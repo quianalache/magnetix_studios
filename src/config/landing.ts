@@ -75,23 +75,23 @@ export interface ResolvedBrand {
  */
 export const CUSTOM_BRAND: CustomBrand = {
   /** Displayed in navbar, hero, footer copyright, page title â€” everywhere. */
-  name: "YourCRM",
+  name: "Magnetix Studios",
 
   /** One-line positioning, surfaced in hero subtitle + meta description. */
-  tagline: "The AI-powered CRM that works while you sleep",
+  tagline: "The AI-powered CRM that works while you live your best life",
 
   /**
    * Short (~140 char) description used under the hero headline. Should
    * read like a tweet â€” what the product does, for whom.
    */
   shortDescription:
-    "Contacts, pipeline, and a website builder â€” plus AI agents that answer every lead by chat, text, and phone the moment it lands, 24/7. One branded workspace your team actually wants to use.",
+    "Contacts, pipeline, and a website builder — plus AI agents that answer every lead by chat, text, and phone the moment it lands, 24/7. One branded workspace your team actually wants to use.",
 
   /** Used on CTA buttons + the FAQ "talk to us" line + footer. */
-  supportEmail: "hello@yourbrand.com",
+  supportEmail: "quiana@quianalache.com",
 
   /** Used in footer, og:url, canonical. No https://, no trailing slash. */
-  primaryDomain: "yourbrand.com",
+  primaryDomain: "magnetixstudios.com",
 
   /**
    * Pricing tiers. HIDDEN BY DEFAULT â€” the custom landing is wired for
