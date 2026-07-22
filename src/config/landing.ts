@@ -88,7 +88,7 @@ export const CUSTOM_BRAND: CustomBrand = {
     "Contacts, pipeline, and a website builder — plus AI agents that answer every lead by chat, text, and phone the moment it lands, 24/7. One branded workspace your team actually wants to use.",
 
   /** Used on CTA buttons + the FAQ "talk to us" line + footer. */
-  supportEmail: "quiana@quianalache.com",
+  supportEmail: "support@magnetixstudios.com",
 
   /** Used in footer, og:url, canonical. No https://, no trailing slash. */
   primaryDomain: "magnetixstudios.com",
