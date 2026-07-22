@@ -10,6 +10,13 @@
 export interface MetaCapabilities {
   inbox: boolean;
   publish: boolean;
+  /**
+   * Instagram DM sending specifically — needs `instagram_manage_messages`,
+   * which a user can decline independently of `pages_messaging`. Optional
+   * because connections stamped before this field existed don't carry it;
+   * those fall back to the `inbox` flag (see `metaCanInstagramDm`).
+   */
+  instagramDm?: boolean;
 }
 
 interface CapabilityCarrier {
@@ -19,7 +26,9 @@ interface CapabilityCarrier {
 
 /**
  * Derive capabilities from the granted scope set, intersected with the gates
- * that were on. `inbox` needs `pages_messaging`; `publish` needs
+ * that were on. `inbox` needs `pages_messaging`; `instagramDm` additionally
+ * needs `instagram_manage_messages` (grantable/declinable independently, so
+ * Messenger working never implies IG DMs work); `publish` needs
  * `pages_manage_posts`. A gate being off forces its capability false.
  */
 export function deriveMetaCapabilities(
@@ -28,6 +37,7 @@ export function deriveMetaCapabilities(
 ): MetaCapabilities {
   return {
     inbox: gates.inbox && granted.has("pages_messaging"),
+    instagramDm: gates.inbox && granted.has("instagram_manage_messages"),
     publish: gates.publish && granted.has("pages_manage_posts"),
   };
 }
@@ -36,6 +46,19 @@ export function deriveMetaCapabilities(
 export function metaCanInbox(cfg: CapabilityCarrier | null | undefined): boolean {
   if (!cfg?.connected) return false;
   return cfg.capabilities ? cfg.capabilities.inbox : true;
+}
+
+/**
+ * True when the connection can send Instagram DMs. Legacy connections (no
+ * capabilities at all) assume yes, like `metaCanInbox`; connections stamped
+ * before the `instagramDm` field existed fall back to the `inbox` flag.
+ */
+export function metaCanInstagramDm(
+  cfg: CapabilityCarrier | null | undefined,
+): boolean {
+  if (!cfg?.connected) return false;
+  if (!cfg.capabilities) return true;
+  return cfg.capabilities.instagramDm ?? cfg.capabilities.inbox;
 }
 
 /** True when the connection can publish (legacy connections must reconnect). */

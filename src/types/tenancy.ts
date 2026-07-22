@@ -250,6 +250,16 @@ export interface SubAccountDoc {
    */
   metaInboxEnabledByAgency?: boolean;
   /**
+   * Agency-controlled gate for the Messenger + Instagram AI auto-reply (the
+   * "meta" AI channel). Layered ON TOP of `metaInboxEnabledByAgency` — the
+   * inbox gate makes the DMs exist, this gate lets the AI answer them
+   * (spending the agency's shared OpenRouter credits). Opt-IN like WhatsApp
+   * (`=== true`; the channel never pre-existed the gate). Enforced at
+   * enable time (channels PATCH route) and at runtime (Meta inbound
+   * webhook dispatch) via `lib/comms/ai/gates.ts`.
+   */
+  metaAgentEnabledByAgency?: boolean;
+  /**
    * Agency-controlled gate for the website builder (gitpage.site). Only the
    * agency owner can flip this (PATCH /api/agency/sub-accounts/[id]/
    * feature-gates). When `false` (or undefined on legacy docs): the website
@@ -623,14 +633,20 @@ export interface MetaConfig {
    * connection:
    *   - `inbox`   — true when the inbox gate is on AND `pages_messaging` was
    *                 granted (Messenger/IG DM send+receive).
+   *   - `instagramDm` — true when the inbox gate is on AND
+   *                 `instagram_manage_messages` was granted. Tracked
+   *                 separately because a user can decline the IG scope while
+   *                 granting `pages_messaging` — Messenger working never
+   *                 implies IG DMs work.
    *   - `publish` — true when the Social gate is on AND `pages_manage_posts`
    *                 was granted (Social Planner posting).
    * Optional so legacy connections (made before capability tracking) read as
    * undefined; helpers treat missing `inbox` as true (back-compat — the inbox
-   * worked) and missing `publish` as false (must reconnect via the unified
-   * card to gain posting). Reconnecting always refreshes this.
+   * worked), missing `instagramDm` as the `inbox` value (pre-field stamps),
+   * and missing `publish` as false (must reconnect via the unified card to
+   * gain posting). Reconnecting always refreshes this.
    */
-  capabilities?: { inbox: boolean; publish: boolean };
+  capabilities?: { inbox: boolean; publish: boolean; instagramDm?: boolean };
   connectedByUid: string | null;
   connectedAt: Timestamp | FieldValue | null;
 }

@@ -47,6 +47,17 @@ export interface AvailabilityInput {
    * meetings don't block new bookings.
    */
   busy: BusyEvent[];
+  /**
+   * Skip the min-notice (`page.minNoticeHours`) filter. Default false —
+   * listing/rendering always enforces it. Set true ONLY for a book-time
+   * re-verify of an ALREADY-OFFERED slot: min-notice is measured against
+   * a moving "now", so re-applying it at confirm time can reject a slot
+   * that was validly bookable when offered simply because conversation
+   * time elapsed (the voice-booking false "slot just got taken"). The
+   * busy-overlap and working-hours checks still run, so double-booking
+   * protection is unaffected.
+   */
+  ignoreMinNotice?: boolean;
 }
 
 /**
@@ -176,9 +187,9 @@ export function computeAvailability(input: AvailabilityInput): SlotCandidate[] {
   const horizonEnd = new Date(
     now.getTime() + page.visibleDays * 24 * 60 * 60_000,
   );
-  const minBookable = new Date(
-    now.getTime() + page.minNoticeHours * 60 * 60_000,
-  );
+  const minBookable = input.ignoreMinNotice
+    ? now
+    : new Date(now.getTime() + page.minNoticeHours * 60 * 60_000);
   const fromInstant = input.fromInstant
     ? new Date(Math.max(input.fromInstant.getTime(), minBookable.getTime()))
     : minBookable;
