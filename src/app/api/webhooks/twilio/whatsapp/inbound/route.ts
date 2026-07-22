@@ -301,7 +301,7 @@ export async function POST(request: Request) {
             channelId: "whatsapp",
             contact,
             incomingMessage: bodyRaw,
-            contactPhone: from,
+            replyTo: from,
           });
         }
       }

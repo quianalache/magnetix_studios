@@ -18,7 +18,16 @@ const PROFILE_DOC = "profile";
 // `const SUPPORTED_CHANNELS` runtime array. If a runtime list of channels
 // ever needs to exist, export the array AND derive the type from it via
 // `(typeof SUPPORTED_CHANNELS)[number]`.
-export type ConfiguredChannelId = "sms" | "web-chat" | "voice" | "whatsapp";
+export type ConfiguredChannelId =
+  | "sms"
+  | "web-chat"
+  | "voice"
+  | "whatsapp"
+  /** Messenger + Instagram DMs — ONE channel doc (`aiAgent/meta`) covering
+   *  both platforms, because they ride one Meta connection and the reply
+   *  always mirrors the platform the DM arrived on. No nested block —
+   *  the shared AiChannelConfig fields are everything it needs. */
+  | "meta";
 
 /**
  * Channel-specific default seed for a freshly-created config doc.

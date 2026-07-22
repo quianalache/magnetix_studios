@@ -288,7 +288,7 @@ export async function POST(request: Request) {
               channelId: "sms",
               contact,
               incomingMessage: bodyRaw,
-              contactPhone: from,
+              replyTo: from,
             });
           }
         }

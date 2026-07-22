@@ -61,6 +61,17 @@ export interface VoiceCall {
   /** Vapi's structured-data extraction said the caller asked for a
    *  callback. Drives whether a follow-up Task is created. */
   callbackRequested: boolean;
+  /** Voice Booking correlation — stamped by the LLM booking loop DURING
+   *  the call (keyed off Vapi's call id) so the end-of-call handler can
+   *  create the right follow-up Task even though a caller busy booking
+   *  never triggers `callbackRequested`. `attemptedAt` = the caller
+   *  engaged the booking flow; `booked` = an appointment was actually
+   *  created (phone-only, so NO confirmation email was sent — the Task
+   *  flags that). Absent when the caller never touched booking. */
+  voiceBooking?: {
+    attemptedAt?: string | null;
+    booked?: { eventId: string; startAtIso: string } | null;
+  } | null;
   capturedName: string | null;
   capturedEmail: string | null;
   capturedPhone: string | null;

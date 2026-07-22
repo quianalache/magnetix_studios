@@ -51,11 +51,28 @@ function getWebhookSecret(): string {
   return s;
 }
 
+/**
+ * The public base URL Vapi calls back on (LLM turn webhook + end-of-call).
+ * This gets BAKED into the assistant config on every provisioning save, so
+ * it must be the SAME real, publicly-reachable URL in every environment —
+ * otherwise a save from local dev (where `NEXT_PUBLIC_APP_URL` is
+ * `localhost:3000`) would re-PATCH the shared assistant's webhook to an
+ * address Vapi's cloud can't reach, silently breaking the live number.
+ *
+ * `VAPI_PUBLIC_BASE_URL` is the dedicated, environment-stable override:
+ * set it to the production URL in prod AND local dev so provisioning can be
+ * exercised locally without ever repointing the live assistant. It falls
+ * back to `NEXT_PUBLIC_APP_URL` when unset (unchanged behavior for
+ * deployments that only ever provision from production).
+ */
 function getAppUrl(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const url = (
+    process.env.VAPI_PUBLIC_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim()
+  );
   if (!url) {
     throw new VapiError(
-      "NEXT_PUBLIC_APP_URL is not set — Vapi must reach our LLM endpoint",
+      "Neither VAPI_PUBLIC_BASE_URL nor NEXT_PUBLIC_APP_URL is set — Vapi must reach our LLM endpoint",
       500,
       "",
     );
@@ -382,19 +399,72 @@ export async function ensureVapiPhoneNumber(input: {
     }
   }
 
-  const created = await vapiFetch<VapiPhoneNumberResponse>("/phone-number", {
-    method: "POST",
-    body: JSON.stringify({
-      provider: "twilio",
-      number: input.twilioConfig.fromNumber,
-      twilioAccountSid: input.twilioConfig.accountSid,
-      twilioAuthToken: input.twilioConfig.authToken,
-      assistantId: input.assistantId,
-      // Same 40-char clamp as the assistant for symmetry.
-      name: `LeadStack sa:${input.subAccountId}`.slice(0, 40),
-    }),
-  });
-  return { phoneNumberId: created.id };
+  try {
+    const created = await vapiFetch<VapiPhoneNumberResponse>("/phone-number", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: "twilio",
+        number: input.twilioConfig.fromNumber,
+        twilioAccountSid: input.twilioConfig.accountSid,
+        twilioAuthToken: input.twilioConfig.authToken,
+        assistantId: input.assistantId,
+        // Same 40-char clamp as the assistant for symmetry.
+        name: `LeadStack sa:${input.subAccountId}`.slice(0, 40),
+      }),
+    });
+    return { phoneNumberId: created.id };
+  } catch (err) {
+    // Self-heal: Vapi refuses to create a second phone-number resource for
+    // a Twilio number it already has registered — it 400s with "Existing
+    // Phone Number ... Has Identical twilioAccountSid and number". This
+    // fires when our stored `vapiPhoneNumberId` was lost (e.g. a save that
+    // blanked it) even though the resource still exists on Vapi's side.
+    // Rather than failing the whole save, find the existing resource by
+    // number and rebind our assistant to it — the same outcome the PATCH
+    // branch above would have produced with the id we lost.
+    if (
+      err instanceof VapiError &&
+      err.status === 400 &&
+      /identical|existing phone number|already/i.test(err.body)
+    ) {
+      const existingId = await findVapiPhoneNumberIdByNumber(
+        input.twilioConfig.fromNumber,
+      );
+      if (existingId) {
+        console.warn(
+          `[vapi] phone-number ${input.twilioConfig.fromNumber} already registered — rebinding existing resource ${existingId} instead of re-creating`,
+        );
+        await vapiFetch(`/phone-number/${existingId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ assistantId: input.assistantId }),
+        });
+        return { phoneNumberId: existingId };
+      }
+    }
+    throw err;
+  }
+}
+
+/**
+ * List Vapi phone-number resources and return the id of the one matching
+ * `number` (E.164). Best-effort — returns null on any error or no match, so
+ * the caller falls through to surfacing the original create error. Used by
+ * the self-heal path in `ensureVapiPhoneNumber`.
+ */
+async function findVapiPhoneNumberIdByNumber(
+  number: string,
+): Promise<string | null> {
+  try {
+    const list = await vapiFetch<Array<{ id?: string; number?: string }>>(
+      "/phone-number",
+      { method: "GET" },
+    );
+    if (!Array.isArray(list)) return null;
+    const match = list.find((p) => p?.number === number);
+    return match?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**

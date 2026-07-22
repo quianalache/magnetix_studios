@@ -136,6 +136,14 @@ export interface VoiceChannelConfig {
   voiceId: string;
   /** Hard cap on call length (seconds). Vapi enforces this server-side. */
   maxCallSeconds: number;
+  /**
+   * Voice Booking v1 — slug of the PUBLISHED booking page the inbound
+   * voice agent may book appointments on during a call. Null (default,
+   * and what legacy docs read as) = live booking off; the agent falls
+   * back to sharing/promising the booking link. Deposit-taking pages are
+   * refused at runtime even if selected. See VOICE_BOOKING_V1_PLAN.md.
+   */
+  bookingPageSlug?: string | null;
   /** Which phone-number resource the voice agent attaches to.
    *    - "twilio-byoc"   (default): reuse the sub-account's dedicated
    *       Twilio number — one number serves SMS + Voice. Production.
@@ -253,9 +261,16 @@ export const DEFAULT_WEB_CHAT_CONFIG: WebChatChannelConfig = {
 
 export const DEFAULT_VOICE_CONFIG: VoiceChannelConfig = {
   greeting: "Hi, thanks for calling. How can I help?",
-  voiceProvider: "11labs",
-  voiceId: "burt",
+  // OpenAI voice names are literal, stable API constants that Vapi resolves
+  // without any provider key on the operator's side. The old default
+  // ("11labs"/"burt") was a Vapi preset name that no longer resolves —
+  // assistant creation 400s with "Couldn't Find 11labs Voice". ElevenLabs
+  // voices are still usable via the custom voice-ID input in the Voice
+  // settings UI (requires an ID confirmed in Vapi's voice library).
+  voiceProvider: "openai",
+  voiceId: "alloy",
   maxCallSeconds: 600,
+  bookingPageSlug: null,
   numberMode: "twilio-byoc",
   vapiAssistantId: null,
   vapiPhoneNumberId: null,

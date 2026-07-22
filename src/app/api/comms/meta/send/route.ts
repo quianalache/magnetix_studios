@@ -5,6 +5,7 @@ import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireContactAccessible, requireUid } from "@/lib/comms/route-auth";
 import { sendMetaMessage } from "@/lib/comms/meta";
+import { metaCanInstagramDm } from "@/lib/comms/meta-capabilities";
 import { upsertConversationForMessage } from "@/lib/server/conversations-service";
 import type { ActivityType } from "@/types/contacts";
 import type { SubAccountDoc } from "@/types";
@@ -92,15 +93,35 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  const fromNodeId =
-    channel === "instagram" ? cfg.instagramBusinessAccountId : cfg.pageId;
+  if (channel === "instagram" && !cfg.instagramBusinessAccountId) {
+    return NextResponse.json(
+      {
+        error: "No Instagram business account is linked to the connected Page.",
+      },
+      { status: 503 },
+    );
+  }
+  if (channel === "instagram" && !metaCanInstagramDm(cfg)) {
+    return NextResponse.json(
+      {
+        error:
+          "Instagram messaging permission wasn't granted on this connection. Click Reconnect under Settings → Facebook & Instagram and approve Instagram access.",
+      },
+      { status: 403 },
+    );
+  }
+  // Meta's Messenger Platform sends BOTH channels from the Page node with the
+  // Page token — the recipient's Instagram-scoped id is what routes an IG DM.
+  // Posting to the IG business-account id instead fails with
+  // "(#3) Application does not have the capability to make this API call"
+  // (that node only accepts sends on graph.instagram.com with an
+  // Instagram-Login token).
+  const fromNodeId = cfg.pageId;
   if (!fromNodeId) {
     return NextResponse.json(
       {
         error:
-          channel === "instagram"
-            ? "No Instagram business account is linked to the connected Page."
-            : "The connected Page is missing its id — reconnect under Settings → Messaging.",
+          "The connected Page is missing its id — reconnect under Settings → Messaging.",
       },
       { status: 503 },
     );

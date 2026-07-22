@@ -1,5 +1,6 @@
 import {
   Bot,
+  Instagram,
   Mail,
   MessageCircle,
   MessagesSquare,
@@ -21,6 +22,7 @@ export type AiChannelId =
   | "overview"
   | "sms"
   | "whatsapp"
+  | "meta"
   | "voice"
   | "email"
   | "web-chat"
@@ -96,6 +98,17 @@ export const AI_CHANNELS: AiChannel[] = [
     comingSoon: false,
     beta: true,
     slug: "whatsapp",
+  },
+  {
+    id: "meta",
+    label: "Messenger & Instagram",
+    blurb:
+      "AI auto-replies to Facebook Messenger and Instagram DMs on the connected Meta Page. Same persona, business hours, and escalation rules as SMS.",
+    icon: Instagram,
+    group: "inbound",
+    comingSoon: false,
+    beta: true,
+    slug: "meta",
   },
   {
     id: "voice",

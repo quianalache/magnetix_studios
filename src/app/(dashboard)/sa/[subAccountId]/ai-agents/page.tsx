@@ -23,6 +23,7 @@ export default function AiAgentsOverviewPage() {
   const [whatsappConfig, setWhatsappConfig] = useState<AiChannelConfig | null>(
     null,
   );
+  const [metaConfig, setMetaConfig] = useState<AiChannelConfig | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
 
@@ -30,10 +31,11 @@ export default function AiAgentsOverviewPage() {
     let cancelled = false;
     (async () => {
       try {
-        const [smsRes, voiceRes, whatsappRes] = await Promise.all([
+        const [smsRes, voiceRes, whatsappRes, metaRes] = await Promise.all([
           fetch(`/api/sub-accounts/${subAccountId}/ai-agent/channels/sms`),
           fetch(`/api/sub-accounts/${subAccountId}/ai-agent/channels/voice`),
           fetch(`/api/sub-accounts/${subAccountId}/ai-agent/channels/whatsapp`),
+          fetch(`/api/sub-accounts/${subAccountId}/ai-agent/channels/meta`),
         ]);
         const smsData = smsRes.ok
           ? ((await smsRes.json()) as { config: AiChannelConfig | null })
@@ -44,10 +46,14 @@ export default function AiAgentsOverviewPage() {
         const whatsappData = whatsappRes.ok
           ? ((await whatsappRes.json()) as { config: AiChannelConfig | null })
           : { config: null };
+        const metaData = metaRes.ok
+          ? ((await metaRes.json()) as { config: AiChannelConfig | null })
+          : { config: null };
         if (!cancelled) {
           setSmsConfig(smsData.config);
           setVoiceConfig(voiceData.config);
           setWhatsappConfig(whatsappData.config);
+          setMetaConfig(metaData.config);
           setLoaded(true);
         }
       } catch {
@@ -75,6 +81,13 @@ export default function AiAgentsOverviewPage() {
     !!whatsappConfig?.enabled &&
     whatsappSenderConfigured &&
     subAccount?.whatsappEnabledByAgency === true;
+  // Messenger + Instagram — needs BOTH agency gates (inbox + AI, opt-in) and
+  // a connected Meta Page.
+  const metaEnabled =
+    !!metaConfig?.enabled &&
+    !!subAccount?.metaConfig?.connected &&
+    subAccount?.metaInboxEnabledByAgency === true &&
+    subAccount?.metaAgentEnabledByAgency === true;
 
   // Overview grid shows the inbound channels only — Outbound has its own
   // tab + config and isn't a shared-persona inbound channel.
@@ -152,7 +165,9 @@ export default function AiAgentsOverviewPage() {
                       ? voiceEnabled
                       : channel.id === "whatsapp"
                         ? whatsappEnabled
-                        : undefined
+                        : channel.id === "meta"
+                          ? metaEnabled
+                          : undefined
                 }
               />
             ))}

@@ -6,6 +6,13 @@ import { callAi, type AiChatMessage } from "@/lib/comms/ai/openrouter";
 import { incrementChannelTokens, resolveAgent } from "@/lib/comms/ai/agent";
 import { buildContactContextBlock } from "@/lib/comms/ai/context";
 import { buildSystemPrompt } from "@/lib/comms/ai/prompt";
+import {
+  bookVoiceSlot,
+  formatSlotForSpeech,
+  getVoiceBookingContext,
+  listVoiceSlots,
+} from "@/lib/server/voice-booking-service";
+import type { BookingPage } from "@/types/booking";
 import type { SubAccountDoc } from "@/types";
 import type { Contact } from "@/types/contacts";
 
@@ -262,13 +269,37 @@ export async function POST(
   const personaOverride =
     isOutboundCall && outboundPersona ? outboundPersona : null;
 
-  const systemPrompt = buildSystemPrompt({
+  let systemPrompt = buildSystemPrompt({
     agent,
     channelId: "voice",
     fallbackBusinessName: subAccount.name ?? "the business",
     contactContextBlock: contextBlock,
     personaOverride,
+    bookingLink: subAccount.bookingLink ?? null,
   });
+
+  // ── Voice Booking v1 — live booking tools (inbound calls only) ──────
+  // When the voice channel designates a bookable page, append the marker
+  // instructions and run a tool loop around the LLM call below. Anything
+  // unbookable (missing/unpublished/deposit page) silently degrades to
+  // the plain booking-link behavior — a page edit can't break live calls.
+  let bookingPage: BookingPage | null = null;
+  if (!isOutboundCall) {
+    const slugCfg = agent.channel.voice?.bookingPageSlug ?? null;
+    if (slugCfg) {
+      const bctx = await getVoiceBookingContext(subAccountId, slugCfg).catch(
+        () => null,
+      );
+      if (bctx?.bookable) {
+        bookingPage = bctx.page;
+        systemPrompt += `\n\n${buildBookingToolsBlock(bctx.page)}`;
+      } else if (bctx) {
+        console.warn(
+          `[vapi/llm] booking page "${slugCfg}" not bookable (${bctx.reason}) sa=${subAccountId} — falling back to link behavior`,
+        );
+      }
+    }
+  }
 
   // Strip Vapi's own system message — the persona we want is the one
   // we just composed. Keep the user / assistant turn history as-is.
@@ -289,28 +320,62 @@ export async function POST(
   // (wantsStream is computed above so the outer catch can reuse it.)
 
   try {
-    const completion = await callAi({
-      model: agent.effective.modelOverride ?? body.model ?? undefined,
-      messages,
-      // Voice replies should be short — cap aggressively to avoid the
-      // bot launching into a paragraph that the caller will interrupt.
-      maxTokens: 220,
-      temperature: 0.5,
-    });
+    // Tool loop: up to 2 booking-tool rounds on top of the initial call.
+    // Without a booking page (or when the model emits no marker) this is
+    // exactly one LLM call — identical to the pre-booking behavior.
+    let totalTokens = 0;
+    let speakText = "";
+    let modelUsed = "";
+    for (let round = 0; round < 3; round++) {
+      const completion = await callAi({
+        model: agent.effective.modelOverride ?? body.model ?? undefined,
+        messages,
+        // Voice replies should be short — cap aggressively to avoid the
+        // bot launching into a paragraph that the caller will interrupt.
+        maxTokens: 220,
+        temperature: 0.5,
+      });
+      totalTokens += completion.totalTokens;
+      modelUsed = completion.model;
+      speakText = completion.text;
 
-    void incrementChannelTokens(subAccountId, "voice", completion.totalTokens);
+      const toolResult =
+        bookingPage && round < 2
+          ? await runBookingToolIfRequested({
+              modelText: completion.text,
+              subAccountId,
+              agencyId: subAccount.agencyId,
+              page: bookingPage,
+              callerPhone,
+              contactId: contact?.id ?? null,
+              callId: body.call?.id ?? null,
+            })
+          : null;
+      if (!toolResult) break;
+      // Feed the tool result back and let the model compose the spoken
+      // reply. Clearly labelled so it can't be mistaken for the caller.
+      messages.push(
+        { role: "assistant", content: completion.text },
+        { role: "user", content: toolResult },
+      );
+    }
+
+    void incrementChannelTokens(subAccountId, "voice", totalTokens);
 
     // Defensive: strip any [[...]] markers, leftover JSON-ish brackets,
     // or asterisks from the reply before TTS speaks it. Voice safety
     // rails forbid these but model output drifts; on voice the TTS
     // engine reads symbols out loud character-by-character which sounds
     // terrible. Web Chat / SMS keep their marker parsing untouched —
-    // this is voice-only sanitisation.
-    const speakable = stripVoiceUnspeakables(completion.text);
+    // this is voice-only sanitisation. Also the last line of defense if
+    // the tool loop exhausted its rounds with a marker still in the text.
+    const speakable =
+      stripVoiceUnspeakables(speakText) ||
+      "Sorry, could you say that again?";
 
     return wantsStream
-      ? openAiSseStream(speakable, completion.model)
-      : NextResponse.json(openAiCompletion(speakable, completion.model));
+      ? openAiSseStream(speakable, modelUsed)
+      : NextResponse.json(openAiCompletion(speakable, modelUsed));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(
@@ -340,4 +405,166 @@ export async function POST(
       ? openAiSseStream(fallbackText, "fallback")
       : NextResponse.json(openAiCompletion(fallbackText, "fallback"));
   }
+}
+
+// ── Voice Booking v1 — marker tools ─────────────────────────────────────
+// We ARE the LLM in Vapi's custom-llm mode, so "tools" are simply markers
+// the model emits that we intercept BEFORE anything reaches TTS: run the
+// real availability/book service, feed the result back as a labelled
+// message, and let the model compose the spoken reply. No Vapi tool
+// registration, no extra webhook route, and existing assistants pick this
+// up without re-provisioning. stripVoiceUnspeakables() guarantees a marker
+// can never be spoken even if the loop cap is hit.
+
+const SLOTS_MARKER_RE = /\[\[\s*slots\s*\]\]/i;
+const BOOK_MARKER_RE = /\[\[\s*book\b([^\]]*)\]\]/i;
+
+function buildBookingToolsBlock(page: BookingPage): string {
+  return `--- LIVE BOOKING TOOLS ---
+You can book real appointments for the caller on the business's "${page.name}" calendar (${page.durationMinutes}-minute slots, times in ${page.timezone}). This SUPERSEDES the earlier booking guidance: book directly during this call instead of promising a texted link — only fall back to the link if no offered time suits the caller.
+Markers (the system intercepts them; the caller never hears them):
+1. When the caller wants to book, schedule, or pick a time, respond with EXACTLY [[slots]] and nothing else. The system hands you the available times.
+2. Offer AT MOST 3 of those times conversationally (day + time, e.g. "Tuesday at ten a.m."). Ask which works.
+3. When the caller chooses a time AND you know their first name (ask for it first if you don't), respond with EXACTLY [[book start="<the exact start value of the chosen slot>" name="<caller's first name>"]] and nothing else.
+4. The system reports the result; confirm to the caller in one short sentence.
+Rules: never invent or confirm a time that didn't come from [[slots]]. COPY the start value character-for-character from the [[slots]] result — never retype, reformat, shorten, or reconstruct a timestamp from the day/time you spoke aloud. Never read raw start values or dates in ISO format aloud. If the system says a time was just taken, apologise and offer the alternatives it provides.`;
+}
+
+/**
+ * If the model's text contains a booking marker, execute it and return the
+ * tool-result message to feed back; null when no marker (the text is the
+ * final spoken reply). Failures return an instructive tool result rather
+ * than throwing — a booking hiccup must never drop the live call.
+ */
+/**
+ * Mark on the voiceCalls doc that the caller engaged the booking flow, so
+ * the end-of-call handler can create a "call back" Task when the call ends
+ * WITHOUT a completed booking (a caller busy booking never triggers Vapi's
+ * `callbackRequested`). Separate field from the `booked` stamp so a merge
+ * can't clobber a success. Best-effort — a failure just means no task.
+ */
+async function stampBookingAttempt(
+  subAccountId: string,
+  callId: string | null,
+): Promise<void> {
+  if (!callId) return;
+  try {
+    await getAdminDb()
+      .doc(`subAccounts/${subAccountId}/voiceCalls/${callId}`)
+      .set(
+        { voiceBooking: { attemptedAt: new Date().toISOString() } },
+        { merge: true },
+      );
+  } catch (err) {
+    console.warn(`[vapi/llm] booking-attempt stamp failed sa=${subAccountId}`, err);
+  }
+}
+
+async function runBookingToolIfRequested(input: {
+  modelText: string;
+  subAccountId: string;
+  agencyId: string;
+  page: BookingPage;
+  callerPhone: string;
+  contactId: string | null;
+  callId: string | null;
+}): Promise<string | null> {
+  const { modelText, subAccountId, agencyId, page } = input;
+
+  const bookMatch = BOOK_MARKER_RE.exec(modelText);
+  if (bookMatch) {
+    const attrs = bookMatch[1] ?? "";
+    const startAtIso = /start\s*=\s*"([^"]+)"/.exec(attrs)?.[1]?.trim() ?? "";
+    const callerName = /name\s*=\s*"([^"]*)"/.exec(attrs)?.[1]?.trim() ?? "";
+    if (!callerName) {
+      return "[SYSTEM TOOL RESULT — not the caller speaking] You must know the caller's first name before booking. Ask for their name, then emit the [[book …]] marker again with it.";
+    }
+    if (!startAtIso) {
+      return "[SYSTEM TOOL RESULT — not the caller speaking] The book marker was missing its start value. Emit [[slots]] to get fresh times, then book with the exact start value of the slot the caller chose.";
+    }
+    try {
+      const result = await bookVoiceSlot({
+        subAccountId,
+        agencyId,
+        page,
+        startAtIso,
+        callerName,
+        callerPhone: input.callerPhone,
+        contactId: input.contactId,
+        callId: input.callId,
+      });
+      if (result.ok) {
+        const label = formatSlotForSpeech(result.startAt, page.timezone);
+        return `[SYSTEM TOOL RESULT — not the caller speaking] Booked: ${label} (${page.durationMinutes} minutes). Confirm briefly to the caller — day and time only — and let them know it's locked in.`;
+      }
+      // The caller tried to book but it didn't complete — record the
+      // attempt so the end-of-call handler follows up if the call ends
+      // without a booking.
+      void stampBookingAttempt(subAccountId, input.callId);
+      // Not booked. Include fresh alternatives in the same result so
+      // recovery doesn't cost another tool round. Distinguish the reasons:
+      // an `invalid_slot` is almost always the model reconstructing the
+      // timestamp instead of copying the exact start="…" value — telling it
+      // "no longer available" (a real-conflict message) would send it into
+      // a retry loop on the same bad value. Give it a copy-exactly nudge
+      // instead. A genuine `slot_taken` gets the apologise-and-offer path.
+      const alternatives = await listVoiceSlots(subAccountId, page).catch(
+        () => [],
+      );
+      const altLines = alternatives
+        .map(
+          (s) =>
+            `- start="${s.startAt.toISOString()}" → ${formatSlotForSpeech(s.startAt, page.timezone)}`,
+        )
+        .join("\n");
+      if (result.code === "invalid_slot") {
+        return `[SYSTEM TOOL RESULT — not the caller speaking] That start value wasn't a valid slot time — do NOT retype or reconstruct timestamps. Re-emit [[book]] using a start value COPIED EXACTLY (character-for-character) from the list below.${
+          altLines
+            ? `\n${altLines}`
+            : " No times are currently loaded — emit [[slots]] first, then copy a start value from that result verbatim."
+        }`;
+      }
+      if (result.code === "error") {
+        return "[SYSTEM TOOL RESULT — not the caller speaking] Booking failed due to a system error. Apologise and tell the caller the team will follow up to lock in a time.";
+      }
+      return `[SYSTEM TOOL RESULT — not the caller speaking] That time is no longer available. Apologise briefly.${
+        altLines
+          ? ` Offer up to 3 of these instead:\n${altLines}`
+          : " Nothing else is open in the next 7 days — offer to have the team follow up with times by text."
+      }`;
+    } catch (err) {
+      console.error(
+        `[vapi/llm] book tool failed sa=${subAccountId} slug=${page.slug}`,
+        err,
+      );
+      return "[SYSTEM TOOL RESULT — not the caller speaking] Booking failed due to a system error. Apologise and tell the caller the team will follow up to lock in a time.";
+    }
+  }
+
+  if (SLOTS_MARKER_RE.test(modelText)) {
+    // The caller wants to see times — that's booking intent. Record it so a
+    // call that ends before a booking still creates a follow-up Task.
+    void stampBookingAttempt(subAccountId, input.callId);
+    try {
+      const slots = await listVoiceSlots(subAccountId, input.page);
+      if (slots.length === 0) {
+        return "[SYSTEM TOOL RESULT — not the caller speaking] No available times in the next 7 days. Tell the caller nothing's open this week and offer to have the team follow up (or text the booking link).";
+      }
+      const lines = slots
+        .map(
+          (s) =>
+            `- start="${s.startAt.toISOString()}" → ${formatSlotForSpeech(s.startAt, page.timezone)}`,
+        )
+        .join("\n");
+      return `[SYSTEM TOOL RESULT — not the caller speaking] Available times (${page.timezone}):\n${lines}\nOffer AT MOST 3 conversationally (day + time), ask which works, and when the caller picks one — and you have their first name — emit [[book start="…" name="…"]] with that slot's exact start value.`;
+    } catch (err) {
+      console.error(
+        `[vapi/llm] slots tool failed sa=${subAccountId} slug=${page.slug}`,
+        err,
+      );
+      return "[SYSTEM TOOL RESULT — not the caller speaking] Couldn't load availability right now. Apologise and offer to have the team follow up with times.";
+    }
+  }
+
+  return null;
 }

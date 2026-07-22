@@ -13,7 +13,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { metaCanInbox, metaCanPublish } from "@/lib/comms/meta-capabilities";
+import {
+  metaCanInbox,
+  metaCanInstagramDm,
+  metaCanPublish,
+} from "@/lib/comms/meta-capabilities";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -105,6 +109,7 @@ export function SubAccountMetaSection() {
   if (!isAdmin || !gateOn) return null;
 
   const canInbox = metaCanInbox(cfg);
+  const canInstagramDm = metaCanInstagramDm(cfg);
   const canPublish = metaCanPublish(cfg);
 
   function handleConnect() {
@@ -219,8 +224,21 @@ export function SubAccountMetaSection() {
               ready for the other. */}
           <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
             {inboxOn && <CapabilityBadge label="Inbox" ok={canInbox} />}
+            {inboxOn && cfg?.instagramBusinessAccountId && (
+              <CapabilityBadge label="Instagram DMs" ok={canInstagramDm} />
+            )}
             {socialOn && <CapabilityBadge label="Posting" ok={canPublish} />}
           </div>
+          {inboxOn && cfg?.instagramBusinessAccountId && !canInstagramDm && (
+            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>
+                Instagram messaging permission isn&apos;t granted on this
+                connection — Messenger works but Instagram DM replies will be
+                blocked. Click Reconnect and approve Instagram access.
+              </span>
+            </p>
+          )}
           {socialOn && !canPublish && (
             <p className="mt-2 flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
               <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />

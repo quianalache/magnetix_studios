@@ -11,6 +11,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowRight, Inbox, Loader2, Lock, PhoneCall } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ import type {
   VoiceNumberMode,
 } from "@/types/ai";
 import { DEFAULT_VOICE_CONFIG } from "@/types/ai";
+import type { BookingPage } from "@/types/booking";
 
 /**
  * Voice channel operational settings. Mirrors SmsChannelSection's shape
@@ -43,18 +45,30 @@ import { DEFAULT_VOICE_CONFIG } from "@/types/ai";
 const NATIVE_SELECT_CLASSES =
   "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground";
 
+// Preset voices are OpenAI-only ON PURPOSE: OpenAI voice names are literal,
+// stable TTS API constants Vapi resolves with no operator-side provider key.
+// The previous ElevenLabs presets (burt/andrea/rohan/lily) were Vapi preset
+// NAMES that no longer resolve — assistant creation 400s with "Couldn't Find
+// 11labs Voice" (real ElevenLabs voice ids are opaque hashes, and
+// custom/cloned voices additionally need the operator's ElevenLabs key in
+// Vapi → Provider Keys). ElevenLabs stays available via the custom voice-ID
+// option below, so we never ship a hardcoded id we can't verify.
 const VOICE_OPTIONS: Array<{
   provider: string;
   voiceId: string;
   label: string;
 }> = [
-  { provider: "11labs", voiceId: "burt", label: "ElevenLabs — Burt (warm, male)" },
-  { provider: "11labs", voiceId: "andrea", label: "ElevenLabs — Andrea (clear, female)" },
-  { provider: "11labs", voiceId: "rohan", label: "ElevenLabs — Rohan (professional, male)" },
-  { provider: "11labs", voiceId: "lily", label: "ElevenLabs — Lily (friendly, female)" },
   { provider: "openai", voiceId: "alloy", label: "OpenAI — Alloy (neutral)" },
+  { provider: "openai", voiceId: "echo", label: "OpenAI — Echo (calm, male)" },
+  { provider: "openai", voiceId: "fable", label: "OpenAI — Fable (expressive)" },
+  { provider: "openai", voiceId: "onyx", label: "OpenAI — Onyx (deep, male)" },
+  { provider: "openai", voiceId: "nova", label: "OpenAI — Nova (warm, female)" },
   { provider: "openai", voiceId: "shimmer", label: "OpenAI — Shimmer (bright, female)" },
 ];
+
+/** Sentinel select value for the "paste your own ElevenLabs voice id" mode.
+ *  Has no colon so it can never collide with a real `provider:voiceId` key. */
+const CUSTOM_VOICE_KEY = "custom";
 
 function voiceKey(provider: string, voiceId: string): string {
   return `${provider}:${voiceId}`;
@@ -72,9 +86,12 @@ export function VoiceChannelSection() {
   const [selectedVoice, setSelectedVoice] = useState(
     voiceKey(DEFAULT_VOICE_CONFIG.voiceProvider, DEFAULT_VOICE_CONFIG.voiceId),
   );
+  const [customVoiceId, setCustomVoiceId] = useState("");
   const [maxCallSeconds, setMaxCallSeconds] = useState(
     DEFAULT_VOICE_CONFIG.maxCallSeconds,
   );
+  const [bookingPageSlug, setBookingPageSlug] = useState("");
+  const [bookingPages, setBookingPages] = useState<BookingPage[]>([]);
   const [numberMode, setNumberMode] = useState<VoiceNumberMode>(
     DEFAULT_VOICE_CONFIG.numberMode,
   );
@@ -120,7 +137,19 @@ export function VoiceChannelSection() {
         const v: VoiceChannelConfig =
           channelData.config.voice ?? DEFAULT_VOICE_CONFIG;
         setGreeting(v.greeting);
-        setSelectedVoice(voiceKey(v.voiceProvider, v.voiceId));
+        setBookingPageSlug(v.bookingPageSlug ?? "");
+        // A stored voice that isn't one of our presets (a pasted ElevenLabs
+        // id — or a legacy 11labs preset name like "burt" that Vapi no
+        // longer resolves) hydrates into custom mode so the operator can see
+        // and fix the raw id.
+        const storedKey = voiceKey(v.voiceProvider, v.voiceId);
+        if (VOICE_OPTIONS.some((o) => voiceKey(o.provider, o.voiceId) === storedKey)) {
+          setSelectedVoice(storedKey);
+          setCustomVoiceId("");
+        } else {
+          setSelectedVoice(CUSTOM_VOICE_KEY);
+          setCustomVoiceId(v.voiceId);
+        }
         setMaxCallSeconds(v.maxCallSeconds);
         setNumberMode(v.numberMode);
         // Only surface the pasted id when the operator picked
@@ -142,6 +171,18 @@ export function VoiceChannelSection() {
     if (!isAdmin) return;
     void hydrate();
   }, [isAdmin, hydrate]);
+
+  // Booking pages for the live-booking picker. Live subscription so a page
+  // published in another tab appears without a refresh.
+  useEffect(() => {
+    if (!isAdmin || !subAccountId) return;
+    const unsub = subscribeToBookingPages(
+      subAccountId,
+      setBookingPages,
+      () => {},
+    );
+    return () => unsub();
+  }, [isAdmin, subAccountId]);
 
   const totalTokens = useMemo(
     () => config?.totalTokensUsed ?? 0,
@@ -190,7 +231,21 @@ export function VoiceChannelSection() {
 
       const email = overrideEmail ? notifyEmail.trim() || null : null;
 
-      const [voiceProvider, voiceId] = selectedVoice.split(":");
+      let voiceProvider: string;
+      let voiceId: string;
+      if (selectedVoice === CUSTOM_VOICE_KEY) {
+        voiceProvider = "11labs";
+        voiceId = customVoiceId.trim();
+        if (!voiceId) {
+          toast.error(
+            "Paste an ElevenLabs voice ID (from Vapi's voice library), or pick a preset voice.",
+          );
+          setSaving(false);
+          return;
+        }
+      } else {
+        [voiceProvider, voiceId] = selectedVoice.split(":");
+      }
 
       const res = await fetch(
         `/api/sub-accounts/${subAccountId}/ai-agent/channels/voice`,
@@ -207,11 +262,12 @@ export function VoiceChannelSection() {
               voiceProvider,
               voiceId,
               maxCallSeconds,
+              bookingPageSlug: bookingPageSlug || null,
               numberMode,
-              // Only send the pasted id when in vapi-managed mode; BYOC
-              // mode's id is server-managed and the API would ignore
-              // an inbound value anyway, but sending null makes the
-              // intent explicit on a mode switch.
+              // Only the pasted id is meaningful, and only in vapi-managed
+              // mode. In BYOC mode the id is server-managed: the API now
+              // preserves the stored id on a re-save (and only clears it on
+              // a mode switch), so the `null` we send here can't wipe it.
               vapiPhoneNumberId:
                 numberMode === "vapi-managed"
                   ? vapiNumberId.trim() || null
@@ -435,7 +491,27 @@ export function VoiceChannelSection() {
                     {v.label}
                   </option>
                 ))}
+                <option value={CUSTOM_VOICE_KEY}>
+                  ElevenLabs — custom voice ID…
+                </option>
               </select>
+              {selectedVoice === CUSTOM_VOICE_KEY && (
+                <div className="space-y-1">
+                  <Input
+                    id="voice-custom-id"
+                    value={customVoiceId}
+                    onChange={(e) => setCustomVoiceId(e.target.value)}
+                    placeholder="e.g. 21m00Tcm4TlvDq8ikWAM"
+                    maxLength={120}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Paste a voice ID confirmed in Vapi&apos;s voice library
+                    (dashboard.vapi.ai → Voice Library). ElevenLabs IDs are
+                    opaque hashes, not names. Custom/cloned voices also need
+                    your ElevenLabs API key under Vapi → Provider Keys.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="voice-max-seconds">Max call duration (sec)</Label>
@@ -452,6 +528,44 @@ export function VoiceChannelSection() {
                 }
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="voice-booking-page"
+              className="flex items-center gap-2"
+            >
+              Live appointment booking
+              <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
+                Beta
+              </span>
+            </Label>
+            <select
+              id="voice-booking-page"
+              value={bookingPageSlug}
+              onChange={(e) => setBookingPageSlug(e.target.value)}
+              className={NATIVE_SELECT_CLASSES}
+            >
+              <option value="">
+                Off — the agent offers your booking link instead
+              </option>
+              {bookingPages
+                .filter((p) => p.status === "published" && !p.payment)
+                .map((p) => (
+                  <option key={p.slug} value={p.slug}>
+                    Book on: {p.name} ({p.durationMinutes} min)
+                  </option>
+                ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              When set, the agent checks live availability on that booking
+              page and books the caller in during the call — offering up to
+              three slots from the next 7 days. Bookings are phone-only
+              (caller ID): no email is collected, so no confirmation email is
+              sent — the appointment lands on the calendar and the normal
+              booking triggers fire. Deposit-taking pages can&apos;t be
+              booked by phone and aren&apos;t listed.
+            </p>
           </div>
 
           <div className="space-y-1.5">

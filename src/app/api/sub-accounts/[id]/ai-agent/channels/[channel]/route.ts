@@ -19,6 +19,7 @@ import {
   DEFAULT_WHATSAPP_CONFIG,
 } from "@/types/ai";
 import { subAccountWhatsappIsConfigured } from "@/lib/comms/twilio";
+import { metaCanInbox } from "@/lib/comms/meta-capabilities";
 import {
   aiChannelGateOn,
   aiChannelLockedMessage,
@@ -42,6 +43,7 @@ const VALID_CHANNELS: ConfiguredChannelId[] = [
   "web-chat",
   "voice",
   "whatsapp",
+  "meta",
 ];
 
 /** Friendly channel labels for the agency-gate 403 message. */
@@ -50,6 +52,7 @@ const CHANNEL_LABEL: Record<ConfiguredChannelId, string> = {
   "web-chat": "Web Chat",
   voice: "Inbound Voice",
   whatsapp: "WhatsApp",
+  meta: "Messenger & Instagram AI",
 };
 
 function isValidChannel(v: string): v is ConfiguredChannelId {
@@ -93,6 +96,18 @@ function sanitiseVoiceBlock(raw: unknown): Partial<VoiceChannelConfig> {
   }
   if ("maxCallSeconds" in r && typeof r.maxCallSeconds === "number") {
     out.maxCallSeconds = Math.max(60, Math.min(1800, Math.floor(r.maxCallSeconds)));
+  }
+  // Voice Booking — the designated booking-page slug (null = live booking
+  // off). Slug-shaped only; existence/published/payment checks happen at
+  // runtime so a page edit after save degrades gracefully instead of
+  // trapping the config.
+  if ("bookingPageSlug" in r) {
+    const raw = r.bookingPageSlug;
+    if (raw === null || raw === "") {
+      out.bookingPageSlug = null;
+    } else if (typeof raw === "string" && /^[a-z0-9-]{1,80}$/.test(raw.trim())) {
+      out.bookingPageSlug = raw.trim();
+    }
   }
   if (
     "numberMode" in r &&
@@ -445,6 +460,36 @@ export async function PATCH(
     }
   }
 
+  // Meta (Messenger + Instagram): the AI gate was already checked by the
+  // generic aiChannelGateOn block above; layer on the channel's own
+  // prerequisites — the inbox gate must be on (the DMs must exist at all)
+  // and a Meta Page must be connected, or the bot has nothing to reply
+  // through. Instagram-scope presence is NOT required here: a
+  // Messenger-only token still runs the bot on Messenger (the webhook
+  // dispatch skips IG when the scope is missing).
+  if (channel === "meta" && patch.enabled === true) {
+    const saSnap = await getAdminDb().doc(`subAccounts/${id}`).get();
+    const sa = saSnap.exists ? (saSnap.data() as SubAccountDoc) : null;
+    if (sa?.metaInboxEnabledByAgency !== true) {
+      return NextResponse.json(
+        {
+          error:
+            "The Facebook & Instagram inbox is disabled for this sub-account by your agency — the AI can't reply to DMs that can't arrive. Ask your agency owner to enable the inbox first.",
+        },
+        { status: 403 },
+      );
+    }
+    if (!metaCanInbox(sa.metaConfig)) {
+      return NextResponse.json(
+        {
+          error:
+            "Connect a Facebook Page under Settings → Facebook & Instagram before enabling the Messenger & Instagram AI.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // Voice: same merge-with-existing as web-chat. The gates depend on
   // numberMode — twilio-byoc requires a dedicated Twilio number on
   // this sub-account; vapi-managed requires the operator to have
@@ -463,6 +508,23 @@ export async function PATCH(
     }
     const resolvedVoice: VoiceChannelConfig =
       patch.voice ?? existingForGate?.voice ?? { ...DEFAULT_VOICE_CONFIG };
+
+    // `vapiPhoneNumberId` is SERVER-managed in twilio-byoc mode (we create +
+    // own the Vapi phone-number resource). The client sends the field in
+    // every save, so without this guard a plain re-save (client sends
+    // `vapiPhoneNumberId: null` in BYOC mode) merges over and WIPES the real
+    // stored id — the next provisioning run then tries to POST a fresh
+    // phone-number for a Twilio number Vapi already has, which 400s. Keep
+    // the stored id when staying in BYOC; clear it only when switching INTO
+    // BYOC from vapi-managed so provisioning creates a fresh BYOC resource.
+    // vapi-managed mode is untouched — the operator-pasted id flows through.
+    if (patch.voice && resolvedVoice.numberMode === "twilio-byoc") {
+      const previousMode = existingForGate?.voice?.numberMode ?? "twilio-byoc";
+      patch.voice.vapiPhoneNumberId =
+        previousMode === "twilio-byoc"
+          ? (existingForGate?.voice?.vapiPhoneNumberId ?? null)
+          : null;
+    }
 
     if (patch.enabled === true) {
       if (!vapiIsConfigured()) {

@@ -32,6 +32,10 @@ const CHANNEL_GATE: Record<
   "web-chat": { field: "webChatEnabledByAgency", defaultOn: true },
   voice: { field: "inboundVoiceEnabledByAgency", defaultOn: true },
   whatsapp: { field: "whatsappEnabledByAgency", defaultOn: false },
+  // Messenger + Instagram AI — opt-IN (shipped gated-off, WhatsApp
+  // precedent). NB: the effective bot ALSO needs metaInboxEnabledByAgency
+  // (the DMs must exist at all) — that's enforced where this gate is read.
+  meta: { field: "metaAgentEnabledByAgency", defaultOn: false },
 };
 
 /**
@@ -47,6 +51,7 @@ export function aiChannelGateOn(
     | "webChatEnabledByAgency"
     | "inboundVoiceEnabledByAgency"
     | "whatsappEnabledByAgency"
+    | "metaAgentEnabledByAgency"
   >,
   channelId: ConfiguredChannelId,
 ): boolean {
@@ -72,6 +77,7 @@ export function anyAiChannelGateOn(
     | "webChatEnabledByAgency"
     | "inboundVoiceEnabledByAgency"
     | "whatsappEnabledByAgency"
+    | "metaAgentEnabledByAgency"
     | "outboundVoiceEnabledByAgency"
   >,
 ): boolean {
@@ -82,6 +88,7 @@ export function anyAiChannelGateOn(
     aiChannelGateOn(sub, "web-chat") ||
     aiChannelGateOn(sub, "voice") ||
     aiChannelGateOn(sub, "whatsapp") ||
+    aiChannelGateOn(sub, "meta") ||
     sub.outboundVoiceEnabledByAgency === true
   );
 }

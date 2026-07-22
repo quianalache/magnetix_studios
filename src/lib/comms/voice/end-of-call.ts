@@ -76,6 +76,12 @@ export interface VapiEndOfCallPayload {
   metaCampaignId?: string | null;
 }
 
+/** Booking correlation stamped on the voiceCalls doc during the call. */
+type VoiceBookingStamp = {
+  attemptedAt?: string | null;
+  booked?: { eventId: string; startAtIso: string } | null;
+};
+
 export interface EndOfCallResult {
   contactId: string | null;
   contactCreated: boolean;
@@ -103,6 +109,19 @@ export async function handleVapiEndOfCall(input: {
     };
   }
   const subAccount = saSnap.data() as SubAccountDoc;
+
+  // Voice Booking correlation the LLM loop stamped during the call (if any).
+  // Read before the task block so a booking outcome drives the follow-up.
+  let voiceBooking: VoiceBookingStamp | null = null;
+  try {
+    const callSnap = await getAdminDb()
+      .doc(`subAccounts/${subAccountId}/voiceCalls/${payload.callId}`)
+      .get();
+    voiceBooking =
+      (callSnap.data()?.voiceBooking as VoiceBookingStamp | undefined) ?? null;
+  } catch {
+    voiceBooking = null;
+  }
 
   // Reconciliation inputs. Caller ID phone wins if no explicit callback
   // number was extracted — extracted.phone is only populated when the
@@ -157,20 +176,48 @@ export async function handleVapiEndOfCall(input: {
     contactId = payload.metaContactId;
   }
 
-  // Only create the follow-up Task + escalation email when the caller
-  // explicitly asked for a callback OR we have a contact to attach the
-  // Task to. Pure-info calls ("what time do you close?") shouldn't
-  // pollute the operator's Today list.
+  // Decide whether this call needs a follow-up Task, and of what kind:
+  //   - Booking completed → "Follow up with" (voice bookings are phone-only,
+  //     so NO confirmation email went to the customer — flag that).
+  //   - Booking attempted but not completed → "Call back".
+  //   - Otherwise, the caller explicitly asked for a callback → "Call back".
+  // A caller busy booking never triggers Vapi's `callbackRequested`, which
+  // is why the booking correlation (stamped during the call) is checked
+  // first. Pure-info calls ("what time do you close?") still create nothing
+  // so they don't pollute the operator's Today list. Requires a contactId
+  // either way (nothing to attach the Task to otherwise).
   let taskId: string | null = null;
   let emailSent = false;
   const callbackRequested = payload.extracted.callbackRequested === true;
-  if (contactId && callbackRequested) {
-    const followUp = await createCaptureFollowUp({
+
+  let followUp:
+    | { taskAction: "Follow up with" | "Call back"; note: string | null }
+    | null = null;
+  if (voiceBooking?.booked) {
+    followUp = {
+      taskAction: "Follow up with",
+      note: `Booked an appointment by phone via the voice agent (it's on the calendar). NOTE: voice bookings are phone-only — NO confirmation email was sent to the customer, so confirm the appointment with them directly.${
+        payload.summary ? `\n\nCall summary: ${payload.summary}` : ""
+      }`,
+    };
+  } else if (voiceBooking?.attemptedAt) {
+    followUp = {
+      taskAction: "Call back",
+      note: `Tried to book an appointment by phone but the call ended before one was confirmed. Follow up to lock in a time.${
+        payload.summary ? `\n\nCall summary: ${payload.summary}` : ""
+      }`,
+    };
+  } else if (callbackRequested) {
+    followUp = { taskAction: "Call back", note: payload.summary };
+  }
+
+  if (contactId && followUp) {
+    const created = await createCaptureFollowUp({
       agencyId: subAccount.agencyId,
       subAccountId,
       channelId: "voice",
       channelLabel: "Voice",
-      taskAction: "Call back",
+      taskAction: followUp.taskAction,
       sessionNoun: "call",
       sessionId: payload.callId,
       // v1 has no per-call transcript page — the email button deep-links
@@ -180,12 +227,12 @@ export async function handleVapiEndOfCall(input: {
       capturedName,
       capturedEmail,
       capturedPhone,
-      lastInboundMessage: payload.summary,
+      lastInboundMessage: followUp.note ?? payload.summary,
       pageUrl: null,
     });
-    taskId = followUp.taskId;
-    emailSent = followUp.emailSent;
-    errors.push(...followUp.errors);
+    taskId = created.taskId;
+    emailSent = created.emailSent;
+    errors.push(...created.errors);
   }
 
   // ----- Campaign call: write the disposition back to the recipient row.

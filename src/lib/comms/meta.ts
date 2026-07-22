@@ -324,6 +324,8 @@ export function describeMetaSendError(
   const permScope = ig ? "instagram_manage_messages" : "pages_messaging";
 
   switch (error?.code) {
+    case 3:
+      return `Meta reports the app lacks the ${platform} messaging capability. ${ig ? `Check the Meta app has Instagram messaging enabled (App Dashboard → Messenger → Instagram settings) and that "${permScope}" is granted — then Reconnect under Settings → Messaging.` : `Check the "${permScope}" permission is granted, then Reconnect under Settings → Messaging.`}`;
     case 190:
       return `The ${platform} connection has expired. Reconnect the Facebook Page under Settings → Messaging.`;
     case 10:
@@ -346,9 +348,13 @@ export function describeMetaSendError(
 /**
  * Send an outbound text message on Messenger or Instagram.
  *
- * Both go through the same Graph `…/messages` endpoint authed with the Page
- * token; only the sending node differs — the Page id for Messenger, the linked
- * IG business-account id for Instagram. `messaging_type: "RESPONSE"` marks this
+ * BOTH channels send from the PAGE node (`{page-id}/messages`) authed with the
+ * Page token — the recipient's page-scoped (Messenger) or Instagram-scoped
+ * (IG) id is what routes the message; there is no per-channel node. Passing
+ * the IG business-account id as `fromNodeId` fails with "(#3) Application
+ * does not have the capability to make this API call" — that node only
+ * accepts sends on graph.instagram.com with an Instagram-Login token, which
+ * is a different auth model from ours. `messaging_type: "RESPONSE"` marks this
  * as a reply within the user's messaging window (the standard, tag-free case).
  * Returns the Meta message id. Throws with Meta's error text on failure.
  */
@@ -460,11 +466,67 @@ export async function publishToFacebookPage(opts: {
   return { id };
 }
 
+interface ContainerStatusResponse {
+  status_code?: string;
+  error?: { message?: string };
+}
+
 /**
- * Publish a single-image post to an Instagram Business account. Two-step
+ * Wait for an IG media container to finish Meta-side processing before
+ * `media_publish` is called. Containers are processed ASYNCHRONOUSLY —
+ * publishing before `status_code` reaches FINISHED fails with "Media ID is
+ * not available". Small images usually finish fast enough to mask the race;
+ * larger ones (e.g. 1080x1350) expose it reliably.
+ *
+ * Polls `GET /{container-id}?fields=status_code` with a short backoff until
+ * FINISHED/PUBLISHED, treats ERROR/EXPIRED as real failures, and gives up
+ * after ~4 minutes — inside the publish step route's `maxDuration` (Meta's
+ * own guidance is to poll for no more than 5 minutes). Transient status-fetch
+ * failures are ignored (keep polling); only a terminal container state or the
+ * deadline throws. Callers run inside the async QStash publish callback, so
+ * waiting here costs nothing user-facing.
+ */
+async function waitForInstagramContainerReady(
+  containerId: string,
+  pageAccessToken: string,
+): Promise<void> {
+  const deadline = Date.now() + 240_000;
+  let delayMs = 2_000;
+  for (;;) {
+    let statusCode: string | undefined;
+    try {
+      const res = await fetch(
+        `${GRAPH}/${containerId}?fields=status_code&access_token=${encodeURIComponent(pageAccessToken)}`,
+      );
+      const data = (await res.json().catch(() => ({}))) as ContainerStatusResponse;
+      statusCode = data.status_code;
+    } catch {
+      // Network blip — fall through and retry until the deadline.
+    }
+    if (statusCode === "FINISHED" || statusCode === "PUBLISHED") return;
+    if (statusCode === "ERROR" || statusCode === "EXPIRED") {
+      throw new Error(
+        `Instagram couldn't process the image (container ${statusCode}). Check the image URL is public and a supported format/size.`,
+      );
+    }
+    if (Date.now() + delayMs > deadline) {
+      throw new Error(
+        "Instagram is still processing the image — it didn't become ready in time. Reschedule the post to retry.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    delayMs = Math.min(delayMs + 1_000, 5_000);
+  }
+}
+
+/**
+ * Publish a single-image post to an Instagram Business account. Three-step
  * container flow per the IG Content Publishing API:
  *   1. create a media container from the public `imageUrl` + caption,
- *   2. publish the container.
+ *   2. wait for the container to finish async processing (see
+ *      `waitForInstagramContainerReady` — skipping this races Meta and fails
+ *      with "Media ID is not available" on slower-processing images),
+ *   3. publish the container.
  *
  * IG has no binary-upload path — the image MUST be a public https URL (this is
  * why v1 takes a pasted URL). Uses the Page access token (IG publishing is
@@ -496,7 +558,11 @@ export async function publishToInstagram(opts: {
     );
   }
 
-  // Step 2 — publish the container.
+  // Step 2 — wait out Meta's async container processing (racing straight to
+  // media_publish fails with "Media ID is not available").
+  await waitForInstagramContainerReady(createData.id, opts.pageAccessToken);
+
+  // Step 3 — publish the container.
   const publishBody = new URLSearchParams({
     creation_id: createData.id,
     access_token: opts.pageAccessToken,

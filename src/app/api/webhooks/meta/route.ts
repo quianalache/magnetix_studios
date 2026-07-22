@@ -10,8 +10,14 @@ import {
 } from "@/lib/comms/meta";
 import { createContactServerSide } from "@/lib/server/contacts-service";
 import { upsertConversationForMessage } from "@/lib/server/conversations-service";
+import { resolveAgent } from "@/lib/comms/ai/agent";
+import { maybeRespondWithAi } from "@/lib/comms/ai/respond";
+import { aiChannelGateOn } from "@/lib/comms/ai/gates";
+import { aiIsConfigured } from "@/lib/comms/ai/openrouter";
+import { metaCanInstagramDm } from "@/lib/comms/meta-capabilities";
 import type { ConversationChannel } from "@/types/conversations";
 import type { SubAccountDoc } from "@/types";
+import type { Contact } from "@/types/contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +37,13 @@ export const dynamic = "force-dynamic";
  * user id, persist the inbound to `contacts/{id}/metaMessages`, and update the
  * unified-inbox index. Always returns 200 so Meta doesn't retry-storm.
  *
- * Phase A is display-only: no AI auto-reply / outbound send on these channels
- * yet (that's the next slice). Echoes + non-text events are ignored.
+ * Phase B (Meta DM Agent v1): after the message is stored, the shared AI
+ * agent may auto-reply — gated on the agency's `metaAgentEnabledByAgency`
+ * (via `aiChannelGateOn(sa, "meta")`), the `aiAgent/meta` channel doc's
+ * enabled flag, `aiIsConfigured()`, and — for Instagram — the
+ * `instagram_manage_messages` capability on the stored token. The reply
+ * mirrors the platform the DM arrived on. AI failures never break the
+ * webhook contract (log + 200). Echoes + non-text events are ignored.
  */
 
 interface MetaMessaging {
@@ -55,6 +66,9 @@ interface ResolvedRoute {
   subAccountId: string;
   agencyId: string;
   pageAccessToken: string;
+  /** Full sub-account doc — the AI dispatch needs gates + metaConfig +
+   *  bookingLink without a second read. */
+  subAccount: SubAccountDoc;
 }
 
 /**
@@ -92,7 +106,63 @@ async function resolveRoute(
     subAccountId: snap.docs[0].id,
     agencyId: sa.agencyId,
     pageAccessToken: token,
+    subAccount: sa,
   };
+}
+
+/**
+ * Phase B — AI auto-reply dispatch for one just-stored inbound DM. All
+ * gate checks live here so the store/index path above never depends on AI
+ * state. Any failure is logged and swallowed — the webhook's 200 contract
+ * must hold regardless.
+ */
+async function maybeDispatchAiReply(input: {
+  route: ResolvedRoute;
+  contactId: string;
+  channel: "messenger" | "instagram";
+  senderId: string;
+  text: string;
+}): Promise<void> {
+  const { route, contactId, channel, senderId, text } = input;
+  const sa = route.subAccount;
+  try {
+    if (!aiIsConfigured()) return;
+    // Agency AI gate (opt-in) — separate from the inbox gate resolveRoute
+    // already enforced. Manual replies from the inbox are unaffected.
+    if (!aiChannelGateOn(sa, "meta")) return;
+    // A token without the Instagram messaging scope can't send IG replies —
+    // skip BEFORE spending LLM tokens. Messenger keeps working.
+    if (channel === "instagram" && !metaCanInstagramDm(sa.metaConfig)) return;
+
+    const agent = await resolveAgent(route.subAccountId, "meta");
+    if (!agent?.effective.enabled) return;
+
+    const contactSnap = await getAdminDb()
+      .collection("contacts")
+      .doc(contactId)
+      .get();
+    if (!contactSnap.exists) return;
+    const contact: Contact = {
+      id: contactSnap.id,
+      ...(contactSnap.data() as Omit<Contact, "id">),
+    };
+
+    await maybeRespondWithAi({
+      subAccountId: route.subAccountId,
+      subAccount: sa,
+      agent,
+      channelId: "meta",
+      metaChannel: channel,
+      contact,
+      incomingMessage: text,
+      replyTo: senderId,
+    });
+  } catch (err) {
+    console.error(
+      `[webhooks/meta] AI reply pipeline failed sa=${route.subAccountId}`,
+      err,
+    );
+  }
 }
 
 /**
@@ -187,7 +257,10 @@ export async function POST(request: Request) {
   }
 
   const object = payload.object ?? "page";
-  const channel: ConversationChannel =
+  // Narrower than ConversationChannel — the AI dispatch needs the platform
+  // union specifically; it widens fine everywhere ConversationChannel is
+  // expected.
+  const channel: "messenger" | "instagram" =
     object === "instagram" ? "instagram" : "messenger";
   const seen = new Map<string, string>();
   const db = getAdminDb();
@@ -251,6 +324,17 @@ export async function POST(request: Request) {
         channel,
         direction: "inbound",
         body: text,
+      });
+
+      // Phase B — AI auto-reply. Awaited (serverless can't fire-and-forget)
+      // but every failure is swallowed inside; Meta's timeout comfortably
+      // covers a Haiku reply (1-3s typical).
+      await maybeDispatchAiReply({
+        route,
+        contactId: contact.id,
+        channel,
+        senderId,
+        text,
       });
     }
   }

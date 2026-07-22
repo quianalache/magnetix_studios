@@ -32,6 +32,12 @@ export interface BuildSystemPromptInput {
    *  undefined → use the shared persona. Safety rails, KB and contact
    *  context are unchanged. */
   personaOverride?: string | null;
+  /** The sub-account's default booking URL (`subAccountDoc.bookingLink` —
+   *  same value the {{bookingLink}} merge tag resolves). When set, a
+   *  channel-aware booking block is injected so the agent shares the link
+   *  (text channels) or promises a text with it (voice) instead of dead-
+   *  ending on "someone will follow up". Null/blank → no block. */
+  bookingLink?: string | null;
 }
 
 export function buildSystemPrompt(input: BuildSystemPromptInput): string {
@@ -48,10 +54,44 @@ export function buildSystemPrompt(input: BuildSystemPromptInput): string {
   const kb = agent.effective.websiteKb?.trim();
   const kbBlock = kb ? buildKbBlock(kb) : null;
 
-  const sections = [persona, safetyRails, kbBlock, contactContextBlock].filter(
-    (s): s is string => !!s,
-  );
+  const booking = input.bookingLink?.trim();
+  const bookingBlock = booking ? buildBookingBlock(channelId, booking) : null;
+
+  const sections = [
+    persona,
+    safetyRails,
+    bookingBlock,
+    kbBlock,
+    contactContextBlock,
+  ].filter((s): s is string => !!s);
   return sections.join("\n\n");
+}
+
+/**
+ * Channel-aware booking guidance. Text channels share the raw URL (with an
+ * explicit carve-out from web-chat's no-external-links rule); voice never
+ * speaks a URL — it promises the link by text, matching the existing voice
+ * rail ("I'll text it through after the call"), and still runs lead capture
+ * so the team has the follow-up task. Every variant preserves the core
+ * "never invent appointment times" rule — the link replaces guessing.
+ */
+function buildBookingBlock(
+  channelId: ConfiguredChannelId,
+  url: string,
+): string {
+  if (channelId === "voice") {
+    return `--- BOOKING ---
+The business takes bookings through an online booking page. When the caller wants to book, schedule, or pick a time: never read the URL aloud — tell them the team will text the booking link through after the call, and treat it as a lead-capture trigger (ask for their name as usual). For reference only, never spoken: ${url}
+--- END BOOKING ---`;
+  }
+  const linkException =
+    channelId === "web-chat"
+      ? " Sharing this exact link is an allowed exception to the no-external-links rule."
+      : "";
+  return `--- BOOKING ---
+The business takes bookings at: ${url}
+When the person wants to book, schedule, or pick a time, share that exact link and invite them to grab a slot.${linkException} Still never invent or confirm specific appointment times yourself — the booking page shows live availability.
+--- END BOOKING ---`;
 }
 
 function buildKbBlock(kb: string): string {
@@ -116,6 +156,19 @@ Confirm the name back to the caller phonetically so they can correct it if you m
 Only ask for an email if the caller volunteers one or asks for something to be emailed — most callbacks don't need it.
 
 Do NOT emit any [[brackets]], JSON, markers, or structured tags in your reply — our system extracts the lead details automatically from the call transcript after we hang up, so you don't need to format anything special. Just speak like a person.`;
+  }
+
+  if (channelId === "meta") {
+    return `You are speaking as ${businessNameForPrompt} via a Facebook Messenger or Instagram direct message. Critical rules:
+- Keep replies short and conversational — 1-2 brief paragraphs. DMs are chat, not email.
+- PLAIN TEXT ONLY. No markdown of any kind (no asterisks, underscores, headings, bullets, or link syntax) — Messenger and Instagram render it literally. Plain URLs are fine.
+- Hard limit: keep every reply under 900 characters (Instagram rejects longer messages).
+- Emoji are welcome but light — at most one or two per reply, only when natural.
+- Never quote specific prices, make legal/medical commitments, or guarantee outcomes.
+- If asked something you don't know, say "let me check with the team and get back to you".
+- Do not invent appointment times — only confirm a callback or human follow-up.
+- You are replying to someone who messaged the business's page or profile. If they need a human, a quote, or a callback you can't resolve, reassure them the team will follow up (an escalation is raised automatically when relevant).
+- Do NOT emit any [[brackets]], markers, or structured tags — your reply is sent to the person exactly as written.`;
   }
 
   if (channelId === "web-chat") {

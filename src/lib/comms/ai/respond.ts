@@ -6,6 +6,7 @@ import {
   sendSmsForSubAccount,
   sendWhatsappForSubAccount,
 } from "@/lib/comms/twilio";
+import { sendMetaMessage } from "@/lib/comms/meta";
 import { callAi, type AiChatMessage } from "@/lib/comms/ai/openrouter";
 import {
   incrementChannelTokens,
@@ -33,16 +34,21 @@ interface RespondInput {
   /** Profile + channel config, already merged into effective values by
    *  the webhook caller via resolveAgent(). */
   agent: ResolvedAiAgent;
-  /** Which channel this respond run is for. Supported here: "sms" and
-   *  "whatsapp" — both ride Twilio with the same guards → context → LLM →
-   *  send → log flow, differing only in transport (see getChannelTransport).
-   *  web-chat + voice have their own orchestrators and never call this. */
+  /** Which channel this respond run is for. Supported here: "sms",
+   *  "whatsapp" (both Twilio) and "meta" (Messenger/Instagram DMs over the
+   *  Graph API) — same guards → context → LLM → send → log flow, differing
+   *  only in transport (see getChannelTransport). web-chat + voice have
+   *  their own orchestrators and never call this. */
   channelId: ConfiguredChannelId;
   contact: Contact;
   /** The just-arrived inbound text. */
   incomingMessage: string;
-  /** Caller's twilio "From" — needed for the outbound reply destination. */
-  contactPhone: string;
+  /** Reply destination — the caller's phone (Twilio channels) or the
+   *  sender's Meta-scoped user id (meta channel). */
+  replyTo: string;
+  /** REQUIRED when channelId === "meta": which platform the DM arrived on.
+   *  The reply mirrors it, and it becomes the conversation/draft channel. */
+  metaChannel?: "messenger" | "instagram";
 }
 
 type AiSkipReason =
@@ -62,15 +68,19 @@ type RespondOutcome =
   | { kind: "skipped"; reason: AiSkipReason };
 
 /**
- * Per-channel transport. The orchestrator is identical across SMS + WhatsApp;
- * only the message-thread subcollection, the opt-out flag, the provider send,
- * and the activity label differ. Centralising those four here keeps a single
- * orchestrator instead of one near-duplicate per channel.
+ * Per-channel transport. The orchestrator is identical across SMS, WhatsApp
+ * and Meta DMs; only the message-thread subcollection, the opt-out flag, the
+ * provider send, the outbound-row provider fields, and the activity label
+ * differ. Centralising those here keeps a single orchestrator instead of one
+ * near-duplicate per channel.
  */
 interface ChannelTransport {
   /** Subcollection under contacts/{id} where this channel's thread lives. */
   messagesCollection: string;
-  /** Human label used in activity-log lines ("SMS" / "WhatsApp"). */
+  /** When set, only thread rows whose `channel` field matches count as
+   *  history (metaMessages mixes messenger + instagram in one collection). */
+  historyChannelFilter?: string;
+  /** Human label used in activity-log lines ("SMS" / "Instagram" / …). */
   label: string;
   /** Per-channel opt-out flag check. */
   isOptedOut: (contact: Contact) => boolean;
@@ -81,9 +91,15 @@ interface ChannelTransport {
     to: string;
     body: string;
   }) => Promise<{ sid: string; from: string }>;
+  /** Provider-specific fields for the outbound thread row (message-id field
+   *  naming + channel discriminator differ between Twilio and Meta rows). */
+  outboundRowExtras: (sid: string) => Record<string, unknown>;
 }
 
-function getChannelTransport(channelId: ConfiguredChannelId): ChannelTransport {
+function getChannelTransport(
+  channelId: ConfiguredChannelId,
+  metaChannel?: "messenger" | "instagram",
+): ChannelTransport {
   if (channelId === "whatsapp") {
     // NB: no 24-hour session-window guard here. This orchestrator only ever
     // fires in response to a just-received inbound WhatsApp message, so the
@@ -96,6 +112,7 @@ function getChannelTransport(channelId: ConfiguredChannelId): ChannelTransport {
       isOptedOut: (c) => c.whatsappOptedOut === true,
       send: ({ subAccountId, subAccount, to, body }) =>
         sendWhatsappForSubAccount({ subAccountId, subAccount, to, body }),
+      outboundRowExtras: (sid) => ({ twilioMessageSid: sid }),
     };
   }
   if (channelId === "sms") {
@@ -107,6 +124,39 @@ function getChannelTransport(channelId: ConfiguredChannelId): ChannelTransport {
         sendSmsForSubAccount({ subAccountId, subAccount, to, body }).then(
           (r) => ({ sid: r.sid, from: r.from }),
         ),
+      outboundRowExtras: (sid) => ({ twilioMessageSid: sid }),
+    };
+  }
+  if (channelId === "meta") {
+    // Messenger/Instagram DM over the Graph API. `platform` decides the send
+    // channel + labels; the caller (Meta inbound webhook) always sets it to
+    // the platform the DM arrived on. No session-window guard needed — this
+    // orchestrator only fires on a just-received inbound, so Meta's 24h
+    // window is open by definition (same reasoning as WhatsApp above). No
+    // opt-out flag either: Meta has no STOP semantics — a user who doesn't
+    // want replies blocks the Page/profile on-platform, and Meta then
+    // rejects the send.
+    const platform = metaChannel ?? "messenger";
+    return {
+      messagesCollection: "metaMessages",
+      historyChannelFilter: platform,
+      label: platform === "instagram" ? "Instagram" : "Messenger",
+      isOptedOut: () => false,
+      send: async ({ subAccount, to, body }) => {
+        const cfg = subAccount.metaConfig;
+        if (!cfg?.connected || !cfg.pageAccessToken || !cfg.pageId) {
+          throw new Error("No connected Meta Page for this sub-account.");
+        }
+        const messageId = await sendMetaMessage({
+          channel: platform,
+          fromNodeId: cfg.pageId,
+          recipientId: to,
+          text: body,
+          pageAccessToken: cfg.pageAccessToken,
+        });
+        return { sid: messageId, from: cfg.pageId };
+      },
+      outboundRowExtras: (sid) => ({ channel: platform, metaMessageId: sid }),
     };
   }
   // web-chat + voice have dedicated orchestrators; they never reach here.
@@ -153,20 +203,32 @@ async function loadRecentHistory(
   limit: number,
   excludeBody: string,
   messagesCollection: string,
+  channelFilter?: string,
 ): Promise<AiChatMessage[]> {
   const safeLimit = Math.max(1, Math.min(50, limit));
+  // With a channel filter (metaMessages mixes messenger + instagram rows in
+  // one collection), over-fetch so in-code filtering still yields ~limit
+  // turns. In-code beats a where() here — no composite index needed.
+  const fetchLimit = channelFilter
+    ? Math.min(50, safeLimit * 2 + 1)
+    : safeLimit + 1;
   const snap = await getAdminDb()
     .collection("contacts")
     .doc(contactId)
     .collection(messagesCollection)
     .orderBy("createdAt", "desc")
-    .limit(safeLimit + 1)
+    .limit(fetchLimit)
     .get();
   const docs = snap.docs.reverse();
   const turns: AiChatMessage[] = [];
   for (const d of docs) {
-    const data = d.data() as { direction?: string; body?: string };
+    const data = d.data() as {
+      direction?: string;
+      body?: string;
+      channel?: string;
+    };
     if (!data.body) continue;
+    if (channelFilter && data.channel !== channelFilter) continue;
     if (data.direction === "inbound" && data.body.trim() === excludeBody.trim()) {
       continue;
     }
@@ -223,8 +285,9 @@ async function storeOutboundReply({
   body,
   from,
   to,
-  twilioSid,
+  providerSid,
   messagesCollection,
+  extras,
 }: {
   contactId: string;
   agencyId: string;
@@ -232,15 +295,19 @@ async function storeOutboundReply({
   body: string;
   from: string;
   to: string;
-  twilioSid: string;
+  /** Provider message id — also the doc id (natural retry-dedupe). */
+  providerSid: string;
   messagesCollection: string;
+  /** Provider-specific row fields from the transport (e.g.
+   *  `twilioMessageSid` for Twilio, `channel` + `metaMessageId` for Meta). */
+  extras: Record<string, unknown>;
 }): Promise<void> {
   try {
     await getAdminDb()
       .collection("contacts")
       .doc(contactId)
       .collection(messagesCollection)
-      .doc(twilioSid)
+      .doc(providerSid)
       .set(
         {
           agencyId,
@@ -251,7 +318,7 @@ async function storeOutboundReply({
           body,
           from,
           to,
-          twilioMessageSid: twilioSid,
+          ...extras,
           sentByUid: "ai",
           aiGenerated: true,
           error: null,
@@ -280,10 +347,14 @@ export async function maybeRespondWithAi(
     channelId,
     contact,
     incomingMessage,
-    contactPhone,
+    replyTo,
+    metaChannel,
   } = input;
   const eff = agent.effective;
-  const transport = getChannelTransport(channelId);
+  const transport = getChannelTransport(channelId, metaChannel);
+  // The conversation/draft channel mirrors the platform for Meta DMs
+  // ("messenger" | "instagram"); for Twilio channels it IS the channel id.
+  const conversationChannel = (metaChannel ?? channelId) as ConversationChannel;
 
   // Guard: contact is opted out of this channel.
   if (transport.isOptedOut(contact)) {
@@ -338,7 +409,11 @@ export async function maybeRespondWithAi(
         businessName:
           eff.businessName.trim() || subAccount.name || "your business",
         contactName: contact.name || "(unnamed)",
-        contactPhone,
+        // Meta contacts often have no phone — the platform label beats a
+        // raw Meta-scoped id in the notification email.
+        contactPhone:
+          contact.phone?.trim() ||
+          (metaChannel ? `(via ${transport.label})` : replyTo),
         contactId: contact.id,
         subAccountId,
         triggeredKeyword: triggered,
@@ -394,6 +469,7 @@ export async function maybeRespondWithAi(
         eff.contextMessageCount,
         incomingMessage,
         transport.messagesCollection,
+        transport.historyChannelFilter,
       ),
       buildContactContextBlock(contact).catch((err) => {
         console.warn(
@@ -408,6 +484,7 @@ export async function maybeRespondWithAi(
       channelId,
       fallbackBusinessName: subAccount.name ?? "the business",
       contactContextBlock: contextBlock,
+      bookingLink: subAccount.bookingLink ?? null,
     });
     const messages: AiChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -440,8 +517,8 @@ export async function maybeRespondWithAi(
       subAccountId,
       agencyId: subAccount.agencyId,
       contactName: contact.name ?? "",
-      contactPhone: contact.phone ?? contactPhone,
-      channel: channelId as ConversationChannel,
+      contactPhone: contact.phone ?? (metaChannel ? "" : replyTo),
+      channel: conversationChannel,
       body: completion.text,
       model: completion.model,
       tokens: completion.totalTokens,
@@ -454,25 +531,27 @@ export async function maybeRespondWithAi(
     };
   }
 
-  // Send the reply via the channel transport (SMS or WhatsApp over Twilio).
+  // Send the reply via the channel transport (Twilio or the Meta Graph API).
   let send;
   try {
     send = await transport.send({
       subAccountId,
       subAccount,
-      to: contactPhone,
+      to: replyTo,
       body: completion.text,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error(`[ai/respond] Twilio send failed for sa=${subAccountId}: ${msg}`);
+    console.error(
+      `[ai/respond] ${transport.label} send failed for sa=${subAccountId}: ${msg}`,
+    );
     await logActivity({
       contactId: contact.id,
       agencyId: subAccount.agencyId,
       subAccountId,
       type: "ai_skipped",
       content: `AI reply generated but ${transport.label} send failed: ${msg.slice(0, 200)}`,
-      meta: { reason: "llm_failed", twilioError: msg.slice(0, 500), channel: channelId },
+      meta: { reason: "llm_failed", sendError: msg.slice(0, 500), channel: channelId },
     });
     return { kind: "skipped", reason: "llm_failed" };
   }
@@ -483,20 +562,21 @@ export async function maybeRespondWithAi(
     subAccountId,
     body: completion.text,
     from: send.from,
-    to: contactPhone,
-    twilioSid: send.sid,
+    to: replyTo,
+    providerSid: send.sid,
     messagesCollection: transport.messagesCollection,
+    extras: transport.outboundRowExtras(send.sid),
   });
 
   // Unified-inbox index — reflect the bot's reply as the conversation's
-  // latest message (channelId here is always "sms" | "whatsapp").
+  // latest message.
   await upsertConversationForMessage({
     contactId: contact.id,
     subAccountId,
     agencyId: subAccount.agencyId,
     contactName: contact.name ?? "",
-    contactPhone: contact.phone ?? contactPhone,
-    channel: channelId as ConversationChannel,
+    contactPhone: contact.phone ?? (metaChannel ? null : replyTo),
+    channel: conversationChannel,
     direction: "outbound",
     body: completion.text,
   });
@@ -513,7 +593,7 @@ export async function maybeRespondWithAi(
       tokens: completion.totalTokens,
       promptTokens: completion.promptTokens,
       completionTokens: completion.completionTokens,
-      twilioSid: send.sid,
+      providerSid: send.sid,
     },
   });
 
