@@ -256,6 +256,7 @@ export async function respondToWebChat(
     channelId: "web-chat",
     fallbackBusinessName: subAccount?.name ?? "the business",
     contactContextBlock: contextBlock,
+    bookingLink: subAccount?.bookingLink ?? null,
   });
 
   // Tack a session-state hint onto the prompt when capture is already

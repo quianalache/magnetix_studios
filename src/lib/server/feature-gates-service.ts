@@ -50,6 +50,9 @@ export interface ApplyGatesResult {
 const META_GATES: ReadonlySet<AgencyGateField> = new Set([
   "metaInboxEnabledByAgency",
   "socialPlannerEnabledByAgency",
+  // The AI auto-reply gate is useless without the Meta app creds the inbox
+  // itself needs — same skip-on-unconfigured treatment.
+  "metaAgentEnabledByAgency",
 ]);
 
 export async function applyFeatureGates(

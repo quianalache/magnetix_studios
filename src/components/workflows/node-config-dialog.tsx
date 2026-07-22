@@ -208,8 +208,48 @@ export function NodeConfigDialog({
             </Field>
           )}
 
+          {step.type === "wait_for_reply" && (
+            <>
+              <Field label="Wait for a reply for up to">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24"
+                    value={wait.value}
+                    onChange={(e) =>
+                      set({
+                        seconds:
+                          Math.max(1, Number(e.target.value)) * wait.unit,
+                      })
+                    }
+                  />
+                  <select
+                    value={wait.unit}
+                    onChange={(e) =>
+                      set({ seconds: wait.value * Number(e.target.value) })
+                    }
+                    className="border-input bg-background h-9 rounded-md border px-2 text-sm"
+                  >
+                    <option value={60}>minutes</option>
+                    <option value={3_600}>hours</option>
+                    <option value={86_400}>days</option>
+                  </select>
+                </div>
+              </Field>
+              <p className="text-muted-foreground text-xs">
+                If the contact replies within this window, the workflow
+                continues down the <strong>Replied</strong> branch right away;
+                otherwise it takes the <strong>No reply</strong> branch when
+                the window ends. Counts SMS, WhatsApp, and Facebook/Instagram
+                replies — email replies go straight to your own inbox and
+                can&apos;t be detected.
+              </p>
+            </>
+          )}
+
           {step.type === "if_else" && (
-            <Field label="Continue down “yes” when ALL of:">
+            <Field label="Continue down “yes” when:">
               <ConditionsEditor
                 value={(cfg.conditions as ConditionGroup) ?? { all: [] }}
                 onChange={(g) => set({ conditions: g })}

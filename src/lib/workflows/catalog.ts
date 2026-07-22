@@ -13,7 +13,11 @@ export const TRIGGER_LABELS: Record<WorkflowTriggerType, string> = {
   "contact.tag.added": "Tag added to contact",
   "pipeline.stage.changed": "Pipeline stage changed",
   "booking.created": "Booking created",
+  "booking.cancelled": "Booking cancelled",
+  "booking.rescheduled": "Booking rescheduled",
   "quote.accepted": "Quote accepted",
+  "quote.paid": "Quote/invoice paid",
+  "message.received": "Message received (inbox)",
 };
 
 export const NODE_LABELS: Record<WorkflowNodeType, string> = {
@@ -21,6 +25,7 @@ export const NODE_LABELS: Record<WorkflowNodeType, string> = {
   send_sms: "Send SMS",
   whatsapp_template: "Send WhatsApp",
   wait: "Wait",
+  wait_for_reply: "Wait for reply",
   if_else: "If / else",
   goal: "End workflow",
   add_tag: "Add tag",
@@ -53,6 +58,7 @@ export const ADDABLE_TYPES: WorkflowNodeType[] = [
   "send_sms",
   "whatsapp_template",
   "wait",
+  "wait_for_reply",
   "add_tag",
   "remove_tag",
   "move_stage",
@@ -85,6 +91,8 @@ export function defaultConfig(type: WorkflowNodeType): Record<string, unknown> {
       return { templateId: "", manualValues: {} };
     case "wait":
       return { seconds: 86_400 };
+    case "wait_for_reply":
+      return { seconds: 2 * 86_400 };
     case "if_else":
       return { conditions: { all: [] } };
     case "add_tag":
@@ -120,6 +128,16 @@ export function nodeSummary(step: BuilderStep): string {
       if (s % 86_400 === 0) return `Wait ${s / 86_400} day(s)`;
       if (s % 3_600 === 0) return `Wait ${s / 3_600} hour(s)`;
       return `Wait ${Math.round(s / 60)} min`;
+    }
+    case "wait_for_reply": {
+      const s = Number(c.seconds ?? 0);
+      const win =
+        s % 86_400 === 0
+          ? `${s / 86_400} day(s)`
+          : s % 3_600 === 0
+            ? `${s / 3_600} hour(s)`
+            : `${Math.round(s / 60)} min`;
+      return `Up to ${win}`;
     }
     case "if_else": {
       const n = ((c.conditions as { all?: unknown[] })?.all ?? []).length;

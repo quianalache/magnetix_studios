@@ -1,10 +1,10 @@
 import type { WorkflowNode, WorkflowNodeType } from "@/types/workflows";
 
 /**
- * The builder edits a TREE (linear list, where an `if_else` step carries two
+ * The builder edits a TREE (linear list, where a branching step carries two
  * nested branch lists); the engine stores a NODE MAP with next/branch pointers.
- * These two helpers convert between them. An `if_else` is always terminal in
- * its list — branches are where the flow continues.
+ * These two helpers convert between them. A branching step is always terminal
+ * in its list — branches are where the flow continues.
  */
 export interface BuilderStep {
   id: string;
@@ -12,6 +12,11 @@ export interface BuilderStep {
   config: Record<string, unknown>;
   whenTrue?: BuilderStep[];
   whenFalse?: BuilderStep[];
+}
+
+/** Node types that split into whenTrue/whenFalse branches. */
+export function isBranchingType(t: WorkflowNodeType): boolean {
+  return t === "if_else" || t === "wait_for_reply";
 }
 
 export function newNodeId(): string {
@@ -37,11 +42,11 @@ export function parseTree(
         type: n.type,
         config: n.config ?? {},
       };
-      if (n.type === "if_else") {
+      if (isBranchingType(n.type)) {
         step.whenTrue = walk(n.branches?.whenTrue ?? null);
         step.whenFalse = walk(n.branches?.whenFalse ?? null);
         out.push(step);
-        break; // if_else is terminal in a list
+        break; // a branching step is terminal in a list
       }
       out.push(step);
       cur = n.next ?? null;
@@ -62,7 +67,7 @@ export function flattenTree(steps: BuilderStep[]): {
     let prev: WorkflowNode | null = null;
     for (const s of list) {
       const node: WorkflowNode = { id: s.id, type: s.type, config: s.config };
-      if (s.type === "if_else") {
+      if (isBranchingType(s.type)) {
         node.branches = {
           whenTrue: build(s.whenTrue ?? []),
           whenFalse: build(s.whenFalse ?? []),
@@ -70,7 +75,7 @@ export function flattenTree(steps: BuilderStep[]): {
       }
       nodes[s.id] = node;
       if (!firstId) firstId = s.id;
-      if (prev && prev.type !== "if_else") prev.next = s.id;
+      if (prev && !isBranchingType(prev.type)) prev.next = s.id;
       prev = node;
     }
     return firstId;

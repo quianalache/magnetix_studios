@@ -3,6 +3,10 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import {
+  fireWorkflowTrigger,
+  resumeWaitingRunsOnReply,
+} from "@/lib/workflows/engine";
 import type {
   ConversationBotMode,
   ConversationChannel,
@@ -122,6 +126,22 @@ export async function upsertConversationForMessage(
             preview: preview,
           },
         },
+      });
+      // A reply resolves any workflow run parked on a wait_for_reply node.
+      // Self-guarded fire-and-forget — same contract as the webhook emit.
+      void resumeWaitingRunsOnReply({
+        subAccountId: input.subAccountId,
+        contactId: input.contactId,
+        channel: input.channel,
+      });
+      // And enrolls the contact in message.received workflows (the trigger's
+      // optional channel filter narrows inside fireWorkflowTrigger).
+      void fireWorkflowTrigger({
+        subAccountId: input.subAccountId,
+        agencyId: input.agencyId,
+        type: "message.received",
+        contactId: input.contactId,
+        context: { channel: input.channel },
       });
     }
   } catch (err) {

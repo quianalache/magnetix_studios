@@ -43,6 +43,7 @@ interface PatchBody {
   webChatEnabled?: boolean;
   inboundVoiceEnabled?: boolean;
   metaInboxEnabled?: boolean;
+  metaAgentEnabled?: boolean;
   websiteEnabled?: boolean;
   socialPlannerEnabled?: boolean;
   communityEnabled?: boolean;
@@ -98,6 +99,7 @@ export async function PATCH(
   const wantsWebChat = typeof body.webChatEnabled === "boolean";
   const wantsInboundVoice = typeof body.inboundVoiceEnabled === "boolean";
   const wantsMetaInbox = typeof body.metaInboxEnabled === "boolean";
+  const wantsMetaAgent = typeof body.metaAgentEnabled === "boolean";
   const wantsWebsite = typeof body.websiteEnabled === "boolean";
   const wantsSocialPlanner = typeof body.socialPlannerEnabled === "boolean";
   const wantsCommunity = typeof body.communityEnabled === "boolean";
@@ -139,6 +141,7 @@ export async function PATCH(
     !wantsWebChat &&
     !wantsInboundVoice &&
     !wantsMetaInbox &&
+    !wantsMetaAgent &&
     !wantsWebsite &&
     !wantsSocialPlanner &&
     !wantsCommunity &&
@@ -168,7 +171,9 @@ export async function PATCH(
   // Meta gate when unconfigured (the UI grays these out; this guards the API).
   // Disabling is always allowed.
   if (
-    (body.metaInboxEnabled === true || body.socialPlannerEnabled === true) &&
+    (body.metaInboxEnabled === true ||
+      body.socialPlannerEnabled === true ||
+      body.metaAgentEnabled === true) &&
     !metaAppConfigured()
   ) {
     return NextResponse.json(
@@ -221,6 +226,9 @@ export async function PATCH(
   }
   if (typeof body.metaInboxEnabled === "boolean") {
     gates.metaInboxEnabledByAgency = body.metaInboxEnabled;
+  }
+  if (typeof body.metaAgentEnabled === "boolean") {
+    gates.metaAgentEnabledByAgency = body.metaAgentEnabled;
   }
   if (typeof body.websiteEnabled === "boolean") {
     gates.websiteEnabledByAgency = body.websiteEnabled;
@@ -305,6 +313,7 @@ export async function PATCH(
       ? { inboundVoiceEnabled: body.inboundVoiceEnabled }
       : {}),
     ...(wantsMetaInbox ? { metaInboxEnabled: body.metaInboxEnabled } : {}),
+    ...(wantsMetaAgent ? { metaAgentEnabled: body.metaAgentEnabled } : {}),
     ...(wantsWebsite ? { websiteEnabled: body.websiteEnabled } : {}),
     ...(wantsSocialPlanner
       ? { socialPlannerEnabled: body.socialPlannerEnabled }

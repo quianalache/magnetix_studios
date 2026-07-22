@@ -17,6 +17,11 @@ import type {
 } from "@/types";
 
 export const dynamic = "force-dynamic";
+// Instagram publishing polls the media container until Meta finishes its async
+// processing (up to ~4 min for slow images) — the default function budget
+// would kill the wait mid-poll. 300s is within Vercel's Fluid-compute limit on
+// every plan tier.
+export const maxDuration = 300;
 
 interface CallbackBody {
   postId?: string;

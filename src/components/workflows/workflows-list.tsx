@@ -10,6 +10,7 @@ import {
   GitBranch,
   Loader2,
   Plus,
+  Reply,
   Sprout,
   Trash2,
   Workflow,
@@ -33,7 +34,8 @@ type WorkflowTemplate =
   | "speed-to-lead"
   | "appointment-confirmation"
   | "lead-nurture"
-  | "stage-change-followup";
+  | "stage-change-followup"
+  | "no-reply-followup";
 
 const TEMPLATES: {
   id: WorkflowTemplate;
@@ -64,6 +66,12 @@ const TEMPLATES: {
     label: "Stage-Change Follow-up",
     hint: "Deal moves stage → follow-up task + notify",
     icon: GitBranch,
+  },
+  {
+    id: "no-reply-followup",
+    label: "No-reply Follow-up",
+    hint: "Contact goes quiet → SMS nudge → task if still silent",
+    icon: Reply,
   },
 ];
 

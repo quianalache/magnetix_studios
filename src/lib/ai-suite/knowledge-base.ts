@@ -47,9 +47,27 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     levels: ["sub-account"],
     title: "Contacts",
     location: "Sidebar → Contacts",
-    keywords: ["contact", "lead", "people", "import", "csv", "export", "notes", "activity", "tags"],
+    keywords: ["contact", "lead", "people", "import", "csv", "export", "notes", "activity", "tags", "custom field"],
     body:
-      "Contacts holds every lead and customer for the sub-account. Add or edit a contact from the add/edit modal, and open a contact to see its profile with notes and a unified activity timeline. You can import and export contacts as CSV. Contacts carry a source badge (e.g. Web Chat, Booking, Form) showing where they came from, plus captured marketing attribution (UTM/referrer) when they arrived via a public form. The assistant can add a contact (with tags) or search contacts for you.",
+      "Contacts holds every lead and customer for the sub-account. Add or edit a contact from the add/edit modal, and open a contact to see its profile with notes and a unified activity timeline. You can import and export contacts as CSV. Contacts carry a source badge (e.g. Web Chat, Booking, Form) showing where they came from, plus captured marketing attribution (UTM/referrer) when they arrived via a public form. Contacts (and deals) also support custom fields defined under Settings → Custom Fields. The assistant can add a contact (with tags) or search contacts for you.",
+  },
+  {
+    id: "custom-fields",
+    levels: ["sub-account"],
+    title: "Custom fields (contacts & deals)",
+    location: "Sidebar → Settings Sub-Account → Custom Fields tab",
+    keywords: ["custom field", "custom fields", "extra field", "field type", "dropdown", "define field", "contact field", "deal field", "required field"],
+    body:
+      "Custom Fields lets a workspace admin define its own fields on contacts and deals — pick the entity (contact or deal), a label, a type (text, number, date, dropdown, etc.), and whether it's required. Defined fields then appear on the contact and deal add/edit forms and store per-record values. Managed under Settings → Custom Fields tab (admin-only to define; everyone can fill values).",
+  },
+  {
+    id: "google-reviews",
+    levels: ["sub-account", "agency"],
+    title: "Google review requests (SMS & WhatsApp)",
+    location: "Sidebar → Settings Sub-Account → Messaging tab → Google reviews",
+    keywords: ["google review", "review", "reviews", "review request", "review automation", "reputation", "5 star", "rating", "review link", "ask for review", "request review"],
+    body:
+      "Google review requests send a 'leave us a review' message to a contact over SMS or WhatsApp, with the workspace's Google review link. Set it up under Settings → Messaging tab → Google reviews: paste the Google review URL, pick the channel (SMS free-form; WhatsApp requires the agency WhatsApp gate + a configured WhatsApp sender, and auto-sends need an approved WhatsApp template), and edit the message ({{firstName}}, {{businessName}}, {{reviewUrl}} merge tags). Two ways to send: manually — a 'Request a Google review' button on a contact's profile (shown once the review URL is configured; contact needs a phone number) — or automatically when a quote/invoice is marked paid or a deal is completed (each auto trigger is its own toggle). Auto-sends respect a per-contact cooldown (default 90 days) and opt-outs; every request is logged on the contact's activity timeline and in the unified inbox.",
   },
   ...(GET_LEADS_PARKED ? [] : [GET_LEADS_CARD]),
   {
@@ -75,9 +93,9 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     levels: ["sub-account"],
     title: "Booking pages",
     location: "Sidebar → Booking",
-    keywords: ["booking", "calendly", "slot", "appointment", "self-service", "reschedule", "cancel", "reminder"],
+    keywords: ["booking", "calendly", "slot", "appointment", "self-service", "reschedule", "cancel", "reminder", "booking link", "bookinglink", "merge tag", "voice booking"],
     body:
-      "Booking is a Calendly-style public slot picker per sub-account. Configure a booking page (durations, working hours, required fields, optional price and reminders), then share its public URL. A visitor picks a slot; the server re-verifies availability, reconciles a contact, creates a calendar event, and sends an ICS-attached confirmation email. Reschedule, cancel, reminders, and paid-hold expiry are handled automatically.",
+      "Booking is a Calendly-style public slot picker per sub-account. Configure a booking page (durations, working hours, required fields, optional price and reminders), then share its public URL. A visitor picks a slot; the server re-verifies availability, reconciles a contact, creates a calendar event, and sends an ICS-attached confirmation email. Reschedule, cancel, reminders, and paid-hold expiry are handled automatically. The Booking page also has a 'Default booking link' card (admins): pick one of your published booking pages or paste a custom URL (e.g. Calendly) — that URL is what the {{bookingLink}} merge tag resolves to in workflows, broadcasts, and templates, and it's the link the AI agents share when someone asks to schedule.",
   },
   {
     id: "tasks",
@@ -129,18 +147,38 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     levels: ["sub-account"],
     title: "Workflows (visual automation builder)",
     location: "Sidebar → Workflows",
-    keywords: ["workflow", "automation", "builder", "speed to lead", "trigger", "sms", "email", "drip", "nurture", "publish", "template"],
+    keywords: ["workflow", "automation", "builder", "speed to lead", "trigger", "sms", "email", "drip", "nurture", "publish", "template", "wait for reply", "no reply", "follow up", "branch", "re-enroll"],
     body:
-      "Workflows is a visual automation builder: pick a trigger (e.g. form submitted, contact created, deal stage changed), then chain steps like send SMS, send email, wait, and create task. Start from a template — Speed-to-Lead, Appointment Confirmation, Lead Nurture, Stage-Change Follow-up — or blank. Workflows are created as drafts; publish to make them live, and check per-run history under the workflow's Runs. Emails must include the unsubscribe link. Delayed steps run through a background queue, so workflows need QStash configured on the deployment. The assistant can create a workflow from a starter template for you (as a draft). Related settings — the Reply-To address, sending-hours window, and the 'Pause all workflows' switch — live under Sidebar → Settings → Sending preferences (Messaging tab), not on the Workflows page.",
+      "Workflows is a visual automation builder: pick a trigger (form submitted, contact created, tag added, deal stage changed, booking created/cancelled/rescheduled, quote accepted, quote/invoice paid, or message received — the last with an optional channel filter), then chain steps like send SMS, send email, send WhatsApp template, wait, and create task. Two branching steps: If/else (conditions on the contact, matched ALL or ANY) and Wait for reply — 'if they don't reply within N days, do X': it takes the Replied branch the moment the contact messages back (SMS, WhatsApp, or Facebook/Instagram — email replies can't be detected because they go straight to your own inbox) or the No-reply branch when the window ends. Each workflow has a re-enrollment setting: every time, not while already in the workflow, or only once per contact. Start from a template — Speed-to-Lead, Appointment Confirmation, Lead Nurture, Stage-Change Follow-up, No-reply Follow-up — or blank. Workflows are created as drafts; publish to make them live, and check per-run history under the workflow's Runs. Emails must include the unsubscribe link. Delayed steps run through a background queue, so workflows need QStash configured on the deployment. The assistant can create a workflow from a starter template for you (as a draft). Related settings — the Reply-To address, sending-hours window, and the 'Pause all workflows' switch — live under Sidebar → Settings → Sending preferences (Messaging tab), not on the Workflows page.",
   },
   {
     id: "ai-agents",
     levels: ["sub-account"],
     title: "AI Agents",
     location: "Sidebar → AI Agents",
-    keywords: ["ai agent", "bot", "web chat", "sms", "whatsapp", "voice", "persona", "channel", "openrouter", "outbound"],
+    keywords: ["ai agent", "bot", "web chat", "sms", "whatsapp", "messenger", "instagram", "voice", "persona", "channel", "openrouter", "outbound", "booking link"],
     body:
-      "AI Agents is one persona (system prompt + business hours + escalation keywords + optional website knowledge base) that answers across channels. Configure the shared persona on the Overview, then enable channels: Web Chat (an embeddable widget), SMS and WhatsApp (auto-replies on the dedicated Twilio number), and Voice (AI answers inbound calls). Outbound Voice proactively dials contacts. Every channel needs a non-empty persona prompt first, and channels that send need a dedicated Twilio number (Settings → SMS). Note: AI Agents answers your CLIENTS' inbound messages — the Workspace Assistant (this assistant) helps YOU use the app, and is separate.",
+      "AI Agents is one persona (system prompt + business hours + escalation keywords + optional website knowledge base) that answers across channels. Configure the shared persona on the Overview, then enable channels: Web Chat (an embeddable widget), SMS and WhatsApp (auto-replies on the dedicated Twilio number), Messenger & Instagram (auto-replies to DMs on the connected Meta Page), and Voice (AI answers inbound calls — and can BOOK appointments live during the call: pick a published booking page under Voice settings → 'Live appointment booking' and the agent offers real slots and books the caller in, phone-only, no deposit pages). Outbound Voice proactively dials contacts. Every channel needs a non-empty persona prompt first; Twilio channels need a dedicated Twilio number (Settings → SMS) and Messenger & Instagram needs the Meta connection (Settings → Facebook & Instagram). When the workspace has a default booking link set (Booking page), every agent shares it when someone wants to schedule. Note: AI Agents answers your CLIENTS' inbound messages — the Workspace Assistant (this assistant) helps YOU use the app, and is separate.",
+  },
+  {
+    id: "messenger-instagram-ai",
+    // Dual-level: sub-account operators ask "why isn't the bot answering my
+    // DMs / why is this locked", and the agency owner flips both gates.
+    levels: ["sub-account", "agency"],
+    title: "Messenger & Instagram AI auto-reply",
+    location: "Sidebar → AI Agents → Messenger & Instagram",
+    keywords: ["messenger", "instagram", "dm", "facebook", "auto reply", "ig bot", "meta", "dm bot", "instagram bot", "facebook bot", "social inbox ai", "not replying"],
+    body:
+      "The Messenger & Instagram channel lets the shared AI agent answer inbound Facebook Messenger and Instagram DMs automatically — one switch covers both platforms, and the reply always goes back on the platform the DM arrived on. Prerequisites, in order: the agency owner must enable BOTH the 'Facebook + Instagram inbox' gate AND the 'Messenger & Instagram AI auto-reply' gate (Agency → Sub-accounts → Manage — they're separate switches because the bot spends the agency's AI credits); a Facebook Page must be connected under Settings → Facebook & Instagram; and the agent persona must be saved on the AI Agents Overview. If the Meta connection is missing Instagram messaging permission, the bot answers Messenger only and the settings page shows how to fix it (Reconnect and approve Instagram access). Replying to a conversation manually from the inbox pauses the bot on that thread, and each conversation's AI controls (auto / suggest a draft / off) apply — in suggest mode the bot's reply appears as a draft you approve before it sends.",
+  },
+  {
+    id: "voice-live-booking",
+    levels: ["sub-account"],
+    title: "Voice agent live appointment booking",
+    location: "Sidebar → AI Agents → Voice → Live appointment booking",
+    keywords: ["voice booking", "book appointment", "phone booking", "ai book", "book over the phone", "voice agent book", "book a call", "schedule by phone", "live booking", "book caller", "follow up task", "confirm booking"],
+    body:
+      "The inbound Voice AI can book real appointments during a call. Turn it on under AI Agents → Voice → 'Live appointment booking' by picking one of your PUBLISHED booking pages (deposit-taking pages can't be booked by phone and aren't listed). When a caller wants to book, the agent checks live availability on that page, offers up to three times from the next 7 days, asks the caller's name, and books the slot — the appointment lands on the calendar as a normal booking (same activity log and workflow triggers), assigned automatically in team mode. Bookings are phone-only: no email is collected, so no confirmation email or reminders are sent — the caller is identified by caller ID (new callers become a contact with source 'Voice'). Because nothing is emailed to the caller, every booking attempt creates a team follow-up Task after the call ends: a 'Follow up with…' task when a booking was made (a nudge to confirm the appointment with the caller), or a 'Call back…' task when a caller tried to book but the call ended before a time was locked in. If a time gets taken mid-call the agent apologises and offers alternatives; if nothing suits, it falls back to offering the workspace's booking link. Prerequisites: the Voice channel must be enabled (with its usual Vapi + Twilio setup), and the chosen page must stay published.",
   },
   {
     id: "conversations",
@@ -149,7 +187,7 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     location: "Sidebar → Conversations",
     keywords: ["conversation", "inbox", "message", "reply", "unified", "thread", "chat"],
     body:
-      "Conversations is a unified inbox across SMS, WhatsApp, and (when enabled) Facebook/Instagram DMs. Open a thread to read history and reply from the composer; the available send channels depend on what's connected and whether the contact has messaged on that channel. An unread badge appears in the sidebar.",
+      "Conversations is a unified inbox across SMS, WhatsApp, and (when enabled) Facebook/Instagram DMs. Open a thread to read history and reply from the composer; the available send channels depend on what's connected and whether the contact has messaged on that channel. Each conversation has AI controls (auto-reply / suggest a draft / off) for the channel bots, and replying manually pauses the bot on that thread; in suggest mode the AI's reply appears as a draft you edit and approve before it sends. An unread badge appears in the sidebar.",
   },
   {
     id: "broadcasts",
@@ -179,6 +217,15 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
       "Community is a Skool-style space with a group feed, a classroom for courses (sections + lessons with YouTube/Vimeo video), leaderboards, and gamification. Groups can be free or paid, open-join or approval-required; members join via magic link and are tied to contacts — share the community's public URL to invite them. It's agency-gated — if 'Locked', ask your agency owner to enable it. The assistant can set up a new free community for you, including its first course and lesson, and give you the live URLs.",
   },
   {
+    id: "labs",
+    levels: ["sub-account", "agency"],
+    title: "Labs (pre-release features & the Follow-up Watchdog)",
+    location: "Sidebar → Labs",
+    keywords: ["labs", "experimental", "beta", "watchdog", "follow-up watchdog", "inbox watchdog", "agent", "autonomous", "unanswered", "waiting on reply", "pre-release"],
+    body:
+      "Labs is the home for pre-release, experimental features. It's agency-gated (hidden by default — the agency owner enables the Labs gate per sub-account from the Manage dialog). Its first resident is the Inbox Follow-up Watchdog: an hourly background agent that scans the unified inbox for conversations where a customer wrote in and nobody replied for longer than your threshold, uses AI to judge which ones genuinely need a follow-up, and for each flagged thread creates a Task and sends a push notification to the team. It only ever ADDS internal items — it never messages customers or changes records. Configure it on the Labs page: on/off toggle, the waiting threshold (1–24 hours), optional extra judging criteria, quiet hours for pushes, and a recent-runs log. It also requires the Workspace Assistant (AI Suite) gate to be on, since judgments spend the agency's AI credits.",
+  },
+  {
     id: "reports",
     levels: ["sub-account"],
     title: "Reports",
@@ -194,7 +241,34 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     location: "Sidebar → Settings Sub-Account",
     keywords: ["settings", "twilio", "sms", "email domain", "api key", "webhook", "payments", "paypal", "members", "send window"],
     body:
-      "Settings is where you configure the sub-account: dedicated Twilio SMS (paste your Account SID, Auth Token, and From number to enable SMS threads + AI channels), a dedicated email sending domain (agency-gated), Sending preferences (Reply-To address, sending-hours window, pause-all-workflows), API keys + webhooks for the public API (agency-gated), PayPal.me for invoice payments, members + invites, and the Facebook & Instagram connection.",
+      "Settings is where you configure the sub-account, organized into tabs: Admin (members + invites, territory scoping, branding), Messaging (dedicated Twilio SMS — paste your Account SID, Auth Token, and From number to enable SMS threads + AI channels — plus Missed Call Text Back, Google reviews, a dedicated email sending domain (agency-gated), Sending preferences, and the Facebook & Instagram connection), API (API keys + webhooks for the public API, agency-gated, plus PayPal.me for invoice payments), Custom Fields (define fields on contacts/deals), and Importer (migrate from GoHighLevel).",
+  },
+  {
+    id: "missed-call-text-back",
+    levels: ["sub-account", "agency"],
+    title: "Missed Call Text Back",
+    location: "Sidebar → Settings Sub-Account → Messaging tab → SMS section",
+    keywords: ["missed call", "text back", "mctb", "missed call text back", "call forward", "ring timeout", "auto text", "missed caller", "call back sms"],
+    body:
+      "Missed Call Text Back automatically texts a caller who rings the sub-account's dedicated Twilio number and isn't answered — optionally forwarding the call to a real phone first (with a configurable ring timeout) and sending the auto-SMS only if nobody picks up. Configure it in Settings → Messaging tab under the SMS section: enable it, set the forward-to number, ring timeout, and the text-back message. Prerequisites: the agency owner must enable the Missed Call Text Back gate for this sub-account, and dedicated Twilio SMS must be configured. It can't be combined with the inbound Voice AI agent (both would answer the same line — pick one). A missed call also fires a push notification to team members who have notifications on.",
+  },
+  {
+    id: "territory-scoping",
+    levels: ["sub-account"],
+    title: "Territory scoping (team assignment)",
+    location: "Sidebar → Settings Sub-Account → Admin tab",
+    keywords: ["territory", "territories", "region", "team assignment", "assign rep", "restrict access", "scoping", "sales region", "who sees what"],
+    body:
+      "Territory scoping is an opt-in restriction that pins collaborators to their assigned territories: when enabled, a collaborator only sees the contacts and deals whose territory is in their assigned list — admins and the agency owner always see everything. Turn it on under Settings → Admin tab, then create territories and assign them to members. Enabling auto-seeds a 'Global' territory and gives every member Global by default, so nobody's pipeline goes blank — then carve out real territories and move reps off Global. Disabling preserves all territory data (re-enabling is one click); while off, territory chips and pickers are hidden everywhere.",
+  },
+  {
+    id: "ghl-import",
+    levels: ["sub-account", "agency"],
+    title: "GoHighLevel migration import",
+    location: "Sidebar → Settings Sub-Account → Importer tab",
+    keywords: ["gohighlevel", "ghl", "import", "migrate", "migration", "switch from", "move contacts", "opportunities", "pipeline mapping", "bring clients across"],
+    body:
+      "The Importer tab (Settings → Importer) has a GoHighLevel migration wizard that pulls a GHL sub-account's data into this workspace: contacts (including custom fields and tags), opportunities/deals with a configurable mapping from GHL pipeline stages to this workspace's stages, and notes. Connect by pasting a GHL Private Integration Token plus the location id (validated live, stored server-only), preview what will come across, then start the import — it runs in the background and reports progress. Sub-account admin only. Plain CSV import (from any system) is separate and lives on the Contacts page.",
   },
   {
     id: "sending-preferences",
@@ -221,7 +295,7 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     location: "Sidebar → Templates",
     keywords: ["template", "email template", "sms template", "merge tag", "unsubscribe", "message", "reusable"],
     body:
-      "Templates holds reusable email and SMS message bodies with merge tags (e.g. {{contact.firstName}}) that personalize per recipient. Workflows and Broadcasts pick from these templates when sending. Every email template must include {{unsubscribeLink}} — the editor enforces it for compliance.",
+      "Templates holds reusable email and SMS message bodies with merge tags (e.g. {{contact.firstName}}) that personalize per recipient. Workflows and Broadcasts pick from these templates when sending. {{bookingLink}} resolves to the workspace's default booking link, set on the Booking page. Every email template must include {{unsubscribeLink}} — the editor enforces it for compliance.",
   },
   {
     id: "dashboard",
@@ -262,24 +336,33 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
       "Each client gets a sub-account — an isolated workspace with its own contacts, pipeline, and data. Create one from Agency → Sub-accounts → create; it's assigned a human-readable account number automatically and seeded with default templates. Use the per-row Manage button to rename it, manage members, and control its feature gates. The Agency Assistant can create a sub-account for you, list them with their gates, report a sub-account's record counts and pipeline, and perform workspace actions (contacts, tasks, deals, workflows, webhooks, communities) inside a sub-account you name.",
   },
   {
+    id: "agency-snapshots",
+    levels: ["agency"],
+    title: "Snapshots (reusable sub-account templates)",
+    location: "Agency → Sub-accounts → Snapshots",
+    keywords: ["snapshot", "snapshots", "template", "clone", "duplicate sub-account", "copy setup", "reusable config", "start from snapshot", "onboard client"],
+    body:
+      "Snapshots let the agency owner capture a proven sub-account setup — its forms, message templates, products, and workflows — into a reusable template, then apply it when creating a new sub-account via the 'Start from a snapshot' picker on the new sub-account form. Customer data and credentials are never copied — only the reusable configuration. Capture and manage the snapshot library from the Snapshots panel on the Agency → Sub-accounts page (agency owner only). It's the fast way to onboard a new client with a setup you've already refined.",
+  },
+  {
     id: "agency-feature-gates",
     // Dual-level: sub-account operators hit "why is this Locked?" questions
     // and need to know it's their agency owner who flips the gate.
     levels: ["agency", "sub-account"],
     title: "Feature gates",
     location: "Agency → Sub-accounts → Manage",
-    keywords: ["gate", "enable", "disable", "lock", "feature", "permission", "website", "broadcasts", "api", "whatsapp", "social", "community", "assistant"],
+    keywords: ["gate", "enable", "disable", "lock", "feature", "permission", "website", "broadcasts", "api", "whatsapp", "social", "community", "assistant", "labs", "ai model"],
     body:
-      "Feature gates let the agency owner turn optional features on or off per sub-account — features that consume agency resources (email sending domains, the public API + webhooks, broadcasts, WhatsApp, outbound voice, website builds, Social Planner, Community, Missed-Call Text-Back, and the Workspace Assistant). Every gate is off by default. Open a sub-account's Manage dialog and tick the gates. While a feature is off, its sidebar entry shows a 'Locked' badge (or is hidden if you chose hide-instead-of-lock) and its routes are blocked. Enabling resumes instantly. The Agency Assistant can flip most gates for you (the email sending domain gate must be changed in the Manage dialog because disabling it tears down the live domain). If a sub-account is on a Client billing plan, that plan's gate bundle is applied automatically at activation and whenever the plan is edited — manual gate changes still work, but a plan edit re-applies the bundle.",
+      "Feature gates let the agency owner turn optional features on or off per sub-account — features that consume agency resources (email sending domains, the public API + webhooks, broadcasts, WhatsApp, outbound voice, website builds, the Facebook + Instagram inbox, the Messenger & Instagram AI auto-reply — a separate switch layered on the inbox gate — Social Planner, Community, Missed-Call Text-Back, the Workspace Assistant, and Labs). Those are all off by default. Three AI channels are ON by default and can be switched OFF per sub-account instead: SMS AI auto-reply, Web Chat AI, and Inbound Voice AI. Open a sub-account's Manage dialog and tick the gates; the same dialog also holds the per-sub-account AI model picker (which model the assistants use for that workspace). While a feature is off, its sidebar entry shows a 'Locked' badge (or is hidden if you chose hide-instead-of-lock) and its routes are blocked. Enabling resumes instantly. The Agency Assistant can flip most gates for you (the email sending domain gate must be changed in the Manage dialog because disabling it tears down the live domain). If a sub-account is on a Client billing plan, that plan's gate bundle is applied automatically at activation and whenever the plan is edited — manual gate changes still work, but a plan edit re-applies the bundle.",
   },
   {
     id: "agency-client-billing",
     levels: ["agency"],
     title: "Client billing (plans & subscriptions)",
     location: "Agency → Client billing",
-    keywords: ["billing", "charge", "plan", "subscription", "price", "stripe", "checkout", "invoice client", "mrr", "saas mode", "rebill", "comped", "special price", "paywall"],
+    keywords: ["billing", "charge", "plan", "subscription", "price", "stripe", "checkout", "invoice client", "mrr", "saas mode", "rebill", "comped", "special price", "paywall", "one-time charge", "one off"],
     body:
-      "Client billing lets you charge each sub-account a monthly subscription through your own Stripe account (payments land directly in your Stripe — the platform takes no cut). Create plans at Agency → Client billing: each plan is a name, a monthly price, and the bundle of feature gates it unlocks. Assign a plan from that page's Clients table or from Agency → Sub-accounts → Manage → Billing: the workspace goes 'Awaiting payment' and you can copy or email a secure checkout link (re-sending invalidates older links); the client can also pay from an in-app activation screen. When they pay, the plan's features switch on automatically and renewals bill monthly. You can set a per-client special price, switch plans on a live subscription (prorated), or mark a client 'comped' (not billed — the default for every workspace, so nothing changes until you assign a plan). If a renewal fails the client sees a payment banner for a 7-day grace period, then the workspace pauses behind a paywall until they pay — data is never deleted. The Clients table shows each client's plan, status, and your MRR. Requires Stripe (secret key + webhook) configured on the deployment.",
+      "Client billing lets you charge each sub-account a monthly subscription through your own Stripe account (payments land directly in your Stripe — the platform takes no cut). Create plans at Agency → Client billing: each plan is a name, a monthly price, and the bundle of feature gates it unlocks. Assign a plan from that page's Clients table or from Agency → Sub-accounts → Manage → Billing: the workspace goes 'Awaiting payment' and you can copy or email a secure checkout link (re-sending invalidates older links); the client can also pay from an in-app activation screen. When they pay, the plan's features switch on automatically and renewals bill monthly. You can set a per-client special price, switch plans on a live subscription (prorated), or mark a client 'comped' (not billed — the default for every workspace, so nothing changes until you assign a plan). If a renewal fails the client sees a payment banner for a 7-day grace period, then the workspace pauses behind a paywall until they pay — data is never deleted. The Clients table shows each client's plan, status, and your MRR. You can also bill a client ONCE (e.g. 'Web design — $500') independent of any plan: create a one-time charge from the Manage dialog's Billing section (description + amount → a secure payment link to copy or email; it works for comped clients too). The Agency Assistant can drive billing by chat — list plans, create a plan, assign a plan to a sub-account, and create a one-time charge — each write behind its own confirmation card. Requires Stripe (secret key + webhook) configured on the deployment.",
   },
   {
     id: "workspace-subscription",

@@ -191,9 +191,9 @@ export async function revokeApiKey(
  * query. The caller MUST then constant-time-compare the SHA-256 hash
  * before granting access — prefix alone is not a credential.
  *
- * Requires a single-field collection-group index on `prefix` (created on
- * first deploy via the Firestore console's "missing index" link, or
- * declared explicitly in firestore.indexes.json — see slice 2).
+ * Requires the `apiKeys.prefix` COLLECTION_GROUP field override declared
+ * in firestore.indexes.json (deployed via
+ * `firebase deploy --only firestore:rules,firestore:indexes`).
  */
 export async function findApiKeyByPrefix(
   prefix: string,

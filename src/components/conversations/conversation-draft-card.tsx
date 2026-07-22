@@ -30,8 +30,11 @@ export function ConversationDraftCard({
 }) {
   const [body, setBody] = useState(draft.body);
   const [busy, setBusy] = useState<null | "approve" | "discard">(null);
-  const endpoint =
-    draft.channel === "sms"
+  const isMeta =
+    draft.channel === "messenger" || draft.channel === "instagram";
+  const endpoint = isMeta
+    ? "/api/comms/meta/send"
+    : draft.channel === "sms"
       ? "/api/comms/sms/send"
       : "/api/comms/whatsapp/send";
 
@@ -43,7 +46,13 @@ export function ConversationDraftCard({
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contactId: contact.id, body: trimmed }),
+        body: JSON.stringify({
+          contactId: contact.id,
+          body: trimmed,
+          // The meta send route needs the platform to reply on; SMS/WhatsApp
+          // routes ignore the extra field.
+          ...(isMeta ? { channel: draft.channel } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;

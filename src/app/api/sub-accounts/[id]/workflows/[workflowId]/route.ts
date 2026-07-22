@@ -15,6 +15,7 @@ const NODE_TYPES: WorkflowNodeType[] = [
   "send_sms",
   "whatsapp_template",
   "wait",
+  "wait_for_reply",
   "if_else",
   "goal",
   "add_tag",
@@ -94,6 +95,13 @@ export async function PATCH(
   }
   if (body.trigger && typeof body.trigger === "object") {
     patch.trigger = body.trigger as WorkflowPatch["trigger"];
+  }
+  if (
+    body.reentry === "every_time" ||
+    body.reentry === "unless_active" ||
+    body.reentry === "once_ever"
+  ) {
+    patch.reentry = body.reentry;
   }
   if (body.startNodeId === null || typeof body.startNodeId === "string") {
     patch.startNodeId = body.startNodeId as string | null;

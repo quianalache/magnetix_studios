@@ -19,6 +19,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
 import { Button } from "@/components/ui/button";
 import { BookingHelpDialog } from "@/components/booking/booking-help-dialog";
+import { DefaultBookingLinkCard } from "@/components/booking/default-booking-link-card";
 import type { BookingPage } from "@/types/booking";
 
 /**
@@ -235,6 +236,8 @@ export default function BookingListPage() {
           ))}
         </ul>
       )}
+
+      {loaded && <DefaultBookingLinkCard pages={pages} />}
     </div>
   );
 }

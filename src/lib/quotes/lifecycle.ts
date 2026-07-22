@@ -130,12 +130,19 @@ export async function fireQuoteTrigger(
   quote: Pick<Quote, "agencyId" | "subAccountId" | "contactId">,
   trigger: Extract<AutomationTriggerType, `quote_${string}`>,
 ): Promise<void> {
-  // Workflow Builder: only quote acceptance is a v1 trigger.
-  if (trigger === "quote_accepted") {
+  // Workflow Builder triggers: accepted (v1), paid (v2 — covers invoices
+  // too; both document kinds share the mark-paid route).
+  const type =
+    trigger === "quote_accepted"
+      ? ("quote.accepted" as const)
+      : trigger === "quote_marked_paid"
+        ? ("quote.paid" as const)
+        : null;
+  if (type) {
     void fireWorkflowTrigger({
       agencyId: quote.agencyId,
       subAccountId: quote.subAccountId,
-      type: "quote.accepted",
+      type,
       contactId: quote.contactId,
     });
   }

@@ -196,6 +196,7 @@ export async function createSubAccountForAgency(
       webChatEnabledByAgency: true,
       inboundVoiceEnabledByAgency: true,
       metaInboxEnabledByAgency: false,
+      metaAgentEnabledByAgency: false,
       websiteEnabledByAgency: false,
       communityEnabledByAgency: false,
       getLeadsEnabledByAgency: false,

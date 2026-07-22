@@ -4,7 +4,8 @@ import type { Condition, ConditionGroup } from "@/types/workflows";
 import type { Contact } from "@/types/contacts";
 
 /**
- * Evaluate a workflow ConditionGroup (an AND list in v1) against a contact.
+ * Evaluate a workflow ConditionGroup against a contact. `match: "all"` (the
+ * default) requires every condition; `match: "any"` requires at least one.
  * Used for both trigger filters and `if_else` branch nodes. An empty group
  * is always true (no filter).
  */
@@ -47,5 +48,7 @@ export function evalConditionGroup(
 ): boolean {
   const all = group?.all ?? [];
   if (all.length === 0) return true;
-  return all.every((c) => evalOne(contact, c));
+  return group?.match === "any"
+    ? all.some((c) => evalOne(contact, c))
+    : all.every((c) => evalOne(contact, c));
 }

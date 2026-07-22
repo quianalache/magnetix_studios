@@ -237,6 +237,7 @@ export async function POST(request: Request) {
         webChatEnabledByAgency: true,
         inboundVoiceEnabledByAgency: true,
         metaInboxEnabledByAgency: false,
+        metaAgentEnabledByAgency: false,
         websiteEnabledByAgency: false,
         communityEnabledByAgency: false,
         getLeadsEnabledByAgency: false,

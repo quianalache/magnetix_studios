@@ -77,6 +77,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const initialInboundVoice =
     subAccount?.inboundVoiceEnabledByAgency !== false;
   const initialMetaInbox = subAccount?.metaInboxEnabledByAgency === true;
+  const initialMetaAgent = subAccount?.metaAgentEnabledByAgency === true;
   const initialWebsite = subAccount?.websiteEnabledByAgency === true;
   const initialSocial = subAccount?.socialPlannerEnabledByAgency === true;
   const initialCommunity = subAccount?.communityEnabledByAgency === true;
@@ -119,6 +120,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const [inboundVoiceEnabled, setInboundVoiceEnabled] =
     useState(initialInboundVoice);
   const [metaInboxEnabled, setMetaInboxEnabled] = useState(initialMetaInbox);
+  const [metaAgentEnabled, setMetaAgentEnabled] = useState(initialMetaAgent);
   const [websiteEnabled, setWebsiteEnabled] = useState(initialWebsite);
   const [socialPlannerEnabled, setSocialPlannerEnabled] =
     useState(initialSocial);
@@ -240,6 +242,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const webChatDirty = webChatEnabled !== initialWebChat;
   const inboundVoiceDirty = inboundVoiceEnabled !== initialInboundVoice;
   const metaInboxDirty = metaInboxEnabled !== initialMetaInbox;
+  const metaAgentDirty = metaAgentEnabled !== initialMetaAgent;
   const websiteDirty = websiteEnabled !== initialWebsite;
   const socialDirty = socialPlannerEnabled !== initialSocial;
   const communityDirty = communityEnabled !== initialCommunity;
@@ -265,6 +268,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     webChatDirty ||
     inboundVoiceDirty ||
     metaInboxDirty ||
+    metaAgentDirty ||
     websiteDirty ||
     socialDirty ||
     communityDirty ||
@@ -303,6 +307,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
         webChatEnabled?: boolean;
         inboundVoiceEnabled?: boolean;
         metaInboxEnabled?: boolean;
+        metaAgentEnabled?: boolean;
         websiteEnabled?: boolean;
         socialPlannerEnabled?: boolean;
         communityEnabled?: boolean;
@@ -329,6 +334,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
       if (inboundVoiceDirty)
         payload.inboundVoiceEnabled = inboundVoiceEnabled;
       if (metaInboxDirty) payload.metaInboxEnabled = metaInboxEnabled;
+      if (metaAgentDirty) payload.metaAgentEnabled = metaAgentEnabled;
       if (websiteDirty) payload.websiteEnabled = websiteEnabled;
       if (socialDirty) payload.socialPlannerEnabled = socialPlannerEnabled;
       if (communityDirty) payload.communityEnabled = communityEnabled;
@@ -434,6 +440,13 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
           metaInboxEnabled
             ? "Facebook + Instagram inbox (beta) enabled."
             : "Facebook + Instagram inbox (beta) disabled. The channels go silent and hidden.",
+        );
+      }
+      if (metaAgentDirty) {
+        parts.push(
+          metaAgentEnabled
+            ? "Messenger & Instagram AI auto-reply (beta) enabled."
+            : "Messenger & Instagram AI auto-reply (beta) disabled. The bot stops replying; manual inbox replies are unaffected.",
         );
       }
       if (websiteDirty) {
@@ -746,6 +759,29 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
           </GateToggle>
 
           <GateToggle
+            checked={metaAgentEnabled}
+            onChange={setMetaAgentEnabled}
+            disabled={saving || (metaUnconfigured && !initialMetaAgent)}
+            icon={<MessagesSquare className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />}
+            title="Messenger & Instagram AI auto-reply"
+            beta
+          >
+            When enabled, this sub-account can turn on the AI agent for its
+            Messenger and Instagram DMs — the same persona that answers SMS
+            and Web Chat replies to inbound DMs automatically. Each reply
+            spends your agency&apos;s shared OpenRouter credits. Requires the
+            Facebook + Instagram inbox (above) to be enabled and a connected
+            Meta Page. Disabling silences the bot; manual replies from the
+            inbox are unaffected.
+            {metaUnconfigured && (
+              <span className="mt-1 block font-medium text-amber-600 dark:text-amber-400">
+                Unavailable — set <code>META_APP_ID</code> and{" "}
+                <code>META_APP_SECRET</code> on the deployment to enable.
+              </span>
+            )}
+          </GateToggle>
+
+          <GateToggle
             checked={socialPlannerEnabled}
             onChange={setSocialPlannerEnabled}
             disabled={saving || (metaUnconfigured && !initialSocial)}
@@ -842,6 +878,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
             disabled={saving}
             icon={<Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
             title="Workspace Assistant"
+            beta
             hideOption={{
               hidden: aiSuiteHidden,
               onHiddenChange: setAiSuiteHidden,

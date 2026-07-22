@@ -35,9 +35,9 @@ export const metadata: Metadata = {
         description: CUSTOM_BRAND.shortDescription,
       }
     : {
-        title: "LeadStack — The all-in-one CRM for teams that actually close",
+        title: "LeadStack — Own Your CRM, Never Rent It Again",
         description:
-          "Capture leads, run pipelines, and book meetings from one simple workspace. Built for small teams that want to replace five tools with one.",
+          "The GoHighLevel alternative you own. One payment, unlimited sub-accounts, AI agents, your code and data. The GHL alternative without the monthly rent.",
       }),
   // Favicon per deployment mode (the former src/app/icon.svg file
   // convention would override this metadata, so both marks live in

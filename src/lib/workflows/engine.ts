@@ -34,6 +34,7 @@ import type {
   WhatsappTemplateConfig,
   UpdateFieldConfig,
   WaitConfig,
+  WaitForReplyConfig,
   WebhookConfig,
   WorkflowDoc,
   WorkflowNode,
@@ -506,12 +507,51 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       ) {
         continue;
       }
+      if (
+        wf.trigger.type === "message.received" &&
+        wf.trigger.channel &&
+        wf.trigger.channel !== input.context?.channel
+      ) {
+        continue;
+      }
       if (!evalConditionGroup(wf.trigger.filters, contact)) continue;
+      if (!(await reentryAllows(wf, contact.id))) continue;
 
       await enroll(wf, contact.id, input.context ?? {});
     }
   } catch (err) {
     console.error("[workflows] fireWorkflowTrigger failed", err);
+  }
+}
+
+/**
+ * Enforce the workflow's re-enrollment policy. "every_time" (default, incl.
+ * every pre-v2 doc) never blocks. Equality-only query + in-memory status
+ * filter — a contact rarely has more than a handful of runs per workflow.
+ * Fails open: an unexpected read error must not silently kill enrollments.
+ */
+async function reentryAllows(
+  wf: WorkflowDoc,
+  contactId: string
+): Promise<boolean> {
+  const policy = wf.reentry ?? "every_time";
+  if (policy === "every_time") return true;
+  try {
+    const snap = await getAdminDb()
+      .collection("workflowRuns")
+      .where("workflowId", "==", wf.id)
+      .where("contactId", "==", contactId)
+      .get();
+    if (snap.empty) return true;
+    if (policy === "once_ever") return false;
+    // unless_active — block only while a run is live.
+    return !snap.docs.some((d) => {
+      const s = (d.data() as WorkflowRunDoc).status;
+      return s === "running" || s === "waiting";
+    });
+  } catch (err) {
+    console.warn("[workflows] reentry check failed — allowing", err);
+    return true;
   }
 }
 
@@ -592,7 +632,11 @@ async function completeRun(
 }
 
 /** Advance one node of a run. Idempotent on the run's history. */
-export async function runStep(runId: string, nodeId: string): Promise<void> {
+export async function runStep(
+  runId: string,
+  nodeId: string,
+  phase?: "timeout"
+): Promise<void> {
   const db = getAdminDb();
   const runRef = db.collection("workflowRuns").doc(runId);
   const runSnap = await runRef.get();
@@ -624,6 +668,14 @@ export async function runStep(runId: string, nodeId: string): Promise<void> {
   const node = wf.nodes[nodeId];
   if (!node) {
     await completeRun(runRef, wf.id);
+    return;
+  }
+
+  // wait_for_reply is a two-phase node handled outside the registry: it arms
+  // (parks the run + schedules a timeout), then is resolved EITHER by the
+  // inbound-message hook (Replied) or the timeout callback (No reply).
+  if (node.type === "wait_for_reply") {
+    await stepWaitForReply(runRef, run, wf, node, phase);
     return;
   }
 
@@ -700,6 +752,167 @@ export async function runStep(runId: string, nodeId: string): Promise<void> {
     return;
   }
   await scheduleNode(runRef, target, delay);
+}
+
+/* --------------------------- wait_for_reply ---------------------------- */
+
+/**
+ * Two-phase wait_for_reply.
+ *
+ * Arm (first entry, `phase` absent): stamp `run.waiting`, park the run as
+ * "waiting", and schedule a timeout callback that re-enters this SAME node
+ * with `phase: "timeout"`. No history entry is appended — the history entry
+ * IS the resolution marker, and appending it here would make the step
+ * worker's idempotency guard treat the node as already resolved.
+ *
+ * Timeout (`phase === "timeout"`): claim the node in a transaction — a reply
+ * may have resolved it first (the claim re-checks `waiting` + history inside
+ * the transaction, so exactly one path wins). On claim, advance to the
+ * No-reply branch.
+ *
+ * A QStash retry of the ARM message re-runs the arm path: the timeout
+ * publish is deduplicated by id and the `waiting` re-stamp is idempotent.
+ */
+async function stepWaitForReply(
+  runRef: FirebaseFirestore.DocumentReference,
+  run: WorkflowRunDoc,
+  wf: WorkflowDoc,
+  node: WorkflowNode,
+  phase: "timeout" | undefined
+): Promise<void> {
+  const db = getAdminDb();
+
+  if (phase !== "timeout") {
+    // Phase 1 — arm. Stamp `waiting` BEFORE publishing the timeout so the
+    // callback can never race an unstamped run; if we die between the two
+    // writes, QStash's retry of the arm message re-runs this idempotently.
+    const cfg = node.config as unknown as WaitForReplyConfig;
+    const seconds = Math.max(60, Math.floor(cfg.seconds ?? 0));
+    await runRef.update({
+      waiting: {
+        nodeId: node.id,
+        kind: "reply",
+        since: Timestamp.now(),
+        until: Timestamp.fromMillis(Date.now() + seconds * 1000),
+      },
+      status: "waiting",
+      currentNodeId: node.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const res = await publishCallback({
+      pathname: STEP_PATH,
+      body: { runId: run.id, nodeId: node.id, phase: "timeout" },
+      delaySeconds: seconds,
+      deduplicationId: `wf_${run.id}_${node.id}_timeout`,
+    });
+    if (!res) {
+      await runRef.update({
+        waiting: null,
+        status: "failed",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    await runRef.update({ qstashMessageId: res.messageId });
+    return;
+  }
+
+  // Phase 2 — timeout. Claim, then take the No-reply branch.
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(runRef);
+    if (!snap.exists) return false;
+    const r = snap.data() as WorkflowRunDoc;
+    if (r.waiting?.nodeId !== node.id) return false; // a reply won the race
+    if (r.history.some((h) => h.nodeId === node.id)) return false;
+    const entry: WorkflowRunHistoryEntry = {
+      nodeId: node.id,
+      type: node.type,
+      at: Timestamp.now(),
+      result: "timeout",
+    };
+    tx.update(runRef, {
+      waiting: null,
+      status: "running",
+      history: FieldValue.arrayUnion(entry),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  });
+  if (!claimed) return;
+
+  const target = node.branches?.whenFalse ?? null;
+  if (!target) {
+    await completeRun(runRef, wf.id);
+    return;
+  }
+  await scheduleNode(runRef, target, 0);
+}
+
+/**
+ * Resolve every run of this contact parked on a `wait_for_reply` node — the
+ * contact replied. Called (fire-and-forget) from the unified-inbox upsert for
+ * every inbound SMS/WhatsApp/Messenger/Instagram message. Web chat and email
+ * deliberately don't count: web chat sessions live outside the inbox, and
+ * email replies route to the operator's own inbox and never touch the app.
+ *
+ * Equality-only query (contactId + status) — no composite index needed.
+ * Never throws: a workflow problem must not break the inbound webhook.
+ */
+export async function resumeWaitingRunsOnReply(input: {
+  subAccountId: string;
+  contactId: string;
+  channel: string;
+}): Promise<void> {
+  try {
+    const db = getAdminDb();
+    const snap = await db
+      .collection("workflowRuns")
+      .where("contactId", "==", input.contactId)
+      .where("status", "==", "waiting")
+      .get();
+    if (snap.empty) return;
+
+    for (const doc of snap.docs) {
+      const run = doc.data() as WorkflowRunDoc;
+      if (run.subAccountId !== input.subAccountId) continue;
+      const waiting = run.waiting;
+      if (!waiting || waiting.kind !== "reply") continue; // plain timer wait
+      const nodeId = waiting.nodeId;
+
+      const claimed = await db.runTransaction(async (tx) => {
+        const s = await tx.get(doc.ref);
+        if (!s.exists) return false;
+        const r = s.data() as WorkflowRunDoc;
+        if (r.waiting?.nodeId !== nodeId) return false; // timeout won the race
+        if (r.history.some((h) => h.nodeId === nodeId)) return false;
+        const entry: WorkflowRunHistoryEntry = {
+          nodeId,
+          type: "wait_for_reply",
+          at: Timestamp.now(),
+          result: `replied:${input.channel}`,
+        };
+        tx.update(doc.ref, {
+          waiting: null,
+          status: "running",
+          history: FieldValue.arrayUnion(entry),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      if (!claimed) continue;
+
+      const wfSnap = await db.doc(`workflows/${run.workflowId}`).get();
+      const wf = wfSnap.exists ? (wfSnap.data() as WorkflowDoc) : null;
+      const target = wf?.nodes?.[nodeId]?.branches?.whenTrue ?? null;
+      if (!target) {
+        await completeRun(doc.ref, run.workflowId);
+        continue;
+      }
+      await scheduleNode(doc.ref, target, 0);
+    }
+  } catch (err) {
+    console.warn("[workflows] resumeWaitingRunsOnReply failed", err);
+  }
 }
 
 /** Manually enroll one contact to dry-run a workflow (ignores trigger/filters;

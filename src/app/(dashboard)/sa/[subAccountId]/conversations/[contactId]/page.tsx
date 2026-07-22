@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useConversationTheme } from "@/hooks/use-conversation-theme";
 import { cn } from "@/lib/utils";
+import { metaCanInstagramDm } from "@/lib/comms/meta-capabilities";
 import { subscribeToContact } from "@/lib/firestore/contacts";
 import {
   markConversationRead,
@@ -93,6 +94,9 @@ export default function ConversationDetailPage() {
   // BETA Meta channels — offered only when the agency gate is on, a Page is
   // connected, this contact has a Meta identity, and they've actually used the
   // channel (so we never expose a reply path the recipient can't receive).
+  // Instagram additionally needs the IG messaging scope on the stored token —
+  // it's declinable independently of Messenger's, so Messenger working never
+  // implies IG replies will.
   if (
     subAccount?.metaInboxEnabledByAgency === true &&
     subAccount?.metaConfig?.connected &&
@@ -100,7 +104,8 @@ export default function ConversationDetailPage() {
   ) {
     for (const ch of conversation?.channelsSeen ?? []) {
       if (
-        (ch === "messenger" || ch === "instagram") &&
+        (ch === "messenger" ||
+          (ch === "instagram" && metaCanInstagramDm(subAccount.metaConfig))) &&
         !availableChannels.includes(ch)
       ) {
         availableChannels.push(ch);

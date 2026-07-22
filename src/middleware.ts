@@ -15,6 +15,9 @@ const PUBLIC_PATHS = [
   // Affiliate direct "Buy now" link (/buy?ref=CODE). Sets the referral
   // cookie client-side then bounces to Stripe checkout. Public — no session.
   "/buy",
+  // Secret webinar-only founders landing. Unlinked + noindex (page
+  // metadata); the URL is only shared during webinars. Public — no session.
+  "/founderx",
   // Public docs (e.g. /docs/updating — the "keeping your app up to date"
   // guide linked from /thank-you and shareable as a stable URL).
   "/docs",

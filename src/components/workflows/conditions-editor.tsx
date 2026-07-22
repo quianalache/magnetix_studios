@@ -26,8 +26,9 @@ export function ConditionsEditor({
   onChange: (g: ConditionGroup) => void;
 }) {
   const all = value?.all ?? [];
+  const match = value?.match === "any" ? "any" : "all";
 
-  const set = (next: Condition[]) => onChange({ all: next });
+  const set = (next: Condition[]) => onChange({ ...value, all: next });
   const update = (i: number, patch: Partial<Condition>) =>
     set(all.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
@@ -38,6 +39,21 @@ export function ConditionsEditor({
           No conditions — runs for everyone (trigger) / always takes the “yes”
           path (if/else).
         </p>
+      )}
+      {all.length > 1 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Match</span>
+          <select
+            value={match}
+            onChange={(e) =>
+              onChange({ ...value, all, match: e.target.value as "all" | "any" })
+            }
+            className="h-7 rounded-md border border-input bg-background px-1.5 text-xs"
+          >
+            <option value="all">ALL conditions (and)</option>
+            <option value="any">ANY condition (or)</option>
+          </select>
+        </div>
       )}
       {all.map((c, i) => (
         <div key={i} className="flex items-center gap-1.5">

@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type {
   WorkflowDoc,
   WorkflowNode,
+  WorkflowReentry,
   WorkflowRunDoc,
   WorkflowRunStatus,
   WorkflowStatus,
@@ -44,9 +45,12 @@ export type WorkflowTemplate =
   | "speed-to-lead"
   | "appointment-confirmation"
   | "lead-nurture"
-  | "stage-change-followup";
+  | "stage-change-followup"
+  | "no-reply-followup";
 
-type Seed = Pick<WorkflowDoc, "trigger" | "nodes" | "startNodeId">;
+type Seed = Pick<WorkflowDoc, "trigger" | "nodes" | "startNodeId"> & {
+  reentry?: WorkflowReentry;
+};
 
 /** The Speed-to-Lead starter, rebuilt on the new engine (replaces the legacy
  *  recipe): form submit → instant SMS + email to the lead → notify the team. */
@@ -273,11 +277,70 @@ function stageChangeFollowupSeed(): Seed {
   };
 }
 
+/** No-reply follow-up (message.received): the contact messaged in, then went
+ *  quiet — wait_for_reply watches for their NEXT inbound. Still engaged →
+ *  end quietly. Quiet for 2 days → SMS nudge, then either celebrate the
+ *  re-engagement or drop a task for a personal follow-up. Seeds with
+ *  reentry "unless_active" so a chatty contact isn't enrolled per message. */
+function noReplyFollowupSeed(): Seed {
+  const DAY = 86_400;
+  const nodes: Record<string, WorkflowNode> = {
+    n1: {
+      id: "n1",
+      type: "wait_for_reply",
+      config: { seconds: 2 * DAY },
+      branches: { whenTrue: "n2", whenFalse: "n3" },
+    },
+    n2: { id: "n2", type: "goal", config: {}, next: null },
+    n3: {
+      id: "n3",
+      type: "send_sms",
+      config: {
+        body: "Hi {{contact.firstName}}, just checking in — did you still want a hand with this? Happy to pick it back up whenever suits.",
+      },
+      next: "n4",
+    },
+    n4: {
+      id: "n4",
+      type: "wait_for_reply",
+      config: { seconds: 3 * DAY },
+      branches: { whenTrue: "n5", whenFalse: "n6" },
+    },
+    n5: {
+      id: "n5",
+      type: "notify",
+      config: {
+        recipient: "owner",
+        to: "",
+        subject: "Lead re-engaged after a nudge",
+        body: "{{contact.name}} ({{contact.phone}}) replied after the follow-up nudge — jump back into the conversation.",
+      },
+      next: null,
+    },
+    n6: {
+      id: "n6",
+      type: "create_task",
+      config: {
+        title: "Reach out personally — {{contact.name}} went quiet",
+        dueInDays: 0,
+      },
+      next: null,
+    },
+  };
+  return {
+    trigger: { type: "message.received", filters: { all: [] } },
+    reentry: "unless_active",
+    nodes,
+    startNodeId: "n1",
+  };
+}
+
 const SEEDS: Record<Exclude<WorkflowTemplate, "blank">, () => Seed> = {
   "speed-to-lead": speedToLeadSeed,
   "appointment-confirmation": appointmentConfirmationSeed,
   "lead-nurture": leadNurtureSeed,
   "stage-change-followup": stageChangeFollowupSeed,
+  "no-reply-followup": noReplyFollowupSeed,
 };
 
 export async function createWorkflowServerSide(opts: {
@@ -307,6 +370,7 @@ export async function createWorkflowServerSide(opts: {
     name: opts.name.trim() || "Untitled workflow",
     status: "draft",
     trigger: seed.trigger,
+    reentry: seed.reentry ?? "every_time",
     startNodeId: seed.startNodeId,
     nodes: seed.nodes,
     stats: { enrolled: 0, completed: 0 },
@@ -321,6 +385,7 @@ export interface WorkflowPatch {
   name?: string;
   status?: WorkflowStatus;
   trigger?: WorkflowTrigger;
+  reentry?: WorkflowReentry;
   nodes?: Record<string, WorkflowNode>;
   startNodeId?: string | null;
 }
@@ -342,6 +407,7 @@ export async function updateWorkflowServerSide(opts: {
   if (patch.name !== undefined) write.name = patch.name.trim() || "Untitled workflow";
   if (patch.status !== undefined) write.status = patch.status;
   if (patch.trigger !== undefined) write.trigger = patch.trigger;
+  if (patch.reentry !== undefined) write.reentry = patch.reentry;
   if (patch.nodes !== undefined) write.nodes = patch.nodes;
   if (patch.startNodeId !== undefined) write.startNodeId = patch.startNodeId;
   await ref.update(write);

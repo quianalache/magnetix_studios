@@ -80,12 +80,18 @@ export async function dispatchPushForWebhookEvent(
         const booking = rec(payload.booking);
         const title = str(booking.title) ?? "New booking";
         const startAt = str(booking.start_at);
+        // Format in the booking page's timezone (threaded through the
+        // webhook payload) — without it toLocaleString falls back to the
+        // server's zone (UTC in prod), showing the wrong time. Falls back
+        // to the old behavior only when a timezone isn't available.
+        const tz = str(booking.timezone);
         const when = startAt
           ? new Date(startAt).toLocaleString("en-US", {
               month: "short",
               day: "numeric",
               hour: "numeric",
               minute: "2-digit",
+              ...(tz ? { timeZone: tz } : {}),
             })
           : null;
         await sendPushForEvent({

@@ -318,6 +318,7 @@ const WORKFLOW_TEMPLATES: Record<WorkflowTemplate, string> = {
   "appointment-confirmation": "Appointment Confirmation",
   "lead-nurture": "Lead Nurture",
   "stage-change-followup": "Stage-Change Follow-up",
+  "no-reply-followup": "No-reply Follow-up",
 };
 
 /**
@@ -347,6 +348,11 @@ const FEATURE_GATES: Record<
   "meta-inbox": {
     field: "metaInboxEnabledByAgency",
     label: "Facebook + Instagram inbox",
+    metaRequired: true,
+  },
+  "meta-agent": {
+    field: "metaAgentEnabledByAgency",
+    label: "Messenger & Instagram AI auto-reply",
     metaRequired: true,
   },
   "social-planner": {

@@ -113,6 +113,7 @@ export async function POST(
     channelId,
     fallbackBusinessName: subAccount?.name ?? "the business",
     contactContextBlock: null,
+    bookingLink: subAccount?.bookingLink ?? null,
   });
 
   try {

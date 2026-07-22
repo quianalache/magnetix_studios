@@ -19,6 +19,7 @@ import {
   MessageSquare,
   PencilLine,
   Plus,
+  Reply,
   Tag,
   Trash2,
   Webhook,
@@ -46,6 +47,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   flattenTree,
+  isBranchingType,
   newNodeId,
   parseTree,
   type BuilderStep,
@@ -58,6 +60,7 @@ import {
 import { TestDialog } from "./test-dialog";
 import type {
   WorkflowNodeType,
+  WorkflowReentry,
   WorkflowStatus,
   WorkflowTrigger,
   WorkflowTriggerType,
@@ -69,7 +72,18 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "contact.tag.added",
   "pipeline.stage.changed",
   "booking.created",
+  "booking.cancelled",
+  "booking.rescheduled",
   "quote.accepted",
+  "quote.paid",
+  "message.received",
+];
+
+const MESSAGE_CHANNELS: { value: string; label: string }[] = [
+  { value: "sms", label: "SMS" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "messenger", label: "Facebook Messenger" },
+  { value: "instagram", label: "Instagram" },
 ];
 
 const ICONS: Record<WorkflowNodeType, typeof Mail> = {
@@ -77,6 +91,7 @@ const ICONS: Record<WorkflowNodeType, typeof Mail> = {
   send_sms: MessageSquare,
   whatsapp_template: MessageCircle,
   wait: Clock,
+  wait_for_reply: Reply,
   if_else: GitBranch,
   goal: Flag,
   add_tag: Tag,
@@ -93,9 +108,16 @@ export interface BuilderInitial {
   name: string;
   status: WorkflowStatus;
   trigger: WorkflowTrigger;
+  reentry?: WorkflowReentry;
   nodes: Record<string, import("@/types/workflows").WorkflowNode>;
   startNodeId: string | null;
 }
+
+const REENTRY_OPTIONS: { value: WorkflowReentry; label: string }[] = [
+  { value: "every_time", label: "Every time the trigger fires" },
+  { value: "unless_active", label: "Not while already in this workflow" },
+  { value: "once_ever", label: "Only once per contact, ever" },
+];
 
 /**
  * Per-tier breakdown of each send-integration check, surfaced on the node as
@@ -163,6 +185,9 @@ export function WorkflowBuilder({
   const [name, setName] = useState(initial.name);
   const [status, setStatus] = useState<WorkflowStatus>(initial.status);
   const [trigger, setTrigger] = useState<WorkflowTrigger>(initial.trigger);
+  const [reentry, setReentry] = useState<WorkflowReentry>(
+    initial.reentry ?? "every_time"
+  );
   const [steps, setSteps] = useState<BuilderStep[]>(
     parseTree(initial.nodes, initial.startNodeId)
   );
@@ -175,7 +200,7 @@ export function WorkflowBuilder({
     const walk = (list: BuilderStep[]): BuilderStep[] =>
       list.map((s) => {
         if (s.id === id) return { ...s, config };
-        if (s.type === "if_else") {
+        if (isBranchingType(s.type)) {
           return {
             ...s,
             whenTrue: walk(s.whenTrue ?? []),
@@ -205,6 +230,7 @@ export function WorkflowBuilder({
             name,
             status: effective,
             trigger,
+            reentry,
             nodes,
             startNodeId,
           }),
@@ -326,6 +352,30 @@ export function WorkflowBuilder({
             </select>
           )}
 
+          {trigger.type === "message.received" && (
+            <>
+              <select
+                value={trigger.channel ?? ""}
+                onChange={(e) =>
+                  setTrigger({ ...trigger, channel: e.target.value || null })
+                }
+                className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+              >
+                <option value="">Any channel</option>
+                {MESSAGE_CHANNELS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-muted-foreground mt-1.5 text-xs">
+                Fires on every inbound message. Set re-entry to &ldquo;Not
+                while already in this workflow&rdquo; below so a chatty
+                contact isn&apos;t enrolled once per message.
+              </p>
+            </>
+          )}
+
           <div className="mt-3 border-t pt-3">
             <div className="text-muted-foreground mb-1.5 text-xs font-medium">
               Only continue if (optional)
@@ -334,6 +384,23 @@ export function WorkflowBuilder({
               value={trigger.filters ?? { all: [] }}
               onChange={(g) => setTrigger({ ...trigger, filters: g })}
             />
+          </div>
+
+          <div className="mt-3 border-t pt-3">
+            <div className="text-muted-foreground mb-1.5 text-xs font-medium">
+              Re-enroll this contact
+            </div>
+            <select
+              value={reentry}
+              onChange={(e) => setReentry(e.target.value as WorkflowReentry)}
+              className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+            >
+              {REENTRY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -369,7 +436,7 @@ function Chain({
   onEdit: (s: BuilderStep) => void;
 }) {
   const endsInBranch =
-    steps.length > 0 && steps[steps.length - 1].type === "if_else";
+    steps.length > 0 && isBranchingType(steps[steps.length - 1].type);
 
   function add(type: WorkflowNodeType) {
     const step: BuilderStep = {
@@ -377,7 +444,7 @@ function Chain({
       type,
       config: defaultConfig(type),
     };
-    if (type === "if_else") {
+    if (isBranchingType(type)) {
       step.whenTrue = [];
       step.whenFalse = [];
     }
@@ -395,10 +462,10 @@ function Chain({
             onEdit={() => onEdit(s)}
             onDelete={() => onChange(steps.filter((_, j) => j !== i))}
           />
-          {s.type === "if_else" && (
+          {isBranchingType(s.type) && (
             <div className="mt-1 ml-4 grid grid-cols-2 gap-3 border-l-2 border-dashed pl-3">
               <Branch
-                label="Yes"
+                label={s.type === "wait_for_reply" ? "Replied" : "Yes"}
                 steps={s.whenTrue ?? []}
                 onChange={(ns) =>
                   onChange(
@@ -408,7 +475,7 @@ function Chain({
                 onEdit={onEdit}
               />
               <Branch
-                label="No"
+                label={s.type === "wait_for_reply" ? "No reply" : "No"}
                 steps={s.whenFalse ?? []}
                 onChange={(ns) =>
                   onChange(

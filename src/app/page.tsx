@@ -15,6 +15,7 @@ import { Comparison } from "@/components/landing/comparison";
 import { MakeItYours } from "@/components/landing/make-it-yours";
 import { TestimonialsCarousel } from "@/components/landing/testimonials-carousel";
 import { Pricing as LeadStackPricing } from "@/components/landing/pricing";
+import { UneedReviews } from "@/components/landing/uneed-reviews";
 import { FAQ as LeadStackFAQ } from "@/components/landing/faq";
 import { CTA as LeadStackCTA } from "@/components/landing/cta";
 import { Footer as LeadStackFooter } from "@/components/landing/footer";
@@ -75,8 +76,9 @@ export default async function HomePage() {
         <Comparison />
         {/* <Support /> — hidden for now; uncomment to restore */}
         <MakeItYours />
-        <TestimonialsCarousel />
+        <UneedReviews />
         <LeadStackPricing />
+        <TestimonialsCarousel />
         <IntegrationsCarousel />
         <LeadStackFAQ />
         <LeadStackCTA />

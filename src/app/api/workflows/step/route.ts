@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let payload: { runId?: string; nodeId?: string };
+  let payload: { runId?: string; nodeId?: string; phase?: string };
   try {
     payload = JSON.parse(rawBody);
   } catch {
@@ -45,7 +45,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    await runStep(payload.runId, payload.nodeId);
+    await runStep(
+      payload.runId,
+      payload.nodeId,
+      payload.phase === "timeout" ? "timeout" : undefined,
+    );
   } catch (err) {
     console.error("[workflows/step] threw", err);
     return NextResponse.json(

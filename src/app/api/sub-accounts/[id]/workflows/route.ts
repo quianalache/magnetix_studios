@@ -11,6 +11,7 @@ const TEMPLATE_NAMES: Record<Exclude<WorkflowTemplate, "blank">, string> = {
   "appointment-confirmation": "Appointment Confirmation",
   "lead-nurture": "Lead Nurture",
   "stage-change-followup": "Stage-Change Follow-up",
+  "no-reply-followup": "No-reply Follow-up",
 };
 
 export const dynamic = "force-dynamic";

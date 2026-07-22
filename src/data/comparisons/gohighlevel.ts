@@ -108,6 +108,22 @@ export const gohighlevelComparison: Comparison = {
       },
       {
         category: "Ownership & economics",
+        label: "Snapshots — reusable sub-account config templates",
+        footnote:
+          "Capture a proven sub-account setup (forms, message templates, products, workflows) and apply it to any other sub-account in one click.",
+        leadstack: true,
+        competitor: true,
+      },
+      {
+        category: "Ownership & economics",
+        label: "Client billing / SaaS mode — sell sub-accounts as monthly plans",
+        footnote:
+          "Package features into monthly or annual plans and charge each client through your own Stripe account — checkout links, automatic feature unlocks on payment, dunning grace + paywall, per-client special pricing, and one-time charges. GoHighLevel gates SaaS Mode to its $497/mo Agency Pro plan.",
+        leadstack: "Included",
+        competitor: "$497/mo plan",
+      },
+      {
+        category: "Ownership & economics",
         label: "White-label every client surface (login, domain, emails, booking, chat)",
         leadstack: true,
         competitor: true,
@@ -123,6 +139,12 @@ export const gohighlevelComparison: Comparison = {
       {
         category: "CRM & sales",
         label: "Contacts — notes, activity timeline, custom fields",
+        leadstack: true,
+        competitor: true,
+      },
+      {
+        category: "CRM & sales",
+        label: "Contact tagging — audiences, filters, tag-triggered workflows",
         leadstack: true,
         competitor: true,
       },
@@ -185,6 +207,14 @@ export const gohighlevelComparison: Comparison = {
       {
         category: "Lead capture & sites",
         label: "Marketing attribution capture (UTM + ad click IDs)",
+        leadstack: true,
+        competitor: true,
+      },
+      {
+        category: "Lead capture & sites",
+        label: "Meta Pixel + Google Tag Manager tracking",
+        footnote:
+          "Meta Pixel loads site-wide (including hosted form pages) and form submissions automatically fire a Pixel Lead event. GTM covers any other tracker (LinkedIn Insight, TikTok Pixel, Hotjar).",
         leadstack: true,
         competitor: true,
       },
@@ -288,11 +318,31 @@ export const gohighlevelComparison: Comparison = {
         leadstack: true,
         competitor: true,
       },
+      {
+        category: "AI",
+        label: "AI guardrails — human-approved actions, full audit trail",
+        leadstack: true,
+        competitor: false,
+      },
 
       // ── Marketing & engagement ──────────────────────────────────────────
       {
         category: "Marketing & engagement",
         label: "Workflow automations",
+        leadstack: true,
+        competitor: true,
+      },
+      {
+        category: "Marketing & engagement",
+        label: "No-reply follow-up sequences (wait-for-reply branching)",
+        footnote:
+          "Workflows can wait for a contact's reply and branch either way — replied vs. went quiet. Build \"no reply in 2 days → nudge → still silent → task for a human\" flows across SMS, WhatsApp, and Facebook/Instagram, with re-enrollment rules so nobody gets double-messaged. Ships as a ready-made template.",
+        leadstack: true,
+        competitor: true,
+      },
+      {
+        category: "Marketing & engagement",
+        label: "Merge tags / custom values ({{...}}) in email + SMS",
         leadstack: true,
         competitor: true,
       },
@@ -390,7 +440,12 @@ export const gohighlevelComparison: Comparison = {
       {
         question: "Is LeadStack a true GoHighLevel replacement?",
         answer:
-          "Yes — for the work agencies do every day: contacts, pipeline, calendar, booking pages, quotes, automations, bulk email broadcasts, AI Web Chat + SMS + Voice agents, social post scheduling (Facebook + Instagram), Google review requests, dedicated per-sub-account phone numbers and sending domains, and a full public REST API with webhooks. It's the same surface area you sell today — delivered as code you own.",
+          "Yes — for the work agencies do every day: contacts, pipeline, calendar, booking pages, quotes, workflow automations with no-reply follow-up sequences, bulk email broadcasts, AI Web Chat + SMS + Voice agents, social post scheduling (Facebook + Instagram), Google review requests, dedicated per-sub-account phone numbers and sending domains, and a full public REST API with webhooks. It's the same surface area you sell today — delivered as code you own.",
+      },
+      {
+        question: "Can it automatically follow up with leads who don't reply?",
+        answer:
+          "Yes — this is built into the workflow builder, the same way agencies use it in GoHighLevel. A workflow can send a message, then wait for the contact's reply for a window you choose: if they answer, it continues down the \"replied\" path (or simply stops); if they stay quiet, it takes the \"no reply\" path — a nudge text, a second touch, and finally a task so a human picks up the phone. It works across SMS, WhatsApp, and Facebook/Instagram conversations, respects opt-outs and your sending hours, and re-enrollment rules make sure a chatty contact is never double-enrolled. There's a ready-made \"No-reply Follow-up\" template, so a brand-new sub-account can switch on quiet-lead chasing in about a minute.",
       },
       {
         question: "Can I bring my clients across from GoHighLevel?",

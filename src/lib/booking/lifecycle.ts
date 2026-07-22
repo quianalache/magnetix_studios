@@ -103,12 +103,20 @@ export async function fireBookingTrigger(
   trigger: Extract<AutomationTriggerType, `event_${string}`>,
 ): Promise<void> {
   if (!event.contactId) return;
-  // Workflow Builder: only new bookings are a v1 trigger.
-  if (trigger === "event_booked") {
+  // Workflow Builder triggers: created (v1), cancelled + rescheduled (v2).
+  const type =
+    trigger === "event_booked"
+      ? ("booking.created" as const)
+      : trigger === "event_cancelled"
+        ? ("booking.cancelled" as const)
+        : trigger === "event_rescheduled"
+          ? ("booking.rescheduled" as const)
+          : null;
+  if (type) {
     void fireWorkflowTrigger({
       agencyId: event.agencyId,
       subAccountId: event.subAccountId,
-      type: "booking.created",
+      type,
       contactId: event.contactId,
     });
   }
@@ -153,6 +161,22 @@ export async function emitBookingWebhook(opts: {
     const snap = await getAdminDb().doc(`events/${opts.eventId}`).get();
     const data = snap.exists ? snap.data()! : {};
     const cancelled = webhookType === "booking.cancelled";
+    // Resolve the booking page's timezone so downstream consumers (push
+    // notifications especially) can render `start_at` in the booking's real
+    // zone instead of the server's (UTC on Vercel/Railway). Best-effort — a
+    // deleted page or a non-page event just omits it.
+    const slug = (data.bookingPageSlug as string | null) ?? null;
+    let timezone: string | null = null;
+    if (slug) {
+      try {
+        const pageSnap = await getAdminDb()
+          .doc(`subAccounts/${opts.subAccountId}/bookingPages/${slug}`)
+          .get();
+        timezone = (pageSnap.data()?.timezone as string | undefined) ?? null;
+      } catch {
+        timezone = null;
+      }
+    }
     await emitWebhookEvent({
       subAccountId: opts.subAccountId,
       agencyId: opts.agencyId,
@@ -162,11 +186,12 @@ export async function emitBookingWebhook(opts: {
         booking: {
           id: opts.eventId,
           object: "booking",
-          slug: (data.bookingPageSlug as string | null) ?? null,
+          slug,
           contact_id: (data.contactId as string | null) ?? null,
           title: (data.title as string | null) ?? null,
           start_at: tsToIsoOrNull(data.startAt),
           end_at: tsToIsoOrNull(data.endAt),
+          timezone,
           status: (data.status as string | null) ?? "scheduled",
           created_at: tsToIsoOrNull(data.createdAt),
           cancelled_at: cancelled

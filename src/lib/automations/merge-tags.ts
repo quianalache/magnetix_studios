@@ -101,7 +101,7 @@ export const SUPPORTED_TAGS_EMAIL: ReadonlyArray<{ tag: string; description: str
   { tag: "owner.firstName", description: "Agency owner's first name" },
   { tag: "owner.email", description: "Agency owner's email" },
   { tag: "workspace.name", description: "Sub-account name" },
-  { tag: "bookingLink", description: "Booking page URL (set in Automations → Settings)" },
+  { tag: "bookingLink", description: "Booking page URL (set under Booking → Default booking link)" },
   { tag: "unsubscribeLink", description: "Per-contact unsubscribe URL (required in email)" },
 ];
 
@@ -110,7 +110,7 @@ export const SUPPORTED_TAGS_SMS: ReadonlyArray<{ tag: string; description: strin
   { tag: "contact.lastName", description: "Contact's last name" },
   { tag: "owner.firstName", description: "Agency owner's first name" },
   { tag: "workspace.name", description: "Sub-account name" },
-  { tag: "bookingLink", description: "Booking page URL (set in Automations → Settings)" },
+  { tag: "bookingLink", description: "Booking page URL (set under Booking → Default booking link)" },
 ];
 
 /**
