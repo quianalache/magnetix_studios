@@ -331,6 +331,21 @@ export interface SubAccountDoc {
    */
   communityEnabledByAgency?: boolean;
   /**
+   * Agency-controlled gate for Standalone Courses — a course/product sold on
+   * its own public sales page at `/course/[saId]/[courseId]`, independent of
+   * Community (no group/membership required to buy or enroll). Only the
+   * agency owner can flip it (PATCH /api/agency/sub-accounts/[id]/
+   * feature-gates). When `false` (or undefined on legacy docs): the Courses
+   * sidebar entry renders a "Locked by your agency" state AND every
+   * `/course/*` page + standalone-course API 404s/403s. No tear-down on
+   * disable — courses, enrollments, and purchases are preserved, so
+   * re-enabling resumes instantly. Defaults to `false` at creation (explicit
+   * allowlist). Read `=== true` so legacy docs stay locked. Deliberately NOT
+   * coupled to `communityEnabledByAgency` — an agency can enable one without
+   * the other. See "Standalone Course/Product Sales Page (v1)" plan.
+   */
+  standaloneCoursesEnabledByAgency?: boolean;
+  /**
    * Agency-controlled gate for Missed Call Text Back (MCTB). When `false` (or
    * undefined on legacy docs) the sub-account can't enable the feature — the
    * settings card shows a locked state and the config route 403s. When on, the
@@ -389,6 +404,7 @@ export interface SubAccountDoc {
   websiteHiddenWhenDisabled?: boolean;
   socialPlannerHiddenWhenDisabled?: boolean;
   communityHiddenWhenDisabled?: boolean;
+  standaloneCoursesHiddenWhenDisabled?: boolean;
   getLeadsHiddenWhenDisabled?: boolean;
   aiSuiteHiddenWhenDisabled?: boolean;
   labsHiddenWhenDisabled?: boolean;

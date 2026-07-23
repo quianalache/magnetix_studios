@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/community/image-upload";
+import { uploadCommunityImage } from "@/lib/community/upload-image";
 import type { Course, CourseAccess } from "@/types/community";
 
 const SELECT =
@@ -126,9 +127,7 @@ export function CourseSettingsModal({
             value={thumbnailUrl}
             onChange={setThumbnailUrl}
             onUploadingChange={setImgUploading}
-            saId={saId}
-            groupId={groupId}
-            kind="course"
+            onUpload={(file) => uploadCommunityImage(file, saId, groupId, "course")}
             aspect="video"
           />
           <div className="space-y-1.5">

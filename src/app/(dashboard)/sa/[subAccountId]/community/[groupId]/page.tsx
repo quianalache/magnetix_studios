@@ -18,6 +18,7 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import { useSubAccount } from "@/context/sub-account-context";
 import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
 import { ImageUpload } from "@/components/community/image-upload";
+import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -242,9 +243,7 @@ export default function CommunityGroupSettingsPage({
             value={coverUrl}
             onChange={setCoverUrl}
             onUploadingChange={setImgUploading}
-            saId={subAccountId}
-            groupId={groupId}
-            kind="cover"
+            onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "cover")}
             aspect="video"
             disabled={!isAdmin}
           />
@@ -254,9 +253,7 @@ export default function CommunityGroupSettingsPage({
             value={cardImageUrl}
             onChange={setCardImageUrl}
             onUploadingChange={setImgUploading}
-            saId={subAccountId}
-            groupId={groupId}
-            kind="card"
+            onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "card")}
             aspect="video"
             disabled={!isAdmin}
           />
@@ -268,9 +265,7 @@ export default function CommunityGroupSettingsPage({
           value={logoUrl}
           onChange={setLogoUrl}
           onUploadingChange={setImgUploading}
-          saId={subAccountId}
-          groupId={groupId}
-          kind="logo"
+          onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "logo")}
           aspect="square"
           disabled={!isAdmin}
         />

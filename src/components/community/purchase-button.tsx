@@ -4,24 +4,22 @@ import { useState } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 
 /**
- * Starts a one-time purchase (group access or a course), then surfaces the
- * paypal.me link to pay at. v1 is manual-reconcile: after paying, a staff admin
- * marks the purchase paid to grant access. Used on the About page (group) and
- * the classroom catalog (course).
+ * Starts a one-time purchase, then surfaces the paypal.me link to pay at. v1
+ * is manual-reconcile: after paying, a staff admin marks the purchase paid to
+ * grant access. Used on the group About page + classroom catalog (Community)
+ * and the standalone-course sales page — each caller passes its own POST
+ * `endpoint` + `body`, so this component carries no community-specific
+ * coupling.
  */
 export function PurchaseButton({
-  saId,
-  groupId,
-  scope,
-  targetId,
+  endpoint,
+  body,
   label,
   brand,
   className,
 }: {
-  saId: string;
-  groupId: string;
-  scope: "group" | "course";
-  targetId: string;
+  endpoint: string;
+  body?: Record<string, unknown>;
   label: string;
   brand: string;
   className?: string;
@@ -34,10 +32,10 @@ export function PurchaseButton({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/community/${saId}/${groupId}/purchase`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope, targetId }),
+        body: JSON.stringify(body ?? {}),
       });
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;

@@ -3,14 +3,16 @@
 import { useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { cn } from "@/lib/utils";
 
 /**
- * Image upload field for a community group's cover / logo. Uploads straight to
- * Firebase Storage (staff are Firebase-authed) and hands the resulting public
- * URL back via `onChange`. Shows a preview with replace + remove. The parent
- * persists the URL on its normal Save.
+ * Generic image upload field (cover / logo / thumbnail). Delegates the
+ * actual upload to the caller via `onUpload` (rather than knowing about
+ * community `saId`/`groupId` Storage paths directly), so it's reusable by
+ * Community AND Standalone Courses — each caller passes its own upload
+ * function for its own Storage path. Hands the resulting public URL back via
+ * `onChange`. Shows a preview with replace + remove. The parent persists the
+ * URL on its normal Save.
  */
 export function ImageUpload({
   label,
@@ -18,9 +20,7 @@ export function ImageUpload({
   value,
   onChange,
   onUploadingChange,
-  saId,
-  groupId,
-  kind,
+  onUpload,
   aspect = "video",
   disabled,
 }: {
@@ -30,9 +30,7 @@ export function ImageUpload({
   onChange: (url: string | null) => void;
   /** Fires true while a file is uploading — let the parent block Save until done. */
   onUploadingChange?: (uploading: boolean) => void;
-  saId: string;
-  groupId: string;
-  kind: "cover" | "card" | "logo" | "course";
+  onUpload: (file: File) => Promise<string>;
   /** "video" = 16:9 cover, "square" = logo. */
   aspect?: "video" | "square";
   disabled?: boolean;
@@ -44,7 +42,7 @@ export function ImageUpload({
     setUploading(true);
     onUploadingChange?.(true);
     try {
-      const url = await uploadCommunityImage(file, saId, groupId, kind);
+      const url = await onUpload(file);
       onChange(url);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

@@ -72,10 +72,8 @@ export function JoinButton({
   if (access === "paid") {
     return (
       <PurchaseButton
-        saId={saId}
-        groupId={groupId}
-        scope="group"
-        targetId={groupId}
+        endpoint={`/api/community/${saId}/${groupId}/purchase`}
+        body={{ scope: "group", targetId: groupId }}
         label={`Join — ${priceLabel}`}
         brand={brandColor}
         className={base}

@@ -28,6 +28,13 @@ interface EnsureMemberInput {
   subAccountId: string;
   email: string;
   displayName?: string | null;
+  /**
+   * Reconciled-contact source tag. Defaults to "community" (the original
+   * caller). Standalone Courses passes "course" so CRM contact-source
+   * reporting doesn't mislabel course buyers as community joiners — both
+   * paths share this same member identity + reconciliation logic.
+   */
+  source?: string;
 }
 
 /**
@@ -48,6 +55,7 @@ export async function ensureMember({
   subAccountId,
   email,
   displayName,
+  source = "community",
 }: EnsureMemberInput): Promise<Member> {
   const db = getAdminDb();
   const normalizedEmail = email.trim().toLowerCase();
@@ -86,7 +94,7 @@ export async function ensureMember({
         phone: "",
         company: "",
         address: "",
-        source: "community",
+        source,
         tags: [],
       });
       contactId = result.id;

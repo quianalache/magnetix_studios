@@ -29,6 +29,7 @@ import {
   Radar,
   Share2,
   GraduationCap,
+  BookOpen,
   Sparkles,
   CreditCard,
   FlaskConical,
@@ -107,6 +108,12 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
     icon: GraduationCap,
     enabled: true,
   },
+  {
+    href: "/courses",
+    label: "Courses",
+    icon: BookOpen,
+    enabled: true,
+  },
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   // Labs — the gated container for PRE-RELEASE features (agency opt-in per
   // sub-account via labsEnabledByAgency; hidden-by-default when off).
@@ -164,6 +171,9 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
   const [websiteGate, setWebsiteGate] = useState<boolean | null>(null);
   const [socialGate, setSocialGate] = useState<boolean | null>(null);
   const [communityGate, setCommunityGate] = useState<boolean | null>(null);
+  const [standaloneCoursesGate, setStandaloneCoursesGate] = useState<
+    boolean | null
+  >(null);
   const [aiSuiteGate, setAiSuiteGate] = useState<boolean | null>(null);
   const [getLeadsGate, setGetLeadsGate] = useState<boolean | null>(null);
   const [labsGate, setLabsGate] = useState<boolean | null>(null);
@@ -175,6 +185,7 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
   const [websiteHidden, setWebsiteHidden] = useState(false);
   const [socialHidden, setSocialHidden] = useState(false);
   const [communityHidden, setCommunityHidden] = useState(false);
+  const [standaloneCoursesHidden, setStandaloneCoursesHidden] = useState(false);
   const [getLeadsHidden, setGetLeadsHidden] = useState(false);
   const [aiSuiteHidden, setAiSuiteHidden] = useState(false);
   const [labsHidden, setLabsHidden] = useState(false);
@@ -185,6 +196,7 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
       setWebsiteGate(null);
       setSocialGate(null);
       setCommunityGate(null);
+      setStandaloneCoursesGate(null);
       setAiSuiteGate(null);
       setGetLeadsGate(null);
       setLabsGate(null);
@@ -198,6 +210,9 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
         setWebsiteGate(data?.websiteEnabledByAgency === true);
         setSocialGate(data?.socialPlannerEnabledByAgency === true);
         setCommunityGate(data?.communityEnabledByAgency === true);
+        setStandaloneCoursesGate(
+          data?.standaloneCoursesEnabledByAgency === true,
+        );
         // Workspace Assistant is opt-in like the other gates — off unless the
         // agency owner explicitly enabled it (legacy/unset reads as off).
         setAiSuiteGate(data?.aiSuiteEnabledByAgency === true);
@@ -208,6 +223,9 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
         setWebsiteHidden(data?.websiteHiddenWhenDisabled !== false);
         setSocialHidden(data?.socialPlannerHiddenWhenDisabled !== false);
         setCommunityHidden(data?.communityHiddenWhenDisabled !== false);
+        setStandaloneCoursesHidden(
+          data?.standaloneCoursesHiddenWhenDisabled !== false,
+        );
         setGetLeadsHidden(data?.getLeadsHiddenWhenDisabled !== false);
         setAiSuiteHidden(data?.aiSuiteHiddenWhenDisabled !== false);
         setLabsHidden(data?.labsHiddenWhenDisabled !== false);
@@ -217,6 +235,7 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
         setWebsiteGate(null);
         setSocialGate(null);
         setCommunityGate(null);
+        setStandaloneCoursesGate(null);
         setAiSuiteGate(null);
         setGetLeadsGate(null);
         setLabsGate(null);
@@ -383,6 +402,8 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
                 (item.href === "/website" && websiteGate === false) ||
                 (item.href === "/social" && socialGate === false) ||
                 (item.href === "/community" && communityGate === false) ||
+                (item.href === "/courses" &&
+                  standaloneCoursesGate === false) ||
                 (item.href === "/ai-suite" && aiSuiteGate === false) ||
                 (item.href === "/get-leads" && getLeadsGate === false) ||
                 (item.href === "/labs" && labsGate === false);
@@ -401,6 +422,9 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
                 (item.href === "/community" &&
                   communityGate === false &&
                   communityHidden) ||
+                (item.href === "/courses" &&
+                  standaloneCoursesGate === false &&
+                  standaloneCoursesHidden) ||
                 (item.href === "/get-leads" &&
                   getLeadsGate === false &&
                   getLeadsHidden) ||

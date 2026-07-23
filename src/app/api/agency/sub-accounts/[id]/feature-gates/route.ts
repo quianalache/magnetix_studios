@@ -47,6 +47,7 @@ interface PatchBody {
   websiteEnabled?: boolean;
   socialPlannerEnabled?: boolean;
   communityEnabled?: boolean;
+  standaloneCoursesEnabled?: boolean;
   missedCallTextBackEnabled?: boolean;
   aiSuiteEnabled?: boolean;
   /**
@@ -64,6 +65,7 @@ interface PatchBody {
   websiteHiddenWhenDisabled?: boolean;
   socialPlannerHiddenWhenDisabled?: boolean;
   communityHiddenWhenDisabled?: boolean;
+  standaloneCoursesHiddenWhenDisabled?: boolean;
   getLeadsHiddenWhenDisabled?: boolean;
   aiSuiteHiddenWhenDisabled?: boolean;
   labsHiddenWhenDisabled?: boolean;
@@ -103,6 +105,8 @@ export async function PATCH(
   const wantsWebsite = typeof body.websiteEnabled === "boolean";
   const wantsSocialPlanner = typeof body.socialPlannerEnabled === "boolean";
   const wantsCommunity = typeof body.communityEnabled === "boolean";
+  const wantsStandaloneCourses =
+    typeof body.standaloneCoursesEnabled === "boolean";
   const wantsMissedCall = typeof body.missedCallTextBackEnabled === "boolean";
   const wantsAiSuite = typeof body.aiSuiteEnabled === "boolean";
   const wantsAiSuiteModel = body.aiSuiteModel !== undefined;
@@ -126,6 +130,8 @@ export async function PATCH(
     typeof body.socialPlannerHiddenWhenDisabled === "boolean";
   const wantsCommunityHidden =
     typeof body.communityHiddenWhenDisabled === "boolean";
+  const wantsStandaloneCoursesHidden =
+    typeof body.standaloneCoursesHiddenWhenDisabled === "boolean";
   const wantsGetLeadsHidden =
     typeof body.getLeadsHiddenWhenDisabled === "boolean";
   const wantsAiSuiteHidden =
@@ -145,6 +151,7 @@ export async function PATCH(
     !wantsWebsite &&
     !wantsSocialPlanner &&
     !wantsCommunity &&
+    !wantsStandaloneCourses &&
     !wantsMissedCall &&
     !wantsAiSuite &&
     !wantsAiSuiteModel &&
@@ -154,6 +161,7 @@ export async function PATCH(
     !wantsWebsiteHidden &&
     !wantsSocialPlannerHidden &&
     !wantsCommunityHidden &&
+    !wantsStandaloneCoursesHidden &&
     !wantsGetLeadsHidden &&
     !wantsAiSuiteHidden &&
     !wantsLabsHidden
@@ -239,6 +247,9 @@ export async function PATCH(
   if (typeof body.communityEnabled === "boolean") {
     gates.communityEnabledByAgency = body.communityEnabled;
   }
+  if (typeof body.standaloneCoursesEnabled === "boolean") {
+    gates.standaloneCoursesEnabledByAgency = body.standaloneCoursesEnabled;
+  }
   if (typeof body.missedCallTextBackEnabled === "boolean") {
     gates.missedCallTextBackEnabledByAgency = body.missedCallTextBackEnabled;
   }
@@ -284,6 +295,10 @@ export async function PATCH(
     hiddenUpdates.communityHiddenWhenDisabled =
       body.communityHiddenWhenDisabled;
   }
+  if (wantsStandaloneCoursesHidden) {
+    hiddenUpdates.standaloneCoursesHiddenWhenDisabled =
+      body.standaloneCoursesHiddenWhenDisabled;
+  }
   if (wantsGetLeadsHidden) {
     hiddenUpdates.getLeadsHiddenWhenDisabled = body.getLeadsHiddenWhenDisabled;
   }
@@ -319,6 +334,9 @@ export async function PATCH(
       ? { socialPlannerEnabled: body.socialPlannerEnabled }
       : {}),
     ...(wantsCommunity ? { communityEnabled: body.communityEnabled } : {}),
+    ...(wantsStandaloneCourses
+      ? { standaloneCoursesEnabled: body.standaloneCoursesEnabled }
+      : {}),
     ...(wantsMissedCall
       ? { missedCallTextBackEnabled: body.missedCallTextBackEnabled }
       : {}),
@@ -340,6 +358,12 @@ export async function PATCH(
       : {}),
     ...(wantsCommunityHidden
       ? { communityHiddenWhenDisabled: body.communityHiddenWhenDisabled }
+      : {}),
+    ...(wantsStandaloneCoursesHidden
+      ? {
+          standaloneCoursesHiddenWhenDisabled:
+            body.standaloneCoursesHiddenWhenDisabled,
+        }
       : {}),
     ...(wantsGetLeadsHidden
       ? { getLeadsHiddenWhenDisabled: body.getLeadsHiddenWhenDisabled }

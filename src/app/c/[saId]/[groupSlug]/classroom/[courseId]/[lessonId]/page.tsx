@@ -96,10 +96,8 @@ export default async function LessonPlayerPage({
         <ArrowLeft className="h-4 w-4" /> {course.title}
       </Link>
       <LessonPlayer
-        saId={saId}
-        groupId={group.id}
-        groupSlug={groupSlug}
-        courseId={courseId}
+        completeEndpoint={`/api/community/${saId}/${group.id}/courses/${courseId}/lessons/${lessonId}/complete`}
+        lessonHref={(id) => `/c/${saId}/${groupSlug}/classroom/${courseId}/${id}`}
         brand={brand}
         sections={sections}
         lessons={lessons}

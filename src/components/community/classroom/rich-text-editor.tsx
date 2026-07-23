@@ -27,7 +27,6 @@ import {
   Video,
 } from "lucide-react";
 import { LessonVideo } from "./lesson-video-extension";
-import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { lessonBodyToEditorHtml } from "@/lib/community/lesson-html-shared";
 import { cn } from "@/lib/utils";
@@ -40,17 +39,20 @@ import { cn } from "@/lib/utils";
  *
  * Mounted with a `key={lesson.id}` parent so it remounts per lesson — initial
  * content is read once, no value→editor syncing needed.
+ *
+ * Image uploads are delegated to the caller via `onUploadImage` (rather than
+ * this component knowing about `saId`/`groupId` Storage paths directly), so
+ * it's reusable by Community lesson editing AND Standalone Course editing —
+ * each caller passes the upload function for its own Storage path.
  */
 export function RichTextEditor({
   value,
   onChange,
-  saId,
-  groupId,
+  onUploadImage,
 }: {
   value: string;
   onChange: (html: string) => void;
-  saId: string;
-  groupId: string;
+  onUploadImage: (file: File) => Promise<string>;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -91,7 +93,7 @@ export function RichTextEditor({
   async function handleImageFile(file: File) {
     setUploading(true);
     try {
-      const url = await uploadCommunityImage(file, saId, groupId, "course");
+      const url = await onUploadImage(file);
       editor!.chain().focus().setImage({ src: url }).run();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

@@ -35,3 +35,27 @@ export async function uploadCommunityImage(
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
 }
+
+/**
+ * Standalone-course sibling of `uploadCommunityImage` — same validation +
+ * behavior, different Storage path (`standalone-courses/{saId}/{courseId}/
+ * {kind}-{timestamp}.{ext}`) since standalone courses have no groupId.
+ */
+export async function uploadStandaloneCourseImage(
+  file: File,
+  saId: string,
+  courseId: string,
+  kind: "cover" | "lesson",
+): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("Image is too large — keep it under 5 MB.");
+  }
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "img";
+  const path = `standalone-courses/${saId}/${courseId}/${kind}-${Date.now()}.${ext}`;
+  const storageRef = ref(getFirebaseStorage(), path);
+  await uploadBytes(storageRef, file, { contentType: file.type });
+  return getDownloadURL(storageRef);
+}

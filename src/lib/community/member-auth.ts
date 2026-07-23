@@ -61,6 +61,14 @@ interface TokenPayload {
   k: "ml" | "ses";
   /** Optional "join this group on verify" intent (magic-link tokens only). */
   j?: string;
+  /**
+   * Optional "return to this standalone course on verify" intent
+   * (magic-link tokens only). Distinct from `j` — a course login has no
+   * group/membership to auto-join; verify just establishes the session and
+   * redirects back to the course, where the buyer completes enroll/purchase
+   * as an explicit follow-up action.
+   */
+  c?: string;
 }
 
 function encodeToken(payload: TokenPayload): string {
@@ -109,6 +117,7 @@ export function signMemberMagicLinkToken(
   subAccountId: string,
   email: string,
   joinGroupId?: string,
+  courseId?: string,
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -116,6 +125,7 @@ export function signMemberMagicLinkToken(
     exp: Date.now() + MAGIC_LINK_TTL_MS,
     k: "ml",
     ...(joinGroupId ? { j: joinGroupId } : {}),
+    ...(courseId ? { c: courseId } : {}),
   });
 }
 
@@ -135,13 +145,19 @@ export function signMemberSessionToken(
 
 export function verifyMemberMagicLinkToken(
   token: string,
-): { subAccountId: string; email: string; joinGroupId?: string } | null {
+): {
+  subAccountId: string;
+  email: string;
+  joinGroupId?: string;
+  courseId?: string;
+} | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
   return {
     subAccountId: payload.sa,
     email: payload.e,
     joinGroupId: payload.j,
+    courseId: payload.c,
   };
 }
 

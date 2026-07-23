@@ -1,0 +1,443 @@
+import "server-only";
+
+import { FieldValue } from "firebase-admin/firestore";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { parseVideoUrl } from "@/lib/community/video-embed";
+import type { ResourceLink } from "@/types/community";
+import type {
+  StandaloneCourse,
+  StandaloneCourseAccess,
+  StandaloneCourseCurriculumSection,
+  StandaloneCourseSection,
+  StandaloneEnrollment,
+  StandaloneLesson,
+} from "@/types/standalone-courses";
+
+/**
+ * Server-side Standalone Course service (Admin SDK). Forked from
+ * `community-classroom-service.ts` — same section/lesson/progress shape and
+ * behavior, minus everything that depended on a community group: no `groupId`
+ * threading, no `access: "level"` (no group/membership concept exists here).
+ * Staff mutate via /api/sub-accounts/[id]/standalone-courses/*; buyers read
+ * the server-rendered sales page + player and mark lessons complete.
+ */
+
+function coursesCol(saId: string) {
+  return getAdminDb().collection(`subAccounts/${saId}/standaloneCourses`);
+}
+function courseDoc(saId: string, courseId: string) {
+  return coursesCol(saId).doc(courseId);
+}
+
+/* ------------------------------- Courses ------------------------------- */
+
+export async function createStandaloneCourseServerSide(opts: {
+  subAccountId: string;
+  agencyId: string;
+  title: string;
+  aboutHtml?: string;
+  coverUrl?: string | null;
+  category?: string | null;
+  access?: StandaloneCourseAccess;
+  priceCents?: number | null;
+  currency?: string | null;
+  published?: boolean;
+}): Promise<StandaloneCourse> {
+  const access: StandaloneCourseAccess = opts.access ?? "open";
+  const doc = {
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    title: opts.title.trim(),
+    aboutHtml: opts.aboutHtml?.trim() ?? "",
+    coverUrl: opts.coverUrl ?? null,
+    category: opts.category?.trim() || null,
+    published: opts.published ?? false,
+    access,
+    priceCents: access === "purchase" ? (opts.priceCents ?? null) : null,
+    currency: access === "purchase" ? (opts.currency ?? "USD") : null,
+    enrollmentCount: 0,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await coursesCol(opts.subAccountId).add(doc);
+  return { id: ref.id, ...doc } as StandaloneCourse;
+}
+
+export interface StandaloneCoursePatch {
+  title?: string;
+  aboutHtml?: string;
+  coverUrl?: string | null;
+  category?: string | null;
+  published?: boolean;
+  access?: StandaloneCourseAccess;
+  priceCents?: number | null;
+  currency?: string | null;
+}
+
+export async function updateStandaloneCourseServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  patch: StandaloneCoursePatch;
+}): Promise<void> {
+  const updates: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const p = opts.patch;
+  if (typeof p.title === "string") updates.title = p.title.trim();
+  if (typeof p.aboutHtml === "string") updates.aboutHtml = p.aboutHtml.trim();
+  if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
+  if (p.category !== undefined) updates.category = p.category?.trim() || null;
+  if (typeof p.published === "boolean") updates.published = p.published;
+  if (p.access) {
+    updates.access = p.access;
+    if (p.access === "purchase") {
+      if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
+      updates.currency = p.currency ?? "USD";
+    } else {
+      updates.priceCents = null;
+      updates.currency = null;
+    }
+  } else if (p.priceCents !== undefined) {
+    updates.priceCents = p.priceCents;
+  }
+  await courseDoc(opts.subAccountId, opts.courseId).update(updates);
+}
+
+export async function deleteStandaloneCourseServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+}): Promise<void> {
+  await getAdminDb().recursiveDelete(
+    courseDoc(opts.subAccountId, opts.courseId),
+  );
+}
+
+export async function getStandaloneCourse(
+  saId: string,
+  courseId: string,
+): Promise<StandaloneCourse | null> {
+  const snap = await courseDoc(saId, courseId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...(snap.data() as Omit<StandaloneCourse, "id">) };
+}
+
+export async function listStandaloneCourses(
+  saId: string,
+): Promise<StandaloneCourse[]> {
+  const snap = await coursesCol(saId).orderBy("createdAt", "desc").get();
+  return snap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCourse, "id">) }),
+  );
+}
+
+/* ------------------------------ Sections ------------------------------- */
+
+export async function createStandaloneSectionServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  title: string;
+}): Promise<StandaloneCourseSection> {
+  const col = courseDoc(opts.subAccountId, opts.courseId).collection(
+    "sections",
+  );
+  const count = (await col.count().get()).data().count;
+  const doc = { title: opts.title.trim() || "Untitled section", order: count };
+  const ref = await col.add(doc);
+  return { id: ref.id, ...doc };
+}
+
+export async function updateStandaloneSectionServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  sectionId: string;
+  patch: { title?: string; order?: number };
+}): Promise<void> {
+  const updates: Record<string, unknown> = {};
+  if (typeof opts.patch.title === "string")
+    updates.title = opts.patch.title.trim();
+  if (typeof opts.patch.order === "number") updates.order = opts.patch.order;
+  await courseDoc(opts.subAccountId, opts.courseId)
+    .collection("sections")
+    .doc(opts.sectionId)
+    .update(updates);
+}
+
+export async function deleteStandaloneSectionServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  sectionId: string;
+}): Promise<void> {
+  await courseDoc(opts.subAccountId, opts.courseId)
+    .collection("sections")
+    .doc(opts.sectionId)
+    .delete();
+  // Lessons keep their now-dangling sectionId and render as "Other".
+}
+
+/* ------------------------------- Lessons ------------------------------- */
+
+function lessonsCol(saId: string, courseId: string) {
+  return courseDoc(saId, courseId).collection("lessons");
+}
+
+export async function createStandaloneLessonServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  sectionId: string | null;
+  title: string;
+}): Promise<StandaloneLesson> {
+  const col = lessonsCol(opts.subAccountId, opts.courseId);
+  const count = (await col.count().get()).data().count;
+  const doc = {
+    sectionId: opts.sectionId,
+    title: opts.title.trim() || "Untitled lesson",
+    order: count,
+    published: false,
+    videoUrl: null,
+    videoProvider: null,
+    videoId: null,
+    bodyHtml: "",
+    resourceLinks: [] as ResourceLink[],
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await col.add(doc);
+  return { id: ref.id, ...doc } as StandaloneLesson;
+}
+
+export interface StandaloneLessonPatch {
+  title?: string;
+  sectionId?: string | null;
+  order?: number;
+  published?: boolean;
+  videoUrl?: string | null;
+  bodyHtml?: string;
+  resourceLinks?: ResourceLink[];
+}
+
+export async function updateStandaloneLessonServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  lessonId: string;
+  patch: StandaloneLessonPatch;
+}): Promise<{ videoError?: boolean }> {
+  const updates: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const p = opts.patch;
+  if (typeof p.title === "string") updates.title = p.title.trim();
+  if (p.sectionId !== undefined) updates.sectionId = p.sectionId;
+  if (typeof p.order === "number") updates.order = p.order;
+  if (typeof p.published === "boolean") updates.published = p.published;
+  if (typeof p.bodyHtml === "string") updates.bodyHtml = p.bodyHtml;
+  if (Array.isArray(p.resourceLinks)) {
+    updates.resourceLinks = p.resourceLinks
+      .filter((r) => r && r.url?.trim())
+      .map((r) => ({ label: r.label?.trim() || r.url.trim(), url: r.url.trim() }))
+      .slice(0, 20);
+  }
+  let videoError = false;
+  if (p.videoUrl !== undefined) {
+    if (!p.videoUrl) {
+      updates.videoUrl = null;
+      updates.videoProvider = null;
+      updates.videoId = null;
+    } else {
+      const parsed = parseVideoUrl(p.videoUrl);
+      if (parsed) {
+        updates.videoUrl = p.videoUrl.trim();
+        updates.videoProvider = parsed.provider;
+        updates.videoId = parsed.id;
+      } else {
+        videoError = true; // Leave the existing video untouched.
+      }
+    }
+  }
+  await lessonsCol(opts.subAccountId, opts.courseId)
+    .doc(opts.lessonId)
+    .update(updates);
+  return { videoError };
+}
+
+export async function deleteStandaloneLessonServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  lessonId: string;
+}): Promise<void> {
+  await getAdminDb().recursiveDelete(
+    lessonsCol(opts.subAccountId, opts.courseId).doc(opts.lessonId),
+  );
+}
+
+/* --------------------------- Read: full tree --------------------------- */
+
+export interface StandaloneCourseTree {
+  course: StandaloneCourse;
+  sections: StandaloneCourseSection[];
+  lessons: StandaloneLesson[];
+}
+
+export async function getStandaloneCourseTree(opts: {
+  subAccountId: string;
+  courseId: string;
+  includeUnpublished: boolean;
+}): Promise<StandaloneCourseTree | null> {
+  const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
+  if (!course) return null;
+  const ref = courseDoc(opts.subAccountId, opts.courseId);
+  const [sectionsSnap, lessonsSnap] = await Promise.all([
+    ref.collection("sections").orderBy("order", "asc").get(),
+    ref.collection("lessons").orderBy("order", "asc").get(),
+  ]);
+  const sections = sectionsSnap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCourseSection, "id">) }),
+  );
+  let lessons = lessonsSnap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneLesson, "id">) }),
+  );
+  if (!opts.includeUnpublished) lessons = lessons.filter((l) => l.published);
+  return { course, sections, lessons };
+}
+
+/**
+ * Summary-only curriculum outline for the public sales page — section names
+ * + published-lesson counts, no individual lesson titles/links (matches the
+ * GoKollab reference: collapsible sections, no pre-purchase lesson list).
+ */
+export async function getCurriculumOutline(
+  saId: string,
+  courseId: string,
+): Promise<StandaloneCourseCurriculumSection[]> {
+  const ref = courseDoc(saId, courseId);
+  const [sectionsSnap, lessonsSnap] = await Promise.all([
+    ref.collection("sections").orderBy("order", "asc").get(),
+    ref.collection("lessons").where("published", "==", true).get(),
+  ]);
+  const counts = new Map<string | null, number>();
+  for (const d of lessonsSnap.docs) {
+    const sectionId = (d.data().sectionId as string | null) ?? null;
+    counts.set(sectionId, (counts.get(sectionId) ?? 0) + 1);
+  }
+  return sectionsSnap.docs.map((d) => ({
+    id: d.id,
+    title: d.data().title as string,
+    order: (d.data().order as number) ?? 0,
+    lessonCount: counts.get(d.id) ?? 0,
+  }));
+}
+
+/* ------------------------- Enrollment / progress ----------------------- */
+
+function enrollmentDoc(saId: string, courseId: string, memberId: string) {
+  return courseDoc(saId, courseId).collection("enrollments").doc(memberId);
+}
+
+export async function getStandaloneEnrollment(
+  saId: string,
+  courseId: string,
+  memberId: string,
+): Promise<StandaloneEnrollment | null> {
+  const snap = await enrollmentDoc(saId, courseId, memberId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...(snap.data() as Omit<StandaloneEnrollment, "id">) };
+}
+
+/**
+ * Idempotently enroll a member in a free ("open") course + bump the
+ * denormalized enrollment count once. No-ops if already enrolled.
+ */
+export async function enrollInStandaloneCourseServerSide(opts: {
+  subAccountId: string;
+  agencyId: string;
+  courseId: string;
+  memberId: string;
+}): Promise<void> {
+  const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
+  const snap = await ref.get();
+  if (snap.exists) return;
+  await ref.set({
+    memberId: opts.memberId,
+    courseId: opts.courseId,
+    status: "enrolled",
+    completedLessonIds: [],
+    progressPct: 0,
+    enrolledAt: FieldValue.serverTimestamp(),
+    completedAt: null,
+  });
+  await courseDoc(opts.subAccountId, opts.courseId).update({
+    enrollmentCount: FieldValue.increment(1),
+  });
+  void emitWebhookEvent({
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    mode: "live",
+    type: "course.enrolled",
+    payload: { courseId: opts.courseId, memberId: opts.memberId },
+  });
+}
+
+/** Idempotently mark a lesson complete + recompute the course progress. */
+export async function markStandaloneLessonCompleteServerSide(opts: {
+  subAccountId: string;
+  agencyId: string;
+  courseId: string;
+  memberId: string;
+  lessonId: string;
+}): Promise<{ progressPct: number; completed: boolean }> {
+  const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
+  const publishedSnap = await lessonsCol(opts.subAccountId, opts.courseId)
+    .where("published", "==", true)
+    .get();
+  const total = publishedSnap.size || 1;
+
+  const snap = await ref.get();
+  const existing =
+    (snap.data() as Omit<StandaloneEnrollment, "id"> | undefined) ?? null;
+  const completed = new Set(existing?.completedLessonIds ?? []);
+  completed.add(opts.lessonId);
+  const completedIds = Array.from(completed);
+  const progressPct = Math.min(
+    100,
+    Math.round((completedIds.length / total) * 100),
+  );
+  const isComplete = progressPct >= 100;
+
+  await ref.set(
+    {
+      memberId: opts.memberId,
+      courseId: opts.courseId,
+      status: isComplete ? "completed" : "enrolled",
+      completedLessonIds: completedIds,
+      progressPct,
+      enrolledAt: existing?.enrolledAt ?? FieldValue.serverTimestamp(),
+      completedAt: isComplete ? FieldValue.serverTimestamp() : null,
+    },
+    { merge: true },
+  );
+
+  const wasAlreadyComplete = existing?.status === "completed";
+  void emitWebhookEvent({
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    mode: "live",
+    type: "course.lesson.completed",
+    payload: {
+      courseId: opts.courseId,
+      lessonId: opts.lessonId,
+      memberId: opts.memberId,
+      progressPct,
+    },
+  });
+  if (isComplete && !wasAlreadyComplete) {
+    void emitWebhookEvent({
+      subAccountId: opts.subAccountId,
+      agencyId: opts.agencyId,
+      mode: "live",
+      type: "course.completed",
+      payload: { courseId: opts.courseId, memberId: opts.memberId },
+    });
+  }
+
+  return { progressPct, completed: isComplete };
+}

@@ -373,6 +373,30 @@ service cloud.firestore {
         }
       }
 
+      // Standalone Courses — a course/product sold on its own public sales
+      // page, independent of Community (no group/membership). Same pattern
+      // as communityGroups above: staff-readable for the dashboard builder,
+      // ALL writes go through the Admin-SDK routes
+      // (/api/sub-accounts/[id]/standalone-courses/* for staff,
+      // /api/course/* for buyers). The public /course/ pages fetch
+      // server-side via the Admin SDK (rules bypass). Buyers reuse the same
+      // Member identity as Community (see /members below) — never Firebase
+      // Auth users, never read through the client SDK.
+      match /standaloneCourses/{courseId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+        match /{document=**} {
+          allow read: if canAccessSub(
+            subAccountId,
+            get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+          );
+          allow write: if false;
+        }
+      }
+
       // Community member identities (the login record; one per email per
       // sub-account). Staff-readable for the roster; server-only writes.
       match /members/{memberId} {

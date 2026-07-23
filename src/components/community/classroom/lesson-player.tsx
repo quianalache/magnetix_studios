@@ -22,20 +22,18 @@ export interface PlayerSection {
 }
 
 export function LessonPlayer({
-  saId,
-  groupId,
-  groupSlug,
-  courseId,
+  completeEndpoint,
+  lessonHref,
   brand,
   sections,
   lessons,
   currentLessonId,
   completedIds: initialCompleted,
 }: {
-  saId: string;
-  groupId: string;
-  groupSlug: string;
-  courseId: string;
+  /** Full POST URL to mark the current lesson complete. */
+  completeEndpoint: string;
+  /** Builds the nav href for a given lesson id. */
+  lessonHref: (lessonId: string) => string;
   brand: string;
   sections: PlayerSection[];
   lessons: PlayerLesson[];
@@ -51,8 +49,6 @@ export function LessonPlayer({
   const current = lessons.find((l) => l.id === currentLessonId) ?? lessons[0];
   const idx = lessons.findIndex((l) => l.id === current.id);
   const next = lessons[idx + 1] ?? null;
-  const lessonHref = (id: string) =>
-    `/c/${saId}/${groupSlug}/classroom/${courseId}/${id}`;
 
   const sectionIds = new Set(sections.map((s) => s.id));
   const inSection = (sid: string | null) =>
@@ -66,10 +62,7 @@ export function LessonPlayer({
   async function completeAndContinue() {
     setSaving(true);
     try {
-      const res = await fetch(
-        `/api/community/${saId}/${groupId}/courses/${courseId}/lessons/${current.id}/complete`,
-        { method: "POST" },
-      );
+      const res = await fetch(completeEndpoint, { method: "POST" });
       if (!res.ok) throw new Error();
       setCompleted((prev) => new Set(prev).add(current.id));
       if (next) {

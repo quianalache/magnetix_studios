@@ -87,6 +87,12 @@ export const WEBHOOK_EVENT_TYPES = [
   "community.purchase.paid",
   "community.lesson.completed",
   "community.course.completed",
+  // Standalone Courses — independent of Community (no group/membership
+  // required). Emitted from the standalone-course service write paths.
+  "course.enrolled",
+  "course.purchase.paid",
+  "course.lesson.completed",
+  "course.completed",
   // Client Billing v1 — agency→sub-account plan lifecycle. Emitted from the
   // billing service (assign/comp) and the Stripe webhook handlers
   // (activate / past_due / canceled). Always live — billing has no test mode.

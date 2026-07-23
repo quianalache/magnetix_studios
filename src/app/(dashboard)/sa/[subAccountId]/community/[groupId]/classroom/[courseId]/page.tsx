@@ -32,6 +32,7 @@ import {
   subscribeToSections,
 } from "@/lib/firestore/community-classroom";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -592,8 +593,9 @@ function LessonEditor({
         <RichTextEditor
           value={body}
           onChange={setBody}
-          saId={saId}
-          groupId={groupId}
+          onUploadImage={(file) =>
+            uploadCommunityImage(file, saId, groupId, "course")
+          }
         />
       </div>
 

@@ -199,6 +199,7 @@ export async function createSubAccountForAgency(
       metaAgentEnabledByAgency: false,
       websiteEnabledByAgency: false,
       communityEnabledByAgency: false,
+      standaloneCoursesEnabledByAgency: false,
       getLeadsEnabledByAgency: false,
       missedCallTextBackEnabledByAgency: false,
       // Labs (pre-release features) ships OFF — explicit opt-in per client.

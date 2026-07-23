@@ -72,10 +72,8 @@ export default async function ClassroomCatalogPage({
                     c.locked.purchasable ? (
                       <div className="mt-3">
                         <PurchaseButton
-                          saId={saId}
-                          groupId={group.id}
-                          scope="course"
-                          targetId={c.id}
+                          endpoint={`/api/community/${saId}/${group.id}/purchase`}
+                          body={{ scope: "course", targetId: c.id }}
                           label={c.locked.reason}
                           brand={brand}
                           className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"

@@ -20,6 +20,7 @@ import {
   Send,
   Share2,
   GraduationCap,
+  BookOpen,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -81,6 +82,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const initialWebsite = subAccount?.websiteEnabledByAgency === true;
   const initialSocial = subAccount?.socialPlannerEnabledByAgency === true;
   const initialCommunity = subAccount?.communityEnabledByAgency === true;
+  const initialStandaloneCourses =
+    subAccount?.standaloneCoursesEnabledByAgency === true;
   const initialMissedCall =
     subAccount?.missedCallTextBackEnabledByAgency === true;
   // Workspace Assistant is opt-in like every other gate — off unless
@@ -103,6 +106,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     subAccount?.socialPlannerHiddenWhenDisabled !== false;
   const initialCommunityHidden =
     subAccount?.communityHiddenWhenDisabled !== false;
+  const initialStandaloneCoursesHidden =
+    subAccount?.standaloneCoursesHiddenWhenDisabled !== false;
   const initialGetLeadsHidden =
     subAccount?.getLeadsHiddenWhenDisabled !== false;
   const initialAiSuiteHidden =
@@ -125,6 +130,9 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const [socialPlannerEnabled, setSocialPlannerEnabled] =
     useState(initialSocial);
   const [communityEnabled, setCommunityEnabled] = useState(initialCommunity);
+  const [standaloneCoursesEnabled, setStandaloneCoursesEnabled] = useState(
+    initialStandaloneCourses,
+  );
   const [missedCallEnabled, setMissedCallEnabled] = useState(initialMissedCall);
   const [aiSuiteEnabled, setAiSuiteEnabled] = useState(initialAiSuite);
   const [aiSuiteModel, setAiSuiteModel] = useState<"opus" | "sonnet">(
@@ -139,6 +147,9 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const [socialHidden, setSocialHidden] = useState(initialSocialHidden);
   const [communityHidden, setCommunityHidden] = useState(
     initialCommunityHidden,
+  );
+  const [standaloneCoursesHidden, setStandaloneCoursesHidden] = useState(
+    initialStandaloneCoursesHidden,
   );
   const [getLeadsHidden, setGetLeadsHidden] = useState(initialGetLeadsHidden);
   const [aiSuiteHidden, setAiSuiteHidden] = useState(initialAiSuiteHidden);
@@ -186,6 +197,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
       setWebsiteEnabled(initialWebsite);
       setSocialPlannerEnabled(initialSocial);
       setCommunityEnabled(initialCommunity);
+      setStandaloneCoursesEnabled(initialStandaloneCourses);
       setMissedCallEnabled(initialMissedCall);
       setAiSuiteEnabled(initialAiSuite);
       setAiSuiteModel(initialAiSuiteModel);
@@ -195,6 +207,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
       setWebsiteHidden(initialWebsiteHidden);
       setSocialHidden(initialSocialHidden);
       setCommunityHidden(initialCommunityHidden);
+      setStandaloneCoursesHidden(initialStandaloneCoursesHidden);
       setGetLeadsHidden(initialGetLeadsHidden);
       setAiSuiteHidden(initialAiSuiteHidden);
       setLabsHidden(initialLabsHidden);
@@ -214,6 +227,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     initialWebsite,
     initialSocial,
     initialCommunity,
+    initialStandaloneCourses,
     initialMissedCall,
     initialAiSuite,
     initialAiSuiteModel,
@@ -223,6 +237,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     initialWebsiteHidden,
     initialSocialHidden,
     initialCommunityHidden,
+    initialStandaloneCoursesHidden,
     initialGetLeadsHidden,
     initialAiSuiteHidden,
     initialLabsHidden,
@@ -246,6 +261,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const websiteDirty = websiteEnabled !== initialWebsite;
   const socialDirty = socialPlannerEnabled !== initialSocial;
   const communityDirty = communityEnabled !== initialCommunity;
+  const standaloneCoursesDirty =
+    standaloneCoursesEnabled !== initialStandaloneCourses;
   const missedCallDirty = missedCallEnabled !== initialMissedCall;
   const aiSuiteDirty = aiSuiteEnabled !== initialAiSuite;
   const aiSuiteModelDirty = aiSuiteModel !== initialAiSuiteModel;
@@ -255,6 +272,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   const websiteHiddenDirty = websiteHidden !== initialWebsiteHidden;
   const socialHiddenDirty = socialHidden !== initialSocialHidden;
   const communityHiddenDirty = communityHidden !== initialCommunityHidden;
+  const standaloneCoursesHiddenDirty =
+    standaloneCoursesHidden !== initialStandaloneCoursesHidden;
   const getLeadsHiddenDirty = getLeadsHidden !== initialGetLeadsHidden;
   const aiSuiteHiddenDirty = aiSuiteHidden !== initialAiSuiteHidden;
   const labsHiddenDirty = labsHidden !== initialLabsHidden;
@@ -272,6 +291,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     websiteDirty ||
     socialDirty ||
     communityDirty ||
+    standaloneCoursesDirty ||
     missedCallDirty ||
     aiSuiteDirty ||
     aiSuiteModelDirty ||
@@ -281,6 +301,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     websiteHiddenDirty ||
     socialHiddenDirty ||
     communityHiddenDirty ||
+    standaloneCoursesHiddenDirty ||
     getLeadsHiddenDirty ||
     aiSuiteHiddenDirty ||
     labsHiddenDirty;
@@ -311,6 +332,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
         websiteEnabled?: boolean;
         socialPlannerEnabled?: boolean;
         communityEnabled?: boolean;
+        standaloneCoursesEnabled?: boolean;
         missedCallTextBackEnabled?: boolean;
         aiSuiteEnabled?: boolean;
         aiSuiteModel?: "opus" | "sonnet";
@@ -320,6 +342,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
         websiteHiddenWhenDisabled?: boolean;
         socialPlannerHiddenWhenDisabled?: boolean;
         communityHiddenWhenDisabled?: boolean;
+        standaloneCoursesHiddenWhenDisabled?: boolean;
         getLeadsHiddenWhenDisabled?: boolean;
         aiSuiteHiddenWhenDisabled?: boolean;
         labsHiddenWhenDisabled?: boolean;
@@ -338,6 +361,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
       if (websiteDirty) payload.websiteEnabled = websiteEnabled;
       if (socialDirty) payload.socialPlannerEnabled = socialPlannerEnabled;
       if (communityDirty) payload.communityEnabled = communityEnabled;
+      if (standaloneCoursesDirty)
+        payload.standaloneCoursesEnabled = standaloneCoursesEnabled;
       if (missedCallDirty)
         payload.missedCallTextBackEnabled = missedCallEnabled;
       if (aiSuiteDirty) payload.aiSuiteEnabled = aiSuiteEnabled;
@@ -352,6 +377,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
         payload.socialPlannerHiddenWhenDisabled = socialHidden;
       if (communityHiddenDirty)
         payload.communityHiddenWhenDisabled = communityHidden;
+      if (standaloneCoursesHiddenDirty)
+        payload.standaloneCoursesHiddenWhenDisabled = standaloneCoursesHidden;
       if (getLeadsHiddenDirty)
         payload.getLeadsHiddenWhenDisabled = getLeadsHidden;
       if (aiSuiteHiddenDirty)
@@ -470,6 +497,13 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
             : "Community disabled. Members, posts, and courses preserved; the public pages go offline.",
         );
       }
+      if (standaloneCoursesDirty) {
+        parts.push(
+          standaloneCoursesEnabled
+            ? "Standalone Courses enabled."
+            : "Standalone Courses disabled. Courses, enrollments, and purchases preserved; the public sales pages go offline.",
+        );
+      }
       if (missedCallDirty) {
         parts.push(
           missedCallEnabled
@@ -517,6 +551,10 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
         hiddenChanges.push(`Social Planner ${socialHidden ? "hidden" : "shown as Locked"}`);
       if (communityHiddenDirty)
         hiddenChanges.push(`Community ${communityHidden ? "hidden" : "shown as Locked"}`);
+      if (standaloneCoursesHiddenDirty)
+        hiddenChanges.push(
+          `Courses ${standaloneCoursesHidden ? "hidden" : "shown as Locked"}`,
+        );
       if (getLeadsHiddenDirty)
         hiddenChanges.push(`Get Leads ${getLeadsHidden ? "hidden" : "shown as Locked"}`);
       if (aiSuiteHiddenDirty)
@@ -827,6 +865,27 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
             CRM contacts. Disabling locks the Community sidebar entry AND takes
             the public group pages offline; members, posts, and courses are
             preserved, so re-enabling resumes instantly.
+          </GateToggle>
+
+          <GateToggle
+            checked={standaloneCoursesEnabled}
+            onChange={setStandaloneCoursesEnabled}
+            disabled={saving}
+            icon={<BookOpen className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />}
+            title="Standalone Courses"
+            hideOption={{
+              hidden: standaloneCoursesHidden,
+              onHiddenChange: setStandaloneCoursesHidden,
+              disabled: saving,
+            }}
+          >
+            When enabled, this sub-account can sell a course on its own simple
+            public sales page (<code>/course/…</code>) — independent of
+            Community, no group required. Buyers sign in with a magic link and
+            become CRM contacts, same as Community. Disabling locks the
+            Courses sidebar entry AND takes the public sales pages offline;
+            courses, enrollments, and purchases are preserved, so re-enabling
+            resumes instantly.
           </GateToggle>
 
           <GateToggle
