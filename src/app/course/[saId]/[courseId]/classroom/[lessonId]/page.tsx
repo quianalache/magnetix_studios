@@ -70,7 +70,7 @@ export default async function StandaloneLessonPlayerPage({
         </Link>
         <LessonPlayer
           completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
-          lessonHref={(id) => `${salesPage}/classroom/${id}`}
+          lessonHrefBase={`${salesPage}/classroom`}
           brand={DEFAULT_BRAND}
           sections={sections}
           lessons={lessons}

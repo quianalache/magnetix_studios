@@ -23,7 +23,7 @@ export interface PlayerSection {
 
 export function LessonPlayer({
   completeEndpoint,
-  lessonHref,
+  lessonHrefBase,
   brand,
   sections,
   lessons,
@@ -32,14 +32,20 @@ export function LessonPlayer({
 }: {
   /** Full POST URL to mark the current lesson complete. */
   completeEndpoint: string;
-  /** Builds the nav href for a given lesson id. */
-  lessonHref: (lessonId: string) => string;
+  /**
+   * Base path a lesson id gets appended to (`${lessonHrefBase}/${lessonId}`)
+   * to build each nav href. A plain string, not a function — this component
+   * is rendered from Server Component pages, and function props can't cross
+   * the RSC server→client serialization boundary.
+   */
+  lessonHrefBase: string;
   brand: string;
   sections: PlayerSection[];
   lessons: PlayerLesson[];
   currentLessonId: string;
   completedIds: string[];
 }) {
+  const lessonHref = (lessonId: string) => `${lessonHrefBase}/${lessonId}`;
   const router = useRouter();
   const [completed, setCompleted] = useState<Set<string>>(
     new Set(initialCompleted),

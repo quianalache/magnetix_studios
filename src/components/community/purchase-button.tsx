@@ -69,7 +69,7 @@ export function PurchaseButton({
           Pay on PayPal <ExternalLink className="h-4 w-4" />
         </a>
         <p className="text-center text-xs text-[#909090]">
-          After you pay, the group owner confirms it and unlocks your access.
+          After you pay, the owner confirms it and unlocks your access.
         </p>
       </div>
     );

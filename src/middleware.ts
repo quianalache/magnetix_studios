@@ -126,6 +126,12 @@ const PUBLIC_PATHS = [
   // a member session can never resolve into the staff `/sa/*` surface.
   "/c",
   "/api/community",
+  // Standalone Courses — a course/product sold on its own public sales page,
+  // independent of Community. Same session model (magic-link HMAC cookie
+  // scoped to the sub-account), NOT Firebase Auth. The agency gate + member-
+  // session checks happen inside each route/page.
+  "/course",
+  "/api/course",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid

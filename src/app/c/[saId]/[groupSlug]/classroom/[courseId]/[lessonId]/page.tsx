@@ -97,7 +97,7 @@ export default async function LessonPlayerPage({
       </Link>
       <LessonPlayer
         completeEndpoint={`/api/community/${saId}/${group.id}/courses/${courseId}/lessons/${lessonId}/complete`}
-        lessonHref={(id) => `/c/${saId}/${groupSlug}/classroom/${courseId}/${id}`}
+        lessonHrefBase={`/c/${saId}/${groupSlug}/classroom/${courseId}`}
         brand={brand}
         sections={sections}
         lessons={lessons}
