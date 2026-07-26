@@ -98,12 +98,15 @@ export async function requestStandaloneCoursePurchaseServerSide(opts: {
 
 /**
  * Start a Stripe embedded Checkout Session for a paid course — the instant-
- * access path (replaces PayPal for the new signup popup). `mode:"payment"`
- * with ad-hoc `price_data`, no pre-existing Stripe Price object, mirroring
- * `createChargeCheckoutSession` in `billing-service.ts`. A fresh pending
- * purchase doc is created per attempt (not reused) so the webhook can look it
- * up unambiguously by `stripeCheckoutSessionId` even if the buyer reopens the
- * modal and starts a second checkout.
+ * access path (replaces PayPal for the new signup popup). Ad-hoc `price_data`,
+ * no pre-existing Stripe Price object, mirroring `createChargeCheckoutSession`
+ * in `billing-service.ts`. `mode:"payment"` for a one-time course, or
+ * `mode:"subscription"` when the course's own billing type is `"recurring"`
+ * (independent of the Course Offers subscription path — a course can be sold
+ * directly as a subscription without ever being wrapped in an Offer). A fresh
+ * pending purchase doc is created per attempt (not reused) so the webhook can
+ * look it up unambiguously by `stripeCheckoutSessionId` even if the buyer
+ * reopens the modal and starts a second checkout.
  */
 export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   subAccountId: string;
@@ -120,6 +123,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   const agencyId = (subSnap.data()?.agencyId as string) ?? "";
   const amountCents = course.priceCents;
   const currency = course.currency ?? "USD";
+  const isRecurring = course.billingType === "recurring";
 
   const stripe = getStripeServer();
   const metadata = {
@@ -128,24 +132,49 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     courseId: opts.courseId,
     memberId: opts.memberId,
   };
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    ui_mode: "embedded",
-    customer_email: opts.memberEmail,
-    line_items: [
-      {
-        price_data: {
-          currency,
-          unit_amount: amountCents,
-          product_data: { name: course.title },
+  const session = await stripe.checkout.sessions.create(
+    isRecurring
+      ? {
+          mode: "subscription",
+          ui_mode: "embedded",
+          customer_email: opts.memberEmail,
+          line_items: [
+            {
+              price_data: {
+                currency,
+                unit_amount: amountCents,
+                product_data: { name: course.title },
+                recurring: { interval: course.recurringInterval ?? "month" },
+              },
+              quantity: 1,
+            },
+          ],
+          return_url: opts.returnUrl,
+          metadata,
+          subscription_data: {
+            metadata,
+            ...(course.trialDays ? { trial_period_days: course.trialDays } : {}),
+          },
+        }
+      : {
+          mode: "payment",
+          ui_mode: "embedded",
+          customer_email: opts.memberEmail,
+          line_items: [
+            {
+              price_data: {
+                currency,
+                unit_amount: amountCents,
+                product_data: { name: course.title },
+              },
+              quantity: 1,
+            },
+          ],
+          return_url: opts.returnUrl,
+          metadata,
+          payment_intent_data: { metadata },
         },
-        quantity: 1,
-      },
-    ],
-    return_url: opts.returnUrl,
-    metadata,
-    payment_intent_data: { metadata },
-  });
+  );
   if (!session.client_secret) {
     throw new Error("Stripe did not return a client secret.");
   }
@@ -161,6 +190,8 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
     stripePaymentIntentId: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
     status: "pending",
     grantedByUid: null,
     requestedAt: FieldValue.serverTimestamp(),
@@ -198,6 +229,7 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   purchaseId: string;
   grantedByUid: string | null;
   stripePaymentIntentId?: string | null;
+  stripeCustomerId?: string | null;
 }): Promise<{ ok: boolean }> {
   const ref = purchasesCol(opts.subAccountId, opts.courseId).doc(
     opts.purchaseId,
@@ -216,6 +248,9 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
     grantedByUid: opts.grantedByUid,
     ...(opts.stripePaymentIntentId !== undefined
       ? { stripePaymentIntentId: opts.stripePaymentIntentId }
+      : {}),
+    ...(opts.stripeCustomerId !== undefined
+      ? { stripeCustomerId: opts.stripeCustomerId }
       : {}),
   });
 
@@ -287,6 +322,11 @@ export async function handleStandaloneCourseCheckoutCompleted(
     );
     return;
   }
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : null;
+  if (subscriptionId) {
+    await snap.docs[0].ref.update({ stripeSubscriptionId: subscriptionId });
+  }
   await markStandaloneCoursePurchasePaidServerSide({
     subAccountId,
     courseId,
@@ -294,5 +334,34 @@ export async function handleStandaloneCourseCheckoutCompleted(
     grantedByUid: null,
     stripePaymentIntentId:
       typeof session.payment_intent === "string" ? session.payment_intent : null,
+    stripeCustomerId:
+      typeof session.customer === "string" ? session.customer : null,
   });
+}
+
+/**
+ * Webhook: `customer.subscription.deleted` for a course sold directly as a
+ * recurring subscription (independent of Course Offers — see
+ * `handleCourseOfferSubscriptionDeleted` for the Offer-bundle equivalent).
+ * Flips the matching purchase to `canceled` and stamps the enrollment's
+ * access-expiry so the classroom-access guard denies future entry, without
+ * deleting enrollment/progress data.
+ */
+export async function handleStandaloneCourseSubscriptionDeleted(
+  subscription: Stripe.Subscription,
+): Promise<void> {
+  const { subAccountId, courseId } = subscription.metadata ?? {};
+  if (!subAccountId || !courseId) return;
+  const snap = await purchasesCol(subAccountId, courseId)
+    .where("stripeSubscriptionId", "==", subscription.id)
+    .limit(1)
+    .get();
+  if (snap.empty) return;
+  const purchase = snap.docs[0].data() as Omit<StandaloneCoursePurchase, "id">;
+  await snap.docs[0].ref.update({ status: "canceled" });
+  await getAdminDb()
+    .doc(
+      `subAccounts/${subAccountId}/standaloneCourses/${courseId}/enrollments/${purchase.memberId}`,
+    )
+    .set({ accessExpiresAt: FieldValue.serverTimestamp() }, { merge: true });
 }

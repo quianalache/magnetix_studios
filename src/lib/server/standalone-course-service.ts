@@ -9,7 +9,9 @@ import type { ResourceLink } from "@/types/community";
 import type {
   StandaloneCourse,
   StandaloneCourseAccess,
+  StandaloneCourseBillingType,
   StandaloneCourseCurriculumSection,
+  StandaloneCourseRecurringInterval,
   StandaloneCourseSection,
   StandaloneEnrollment,
   StandaloneLesson,
@@ -43,10 +45,15 @@ export async function createStandaloneCourseServerSide(opts: {
   access?: StandaloneCourseAccess;
   priceCents?: number | null;
   currency?: string | null;
+  billingType?: StandaloneCourseBillingType;
+  recurringInterval?: StandaloneCourseRecurringInterval | null;
+  trialDays?: number | null;
   published?: boolean;
   showMemberCount?: boolean;
 }): Promise<StandaloneCourse> {
   const access: StandaloneCourseAccess = opts.access ?? "open";
+  const billingType: StandaloneCourseBillingType | null =
+    access === "purchase" ? (opts.billingType ?? "oneTime") : null;
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
@@ -58,6 +65,10 @@ export async function createStandaloneCourseServerSide(opts: {
     access,
     priceCents: access === "purchase" ? (opts.priceCents ?? null) : null,
     currency: access === "purchase" ? (opts.currency ?? "USD") : null,
+    billingType,
+    recurringInterval:
+      billingType === "recurring" ? (opts.recurringInterval ?? "month") : null,
+    trialDays: billingType === "recurring" ? (opts.trialDays ?? null) : null,
     enrollmentCount: 0,
     showMemberCount: opts.showMemberCount ?? false,
     theme: DEFAULT_COURSE_THEME,
@@ -77,6 +88,9 @@ export interface StandaloneCoursePatch {
   access?: StandaloneCourseAccess;
   priceCents?: number | null;
   currency?: string | null;
+  billingType?: StandaloneCourseBillingType;
+  recurringInterval?: StandaloneCourseRecurringInterval | null;
+  trialDays?: number | null;
   showMemberCount?: boolean;
 }
 
@@ -102,12 +116,33 @@ export async function updateStandaloneCourseServerSide(opts: {
     if (p.access === "purchase") {
       if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
       updates.currency = p.currency ?? "USD";
+      const billingType = p.billingType ?? "oneTime";
+      updates.billingType = billingType;
+      updates.recurringInterval =
+        billingType === "recurring" ? (p.recurringInterval ?? "month") : null;
+      updates.trialDays =
+        billingType === "recurring" ? (p.trialDays ?? null) : null;
     } else {
       updates.priceCents = null;
       updates.currency = null;
+      updates.billingType = null;
+      updates.recurringInterval = null;
+      updates.trialDays = null;
     }
-  } else if (p.priceCents !== undefined) {
-    updates.priceCents = p.priceCents;
+  } else {
+    if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
+    if (p.billingType !== undefined) {
+      updates.billingType = p.billingType;
+      updates.recurringInterval =
+        p.billingType === "recurring" ? (p.recurringInterval ?? "month") : null;
+      updates.trialDays =
+        p.billingType === "recurring" ? (p.trialDays ?? null) : null;
+    } else {
+      if (p.recurringInterval !== undefined) {
+        updates.recurringInterval = p.recurringInterval;
+      }
+      if (p.trialDays !== undefined) updates.trialDays = p.trialDays;
+    }
   }
   await courseDoc(opts.subAccountId, opts.courseId).update(updates);
 }

@@ -21,6 +21,7 @@ import {
 import {
   COURSE_CHARGE_KIND,
   handleStandaloneCourseCheckoutCompleted,
+  handleStandaloneCourseSubscriptionDeleted,
 } from "@/lib/server/standalone-course-purchase-service";
 import {
   OFFER_CHARGE_KIND,
@@ -470,6 +471,11 @@ export async function handleSubscriptionDeleted(
 
   if (subscription.metadata?.kind === OFFER_CHARGE_KIND) {
     await handleCourseOfferSubscriptionDeleted(subscription);
+    return;
+  }
+
+  if (subscription.metadata?.kind === COURSE_CHARGE_KIND) {
+    await handleStandaloneCourseSubscriptionDeleted(subscription);
     return;
   }
 

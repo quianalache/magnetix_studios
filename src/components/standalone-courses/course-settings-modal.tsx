@@ -19,6 +19,8 @@ import { uploadStandaloneCourseImage } from "@/lib/community/upload-image";
 import type {
   StandaloneCourse,
   StandaloneCourseAccess,
+  StandaloneCourseBillingType,
+  StandaloneCourseRecurringInterval,
 } from "@/types/standalone-courses";
 
 const SELECT =
@@ -53,6 +55,11 @@ export function StandaloneCourseSettingsModal({
   const [category, setCategory] = useState("");
   const [access, setAccess] = useState<StandaloneCourseAccess>("open");
   const [price, setPrice] = useState("");
+  const [billingType, setBillingType] =
+    useState<StandaloneCourseBillingType>("oneTime");
+  const [recurringInterval, setRecurringInterval] =
+    useState<StandaloneCourseRecurringInterval>("month");
+  const [trialDays, setTrialDays] = useState("");
   const [published, setPublished] = useState(false);
   const [showMemberCount, setShowMemberCount] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -67,6 +74,9 @@ export function StandaloneCourseSettingsModal({
     setCategory(course?.category ?? "");
     setAccess(course?.access ?? "open");
     setPrice(course?.priceCents != null ? (course.priceCents / 100).toString() : "");
+    setBillingType(course?.billingType ?? "oneTime");
+    setRecurringInterval(course?.recurringInterval ?? "month");
+    setTrialDays(course?.trialDays != null ? course.trialDays.toString() : "");
     setPublished(course?.published ?? false);
     setShowMemberCount(course?.showMemberCount ?? false);
   }, [open, course]);
@@ -87,6 +97,15 @@ export function StandaloneCourseSettingsModal({
         priceCents:
           access === "purchase" && price.trim()
             ? Math.round(parseFloat(price) * 100)
+            : null,
+        billingType: access === "purchase" ? billingType : undefined,
+        recurringInterval:
+          access === "purchase" && billingType === "recurring"
+            ? recurringInterval
+            : null,
+        trialDays:
+          access === "purchase" && billingType === "recurring" && trialDays.trim()
+            ? Number(trialDays)
             : null,
         published,
         showMemberCount,
@@ -190,23 +209,73 @@ export function StandaloneCourseSettingsModal({
                 }
               >
                 <option value="open">Free</option>
-                <option value="purchase">One-time purchase</option>
+                <option value="purchase">Purchase</option>
               </select>
             </div>
             {access === "purchase" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="m-price">Price</Label>
-                <Input
-                  id="m-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="49.00"
-                  className="w-28"
-                />
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="m-billing-type">Billing</Label>
+                  <select
+                    id="m-billing-type"
+                    className={SELECT}
+                    value={billingType}
+                    onChange={(e) =>
+                      setBillingType(e.target.value as StandaloneCourseBillingType)
+                    }
+                  >
+                    <option value="oneTime">One-time</option>
+                    <option value="recurring">Recurring</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="m-price">Price</Label>
+                  <Input
+                    id="m-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="49.00"
+                    className="w-28"
+                  />
+                </div>
+                {billingType === "recurring" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="m-recurring-interval">Frequency</Label>
+                    <select
+                      id="m-recurring-interval"
+                      className={SELECT}
+                      value={recurringInterval}
+                      onChange={(e) =>
+                        setRecurringInterval(
+                          e.target.value as StandaloneCourseRecurringInterval,
+                        )
+                      }
+                    >
+                      <option value="day">Daily</option>
+                      <option value="week">Weekly</option>
+                      <option value="month">Monthly</option>
+                      <option value="year">Yearly</option>
+                    </select>
+                  </div>
+                )}
+                {billingType === "recurring" && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="m-trial-days">Trial days</Label>
+                    <Input
+                      id="m-trial-days"
+                      type="number"
+                      min="0"
+                      value={trialDays}
+                      onChange={(e) => setTrialDays(e.target.value)}
+                      placeholder="0"
+                      className="w-24"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
           <label className="flex items-center gap-2 text-sm">

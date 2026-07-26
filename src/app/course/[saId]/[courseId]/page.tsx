@@ -78,7 +78,9 @@ export default async function CourseSalesPage({
 
   const priceLabel =
     course.access === "purchase"
-      ? formatPrice(course.priceCents, course.currency)
+      ? course.billingType === "recurring"
+        ? `${formatPrice(course.priceCents, course.currency)} / ${course.recurringInterval ?? "month"}`
+        : formatPrice(course.priceCents, course.currency)
       : "Free";
   const aboutHtml = sanitizeLessonHtml(course.aboutHtml);
   const totalLessons = outline.reduce((sum, s) => sum + s.lessonCount, 0);

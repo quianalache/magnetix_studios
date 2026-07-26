@@ -12,6 +12,12 @@ import type { CourseTheme } from "./course-theme";
  * and no membership/level concept.
  */
 export type StandaloneCourseAccess = "open" | "purchase";
+/** Only meaningful when `access === "purchase"` — a course's own direct-sale
+ *  price can be a single one-time charge or a subscription, independent of
+ *  the Course Offers bundling/pricing layer (a course and an offer are two
+ *  different things — each has its own complete pricing model). */
+export type StandaloneCourseBillingType = "oneTime" | "recurring";
+export type StandaloneCourseRecurringInterval = "day" | "week" | "month" | "year";
 
 export interface StandaloneCourse {
   id: string;
@@ -25,9 +31,17 @@ export interface StandaloneCourse {
   /** Single free-text tag, e.g. "Creative". Null = no pill shown. */
   category: string | null;
   access: StandaloneCourseAccess;
-  /** One-time price (cents) when `access === "purchase"`. */
+  /** Price (cents) when `access === "purchase"` — the amount per charge,
+   *  whether one-time or per billing cycle. */
   priceCents: number | null;
   currency: string | null;
+  /** Null when `access !== "purchase"`. Defaults to "oneTime". */
+  billingType: StandaloneCourseBillingType | null;
+  /** Only set when `billingType === "recurring"`. */
+  recurringInterval: StandaloneCourseRecurringInterval | null;
+  /** Days before the first charge — only meaningful when `billingType ===
+   *  "recurring"`. Null/0 = bill immediately. */
+  trialDays: number | null;
   /** Denormalized count of enrolled members, for the sales-page stat. */
   enrollmentCount: number;
   /** Show the enrollment count on the public sales page. Off by default —
@@ -97,7 +111,11 @@ export interface StandaloneEnrollment {
  * before `method` existed have no such field; every read site treats a
  * missing `method` as `"paypal"`.
  */
-export type StandaloneCoursePurchaseStatus = "pending" | "paid" | "void";
+export type StandaloneCoursePurchaseStatus =
+  | "pending"
+  | "paid"
+  | "void"
+  | "canceled";
 export type StandaloneCoursePurchaseMethod = "paypal" | "stripe";
 
 export interface StandaloneCoursePurchase {
@@ -112,6 +130,10 @@ export interface StandaloneCoursePurchase {
   paypalUrl: string | null;
   stripeCheckoutSessionId: string | null;
   stripePaymentIntentId: string | null;
+  /** Saved for subscription purchases so a canceled subscription can be
+   *  looked back up by `stripeSubscriptionId`. */
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
   status: StandaloneCoursePurchaseStatus;
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;
