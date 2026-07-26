@@ -37,7 +37,7 @@ export async function PATCH(
       {
         ok: false,
         error:
-          "That video link wasn't recognized. Paste a YouTube or Vimeo URL. Other fields were saved.",
+          "That video link wasn't recognized. Paste a YouTube, Vimeo, Loom, or Descript URL. Other fields were saved.",
       },
       { status: 422 },
     );

@@ -2148,7 +2148,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
     menuLabel:
       "Set up a new community with its first course and lesson (returns the live URLs)",
     description:
-      "Set up a new community (a Skool-style group with a feed + classroom) in this sub-account, including its first course and first lesson, and return the live URLs. Gather conversationally before calling: the community's name, who can join (open, or approval-required), an optional one-line tagline, the first lesson's title, and optionally a YouTube/Vimeo video URL and/or lesson text. Everything is created PUBLISHED and live on confirm. Free-to-join communities only — for a paid community, point the user at Sidebar → Community (pricing needs PayPal setup).",
+      "Set up a new community (a Skool-style group with a feed + classroom) in this sub-account, including its first course and first lesson, and return the live URLs. Gather conversationally before calling: the community's name, who can join (open, or approval-required), an optional one-line tagline, the first lesson's title, and optionally a YouTube/Vimeo/Loom/Descript video URL and/or lesson text. Everything is created PUBLISHED and live on confirm. Free-to-join communities only — for a paid community, point the user at Sidebar → Community (pricing needs PayPal setup).",
     parameters: {
       type: "object",
       properties: {
@@ -2177,7 +2177,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         },
         lessonVideoUrl: {
           type: "string",
-          description: "Optional YouTube or Vimeo URL for the first lesson.",
+          description: "Optional YouTube, Vimeo, Loom, or Descript URL for the first lesson.",
         },
         lessonText: {
           type: "string",
@@ -2277,7 +2277,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       const communityUrl = `${base}/c/${ctx.subAccountId}/${group.slug}/community`;
       const lessonUrl = `${base}/c/${ctx.subAccountId}/${group.slug}/classroom/${course.id}/${lesson.id}`;
       const videoNote = videoError
-        ? " (⚠️ the video URL wasn't recognized — YouTube/Vimeo links only; add it in the classroom editor)"
+        ? " (⚠️ the video URL wasn't recognized — YouTube/Vimeo/Loom/Descript links only; add it in the classroom editor)"
         : args.lessonVideoUrl
           ? " with video"
           : "";

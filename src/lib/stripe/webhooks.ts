@@ -18,6 +18,15 @@ import {
   handleSubAccountPlanCheckoutCompleted,
   handleSubAccountSubscriptionEvent,
 } from "@/lib/server/billing-service";
+import {
+  COURSE_CHARGE_KIND,
+  handleStandaloneCourseCheckoutCompleted,
+} from "@/lib/server/standalone-course-purchase-service";
+import {
+  OFFER_CHARGE_KIND,
+  handleCourseOfferCheckoutCompleted,
+  handleCourseOfferSubscriptionDeleted,
+} from "@/lib/server/course-offer-purchase-service";
 import type { SubscriptionStatus } from "@/types";
 
 export async function handleCheckoutCompleted(
@@ -42,6 +51,19 @@ export async function handleCheckoutCompleted(
   // One-time agency → client charge (e.g. "Web design"). mode:"payment".
   if (session.metadata?.kind === SUB_ACCOUNT_CHARGE_KIND) {
     await handleSubAccountChargeCheckoutCompleted(session);
+    return;
+  }
+
+  // Standalone Course instant purchase (embedded Checkout, mode:"payment").
+  if (session.metadata?.kind === COURSE_CHARGE_KIND) {
+    await handleStandaloneCourseCheckoutCompleted(session);
+    return;
+  }
+
+  // Course Offer purchase — bundles one or more courses, mode:"payment" or
+  // mode:"subscription" depending on the offer's type.
+  if (session.metadata?.kind === OFFER_CHARGE_KIND) {
+    await handleCourseOfferCheckoutCompleted(session);
     return;
   }
 
@@ -443,6 +465,11 @@ export async function handleSubscriptionDeleted(
 ) {
   if (subscription.metadata?.kind === SUB_ACCOUNT_PLAN_KIND) {
     await handleSubAccountSubscriptionEvent(subscription, { deleted: true });
+    return;
+  }
+
+  if (subscription.metadata?.kind === OFFER_CHARGE_KIND) {
+    await handleCourseOfferSubscriptionDeleted(subscription);
     return;
   }
 

@@ -1,5 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { VideoProvider, ResourceLink } from "./community";
+import type { CourseTheme } from "./course-theme";
 
 /**
  * Standalone Courses — a course/product sold on its own public sales page,
@@ -29,6 +30,13 @@ export interface StandaloneCourse {
   currency: string | null;
   /** Denormalized count of enrolled members, for the sales-page stat. */
   enrollmentCount: number;
+  /** Show the enrollment count on the public sales page. Off by default —
+   *  an owner opts in per course. */
+  showMemberCount: boolean;
+  /** Visual theme — colors, fonts, background, and content blocks for the
+   *  public sales page. Courses created before this feature has no such
+   *  field; every read falls back to `DEFAULT_COURSE_THEME`. */
+  theme: CourseTheme;
   published: boolean;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
@@ -69,16 +77,28 @@ export interface StandaloneEnrollment {
   progressPct: number;
   enrolledAt: Timestamp | FieldValue | null;
   completedAt: Timestamp | FieldValue | null;
+  /** Offer Access rules (Course Offers feature) — null unless the
+   *  enrollment was granted by an Offer with a "begin at date" or
+   *  "restrict to N days" rule. Checked by the classroom-access guard
+   *  alongside the existing enrolled/paid checks. */
+  accessBeginsAt?: Timestamp | FieldValue | null;
+  accessExpiresAt?: Timestamp | FieldValue | null;
 }
 
 /**
- * A one-time PayPal purchase for a standalone course, at
+ * A one-time purchase for a standalone course, at
  * `standaloneCourses/{courseId}/purchases/{purchaseId}`. Simpler than
  * Community's Purchase — no `scope`/`targetId` discriminator needed since
- * every purchase here IS a course purchase. v1 is manual-reconcile (staff
- * marks paid), same as every other PayPal.me flow in this codebase.
+ * every purchase here IS a course purchase.
+ *
+ * Two payment methods: `paypal` (v1, manual-reconcile — staff marks paid)
+ * and `stripe` (instant — a webhook marks paid the moment the charge
+ * succeeds, see `handleStandaloneCourseCheckoutCompleted`). Docs written
+ * before `method` existed have no such field; every read site treats a
+ * missing `method` as `"paypal"`.
  */
 export type StandaloneCoursePurchaseStatus = "pending" | "paid" | "void";
+export type StandaloneCoursePurchaseMethod = "paypal" | "stripe";
 
 export interface StandaloneCoursePurchase {
   id: string;
@@ -88,11 +108,20 @@ export interface StandaloneCoursePurchase {
   memberId: string;
   amountCents: number;
   currency: string;
-  paypalUrl: string;
+  method: StandaloneCoursePurchaseMethod;
+  paypalUrl: string | null;
+  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
   status: StandaloneCoursePurchaseStatus;
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;
   paidAt: Timestamp | FieldValue | null;
+  /** Set when this marker was stamped by an Offer purchase covering this
+   *  course (Course Offers feature), rather than a direct course purchase —
+   *  lets `hasPaidStandaloneCourse`'s existing gate check recognize
+   *  Offer-granted access on a course that also has its own `access:
+   *  "purchase"` direct-sale mode, with no change to that guard itself. */
+  offerId?: string | null;
 }
 
 /** A curriculum-outline entry for the public sales page (summary only, no lesson links). */

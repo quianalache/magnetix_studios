@@ -214,7 +214,7 @@ export const AI_SUITE_KNOWLEDGE: AiSuiteKnowledgeCard[] = [
     location: "Sidebar → Community",
     keywords: ["community", "course", "group", "skool", "classroom", "member", "feed"],
     body:
-      "Community is a Skool-style space with a group feed, a classroom for courses (sections + lessons with YouTube/Vimeo video), leaderboards, and gamification. Groups can be free or paid, open-join or approval-required; members join via magic link and are tied to contacts — share the community's public URL to invite them. It's agency-gated — if 'Locked', ask your agency owner to enable it. The assistant can set up a new free community for you, including its first course and lesson, and give you the live URLs.",
+      "Community is a Skool-style space with a group feed, a classroom for courses (sections + lessons with YouTube/Vimeo/Loom/Descript video), leaderboards, and gamification. Groups can be free or paid, open-join or approval-required; members join via magic link and are tied to contacts — share the community's public URL to invite them. It's agency-gated — if 'Locked', ask your agency owner to enable it. The assistant can set up a new free community for you, including its first course and lesson, and give you the live URLs.",
   },
   {
     id: "labs",

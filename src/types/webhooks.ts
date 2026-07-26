@@ -93,6 +93,9 @@ export const WEBHOOK_EVENT_TYPES = [
   "course.purchase.paid",
   "course.lesson.completed",
   "course.completed",
+  // Course Offers — the bundling/pricing layer on top of Standalone Courses.
+  // Emitted once per purchase (regardless of how many courses it bundles).
+  "course.offer.purchase.paid",
   // Client Billing v1 — agency→sub-account plan lifecycle. Emitted from the
   // billing service (assign/comp) and the Stripe webhook handlers
   // (activate / past_due / canceled). Always live — billing has no test mode.

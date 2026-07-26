@@ -132,6 +132,12 @@ const PUBLIC_PATHS = [
   // session checks happen inside each route/page.
   "/course",
   "/api/course",
+  // Course Offers — the bundling/pricing wrapper around Standalone Courses.
+  // Same session model (magic-link HMAC cookie scoped to the sub-account),
+  // NOT Firebase Auth. The agency gate + member-session checks happen
+  // inside each route/page, mirroring /course + /api/course above.
+  "/offer",
+  "/api/offer",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid

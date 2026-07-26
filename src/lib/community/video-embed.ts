@@ -1,10 +1,12 @@
 import type { VideoProvider } from "@/types/community";
 
 /**
- * Parse a pasted YouTube or Vimeo URL into a provider + id + canonical embed
- * URL. Client-safe (no server-only deps) so the builder validates on paste and
- * the player renders the iframe from the same logic. v1 supports YouTube +
- * Vimeo only (no Loom/Wistia/native upload).
+ * Parse a pasted YouTube, Vimeo, Loom, or Descript URL into a provider + id +
+ * canonical embed URL. Client-safe (no server-only deps) so the builder
+ * validates on paste and the player renders the iframe from the same logic.
+ * Adding a provider here also requires allow-listing its embed host in
+ * `lesson-html.ts`'s `sanitizeLessonHtml` — that's the hard security boundary
+ * that decides which iframe hosts actually survive into rendered lesson HTML.
  */
 export interface ParsedVideo {
   provider: VideoProvider;
@@ -41,6 +43,28 @@ export function parseVideoUrl(raw: string): ParsedVideo | null {
     };
   }
 
+  // Loom — loom.com/share/{id} or loom.com/embed/{id}
+  const loom =
+    url.match(/loom\.com\/(?:share|embed)\/([A-Za-z0-9]+)/) ?? null;
+  if (loom) {
+    return {
+      provider: "loom",
+      id: loom[1],
+      embedUrl: `https://www.loom.com/embed/${loom[1]}`,
+    };
+  }
+
+  // Descript — share.descript.com/view/{id} or share.descript.com/embed/{id}
+  const descript =
+    url.match(/share\.descript\.com\/(?:view|embed)\/([A-Za-z0-9]+)/) ?? null;
+  if (descript) {
+    return {
+      provider: "descript",
+      id: descript[1],
+      embedUrl: `https://share.descript.com/embed/${descript[1]}`,
+    };
+  }
+
   return null;
 }
 
@@ -49,7 +73,14 @@ export function embedUrlFor(
   id: string | null,
 ): string | null {
   if (!provider || !id) return null;
-  return provider === "youtube"
-    ? `https://www.youtube.com/embed/${id}`
-    : `https://player.vimeo.com/video/${id}`;
+  switch (provider) {
+    case "youtube":
+      return `https://www.youtube.com/embed/${id}`;
+    case "vimeo":
+      return `https://player.vimeo.com/video/${id}`;
+    case "loom":
+      return `https://www.loom.com/embed/${id}`;
+    case "descript":
+      return `https://share.descript.com/embed/${id}`;
+  }
 }

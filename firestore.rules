@@ -397,6 +397,39 @@ service cloud.firestore {
         }
       }
 
+      // Course Offers — the bundling/pricing layer on top of Standalone
+      // Courses. Same pattern as standaloneCourses above: staff-readable for
+      // the dashboard, ALL writes go through the Admin-SDK routes
+      // (/api/sub-accounts/[id]/course-offers/* for staff, /api/offer/* for
+      // buyers). The public /offer/ pages fetch server-side via the Admin
+      // SDK (rules bypass).
+      match /courseOffers/{offerId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+        match /{document=**} {
+          allow read: if canAccessSub(
+            subAccountId,
+            get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+          );
+          allow write: if false;
+        }
+      }
+
+      // Reusable, sub-account-scoped course-theme templates (staff-only,
+      // never shared across sub-accounts/agencies). All CRUD goes through
+      // /api/sub-accounts/[id]/course-theme-templates/* — staff-readable
+      // here purely for future flexibility, not currently read client-side.
+      match /courseThemeTemplates/{templateId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
       // Community member identities (the login record; one per email per
       // sub-account). Staff-readable for the roster; server-only writes.
       match /members/{memberId} {

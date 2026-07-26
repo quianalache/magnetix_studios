@@ -3,8 +3,8 @@ import { embedUrlFor } from "@/lib/community/video-embed";
 import type { VideoProvider } from "@/types/community";
 
 /**
- * Inline lesson video — a TipTap block node that embeds a YouTube/Vimeo player
- * mid-lesson (Phase 2). Stored as a `<div class="lesson-video" data-provider
+ * Inline lesson video — a TipTap block node that embeds a YouTube/Vimeo/Loom/
+ * Descript player mid-lesson (Phase 2). Stored as a `<div class="lesson-video" data-provider
  * data-id><iframe …></div>` so the player can render it directly while the
  * sanitizer (see lesson-html.ts) keeps the iframe only because its src points
  * at a known embed host. In the editor the iframe has pointer-events disabled

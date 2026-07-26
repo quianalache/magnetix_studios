@@ -54,6 +54,7 @@ export function StandaloneCourseSettingsModal({
   const [access, setAccess] = useState<StandaloneCourseAccess>("open");
   const [price, setPrice] = useState("");
   const [published, setPublished] = useState(false);
+  const [showMemberCount, setShowMemberCount] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
 
@@ -67,6 +68,7 @@ export function StandaloneCourseSettingsModal({
     setAccess(course?.access ?? "open");
     setPrice(course?.priceCents != null ? (course.priceCents / 100).toString() : "");
     setPublished(course?.published ?? false);
+    setShowMemberCount(course?.showMemberCount ?? false);
   }, [open, course]);
 
   async function save() {
@@ -87,6 +89,7 @@ export function StandaloneCourseSettingsModal({
             ? Math.round(parseFloat(price) * 100)
             : null,
         published,
+        showMemberCount,
       };
       const url =
         mode === "create"
@@ -214,6 +217,15 @@ export function StandaloneCourseSettingsModal({
               className="h-4 w-4"
             />
             Published (visible on the public sales page)
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showMemberCount}
+              onChange={(e) => setShowMemberCount(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Show member count on the sales page
           </label>
         </div>
 

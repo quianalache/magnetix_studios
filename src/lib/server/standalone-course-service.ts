@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
 import type { ResourceLink } from "@/types/community";
 import type {
   StandaloneCourse,
@@ -43,6 +44,7 @@ export async function createStandaloneCourseServerSide(opts: {
   priceCents?: number | null;
   currency?: string | null;
   published?: boolean;
+  showMemberCount?: boolean;
 }): Promise<StandaloneCourse> {
   const access: StandaloneCourseAccess = opts.access ?? "open";
   const doc = {
@@ -57,6 +59,8 @@ export async function createStandaloneCourseServerSide(opts: {
     priceCents: access === "purchase" ? (opts.priceCents ?? null) : null,
     currency: access === "purchase" ? (opts.currency ?? "USD") : null,
     enrollmentCount: 0,
+    showMemberCount: opts.showMemberCount ?? false,
+    theme: DEFAULT_COURSE_THEME,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -73,6 +77,7 @@ export interface StandaloneCoursePatch {
   access?: StandaloneCourseAccess;
   priceCents?: number | null;
   currency?: string | null;
+  showMemberCount?: boolean;
 }
 
 export async function updateStandaloneCourseServerSide(opts: {
@@ -89,6 +94,9 @@ export async function updateStandaloneCourseServerSide(opts: {
   if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
   if (p.category !== undefined) updates.category = p.category?.trim() || null;
   if (typeof p.published === "boolean") updates.published = p.published;
+  if (typeof p.showMemberCount === "boolean") {
+    updates.showMemberCount = p.showMemberCount;
+  }
   if (p.access) {
     updates.access = p.access;
     if (p.access === "purchase") {
@@ -119,16 +127,31 @@ export async function getStandaloneCourse(
 ): Promise<StandaloneCourse | null> {
   const snap = await courseDoc(saId, courseId).get();
   if (!snap.exists) return null;
-  return { id: snap.id, ...(snap.data() as Omit<StandaloneCourse, "id">) };
+  const data = snap.data() as Omit<StandaloneCourse, "id">;
+  // Courses created before theming shipped have no `theme` field.
+  return { id: snap.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
+}
+
+/** Full-object replace of a course's theme (staff-only, via the theme editor). */
+export async function updateStandaloneCourseThemeServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  theme: StandaloneCourse["theme"];
+}): Promise<void> {
+  await courseDoc(opts.subAccountId, opts.courseId).update({
+    theme: opts.theme,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 }
 
 export async function listStandaloneCourses(
   saId: string,
 ): Promise<StandaloneCourse[]> {
   const snap = await coursesCol(saId).orderBy("createdAt", "desc").get();
-  return snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCourse, "id">) }),
-  );
+  return snap.docs.map((d) => {
+    const data = d.data() as Omit<StandaloneCourse, "id">;
+    return { id: d.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
+  });
 }
 
 /* ------------------------------ Sections ------------------------------- */

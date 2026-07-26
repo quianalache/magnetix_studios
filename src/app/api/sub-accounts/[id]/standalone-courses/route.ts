@@ -25,6 +25,7 @@ export async function POST(
     priceCents?: number | null;
     currency?: string | null;
     published?: boolean;
+    showMemberCount?: boolean;
   };
   try {
     body = await request.json();
@@ -49,6 +50,7 @@ export async function POST(
     priceCents: body.priceCents ?? null,
     currency: body.currency ?? null,
     published: body.published,
+    showMemberCount: body.showMemberCount,
   });
   return NextResponse.json({ ok: true, course });
 }

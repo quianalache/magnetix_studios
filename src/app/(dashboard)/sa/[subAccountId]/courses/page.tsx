@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { GraduationCap, Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
+import { Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { StandaloneCourseSettingsModal } from "@/components/standalone-courses/course-settings-modal";
+import { OffersList } from "@/components/course-offers/offers-list";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+
+type CoursesTab = "products" | "offers";
 
 /**
  * Standalone Courses — staff list + create. Gated by
@@ -23,6 +27,7 @@ export default function StandaloneCoursesPage() {
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tab, setTab] = useState<CoursesTab>("products");
 
   const gateOn = subAccount?.standaloneCoursesEnabledByAgency === true;
 
@@ -58,32 +63,43 @@ export default function StandaloneCoursesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <GraduationCap className="h-6 w-6" />
-            Courses
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sell a course on its own simple sales page — no community
-            required.
-          </p>
-        </div>
-        {isAdmin && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> New course
+    <div className="mx-auto w-full max-w-5xl space-y-4 p-6">
+      <div>
+        <h1 className="text-lg font-semibold">
+          {tab === "products" ? "Products" : "Offers"}
+        </h1>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">
+          {tab === "products"
+            ? "Manage or create new courses"
+            : "Create and manage offers for your courses"}
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-b pb-3">
+        <SegmentedControl
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "products", label: "Products" },
+            { value: "offers", label: "Offers" },
+          ]}
+        />
+        {tab === "products" && isAdmin && (
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> New course
           </Button>
         )}
       </div>
 
-      {!loaded ? (
+      {tab === "offers" ? (
+        <OffersList subAccountId={subAccountId} />
+      ) : !loaded ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : courses.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             No courses yet.{" "}
             {isAdmin
               ? "Create your first course to get started."

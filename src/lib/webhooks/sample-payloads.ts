@@ -336,6 +336,14 @@ export const SAMPLE_PAYLOADS: Record<WebhookEventType, () => unknown> = {
     courseId: sampleId("crs"),
     memberId: sampleId("mbr"),
   }),
+  "course.offer.purchase.paid": () => ({
+    purchaseId: sampleId("pur"),
+    offerId: sampleId("ofr"),
+    courseIds: [sampleId("crs"), sampleId("crs")],
+    memberId: sampleId("mbr"),
+    amountCents: 9700,
+    currency: "USD",
+  }),
   "message.received": () => ({
     message: {
       object: "message",

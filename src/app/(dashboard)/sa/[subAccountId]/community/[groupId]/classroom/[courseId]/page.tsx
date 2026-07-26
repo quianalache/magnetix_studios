@@ -510,7 +510,7 @@ function LessonEditor({
 
   async function save() {
     if (!videoValid) {
-      toast.error("Paste a valid YouTube or Vimeo URL");
+      toast.error("Paste a valid YouTube, Vimeo, Loom, or Descript URL");
       return;
     }
     setSaving(true);
@@ -565,7 +565,7 @@ function LessonEditor({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Video URL (YouTube or Vimeo)</Label>
+        <Label>Video URL (YouTube, Vimeo, Loom, or Descript)</Label>
         <Input
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
@@ -573,7 +573,7 @@ function LessonEditor({
         />
         {!videoValid && (
           <p className="text-xs text-destructive">
-            Not a recognized YouTube or Vimeo link.
+            Not a recognized YouTube, Vimeo, Loom, or Descript link.
           </p>
         )}
         {parsed && (

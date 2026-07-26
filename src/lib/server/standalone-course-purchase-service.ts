@@ -1,19 +1,24 @@
 import "server-only";
 
+import type Stripe from "stripe";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { getStripeServer } from "@/lib/stripe/server";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
 import type { PayPalConfig } from "@/types";
 
 /**
- * One-time PayPal purchases for a standalone course. Forked from
+ * One-time purchases for a standalone course — PayPal (v1, manual-reconcile)
+ * and Stripe (instant, webhook-granted). Forked from
  * `community-purchase-service.ts`, simplified: no `scope`/`groupId`
- * discriminator since every purchase here IS a course purchase. v1 is
- * manual-reconcile — same as every other PayPal.me flow in this codebase.
+ * discriminator since every purchase here IS a course purchase.
  */
+
+/** Checkout-session metadata discriminator, mirroring SUB_ACCOUNT_CHARGE_KIND. */
+export const COURSE_CHARGE_KIND = "courseCharge";
 
 function purchasesCol(saId: string, courseId: string) {
   return getAdminDb().collection(
@@ -78,7 +83,10 @@ export async function requestStandaloneCoursePurchaseServerSide(opts: {
     memberId: opts.memberId,
     amountCents,
     currency,
+    method: "paypal",
     paypalUrl,
+    stripeCheckoutSessionId: null,
+    stripePaymentIntentId: null,
     status: "pending",
     grantedByUid: null,
     requestedAt: FieldValue.serverTimestamp(),
@@ -86,6 +94,80 @@ export async function requestStandaloneCoursePurchaseServerSide(opts: {
   });
 
   return { purchaseId: ref.id, paypalUrl, status: "pending" };
+}
+
+/**
+ * Start a Stripe embedded Checkout Session for a paid course — the instant-
+ * access path (replaces PayPal for the new signup popup). `mode:"payment"`
+ * with ad-hoc `price_data`, no pre-existing Stripe Price object, mirroring
+ * `createChargeCheckoutSession` in `billing-service.ts`. A fresh pending
+ * purchase doc is created per attempt (not reused) so the webhook can look it
+ * up unambiguously by `stripeCheckoutSessionId` even if the buyer reopens the
+ * modal and starts a second checkout.
+ */
+export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  memberId: string;
+  memberEmail: string;
+  returnUrl: string;
+}): Promise<{ clientSecret: string }> {
+  const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
+  if (!course || course.access !== "purchase" || !course.priceCents) {
+    throw new Error("This course isn't for sale.");
+  }
+  const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  const agencyId = (subSnap.data()?.agencyId as string) ?? "";
+  const amountCents = course.priceCents;
+  const currency = course.currency ?? "USD";
+
+  const stripe = getStripeServer();
+  const metadata = {
+    kind: COURSE_CHARGE_KIND,
+    subAccountId: opts.subAccountId,
+    courseId: opts.courseId,
+    memberId: opts.memberId,
+  };
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    ui_mode: "embedded",
+    customer_email: opts.memberEmail,
+    line_items: [
+      {
+        price_data: {
+          currency,
+          unit_amount: amountCents,
+          product_data: { name: course.title },
+        },
+        quantity: 1,
+      },
+    ],
+    return_url: opts.returnUrl,
+    metadata,
+    payment_intent_data: { metadata },
+  });
+  if (!session.client_secret) {
+    throw new Error("Stripe did not return a client secret.");
+  }
+
+  await purchasesCol(opts.subAccountId, opts.courseId).add({
+    subAccountId: opts.subAccountId,
+    agencyId,
+    courseId: opts.courseId,
+    memberId: opts.memberId,
+    amountCents,
+    currency,
+    method: "stripe",
+    paypalUrl: null,
+    stripeCheckoutSessionId: session.id,
+    stripePaymentIntentId: null,
+    status: "pending",
+    grantedByUid: null,
+    requestedAt: FieldValue.serverTimestamp(),
+    paidAt: null,
+  });
+
+  return { clientSecret: session.client_secret };
 }
 
 /** Has this member paid for this course? (Drives the classroom unlock check.) */
@@ -103,14 +185,19 @@ export async function hasPaidStandaloneCourse(
 }
 
 /**
- * Staff: mark a purchase paid, grant classroom access (upsert the enrollment
- * doc so it's immediate), and bump the denormalized enrollment count.
+ * Mark a purchase paid, grant classroom access (upsert the enrollment doc so
+ * it's immediate), and bump the denormalized enrollment count. Called from
+ * two places: staff clicking "Mark as paid" on a pending PayPal purchase
+ * (`grantedByUid` = the staff uid), and the Stripe webhook the instant a
+ * charge succeeds (`grantedByUid: null` = automated). Both share this one
+ * idempotency guard + grant logic so a future fix can't land in only one copy.
  */
 export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   subAccountId: string;
   courseId: string;
   purchaseId: string;
-  grantedByUid: string;
+  grantedByUid: string | null;
+  stripePaymentIntentId?: string | null;
 }): Promise<{ ok: boolean }> {
   const ref = purchasesCol(opts.subAccountId, opts.courseId).doc(
     opts.purchaseId,
@@ -127,6 +214,9 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
     status: "paid",
     paidAt: FieldValue.serverTimestamp(),
     grantedByUid: opts.grantedByUid,
+    ...(opts.stripePaymentIntentId !== undefined
+      ? { stripePaymentIntentId: opts.stripePaymentIntentId }
+      : {}),
   });
 
   const courseRef = getAdminDb().doc(
@@ -167,4 +257,42 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   });
 
   return { ok: true };
+}
+
+/**
+ * Stripe webhook: `checkout.session.completed` with `metadata.kind ===
+ * COURSE_CHARGE_KIND`. Looks up the pending purchase doc this session
+ * created (by `stripeCheckoutSessionId`, stamped at checkout-creation time)
+ * and grants access via the same path staff's "Mark as paid" uses. The
+ * idempotency guard lives inside `markStandaloneCoursePurchasePaidServerSide`
+ * — Stripe retries webhooks, so this can safely run more than once.
+ */
+export async function handleStandaloneCourseCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  const { subAccountId, courseId } = session.metadata ?? {};
+  if (!subAccountId || !courseId) {
+    console.error(
+      "[standalone-course] courseCharge checkout completed without metadata",
+    );
+    return;
+  }
+  const snap = await purchasesCol(subAccountId, courseId)
+    .where("stripeCheckoutSessionId", "==", session.id)
+    .limit(1)
+    .get();
+  if (snap.empty) {
+    console.error(
+      `[standalone-course] no pending purchase for session ${session.id}`,
+    );
+    return;
+  }
+  await markStandaloneCoursePurchasePaidServerSide({
+    subAccountId,
+    courseId,
+    purchaseId: snap.docs[0].id,
+    grantedByUid: null,
+    stripePaymentIntentId:
+      typeof session.payment_intent === "string" ? session.payment_intent : null,
+  });
 }

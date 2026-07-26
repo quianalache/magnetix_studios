@@ -91,33 +91,45 @@ export default function StandaloneCoursePurchasesPage({
         {pending.length === 0 ? (
           <p className="text-sm text-muted-foreground">No pending purchases.</p>
         ) : (
-          pending.map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between rounded-lg border bg-card p-3"
-            >
-              <div className="text-sm">
-                <span className="font-medium">{nameOf(p.memberId)}</span>
-                <span className="text-muted-foreground">
-                  {" "}
-                  · {(p.amountCents / 100).toFixed(2)} {p.currency}
-                </span>
+          pending.map((p) => {
+            const method = p.method ?? "paypal";
+            return (
+              <div
+                key={p.id}
+                className="flex items-center justify-between rounded-lg border bg-card p-3"
+              >
+                <div className="text-sm">
+                  <span className="font-medium">{nameOf(p.memberId)}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {(p.amountCents / 100).toFixed(2)} {p.currency}
+                  </span>
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {method === "stripe" ? "Stripe" : "PayPal"}
+                  </span>
+                </div>
+                {method === "stripe" ? (
+                  <span className="text-xs text-muted-foreground">
+                    Waiting on Stripe
+                  </span>
+                ) : (
+                  isAdmin && (
+                    <Button
+                      size="sm"
+                      onClick={() => markPaid(p.id)}
+                      disabled={busy === p.id}
+                    >
+                      {busy === p.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Mark paid"
+                      )}
+                    </Button>
+                  )
+                )}
               </div>
-              {isAdmin && (
-                <Button
-                  size="sm"
-                  onClick={() => markPaid(p.id)}
-                  disabled={busy === p.id}
-                >
-                  {busy === p.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Mark paid"
-                  )}
-                </Button>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </section>
 
@@ -129,7 +141,12 @@ export default function StandaloneCoursePurchasesPage({
           <div className="divide-y rounded-lg border bg-card">
             {paid.map((p) => (
               <div key={p.id} className="flex items-center justify-between p-3 text-sm">
-                <span className="font-medium">{nameOf(p.memberId)}</span>
+                <span className="font-medium">
+                  {nameOf(p.memberId)}
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {(p.method ?? "paypal") === "stripe" ? "Stripe" : "PayPal"}
+                  </span>
+                </span>
                 <span className="text-muted-foreground">
                   {(p.amountCents / 100).toFixed(2)} {p.currency}
                 </span>

@@ -33,6 +33,10 @@ import {
   Sparkles,
   CreditCard,
   FlaskConical,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -61,69 +65,110 @@ interface NavItem {
   matchPrefix?: string;
 }
 
-// Per-sub-account nav. `href` is templated with the active sub-account id at
-// render time; `matchPrefix` is the stem used to highlight the active link.
-const SUB_ACCOUNT_NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: Home, enabled: true },
-  { href: "/ai-suite", label: "Workspace Assistant", icon: Sparkles, enabled: true },
+interface NavGroup {
+  /** Section header shown above the group — null renders the items with no
+   *  header (Dashboard at the top, Sub-Account Settings at the bottom). */
+  label: string | null;
+  items: NavItem[];
+}
+
+/**
+ * Per-sub-account nav, grouped into categories (CRM / Calendar / Marketing /
+ * Sales / AI / Memberships / Insights) matching the agency's own mental
+ * model of the product, rather than one long flat list. `href` is templated
+ * with the active sub-account id at render time; `matchPrefix` is the stem
+ * used to highlight the active link.
+ */
+const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
   {
-    href: "/conversations",
-    label: "Conversations",
-    icon: MessagesSquare,
-    enabled: true,
-    badgeKey: "unreadConversations",
-  },
-  { href: "/contacts", label: "Contacts", icon: Users, enabled: true },
-  // Get Leads is PARKED — entry hidden while the flag is on.
-  ...(GET_LEADS_PARKED
-    ? []
-    : [{ href: "/get-leads", label: "Get Leads", icon: Radar, enabled: true }]),
-  { href: "/pipeline", label: "Pipeline", icon: GitBranch, enabled: true },
-  { href: "/calendar", label: "Calendar", icon: Calendar, enabled: true },
-  {
-    href: "/booking",
-    label: "Booking",
-    icon: CalendarClock,
-    enabled: true,
+    label: null,
+    items: [{ href: "/dashboard", label: "Dashboard", icon: Home, enabled: true }],
   },
   {
-    href: "/tasks",
-    label: "Tasks",
-    icon: CheckSquare,
-    enabled: true,
-    badgeKey: "dueToday",
+    label: "CRM",
+    items: [
+      {
+        href: "/conversations",
+        label: "Conversations",
+        icon: MessagesSquare,
+        enabled: true,
+        badgeKey: "unreadConversations",
+      },
+      { href: "/contacts", label: "Contacts", icon: Users, enabled: true },
+      // Get Leads is PARKED — entry hidden while the flag is on. Lives in
+      // CRM once unparked, alongside Contacts.
+      ...(GET_LEADS_PARKED
+        ? []
+        : [{ href: "/get-leads", label: "Get Leads", icon: Radar, enabled: true }]),
+      { href: "/pipeline", label: "Pipeline", icon: GitBranch, enabled: true },
+      {
+        href: "/tasks",
+        label: "Tasks",
+        icon: CheckSquare,
+        enabled: true,
+        badgeKey: "dueToday",
+      },
+    ],
   },
-  { href: "/forms", label: "Forms", icon: FileText, enabled: true },
-  { href: "/products", label: "Products", icon: Package, enabled: true },
-  { href: "/quotes", label: "Quotes", icon: FileSignature, enabled: true },
-  { href: "/website", label: "Website", icon: Globe, enabled: true },
-  { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
-  { href: "/ai-agents", label: "AI Agents", icon: Bot, enabled: true },
-  { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
-  { href: "/templates", label: "Templates", icon: FileText, enabled: true },
-  { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
   {
-    href: "/community",
-    label: "Community",
-    icon: GraduationCap,
-    enabled: true,
+    label: "Calendar",
+    items: [
+      { href: "/calendar", label: "Calendar", icon: Calendar, enabled: true },
+      { href: "/booking", label: "Booking", icon: CalendarClock, enabled: true },
+    ],
   },
   {
-    href: "/courses",
-    label: "Courses",
-    icon: BookOpen,
-    enabled: true,
+    label: "Marketing",
+    items: [
+      { href: "/forms", label: "Forms", icon: FileText, enabled: true },
+      { href: "/website", label: "Website", icon: Globe, enabled: true },
+      { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
+      { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
+      { href: "/templates", label: "Templates", icon: FileText, enabled: true },
+      { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
+    ],
   },
-  { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
-  // Labs — the gated container for PRE-RELEASE features (agency opt-in per
-  // sub-account via labsEnabledByAgency; hidden-by-default when off).
-  { href: "/labs", label: "Labs", icon: FlaskConical, enabled: true },
-  { href: "/logs", label: "Logs", icon: ScrollText, enabled: true },
   {
-    href: "/dashboard/settings",
-    label: "Settings Sub-Account",
-    icon: Settings,
-    enabled: true,
+    label: "Sales",
+    items: [
+      { href: "/products", label: "Products", icon: Package, enabled: true },
+      { href: "/quotes", label: "Quotes", icon: FileSignature, enabled: true },
+    ],
+  },
+  {
+    label: "AI",
+    items: [
+      { href: "/ai-suite", label: "Workspace Assistant", icon: Sparkles, enabled: true },
+      { href: "/ai-agents", label: "AI Agents", icon: Bot, enabled: true },
+    ],
+  },
+  {
+    label: "Memberships",
+    items: [
+      { href: "/community", label: "Community", icon: GraduationCap, enabled: true },
+      { href: "/courses", label: "Courses", icon: BookOpen, enabled: true },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
+      { href: "/logs", label: "Logs", icon: ScrollText, enabled: true },
+      // Labs — the gated container for PRE-RELEASE features (agency opt-in
+      // per sub-account via labsEnabledByAgency; hidden-by-default when off).
+      { href: "/labs", label: "Labs", icon: FlaskConical, enabled: true },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      {
+        href: "/dashboard/settings",
+        label: "Sub-Account Settings",
+        icon: Settings,
+        enabled: true,
+      },
+    ],
   },
 ];
 
@@ -142,6 +187,14 @@ const PWA_CORE_HREFS = new Set([
   "/dashboard/settings",
 ]);
 
+const COLLAPSE_STORAGE_KEY = "ls_sidebar_collapsed";
+/** Which of the 7 category groups (CRM, Calendar, Marketing, Sales, AI,
+ *  Memberships, Insights) are collapsed — stored as a JSON array of group
+ *  labels. The Dashboard/Sub-Account Settings entries and the Agency/
+ *  Sub-account identity sections are never collapsible, per product
+ *  decision — only the named category groups get an expand/collapse. */
+const GROUP_COLLAPSE_STORAGE_KEY = "ls_sidebar_collapsed_groups";
+
 interface SidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -152,7 +205,15 @@ function activeSubAccountFromPath(pathname: string): string | null {
   return match ? match[1] : null;
 }
 
-function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
+function SidebarContent({
+  trimmed = false,
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  trimmed?: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   const pathname = usePathname();
   const dueToday = useDueTodayCount();
   const unreadConversations = useUnreadConversationsCount();
@@ -189,6 +250,33 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
   const [getLeadsHidden, setGetLeadsHidden] = useState(false);
   const [aiSuiteHidden, setAiSuiteHidden] = useState(false);
   const [labsHidden, setLabsHidden] = useState(false);
+
+  // Per-group collapse (CRM / Calendar / Marketing / Sales / AI /
+  // Memberships / Insights only — Dashboard and Sub-Account Settings stay
+  // fixed). Hydrated from localStorage after mount, same pattern as the
+  // whole-sidebar collapse, to avoid an SSR/client markup mismatch.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(GROUP_COLLAPSE_STORAGE_KEY);
+      if (stored) setCollapsedGroups(new Set(JSON.parse(stored) as string[]));
+    } catch {
+      // Malformed/legacy value — fall back to "all expanded".
+    }
+  }, []);
+  function toggleGroup(label: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      window.localStorage.setItem(
+        GROUP_COLLAPSE_STORAGE_KEY,
+        JSON.stringify([...next]),
+      );
+      return next;
+    });
+  }
+
   useEffect(() => {
     const linkSubIdLocal = activeSubId ?? memberships[0]?.subAccountId ?? null;
     if (!linkSubIdLocal) {
@@ -259,11 +347,123 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
       : (activeMembership.name ?? "Sub-account")
     : "Sub-account";
 
+  function renderNavItem(item: NavItem) {
+    const fullHref = `${subRoot ?? `/sa/${linkSubId}`}${item.href}`;
+    const isActive =
+      pathname === fullHref ||
+      (item.href !== "/dashboard" && pathname.startsWith(fullHref));
+    // Agency-level gate lock. We DO render it when the gate is unknown
+    // (gate === null) — assumption: legitimate sub-accounts are enabled,
+    // and flashing "Locked" → "Enabled" is worse UX than a brief window
+    // where a disabled tenant can click. The underlying routes 403 either way.
+    const gateLocked =
+      (item.href === "/broadcasts" && broadcastsGate === false) ||
+      (item.href === "/website" && websiteGate === false) ||
+      (item.href === "/social" && socialGate === false) ||
+      (item.href === "/community" && communityGate === false) ||
+      (item.href === "/courses" && standaloneCoursesGate === false) ||
+      (item.href === "/ai-suite" && aiSuiteGate === false) ||
+      (item.href === "/get-leads" && getLeadsGate === false) ||
+      (item.href === "/labs" && labsGate === false);
+    // When the agency owner opted to hide (not just lock) a disabled
+    // feature, omit the entry entirely so the tenant never sees it.
+    const gateHidden =
+      (item.href === "/broadcasts" && broadcastsGate === false && broadcastsHidden) ||
+      (item.href === "/website" && websiteGate === false && websiteHidden) ||
+      (item.href === "/social" && socialGate === false && socialHidden) ||
+      (item.href === "/community" && communityGate === false && communityHidden) ||
+      (item.href === "/courses" &&
+        standaloneCoursesGate === false &&
+        standaloneCoursesHidden) ||
+      (item.href === "/get-leads" && getLeadsGate === false && getLeadsHidden) ||
+      (item.href === "/ai-suite" && aiSuiteGate === false && aiSuiteHidden) ||
+      (item.href === "/labs" && labsGate === false && labsHidden);
+    if (gateHidden) return null;
+
+    if (!item.enabled || gateLocked) {
+      const lockedByGate = gateLocked;
+      return (
+        <div
+          key={item.href}
+          title={
+            collapsed
+              ? item.label
+              : lockedByGate
+                ? "Disabled by your agency administrator"
+                : "Coming soon"
+          }
+          className={cn(
+            "flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground/50",
+            collapsed ? "justify-center" : "justify-between",
+          )}
+        >
+          <span className="flex items-center gap-2.5">
+            <item.icon className="h-4 w-4 shrink-0" />
+            {!collapsed && item.label}
+          </span>
+          {!collapsed && (
+            <span className="flex items-center gap-1 rounded-full border px-1.5 text-[10px] uppercase tracking-wide">
+              {lockedByGate && <Lock className="h-2.5 w-2.5" />}
+              {lockedByGate ? "Locked" : "Soon"}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    const badge =
+      item.badgeKey === "dueToday" && dueToday > 0
+        ? dueToday
+        : item.badgeKey === "unreadConversations" && unreadConversations > 0
+          ? unreadConversations
+          : null;
+
+    return (
+      <Link
+        key={item.href}
+        href={fullHref}
+        title={collapsed ? item.label : undefined}
+        className={cn(
+          "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+          collapsed ? "justify-center" : "justify-between",
+          isActive
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
+      >
+        <span className="flex items-center gap-2.5">
+          <item.icon className="h-4 w-4 shrink-0" />
+          {!collapsed && item.label}
+        </span>
+        {!collapsed && badge !== null && (
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+            )}
+          >
+            {badge}
+          </span>
+        )}
+        {collapsed && badge !== null && (
+          <span className="absolute ml-5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+        )}
+      </Link>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 items-center border-b px-6">
-        <Link href="/" className="flex items-center gap-2 text-xl font-bold">
-          {agency.logoUrl ? (
+      <div
+        className={cn(
+          "flex h-14 items-center border-b",
+          collapsed ? "justify-center px-2" : "justify-between px-4",
+        )}
+      >
+        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
+          {agency.logoUrl && !collapsed ? (
             // Custom agency logo. Constrained to 24px tall, auto width;
             // the agency hosts the asset so we render whatever they paste.
             // eslint-disable-next-line @next/next/no-img-element
@@ -275,70 +475,99 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
           ) : (
             <LogoMark size={20} idSuffix="-sidebar" />
           )}
-          <span className="truncate">{agency.name}</span>
+          {!collapsed && <span className="truncate">{agency.name}</span>}
         </Link>
+        {!collapsed && onToggleCollapsed && (
+          <button
+            onClick={onToggleCollapsed}
+            title="Collapse menu"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+      {collapsed && onToggleCollapsed && (
+        <button
+          onClick={onToggleCollapsed}
+          title="Expand menu"
+          className="flex items-center justify-center border-b py-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </button>
+      )}
+
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {/* Agency-level nav — visible to agency owners always; everyone with
             access to /agency sees the entry. */}
         {(agencyRole === "owner" || memberships.length > 1) && (
           <div className="mb-3">
-            <p className="mb-1 px-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Agency
-            </p>
+            {!collapsed && (
+              <p className="mb-1 px-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Agency
+              </p>
+            )}
             {agencyRole === "owner" && !trimmed && (
               <Link
                 href="/agency/get-started"
+                title={collapsed ? "Get started" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
                   pathname.startsWith("/agency/get-started")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Compass className="h-4 w-4" />
-                Get started
+                <Compass className="h-4 w-4 shrink-0" />
+                {!collapsed && "Get started"}
               </Link>
             )}
             <Link
               href="/agency"
+              title={collapsed ? "Agency home" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                collapsed && "justify-center",
                 pathname === "/agency"
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Building2 className="h-4 w-4" />
-              Agency home
+              <Building2 className="h-4 w-4 shrink-0" />
+              {!collapsed && "Agency home"}
             </Link>
             {agencyRole === "owner" && (
               <Link
                 href="/agency/sub-accounts"
+                title={collapsed ? "Sub-accounts" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
                   pathname.startsWith("/agency/sub-accounts")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Users className="h-4 w-4" />
-                Sub-accounts
+                <Users className="h-4 w-4 shrink-0" />
+                {!collapsed && "Sub-accounts"}
               </Link>
             )}
             {agencyRole === "owner" && !trimmed && (
               <Link
                 href="/agency/billing"
+                title={collapsed ? "Client billing" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
                   pathname.startsWith("/agency/billing")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <CreditCard className="h-4 w-4" />
-                Client billing
+                <CreditCard className="h-4 w-4 shrink-0" />
+                {!collapsed && "Client billing"}
               </Link>
             )}
             {/* Hidden until the owner enables it under Agency → Settings —
@@ -346,29 +575,33 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
             {agencyRole === "owner" && agency.agencyAssistantEnabled && (
               <Link
                 href="/agency/ai-suite"
+                title={collapsed ? "Agency Assistant" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
                   pathname.startsWith("/agency/ai-suite")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Sparkles className="h-4 w-4" />
-                Agency Assistant
+                <Sparkles className="h-4 w-4 shrink-0" />
+                {!collapsed && "Agency Assistant"}
               </Link>
             )}
             {agencyRole === "owner" && !trimmed && (
               <Link
                 href="/agency/settings"
+                title={collapsed ? "Settings Agency" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
                   pathname.startsWith("/agency/settings")
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Settings className="h-4 w-4" />
-                Settings Agency
+                <Settings className="h-4 w-4 shrink-0" />
+                {!collapsed && "Settings Agency"}
               </Link>
             )}
           </div>
@@ -376,7 +609,7 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
 
         {showSubNav && (
           <div>
-            {(agencyRole === "owner" || memberships.length > 1) && (
+            {(agencyRole === "owner" || memberships.length > 1) && !collapsed && (
               <p
                 className="mb-1 truncate px-3 text-[10px] uppercase tracking-wider text-muted-foreground"
                 title={subSectionLabel}
@@ -384,119 +617,42 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
                 {subSectionLabel}
               </p>
             )}
-            {SUB_ACCOUNT_NAV.filter(
-              (item) => !trimmed || PWA_CORE_HREFS.has(item.href),
-            ).map((item) => {
-              const fullHref = `${subRoot ?? `/sa/${linkSubId}`}${item.href}`;
-              const isActive =
-                pathname === fullHref ||
-                (item.href !== "/dashboard" && pathname.startsWith(fullHref));
-              // Agency-level gate lock for Broadcasts. We DO render it
-              // when the gate is unknown (broadcastsGate === null) —
-              // assumption: legitimate sub-accounts are enabled, and
-              // flashing "Locked" → "Enabled" is worse UX than a brief
-              // window where a disabled tenant can click. The send route
-              // returns 403 either way.
-              const gateLocked =
-                (item.href === "/broadcasts" && broadcastsGate === false) ||
-                (item.href === "/website" && websiteGate === false) ||
-                (item.href === "/social" && socialGate === false) ||
-                (item.href === "/community" && communityGate === false) ||
-                (item.href === "/courses" &&
-                  standaloneCoursesGate === false) ||
-                (item.href === "/ai-suite" && aiSuiteGate === false) ||
-                (item.href === "/get-leads" && getLeadsGate === false) ||
-                (item.href === "/labs" && labsGate === false);
-              // When the agency owner opted to hide (not just lock) a disabled
-              // feature, omit the entry entirely so the tenant never sees it.
-              const gateHidden =
-                (item.href === "/broadcasts" &&
-                  broadcastsGate === false &&
-                  broadcastsHidden) ||
-                (item.href === "/website" &&
-                  websiteGate === false &&
-                  websiteHidden) ||
-                (item.href === "/social" &&
-                  socialGate === false &&
-                  socialHidden) ||
-                (item.href === "/community" &&
-                  communityGate === false &&
-                  communityHidden) ||
-                (item.href === "/courses" &&
-                  standaloneCoursesGate === false &&
-                  standaloneCoursesHidden) ||
-                (item.href === "/get-leads" &&
-                  getLeadsGate === false &&
-                  getLeadsHidden) ||
-                (item.href === "/ai-suite" &&
-                  aiSuiteGate === false &&
-                  aiSuiteHidden) ||
-                (item.href === "/labs" && labsGate === false && labsHidden);
-              if (gateHidden) return null;
-              if (!item.enabled || gateLocked) {
-                const lockedByGate = gateLocked;
-                return (
-                  <div
-                    key={item.href}
-                    className="flex cursor-not-allowed items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground/50"
-                    title={
-                      lockedByGate
-                        ? "Disabled by your agency administrator"
-                        : "Coming soon"
-                    }
-                  >
-                    <span className="flex items-center gap-3">
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
-                    </span>
-                    <span className="flex items-center gap-1 rounded-full border px-1.5 text-[10px] uppercase tracking-wide">
-                      {lockedByGate && <Lock className="h-2.5 w-2.5" />}
-                      {lockedByGate ? "Locked" : "Soon"}
-                    </span>
-                  </div>
-                );
-              }
-              const badge =
-                item.badgeKey === "dueToday" && dueToday > 0
-                  ? dueToday
-                  : item.badgeKey === "unreadConversations" &&
-                      unreadConversations > 0
-                    ? unreadConversations
-                    : null;
+            {SUB_ACCOUNT_NAV_GROUPS.map((group, groupIdx) => {
+              const visibleItems = group.items.filter(
+                (item) => !trimmed || PWA_CORE_HREFS.has(item.href),
+              );
+              if (visibleItems.length === 0) return null;
+
+              // Dashboard / Sub-Account Settings (label === null) always
+              // show their item(s) — no toggle, per product decision.
+              // When the whole sidebar is in icon-only rail mode, per-group
+              // state is moot (no labels to click) — always show every icon.
+              const isGroupCollapsed =
+                !!group.label && !collapsed && collapsedGroups.has(group.label);
+
               return (
-                <Link
-                  key={item.href}
-                  href={fullHref}
-                  className={cn(
-                    "flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <span className="flex items-center gap-3">
-                    <item.icon className="h-4 w-4" />
-                    {item.label}
-                  </span>
-                  {badge !== null && (
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-                      )}
+                <div key={group.label ?? `ungrouped-${groupIdx}`} className="mb-3">
+                  {group.label && !collapsed && (
+                    <button
+                      onClick={() => toggleGroup(group.label!)}
+                      className="mb-1 flex w-full items-center gap-1 px-3 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
                     >
-                      {badge}
-                    </span>
+                      {isGroupCollapsed ? (
+                        <ChevronRight className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                      {group.label}
+                    </button>
                   )}
-                </Link>
+                  {!isGroupCollapsed && visibleItems.map(renderNavItem)}
+                </div>
               );
             })}
           </div>
         )}
 
-        {!showSubNav && !loading && (
+        {!showSubNav && !loading && !collapsed && (
           <p className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
             Pick a sub-account from{" "}
             <Link href="/agency" className="text-primary underline">
@@ -507,14 +663,18 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
         )}
       </nav>
 
-      <div className="border-t p-4">
+      <div className="border-t p-3">
         <Button
           variant="ghost"
-          className="w-full justify-start gap-3"
+          title={collapsed ? "Sign Out" : undefined}
+          className={cn(
+            "w-full gap-2.5 text-[13px]",
+            collapsed ? "justify-center" : "justify-start",
+          )}
           onClick={() => signOutUser()}
         >
-          <LogOut className="h-4 w-4" />
-          Sign Out
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && "Sign Out"}
         </Button>
       </div>
     </div>
@@ -524,6 +684,22 @@ function SidebarContent({ trimmed = false }: { trimmed?: boolean }) {
 export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const pathname = usePathname();
   const standalone = useIsStandalone();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Hydrate the collapse preference from localStorage after mount (avoids
+  // an SSR/client markup mismatch — the server always renders expanded).
+  useEffect(() => {
+    const stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    if (stored === "1") setCollapsed(true);
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   // Close the mobile drawer whenever navigation happens — tapping a menu
   // item should reveal the destination, not leave the sheet covering it.
@@ -535,14 +711,21 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
   return (
     <>
-      <aside className="hidden w-64 shrink-0 border-r bg-background md:block">
-        <SidebarContent />
+      <aside
+        className={cn(
+          "hidden shrink-0 border-r bg-background transition-[width] duration-150 md:block",
+          collapsed ? "w-14" : "w-56",
+        )}
+      >
+        <SidebarContent collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </aside>
 
       {/* The drawer trims to PWA core items ONLY when running installed
-          (standalone) — regular mobile-browser use keeps the full menu. */}
+          (standalone) — regular mobile-browser use keeps the full menu. The
+          collapse-to-icons feature is desktop-only; the drawer always shows
+          full labels since it's an overlay you dismiss, not a persistent rail. */}
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="w-56 p-0">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>

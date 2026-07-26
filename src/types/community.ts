@@ -35,6 +35,9 @@ export interface Member {
   avatarUrl: string | null;
   /** Short member bio shown on their profile + the members directory. */
   bio: string;
+  /** Captured at instant-signup (Standalone Courses). Null for members
+   *  created via magic-link, which never collects a phone number. */
+  phone: string | null;
   /**
    * The CRM contact this member is reconciled to. Set at creation — joining
    * the community doubles as lead capture. Null only if reconciliation failed.
@@ -242,7 +245,7 @@ export interface CourseSection {
   order: number;
 }
 
-export type VideoProvider = "youtube" | "vimeo";
+export type VideoProvider = "youtube" | "vimeo" | "loom" | "descript";
 
 export interface ResourceLink {
   label: string;

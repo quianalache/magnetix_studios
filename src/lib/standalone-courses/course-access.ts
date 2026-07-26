@@ -5,10 +5,24 @@ import {
   type StandaloneCoursesGate,
 } from "@/lib/standalone-courses/gate";
 import { getCurrentMember } from "@/lib/community/member-session";
-import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import {
+  getStandaloneCourse,
+  getStandaloneEnrollment,
+} from "@/lib/server/standalone-course-service";
 import { hasPaidStandaloneCourse } from "@/lib/server/standalone-course-purchase-service";
 import type { Member } from "@/types/community";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+
+/** Timestamp-ish value read off a Firestore doc — Admin SDK Timestamp or a
+ *  plain Date, depending on the read path. */
+function toDateOrNull(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return null;
+}
 
 /**
  * Resolve access to a standalone course's public surfaces, mirroring
@@ -77,6 +91,18 @@ export async function requireCourseClassroomAccess(
     if (!paid) {
       return { kind: "redirect", to: `/course/${saId}/${courseId}` };
     }
+  }
+
+  // Offer Access rules (Course Offers feature) — a course granted via an
+  // Offer with a "begin at date" or "restrict to N days" rule stamps the
+  // enrollment with an access window. Most enrollments have neither field
+  // set and are unaffected.
+  const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
+  const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
+  const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
+  const now = new Date();
+  if ((beginsAt && now < beginsAt) || (expiresAt && now > expiresAt)) {
+    return { kind: "redirect", to: `/course/${saId}/${courseId}` };
   }
 
   return { kind: "ok", gate, course, member };

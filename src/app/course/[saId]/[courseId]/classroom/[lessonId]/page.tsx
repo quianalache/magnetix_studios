@@ -13,6 +13,8 @@ import {
   type PlayerLesson,
   type PlayerSection,
 } from "@/components/community/classroom/lesson-player";
+import { getInAppUpsellsForMember } from "@/lib/server/course-offer-upsell-service";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +48,16 @@ export default async function StandaloneLessonPlayerPage({
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
 
+  // In-App Upsells (Course Offers feature) — published upsells targeting any
+  // offer this member has purchased, shown as a locked "Buy Now" card.
+  // Display-only; no new purchase mechanic beyond the offer checkout.
+  const inAppUpsells = await getInAppUpsellsForMember(saId, member.id);
+  const upsellTargets = (
+    await Promise.all(
+      inAppUpsells.map((u) => getCourseOffer(saId, u.targetOfferId)),
+    )
+  ).filter((o): o is NonNullable<typeof o> => !!o);
+
   const sections: PlayerSection[] = tree.sections.map((s) => ({
     id: s.id,
     title: s.title,
@@ -77,6 +89,30 @@ export default async function StandaloneLessonPlayerPage({
           currentLessonId={lessonId}
           completedIds={enrollment?.completedLessonIds ?? []}
         />
+
+        {upsellTargets.length > 0 && (
+          <div className="mt-6 space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-[#909090]">
+              More for you
+            </p>
+            {upsellTargets.map((target) => (
+              <div
+                key={target.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
+              >
+                <span className="text-sm font-medium text-[#202124]">
+                  {target.title}
+                </span>
+                <a
+                  href={`/offer/${saId}/${target.id}`}
+                  className="shrink-0 rounded-md bg-[#202124] px-3 py-1.5 text-xs font-semibold text-white"
+                >
+                  Buy Now
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

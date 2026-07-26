@@ -18,9 +18,9 @@ export {
  * stored HTML on the way out.
  *
  * Allowed: standard formatting + headings + lists + blockquote + code/pre +
- * <img> + <a> + <iframe> RESTRICTED to YouTube / Vimeo embed hosts (the inline
- * `lesson-video` node). Everything else (scripts, event handlers, arbitrary
- * iframes) is stripped.
+ * <img> + <a> + <iframe> RESTRICTED to YouTube / Vimeo / Loom / Descript embed
+ * hosts (the inline `lesson-video` node). Everything else (scripts, event
+ * handlers, arbitrary iframes) is stripped.
  *
  * This module pulls in sanitize-html (a Node HTML parser) — keep it OFF the
  * client import path. Client components use ./lesson-html-shared instead.
@@ -28,7 +28,7 @@ export {
 
 // Only iframes pointing at these embed hosts survive sanitization.
 const SAFE_IFRAME_SRC =
-  /^https:\/\/(www\.youtube\.com\/embed\/|player\.vimeo\.com\/video\/)/;
+  /^https:\/\/(www\.youtube\.com\/embed\/|player\.vimeo\.com\/video\/|www\.loom\.com\/embed\/|share\.descript\.com\/embed\/)/;
 
 /** Sanitize lesson HTML for rendering to members. Server-side (no DOM). */
 export function sanitizeLessonHtml(html: string): string {
@@ -50,7 +50,12 @@ export function sanitizeLessonHtml(html: string): string {
     allowedSchemes: ["http", "https", "mailto"],
     allowedSchemesByTag: { img: ["http", "https"], iframe: ["https"] },
     // iframes are doubly restricted: known host AND known embed path.
-    allowedIframeHostnames: ["www.youtube.com", "player.vimeo.com"],
+    allowedIframeHostnames: [
+      "www.youtube.com",
+      "player.vimeo.com",
+      "www.loom.com",
+      "share.descript.com",
+    ],
     exclusiveFilter: (frame) =>
       frame.tag === "iframe" && !SAFE_IFRAME_SRC.test(frame.attribs.src ?? ""),
     // Harden every surviving link.

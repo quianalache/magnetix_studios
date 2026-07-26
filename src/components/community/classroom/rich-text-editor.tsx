@@ -35,7 +35,8 @@ import { cn } from "@/lib/utils";
  * Rich-text editor for course lesson bodies (Skool-style). Emits HTML via
  * `onChange`; the public player sanitizes it on render (see lesson-html.ts).
  * Images upload straight to Firebase Storage via the shared community helper;
- * the Video button embeds a YouTube/Vimeo player inline (the LessonVideo node).
+ * the Video button embeds a YouTube/Vimeo/Loom/Descript player inline (the
+ * LessonVideo node).
  *
  * Mounted with a `key={lesson.id}` parent so it remounts per lesson — initial
  * content is read once, no value→editor syncing needed.
@@ -120,11 +121,11 @@ export function RichTextEditor({
   }
 
   function addVideo() {
-    const url = window.prompt("YouTube or Vimeo URL");
+    const url = window.prompt("YouTube, Vimeo, Loom, or Descript URL");
     if (!url) return;
     const parsed = parseVideoUrl(url);
     if (!parsed) {
-      toast.error("Not a recognized YouTube or Vimeo link.");
+      toast.error("Not a recognized YouTube, Vimeo, Loom, or Descript link.");
       return;
     }
     editor!

@@ -15,3 +15,9 @@ export function getStripeServer(): Stripe {
   }
   return _stripe;
 }
+
+/** Whether the configured Stripe secret key is a test-mode key — drives the
+ *  "Payment Mode: Test/Live" indicator on the Offer details page. */
+export function isStripeTestMode(): boolean {
+  return (process.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_test_");
+}

@@ -29,6 +29,15 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Course Offer thumbnail images — same rules, independent path.
+    match /course-offers/{subAccountId}/{offerId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Default deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;

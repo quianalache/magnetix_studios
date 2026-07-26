@@ -23,6 +23,9 @@ importers:
       '@react-pdf/renderer':
         specifier: ^4.5.1
         version: 4.5.1(react@19.1.0)
+      '@stripe/react-stripe-js':
+        specifier: ^6.8.0
+        version: 6.8.0(@stripe/stripe-js@8.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@stripe/stripe-js':
         specifier: ^8.9.0
         version: 8.9.0
@@ -1145,6 +1148,13 @@ packages:
 
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
+
+  '@stripe/react-stripe-js@6.8.0':
+    resolution: {integrity: sha512-nRrPkos00CmUeqXHxtJkXmSbl9/6ybGI4jVebzsiA6QaE5A4iw9dn1C4hUx2tBmQQV2e6pm2aLkPYov4hdta2w==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.5.0 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
 
   '@stripe/stripe-js@8.9.0':
     resolution: {integrity: sha512-OJkXvUI5GAc56QdiSRimQDvWYEqn475J+oj8RzRtFTCPtkJNO2TWW619oDY+nn1ExR+2tCVTQuRQBbR4dRugww==}
@@ -5819,6 +5829,13 @@ snapshots:
   '@sindresorhus/merge-streams@4.0.0': {}
 
   '@stablelib/base64@1.0.1': {}
+
+  '@stripe/react-stripe-js@6.8.0(@stripe/stripe-js@8.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@stripe/stripe-js': 8.9.0
+      prop-types: 15.8.1
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
 
   '@stripe/stripe-js@8.9.0': {}
 

@@ -7,6 +7,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
+import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
 import type {
   StandaloneCourse,
   StandaloneCourseSection,
@@ -35,9 +36,10 @@ export function subscribeToStandaloneCourses(
     collection(getFirebaseDb(), coursesPath(saId)),
     (snap) => {
       cb(
-        snap.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCourse, "id">) }),
-        ),
+        snap.docs.map((d) => {
+          const data = d.data() as Omit<StandaloneCourse, "id">;
+          return { id: d.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
+        }),
       );
     },
     (e) => onError?.(e),
@@ -53,11 +55,12 @@ export function subscribeToStandaloneCourse(
   return onSnapshot(
     doc(getFirebaseDb(), `${coursesPath(saId)}/${courseId}`),
     (snap) => {
-      cb(
-        snap.exists()
-          ? { id: snap.id, ...(snap.data() as Omit<StandaloneCourse, "id">) }
-          : null,
-      );
+      if (!snap.exists()) {
+        cb(null);
+        return;
+      }
+      const data = snap.data() as Omit<StandaloneCourse, "id">;
+      cb({ id: snap.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME });
     },
     (e) => onError?.(e),
   );

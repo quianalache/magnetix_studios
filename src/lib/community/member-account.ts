@@ -2,7 +2,10 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { createContactServerSide } from "@/lib/server/contacts-service";
+import {
+  createContactServerSide,
+  updateContactServerSide,
+} from "@/lib/server/contacts-service";
 import type { Member } from "@/types/community";
 
 /**
@@ -29,6 +32,12 @@ interface EnsureMemberInput {
   email: string;
   displayName?: string | null;
   /**
+   * Captured at instant-signup (Standalone Courses). Magic-link callers never
+   * pass this, so an existing member's phone can never be silently blanked
+   * out by a plain login.
+   */
+  phone?: string | null;
+  /**
    * Reconciled-contact source tag. Defaults to "community" (the original
    * caller). Standalone Courses passes "course" so CRM contact-source
    * reporting doesn't mislabel course buyers as community joiners — both
@@ -40,12 +49,20 @@ interface EnsureMemberInput {
 /**
  * Idempotently get-or-create a member identity for `email` in this sub-account,
  * reconciling it to a CRM contact along the way (joining the community doubles
- * as lead capture). Called at magic-link VERIFY time — never at request time —
- * so a member doc only ever exists for an email whose owner clicked the link.
+ * as lead capture). Called at magic-link VERIFY time, or at instant-signup time
+ * (Standalone Courses — no magic link) — either way a member doc only ever
+ * exists for an email its owner actually submitted.
  *
  * Contact reconciliation: reuse an existing contact matched by email within the
  * sub-account, otherwise create one (`source: "community"`) via the same
  * server-side write path the rest of the app uses, so `contact.created` fires.
+ *
+ * If the member already exists and the caller supplies a `displayName`/`phone`
+ * that differs from what's stored (the instant-signup path always does), the
+ * member doc and its linked contact are patched to keep the info fresh — a
+ * repeat buyer re-entering the popup on a new device shouldn't leave stale
+ * data behind. Magic-link callers never pass these fields, so they can't
+ * accidentally blank them out.
  *
  * Concurrent verify clicks for the same brand-new email could race into two
  * member docs; the 15-minute single-use magic link makes this vanishingly
@@ -55,13 +72,43 @@ export async function ensureMember({
   subAccountId,
   email,
   displayName,
+  phone,
   source = "community",
 }: EnsureMemberInput): Promise<Member> {
   const db = getAdminDb();
   const normalizedEmail = email.trim().toLowerCase();
 
   const existing = await findMemberByEmail(subAccountId, normalizedEmail);
-  if (existing) return existing;
+  if (existing) {
+    const patch: Record<string, unknown> = {};
+    const trimmedName = displayName?.trim();
+    if (trimmedName && trimmedName !== existing.displayName) {
+      patch.displayName = trimmedName;
+    }
+    const trimmedPhone = phone?.trim();
+    if (trimmedPhone && trimmedPhone !== existing.phone) {
+      patch.phone = trimmedPhone;
+    }
+    if (Object.keys(patch).length === 0) return existing;
+
+    await db
+      .doc(`subAccounts/${subAccountId}/members/${existing.id}`)
+      .set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+
+    if (existing.contactId) {
+      await updateContactServerSide({
+        contactId: existing.contactId,
+        patch: {
+          ...(patch.displayName ? { name: patch.displayName as string } : {}),
+          ...(patch.phone ? { phone: patch.phone as string } : {}),
+        },
+      }).catch((err) =>
+        console.warn("[community/member-account] contact sync failed", err),
+      );
+    }
+
+    return { ...existing, ...patch } as Member;
+  }
 
   // Resolve tenancy + the audit actor for the reconciled contact.
   const saSnap = await db.doc(`subAccounts/${subAccountId}`).get();
@@ -91,7 +138,7 @@ export async function ensureMember({
         mode: "live",
         name: displayName?.trim() || "",
         email: normalizedEmail,
-        phone: "",
+        phone: phone?.trim() || "",
         company: "",
         address: "",
         source,
@@ -114,6 +161,7 @@ export async function ensureMember({
       displayName: displayName?.trim() || null,
       avatarUrl: null,
       bio: "",
+      phone: phone?.trim() || null,
       contactId,
       status: "active",
       createdAt: FieldValue.serverTimestamp(),
