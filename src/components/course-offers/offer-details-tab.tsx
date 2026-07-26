@@ -57,6 +57,9 @@ export function OfferDetailsTab({
   const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(
     offer.recurringInterval ?? "month",
   );
+  const [trialDays, setTrialDays] = useState(
+    offer.trialDays != null ? offer.trialDays.toString() : "",
+  );
   const [priceTextOverride, setPriceTextOverride] = useState(
     offer.priceTextOverride ?? "",
   );
@@ -97,6 +100,7 @@ export function OfferDetailsTab({
     setType(offer.type);
     setPrice(offer.priceCents != null ? (offer.priceCents / 100).toString() : "");
     setRecurringInterval(offer.recurringInterval ?? "month");
+    setTrialDays(offer.trialDays != null ? offer.trialDays.toString() : "");
     setPriceTextOverride(offer.priceTextOverride ?? "");
     setThumbnailUrl(offer.thumbnailUrl);
     setDiscountCodesEnabled(offer.discountCodesEnabled);
@@ -133,6 +137,10 @@ export function OfferDetailsTab({
             : null,
         currency: type !== "free" ? "USD" : null,
         recurringInterval: type === "recurring" ? recurringInterval : null,
+        trialDays:
+          type === "recurring" && trialDays.trim()
+            ? Number(trialDays)
+            : null,
         priceTextOverride: priceTextOverride.trim() || null,
         thumbnailUrl,
         discountCodesEnabled,
@@ -309,6 +317,8 @@ export function OfferDetailsTab({
                     setRecurringInterval(e.target.value as RecurringInterval)
                   }
                 >
+                  <option value="day">/ day</option>
+                  <option value="week">/ week</option>
                   <option value="month">/ month</option>
                   <option value="year">/ year</option>
                 </select>
@@ -319,6 +329,24 @@ export function OfferDetailsTab({
             <p className="mt-1 text-[12px] text-muted-foreground">
               {formatCurrency(priceCentsPreview / 100, "USD")}
             </p>
+          )}
+          {type === "recurring" && (
+            <div className="mt-3 space-y-1.5">
+              <Label htmlFor="offer-d-trial-days" className="text-[12px] text-muted-foreground">
+                Trial Days
+              </Label>
+              <Input
+                id="offer-d-trial-days"
+                type="number"
+                min="0"
+                value={trialDays}
+                onChange={(e) => setTrialDays(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-[12px] text-muted-foreground">
+                Number of days until first billing
+              </p>
+            </div>
           )}
           <div className="mt-3 space-y-1.5">
             <Label htmlFor="offer-d-price-text" className="text-[12px] text-muted-foreground">

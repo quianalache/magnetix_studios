@@ -160,7 +160,10 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
           ],
           return_url: opts.returnUrl,
           metadata,
-          subscription_data: { metadata },
+          subscription_data: {
+            metadata,
+            ...(offer.trialDays ? { trial_period_days: offer.trialDays } : {}),
+          },
           allow_promotion_codes: offer.discountCodesEnabled,
         }
       : {

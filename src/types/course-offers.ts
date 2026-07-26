@@ -12,7 +12,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  */
 export type OfferType = "free" | "oneTime" | "recurring";
 export type OfferVisibility = "draft" | "published";
-export type RecurringInterval = "month" | "year";
+export type RecurringInterval = "day" | "week" | "month" | "year";
 
 export interface CourseOfferAccess {
   beginAtSpecificDate: boolean;
@@ -43,6 +43,10 @@ export interface CourseOffer {
   currency: string | null;
   /** Only set when `type === "recurring"`. */
   recurringInterval: RecurringInterval | null;
+  /** Days before the first charge — only meaningful when `type ===
+   *  "recurring"`. Null/0 = bill immediately. Maps to Stripe Checkout's
+   *  `subscription_data.trial_period_days`. */
+  trialDays: number | null;
   /** Custom checkout price display, e.g. "Free Trial", "Limited Time Only". */
   priceTextOverride: string | null;
   visibility: OfferVisibility;

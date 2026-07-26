@@ -51,6 +51,7 @@ export async function createCourseOfferServerSide(opts: {
     priceCents: type === "free" ? null : (opts.priceCents ?? null),
     currency: type === "free" ? null : (opts.currency ?? "USD"),
     recurringInterval: null,
+    trialDays: null,
     priceTextOverride: opts.priceTextOverride?.trim() || null,
     visibility: "draft" as OfferVisibility,
     version: 1,
@@ -73,6 +74,7 @@ export interface CourseOfferPatch {
   priceCents?: number | null;
   currency?: string | null;
   recurringInterval?: RecurringInterval | null;
+  trialDays?: number | null;
   priceTextOverride?: string | null;
   visibility?: OfferVisibility;
   thumbnailUrl?: string | null;
@@ -102,11 +104,14 @@ export async function updateCourseOfferServerSide(opts: {
       updates.priceCents = null;
       updates.currency = null;
       updates.recurringInterval = null;
+      updates.trialDays = null;
     } else {
       if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
       updates.currency = p.currency ?? "USD";
       updates.recurringInterval =
         p.type === "recurring" ? (p.recurringInterval ?? "month") : null;
+      updates.trialDays =
+        p.type === "recurring" ? (p.trialDays ?? null) : null;
     }
   } else {
     if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
@@ -114,6 +119,7 @@ export async function updateCourseOfferServerSide(opts: {
     if (p.recurringInterval !== undefined) {
       updates.recurringInterval = p.recurringInterval;
     }
+    if (p.trialDays !== undefined) updates.trialDays = p.trialDays;
   }
   if (p.priceTextOverride !== undefined) {
     updates.priceTextOverride = p.priceTextOverride?.trim() || null;
