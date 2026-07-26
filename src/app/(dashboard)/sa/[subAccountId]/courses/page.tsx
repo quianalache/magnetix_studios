@@ -63,7 +63,7 @@ export default function StandaloneCoursesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 p-6">
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-6">
       <div>
         <h1 className="text-lg font-semibold">
           {tab === "products" ? "Products" : "Offers"}
@@ -107,7 +107,7 @@ export default function StandaloneCoursesPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((c) => (
             <CourseCard key={c.id} course={c} subAccountId={subAccountId} />
           ))}
@@ -140,7 +140,7 @@ function CourseCard({
       : "Free";
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-lg border bg-card">
       <Link
         href={`/sa/${subAccountId}/courses/${c.id}`}
         className="block"
@@ -154,23 +154,23 @@ function CourseCard({
             className="aspect-video w-full object-cover"
           />
         ) : (
-          <div className="flex aspect-video w-full items-center justify-center bg-muted text-3xl font-semibold text-muted-foreground">
+          <div className="flex aspect-video w-full items-center justify-center bg-muted text-xl font-semibold text-muted-foreground">
             {c.title.charAt(0).toUpperCase()}
           </div>
         )}
       </Link>
 
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-3">
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/sa/${subAccountId}/courses/${c.id}`}
-            className="font-medium hover:underline"
+            className="text-[13px] font-medium hover:underline"
           >
             {c.title}
           </Link>
           <span
             className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+              "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
               c.published
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                 : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
@@ -179,9 +179,9 @@ function CourseCard({
             {c.published ? "published" : "draft"}
           </span>
         </div>
-        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="mt-2 flex items-center gap-2.5 text-[12px] text-muted-foreground">
           <span className="flex items-center gap-1">
-            <Users className="h-3.5 w-3.5" />
+            <Users className="h-3 w-3" />
             {c.enrollmentCount}
           </span>
           <span>{price}</span>
