@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import { StandaloneCourseSettingsModal } from "@/components/standalone-courses/course-settings-modal";
 import { OffersList } from "@/components/course-offers/offers-list";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
@@ -26,7 +25,6 @@ export default function StandaloneCoursesPage() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [tab, setTab] = useState<CoursesTab>("products");
 
   const gateOn = subAccount?.standaloneCoursesEnabledByAgency === true;
@@ -85,9 +83,11 @@ export default function StandaloneCoursesPage() {
           ]}
         />
         {tab === "products" && isAdmin && (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> New course
-          </Button>
+          <Link href={`/sa/${subAccountId}/courses/new`}>
+            <Button size="sm">
+              <Plus className="h-3.5 w-3.5" /> New course
+            </Button>
+          </Link>
         )}
       </div>
 
@@ -113,14 +113,6 @@ export default function StandaloneCoursesPage() {
           ))}
         </div>
       )}
-
-      <StandaloneCourseSettingsModal
-        mode="create"
-        saId={subAccountId}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSaved={() => {}}
-      />
     </div>
   );
 }
