@@ -19,6 +19,62 @@ export type StandaloneCourseAccess = "open" | "purchase";
 export type StandaloneCourseBillingType = "oneTime" | "recurring";
 export type StandaloneCourseRecurringInterval = "day" | "week" | "month" | "year";
 
+/** Course tags — discovery/filter metadata, shown in the editor's Settings
+ *  tab. `topic` is a fixed list (see `src/lib/standalone-courses/course-tags.ts`),
+ *  `language` is free-text. */
+export type StandaloneCourseDifficulty =
+  | "beginner"
+  | "intermediate"
+  | "advanced"
+  | "expert";
+
+/** Instructor bio shown on the course detail/checkout pages — also the
+ *  "profile" the Course Theme's instructor sidebar block can sync from
+ *  (`CourseTheme`'s `syncFromProfile` flag). */
+export interface StandaloneCourseInstructor {
+  heading: string;
+  name: string;
+  title: string;
+  bio: string;
+  headshotUrl: string | null;
+}
+
+export const DEFAULT_STANDALONE_COURSE_INSTRUCTOR: StandaloneCourseInstructor = {
+  heading: "Instructor",
+  name: "",
+  title: "",
+  bio: "",
+  headshotUrl: null,
+};
+
+/** Player behavior toggles — all on by default, matching the GHL reference. */
+export interface StandaloneCourseLearningExperience {
+  autoplayNextLesson: boolean;
+  autoplayFirstLesson: boolean;
+  autoCompleteLessons: boolean;
+}
+
+export const DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE: StandaloneCourseLearningExperience =
+  {
+    autoplayNextLesson: true,
+    autoplayFirstLesson: true,
+    autoCompleteLessons: true,
+  };
+
+export interface StandaloneCourseAdvanced {
+  customJs: string;
+  customCss: string;
+  headerTrackingCode: string;
+  footerTrackingCode: string;
+}
+
+export const DEFAULT_STANDALONE_COURSE_ADVANCED: StandaloneCourseAdvanced = {
+  customJs: "",
+  customCss: "",
+  headerTrackingCode: "",
+  footerTrackingCode: "",
+};
+
 export interface StandaloneCourse {
   id: string;
   subAccountId: string;
@@ -47,6 +103,16 @@ export interface StandaloneCourse {
   /** Show the enrollment count on the public sales page. Off by default —
    *  an owner opts in per course. */
   showMemberCount: boolean;
+  /** Discovery/filter tags — Settings tab. All null until the owner sets them. */
+  language: string | null;
+  difficulty: StandaloneCourseDifficulty | null;
+  topic: string | null;
+  instructor: StandaloneCourseInstructor;
+  /** Per-course branding overrides — Settings tab. */
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  learningExperience: StandaloneCourseLearningExperience;
+  advanced: StandaloneCourseAdvanced;
   /** Visual theme — colors, fonts, background, and content blocks for the
    *  public sales page. Courses created before this feature has no such
    *  field; every read falls back to `DEFAULT_COURSE_THEME`. */

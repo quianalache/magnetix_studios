@@ -6,11 +6,20 @@ import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
 import type { ResourceLink } from "@/types/community";
+import {
+  DEFAULT_STANDALONE_COURSE_ADVANCED,
+  DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
+  DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
+} from "@/types/standalone-courses";
 import type {
   StandaloneCourse,
   StandaloneCourseAccess,
+  StandaloneCourseAdvanced,
   StandaloneCourseBillingType,
   StandaloneCourseCurriculumSection,
+  StandaloneCourseDifficulty,
+  StandaloneCourseInstructor,
+  StandaloneCourseLearningExperience,
   StandaloneCourseRecurringInterval,
   StandaloneCourseSection,
   StandaloneEnrollment,
@@ -71,6 +80,14 @@ export async function createStandaloneCourseServerSide(opts: {
     trialDays: billingType === "recurring" ? (opts.trialDays ?? null) : null,
     enrollmentCount: 0,
     showMemberCount: opts.showMemberCount ?? false,
+    language: null as string | null,
+    difficulty: null as StandaloneCourseDifficulty | null,
+    topic: null as string | null,
+    instructor: DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
+    logoUrl: null as string | null,
+    faviconUrl: null as string | null,
+    learningExperience: DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
+    advanced: DEFAULT_STANDALONE_COURSE_ADVANCED,
     theme: DEFAULT_COURSE_THEME,
     linkedCommunityGroupIds: [] as string[],
     createdAt: FieldValue.serverTimestamp(),
@@ -93,6 +110,14 @@ export interface StandaloneCoursePatch {
   recurringInterval?: StandaloneCourseRecurringInterval | null;
   trialDays?: number | null;
   showMemberCount?: boolean;
+  language?: string | null;
+  difficulty?: StandaloneCourseDifficulty | null;
+  topic?: string | null;
+  instructor?: Partial<StandaloneCourseInstructor>;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  learningExperience?: Partial<StandaloneCourseLearningExperience>;
+  advanced?: Partial<StandaloneCourseAdvanced>;
 }
 
 export async function updateStandaloneCourseServerSide(opts: {
@@ -145,7 +170,44 @@ export async function updateStandaloneCourseServerSide(opts: {
       if (p.trialDays !== undefined) updates.trialDays = p.trialDays;
     }
   }
+  if (p.language !== undefined) updates.language = p.language;
+  if (p.difficulty !== undefined) updates.difficulty = p.difficulty;
+  if (p.topic !== undefined) updates.topic = p.topic;
+  if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
+  if (p.faviconUrl !== undefined) updates.faviconUrl = p.faviconUrl;
+  if (p.instructor) {
+    for (const [key, value] of Object.entries(p.instructor)) {
+      updates[`instructor.${key}`] = value;
+    }
+  }
+  if (p.learningExperience) {
+    for (const [key, value] of Object.entries(p.learningExperience)) {
+      updates[`learningExperience.${key}`] = value;
+    }
+  }
+  if (p.advanced) {
+    for (const [key, value] of Object.entries(p.advanced)) {
+      updates[`advanced.${key}`] = value;
+    }
+  }
   await courseDoc(opts.subAccountId, opts.courseId).update(updates);
+}
+
+/** Apply the current learning-experience toggles to every course in the
+ *  sub-account — the Settings tab's "Apply to all courses" button. */
+export async function applyLearningExperienceToAllCoursesServerSide(opts: {
+  subAccountId: string;
+  learningExperience: StandaloneCourseLearningExperience;
+}): Promise<void> {
+  const snap = await coursesCol(opts.subAccountId).get();
+  await Promise.all(
+    snap.docs.map((d) =>
+      d.ref.update({
+        learningExperience: opts.learningExperience,
+        updatedAt: FieldValue.serverTimestamp(),
+      }),
+    ),
+  );
 }
 
 export async function deleteStandaloneCourseServerSide(opts: {
@@ -157,20 +219,39 @@ export async function deleteStandaloneCourseServerSide(opts: {
   );
 }
 
+/** Courses created before theming/community-linking/Settings shipped have no
+ *  such fields — every read falls back to sensible defaults. */
+function withCourseDefaults(
+  id: string,
+  data: Omit<StandaloneCourse, "id">,
+): StandaloneCourse {
+  return {
+    id,
+    ...data,
+    theme: data.theme ?? DEFAULT_COURSE_THEME,
+    linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
+    instructor: data.instructor ?? DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
+    learningExperience:
+      data.learningExperience ?? DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
+    advanced: data.advanced ?? DEFAULT_STANDALONE_COURSE_ADVANCED,
+    language: data.language ?? null,
+    difficulty: data.difficulty ?? null,
+    topic: data.topic ?? null,
+    logoUrl: data.logoUrl ?? null,
+    faviconUrl: data.faviconUrl ?? null,
+  };
+}
+
 export async function getStandaloneCourse(
   saId: string,
   courseId: string,
 ): Promise<StandaloneCourse | null> {
   const snap = await courseDoc(saId, courseId).get();
   if (!snap.exists) return null;
-  const data = snap.data() as Omit<StandaloneCourse, "id">;
-  // Courses created before theming/community-linking shipped have no such fields.
-  return {
-    id: snap.id,
-    ...data,
-    theme: data.theme ?? DEFAULT_COURSE_THEME,
-    linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
-  };
+  return withCourseDefaults(
+    snap.id,
+    snap.data() as Omit<StandaloneCourse, "id">,
+  );
 }
 
 /** Full-object replace of a course's theme (staff-only, via the theme editor). */
@@ -189,15 +270,9 @@ export async function listStandaloneCourses(
   saId: string,
 ): Promise<StandaloneCourse[]> {
   const snap = await coursesCol(saId).orderBy("createdAt", "desc").get();
-  return snap.docs.map((d) => {
-    const data = d.data() as Omit<StandaloneCourse, "id">;
-    return {
-      id: d.id,
-      ...data,
-      theme: data.theme ?? DEFAULT_COURSE_THEME,
-      linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
-    };
-  });
+  return snap.docs.map((d) =>
+    withCourseDefaults(d.id, d.data() as Omit<StandaloneCourse, "id">),
+  );
 }
 
 /**

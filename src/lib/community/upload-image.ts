@@ -45,7 +45,7 @@ export async function uploadStandaloneCourseImage(
   file: File,
   saId: string,
   courseId: string,
-  kind: "cover" | "lesson",
+  kind: "cover" | "lesson" | "instructor-headshot" | "logo" | "favicon",
 ): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");

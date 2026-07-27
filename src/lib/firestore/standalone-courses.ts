@@ -8,12 +8,38 @@ import {
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
+import {
+  DEFAULT_STANDALONE_COURSE_ADVANCED,
+  DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
+  DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
+} from "@/types/standalone-courses";
 import type {
   StandaloneCourse,
   StandaloneCourseSection,
   StandaloneLesson,
   StandaloneCoursePurchase,
 } from "@/types/standalone-courses";
+
+function withCourseDefaults(
+  id: string,
+  data: Omit<StandaloneCourse, "id">,
+): StandaloneCourse {
+  return {
+    id,
+    ...data,
+    theme: data.theme ?? DEFAULT_COURSE_THEME,
+    linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
+    instructor: data.instructor ?? DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
+    learningExperience:
+      data.learningExperience ?? DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
+    advanced: data.advanced ?? DEFAULT_STANDALONE_COURSE_ADVANCED,
+    language: data.language ?? null,
+    difficulty: data.difficulty ?? null,
+    topic: data.topic ?? null,
+    logoUrl: data.logoUrl ?? null,
+    faviconUrl: data.faviconUrl ?? null,
+  };
+}
 
 /**
  * Client-side subscriptions for the STAFF standalone-course dashboard (staff
@@ -36,10 +62,9 @@ export function subscribeToStandaloneCourses(
     collection(getFirebaseDb(), coursesPath(saId)),
     (snap) => {
       cb(
-        snap.docs.map((d) => {
-          const data = d.data() as Omit<StandaloneCourse, "id">;
-          return { id: d.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
-        }),
+        snap.docs.map((d) =>
+          withCourseDefaults(d.id, d.data() as Omit<StandaloneCourse, "id">),
+        ),
       );
     },
     (e) => onError?.(e),
@@ -59,8 +84,12 @@ export function subscribeToStandaloneCourse(
         cb(null);
         return;
       }
-      const data = snap.data() as Omit<StandaloneCourse, "id">;
-      cb({ id: snap.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME });
+      cb(
+        withCourseDefaults(
+          snap.id,
+          snap.data() as Omit<StandaloneCourse, "id">,
+        ),
+      );
     },
     (e) => onError?.(e),
   );
