@@ -37,7 +37,6 @@ import { uploadStandaloneCourseImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { StandaloneCourseSettingsModal } from "@/components/standalone-courses/course-settings-modal";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { cn } from "@/lib/utils";
 import type { ResourceLink } from "@/types/community";
@@ -70,7 +69,6 @@ export default function StandaloneCourseEditorPage({
   const [lessons, setLessons] = useState<StandaloneLesson[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -210,9 +208,11 @@ export default function StandaloneCourseEditorPage({
               Theme
             </Button>
           </Link>
-          <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
-            <Settings2 className="h-4 w-4" /> Course settings
-          </Button>
+          <Link href={`/sa/${subAccountId}/courses/${courseId}/edit`}>
+            <Button variant="outline" size="sm">
+              <Settings2 className="h-4 w-4" /> Course settings
+            </Button>
+          </Link>
           <Button
             variant="ghost"
             size="sm"
@@ -312,14 +312,6 @@ export default function StandaloneCourseEditorPage({
         </div>
       </div>
 
-      <StandaloneCourseSettingsModal
-        mode="edit"
-        saId={subAccountId}
-        course={course}
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onSaved={() => {}}
-      />
     </div>
   );
 }
