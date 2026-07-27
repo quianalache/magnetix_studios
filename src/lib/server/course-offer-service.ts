@@ -38,6 +38,8 @@ export async function createCourseOfferServerSide(opts: {
   type?: OfferType;
   priceCents?: number | null;
   currency?: string | null;
+  recurringInterval?: RecurringInterval | null;
+  trialDays?: number | null;
   priceTextOverride?: string | null;
 }): Promise<CourseOffer> {
   const type: OfferType = opts.type ?? "free";
@@ -50,8 +52,9 @@ export async function createCourseOfferServerSide(opts: {
     type,
     priceCents: type === "free" ? null : (opts.priceCents ?? null),
     currency: type === "free" ? null : (opts.currency ?? "USD"),
-    recurringInterval: null,
-    trialDays: null,
+    recurringInterval:
+      type === "recurring" ? (opts.recurringInterval ?? "month") : null,
+    trialDays: type === "recurring" ? (opts.trialDays ?? null) : null,
     priceTextOverride: opts.priceTextOverride?.trim() || null,
     visibility: "draft" as OfferVisibility,
     version: 1,

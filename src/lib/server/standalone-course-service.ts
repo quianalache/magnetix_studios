@@ -4,7 +4,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
 import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
+import type { OfferType } from "@/types/course-offers";
 import type { ResourceLink } from "@/types/community";
 import {
   DEFAULT_STANDALONE_COURSE_ADVANCED,
@@ -94,7 +96,28 @@ export async function createStandaloneCourseServerSide(opts: {
     updatedAt: FieldValue.serverTimestamp(),
   };
   const ref = await coursesCol(opts.subAccountId).add(doc);
-  return { id: ref.id, ...doc } as StandaloneCourse;
+  const course = { id: ref.id, ...doc } as StandaloneCourse;
+
+  // Auto-create a companion draft Offer mirroring whatever pricing was set
+  // in the course wizard's Pricing step — an Offer can't exist before its
+  // course does, so course creation is the trigger. One-time copy, not an
+  // ongoing sync: editing the course's price afterward doesn't touch this
+  // offer, same as applying a Theme Template copies rather than references.
+  const offerType: OfferType =
+    access === "open" ? "free" : billingType === "recurring" ? "recurring" : "oneTime";
+  await createCourseOfferServerSide({
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    title: course.title,
+    courseIds: [course.id],
+    type: offerType,
+    priceCents: course.priceCents,
+    currency: course.currency,
+    recurringInterval: course.recurringInterval,
+    trialDays: course.trialDays,
+  });
+
+  return course;
 }
 
 export interface StandaloneCoursePatch {
