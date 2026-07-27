@@ -106,3 +106,27 @@ export async function uploadCourseThemeImage(
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
 }
+
+/**
+ * Course Offer theme sibling of `uploadCourseThemeImage` — Hero background,
+ * body/sidebar block images. Same Storage path prefix as
+ * `uploadCourseOfferImage` (already permitted by `storage.rules`).
+ */
+export async function uploadCourseOfferThemeImage(
+  file: File,
+  saId: string,
+  offerId: string,
+  kind: "hero" | "block",
+): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("Image is too large — keep it under 5 MB.");
+  }
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "img";
+  const path = `course-offers/${saId}/${offerId}/theme-${kind}-${Date.now()}.${ext}`;
+  const storageRef = ref(getFirebaseStorage(), path);
+  await uploadBytes(storageRef, file, { contentType: file.type });
+  return getDownloadURL(storageRef);
+}

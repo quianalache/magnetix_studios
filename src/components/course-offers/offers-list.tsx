@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Eye, Link2, Loader2, Pencil, Plus } from "lucide-react";
+import { Eye, Link2, Loader2, Palette, Pencil, Plus } from "lucide-react";
 import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
@@ -195,6 +195,13 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1 text-muted-foreground">
+                      <Link
+                        href={`/sa/${subAccountId}/courses/offers/${offer.id}/theme`}
+                        title="Edit Checkout"
+                        className="rounded p-1 hover:bg-muted hover:text-foreground"
+                      >
+                        <Palette className="h-3.5 w-3.5" />
+                      </Link>
                       <Link
                         href={`/sa/${subAccountId}/courses/offers/${offer.id}`}
                         title="Edit"

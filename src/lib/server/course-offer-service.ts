@@ -6,6 +6,7 @@ import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
 } from "@/types/course-offers";
+import { DEFAULT_OFFER_THEME } from "@/types/course-theme";
 import type {
   CourseOffer,
   CourseOfferAccess,
@@ -62,6 +63,7 @@ export async function createCourseOfferServerSide(opts: {
     discountCodesEnabled: false,
     access: DEFAULT_COURSE_OFFER_ACCESS,
     advanced: DEFAULT_COURSE_OFFER_ADVANCED,
+    theme: DEFAULT_OFFER_THEME,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -159,7 +161,20 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     access: (data.access as CourseOfferAccess) ?? DEFAULT_COURSE_OFFER_ACCESS,
     advanced:
       (data.advanced as CourseOfferAdvanced) ?? DEFAULT_COURSE_OFFER_ADVANCED,
+    theme: (data.theme as CourseOffer["theme"]) ?? DEFAULT_OFFER_THEME,
   };
+}
+
+/** Full-object replace of an offer's theme (staff-only, via its theme editor). */
+export async function updateCourseOfferThemeServerSide(opts: {
+  subAccountId: string;
+  offerId: string;
+  theme: CourseOffer["theme"];
+}): Promise<void> {
+  await offerDoc(opts.subAccountId, opts.offerId).update({
+    theme: opts.theme,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 }
 
 export async function getCourseOffer(

@@ -267,6 +267,26 @@ export const DEFAULT_COURSE_THEME: CourseTheme = {
 };
 
 /**
+ * Same `CourseTheme` shape, stamped onto a new Course Offer's `theme` field
+ * instead of a course's. Offers reuse the entire theme system (colors,
+ * fonts, header, hero, body blocks, sidebar blocks, templates) — the only
+ * difference is the sidebar starts empty: `progress`/`instructor` are
+ * course-lesson/course-instructor concepts that don't map cleanly onto an
+ * Offer, which can bundle several courses at once. If a template that
+ * happens to include those core blocks gets applied to an Offer, they're
+ * stripped at apply time (see `applyCourseThemeTemplateToOfferServerSide`)
+ * rather than rendered ambiguously.
+ */
+export const DEFAULT_OFFER_THEME: CourseTheme = {
+  ...DEFAULT_COURSE_THEME,
+  header: {
+    ...DEFAULT_COURSE_THEME.header,
+    searchPlaceholder: "Search",
+  },
+  sidebar: [],
+};
+
+/**
  * A saved, reusable course theme — lives at
  * `subAccounts/{saId}/courseThemeTemplates/{templateId}`, scoped to one
  * sub-account (not shareable across businesses/agencies, per product

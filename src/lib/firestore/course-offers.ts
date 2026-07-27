@@ -11,6 +11,7 @@ import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
 } from "@/types/course-offers";
+import { DEFAULT_OFFER_THEME } from "@/types/course-theme";
 import type {
   CourseOffer,
   CourseOfferPurchase,
@@ -36,6 +37,7 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     advanced:
       (data.advanced as CourseOffer["advanced"]) ??
       DEFAULT_COURSE_OFFER_ADVANCED,
+    theme: (data.theme as CourseOffer["theme"]) ?? DEFAULT_OFFER_THEME,
   };
 }
 

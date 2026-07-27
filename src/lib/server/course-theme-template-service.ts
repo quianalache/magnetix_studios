@@ -4,6 +4,8 @@ import { randomUUID } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { updateStandaloneCourseThemeServerSide } from "@/lib/server/standalone-course-service";
+import { updateCourseOfferThemeServerSide } from "@/lib/server/course-offer-service";
+import { isCoreSidebarBlock } from "@/types/course-theme";
 import type { CourseTheme, CourseThemeTemplate } from "@/types/course-theme";
 
 /**
@@ -73,5 +75,30 @@ export async function applyCourseThemeTemplateServerSide(opts: {
     subAccountId: opts.subAccountId,
     courseId: opts.courseId,
     theme: cloneThemeWithFreshIds(template.theme),
+  });
+}
+
+/**
+ * Same idea, applied to a Course Offer instead — templates are fully
+ * generic (`{name, theme}`, no course-specific reference), so any template
+ * saved from a course's theme editor can be applied to an offer and vice
+ * versa. `progress`/`instructor` core sidebar blocks are stripped here: they
+ * don't map onto an Offer, which can bundle several courses at once (see
+ * `DEFAULT_OFFER_THEME`'s doc comment).
+ */
+export async function applyCourseThemeTemplateToOfferServerSide(opts: {
+  subAccountId: string;
+  offerId: string;
+  templateId: string;
+}): Promise<void> {
+  const snap = await templatesCol(opts.subAccountId).doc(opts.templateId).get();
+  if (!snap.exists) throw new Error("Template not found");
+  const template = snap.data() as Omit<CourseThemeTemplate, "id">;
+  const theme = cloneThemeWithFreshIds(template.theme);
+  theme.sidebar = theme.sidebar.filter((b) => !isCoreSidebarBlock(b));
+  await updateCourseOfferThemeServerSide({
+    subAccountId: opts.subAccountId,
+    offerId: opts.offerId,
+    theme,
   });
 }

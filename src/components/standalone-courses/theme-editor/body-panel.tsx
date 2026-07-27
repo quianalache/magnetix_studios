@@ -11,6 +11,7 @@ import {
   BLOCK_TYPE_ICONS,
   ADDABLE_BLOCK_TYPES,
 } from "@/lib/standalone-courses/theme-block-defaults";
+import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import type { CourseBlock, CourseBlockType } from "@/types/course-theme";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
@@ -106,8 +107,7 @@ export function BodyPanel({
           <BlockForm
             block={selected}
             onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
-            saId={saId}
-            courseId={courseId}
+            onUploadImage={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
             otherCourses={otherCourses}
           />
         ) : (

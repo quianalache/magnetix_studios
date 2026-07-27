@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { requireOfferPageAccess } from "@/lib/course-offers/offer-access";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import { hasPaidCourseOffer } from "@/lib/server/course-offer-purchase-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
-import { EnrollOfferModal } from "./enroll-modal";
+import { OfferSalesPageView } from "@/components/course-offers/offer-sales-page-view";
+import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +21,13 @@ function formatPrice(cents: number | null, currency: string | null): string {
   }
 }
 
-const BRAND = "#202124";
-
 /**
- * Public Offer landing/checkout page — simpler than the Standalone Course
- * sales page (no theme editor for Offers in this pass), server-rendered via
- * the Admin SDK. Shows the bundle of attached courses plus the enroll CTA.
- * Existing single-course sales pages are untouched; this is additive.
+ * Public Offer landing/checkout page — server-rendered via the Admin SDK,
+ * using the same Course Theme system Standalone Courses use (see
+ * `OfferSalesPageView`), so an Offer's checkout page gets the same
+ * colors/fonts/header/hero/body/sidebar customization instead of a bare-
+ * bones fixed layout. Existing single-course sales pages are untouched;
+ * this is additive.
  */
 export default async function OfferPage({
   params,
@@ -37,11 +39,42 @@ export default async function OfferPage({
   const access = await requireOfferPageAccess(saId, offerId);
   if (access.kind === "notFound") notFound();
   const { offer, member } = access;
+  const theme = offer.theme;
 
   const courses = await Promise.all(
     offer.courseIds.map((id) => getStandaloneCourse(saId, id)),
   );
   const validCourses = courses.filter((c): c is NonNullable<typeof c> => !!c);
+  const includedCourses = validCourses.map((c) => ({
+    id: c.id,
+    title: c.title,
+    coverUrl: c.coverUrl,
+  }));
+
+  // Batch-resolve every Cross Sell block's target course, same pattern as
+  // the Standalone Course sales page.
+  const targetIds = new Set<string>();
+  for (const block of [...theme.body, ...theme.sidebar]) {
+    if (block.type === "crossSell" && block.targetCourseId) {
+      targetIds.add(block.targetCourseId);
+    }
+  }
+  const crossSellTargets = new Map<string, CrossSellTargetInfo>();
+  await Promise.all(
+    Array.from(targetIds).map(async (id) => {
+      const target = await getStandaloneCourse(saId, id);
+      if (target) {
+        crossSellTargets.set(id, {
+          id: target.id,
+          title: target.title,
+          priceCents: target.priceCents,
+          currency: target.currency,
+          access: target.access,
+          published: target.published,
+        });
+      }
+    }),
+  );
 
   const priceLabel =
     offer.priceTextOverride ||
@@ -52,61 +85,24 @@ export default async function OfferPage({
         : formatPrice(offer.priceCents, offer.currency));
 
   const descriptionHtml = sanitizeLessonHtml(offer.descriptionHtml);
+  const alreadyPurchased = member
+    ? await hasPaidCourseOffer(saId, offerId, member.id)
+    : false;
 
   return (
-    <div className="mx-auto min-h-screen max-w-2xl bg-[#F8F7F5] px-4 py-10">
-      {offer.thumbnailUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={offer.thumbnailUrl}
-          alt=""
-          className="mb-6 aspect-video w-full rounded-xl object-cover"
-        />
-      )}
-      <h1 className="text-2xl font-semibold text-[#202124]">{offer.title}</h1>
-      <p className="mt-1 text-lg font-medium text-[#202124]">{priceLabel}</p>
-
-      {descriptionHtml && (
-        <div
-          className="prose prose-sm mt-4 max-w-none text-[#202124]"
-          dangerouslySetInnerHTML={{ __html: descriptionHtml }}
-        />
-      )}
-
-      <div className="mt-6 space-y-2">
-        <p className="text-sm font-medium text-[#909090] uppercase tracking-wide">
-          What&apos;s included
-        </p>
-        {validCourses.map((course) => (
-          <div
-            key={course.id}
-            className="flex items-center gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
-          >
-            {course.coverUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={course.coverUrl}
-                alt=""
-                className="h-12 w-20 shrink-0 rounded-md object-cover"
-              />
-            )}
-            <span className="text-sm font-medium text-[#202124]">
-              {course.title}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <EnrollOfferModal
-          saId={saId}
-          offerId={offerId}
-          type={offer.type}
-          priceLabel={priceLabel}
-          brand={BRAND}
-          member={member}
-        />
-      </div>
-    </div>
+    <OfferSalesPageView
+      saId={saId}
+      offerId={offerId}
+      offer={offer}
+      theme={theme}
+      priceLabel={priceLabel}
+      descriptionHtml={descriptionHtml}
+      includedCourses={includedCourses}
+      member={member}
+      alreadyPurchased={alreadyPurchased}
+      firstCourseId={offer.courseIds[0] ?? null}
+      crossSellTargets={crossSellTargets}
+      interactive
+    />
   );
 }

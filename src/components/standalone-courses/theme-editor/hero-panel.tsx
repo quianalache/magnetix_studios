@@ -4,19 +4,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ColorInput } from "@/components/ui/color-input";
 import { ImageUpload } from "@/components/community/image-upload";
-import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import type { HeroTheme, HeroVerticalSpacing } from "@/types/course-theme";
 
 export function HeroPanel({
   value,
   onChange,
-  saId,
-  courseId,
+  onUploadImage,
 }: {
   value: HeroTheme;
   onChange: (next: HeroTheme) => void;
-  saId: string;
-  courseId: string;
+  /** Storage path (course theme vs offer theme) is the caller's concern —
+   *  same reasoning as `BlockForm`'s `onUploadImage`. */
+  onUploadImage: (file: File) => Promise<string>;
 }) {
   return (
     <div className="max-w-md space-y-4">
@@ -61,7 +60,7 @@ export function HeroPanel({
               hint="Recommended dimensions of 1280×384."
               value={value.backgroundImageUrl}
               onChange={(url) => onChange({ ...value, backgroundImageUrl: url })}
-              onUpload={(file) => uploadCourseThemeImage(file, saId, courseId, "hero")}
+              onUpload={onUploadImage}
             />
           )}
 

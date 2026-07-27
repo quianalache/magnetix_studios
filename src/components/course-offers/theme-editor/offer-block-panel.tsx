@@ -3,38 +3,36 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BlockListRow } from "./block-list-row";
-import { BlockForm, ProgressBlockForm, InstructorBlockForm } from "./block-form";
+import { BlockListRow } from "@/components/standalone-courses/theme-editor/block-list-row";
+import { BlockForm } from "@/components/standalone-courses/theme-editor/block-form";
 import {
   createDefaultBlock,
   BLOCK_TYPE_LABELS,
   BLOCK_TYPE_ICONS,
   ADDABLE_BLOCK_TYPES,
 } from "@/lib/standalone-courses/theme-block-defaults";
-import { uploadCourseThemeImage } from "@/lib/community/upload-image";
-import { isCoreSidebarBlock } from "@/types/course-theme";
-import type { SidebarBlock, CourseBlockType } from "@/types/course-theme";
+import { uploadCourseOfferThemeImage } from "@/lib/community/upload-image";
+import type { CourseBlock, CourseBlockType } from "@/types/course-theme";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
-const CORE_LABELS: Record<"progress" | "instructor", string> = {
-  progress: "Progress",
-  instructor: "Instructor",
-};
-
-/** Sidebar region — the 2 core blocks (Progress, Instructor; reorderable,
- *  hideable, never deletable) mixed into the same ordered list as the 6
- *  optional block types. */
-export function SidebarPanel({
+/**
+ * Offer Body/Sidebar region — both are just a freely-ordered list of the 6
+ * optional block types, same as `BodyPanel` for courses. One shared
+ * component covers both tabs since, unlike courses, an Offer's sidebar has
+ * no core Progress/Instructor blocks to special-case (see
+ * `DEFAULT_OFFER_THEME`'s doc comment).
+ */
+export function OfferBlockPanel({
   blocks,
   onChange,
   saId,
-  courseId,
+  offerId,
   otherCourses,
 }: {
-  blocks: SidebarBlock[];
-  onChange: (blocks: SidebarBlock[]) => void;
+  blocks: CourseBlock[];
+  onChange: (blocks: CourseBlock[]) => void;
   saId: string;
-  courseId: string;
+  offerId: string;
   otherCourses: StandaloneCourse[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
@@ -71,13 +69,13 @@ export function SidebarPanel({
         {sorted.map((b, i) => (
           <BlockListRow
             key={b.id}
-            label={isCoreSidebarBlock(b) ? CORE_LABELS[b.type] : BLOCK_TYPE_LABELS[b.type]}
+            label={BLOCK_TYPE_LABELS[b.type]}
             icon={BLOCK_TYPE_ICONS[b.type]}
             selected={selectedId === b.id}
             onSelect={() => setSelectedId(b.id)}
             onMoveUp={() => move(b.id, -1)}
             onMoveDown={() => move(b.id, 1)}
-            onDelete={isCoreSidebarBlock(b) ? undefined : () => remove(b.id)}
+            onDelete={() => remove(b.id)}
             canMoveUp={i > 0}
             canMoveDown={i < sorted.length - 1}
           />
@@ -111,32 +109,17 @@ export function SidebarPanel({
       </div>
 
       <div>
-        {!selected && (
-          <p className="text-sm text-muted-foreground">Select a block to edit.</p>
-        )}
-        {selected && selected.type === "progress" && (
-          <ProgressBlockForm
-            block={selected}
-            onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
-            saId={saId}
-            courseId={courseId}
-          />
-        )}
-        {selected && selected.type === "instructor" && (
-          <InstructorBlockForm
-            block={selected}
-            onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
-            saId={saId}
-            courseId={courseId}
-          />
-        )}
-        {selected && !isCoreSidebarBlock(selected) && (
+        {selected ? (
           <BlockForm
             block={selected}
             onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
-            onUploadImage={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
+            onUploadImage={(file) => uploadCourseOfferThemeImage(file, saId, offerId, "block")}
             otherCourses={otherCourses}
           />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {blocks.length === 0 ? "No blocks yet — add one to get started." : "Select a block to edit."}
+          </p>
         )}
       </div>
     </div>

@@ -61,7 +61,7 @@ export function LayoutPanel({
   onColorsChange,
   onFontsChange,
   saId,
-  courseId,
+  applyTarget,
   onApplied,
   onGoToHero,
 }: {
@@ -70,7 +70,9 @@ export function LayoutPanel({
   onColorsChange: (next: CourseThemeColors) => void;
   onFontsChange: (next: CourseThemeFonts) => void;
   saId: string;
-  courseId: string;
+  /** Templates are shared across Courses and Offers — this is just the
+   *  request body the apply route needs to know which one to write onto. */
+  applyTarget: { courseId: string } | { offerId: string };
   onApplied: (theme: CourseTheme) => void;
   onGoToHero: () => void;
 }) {
@@ -99,7 +101,7 @@ export function LayoutPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ courseId }),
+          body: JSON.stringify(applyTarget),
         },
       );
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };

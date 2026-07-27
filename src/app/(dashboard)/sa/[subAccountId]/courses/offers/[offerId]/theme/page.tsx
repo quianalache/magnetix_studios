@@ -16,22 +16,21 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import {
-  subscribeToStandaloneCourse,
-  subscribeToStandaloneCourses,
-} from "@/lib/firestore/standalone-courses";
+import { subscribeToCourseOffer } from "@/lib/firestore/course-offers";
+import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { uploadCourseThemeImage } from "@/lib/community/upload-image";
+import { uploadCourseOfferThemeImage } from "@/lib/community/upload-image";
 import { LayoutPanel } from "@/components/standalone-courses/theme-editor/layout-panel";
 import { HeaderPanel } from "@/components/standalone-courses/theme-editor/header-panel";
 import { HeroPanel } from "@/components/standalone-courses/theme-editor/hero-panel";
-import { BodyPanel } from "@/components/standalone-courses/theme-editor/body-panel";
-import { SidebarPanel } from "@/components/standalone-courses/theme-editor/sidebar-panel";
-import { ThemeLivePreview } from "@/components/standalone-courses/theme-editor/live-preview";
+import { OfferBlockPanel } from "@/components/course-offers/theme-editor/offer-block-panel";
+import { OfferThemeLivePreview } from "@/components/course-offers/theme-editor/offer-live-preview";
+import type { CourseOffer } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+import { isCoreSidebarBlock } from "@/types/course-theme";
 import type { CourseTheme } from "@/types/course-theme";
 
 const TABS = ["Layout", "Header", "Hero", "Body", "Sidebar"] as const;
@@ -46,25 +45,25 @@ const TAB_ICONS: Record<Tab, typeof LayoutPanelLeft> = {
 };
 
 /**
- * Standalone-course theme editor — colors, fonts, background, and the
- * Header/Hero/Body/Sidebar content blocks that skin the public sales page.
- * Mirrors GoHighLevel's own course-page editor: a narrow icon rail + a
- * collapsible settings panel on the left, and a large live preview of the
- * actual sales page on the right (`ThemeLivePreview`, sharing its rendering
- * with the real public page so "looks identical" is structural, not
- * something kept in sync by hand).
+ * Course Offer theme editor — the "Edit Checkout" destination. Same system
+ * Standalone Courses use (colors/fonts/header/hero/body/sidebar blocks,
+ * live preview, shared templates), forked from
+ * `courses/[courseId]/theme/page.tsx` rather than genuinely shared, since
+ * an Offer's Body/Sidebar are both plain block lists (no Progress/
+ * Instructor core blocks — see `DEFAULT_OFFER_THEME`), so both tabs reuse
+ * the one `OfferBlockPanel` instead of two separate panels.
  */
-export default function CourseThemeEditorPage({
+export default function OfferThemeEditorPage({
   params,
 }: {
-  params: Promise<{ subAccountId: string; courseId: string }>;
+  params: Promise<{ subAccountId: string; offerId: string }>;
 }) {
-  const { courseId } = use(params);
+  const { offerId } = use(params);
   const { subAccountId } = useSubAccount();
   const apiBase = `/api/sub-accounts/${subAccountId}`;
 
-  const [course, setCourse] = useState<StandaloneCourse | null>(null);
-  const [otherCourses, setOtherCourses] = useState<StandaloneCourse[]>([]);
+  const [offer, setOffer] = useState<CourseOffer | null>(null);
+  const [allCourses, setAllCourses] = useState<StandaloneCourse[]>([]);
   const [theme, setTheme] = useState<CourseTheme | null>(null);
   const [tab, setTab] = useState<Tab>("Layout");
   const [panelOpen, setPanelOpen] = useState(true);
@@ -74,20 +73,17 @@ export default function CourseThemeEditorPage({
   const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
-    const u1 = subscribeToStandaloneCourse(subAccountId, courseId, (c) => {
-      setCourse(c);
-      // Only seed local edit state on first load — once the editor has its
-      // own in-progress edits, further snapshot events (e.g. our own Save
-      // round-tripping) must not clobber them.
-      setTheme((prev) => prev ?? c?.theme ?? null);
+    const u1 = subscribeToCourseOffer(subAccountId, offerId, (o) => {
+      setOffer(o);
+      setTheme((prev) => prev ?? o?.theme ?? null);
       setLoaded(true);
     });
-    const u2 = subscribeToStandaloneCourses(subAccountId, setOtherCourses);
+    const u2 = subscribeToStandaloneCourses(subAccountId, setAllCourses);
     return () => {
       u1();
       u2();
     };
-  }, [subAccountId, courseId]);
+  }, [subAccountId, offerId]);
 
   if (!loaded) {
     return (
@@ -96,10 +92,10 @@ export default function CourseThemeEditorPage({
       </div>
     );
   }
-  if (!course || !theme) {
+  if (!offer || !theme) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
-        Course not found.{" "}
+        Offer not found.{" "}
         <Link href={`/sa/${subAccountId}/courses`} className="underline">
           Back to Courses
         </Link>
@@ -110,15 +106,15 @@ export default function CourseThemeEditorPage({
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch(`${apiBase}/standalone-courses/${courseId}/theme`, {
+      const res = await fetch(`${apiBase}/course-offers/${offerId}/theme`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme }),
       });
       if (!res.ok) throw new Error();
-      toast.success("Theme saved.");
+      toast.success("Checkout page saved.");
     } catch {
-      toast.error("Couldn't save theme");
+      toast.error("Couldn't save");
     } finally {
       setSaving(false);
     }
@@ -146,22 +142,20 @@ export default function CourseThemeEditorPage({
     }
   }
 
-  const selectableOtherCourses = otherCourses.filter(
-    (c) => c.id !== courseId && c.published,
-  );
+  const selectableCourses = allCourses.filter((c) => c.published);
 
   return (
     <div className="flex h-[calc(100vh-1px)] flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
         <Link
-          href={`/sa/${subAccountId}/courses/${courseId}`}
+          href={`/sa/${subAccountId}/courses/offers/${offerId}`}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
         <div className="rounded-lg border px-4 py-1.5 text-sm font-medium text-foreground">
-          {course.title}
+          {offer.title} — Edit Checkout
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -197,7 +191,7 @@ export default function CourseThemeEditorPage({
               </div>
             </PopoverContent>
           </Popover>
-          <a href={`/course/${subAccountId}/${courseId}`} target="_blank" rel="noreferrer">
+          <a href={`/offer/${subAccountId}/${offerId}`} target="_blank" rel="noreferrer">
             <Button
               variant="secondary"
               size="sm"
@@ -250,7 +244,7 @@ export default function CourseThemeEditorPage({
                   onColorsChange={(colors) => setTheme({ ...theme, colors })}
                   onFontsChange={(fonts) => setTheme({ ...theme, fonts })}
                   saId={subAccountId}
-                  applyTarget={{ courseId }}
+                  applyTarget={{ offerId }}
                   onApplied={setTheme}
                   onGoToHero={() => setTab("Hero")}
                 />
@@ -266,26 +260,30 @@ export default function CourseThemeEditorPage({
                   value={theme.hero}
                   onChange={(hero) => setTheme({ ...theme, hero })}
                   onUploadImage={(file) =>
-                    uploadCourseThemeImage(file, subAccountId, courseId, "hero")
+                    uploadCourseOfferThemeImage(file, subAccountId, offerId, "hero")
                   }
                 />
               )}
               {tab === "Body" && (
-                <BodyPanel
+                <OfferBlockPanel
                   blocks={theme.body}
                   onChange={(body) => setTheme({ ...theme, body })}
                   saId={subAccountId}
-                  courseId={courseId}
-                  otherCourses={selectableOtherCourses}
+                  offerId={offerId}
+                  otherCourses={selectableCourses}
                 />
               )}
               {tab === "Sidebar" && (
-                <SidebarPanel
-                  blocks={theme.sidebar}
+                <OfferBlockPanel
+                  // An Offer's sidebar never has core Progress/Instructor
+                  // blocks (see DEFAULT_OFFER_THEME) — filtered defensively
+                  // in case a template that had them slipped through before
+                  // apply-time stripping, same as OfferSalesPageView does.
+                  blocks={theme.sidebar.filter((b) => !isCoreSidebarBlock(b))}
                   onChange={(sidebar) => setTheme({ ...theme, sidebar })}
                   saId={subAccountId}
-                  courseId={courseId}
-                  otherCourses={selectableOtherCourses}
+                  offerId={offerId}
+                  otherCourses={selectableCourses}
                 />
               )}
             </div>
@@ -301,12 +299,12 @@ export default function CourseThemeEditorPage({
         </button>
 
         <div className="flex-1 overflow-y-auto bg-[#F8F7F5]">
-          <ThemeLivePreview
+          <OfferThemeLivePreview
             saId={subAccountId}
-            courseId={courseId}
-            course={course}
+            offerId={offerId}
+            offer={offer}
             theme={theme}
-            otherCourses={otherCourses}
+            allCourses={allCourses}
           />
         </div>
       </div>

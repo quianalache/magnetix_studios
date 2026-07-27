@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { CourseTheme } from "./course-theme";
 
 /**
  * Course Offers — the commerce/pricing layer on top of Standalone Courses
@@ -58,6 +59,11 @@ export interface CourseOffer {
   discountCodesEnabled: boolean;
   access: CourseOfferAccess;
   advanced: CourseOfferAdvanced;
+  /** Visual theme for the Offer's public checkout page — same system
+   *  Standalone Courses use (colors/fonts/header/hero/body/sidebar blocks,
+   *  live preview, shared templates). Offers created before this feature
+   *  has no such field; every read falls back to `DEFAULT_OFFER_THEME`. */
+  theme: CourseTheme;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }

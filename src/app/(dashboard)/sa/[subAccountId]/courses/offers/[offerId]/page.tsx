@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Link2, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Link2, Loader2, Palette, Trash2 } from "lucide-react";
 import {
   subscribeToCourseOffer,
   subscribeToCourseOffers,
@@ -116,6 +116,11 @@ export default function CourseOfferDetailPage({
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`/sa/${subAccountId}/courses/offers/${offer.id}/theme`}>
+            <Button variant="outline" size="sm">
+              <Palette className="h-3.5 w-3.5" /> Edit Checkout
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={copyLink}>
             <Link2 className="h-3.5 w-3.5" /> Get Link
           </Button>

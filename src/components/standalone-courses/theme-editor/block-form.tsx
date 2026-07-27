@@ -75,14 +75,16 @@ function TypeRadio({
 export function BlockForm({
   block,
   onChange,
-  saId,
-  courseId,
+  onUploadImage,
   otherCourses,
 }: {
   block: CourseBlock;
   onChange: (next: CourseBlock) => void;
-  saId: string;
-  courseId: string;
+  /** Kind is always "block" for this form — the caller supplies the right
+   *  storage path (course theme vs offer theme) via this closure instead of
+   *  this form knowing `saId`/`courseId` directly, so the exact same form
+   *  works for both Standalone Courses and Course Offers. */
+  onUploadImage: (file: File) => Promise<string>;
   otherCourses: StandaloneCourse[];
 }) {
   switch (block.type) {
@@ -106,7 +108,7 @@ export function BlockForm({
             <RichTextEditor
               value={block.bodyHtml}
               onChange={(html) => onChange({ ...block, bodyHtml: html })}
-              onUploadImage={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
+              onUploadImage={onUploadImage}
             />
           </div>
         </div>
@@ -120,7 +122,7 @@ export function BlockForm({
             hint="1280×720 recommended."
             value={block.imageUrl}
             onChange={(url) => onChange({ ...block, imageUrl: url })}
-            onUpload={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
+            onUpload={onUploadImage}
           />
           <div className="space-y-1.5">
             <Label>Go to URL</Label>
@@ -201,7 +203,7 @@ export function BlockForm({
             <RichTextEditor
               value={block.bodyHtml}
               onChange={(html) => onChange({ ...block, bodyHtml: html })}
-              onUploadImage={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
+              onUploadImage={onUploadImage}
             />
           </div>
           <ImageUpload
@@ -209,7 +211,7 @@ export function BlockForm({
             hint="1280×720 recommended."
             value={block.imageUrl}
             onChange={(url) => onChange({ ...block, imageUrl: url })}
-            onUpload={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
+            onUpload={onUploadImage}
           />
           <label className="flex items-center gap-2 text-sm">
             <input
