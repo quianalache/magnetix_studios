@@ -72,6 +72,7 @@ export async function createStandaloneCourseServerSide(opts: {
     enrollmentCount: 0,
     showMemberCount: opts.showMemberCount ?? false,
     theme: DEFAULT_COURSE_THEME,
+    linkedCommunityGroupIds: [] as string[],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -163,8 +164,13 @@ export async function getStandaloneCourse(
   const snap = await courseDoc(saId, courseId).get();
   if (!snap.exists) return null;
   const data = snap.data() as Omit<StandaloneCourse, "id">;
-  // Courses created before theming shipped have no `theme` field.
-  return { id: snap.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
+  // Courses created before theming/community-linking shipped have no such fields.
+  return {
+    id: snap.id,
+    ...data,
+    theme: data.theme ?? DEFAULT_COURSE_THEME,
+    linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
+  };
 }
 
 /** Full-object replace of a course's theme (staff-only, via the theme editor). */
@@ -185,8 +191,101 @@ export async function listStandaloneCourses(
   const snap = await coursesCol(saId).orderBy("createdAt", "desc").get();
   return snap.docs.map((d) => {
     const data = d.data() as Omit<StandaloneCourse, "id">;
-    return { id: d.id, ...data, theme: data.theme ?? DEFAULT_COURSE_THEME };
+    return {
+      id: d.id,
+      ...data,
+      theme: data.theme ?? DEFAULT_COURSE_THEME,
+      linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
+    };
   });
+}
+
+/**
+ * Link/unlink a Community Group to a Standalone Course — connects a course
+ * built "outside" a community to one or more groups "inside" Community.
+ * Anyone who enrolls in the course is auto-granted membership in every
+ * linked group (see `grantLinkedCommunityGroupsServerSide`).
+ */
+export async function linkCommunityGroupServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  groupId: string;
+}): Promise<void> {
+  await courseDoc(opts.subAccountId, opts.courseId).update({
+    linkedCommunityGroupIds: FieldValue.arrayUnion(opts.groupId),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+export async function unlinkCommunityGroupServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  groupId: string;
+}): Promise<void> {
+  await courseDoc(opts.subAccountId, opts.courseId).update({
+    linkedCommunityGroupIds: FieldValue.arrayRemove(opts.groupId),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * Grant active membership in every Community Group linked to this course —
+ * called once a member enrolls (free or paid), from both
+ * `enrollInStandaloneCourseServerSide` and
+ * `markStandaloneCoursePurchasePaidServerSide`. Mirrors the inline
+ * membership-write in `community-purchase-service.ts`'s
+ * `markPurchasePaidServerSide` (`scope === "group"` branch) rather than
+ * calling `joinGroupServerSide` — the member already paid for/enrolled in
+ * the course, so group access is granted directly, bypassing that group's
+ * own paid/approval join policy.
+ */
+export async function grantLinkedCommunityGroupsServerSide(opts: {
+  subAccountId: string;
+  agencyId: string;
+  courseId: string;
+  memberId: string;
+}): Promise<void> {
+  const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
+  if (!course || course.linkedCommunityGroupIds.length === 0) return;
+
+  const db = getAdminDb();
+  for (const groupId of course.linkedCommunityGroupIds) {
+    const groupRef = db.doc(
+      `subAccounts/${opts.subAccountId}/communityGroups/${groupId}`,
+    );
+    const memRef = groupRef.collection("memberships").doc(opts.memberId);
+    const existing = await memRef.get();
+    const wasActive = existing.exists && existing.data()!.status === "active";
+    await memRef.set(
+      {
+        subAccountId: opts.subAccountId,
+        agencyId: opts.agencyId,
+        groupId,
+        memberId: opts.memberId,
+        role: "member",
+        status: "active",
+        points: existing.data()?.points ?? 0,
+        level: existing.data()?.level ?? 1,
+        joinedAt: existing.data()?.joinedAt ?? FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    if (!wasActive) {
+      await groupRef.update({ memberCount: FieldValue.increment(1) });
+      void emitWebhookEvent({
+        subAccountId: opts.subAccountId,
+        agencyId: opts.agencyId,
+        mode: "live",
+        type: "community.member.joined",
+        payload: {
+          groupId,
+          memberId: opts.memberId,
+          via: "standalone-course-link",
+          courseId: opts.courseId,
+        },
+      });
+    }
+  }
 }
 
 /* ------------------------------ Sections ------------------------------- */
@@ -413,25 +512,34 @@ export async function enrollInStandaloneCourseServerSide(opts: {
 }): Promise<void> {
   const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
   const snap = await ref.get();
-  if (snap.exists) return;
-  await ref.set({
-    memberId: opts.memberId,
-    courseId: opts.courseId,
-    status: "enrolled",
-    completedLessonIds: [],
-    progressPct: 0,
-    enrolledAt: FieldValue.serverTimestamp(),
-    completedAt: null,
-  });
-  await courseDoc(opts.subAccountId, opts.courseId).update({
-    enrollmentCount: FieldValue.increment(1),
-  });
-  void emitWebhookEvent({
+  if (!snap.exists) {
+    await ref.set({
+      memberId: opts.memberId,
+      courseId: opts.courseId,
+      status: "enrolled",
+      completedLessonIds: [],
+      progressPct: 0,
+      enrolledAt: FieldValue.serverTimestamp(),
+      completedAt: null,
+    });
+    await courseDoc(opts.subAccountId, opts.courseId).update({
+      enrollmentCount: FieldValue.increment(1),
+    });
+    void emitWebhookEvent({
+      subAccountId: opts.subAccountId,
+      agencyId: opts.agencyId,
+      mode: "live",
+      type: "course.enrolled",
+      payload: { courseId: opts.courseId, memberId: opts.memberId },
+    });
+  }
+  // Runs even on a repeat call — idempotent, and covers a group being
+  // linked to the course after this member had already enrolled.
+  await grantLinkedCommunityGroupsServerSide({
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
-    mode: "live",
-    type: "course.enrolled",
-    payload: { courseId: opts.courseId, memberId: opts.memberId },
+    courseId: opts.courseId,
+    memberId: opts.memberId,
   });
 }
 

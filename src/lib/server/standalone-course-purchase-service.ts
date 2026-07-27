@@ -6,7 +6,10 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { getStripeServer } from "@/lib/stripe/server";
-import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import {
+  getStandaloneCourse,
+  grantLinkedCommunityGroupsServerSide,
+} from "@/lib/server/standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
 import type { PayPalConfig } from "@/types";
 
@@ -276,6 +279,13 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   if (!existingEnroll.exists) {
     await courseRef.update({ enrollmentCount: FieldValue.increment(1) });
   }
+
+  await grantLinkedCommunityGroupsServerSide({
+    subAccountId: opts.subAccountId,
+    agencyId: purchase.agencyId,
+    courseId: opts.courseId,
+    memberId: purchase.memberId,
+  });
 
   void emitWebhookEvent({
     subAccountId: opts.subAccountId,

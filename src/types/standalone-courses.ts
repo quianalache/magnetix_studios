@@ -52,6 +52,14 @@ export interface StandaloneCourse {
    *  field; every read falls back to `DEFAULT_COURSE_THEME`. */
   theme: CourseTheme;
   published: boolean;
+  /** Community Groups linked to this course (`subAccounts/{saId}/
+   *  communityGroups/{groupId}`) — connects a course built "outside" a
+   *  community to one or more groups "inside" Community. Anyone who enrolls
+   *  in (free or paid) this course is auto-granted active membership in
+   *  every linked group, see `grantLinkedCommunityGroupsServerSide`. Courses
+   *  created before this feature has no such field; every read falls back
+   *  to an empty array. */
+  linkedCommunityGroupIds: string[];
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
