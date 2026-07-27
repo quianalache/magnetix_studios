@@ -10,6 +10,7 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
+  DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
 } from "@/types/course-offers";
 import { DEFAULT_OFFER_THEME } from "@/types/course-theme";
 import type {
@@ -38,6 +39,9 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
       (data.advanced as CourseOffer["advanced"]) ??
       DEFAULT_COURSE_OFFER_ADVANCED,
     theme: (data.theme as CourseOffer["theme"]) ?? DEFAULT_OFFER_THEME,
+    checkoutSettings:
+      (data.checkoutSettings as CourseOffer["checkoutSettings"]) ??
+      DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
   };
 }
 

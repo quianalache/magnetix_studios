@@ -38,6 +38,9 @@ export interface Member {
   /** Captured at instant-signup (Standalone Courses). Null for members
    *  created via magic-link, which never collects a phone number. */
   phone: string | null;
+  /** Captured at instant-signup when a Course Offer's checkout has "Collect
+   *  address" enabled. Null otherwise. */
+  address: string | null;
   /**
    * The CRM contact this member is reconciled to. Set at creation — joining
    * the community doubles as lead capture. Null only if reconciliation failed.

@@ -5,12 +5,14 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
+  DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
 } from "@/types/course-offers";
 import { DEFAULT_OFFER_THEME } from "@/types/course-theme";
 import type {
   CourseOffer,
   CourseOfferAccess,
   CourseOfferAdvanced,
+  CourseOfferCheckoutSettings,
   OfferType,
   OfferVisibility,
   RecurringInterval,
@@ -64,6 +66,7 @@ export async function createCourseOfferServerSide(opts: {
     access: DEFAULT_COURSE_OFFER_ACCESS,
     advanced: DEFAULT_COURSE_OFFER_ADVANCED,
     theme: DEFAULT_OFFER_THEME,
+    checkoutSettings: DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -86,6 +89,7 @@ export interface CourseOfferPatch {
   discountCodesEnabled?: boolean;
   access?: Partial<CourseOfferAccess>;
   advanced?: Partial<CourseOfferAdvanced>;
+  checkoutSettings?: Partial<CourseOfferCheckoutSettings>;
 }
 
 export async function updateCourseOfferServerSide(opts: {
@@ -144,6 +148,11 @@ export async function updateCourseOfferServerSide(opts: {
       updates[`advanced.${key}`] = value;
     }
   }
+  if (p.checkoutSettings) {
+    for (const [key, value] of Object.entries(p.checkoutSettings)) {
+      updates[`checkoutSettings.${key}`] = value;
+    }
+  }
   await offerDoc(opts.subAccountId, opts.offerId).update(updates);
 }
 
@@ -162,6 +171,9 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     advanced:
       (data.advanced as CourseOfferAdvanced) ?? DEFAULT_COURSE_OFFER_ADVANCED,
     theme: (data.theme as CourseOffer["theme"]) ?? DEFAULT_OFFER_THEME,
+    checkoutSettings:
+      (data.checkoutSettings as CourseOfferCheckoutSettings) ??
+      DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
   };
 }
 

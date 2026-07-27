@@ -42,13 +42,37 @@ export async function POST(
     name?: string;
     email?: string;
     phone?: string;
+    address?: string;
+    serviceAgreementAccepted?: boolean;
   } | null;
   const name = body?.name?.trim() ?? "";
   const email = body?.email?.trim().toLowerCase() ?? "";
   const phone = body?.phone?.trim() ?? "";
-  if (!name || !EMAIL_RE.test(email) || !phone) {
+  const address = body?.address?.trim() ?? "";
+  const { collectPhoneNumber, collectAddress, serviceAgreement } =
+    offer.checkoutSettings;
+
+  if (!name || !EMAIL_RE.test(email)) {
     return NextResponse.json(
-      { error: "Name, email, and phone are all required." },
+      { error: "Name and email are required." },
+      { status: 400 },
+    );
+  }
+  if (collectPhoneNumber && !phone) {
+    return NextResponse.json(
+      { error: "Phone number is required." },
+      { status: 400 },
+    );
+  }
+  if (collectAddress && !address) {
+    return NextResponse.json(
+      { error: "Address is required." },
+      { status: 400 },
+    );
+  }
+  if (serviceAgreement.mode !== "notRequired" && !body?.serviceAgreementAccepted) {
+    return NextResponse.json(
+      { error: "You must agree to the terms before continuing." },
       { status: 400 },
     );
   }
@@ -57,7 +81,8 @@ export async function POST(
     subAccountId: saId,
     email,
     displayName: name,
-    phone,
+    phone: collectPhoneNumber ? phone : null,
+    address: collectAddress ? address : null,
     source: "course",
   });
 

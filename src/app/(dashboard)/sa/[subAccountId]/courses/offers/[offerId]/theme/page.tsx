@@ -14,6 +14,8 @@ import {
   PanelRight,
   ChevronLeft,
   ChevronRight,
+  UserRound,
+  FileCheck2,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToCourseOffer } from "@/lib/firestore/course-offers";
@@ -28,12 +30,28 @@ import { HeaderPanel } from "@/components/standalone-courses/theme-editor/header
 import { HeroPanel } from "@/components/standalone-courses/theme-editor/hero-panel";
 import { OfferBlockPanel } from "@/components/course-offers/theme-editor/offer-block-panel";
 import { OfferThemeLivePreview } from "@/components/course-offers/theme-editor/offer-live-preview";
-import type { CourseOffer } from "@/types/course-offers";
+import {
+  ExtraContactInfoPanel,
+  ServiceAgreementPanel,
+} from "@/components/course-offers/theme-editor/checkout-settings-panels";
+import {
+  DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
+  type CourseOffer,
+  type CourseOfferCheckoutSettings,
+} from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import { isCoreSidebarBlock } from "@/types/course-theme";
 import type { CourseTheme } from "@/types/course-theme";
 
-const TABS = ["Layout", "Header", "Hero", "Body", "Sidebar"] as const;
+const TABS = [
+  "Layout",
+  "Header",
+  "Hero",
+  "Body",
+  "Sidebar",
+  "Extra Info",
+  "Agreement",
+] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_ICONS: Record<Tab, typeof LayoutPanelLeft> = {
@@ -42,6 +60,8 @@ const TAB_ICONS: Record<Tab, typeof LayoutPanelLeft> = {
   Hero: GalleryHorizontal,
   Body: Rows3,
   Sidebar: PanelRight,
+  "Extra Info": UserRound,
+  Agreement: FileCheck2,
 };
 
 /**
@@ -65,6 +85,8 @@ export default function OfferThemeEditorPage({
   const [offer, setOffer] = useState<CourseOffer | null>(null);
   const [allCourses, setAllCourses] = useState<StandaloneCourse[]>([]);
   const [theme, setTheme] = useState<CourseTheme | null>(null);
+  const [checkoutSettings, setCheckoutSettings] =
+    useState<CourseOfferCheckoutSettings | null>(null);
   const [tab, setTab] = useState<Tab>("Layout");
   const [panelOpen, setPanelOpen] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,6 +98,12 @@ export default function OfferThemeEditorPage({
     const u1 = subscribeToCourseOffer(subAccountId, offerId, (o) => {
       setOffer(o);
       setTheme((prev) => prev ?? o?.theme ?? null);
+      setCheckoutSettings(
+        (prev) =>
+          prev ??
+          o?.checkoutSettings ??
+          DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
+      );
       setLoaded(true);
     });
     const u2 = subscribeToStandaloneCourses(subAccountId, setAllCourses);
@@ -92,7 +120,7 @@ export default function OfferThemeEditorPage({
       </div>
     );
   }
-  if (!offer || !theme) {
+  if (!offer || !theme || !checkoutSettings) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
         Offer not found.{" "}
@@ -106,12 +134,19 @@ export default function OfferThemeEditorPage({
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch(`${apiBase}/course-offers/${offerId}/theme`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme }),
-      });
-      if (!res.ok) throw new Error();
+      const [themeRes, settingsRes] = await Promise.all([
+        fetch(`${apiBase}/course-offers/${offerId}/theme`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ theme }),
+        }),
+        fetch(`${apiBase}/course-offers/${offerId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ checkoutSettings }),
+        }),
+      ]);
+      if (!themeRes.ok || !settingsRes.ok) throw new Error();
       toast.success("Checkout page saved.");
     } catch {
       toast.error("Couldn't save");
@@ -284,6 +319,18 @@ export default function OfferThemeEditorPage({
                   saId={subAccountId}
                   offerId={offerId}
                   otherCourses={selectableCourses}
+                />
+              )}
+              {tab === "Extra Info" && (
+                <ExtraContactInfoPanel
+                  value={checkoutSettings}
+                  onChange={setCheckoutSettings}
+                />
+              )}
+              {tab === "Agreement" && (
+                <ServiceAgreementPanel
+                  value={checkoutSettings}
+                  onChange={setCheckoutSettings}
                 />
               )}
             </div>

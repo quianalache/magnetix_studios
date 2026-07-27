@@ -258,6 +258,7 @@ export function OfferSalesPageView({
                   priceLabel={priceLabel}
                   brand={theme.hero.buttonColor}
                   member={member}
+                  checkoutSettings={offer.checkoutSettings}
                 />
               ) : (
                 <button

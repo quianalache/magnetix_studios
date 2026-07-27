@@ -18,13 +18,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { Member } from "@/types/community";
-import type { OfferType } from "@/types/course-offers";
+import type { CourseOfferCheckoutSettings, OfferType } from "@/types/course-offers";
 
 /**
  * Offer-page CTA + instant signup — same two-step pattern as the Standalone
  * Course `EnrollModal` (`src/app/course/[saId]/[courseId]/enroll-modal.tsx`),
- * generalized for an Offer instead of a single course.
+ * generalized for an Offer instead of a single course. Phone/Address fields
+ * and the Service Agreement checkbox are conditional on `checkoutSettings`
+ * (the Offer's "Extra Contact Information" / "Service Agreement" checkout
+ * options) rather than always collected.
  */
 export function EnrollOfferModal({
   saId,
@@ -33,6 +37,7 @@ export function EnrollOfferModal({
   priceLabel,
   brand,
   member,
+  checkoutSettings,
 }: {
   saId: string;
   offerId: string;
@@ -40,6 +45,7 @@ export function EnrollOfferModal({
   priceLabel: string;
   brand: string;
   member: Member | null;
+  checkoutSettings: CourseOfferCheckoutSettings;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,21 +53,39 @@ export function EnrollOfferModal({
   const [name, setName] = useState(member?.displayName ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
   const [phone, setPhone] = useState(member?.phone ?? "");
+  const [address, setAddress] = useState("");
+  const [agreementAccepted, setAgreementAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const cta = type === "free" ? "Enroll Now" : `Enroll Now — ${priceLabel}`;
+  const { serviceAgreement } = checkoutSettings;
+  const agreementRequired = serviceAgreement.mode !== "notRequired";
+  const agreementText =
+    serviceAgreement.mode === "custom"
+      ? serviceAgreement.customText
+      : "I have read and agree to the terms and conditions of this page.";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (agreementRequired && !agreementAccepted) {
+      setError("You must agree to the terms before continuing.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/offer/${saId}/${offerId}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          address,
+          serviceAgreementAccepted: agreementAccepted,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -136,16 +160,54 @@ export function EnrollOfferModal({
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="offer-enroll-phone">Phone</Label>
-                <Input
-                  id="offer-enroll-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
+              {checkoutSettings.collectPhoneNumber && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="offer-enroll-phone">Phone</Label>
+                  <Input
+                    id="offer-enroll-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              {checkoutSettings.collectAddress && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="offer-enroll-address">Address</Label>
+                  <Input
+                    id="offer-enroll-address"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              {agreementRequired && (
+                <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={agreementAccepted}
+                    onCheckedChange={(v) => setAgreementAccepted(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    {agreementText}
+                    {serviceAgreement.linkUrl && (
+                      <>
+                        {" "}
+                        <a
+                          href={serviceAgreement.linkUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline"
+                        >
+                          View agreement
+                        </a>
+                      </>
+                    )}
+                  </span>
+                </label>
+              )}
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 type="submit"

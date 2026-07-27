@@ -29,6 +29,27 @@ export interface CourseOfferAdvanced {
   footerTracking: string;
 }
 
+export type ServiceAgreementMode = "notRequired" | "required" | "custom";
+
+export interface CourseOfferServiceAgreement {
+  mode: ServiceAgreementMode;
+  /** Shown (and required to be checked) at checkout when `mode === "custom"`. */
+  customText: string;
+  /** Optional "Link to Service Agreement" URL, shown alongside the checkbox
+   *  for both "required" and "custom" modes. */
+  linkUrl: string;
+}
+
+export interface CourseOfferCheckoutSettings {
+  /** Adds a free-form Address field to the checkout form. */
+  collectAddress: boolean;
+  /** Adds a Phone Number field to the checkout form. Independent of
+   *  `serviceAgreement` — this predates it and used to always be collected;
+   *  now it's opt-in like GHL's own checkout. */
+  collectPhoneNumber: boolean;
+  serviceAgreement: CourseOfferServiceAgreement;
+}
+
 export interface CourseOffer {
   id: string;
   subAccountId: string;
@@ -64,6 +85,10 @@ export interface CourseOffer {
    *  live preview, shared templates). Offers created before this feature
    *  has no such field; every read falls back to `DEFAULT_OFFER_THEME`. */
   theme: CourseTheme;
+  /** Checkout-form behavior — separate from `theme` (visual only). Offers
+   *  created before this feature have no such field; every read falls back
+   *  to `DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS`. */
+  checkoutSettings: CourseOfferCheckoutSettings;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -80,6 +105,19 @@ export const DEFAULT_COURSE_OFFER_ADVANCED: CourseOfferAdvanced = {
   customCss: "",
   headerTracking: "",
   footerTracking: "",
+};
+
+export const DEFAULT_SERVICE_AGREEMENT_TEXT =
+  "I have read and agree to the terms and conditions of this page.";
+
+export const DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS: CourseOfferCheckoutSettings = {
+  collectAddress: false,
+  collectPhoneNumber: false,
+  serviceAgreement: {
+    mode: "notRequired",
+    customText: DEFAULT_SERVICE_AGREEMENT_TEXT,
+    linkUrl: "",
+  },
 };
 
 /**

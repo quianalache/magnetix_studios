@@ -37,6 +37,9 @@ interface EnsureMemberInput {
    * out by a plain login.
    */
   phone?: string | null;
+  /** Captured at instant-signup when a Course Offer's checkout has "Collect
+   *  address" enabled. Same never-blank-on-plain-login guarantee as `phone`. */
+  address?: string | null;
   /**
    * Reconciled-contact source tag. Defaults to "community" (the original
    * caller). Standalone Courses passes "course" so CRM contact-source
@@ -73,6 +76,7 @@ export async function ensureMember({
   email,
   displayName,
   phone,
+  address,
   source = "community",
 }: EnsureMemberInput): Promise<Member> {
   const db = getAdminDb();
@@ -89,6 +93,10 @@ export async function ensureMember({
     if (trimmedPhone && trimmedPhone !== existing.phone) {
       patch.phone = trimmedPhone;
     }
+    const trimmedAddress = address?.trim();
+    if (trimmedAddress && trimmedAddress !== existing.address) {
+      patch.address = trimmedAddress;
+    }
     if (Object.keys(patch).length === 0) return existing;
 
     await db
@@ -101,6 +109,7 @@ export async function ensureMember({
         patch: {
           ...(patch.displayName ? { name: patch.displayName as string } : {}),
           ...(patch.phone ? { phone: patch.phone as string } : {}),
+          ...(patch.address ? { address: patch.address as string } : {}),
         },
       }).catch((err) =>
         console.warn("[community/member-account] contact sync failed", err),
@@ -140,7 +149,7 @@ export async function ensureMember({
         email: normalizedEmail,
         phone: phone?.trim() || "",
         company: "",
-        address: "",
+        address: address?.trim() || "",
         source,
         tags: [],
       });
@@ -162,6 +171,7 @@ export async function ensureMember({
       avatarUrl: null,
       bio: "",
       phone: phone?.trim() || null,
+      address: address?.trim() || null,
       contactId,
       status: "active",
       createdAt: FieldValue.serverTimestamp(),
