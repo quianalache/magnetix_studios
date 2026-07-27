@@ -1,11 +1,23 @@
 import { notFound, redirect } from "next/navigation";
 import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-access";
-import { getStandaloneCourseTree } from "@/lib/server/standalone-course-service";
+import {
+  getStandaloneCourseTree,
+  getStandaloneEnrollment,
+  getStandaloneCourse,
+} from "@/lib/server/standalone-course-service";
+import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
+import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 
 export const dynamic = "force-dynamic";
 
-/** Course index — redirect to the first published lesson. */
-export default async function StandaloneCourseIndexPage({
+/**
+ * Course home ("product page") — the enrolled member's landing hub: hero,
+ * a fully clickable curriculum, and the course's theme sidebar blocks.
+ * Distinct from the pre-purchase sales page at `/course/[saId]/[courseId]`.
+ * Previously this route just redirected straight into the first lesson;
+ * see the plan for why that's now a real page instead.
+ */
+export default async function StandaloneCourseHomePage({
   params,
 }: {
   params: Promise<{ saId: string; courseId: string }>;
@@ -15,14 +27,57 @@ export default async function StandaloneCourseIndexPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const { course, member } = access;
+  const theme = course.theme;
+  const salesPage = `/course/${saId}/${courseId}`;
+
   const tree = await getStandaloneCourseTree({
     subAccountId: saId,
     courseId,
     includeUnpublished: false,
   });
-  const first = tree?.lessons[0];
-  if (!tree || !tree.course.published || !first) {
-    redirect(`/course/${saId}/${courseId}`);
+  if (!tree || !tree.course.published || tree.lessons.length === 0) {
+    redirect(salesPage);
   }
-  redirect(`/course/${saId}/${courseId}/classroom/${first.id}`);
+
+  const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
+
+  // Batch-resolve every Cross Sell block's target course, same pattern as
+  // the sales page.
+  const targetIds = new Set<string>();
+  for (const block of [...theme.body, ...theme.sidebar]) {
+    if (block.type === "crossSell" && block.targetCourseId) {
+      targetIds.add(block.targetCourseId);
+    }
+  }
+  const crossSellTargets = new Map<string, CrossSellTargetInfo>();
+  await Promise.all(
+    Array.from(targetIds).map(async (id) => {
+      const target = await getStandaloneCourse(saId, id);
+      if (target) {
+        crossSellTargets.set(id, {
+          id: target.id,
+          title: target.title,
+          priceCents: target.priceCents,
+          currency: target.currency,
+          access: target.access,
+          published: target.published,
+        });
+      }
+    }),
+  );
+
+  return (
+    <CourseHomeView
+      saId={saId}
+      courseId={courseId}
+      course={course}
+      theme={theme}
+      sections={tree.sections}
+      lessons={tree.lessons}
+      member={member}
+      completedLessonIds={enrollment?.completedLessonIds ?? []}
+      crossSellTargets={crossSellTargets}
+    />
+  );
 }

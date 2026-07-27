@@ -1,24 +1,22 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-access";
 import {
   getStandaloneCourseTree,
   getStandaloneEnrollment,
+  getStandaloneCourse,
 } from "@/lib/server/standalone-course-service";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
 import {
-  LessonPlayer,
+  StandaloneLessonPlayer,
   type PlayerLesson,
   type PlayerSection,
-} from "@/components/community/classroom/lesson-player";
+} from "@/components/standalone-courses/standalone-lesson-player";
+import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 import { getInAppUpsellsForMember } from "@/lib/server/course-offer-upsell-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_BRAND = "#202124";
 
 export default async function StandaloneLessonPlayerPage({
   params,
@@ -31,7 +29,9 @@ export default async function StandaloneLessonPlayerPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { course, member } = access;
+  const theme = course.theme;
   const salesPage = `/course/${saId}/${courseId}`;
+  const homeHref = `${salesPage}/classroom`;
 
   const tree = await getStandaloneCourseTree({
     subAccountId: saId,
@@ -43,10 +43,35 @@ export default async function StandaloneLessonPlayerPage({
   if (!tree.lessons.some((l) => l.id === lessonId)) {
     const first = tree.lessons[0];
     if (!first) redirect(salesPage);
-    redirect(`${salesPage}/classroom/${first.id}`);
+    redirect(`${homeHref}/${first.id}`);
   }
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
+
+  // Batch-resolve every Cross Sell block's target course, same pattern as
+  // the sales page and course home.
+  const targetIds = new Set<string>();
+  for (const block of [...theme.body, ...theme.sidebar]) {
+    if (block.type === "crossSell" && block.targetCourseId) {
+      targetIds.add(block.targetCourseId);
+    }
+  }
+  const crossSellTargets = new Map<string, CrossSellTargetInfo>();
+  await Promise.all(
+    Array.from(targetIds).map(async (id) => {
+      const target = await getStandaloneCourse(saId, id);
+      if (target) {
+        crossSellTargets.set(id, {
+          id: target.id,
+          title: target.title,
+          priceCents: target.priceCents,
+          currency: target.currency,
+          access: target.access,
+          published: target.published,
+        });
+      }
+    }),
+  );
 
   // In-App Upsells (Course Offers feature) — published upsells targeting any
   // offer this member has purchased, shown as a locked "Buy Now" card.
@@ -74,16 +99,16 @@ export default async function StandaloneLessonPlayerPage({
   return (
     <div className="min-h-screen bg-[#F8F7F5] px-4 py-8">
       <div className="mx-auto max-w-5xl">
-        <Link
-          href={salesPage}
-          className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
-        >
-          <ArrowLeft className="h-4 w-4" /> {course.title}
-        </Link>
-        <LessonPlayer
+        <StandaloneLessonPlayer
           completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
-          lessonHrefBase={`${salesPage}/classroom`}
-          brand={DEFAULT_BRAND}
+          lessonHrefBase={homeHref}
+          homeHref={homeHref}
+          saId={saId}
+          theme={theme}
+          courseTitle={course.title}
+          courseCoverUrl={course.coverUrl}
+          instructor={course.instructor}
+          crossSellTargets={crossSellTargets}
           sections={sections}
           lessons={lessons}
           currentLessonId={lessonId}
