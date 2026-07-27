@@ -8,6 +8,7 @@ import type {
   ButtonAlign,
 } from "@/types/course-theme";
 import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
+import type { OfferType, OfferVisibility } from "@/types/course-offers";
 
 /**
  * Renderers for the theme's customizable block types. Deliberately
@@ -26,8 +27,8 @@ export interface CrossSellTargetInfo {
   title: string;
   priceCents: number | null;
   currency: string | null;
-  access: "open" | "purchase";
-  published: boolean;
+  type: OfferType;
+  visibility: OfferVisibility;
 }
 
 /**
@@ -233,13 +234,11 @@ export function CourseBlockView({
     }
 
     case "crossSell": {
-      if (!block.targetCourseId) return null;
-      const target = crossSellTargets.get(block.targetCourseId);
-      if (!target || !target.published) return null;
+      if (!block.targetOfferId) return null;
+      const target = crossSellTargets.get(block.targetOfferId);
+      if (!target || target.visibility !== "published") return null;
       const priceLabel =
-        target.access === "purchase"
-          ? formatPriceCents(target.priceCents, target.currency)
-          : "Free";
+        target.type === "free" ? "Free" : formatPriceCents(target.priceCents, target.currency);
       return (
         <div
           className="space-y-2 rounded-xl border border-[#E4E4E4] p-4"
@@ -252,7 +251,7 @@ export function CourseBlockView({
             {priceLabel}
           </p>
           <a
-            href={`/course/${saId}/${target.id}`}
+            href={`/offer/${saId}/${target.id}`}
             className="theme-btn inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold"
             style={themeBtnStyle({
               fill: block.buttonColor,

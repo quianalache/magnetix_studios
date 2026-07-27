@@ -92,7 +92,13 @@ export async function uploadCourseThemeImage(
   file: File,
   saId: string,
   courseId: string,
-  kind: "hero" | "block" | "progress-promo" | "instructor-headshot" | "background",
+  kind:
+    | "hero"
+    | "block"
+    | "progress-promo"
+    | "instructor-headshot"
+    | "background"
+    | "lesson-background",
 ): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");

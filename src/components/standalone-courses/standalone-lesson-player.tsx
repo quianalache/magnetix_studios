@@ -1,8 +1,8 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -16,21 +16,29 @@ import {
 import { cn } from "@/lib/utils";
 import {
   CourseBlockView,
-  ProgressBlockView,
   InstructorBlockView,
+  themeBtnStyle,
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
-import { isCoreSidebarBlock } from "@/types/course-theme";
-import type { CourseTheme } from "@/types/course-theme";
+import { DEFAULT_LESSON_THEME } from "@/types/course-theme";
+import type {
+  LessonTheme,
+  LessonButtonState,
+  LessonCourseContentBlock,
+  InstructorSidebarBlock,
+} from "@/types/course-theme";
 import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
 
 /**
  * Standalone Course lesson player — forked from Community's `LessonPlayer`
  * (`src/components/community/classroom/lesson-player.tsx`) rather than
- * sharing it, since this version is driven by the full `CourseTheme` system
- * (sidebar blocks, Progress/Instructor core blocks, colors/fonts) which
- * Community courses have no equivalent of. Community's version stays a
- * simple `brand`-color-only player wrapped in its own `CommunityShell`.
+ * sharing it, since this version is driven by its own `LessonTheme` system
+ * (independent from the Product/Course-Home `CourseTheme` — see
+ * `src/types/course-theme.ts`'s doc comment on `LessonTheme`). Owns the
+ * full page shell (background layer, colors/fonts) rather than being a
+ * fragment its route wraps, matching the other 3 page-view components
+ * (`course-sales-page-view.tsx` etc.) — so the theme editor's live preview,
+ * which renders this component directly, shows the same background too.
  */
 
 export interface PlayerLesson {
@@ -47,12 +55,36 @@ export interface PlayerSection {
   title: string;
 }
 
+function buttonStateStyle(state: LessonButtonState): CSSProperties {
+  return state.buttonType === "solid"
+    ? themeBtnStyle({
+        fill: state.color,
+        fillHover: state.colorHover,
+        border: state.borderColor,
+        borderHover: state.borderColorHover,
+        text: state.textColor,
+        textHover: state.textColorHover,
+      })
+    : themeBtnStyle({
+        fill: "transparent",
+        fillHover: "transparent",
+        border: "transparent",
+        borderHover: "transparent",
+        text: state.color,
+        textHover: state.colorHover,
+      });
+}
+
+const DEFAULT_COURSE_CONTENT_BLOCK = DEFAULT_LESSON_THEME.sidebar.find(
+  (b) => b.type === "courseContent",
+) as LessonCourseContentBlock;
+
 export function StandaloneLessonPlayer({
   completeEndpoint,
   lessonHrefBase,
   homeHref,
   saId,
-  theme,
+  lessonTheme,
   courseTitle,
   courseCoverUrl,
   instructor,
@@ -61,6 +93,7 @@ export function StandaloneLessonPlayer({
   lessons,
   currentLessonId,
   completedIds: initialCompleted,
+  interactive = true,
 }: {
   /** Full POST URL to mark the current lesson complete. */
   completeEndpoint: string;
@@ -74,7 +107,7 @@ export function StandaloneLessonPlayer({
   /** Course home ("product page") URL — the header's home icon target. */
   homeHref: string;
   saId: string;
-  theme: CourseTheme;
+  lessonTheme: LessonTheme;
   courseTitle: string;
   courseCoverUrl: string | null;
   instructor: StandaloneCourseInstructor;
@@ -83,18 +116,19 @@ export function StandaloneLessonPlayer({
   lessons: PlayerLesson[];
   currentLessonId: string;
   completedIds: string[];
+  /** false in the theme editor's live preview — Mark Complete becomes an
+   *  inert lookalike instead of a real POST, same pattern as the other 3
+   *  page-view components' `interactive` flag. */
+  interactive?: boolean;
 }) {
   const lessonHref = (lessonId: string) => `${lessonHrefBase}/${lessonId}`;
-  const router = useRouter();
-  const [completed, setCompleted] = useState<Set<string>>(
-    new Set(initialCompleted),
-  );
+  const [completed, setCompleted] = useState<Set<string>>(new Set(initialCompleted));
   const [saving, setSaving] = useState(false);
-  const brand = theme.hero.buttonColor;
 
   const current = lessons.find((l) => l.id === currentLessonId) ?? lessons[0];
   const idx = lessons.findIndex((l) => l.id === current.id);
   const next = lessons[idx + 1] ?? null;
+  const isCompleted = completed.has(current.id);
 
   const sectionIds = new Set(sections.map((s) => s.id));
   const inSection = (sid: string | null) =>
@@ -116,18 +150,13 @@ export function StandaloneLessonPlayer({
       ? inSection(sections[currentSectionIdx + 1].id)[0]
       : null;
 
-  async function completeAndContinue() {
+  async function markComplete() {
+    if (!interactive || isCompleted) return;
     setSaving(true);
     try {
       const res = await fetch(completeEndpoint, { method: "POST" });
       if (!res.ok) throw new Error();
       setCompleted((prev) => new Set(prev).add(current.id));
-      if (next) {
-        router.push(lessonHref(next.id));
-      } else {
-        toast.success("Course complete! 🎉");
-        router.refresh();
-      }
     } catch {
       toast.error("Couldn't save progress");
     } finally {
@@ -135,28 +164,30 @@ export function StandaloneLessonPlayer({
     }
   }
 
+  const courseContent =
+    lessonTheme.sidebar.find(
+      (b): b is LessonCourseContentBlock => b.type === "courseContent",
+    ) ?? DEFAULT_COURSE_CONTENT_BLOCK;
+
   const NavLesson = ({ l }: { l: PlayerLesson }) => {
     const isCurrent = l.id === current.id;
     return (
       <Link
         href={lessonHref(l.id)}
-        style={
-          isCurrent
-            ? {
-                backgroundColor: `color-mix(in srgb, ${brand} 14%, white)`,
-                color: brand,
-              }
-            : undefined
-        }
+        style={{
+          color: courseContent.itemTextColor,
+          borderColor: courseContent.itemBorderColor,
+          ...(isCurrent
+            ? { backgroundColor: `color-mix(in srgb, ${courseContent.itemTextColor} 12%, white)` }
+            : ({ ["--category-hover" as string]: courseContent.itemHoverColor } as CSSProperties)),
+        }}
         className={cn(
-          "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-          isCurrent
-            ? "font-medium"
-            : "text-[#3a3a44] hover:bg-black/[0.04]",
+          "category-block-card flex items-center gap-2 rounded-md border-b px-2 py-1.5 text-sm transition-colors last:border-b-0",
+          isCurrent && "font-medium",
         )}
       >
         {completed.has(l.id) ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: brand }} />
+          <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: courseContent.itemTextColor }} />
         ) : (
           <Circle className="h-4 w-4 shrink-0 text-[#c4c4c4]" />
         )}
@@ -173,170 +204,251 @@ export function StandaloneLessonPlayer({
     );
   };
 
-  const sidebarBlocks = [...theme.sidebar].sort((a, b) => a.order - b.order);
   const totalLessons = lessons.length;
-  const completedCount = completed.size;
+
+  const pageStyle = {
+    fontFamily: `"${lessonTheme.fonts.primary.family}", sans-serif`,
+    "--font-secondary": `"${lessonTheme.fonts.secondary.family}", sans-serif`,
+  } as CSSProperties;
+
+  const sortedSidebar = [...lessonTheme.sidebar].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-[#909090]">
-        <a href={homeHref} title="Course home" className="hover:text-[#202124]">
-          <Home className="h-4 w-4" />
-        </a>
-        <span>/</span>
-        <a href={homeHref} className="hover:text-[#202124]">
-          {courseTitle}
-        </a>
-        <span>/</span>
-        <span className="font-medium text-[#202124]">{current.title}</span>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-[1fr_300px]">
-        <div className="min-w-0 space-y-4 rounded-2xl border border-[#E4E4E4] bg-white p-5 shadow-sm sm:p-6">
-          {current.embedUrl && (
-            <div className="aspect-video w-full overflow-hidden rounded-xl border border-[#E4E4E4] bg-black">
-              <iframe
-                src={current.embedUrl}
-                title={current.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="h-full w-full"
-              />
+    <div className="min-h-screen bg-[#F8F7F5]" style={pageStyle}>
+      {lessonTheme.background.imageUrl && (
+        <div
+          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${lessonTheme.background.imageUrl})`,
+            opacity: lessonTheme.background.transparency / 100,
+          }}
+        />
+      )}
+      <div className="relative z-10 px-4 py-8">
+        <div className="mx-auto max-w-5xl space-y-4">
+          {lessonTheme.breadcrumb.visible && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: lessonTheme.breadcrumb.color }}>
+              <a href={homeHref} title="Course home" className="hover:opacity-80">
+                <Home className="h-4 w-4" />
+              </a>
+              <span>/</span>
+              <a href={homeHref} className="hover:opacity-80">
+                {courseTitle}
+              </a>
+              <span>/</span>
+              <span className="font-medium" style={{ color: lessonTheme.breadcrumb.activeColor }}>
+                {current.title}
+              </span>
             </div>
           )}
 
-          <h1 className="text-xl font-semibold text-[#202124]">{current.title}</h1>
-
-          {current.body && (
+          <div className="grid gap-6 md:grid-cols-[1fr_300px]">
             <div
-              className="prose prose-sm max-w-none leading-relaxed prose-headings:text-[#202124] prose-p:text-[#3a3a44] prose-li:text-[#3a3a44] prose-strong:text-[#202124] prose-a:text-[color:var(--brand)]"
-              style={{ ["--brand" as string]: brand }}
-              dangerouslySetInnerHTML={{ __html: current.body }}
-            />
-          )}
+              className="min-w-0 space-y-4 rounded-2xl border border-[#E4E4E4] p-5 shadow-sm sm:p-6"
+              style={{ backgroundColor: lessonTheme.player.backgroundColor }}
+            >
+              {current.embedUrl && (
+                <div className="aspect-video w-full overflow-hidden rounded-xl border border-[#E4E4E4] bg-black">
+                  <iframe
+                    src={current.embedUrl}
+                    title={current.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="h-full w-full"
+                  />
+                </div>
+              )}
 
-          {current.resourceLinks.length > 0 && (
-            <div className="rounded-lg border border-[#E4E4E4] bg-[#F8F7F5] p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#909090]">
-                Resources
-              </p>
-              <ul className="space-y-1">
-                {current.resourceLinks.map((r, i) => (
-                  <li key={i}>
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 text-sm hover:underline"
-                      style={{ color: brand }}
+              <h1 className="text-xl font-semibold text-[#202124]">{current.title}</h1>
+
+              <div
+                className="space-y-3 rounded-xl p-4"
+                style={{ backgroundColor: lessonTheme.body.background }}
+              >
+                {lessonTheme.body.aboutHeadingText && (
+                  <h2
+                    className="text-sm font-semibold uppercase tracking-wide"
+                    style={{ color: lessonTheme.body.aboutHeadingColor }}
+                  >
+                    {lessonTheme.body.aboutHeadingText}
+                  </h2>
+                )}
+                {current.body && (
+                  <div
+                    className="prose prose-sm max-w-none leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: current.body }}
+                  />
+                )}
+              </div>
+
+              <button
+                onClick={markComplete}
+                disabled={saving || isCompleted}
+                className="theme-btn inline-flex items-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold disabled:cursor-default"
+                style={buttonStateStyle(isCompleted ? lessonTheme.body.ctaCompleted : lessonTheme.body.ctaIncomplete)}
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {isCompleted ? lessonTheme.body.ctaCompleted.text : lessonTheme.body.ctaIncomplete.text}
+              </button>
+
+              {next && (
+                <div
+                  className="flex items-center justify-between gap-3 rounded-xl border p-4"
+                  style={{
+                    backgroundColor: lessonTheme.body.nextLessonCard.backgroundColor,
+                    borderColor: lessonTheme.body.nextLessonCard.borderColor,
+                  }}
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: lessonTheme.body.nextLessonCard.messageColor }}
                     >
-                      {r.label} <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <button
-            onClick={completeAndContinue}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: brand }}
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {completed.has(current.id)
-              ? next
-                ? "Next lesson"
-                : "Completed"
-              : next
-                ? "Complete & continue"
-                : "Complete"}
-          </button>
-        </div>
-
-        <aside className="space-y-3">
-          {/* Static — always present, never a theme block. */}
-          <div className="rounded-lg border border-[#E4E4E4] bg-white p-3">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <p className="text-sm font-semibold text-[#202124]">Course Contents</p>
-              <p className="text-xs text-[#909090]">
-                {totalLessons} {totalLessons === 1 ? "Lesson" : "Lessons"}
-              </p>
-            </div>
-            <div className="space-y-3">
-              {sections.map((s) => {
-                const ls = inSection(s.id);
-                if (ls.length === 0) return null;
-                return (
-                  <div key={s.id}>
-                    <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-[#909090]">
-                      {s.title}
+                      {lessonTheme.body.nextLessonCard.messageText}
                     </p>
-                    <div className="space-y-0.5">
-                      {ls.map((l) => (
-                        <NavLesson key={l.id} l={l} />
-                      ))}
-                    </div>
+                    <p
+                      className="truncate text-xs"
+                      style={{ color: lessonTheme.body.nextLessonCard.nextLessonTitleColor }}
+                    >
+                      {next.title}
+                    </p>
                   </div>
-                );
-              })}
-              {other.length > 0 && (
-                <div className="space-y-0.5">
-                  {other.map((l) => (
-                    <NavLesson key={l.id} l={l} />
-                  ))}
+                  <Link
+                    href={lessonHref(next.id)}
+                    className="shrink-0 text-sm font-semibold hover:underline"
+                    style={{ color: lessonTheme.body.nextLessonCard.buttonTextColor }}
+                  >
+                    {lessonTheme.body.nextLessonCard.buttonText} <ChevronRight className="inline h-3.5 w-3.5" />
+                  </Link>
                 </div>
               )}
             </div>
-            {(prevCategory || nextCategory) && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {prevCategory ? (
-                  <Link
-                    href={lessonHref(prevCategory.id)}
-                    className="flex items-center justify-center gap-1 rounded-md border border-[#E4E4E4] px-2 py-1.5 text-xs font-medium text-[#3a3a44] hover:bg-black/[0.03]"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                {nextCategory && (
-                  <Link
-                    href={lessonHref(nextCategory.id)}
-                    className="flex items-center justify-center gap-1 rounded-md border border-[#E4E4E4] px-2 py-1.5 text-xs font-medium text-[#3a3a44] hover:bg-black/[0.03]"
-                  >
-                    Next <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
 
-          {/* Customizable — same block list as the sales page + course home. */}
-          {sidebarBlocks.map((block) => {
-            if (isCoreSidebarBlock(block)) {
-              return block.type === "progress" ? (
-                <ProgressBlockView
-                  key={block.id}
-                  block={block}
-                  completedCount={completedCount}
-                  totalCount={totalLessons}
-                />
-              ) : (
-                <InstructorBlockView key={block.id} block={block} instructor={instructor} />
-              );
-            }
-            return (
-              <CourseBlockView
-                key={block.id}
-                block={block}
-                saId={saId}
-                crossSellTargets={crossSellTargets}
-              />
-            );
-          })}
-        </aside>
+            <aside className="space-y-3">
+              {sortedSidebar.map((block) => {
+                if (block.type === "courseContent") {
+                  return (
+                    <div
+                      key={block.id}
+                      className="rounded-lg border border-[#E4E4E4] p-3"
+                      style={{ backgroundColor: block.background }}
+                    >
+                      <div className="mb-2 flex items-center justify-between px-1">
+                        <p className="text-sm font-semibold" style={{ color: block.headingColor }}>
+                          {block.heading}
+                        </p>
+                        <p className="text-xs" style={{ color: block.lessonCountColor }}>
+                          {totalLessons} {totalLessons === 1 ? "Lesson" : "Lessons"}
+                        </p>
+                      </div>
+                      <div className="space-y-3">
+                        {sections.map((s) => {
+                          const ls = inSection(s.id);
+                          if (ls.length === 0) return null;
+                          return (
+                            <div key={s.id}>
+                              <p
+                                className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide"
+                                style={{ color: block.headingColor }}
+                              >
+                                {s.title}
+                              </p>
+                              <div>
+                                {ls.map((l) => (
+                                  <NavLesson key={l.id} l={l} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {other.length > 0 && (
+                          <div>
+                            {other.map((l) => (
+                              <NavLesson key={l.id} l={l} />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {(prevCategory || nextCategory) && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          {prevCategory ? (
+                            <Link
+                              href={lessonHref(prevCategory.id)}
+                              className="theme-btn flex items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-xs font-medium"
+                              style={buttonStateStyle(block.previousButton)}
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" /> {block.previousButton.text}
+                            </Link>
+                          ) : (
+                            <span />
+                          )}
+                          {nextCategory && (
+                            <Link
+                              href={lessonHref(nextCategory.id)}
+                              className="theme-btn flex items-center justify-center gap-1 rounded-md border px-2 py-1.5 text-xs font-medium"
+                              style={buttonStateStyle(block.nextButton)}
+                            >
+                              {block.nextButton.text} <ChevronRight className="h-3.5 w-3.5" />
+                            </Link>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                if (block.type === "instructor") {
+                  return (
+                    <InstructorBlockView
+                      key={block.id}
+                      block={block as InstructorSidebarBlock}
+                      instructor={instructor}
+                    />
+                  );
+                }
+                if (block.type === "downloads") {
+                  if (current.resourceLinks.length === 0) return null;
+                  return (
+                    <div
+                      key={block.id}
+                      className="space-y-2 rounded-lg border border-[#E4E4E4] p-3"
+                      style={{ backgroundColor: block.background }}
+                    >
+                      <p
+                        className="text-xs font-semibold uppercase tracking-wide"
+                        style={{ color: block.headingColor }}
+                      >
+                        {block.heading}
+                      </p>
+                      <ul className="space-y-1">
+                        {current.resourceLinks.map((r, i) => (
+                          <li key={i}>
+                            <a
+                              href={r.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-sm hover:underline"
+                              style={{ color: block.linkColor }}
+                            >
+                              {r.label} <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                }
+                return (
+                  <CourseBlockView
+                    key={block.id}
+                    block={block}
+                    saId={saId}
+                    crossSellTargets={crossSellTargets}
+                  />
+                );
+              })}
+            </aside>
+          </div>
+        </div>
       </div>
     </div>
   );

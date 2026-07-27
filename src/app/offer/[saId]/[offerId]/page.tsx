@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireOfferPageAccess } from "@/lib/course-offers/offer-access";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { hasPaidCourseOffer } from "@/lib/server/course-offer-purchase-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { OfferSalesPageView } from "@/components/course-offers/offer-sales-page-view";
@@ -51,26 +52,26 @@ export default async function OfferPage({
     coverUrl: c.coverUrl,
   }));
 
-  // Batch-resolve every Cross Sell block's target course, same pattern as
+  // Batch-resolve every Cross Sell block's target offer, same pattern as
   // the Standalone Course sales page.
   const targetIds = new Set<string>();
   for (const block of [...theme.body, ...theme.sidebar]) {
-    if (block.type === "crossSell" && block.targetCourseId) {
-      targetIds.add(block.targetCourseId);
+    if (block.type === "crossSell" && block.targetOfferId) {
+      targetIds.add(block.targetOfferId);
     }
   }
   const crossSellTargets = new Map<string, CrossSellTargetInfo>();
   await Promise.all(
     Array.from(targetIds).map(async (id) => {
-      const target = await getStandaloneCourse(saId, id);
+      const target = await getCourseOffer(saId, id);
       if (target) {
         crossSellTargets.set(id, {
           id: target.id,
           title: target.title,
           priceCents: target.priceCents,
           currency: target.currency,
-          access: target.access,
-          published: target.published,
+          type: target.type,
+          visibility: target.visibility,
         });
       }
     }),

@@ -3,7 +3,6 @@ import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-ac
 import {
   getStandaloneCourseTree,
   getStandaloneEnrollment,
-  getStandaloneCourse,
 } from "@/lib/server/standalone-course-service";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
@@ -29,7 +28,7 @@ export default async function StandaloneLessonPlayerPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { course, member } = access;
-  const theme = course.theme;
+  const lessonTheme = course.lessonTheme;
   const salesPage = `/course/${saId}/${courseId}`;
   const homeHref = `${salesPage}/classroom`;
 
@@ -48,26 +47,27 @@ export default async function StandaloneLessonPlayerPage({
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
 
-  // Batch-resolve every Cross Sell block's target course, same pattern as
-  // the sales page and course home.
+  // Batch-resolve every Cross Sell block's target offer, same pattern as
+  // the sales page and course home. Lesson's Body has no block array (just 3
+  // fixed sections), so only the sidebar can hold a Cross Sell block.
   const targetIds = new Set<string>();
-  for (const block of [...theme.body, ...theme.sidebar]) {
-    if (block.type === "crossSell" && block.targetCourseId) {
-      targetIds.add(block.targetCourseId);
+  for (const block of lessonTheme.sidebar) {
+    if (block.type === "crossSell" && block.targetOfferId) {
+      targetIds.add(block.targetOfferId);
     }
   }
   const crossSellTargets = new Map<string, CrossSellTargetInfo>();
   await Promise.all(
     Array.from(targetIds).map(async (id) => {
-      const target = await getStandaloneCourse(saId, id);
+      const target = await getCourseOffer(saId, id);
       if (target) {
         crossSellTargets.set(id, {
           id: target.id,
           title: target.title,
           priceCents: target.priceCents,
           currency: target.currency,
-          access: target.access,
-          published: target.published,
+          type: target.type,
+          visibility: target.visibility,
         });
       }
     }),
@@ -97,48 +97,46 @@ export default async function StandaloneLessonPlayerPage({
   }));
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5] px-4 py-8">
-      <div className="mx-auto max-w-5xl">
-        <StandaloneLessonPlayer
-          completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
-          lessonHrefBase={homeHref}
-          homeHref={homeHref}
-          saId={saId}
-          theme={theme}
-          courseTitle={course.title}
-          courseCoverUrl={course.coverUrl}
-          instructor={course.instructor}
-          crossSellTargets={crossSellTargets}
-          sections={sections}
-          lessons={lessons}
-          currentLessonId={lessonId}
-          completedIds={enrollment?.completedLessonIds ?? []}
-        />
+    <>
+      <StandaloneLessonPlayer
+        completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
+        lessonHrefBase={homeHref}
+        homeHref={homeHref}
+        saId={saId}
+        lessonTheme={lessonTheme}
+        courseTitle={course.title}
+        courseCoverUrl={course.coverUrl}
+        instructor={course.instructor}
+        crossSellTargets={crossSellTargets}
+        sections={sections}
+        lessons={lessons}
+        currentLessonId={lessonId}
+        completedIds={enrollment?.completedLessonIds ?? []}
+      />
 
-        {upsellTargets.length > 0 && (
-          <div className="mt-6 space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-[#909090]">
-              More for you
-            </p>
-            {upsellTargets.map((target) => (
-              <div
-                key={target.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
+      {upsellTargets.length > 0 && (
+        <div className="mx-auto max-w-5xl space-y-2 px-4 pb-8">
+          <p className="text-xs font-medium uppercase tracking-wide text-[#909090]">
+            More for you
+          </p>
+          {upsellTargets.map((target) => (
+            <div
+              key={target.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3"
+            >
+              <span className="text-sm font-medium text-[#202124]">
+                {target.title}
+              </span>
+              <a
+                href={`/offer/${saId}/${target.id}`}
+                className="shrink-0 rounded-md bg-[#202124] px-3 py-1.5 text-xs font-semibold text-white"
               >
-                <span className="text-sm font-medium text-[#202124]">
-                  {target.title}
-                </span>
-                <a
-                  href={`/offer/${saId}/${target.id}`}
-                  className="shrink-0 rounded-md bg-[#202124] px-3 py-1.5 text-xs font-semibold text-white"
-                >
-                  Buy Now
-                </a>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+                Buy Now
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }

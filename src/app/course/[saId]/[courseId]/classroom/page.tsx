@@ -3,8 +3,8 @@ import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-ac
 import {
   getStandaloneCourseTree,
   getStandaloneEnrollment,
-  getStandaloneCourse,
 } from "@/lib/server/standalone-course-service";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 
@@ -42,26 +42,26 @@ export default async function StandaloneCourseHomePage({
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
 
-  // Batch-resolve every Cross Sell block's target course, same pattern as
+  // Batch-resolve every Cross Sell block's target offer, same pattern as
   // the sales page.
   const targetIds = new Set<string>();
   for (const block of [...theme.body, ...theme.sidebar]) {
-    if (block.type === "crossSell" && block.targetCourseId) {
-      targetIds.add(block.targetCourseId);
+    if (block.type === "crossSell" && block.targetOfferId) {
+      targetIds.add(block.targetOfferId);
     }
   }
   const crossSellTargets = new Map<string, CrossSellTargetInfo>();
   await Promise.all(
     Array.from(targetIds).map(async (id) => {
-      const target = await getStandaloneCourse(saId, id);
+      const target = await getCourseOffer(saId, id);
       if (target) {
         crossSellTargets.set(id, {
           id: target.id,
           title: target.title,
           priceCents: target.priceCents,
           currency: target.currency,
-          access: target.access,
-          published: target.published,
+          type: target.type,
+          visibility: target.visibility,
         });
       }
     }),

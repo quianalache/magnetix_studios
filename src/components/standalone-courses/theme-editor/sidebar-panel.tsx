@@ -14,7 +14,7 @@ import {
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import { isCoreSidebarBlock } from "@/types/course-theme";
 import type { SidebarBlock, CourseBlockType } from "@/types/course-theme";
-import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { CourseOffer } from "@/types/course-offers";
 
 const CORE_LABELS: Record<"progress" | "instructor", string> = {
   progress: "Progress",
@@ -29,13 +29,13 @@ export function SidebarPanel({
   onChange,
   saId,
   courseId,
-  otherCourses,
+  otherOffers,
 }: {
   blocks: SidebarBlock[];
   onChange: (blocks: SidebarBlock[]) => void;
   saId: string;
   courseId: string;
-  otherCourses: StandaloneCourse[];
+  otherOffers: CourseOffer[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
   const [addOpen, setAddOpen] = useState(false);
@@ -135,7 +135,7 @@ export function SidebarPanel({
             block={selected}
             onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
             onUploadImage={(file) => uploadCourseThemeImage(file, saId, courseId, "block")}
-            otherCourses={otherCourses}
+            otherOffers={otherOffers}
           />
         )}
       </div>

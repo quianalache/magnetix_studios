@@ -132,8 +132,10 @@ export interface CustomBlock extends BlockBase {
 export interface CrossSellBlock extends BlockBase {
   type: "crossSell";
   background: string;
-  /** Another StandaloneCourse in the same sub-account, or null = unset. */
-  targetCourseId: string | null;
+  /** A CourseOffer in the same sub-account, or null = unset. Offers (not
+   *  raw Courses) are the actual purchasable/checkout entity, so cross-sell
+   *  always promotes into a real checkout flow. */
+  targetOfferId: string | null;
   titleColor: string;
   priceColor: string;
   buttonText: string;
@@ -255,6 +257,121 @@ export interface CourseTheme {
 }
 
 /**
+ * Visual theming for the enrolled member's Lesson-viewing page
+ * (`StandaloneLessonPlayer`, at `/course/[saId]/[courseId]/classroom/
+ * [lessonId]`) — stored independently from `StandaloneCourse.theme` (which
+ * only covers the Product/Course-Home pages), matching GHL's own "Pages:
+ * Product / Lesson" switcher in the same Customize editor. Colors/fonts/
+ * background reuse the exact same shapes as `CourseTheme` (same picker UI,
+ * independent values, never synced) — everything else here is genuinely
+ * specific to the lesson-viewing experience.
+ */
+export interface LessonBreadcrumbTheme {
+  visible: boolean;
+  color: string;
+  activeColor: string;
+}
+
+export interface LessonPlayerTheme {
+  backgroundColor: string;
+}
+
+/** One button's full text + Regular/Hover fill/border/text config — reused
+ *  for both Call-To-Action states and both Course-Content nav buttons via
+ *  `<ButtonColorFields>` (already built for the Product-page button fields). */
+export interface LessonButtonState {
+  text: string;
+  buttonType: ButtonType;
+  color: string;
+  borderColor: string;
+  textColor: string;
+  colorHover: string;
+  borderColorHover: string;
+  textColorHover: string;
+}
+
+export interface LessonBodyTheme {
+  background: string;
+  /** GHL labels this "Lesson Title" but it's the "About this Lesson"
+   *  section's own heading text/color — the lesson's real title
+   *  (`StandaloneLesson.title`) has no color control here. */
+  aboutHeadingText: string;
+  aboutHeadingColor: string;
+  ctaIncomplete: LessonButtonState;
+  ctaCompleted: LessonButtonState;
+  nextLessonCard: {
+    backgroundColor: string;
+    borderColor: string;
+    messageText: string;
+    messageColor: string;
+    buttonText: string;
+    buttonTextColor: string;
+    nextLessonTitleColor: string;
+  };
+}
+
+export interface LessonCourseContentBlock extends BlockBase {
+  type: "courseContent";
+  background: string;
+  heading: string;
+  headingColor: string;
+  lessonCountColor: string;
+  itemHoverColor: string;
+  itemTextColor: string;
+  itemBorderColor: string;
+  previousButton: LessonButtonState;
+  nextButton: LessonButtonState;
+}
+
+export interface LessonDownloadsBlock extends BlockBase {
+  type: "downloads";
+  heading: string;
+  headingColor: string;
+  background: string;
+  linkColor: string;
+}
+
+/**
+ * Sidebar entries: 3 core blocks (always present, not deletable) mixed into
+ * the same ordered list as the 6 optional block types — no Progress block
+ * here (that's a Course-Home concept; a single lesson has no aggregate
+ * progress bar of its own).
+ */
+export type LessonSidebarBlock =
+  | InstructorSidebarBlock
+  | LessonCourseContentBlock
+  | LessonDownloadsBlock
+  | CourseBlock;
+
+export type LessonSidebarBlockType = LessonSidebarBlock["type"];
+
+export const LESSON_CORE_SIDEBAR_BLOCK_TYPES: readonly LessonSidebarBlockType[] = [
+  "instructor",
+  "courseContent",
+  "downloads",
+];
+
+export function isLessonCoreSidebarBlock(
+  block: LessonSidebarBlock,
+): block is InstructorSidebarBlock | LessonCourseContentBlock | LessonDownloadsBlock {
+  return (
+    block.type === "instructor" ||
+    block.type === "courseContent" ||
+    block.type === "downloads"
+  );
+}
+
+export interface LessonTheme {
+  colors: CourseThemeColors;
+  fonts: CourseThemeFonts;
+  background: CourseThemeBackground;
+  breadcrumb: LessonBreadcrumbTheme;
+  player: LessonPlayerTheme;
+  body: LessonBodyTheme;
+  sidebar: LessonSidebarBlock[];
+}
+
+/**
  * Sensible neutral defaults — used for any course that predates this
  * feature (via a fallback at read time, no migration needed) and stamped
  * onto every newly created course.
@@ -366,6 +483,101 @@ export const DEFAULT_OFFER_THEME: CourseTheme = {
   sidebar: [],
 };
 
+function defaultLessonButtonState(text: string): LessonButtonState {
+  return {
+    text,
+    buttonType: "solid",
+    color: "#202124",
+    borderColor: "#202124",
+    textColor: "#ffffff",
+    colorHover: "#3a3a44",
+    borderColorHover: "#3a3a44",
+    textColorHover: "#ffffff",
+  };
+}
+
+/**
+ * Sensible neutral defaults for the Lesson page's own theme — used for any
+ * course that predates this feature (via a fallback at read time, no
+ * migration needed) and stamped onto every newly created course, alongside
+ * `DEFAULT_COURSE_THEME`.
+ */
+export const DEFAULT_LESSON_THEME: LessonTheme = {
+  colors: DEFAULT_COURSE_THEME.colors,
+  fonts: DEFAULT_COURSE_THEME.fonts,
+  background: {
+    imageUrl: null,
+    transparency: 100,
+  },
+  breadcrumb: {
+    visible: true,
+    color: "#909090",
+    activeColor: "#202124",
+  },
+  player: {
+    backgroundColor: "#ffffff",
+  },
+  body: {
+    background: "#ffffff",
+    aboutHeadingText: "About this Lesson",
+    aboutHeadingColor: "#202124",
+    ctaIncomplete: defaultLessonButtonState("Mark as complete"),
+    ctaCompleted: defaultLessonButtonState("Completed"),
+    nextLessonCard: {
+      backgroundColor: "#f8f7f5",
+      borderColor: "#e4e4e4",
+      messageText: "Great job! Keep going!",
+      messageColor: "#202124",
+      buttonText: "Next lesson",
+      buttonTextColor: "#202124",
+      nextLessonTitleColor: "#909090",
+    },
+  },
+  sidebar: [
+    {
+      id: "core-course-content",
+      order: 0,
+      type: "courseContent",
+      background: "#ffffff",
+      heading: "Course Contents",
+      headingColor: "#202124",
+      lessonCountColor: "#909090",
+      itemHoverColor: "#f8f7f5",
+      itemTextColor: "#3a3a44",
+      itemBorderColor: "#e4e4e4",
+      previousButton: defaultLessonButtonState("Previous Category"),
+      nextButton: defaultLessonButtonState("Next Category"),
+    },
+    {
+      id: "core-instructor",
+      order: 1,
+      type: "instructor",
+      visible: true,
+      syncFromProfile: true,
+      headshotUrl: null,
+      headshotVisible: true,
+      background: "#f8f7f5",
+      heading: "Your Coach",
+      headingColor: "#909090",
+      name: "",
+      nameColor: "#202124",
+      title: "",
+      titleColor: "#909090",
+      bio: "",
+      bioColor: "#202124",
+    },
+    {
+      id: "core-downloads",
+      order: 2,
+      type: "downloads",
+      heading: "Attached Files",
+      headingColor: "#202124",
+      background: "#f8f7f5",
+      linkColor: "#202124",
+    },
+  ],
+};
+
 /**
  * Backfills top-level fields added to `CourseTheme` after a course/offer's
  * theme was first saved (`background`, `categoryBlock`) — Firestore docs
@@ -389,6 +601,21 @@ export function normalizeCourseTheme(
   };
 }
 
+/** Same top-level-key backfill as `normalizeCourseTheme`, for
+ *  `StandaloneCourse.lessonTheme` — a field that doesn't exist at all on
+ *  courses saved before this feature. */
+export function normalizeLessonTheme(
+  theme: LessonTheme | null | undefined,
+  fallbackDefault: LessonTheme,
+): LessonTheme {
+  if (!theme) return fallbackDefault;
+  return {
+    ...fallbackDefault,
+    ...theme,
+    background: theme.background ?? fallbackDefault.background,
+  };
+}
+
 /**
  * A saved, reusable course theme — lives at
  * `subAccounts/{saId}/courseThemeTemplates/{templateId}`, scoped to one
@@ -405,6 +632,10 @@ export interface CourseThemeTemplate {
   agencyId: string;
   name: string;
   theme: CourseTheme;
+  /** Templates saved before the Lesson page theme existed have no such
+   *  field; applying one of those leaves the target's `lessonTheme`
+   *  untouched (falls back to `DEFAULT_LESSON_THEME` at read time). */
+  lessonTheme?: LessonTheme;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }

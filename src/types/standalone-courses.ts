@@ -1,6 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { VideoProvider, ResourceLink } from "./community";
-import type { CourseTheme } from "./course-theme";
+import type { CourseTheme, LessonTheme } from "./course-theme";
 
 /**
  * Standalone Courses — a course/product sold on its own public sales page,
@@ -117,6 +117,12 @@ export interface StandaloneCourse {
    *  public sales page. Courses created before this feature has no such
    *  field; every read falls back to `DEFAULT_COURSE_THEME`. */
   theme: CourseTheme;
+  /** Visual theme for the enrolled member's Lesson-viewing page — stored
+   *  independently from `theme` (which only covers the Product/Course-Home
+   *  pages), matching GHL's own "Pages: Product / Lesson" switcher. Courses
+   *  created before this feature has no such field; every read falls back
+   *  to `DEFAULT_LESSON_THEME`. */
+  lessonTheme: LessonTheme;
   published: boolean;
   /** Community Groups linked to this course (`subAccounts/{saId}/
    *  communityGroups/{groupId}`) — connects a course built "outside" a

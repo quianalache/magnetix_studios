@@ -14,14 +14,15 @@ import {
   PanelRight,
   ChevronLeft,
   ChevronRight,
+  Slash,
+  Video,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import {
-  subscribeToStandaloneCourse,
-  subscribeToStandaloneCourses,
-} from "@/lib/firestore/standalone-courses";
+import { subscribeToStandaloneCourse } from "@/lib/firestore/standalone-courses";
+import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
@@ -30,17 +31,27 @@ import { HeaderPanel } from "@/components/standalone-courses/theme-editor/header
 import { HeroPanel } from "@/components/standalone-courses/theme-editor/hero-panel";
 import { BodyPanel } from "@/components/standalone-courses/theme-editor/body-panel";
 import { SidebarPanel } from "@/components/standalone-courses/theme-editor/sidebar-panel";
+import { BreadcrumbPanel } from "@/components/standalone-courses/theme-editor/breadcrumb-panel";
+import { PlayerPanel } from "@/components/standalone-courses/theme-editor/player-panel";
+import { LessonBodyPanel } from "@/components/standalone-courses/theme-editor/lesson-body-panel";
+import { LessonSidebarPanel } from "@/components/standalone-courses/theme-editor/lesson-sidebar-panel";
 import { ThemeLivePreview } from "@/components/standalone-courses/theme-editor/live-preview";
 import type { StandaloneCourse } from "@/types/standalone-courses";
-import type { CourseTheme } from "@/types/course-theme";
+import type { CourseTheme, LessonTheme } from "@/types/course-theme";
+import type { CourseOffer } from "@/types/course-offers";
 
-const TABS = ["Layout", "Header", "Hero", "Body", "Sidebar"] as const;
-type Tab = (typeof TABS)[number];
+type Page = "product" | "lesson";
+
+const PRODUCT_TABS = ["Layout", "Header", "Hero", "Body", "Sidebar"] as const;
+const LESSON_TABS = ["Layout", "Breadcrumb", "Player", "Body", "Sidebar"] as const;
+type Tab = (typeof PRODUCT_TABS)[number] | (typeof LESSON_TABS)[number];
 
 const TAB_ICONS: Record<Tab, typeof LayoutPanelLeft> = {
   Layout: LayoutPanelLeft,
   Header: PanelTop,
   Hero: GalleryHorizontal,
+  Breadcrumb: Slash,
+  Player: Video,
   Body: Rows3,
   Sidebar: PanelRight,
 };
@@ -64,8 +75,10 @@ export default function CourseThemeEditorPage({
   const apiBase = `/api/sub-accounts/${subAccountId}`;
 
   const [course, setCourse] = useState<StandaloneCourse | null>(null);
-  const [otherCourses, setOtherCourses] = useState<StandaloneCourse[]>([]);
+  const [otherOffers, setOtherOffers] = useState<CourseOffer[]>([]);
   const [theme, setTheme] = useState<CourseTheme | null>(null);
+  const [lessonTheme, setLessonTheme] = useState<LessonTheme | null>(null);
+  const [page, setPage] = useState<Page>("product");
   const [tab, setTab] = useState<Tab>("Layout");
   const [panelOpen, setPanelOpen] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,9 +93,10 @@ export default function CourseThemeEditorPage({
       // own in-progress edits, further snapshot events (e.g. our own Save
       // round-tripping) must not clobber them.
       setTheme((prev) => prev ?? c?.theme ?? null);
+      setLessonTheme((prev) => prev ?? c?.lessonTheme ?? null);
       setLoaded(true);
     });
-    const u2 = subscribeToStandaloneCourses(subAccountId, setOtherCourses);
+    const u2 = subscribeToCourseOffers(subAccountId, setOtherOffers);
     return () => {
       u1();
       u2();
@@ -96,7 +110,7 @@ export default function CourseThemeEditorPage({
       </div>
     );
   }
-  if (!course || !theme) {
+  if (!course || !theme || !lessonTheme) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground">
         Course not found.{" "}
@@ -107,13 +121,18 @@ export default function CourseThemeEditorPage({
     );
   }
 
+  function switchPage(next: Page) {
+    setPage(next);
+    setTab("Layout");
+  }
+
   async function save() {
     setSaving(true);
     try {
       const res = await fetch(`${apiBase}/standalone-courses/${courseId}/theme`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme }),
+        body: JSON.stringify({ theme, lessonTheme }),
       });
       if (!res.ok) throw new Error();
       toast.success("Theme saved.");
@@ -134,7 +153,7 @@ export default function CourseThemeEditorPage({
       const res = await fetch(`${apiBase}/course-theme-templates`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: templateName, theme }),
+        body: JSON.stringify({ name: templateName, theme, lessonTheme }),
       });
       if (!res.ok) throw new Error();
       toast.success("Template saved.");
@@ -146,9 +165,7 @@ export default function CourseThemeEditorPage({
     }
   }
 
-  const selectableOtherCourses = otherCourses.filter(
-    (c) => c.id !== courseId && c.published,
-  );
+  const selectableOffers = otherOffers.filter((o) => o.visibility === "published");
 
   return (
     <div className="flex h-[calc(100vh-1px)] flex-col">
@@ -209,10 +226,22 @@ export default function CourseThemeEditorPage({
         </div>
       </div>
 
+      <div className="flex items-center gap-2 border-b px-4 py-2.5">
+        <Label className="text-sm text-muted-foreground">Pages:</Label>
+        <select
+          value={page}
+          onChange={(e) => switchPage(e.target.value as Page)}
+          className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+        >
+          <option value="product">Product</option>
+          <option value="lesson">Lesson</option>
+        </select>
+      </div>
+
       {/* Editor body: icon rail + collapsible settings panel + live preview */}
       <div className="flex flex-1 overflow-hidden">
         <nav className="flex w-20 shrink-0 flex-col items-center gap-2 border-r py-4">
-          {TABS.map((t) => {
+          {(page === "product" ? PRODUCT_TABS : LESSON_TABS).map((t) => {
             const Icon = TAB_ICONS[t];
             const selected = tab === t;
             return (
@@ -243,7 +272,7 @@ export default function CourseThemeEditorPage({
         {panelOpen && (
           <div className="relative w-[360px] shrink-0 overflow-y-auto border-r">
             <div className="p-5">
-              {tab === "Layout" && (
+              {tab === "Layout" && page === "product" && (
                 <LayoutPanel
                   colors={theme.colors}
                   fonts={theme.fonts}
@@ -256,16 +285,40 @@ export default function CourseThemeEditorPage({
                   }
                   saId={subAccountId}
                   applyTarget={{ courseId }}
-                  onApplied={setTheme}
+                  onApplied={(t, lt) => {
+                    setTheme(t);
+                    if (lt) setLessonTheme(lt);
+                  }}
                 />
               )}
-              {tab === "Header" && (
+              {tab === "Layout" && page === "lesson" && (
+                <LayoutPanel
+                  colors={lessonTheme.colors}
+                  fonts={lessonTheme.fonts}
+                  background={lessonTheme.background}
+                  onColorsChange={(colors) => setLessonTheme({ ...lessonTheme, colors })}
+                  onFontsChange={(fonts) => setLessonTheme({ ...lessonTheme, fonts })}
+                  onBackgroundChange={(background) =>
+                    setLessonTheme({ ...lessonTheme, background })
+                  }
+                  onUploadImage={(file) =>
+                    uploadCourseThemeImage(file, subAccountId, courseId, "lesson-background")
+                  }
+                  saId={subAccountId}
+                  applyTarget={{ courseId }}
+                  onApplied={(t, lt) => {
+                    setTheme(t);
+                    if (lt) setLessonTheme(lt);
+                  }}
+                />
+              )}
+              {tab === "Header" && page === "product" && (
                 <HeaderPanel
                   value={theme.header}
                   onChange={(header) => setTheme({ ...theme, header })}
                 />
               )}
-              {tab === "Hero" && (
+              {tab === "Hero" && page === "product" && (
                 <HeroPanel
                   value={theme.hero}
                   onChange={(hero) => setTheme({ ...theme, hero })}
@@ -274,7 +327,19 @@ export default function CourseThemeEditorPage({
                   }
                 />
               )}
-              {tab === "Body" && (
+              {tab === "Breadcrumb" && page === "lesson" && (
+                <BreadcrumbPanel
+                  value={lessonTheme.breadcrumb}
+                  onChange={(breadcrumb) => setLessonTheme({ ...lessonTheme, breadcrumb })}
+                />
+              )}
+              {tab === "Player" && page === "lesson" && (
+                <PlayerPanel
+                  value={lessonTheme.player}
+                  onChange={(player) => setLessonTheme({ ...lessonTheme, player })}
+                />
+              )}
+              {tab === "Body" && page === "product" && (
                 <BodyPanel
                   blocks={theme.body}
                   onChange={(body) => setTheme({ ...theme, body })}
@@ -284,16 +349,31 @@ export default function CourseThemeEditorPage({
                   }
                   saId={subAccountId}
                   courseId={courseId}
-                  otherCourses={selectableOtherCourses}
+                  otherOffers={selectableOffers}
                 />
               )}
-              {tab === "Sidebar" && (
+              {tab === "Body" && page === "lesson" && (
+                <LessonBodyPanel
+                  value={lessonTheme.body}
+                  onChange={(body) => setLessonTheme({ ...lessonTheme, body })}
+                />
+              )}
+              {tab === "Sidebar" && page === "product" && (
                 <SidebarPanel
                   blocks={theme.sidebar}
                   onChange={(sidebar) => setTheme({ ...theme, sidebar })}
                   saId={subAccountId}
                   courseId={courseId}
-                  otherCourses={selectableOtherCourses}
+                  otherOffers={selectableOffers}
+                />
+              )}
+              {tab === "Sidebar" && page === "lesson" && (
+                <LessonSidebarPanel
+                  blocks={lessonTheme.sidebar}
+                  onChange={(sidebar) => setLessonTheme({ ...lessonTheme, sidebar })}
+                  saId={subAccountId}
+                  courseId={courseId}
+                  otherOffers={selectableOffers}
                 />
               )}
             </div>
@@ -314,7 +394,9 @@ export default function CourseThemeEditorPage({
             courseId={courseId}
             course={course}
             theme={theme}
-            otherCourses={otherCourses}
+            lessonTheme={lessonTheme}
+            page={page}
+            otherOffers={otherOffers}
           />
         </div>
       </div>

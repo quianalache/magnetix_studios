@@ -5,7 +5,12 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
-import { DEFAULT_COURSE_THEME, normalizeCourseTheme } from "@/types/course-theme";
+import {
+  DEFAULT_COURSE_THEME,
+  DEFAULT_LESSON_THEME,
+  normalizeCourseTheme,
+  normalizeLessonTheme,
+} from "@/types/course-theme";
 import type { OfferType } from "@/types/course-offers";
 import type { ResourceLink } from "@/types/community";
 import {
@@ -91,6 +96,7 @@ export async function createStandaloneCourseServerSide(opts: {
     learningExperience: DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE,
     advanced: DEFAULT_STANDALONE_COURSE_ADVANCED,
     theme: DEFAULT_COURSE_THEME,
+    lessonTheme: DEFAULT_LESSON_THEME,
     linkedCommunityGroupIds: [] as string[],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -252,6 +258,7 @@ function withCourseDefaults(
     id,
     ...data,
     theme: normalizeCourseTheme(data.theme, DEFAULT_COURSE_THEME),
+    lessonTheme: normalizeLessonTheme(data.lessonTheme, DEFAULT_LESSON_THEME),
     linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
     instructor: data.instructor ?? DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
     learningExperience:
@@ -282,9 +289,11 @@ export async function updateStandaloneCourseThemeServerSide(opts: {
   subAccountId: string;
   courseId: string;
   theme: StandaloneCourse["theme"];
+  lessonTheme?: StandaloneCourse["lessonTheme"];
 }): Promise<void> {
   await courseDoc(opts.subAccountId, opts.courseId).update({
     theme: opts.theme,
+    ...(opts.lessonTheme ? { lessonTheme: opts.lessonTheme } : {}),
     updatedAt: FieldValue.serverTimestamp(),
   });
 }

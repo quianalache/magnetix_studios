@@ -7,7 +7,12 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
-import { DEFAULT_COURSE_THEME, normalizeCourseTheme } from "@/types/course-theme";
+import {
+  DEFAULT_COURSE_THEME,
+  DEFAULT_LESSON_THEME,
+  normalizeCourseTheme,
+  normalizeLessonTheme,
+} from "@/types/course-theme";
 import {
   DEFAULT_STANDALONE_COURSE_ADVANCED,
   DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
@@ -28,6 +33,7 @@ function withCourseDefaults(
     id,
     ...data,
     theme: normalizeCourseTheme(data.theme, DEFAULT_COURSE_THEME),
+    lessonTheme: normalizeLessonTheme(data.lessonTheme, DEFAULT_LESSON_THEME),
     linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
     instructor: data.instructor ?? DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
     learningExperience:

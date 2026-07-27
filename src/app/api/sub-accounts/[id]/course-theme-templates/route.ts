@@ -6,7 +6,7 @@ import {
   listCourseThemeTemplates,
   saveCourseThemeTemplateServerSide,
 } from "@/lib/server/course-theme-template-service";
-import type { CourseTheme } from "@/types/course-theme";
+import type { CourseTheme, LessonTheme } from "@/types/course-theme";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +32,7 @@ export async function POST(
   const access = await requireStandaloneCoursesStaff(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  let body: { name?: string; theme?: CourseTheme };
+  let body: { name?: string; theme?: CourseTheme; lessonTheme?: LessonTheme };
   try {
     body = await request.json();
   } catch {
@@ -50,6 +50,7 @@ export async function POST(
     agencyId: access.resolvedAgencyId,
     name: body.name,
     theme: body.theme,
+    lessonTheme: body.lessonTheme,
   });
   return NextResponse.json({ ok: true, template });
 }

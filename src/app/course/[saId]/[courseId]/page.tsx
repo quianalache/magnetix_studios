@@ -3,8 +3,8 @@ import { requireCoursePageAccess } from "@/lib/standalone-courses/course-access"
 import {
   getCurriculumOutline,
   getStandaloneEnrollment,
-  getStandaloneCourse,
 } from "@/lib/server/standalone-course-service";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
@@ -49,28 +49,28 @@ export default async function CourseSalesPage({
     member ? getStandaloneEnrollment(saId, courseId, member.id) : null,
   ]);
 
-  // Batch-resolve every Cross Sell block's target course up front, so
+  // Batch-resolve every Cross Sell block's target offer up front, so
   // `CourseBlockView` itself stays a plain sync component reusable by the
   // editor's live preview (which resolves targets from its own already-
-  // subscribed course list instead of an Admin SDK call).
+  // subscribed offer list instead of an Admin SDK call).
   const targetIds = new Set<string>();
   for (const block of [...theme.body, ...theme.sidebar]) {
-    if (block.type === "crossSell" && block.targetCourseId) {
-      targetIds.add(block.targetCourseId);
+    if (block.type === "crossSell" && block.targetOfferId) {
+      targetIds.add(block.targetOfferId);
     }
   }
   const crossSellTargets = new Map<string, CrossSellTargetInfo>();
   await Promise.all(
     Array.from(targetIds).map(async (id) => {
-      const target = await getStandaloneCourse(saId, id);
+      const target = await getCourseOffer(saId, id);
       if (target) {
         crossSellTargets.set(id, {
           id: target.id,
           title: target.title,
           priceCents: target.priceCents,
           currency: target.currency,
-          access: target.access,
-          published: target.published,
+          type: target.type,
+          visibility: target.visibility,
         });
       }
     }),

@@ -6,7 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { updateStandaloneCourseThemeServerSide } from "@/lib/server/standalone-course-service";
 import { updateCourseOfferThemeServerSide } from "@/lib/server/course-offer-service";
 import { isCoreSidebarBlock } from "@/types/course-theme";
-import type { CourseTheme, CourseThemeTemplate } from "@/types/course-theme";
+import type { CourseTheme, CourseThemeTemplate, LessonTheme } from "@/types/course-theme";
 
 /**
  * Reusable course-theme templates — scoped to one sub-account (not
@@ -34,17 +34,29 @@ function cloneThemeWithFreshIds(theme: CourseTheme): CourseTheme {
   return clone;
 }
 
+/** Same idea for the Lesson page's theme — only its `sidebar` is a block
+ *  list (Body is 3 fixed sections, no ids to regenerate). */
+function cloneLessonThemeWithFreshIds(theme: LessonTheme): LessonTheme {
+  const clone = structuredClone(theme);
+  clone.sidebar = clone.sidebar.map((b) => ({ ...b, id: randomUUID() }));
+  return clone;
+}
+
 export async function saveCourseThemeTemplateServerSide(opts: {
   subAccountId: string;
   agencyId: string;
   name: string;
   theme: CourseTheme;
+  /** Optional — a template saved from an Offer's editor has no Lesson page
+   *  to capture (Offers have no lessons of their own). */
+  lessonTheme?: LessonTheme;
 }): Promise<CourseThemeTemplate> {
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     name: opts.name.trim() || "Untitled template",
     theme: cloneThemeWithFreshIds(opts.theme),
+    ...(opts.lessonTheme ? { lessonTheme: cloneLessonThemeWithFreshIds(opts.lessonTheme) } : {}),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -75,6 +87,9 @@ export async function applyCourseThemeTemplateServerSide(opts: {
     subAccountId: opts.subAccountId,
     courseId: opts.courseId,
     theme: cloneThemeWithFreshIds(template.theme),
+    lessonTheme: template.lessonTheme
+      ? cloneLessonThemeWithFreshIds(template.lessonTheme)
+      : undefined,
   });
 }
 

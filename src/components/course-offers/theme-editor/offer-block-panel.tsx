@@ -14,7 +14,7 @@ import {
 } from "@/lib/standalone-courses/theme-block-defaults";
 import { uploadCourseOfferThemeImage } from "@/lib/community/upload-image";
 import type { CourseBlock, CourseBlockType } from "@/types/course-theme";
-import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { CourseOffer } from "@/types/course-offers";
 
 /**
  * Offer Body/Sidebar region — both are just a freely-ordered list of the 6
@@ -28,14 +28,14 @@ export function OfferBlockPanel({
   onChange,
   saId,
   offerId,
-  otherCourses,
+  otherOffers,
   region,
 }: {
   blocks: CourseBlock[];
   onChange: (blocks: CourseBlock[]) => void;
   saId: string;
   offerId: string;
-  otherCourses: StandaloneCourse[];
+  otherOffers: CourseOffer[];
   /** Which "Add block" menu to offer — matches the region restriction the
    *  Standalone Course editor uses (Body: text/image/video/custom; Sidebar:
    *  image/crossSell/callToAction/custom). */
@@ -122,7 +122,7 @@ export function OfferBlockPanel({
             block={selected}
             onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
             onUploadImage={(file) => uploadCourseOfferThemeImage(file, saId, offerId, "block")}
-            otherCourses={otherCourses}
+            otherOffers={otherOffers}
           />
         ) : (
           <p className="text-sm text-muted-foreground">

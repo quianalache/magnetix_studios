@@ -52,7 +52,7 @@ export function createDefaultBlock(type: CourseBlockType, order: number): Course
         order,
         type,
         background: "#ffffff",
-        targetCourseId: null,
+        targetOfferId: null,
         titleColor: "#1d2939",
         priceColor: "#1d2939",
         buttonText: "Get it now!",

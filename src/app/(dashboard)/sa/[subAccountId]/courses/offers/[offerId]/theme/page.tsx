@@ -18,7 +18,7 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { subscribeToCourseOffer } from "@/lib/firestore/course-offers";
+import { subscribeToCourseOffer, subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,9 +39,9 @@ import {
   type CourseOffer,
   type CourseOfferCheckoutSettings,
 } from "@/types/course-offers";
-import type { StandaloneCourse } from "@/types/standalone-courses";
 import { isCoreSidebarBlock } from "@/types/course-theme";
 import type { CourseTheme } from "@/types/course-theme";
+import type { StandaloneCourse } from "@/types/standalone-courses";
 
 const TABS = [
   "Layout",
@@ -83,6 +83,7 @@ export default function OfferThemeEditorPage({
   const apiBase = `/api/sub-accounts/${subAccountId}`;
 
   const [offer, setOffer] = useState<CourseOffer | null>(null);
+  const [otherOffers, setOtherOffers] = useState<CourseOffer[]>([]);
   const [allCourses, setAllCourses] = useState<StandaloneCourse[]>([]);
   const [theme, setTheme] = useState<CourseTheme | null>(null);
   const [checkoutSettings, setCheckoutSettings] =
@@ -106,10 +107,12 @@ export default function OfferThemeEditorPage({
       );
       setLoaded(true);
     });
-    const u2 = subscribeToStandaloneCourses(subAccountId, setAllCourses);
+    const u2 = subscribeToCourseOffers(subAccountId, setOtherOffers);
+    const u3 = subscribeToStandaloneCourses(subAccountId, setAllCourses);
     return () => {
       u1();
       u2();
+      u3();
     };
   }, [subAccountId, offerId]);
 
@@ -177,7 +180,9 @@ export default function OfferThemeEditorPage({
     }
   }
 
-  const selectableCourses = allCourses.filter((c) => c.published);
+  const selectableOffers = otherOffers.filter(
+    (o) => o.id !== offerId && o.visibility === "published",
+  );
 
   return (
     <div className="flex h-[calc(100vh-1px)] flex-col">
@@ -309,7 +314,7 @@ export default function OfferThemeEditorPage({
                   onChange={(body) => setTheme({ ...theme, body })}
                   saId={subAccountId}
                   offerId={offerId}
-                  otherCourses={selectableCourses}
+                  otherOffers={selectableOffers}
                   region="body"
                 />
               )}
@@ -323,7 +328,7 @@ export default function OfferThemeEditorPage({
                   onChange={(sidebar) => setTheme({ ...theme, sidebar })}
                   saId={subAccountId}
                   offerId={offerId}
-                  otherCourses={selectableCourses}
+                  otherOffers={selectableOffers}
                   region="sidebar"
                 />
               )}
@@ -358,6 +363,7 @@ export default function OfferThemeEditorPage({
             offer={offer}
             theme={theme}
             allCourses={allCourses}
+            otherOffers={otherOffers}
           />
         </div>
       </div>

@@ -20,12 +20,16 @@ export function OfferThemeLivePreview({
   offer,
   theme,
   allCourses,
+  otherOffers,
 }: {
   saId: string;
   offerId: string;
   offer: CourseOffer;
   theme: CourseTheme;
+  /** Used only to resolve `offer.courseIds` into the "What's included" list
+   *  — unrelated to Cross Sell, which now targets Offers (see `otherOffers`). */
   allCourses: StandaloneCourse[];
+  otherOffers: CourseOffer[];
 }) {
   const includedCourses = useMemo(
     () =>
@@ -38,18 +42,18 @@ export function OfferThemeLivePreview({
 
   const crossSellTargets = useMemo(() => {
     const map = new Map<string, CrossSellTargetInfo>();
-    for (const c of allCourses) {
-      map.set(c.id, {
-        id: c.id,
-        title: c.title,
-        priceCents: c.priceCents,
-        currency: c.currency,
-        access: c.access,
-        published: c.published,
+    for (const o of otherOffers) {
+      map.set(o.id, {
+        id: o.id,
+        title: o.title,
+        priceCents: o.priceCents,
+        currency: o.currency,
+        type: o.type,
+        visibility: o.visibility,
       });
     }
     return map;
-  }, [allCourses]);
+  }, [otherOffers]);
 
   const priceLabel =
     offer.priceTextOverride ||

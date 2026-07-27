@@ -14,6 +14,7 @@ import type {
   CourseThemeFonts,
   CourseThemeBackground,
   CourseTheme,
+  LessonTheme,
   CourseThemeTemplate,
 } from "@/types/course-theme";
 
@@ -82,7 +83,9 @@ export function LayoutPanel({
   /** Templates are shared across Courses and Offers — this is just the
    *  request body the apply route needs to know which one to write onto. */
   applyTarget: { courseId: string } | { offerId: string };
-  onApplied: (theme: CourseTheme) => void;
+  /** `lessonTheme` is only ever set when a template that has one gets
+   *  applied to a Course (offers have no Lesson page to apply). */
+  onApplied: (theme: CourseTheme, lessonTheme?: LessonTheme) => void;
 }) {
   const [open, setOpen] = useState<SectionKey | null>(null);
   const [templates, setTemplates] = useState<CourseThemeTemplate[]>([]);
@@ -115,7 +118,7 @@ export function LayoutPanel({
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !d.ok) throw new Error(d.error ?? "Couldn't apply template");
       const applied = templates.find((t) => t.id === templateId);
-      if (applied) onApplied(applied.theme);
+      if (applied) onApplied(applied.theme, applied.lessonTheme);
       toast.success("Template applied — remember to Save.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't apply template");

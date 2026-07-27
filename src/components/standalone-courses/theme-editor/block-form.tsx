@@ -7,6 +7,7 @@ import { ColorInput } from "@/components/ui/color-input";
 import { ImageUpload } from "@/components/community/image-upload";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { ButtonColorFields } from "./button-color-fields";
+import { ButtonStateFields } from "./lesson-body-panel";
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import type {
@@ -14,10 +15,12 @@ import type {
   ProgressSidebarBlock,
   InstructorSidebarBlock,
   CategoryBlockTheme,
+  LessonCourseContentBlock,
+  LessonDownloadsBlock,
   ButtonAlign,
   ButtonType,
 } from "@/types/course-theme";
-import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { CourseOffer } from "@/types/course-offers";
 
 const RADIO = "flex items-center gap-1.5 text-xs";
 
@@ -45,7 +48,7 @@ function AlignRadio({
   );
 }
 
-function TypeRadio({
+export function TypeRadio({
   value,
   onChange,
 }: {
@@ -78,7 +81,7 @@ export function BlockForm({
   block,
   onChange,
   onUploadImage,
-  otherCourses,
+  otherOffers,
 }: {
   block: CourseBlock;
   onChange: (next: CourseBlock) => void;
@@ -87,7 +90,7 @@ export function BlockForm({
    *  this form knowing `saId`/`courseId` directly, so the exact same form
    *  works for both Standalone Courses and Course Offers. */
   onUploadImage: (file: File) => Promise<string>;
-  otherCourses: StandaloneCourse[];
+  otherOffers: CourseOffer[];
 }) {
   switch (block.type) {
     case "text":
@@ -287,18 +290,18 @@ export function BlockForm({
             onChange={(v) => onChange({ ...block, background: v })}
           />
           <div className="space-y-1.5">
-            <Label>Course to promote</Label>
+            <Label>Offer to promote</Label>
             <select
-              value={block.targetCourseId ?? ""}
+              value={block.targetOfferId ?? ""}
               onChange={(e) =>
-                onChange({ ...block, targetCourseId: e.target.value || null })
+                onChange({ ...block, targetOfferId: e.target.value || null })
               }
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">Select a course…</option>
-              {otherCourses.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title}
+              <option value="">Select an offer…</option>
+              {otherOffers.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.title}
                 </option>
               ))}
             </select>
@@ -608,6 +611,123 @@ export function CategoryBlockForm({
         label="Lesson Title Color"
         value={value.lessonTitleColor}
         onChange={(v) => onChange({ ...value, lessonTitleColor: v })}
+      />
+    </div>
+  );
+}
+
+/**
+ * Lesson page's "Course Content" sidebar block — the current-category
+ * lesson list + Previous/Next Category nav, a fixed core block like
+ * Instructor/Downloads, not one of the 6 optional block types.
+ */
+export function CourseContentBlockForm({
+  value,
+  onChange,
+}: {
+  value: LessonCourseContentBlock;
+  onChange: (next: LessonCourseContentBlock) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <ColorInput
+        label="Background Color"
+        value={value.background}
+        onChange={(v) => onChange({ ...value, background: v })}
+      />
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label>Course Content Heading</Label>
+          <Input
+            value={value.heading}
+            onChange={(e) => onChange({ ...value, heading: e.target.value })}
+          />
+        </div>
+        <ColorInput
+          value={value.headingColor}
+          onChange={(v) => onChange({ ...value, headingColor: v })}
+        />
+      </div>
+      <ColorInput
+        label="Number Of Lessons"
+        value={value.lessonCountColor}
+        onChange={(v) => onChange({ ...value, lessonCountColor: v })}
+      />
+      <div className="flex flex-col gap-3">
+        <ColorInput
+          label="Item hover color"
+          value={value.itemHoverColor}
+          onChange={(v) => onChange({ ...value, itemHoverColor: v })}
+        />
+        <ColorInput
+          label="Item text color"
+          value={value.itemTextColor}
+          onChange={(v) => onChange({ ...value, itemTextColor: v })}
+        />
+        <ColorInput
+          label="Item border color"
+          value={value.itemBorderColor}
+          onChange={(v) => onChange({ ...value, itemBorderColor: v })}
+        />
+      </div>
+      <div className="space-y-3 border-t pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Previous post button
+        </p>
+        <ButtonStateFields
+          value={value.previousButton}
+          onChange={(previousButton) => onChange({ ...value, previousButton })}
+        />
+      </div>
+      <div className="space-y-3 border-t pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Next post button
+        </p>
+        <ButtonStateFields
+          value={value.nextButton}
+          onChange={(nextButton) => onChange({ ...value, nextButton })}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Lesson page's "Downloads" sidebar block — themes the lesson's own
+ * `resourceLinks` (already staff-editable elsewhere), a fixed core block
+ * like Instructor/Course Content.
+ */
+export function DownloadsBlockForm({
+  value,
+  onChange,
+}: {
+  value: LessonDownloadsBlock;
+  onChange: (next: LessonDownloadsBlock) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label>Download Section Heading</Label>
+          <Input
+            value={value.heading}
+            onChange={(e) => onChange({ ...value, heading: e.target.value })}
+          />
+        </div>
+        <ColorInput
+          value={value.headingColor}
+          onChange={(v) => onChange({ ...value, headingColor: v })}
+        />
+      </div>
+      <ColorInput
+        label="Background Color"
+        value={value.background}
+        onChange={(v) => onChange({ ...value, background: v })}
+      />
+      <ColorInput
+        label="Link Color"
+        value={value.linkColor}
+        onChange={(v) => onChange({ ...value, linkColor: v })}
       />
     </div>
   );
