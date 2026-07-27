@@ -42,6 +42,7 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     checkoutSettings:
       (data.checkoutSettings as CourseOffer["checkoutSettings"]) ??
       DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
+    booking: (data.booking as CourseOffer["booking"]) ?? null,
   };
 }
 

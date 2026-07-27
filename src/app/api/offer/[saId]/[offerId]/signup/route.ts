@@ -108,6 +108,8 @@ export async function POST(
       agencyId: gate.agencyId,
       courseIds: offer.courseIds,
       memberId: member.id,
+      offerTitle: offer.title,
+      booking: offer.booking,
     });
     return NextResponse.json({ ok: true, mode: "free", redirectTo: classroomUrl });
   }

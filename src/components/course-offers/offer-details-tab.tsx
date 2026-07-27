@@ -13,12 +13,14 @@ import { RichTextEditor } from "@/components/community/classroom/rich-text-edito
 import { MultiSelect, MultiSelectChips } from "@/components/ui/multi-select";
 import { uploadCourseOfferImage } from "@/lib/community/upload-image";
 import { formatCurrency } from "@/lib/format";
+import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
 import type {
   CourseOffer,
   OfferType,
   RecurringInterval,
 } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { BookingPage } from "@/types/booking";
 
 const SELECT =
   "h-9 w-full rounded-md border border-input bg-background text-foreground px-3 text-[13px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground";
@@ -88,8 +90,20 @@ export function OfferDetailsTab({
   const [footerTracking, setFooterTracking] = useState(
     offer.advanced.footerTracking,
   );
+  const [bookingPageId, setBookingPageId] = useState(
+    offer.booking?.bookingPageId ?? "",
+  );
+  const [sessionCount, setSessionCount] = useState(
+    offer.booking?.sessionCount?.toString() ?? "1",
+  );
+  const [bookingPages, setBookingPages] = useState<BookingPage[]>([]);
   const [imgUploading, setImgUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(
+    () => subscribeToBookingPages(subAccountId, setBookingPages),
+    [subAccountId],
+  );
 
   // Re-sync local state whenever a fresh offer snapshot arrives (e.g. after
   // a save bumps `version`), so the form never fights the live subscription.
@@ -112,6 +126,8 @@ export function OfferDetailsTab({
     setCustomCss(offer.advanced.customCss);
     setHeaderTracking(offer.advanced.headerTracking);
     setFooterTracking(offer.advanced.footerTracking);
+    setBookingPageId(offer.booking?.bookingPageId ?? "");
+    setSessionCount(offer.booking?.sessionCount?.toString() ?? "1");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer.id, offer.version]);
 
@@ -126,6 +142,15 @@ export function OfferDetailsTab({
     }
     setSaving(true);
     try {
+      const selectedBookingPage = bookingPages.find((p) => p.id === bookingPageId);
+      const booking = selectedBookingPage
+        ? {
+            bookingPageId: selectedBookingPage.id,
+            bookingPageName: selectedBookingPage.name,
+            bookingPageSlug: selectedBookingPage.slug,
+            sessionCount: Math.max(1, Number(sessionCount) || 1),
+          }
+        : null;
       const patch = {
         title: title.trim(),
         descriptionHtml,
@@ -151,6 +176,7 @@ export function OfferDetailsTab({
           accessDays: restrictToDays && accessDays ? Number(accessDays) : null,
         },
         advanced: { customJs, customCss, headerTracking, footerTracking },
+        booking,
         ...(publish !== undefined
           ? { visibility: publish ? "published" : "draft" }
           : {}),
@@ -221,6 +247,53 @@ export function OfferDetailsTab({
           <p className="text-[12px] text-muted-foreground">
             Please attach product to the offer
           </p>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <p className="mb-2 text-[13px] font-medium">Booking Session</p>
+          <p className="mb-2 text-[12px] text-muted-foreground">
+            Bundle a booking link so buyers can schedule sessions with you
+            after purchase — e.g. &quot;2 calls with that person&quot;
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="offer-d-booking-page" className="text-[12px] text-muted-foreground">
+              Booking Page
+            </Label>
+            <select
+              id="offer-d-booking-page"
+              className={SELECT}
+              value={bookingPageId}
+              onChange={(e) => setBookingPageId(e.target.value)}
+            >
+              <option value="">None</option>
+              {bookingPages
+                .filter((p) => p.status === "published")
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+          {bookingPageId && (
+            <div className="mt-3 space-y-1.5">
+              <Label htmlFor="offer-d-session-count" className="text-[12px] text-muted-foreground">
+                Sessions Included
+              </Label>
+              <Input
+                id="offer-d-session-count"
+                type="number"
+                min="1"
+                value={sessionCount}
+                onChange={(e) => setSessionCount(e.target.value)}
+              />
+              <p className="text-[12px] text-muted-foreground">
+                Shown to the buyer and sent by email with the booking link.
+                Not technically enforced — buyers can still book more via
+                the link, same as anyone else.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="rounded-lg border">

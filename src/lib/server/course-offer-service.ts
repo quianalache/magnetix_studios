@@ -12,6 +12,7 @@ import type {
   CourseOffer,
   CourseOfferAccess,
   CourseOfferAdvanced,
+  CourseOfferBookingBundle,
   CourseOfferCheckoutSettings,
   OfferType,
   OfferVisibility,
@@ -67,6 +68,7 @@ export async function createCourseOfferServerSide(opts: {
     advanced: DEFAULT_COURSE_OFFER_ADVANCED,
     theme: DEFAULT_OFFER_THEME,
     checkoutSettings: DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
+    booking: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -90,6 +92,10 @@ export interface CourseOfferPatch {
   access?: Partial<CourseOfferAccess>;
   advanced?: Partial<CourseOfferAdvanced>;
   checkoutSettings?: Partial<CourseOfferCheckoutSettings>;
+  /** Whole-object replace (or `null` to clear) — not a dotted-path merge
+   *  like `access`/`advanced`, since the editor always sends the full
+   *  bundle or nothing. */
+  booking?: CourseOfferBookingBundle | null;
 }
 
 export async function updateCourseOfferServerSide(opts: {
@@ -153,6 +159,7 @@ export async function updateCourseOfferServerSide(opts: {
       updates[`checkoutSettings.${key}`] = value;
     }
   }
+  if (p.booking !== undefined) updates.booking = p.booking;
   await offerDoc(opts.subAccountId, opts.offerId).update(updates);
 }
 
@@ -174,6 +181,7 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     checkoutSettings:
       (data.checkoutSettings as CourseOfferCheckoutSettings) ??
       DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
+    booking: (data.booking as CourseOfferBookingBundle | null) ?? null,
   };
 }
 

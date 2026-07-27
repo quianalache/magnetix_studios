@@ -11,8 +11,11 @@ import {
   getStandaloneCourse,
   enrollInStandaloneCourseServerSide,
 } from "@/lib/server/standalone-course-service";
+import { emailIsConfigured, sendEmail, tenantFrom } from "@/lib/comms/resend";
+import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundle-email";
 import type {
   CourseOfferAccess,
+  CourseOfferBookingBundle,
   CourseOfferPurchase,
 } from "@/types/course-offers";
 import type { PayPalConfig } from "@/types";
@@ -90,6 +93,7 @@ export async function requestCourseOfferPaypalServerSide(opts: {
     agencyId,
     offerId: opts.offerId,
     courseIds: offer.courseIds,
+    booking: offer.booking,
     memberId: opts.memberId,
     amountCents,
     currency,
@@ -199,6 +203,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     agencyId,
     offerId: opts.offerId,
     courseIds: offer.courseIds,
+    booking: offer.booking,
     memberId: opts.memberId,
     amountCents,
     currency,
@@ -301,6 +306,54 @@ async function stampDirectPurchaseMarker(opts: {
 }
 
 /**
+ * Best-effort "here's your booking link" email for a bundled Booking Page —
+ * sent alongside (never instead of) course enrollment. Failure is logged
+ * and swallowed, same as every other email call site in this codebase;
+ * losing the email must never block granting access.
+ */
+async function sendOfferBookingBundleEmail(opts: {
+  subAccountId: string;
+  memberId: string;
+  offerTitle: string;
+  booking: CourseOfferBookingBundle;
+}): Promise<void> {
+  if (!emailIsConfigured()) return;
+  try {
+    const db = getAdminDb();
+    const [memberSnap, subSnap] = await Promise.all([
+      db.doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`).get(),
+      db.doc(`subAccounts/${opts.subAccountId}`).get(),
+    ]);
+    const member = memberSnap.data();
+    if (!member?.email) return;
+    const sub = subSnap.data();
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const bookingUrl = `${appUrl}/b/${opts.subAccountId}/${opts.booking.bookingPageSlug}`;
+
+    const rendered = renderOfferBookingBundleEmail({
+      recipientName: (member.displayName as string | null) ?? "",
+      businessName: (sub?.name as string) ?? "Booking",
+      offerTitle: opts.offerTitle,
+      bookingPageName: opts.booking.bookingPageName,
+      sessionCount: opts.booking.sessionCount,
+      bookingUrl,
+    });
+
+    await sendEmail({
+      to: member.email as string,
+      subject: rendered.subject,
+      text: rendered.text,
+      html: rendered.html,
+      replyTo: (sub?.replyToEmail as string) ?? undefined,
+      from: tenantFrom(sub as Parameters<typeof tenantFrom>[0]),
+    });
+  } catch (err) {
+    console.warn("[course-offer] booking bundle email send failed", err);
+  }
+}
+
+/**
  * The shared "unlock" path — enrolls the member in every course the
  * purchase's snapshotted `courseIds` covers, applies any Offer Access
  * window, and stamps a direct-purchase marker on any bundled course that
@@ -361,6 +414,15 @@ export async function grantCourseOfferAccessServerSide(opts: {
       courseId,
       memberId: purchase.memberId,
       offerId: opts.offerId,
+    });
+  }
+
+  if (purchase.booking) {
+    await sendOfferBookingBundleEmail({
+      subAccountId: opts.subAccountId,
+      memberId: purchase.memberId,
+      offerTitle: offer?.title ?? "your purchase",
+      booking: purchase.booking,
     });
   }
 
@@ -456,6 +518,10 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
   agencyId: string;
   courseIds: string[];
   memberId: string;
+  /** Free offers have no purchase doc to snapshot a booking bundle onto, so
+   *  the caller passes it straight through from the live offer. */
+  offerTitle?: string;
+  booking?: CourseOfferBookingBundle | null;
 }): Promise<void> {
   for (const courseId of opts.courseIds) {
     await enrollInStandaloneCourseServerSide({
@@ -463,6 +529,14 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
       agencyId: opts.agencyId,
       courseId,
       memberId: opts.memberId,
+    });
+  }
+  if (opts.booking) {
+    await sendOfferBookingBundleEmail({
+      subAccountId: opts.subAccountId,
+      memberId: opts.memberId,
+      offerTitle: opts.offerTitle ?? "your purchase",
+      booking: opts.booking,
     });
   }
 }
@@ -588,6 +662,7 @@ export async function chargeOneClickUpsellServerSide(opts: {
       agencyId,
       offerId: opts.targetOfferId,
       courseIds: targetOffer.courseIds,
+      booking: targetOffer.booking,
       memberId: opts.memberId,
       amountCents: targetOffer.priceCents,
       currency: targetOffer.currency ?? "USD",

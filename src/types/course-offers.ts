@@ -50,6 +50,25 @@ export interface CourseOfferCheckoutSettings {
   serviceAgreement: CourseOfferServiceAgreement;
 }
 
+/**
+ * A Booking Page ("Calendar") bundled into an Offer alongside its courses —
+ * e.g. "includes 2 calls with that person". `bookingPageName`/`Slug` are
+ * snapshotted at attach time so the offer + its purchases can render/link
+ * without a join back to the live `BookingPage` doc.
+ *
+ * `sessionCount` is informational only — tracked and shown to the buyer
+ * (email + their post-purchase offer page), not enforced. The public
+ * booking form (`/b/{saId}/{slug}`) has no login and no per-purchase credit
+ * system, so nothing technically blocks booking more than `sessionCount`
+ * times; this is a deliberate scope choice, not an oversight.
+ */
+export interface CourseOfferBookingBundle {
+  bookingPageId: string;
+  bookingPageName: string;
+  bookingPageSlug: string;
+  sessionCount: number;
+}
+
 export interface CourseOffer {
   id: string;
   subAccountId: string;
@@ -89,6 +108,9 @@ export interface CourseOffer {
    *  created before this feature have no such field; every read falls back
    *  to `DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS`. */
   checkoutSettings: CourseOfferCheckoutSettings;
+  /** Bundled Booking Page + session count, or null if this offer is
+   *  courses-only. See `CourseOfferBookingBundle`. */
+  booking: CourseOfferBookingBundle | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -137,6 +159,10 @@ export interface CourseOfferPurchase {
   agencyId: string;
   offerId: string;
   courseIds: string[];
+  /** Snapshotted from the offer at purchase time, same rationale as
+   *  `courseIds` — later edits to the offer's bundle don't retroactively
+   *  change what a past buyer was told they got. */
+  booking: CourseOfferBookingBundle | null;
   memberId: string;
   amountCents: number;
   currency: string;

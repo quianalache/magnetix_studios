@@ -166,7 +166,7 @@ export function OfferSalesPageView({
               </div>
             )}
 
-            {includedCourses.length > 0 && (
+            {(includedCourses.length > 0 || offer.booking) && (
               <div>
                 <h2 className="mb-2 text-lg font-semibold text-[#202124]">What&apos;s included</h2>
                 <div className="space-y-2">
@@ -190,6 +190,18 @@ export function OfferSalesPageView({
                       <span className="text-sm font-medium text-[#202124]">{c.title}</span>
                     </div>
                   ))}
+                  {offer.booking && (
+                    <div className="flex items-center gap-3 rounded-lg border border-[#E4E4E4] bg-white p-3">
+                      <div className="flex h-12 w-20 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-sm font-semibold text-[#909090]">
+                        {offer.booking.sessionCount}×
+                      </div>
+                      <span className="text-sm font-medium text-[#202124]">
+                        {offer.booking.sessionCount}{" "}
+                        {offer.booking.sessionCount === 1 ? "session" : "sessions"} with{" "}
+                        {offer.booking.bookingPageName}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -241,15 +253,30 @@ export function OfferSalesPageView({
               />
             ))}
 
-            <div id="enroll">
+            <div id="enroll" className="space-y-2">
               {alreadyPurchased ? (
-                <a
-                  href={firstCourseId ? `/course/${saId}/${firstCourseId}/classroom` : "#"}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"
-                  style={{ backgroundColor: theme.hero.buttonColor }}
-                >
-                  Continue learning
-                </a>
+                <>
+                  <a
+                    href={firstCourseId ? `/course/${saId}/${firstCourseId}/classroom` : "#"}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"
+                    style={{ backgroundColor: theme.hero.buttonColor }}
+                  >
+                    Continue learning
+                  </a>
+                  {offer.booking && (
+                    <a
+                      href={`/b/${saId}/${offer.booking.bookingPageSlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-3 text-sm font-semibold text-[#202124]"
+                    >
+                      Book your session
+                      {offer.booking.sessionCount > 1
+                        ? `s (${offer.booking.sessionCount} included)`
+                        : ""}
+                    </a>
+                  )}
+                </>
               ) : interactive ? (
                 <EnrollOfferModal
                   saId={saId}
