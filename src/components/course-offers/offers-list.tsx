@@ -35,7 +35,15 @@ function typeLabel(offer: CourseOffer): string {
   return "One Time";
 }
 
-export function OffersList({ subAccountId }: { subAccountId: string }) {
+export function OffersList({
+  subAccountId,
+  courseId,
+}: {
+  subAccountId: string;
+  /** When set, scopes the list to offers that bundle this course — powers a
+   *  single course's own "Offers" tab (which offers include this course). */
+  courseId?: string;
+}) {
   const [offers, setOffers] = useState<CourseOffer[]>([]);
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -68,10 +76,11 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
 
   const filtered = useMemo(() => {
     return offers
+      .filter((o) => !courseId || o.courseIds.includes(courseId))
       .filter((o) => filter === "all" || o.visibility === filter)
       .filter((o) => o.title.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => a.title.localeCompare(b.title));
-  }, [offers, filter, search]);
+  }, [offers, courseId, filter, search]);
 
   function copyLink(offer: CourseOffer) {
     const url = `${window.location.origin}/offer/${subAccountId}/${offer.id}`;
@@ -241,6 +250,7 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
         courses={courses}
         open={createOpen}
         onOpenChange={setCreateOpen}
+        defaultCourseId={courseId}
       />
     </div>
   );

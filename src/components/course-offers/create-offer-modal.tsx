@@ -29,22 +29,28 @@ export function CreateOfferModal({
   courses,
   open,
   onOpenChange,
+  defaultCourseId,
 }: {
   subAccountId: string;
   courses: StandaloneCourse[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** Pre-selects this course when opened from a single course's own "Offers"
+   *  tab, so creating an offer there doesn't require re-picking the course. */
+  defaultCourseId?: string;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [courseIds, setCourseIds] = useState<string[]>([]);
+  const [courseIds, setCourseIds] = useState<string[]>(
+    defaultCourseId ? [defaultCourseId] : [],
+  );
   const [type, setType] = useState<OfferType>("free");
   const [priceTextOverride, setPriceTextOverride] = useState("");
   const [saving, setSaving] = useState(false);
 
   function reset() {
     setTitle("");
-    setCourseIds([]);
+    setCourseIds(defaultCourseId ? [defaultCourseId] : []);
     setType("free");
     setPriceTextOverride("");
   }

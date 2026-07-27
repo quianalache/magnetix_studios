@@ -213,6 +213,11 @@ export default function StandaloneCourseEditorPage({
               Community Groups
             </Button>
           </Link>
+          <Link href={`/sa/${subAccountId}/courses/${courseId}/offers`}>
+            <Button variant="outline" size="sm">
+              Offers
+            </Button>
+          </Link>
           <Link href={`/sa/${subAccountId}/courses/${courseId}/settings`}>
             <Button variant="outline" size="sm">
               Settings
