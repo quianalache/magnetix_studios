@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import type {
@@ -47,6 +48,28 @@ function readableTextOn(hexBackground: string): { strong: string; muted: string 
     : { strong: "#ffffff", muted: "#c9c3d1" };
 }
 
+/**
+ * A block's own `color`/`textColor` style only reaches the wrapping div —
+ * Tailwind Typography's `prose` classes then set their own color on every
+ * child element (p, li, strong, a, …), silently overriding the inherited
+ * value. Typography reads those colors from `--tw-prose-*` CSS custom
+ * properties, so setting them here (in addition to `color`, for the
+ * un-prose-scoped text directly on this element) is what actually makes a
+ * configured text color visible.
+ */
+function proseColorStyle(textColor: string): CSSProperties {
+  return {
+    color: textColor,
+    ["--tw-prose-body" as string]: textColor,
+    ["--tw-prose-headings" as string]: textColor,
+    ["--tw-prose-bold" as string]: textColor,
+    ["--tw-prose-links" as string]: textColor,
+    ["--tw-prose-bullets" as string]: textColor,
+    ["--tw-prose-counters" as string]: textColor,
+    ["--tw-prose-quotes" as string]: textColor,
+  } as CSSProperties;
+}
+
 function alignClass(align: ButtonAlign): string {
   return align === "center"
     ? "justify-center"
@@ -85,7 +108,7 @@ export function CourseBlockView({
       return (
         <div
           className="rounded-xl border border-[#E4E4E4] p-5 prose prose-sm max-w-none leading-relaxed"
-          style={{ backgroundColor: block.background, color: block.textColor }}
+          style={{ backgroundColor: block.background, ...proseColorStyle(block.textColor) }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       );
@@ -149,6 +172,7 @@ export function CourseBlockView({
           {html && (
             <div
               className="prose prose-sm max-w-none leading-relaxed"
+              style={proseColorStyle(block.bodyTextColor ?? "#3a3a44")}
               dangerouslySetInnerHTML={{ __html: html }}
             />
           )}

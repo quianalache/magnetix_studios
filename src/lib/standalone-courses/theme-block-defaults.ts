@@ -32,6 +32,7 @@ export function createDefaultBlock(type: CourseBlockType, order: number): Course
         background: "#ffffff",
         borderColor: "#e4e4e4",
         bodyHtml: "",
+        bodyTextColor: "#3a3a44",
         imageUrl: null,
         buttonVisible: true,
         buttonText: "Learn more",

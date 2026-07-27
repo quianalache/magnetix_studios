@@ -198,6 +198,11 @@ export function BlockForm({
               onChange={(v) => onChange({ ...block, borderColor: v })}
             />
           </div>
+          <ColorInput
+            label="Body Text Color"
+            value={block.bodyTextColor ?? "#3a3a44"}
+            onChange={(v) => onChange({ ...block, bodyTextColor: v })}
+          />
           <div className="space-y-1.5">
             <Label>Content</Label>
             <RichTextEditor

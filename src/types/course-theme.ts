@@ -103,6 +103,10 @@ export interface CustomBlock extends BlockBase {
   background: string;
   borderColor: string;
   bodyHtml: string;
+  /** Color for the rich-text body content below the heading. Blocks saved
+   *  before this field existed fall back to a readable dark gray at render
+   *  time (see `CourseBlockView`'s "custom" case). */
+  bodyTextColor: string;
   imageUrl: string | null;
   buttonVisible: boolean;
   buttonText: string;
