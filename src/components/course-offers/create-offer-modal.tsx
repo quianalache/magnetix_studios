@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -15,8 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, MultiSelectChips } from "@/components/ui/multi-select";
+import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
 import type { OfferType } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { BookingPage } from "@/types/booking";
 
 const SELECT =
   "h-9 w-full rounded-md border border-input bg-background text-foreground px-3 text-[13px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground";
@@ -46,13 +48,23 @@ export function CreateOfferModal({
   );
   const [type, setType] = useState<OfferType>("free");
   const [priceTextOverride, setPriceTextOverride] = useState("");
+  const [bookingPageId, setBookingPageId] = useState("");
+  const [sessionCount, setSessionCount] = useState("1");
+  const [bookingPages, setBookingPages] = useState<BookingPage[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(
+    () => subscribeToBookingPages(subAccountId, setBookingPages),
+    [subAccountId],
+  );
 
   function reset() {
     setTitle("");
     setCourseIds(defaultCourseId ? [defaultCourseId] : []);
     setType("free");
     setPriceTextOverride("");
+    setBookingPageId("");
+    setSessionCount("1");
   }
 
   async function save() {
@@ -66,6 +78,15 @@ export function CreateOfferModal({
     }
     setSaving(true);
     try {
+      const selectedBookingPage = bookingPages.find((p) => p.id === bookingPageId);
+      const booking = selectedBookingPage
+        ? {
+            bookingPageId: selectedBookingPage.id,
+            bookingPageName: selectedBookingPage.name,
+            bookingPageSlug: selectedBookingPage.slug,
+            sessionCount: Math.max(1, Number(sessionCount) || 1),
+          }
+        : null;
       const res = await fetch(
         `/api/sub-accounts/${subAccountId}/course-offers`,
         {
@@ -76,6 +97,7 @@ export function CreateOfferModal({
             courseIds,
             type,
             priceTextOverride: priceTextOverride.trim() || null,
+            booking,
           }),
         },
       );
@@ -137,6 +159,40 @@ export function CreateOfferModal({
               value={courseIds}
               onChange={setCourseIds}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="offer-booking-page" className="text-[13px]">
+              Booking Session
+            </Label>
+            <select
+              id="offer-booking-page"
+              className={SELECT}
+              value={bookingPageId}
+              onChange={(e) => setBookingPageId(e.target.value)}
+            >
+              <option value="">None</option>
+              {bookingPages
+                .filter((p) => p.status === "published")
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+            {bookingPageId && (
+              <Input
+                type="number"
+                min="1"
+                value={sessionCount}
+                onChange={(e) => setSessionCount(e.target.value)}
+                placeholder="Sessions included"
+                className="mt-1.5"
+              />
+            )}
+            <p className="text-[12px] text-muted-foreground">
+              Optional — bundle a booking link buyers get after purchase, on
+              top of the products above
+            </p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="offer-type" className="text-[13px]">

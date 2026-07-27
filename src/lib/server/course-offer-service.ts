@@ -45,6 +45,7 @@ export async function createCourseOfferServerSide(opts: {
   recurringInterval?: RecurringInterval | null;
   trialDays?: number | null;
   priceTextOverride?: string | null;
+  booking?: CourseOfferBookingBundle | null;
 }): Promise<CourseOffer> {
   const type: OfferType = opts.type ?? "free";
   const doc = {
@@ -68,7 +69,7 @@ export async function createCourseOfferServerSide(opts: {
     advanced: DEFAULT_COURSE_OFFER_ADVANCED,
     theme: DEFAULT_OFFER_THEME,
     checkoutSettings: DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
-    booking: null,
+    booking: opts.booking ?? null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };

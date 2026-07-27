@@ -3,7 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireCourseOffersStaff } from "@/lib/course-offers/staff-guard";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
-import type { OfferType } from "@/types/course-offers";
+import type { CourseOfferBookingBundle, OfferType } from "@/types/course-offers";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ export async function POST(
     priceCents?: number | null;
     currency?: string | null;
     priceTextOverride?: string | null;
+    booking?: CourseOfferBookingBundle | null;
   };
   try {
     body = await request.json();
@@ -51,6 +52,7 @@ export async function POST(
     priceCents: body.priceCents ?? null,
     currency: body.currency ?? null,
     priceTextOverride: body.priceTextOverride ?? null,
+    booking: body.booking ?? null,
   });
   return NextResponse.json({ ok: true, offer });
 }
