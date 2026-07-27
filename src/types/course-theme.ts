@@ -44,7 +44,9 @@ export interface HeaderTheme {
   iconColor: string;
   searchBackground: string;
   searchBorder: string;
+  searchIconColor: string;
   searchPlaceholder: string;
+  searchPlaceholderColor: string;
 }
 
 export type HeroVerticalSpacing = "small" | "medium" | "large";
@@ -58,13 +60,19 @@ export interface HeroTheme {
   overlayColor: string;
   /** 0-100 */
   overlayOpacity: number;
+  /** Color for `course.title` as rendered inside the hero banner itself. */
+  titleColor: string;
   /** Hero subtitle — independent of `course.title`, which remains the single
    *  source of truth for the page's actual title text. */
   tagline: string;
   /** Label only — the button's behavior is always the existing EnrollModal. */
   buttonText: string;
   buttonColor: string;
+  buttonBorderColor: string;
   buttonTextColor: string;
+  buttonColorHover: string;
+  buttonBorderColorHover: string;
+  buttonTextColorHover: string;
   verticalSpacing: HeroVerticalSpacing;
 }
 
@@ -113,7 +121,11 @@ export interface CustomBlock extends BlockBase {
   buttonType: ButtonType;
   buttonAlign: ButtonAlign;
   buttonColor: string;
+  buttonBorderColor: string;
   buttonTextColor: string;
+  buttonColorHover: string;
+  buttonBorderColorHover: string;
+  buttonTextColorHover: string;
   linkUrl: string;
 }
 
@@ -126,7 +138,11 @@ export interface CrossSellBlock extends BlockBase {
   priceColor: string;
   buttonText: string;
   buttonColor: string;
+  buttonBorderColor: string;
   buttonTextColor: string;
+  buttonColorHover: string;
+  buttonBorderColorHover: string;
+  buttonTextColorHover: string;
 }
 
 export interface CallToActionBlock extends BlockBase {
@@ -135,7 +151,11 @@ export interface CallToActionBlock extends BlockBase {
   buttonType: ButtonType;
   buttonAlign: ButtonAlign;
   buttonColor: string;
+  buttonBorderColor: string;
   buttonTextColor: string;
+  buttonColorHover: string;
+  buttonBorderColorHover: string;
+  buttonTextColorHover: string;
   linkUrl: string;
 }
 
@@ -165,11 +185,16 @@ export interface InstructorSidebarBlock extends BlockBase {
   visible: boolean;
   syncFromProfile: boolean;
   headshotUrl: string | null;
+  headshotVisible: boolean;
   background: string;
   heading: string;
+  headingColor: string;
   name: string;
+  nameColor: string;
   title: string;
+  titleColor: string;
   bio: string;
+  bioColor: string;
 }
 
 /**
@@ -192,11 +217,39 @@ export function isCoreSidebarBlock(
   return block.type === "progress" || block.type === "instructor";
 }
 
+/** Page-wide background, separate from the Hero's own background — sits
+ *  behind the entire page rather than just the hero banner region. */
+export interface CourseThemeBackground {
+  imageUrl: string | null;
+  /** 0-100. 100 = fully opaque. */
+  transparency: number;
+}
+
+/**
+ * Styling for the curriculum accordion ("Category Block" in GHL's own
+ * naming) — a fixed, non-deletable page element (same treatment as
+ * Progress/Instructor), not one of the 6 optional block types, but still
+ * fully styleable. Only the fields that map to something the accordion
+ * actually renders today are included — no lesson-description snippet or
+ * nested-subcategory concept exists in our curriculum, so those reference
+ * fields (Lesson Description Color, Sub Category *, Subcategory Margin)
+ * are intentionally not modeled.
+ */
+export interface CategoryBlockTheme {
+  background: string;
+  borderColor: string;
+  hoverColor: string;
+  categoryTitleColor: string;
+  lessonTitleColor: string;
+}
+
 export interface CourseTheme {
   colors: CourseThemeColors;
   fonts: CourseThemeFonts;
+  background: CourseThemeBackground;
   header: HeaderTheme;
   hero: HeroTheme;
+  categoryBlock: CategoryBlockTheme;
   body: CourseBlock[];
   sidebar: SidebarBlock[];
 }
@@ -215,12 +268,18 @@ export const DEFAULT_COURSE_THEME: CourseTheme = {
     primary: { family: "Inter", weight: "400" },
     secondary: { family: "Inter", weight: "700" },
   },
+  background: {
+    imageUrl: null,
+    transparency: 100,
+  },
   header: {
     background: "#ffffff",
     iconColor: "#202124",
     searchBackground: "#f8f7f5",
     searchBorder: "#e4e4e4",
+    searchIconColor: "#202124",
     searchPlaceholder: "Search courses, categories and lessons",
+    searchPlaceholderColor: "#909090",
   },
   hero: {
     // Off by default — a prior product decision explicitly removed a
@@ -235,11 +294,23 @@ export const DEFAULT_COURSE_THEME: CourseTheme = {
     overlayVisible: false,
     overlayColor: "#000000",
     overlayOpacity: 40,
+    titleColor: "#ffffff",
     tagline: "",
     buttonText: "Enroll Now",
     buttonColor: "#202124",
+    buttonBorderColor: "#202124",
     buttonTextColor: "#ffffff",
+    buttonColorHover: "#3a3a44",
+    buttonBorderColorHover: "#3a3a44",
+    buttonTextColorHover: "#ffffff",
     verticalSpacing: "medium",
+  },
+  categoryBlock: {
+    background: "#ffffff",
+    borderColor: "#e4e4e4",
+    hoverColor: "#f8f7f5",
+    categoryTitleColor: "#202124",
+    lessonTitleColor: "#202124",
   },
   body: [],
   sidebar: [
@@ -261,11 +332,16 @@ export const DEFAULT_COURSE_THEME: CourseTheme = {
       visible: true,
       syncFromProfile: true,
       headshotUrl: null,
+      headshotVisible: true,
       background: "#f8f7f5",
       heading: "Your Coach",
+      headingColor: "#909090",
       name: "",
+      nameColor: "#202124",
       title: "",
+      titleColor: "#909090",
       bio: "",
+      bioColor: "#202124",
     },
   ],
 };
@@ -289,6 +365,29 @@ export const DEFAULT_OFFER_THEME: CourseTheme = {
   },
   sidebar: [],
 };
+
+/**
+ * Backfills top-level fields added to `CourseTheme` after a course/offer's
+ * theme was first saved (`background`, `categoryBlock`) — Firestore docs
+ * written before those fields existed simply don't have the keys, so a
+ * plain `data.theme ?? DEFAULT_*_THEME` (which only covers a theme missing
+ * *entirely*) leaves them `undefined` at render time. Nested per-field
+ * additions (e.g. `hero.titleColor`) are handled separately, with a `??`
+ * fallback at each render site, since those live inside an already-present
+ * sub-object.
+ */
+export function normalizeCourseTheme(
+  theme: CourseTheme | null | undefined,
+  fallbackDefault: CourseTheme,
+): CourseTheme {
+  if (!theme) return fallbackDefault;
+  return {
+    ...fallbackDefault,
+    ...theme,
+    background: theme.background ?? fallbackDefault.background,
+    categoryBlock: theme.categoryBlock ?? fallbackDefault.categoryBlock,
+  };
+}
 
 /**
  * A saved, reusable course theme — lives at

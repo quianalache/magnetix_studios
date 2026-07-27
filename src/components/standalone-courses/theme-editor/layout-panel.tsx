@@ -6,11 +6,13 @@ import { ChevronDown, ChevronRight, Loader2, Palette, Type, Image as ImageIcon }
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ColorInput } from "@/components/ui/color-input";
+import { ImageUpload } from "@/components/community/image-upload";
 import { cn } from "@/lib/utils";
 import { FontPicker } from "./font-picker";
 import type {
   CourseThemeColors,
   CourseThemeFonts,
+  CourseThemeBackground,
   CourseTheme,
   CourseThemeTemplate,
 } from "@/types/course-theme";
@@ -58,23 +60,29 @@ function AccordionSection({
 export function LayoutPanel({
   colors,
   fonts,
+  background,
   onColorsChange,
   onFontsChange,
+  onBackgroundChange,
+  onUploadImage,
   saId,
   applyTarget,
   onApplied,
-  onGoToHero,
 }: {
   colors: CourseThemeColors;
   fonts: CourseThemeFonts;
+  background: CourseThemeBackground;
   onColorsChange: (next: CourseThemeColors) => void;
   onFontsChange: (next: CourseThemeFonts) => void;
+  onBackgroundChange: (next: CourseThemeBackground) => void;
+  /** Storage path (course theme vs offer theme) is the caller's concern —
+   *  same reasoning as `BlockForm`'s `onUploadImage`. */
+  onUploadImage: (file: File) => Promise<string>;
   saId: string;
   /** Templates are shared across Courses and Offers — this is just the
    *  request body the apply route needs to know which one to write onto. */
   applyTarget: { courseId: string } | { offerId: string };
   onApplied: (theme: CourseTheme) => void;
-  onGoToHero: () => void;
 }) {
   const [open, setOpen] = useState<SectionKey | null>(null);
   const [templates, setTemplates] = useState<CourseThemeTemplate[]>([]);
@@ -187,11 +195,29 @@ export function LayoutPanel({
         onToggle={toggle}
       >
         <p className="text-xs text-muted-foreground">
-          The banner background is set per-course in the Hero tab.
+          A page-wide background, separate from the Hero banner&apos;s own
+          background (set in the Hero tab).
         </p>
-        <Button size="sm" variant="outline" onClick={onGoToHero}>
-          Go to Hero
-        </Button>
+        <ImageUpload
+          label="Background Image"
+          hint="Recommended dimensions of 1920×1080."
+          value={background.imageUrl}
+          onChange={(url) => onBackgroundChange({ ...background, imageUrl: url })}
+          onUpload={onUploadImage}
+        />
+        <div className="space-y-1.5">
+          <Label>Transparency — {background.transparency}%</Label>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={background.transparency}
+            onChange={(e) =>
+              onBackgroundChange({ ...background, transparency: Number(e.target.value) })
+            }
+            className="w-full"
+          />
+        </div>
       </AccordionSection>
 
       <div className={cn("space-y-2 pt-4")}>

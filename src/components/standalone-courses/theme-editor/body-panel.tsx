@@ -1,35 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BlockListRow } from "./block-list-row";
-import { BlockForm } from "./block-form";
+import { BlockForm, CategoryBlockForm } from "./block-form";
 import {
   createDefaultBlock,
   BLOCK_TYPE_LABELS,
   BLOCK_TYPE_ICONS,
-  ADDABLE_BLOCK_TYPES,
+  BODY_ADDABLE_BLOCK_TYPES,
 } from "@/lib/standalone-courses/theme-block-defaults";
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
-import type { CourseBlock, CourseBlockType } from "@/types/course-theme";
+import type { CourseBlock, CourseBlockType, CategoryBlockTheme } from "@/types/course-theme";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
-/** Body region — a freely-ordered list of the 6 optional block types. */
+const CATEGORY_BLOCK_ID = "__category__";
+
+/** Body region — the fixed Category Block (curriculum accordion styling)
+ *  above a freely-ordered list of the 4 body-only optional block types. */
 export function BodyPanel({
   blocks,
   onChange,
+  categoryBlockTheme,
+  onCategoryBlockThemeChange,
   saId,
   courseId,
   otherCourses,
 }: {
   blocks: CourseBlock[];
   onChange: (blocks: CourseBlock[]) => void;
+  categoryBlockTheme: CategoryBlockTheme;
+  onCategoryBlockThemeChange: (next: CategoryBlockTheme) => void;
   saId: string;
   courseId: string;
   otherCourses: StandaloneCourse[];
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string>(CATEGORY_BLOCK_ID);
   const [addOpen, setAddOpen] = useState(false);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const selected = sorted.find((b) => b.id === selectedId) ?? null;
@@ -54,12 +61,22 @@ export function BodyPanel({
   }
   function remove(id: string) {
     onChange(blocks.filter((b) => b.id !== id));
-    if (selectedId === id) setSelectedId(null);
+    if (selectedId === id) setSelectedId(CATEGORY_BLOCK_ID);
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-[220px_1fr]">
       <div className="space-y-1">
+        <BlockListRow
+          label="Category Block"
+          icon={BookOpen}
+          selected={selectedId === CATEGORY_BLOCK_ID}
+          onSelect={() => setSelectedId(CATEGORY_BLOCK_ID)}
+          onMoveUp={() => {}}
+          onMoveDown={() => {}}
+          canMoveUp={false}
+          canMoveDown={false}
+        />
         {sorted.map((b, i) => (
           <BlockListRow
             key={b.id}
@@ -84,7 +101,7 @@ export function BodyPanel({
           </Button>
           {addOpen && (
             <div className="absolute z-10 mt-1 w-full space-y-0.5 rounded-xl border bg-background p-1.5 shadow-lg">
-              {ADDABLE_BLOCK_TYPES.map((t) => {
+              {BODY_ADDABLE_BLOCK_TYPES.map((t) => {
                 const Icon = BLOCK_TYPE_ICONS[t];
                 return (
                   <button
@@ -103,7 +120,9 @@ export function BodyPanel({
       </div>
 
       <div>
-        {selected ? (
+        {selectedId === CATEGORY_BLOCK_ID ? (
+          <CategoryBlockForm value={categoryBlockTheme} onChange={onCategoryBlockThemeChange} />
+        ) : selected ? (
           <BlockForm
             block={selected}
             onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}

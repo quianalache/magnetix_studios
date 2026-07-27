@@ -37,13 +37,25 @@ export function HeaderPanel({
           value={value.searchBorder}
           onChange={(v) => onChange({ ...value, searchBorder: v })}
         />
+        <ColorInput
+          label="Search Icon Color"
+          value={value.searchIconColor ?? "#202124"}
+          onChange={(v) => onChange({ ...value, searchIconColor: v })}
+        />
       </div>
       <div className="space-y-1.5">
         <Label>Search Placeholder</Label>
-        <Input
-          value={value.searchPlaceholder}
-          onChange={(e) => onChange({ ...value, searchPlaceholder: e.target.value })}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            className="flex-1"
+            value={value.searchPlaceholder}
+            onChange={(e) => onChange({ ...value, searchPlaceholder: e.target.value })}
+          />
+          <ColorInput
+            value={value.searchPlaceholderColor ?? "#909090"}
+            onChange={(v) => onChange({ ...value, searchPlaceholderColor: v })}
+          />
+        </div>
       </div>
     </div>
   );

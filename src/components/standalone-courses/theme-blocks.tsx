@@ -31,10 +31,10 @@ export interface CrossSellTargetInfo {
 }
 
 /**
- * Instructor has only a Background Color field (matches the GHL reference —
- * no separate name/title/bio color controls), so its text needs to stay
- * legible against whatever background the owner picks. Cheap luminance
- * check rather than a fixed gray that only works on light backgrounds.
+ * Fallback text colors for Instructor blocks saved before per-field colors
+ * (Heading/Name/Title/Bio) existed — computed from the background so old
+ * blocks stay legible instead of defaulting to a fixed gray that only
+ * works on light backgrounds.
  */
 function readableTextOn(hexBackground: string): { strong: string; muted: string } {
   const hex = hexBackground.replace("#", "");
@@ -67,6 +67,29 @@ function proseColorStyle(textColor: string): CSSProperties {
     ["--tw-prose-bullets" as string]: textColor,
     ["--tw-prose-counters" as string]: textColor,
     ["--tw-prose-quotes" as string]: textColor,
+  } as CSSProperties;
+}
+
+/**
+ * Regular + hover colors for a themed button, expressed as the CSS custom
+ * properties the shared `.theme-btn` class (see `globals.css`) reads —
+ * that's what makes the hover swap work with zero client-side JS.
+ */
+export function themeBtnStyle(opts: {
+  fill: string;
+  fillHover: string;
+  border: string;
+  borderHover: string;
+  text: string;
+  textHover: string;
+}): CSSProperties {
+  return {
+    ["--btn-fill" as string]: opts.fill,
+    ["--btn-fill-hover" as string]: opts.fillHover,
+    ["--btn-border" as string]: opts.border,
+    ["--btn-border-hover" as string]: opts.borderHover,
+    ["--btn-text" as string]: opts.text,
+    ["--btn-text-hover" as string]: opts.textHover,
   } as CSSProperties;
 }
 
@@ -180,13 +203,26 @@ export function CourseBlockView({
             <div className={`flex ${alignClass(block.buttonAlign)}`}>
               <a
                 href={block.linkUrl || "#"}
-                className="inline-flex items-center gap-1 rounded-md px-4 py-2 text-sm font-semibold"
-                style={{
-                  backgroundColor:
-                    block.buttonType === "solid" ? block.buttonColor : "transparent",
-                  color:
-                    block.buttonType === "solid" ? block.buttonTextColor : block.buttonColor,
-                }}
+                className="theme-btn inline-flex items-center gap-1 rounded-md border px-4 py-2 text-sm font-semibold"
+                style={themeBtnStyle(
+                  block.buttonType === "solid"
+                    ? {
+                        fill: block.buttonColor,
+                        fillHover: block.buttonColorHover ?? block.buttonColor,
+                        border: block.buttonBorderColor ?? block.buttonColor,
+                        borderHover: block.buttonBorderColorHover ?? block.buttonColor,
+                        text: block.buttonTextColor,
+                        textHover: block.buttonTextColorHover ?? block.buttonTextColor,
+                      }
+                    : {
+                        fill: "transparent",
+                        fillHover: "transparent",
+                        border: "transparent",
+                        borderHover: "transparent",
+                        text: block.buttonColor,
+                        textHover: block.buttonColorHover ?? block.buttonColor,
+                      },
+                )}
               >
                 {block.buttonText}
               </a>
@@ -217,8 +253,15 @@ export function CourseBlockView({
           </p>
           <a
             href={`/course/${saId}/${target.id}`}
-            className="inline-flex w-full items-center justify-center gap-1 rounded-md px-3 py-2 text-sm font-semibold"
-            style={{ backgroundColor: block.buttonColor, color: block.buttonTextColor }}
+            className="theme-btn inline-flex w-full items-center justify-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold"
+            style={themeBtnStyle({
+              fill: block.buttonColor,
+              fillHover: block.buttonColorHover ?? block.buttonColor,
+              border: block.buttonBorderColor ?? block.buttonColor,
+              borderHover: block.buttonBorderColorHover ?? block.buttonColor,
+              text: block.buttonTextColor,
+              textHover: block.buttonTextColorHover ?? block.buttonTextColor,
+            })}
           >
             {block.buttonText}
           </a>
@@ -232,13 +275,26 @@ export function CourseBlockView({
         <div className={`flex ${alignClass(block.buttonAlign)}`}>
           <a
             href={block.linkUrl || "#"}
-            className="inline-flex items-center gap-1 rounded-md px-4 py-2.5 text-sm font-semibold"
-            style={{
-              backgroundColor:
-                block.buttonType === "solid" ? block.buttonColor : "transparent",
-              color:
-                block.buttonType === "solid" ? block.buttonTextColor : block.buttonColor,
-            }}
+            className="theme-btn inline-flex items-center gap-1 rounded-md border px-4 py-2.5 text-sm font-semibold"
+            style={themeBtnStyle(
+              block.buttonType === "solid"
+                ? {
+                    fill: block.buttonColor,
+                    fillHover: block.buttonColorHover ?? block.buttonColor,
+                    border: block.buttonBorderColor ?? block.buttonColor,
+                    borderHover: block.buttonBorderColorHover ?? block.buttonColor,
+                    text: block.buttonTextColor,
+                    textHover: block.buttonTextColorHover ?? block.buttonTextColor,
+                  }
+                : {
+                    fill: "transparent",
+                    fillHover: "transparent",
+                    border: "transparent",
+                    borderHover: "transparent",
+                    text: block.buttonColor,
+                    textHover: block.buttonColorHover ?? block.buttonColor,
+                  },
+            )}
           >
             {block.buttonText}
           </a>
@@ -326,7 +382,13 @@ export function InstructorBlockView({
   instructor: StandaloneCourseInstructor;
 }) {
   if (!block.visible) return null;
-  const text = readableTextOn(block.background);
+  // Fallback for blocks saved before per-field colors existed.
+  const fallback = readableTextOn(block.background);
+  const headingColor = block.headingColor ?? fallback.muted;
+  const nameColor = block.nameColor ?? fallback.strong;
+  const titleColor = block.titleColor ?? fallback.muted;
+  const bioColor = block.bioColor ?? fallback.strong;
+  const headshotVisible = block.headshotVisible ?? true;
   const resolved = resolveInstructor(block, instructor);
   return (
     <div
@@ -336,35 +398,36 @@ export function InstructorBlockView({
       {resolved.heading && (
         <p
           className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: text.muted }}
+          style={{ color: headingColor }}
         >
           {resolved.heading}
         </p>
       )}
       <div className="flex items-center gap-3">
-        {resolved.headshotUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={resolved.headshotUrl}
-            alt={resolved.name}
-            className="h-12 w-12 rounded-lg object-cover"
-          />
-        ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-black/10 text-sm font-semibold">
-            {resolved.name.charAt(0).toUpperCase()}
-          </div>
-        )}
+        {headshotVisible &&
+          (resolved.headshotUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={resolved.headshotUrl}
+              alt={resolved.name}
+              className="h-12 w-12 rounded-lg object-cover"
+            />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-black/10 text-sm font-semibold">
+              {resolved.name.charAt(0).toUpperCase()}
+            </div>
+          ))}
         <div>
-          <p className="text-sm font-semibold" style={{ color: text.strong }}>
+          <p className="text-sm font-semibold" style={{ color: nameColor }}>
             {resolved.name}
           </p>
-          <p className="text-xs" style={{ color: text.muted }}>
+          <p className="text-xs" style={{ color: titleColor }}>
             {resolved.title}
           </p>
         </div>
       </div>
       {resolved.bio && (
-        <p className="text-xs leading-relaxed" style={{ color: text.strong }}>
+        <p className="text-xs leading-relaxed" style={{ color: bioColor }}>
           {resolved.bio}
         </p>
       )}

@@ -5,6 +5,7 @@ import {
   CourseBlockView,
   ProgressBlockView,
   InstructorBlockView,
+  themeBtnStyle,
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
 import { isCoreSidebarBlock } from "@/types/course-theme";
@@ -65,6 +66,16 @@ export function CourseHomeView({
 
   return (
     <div className="min-h-screen bg-[#F8F7F5]" style={pageStyle}>
+      {theme.background.imageUrl && (
+        <div
+          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${theme.background.imageUrl})`,
+            opacity: theme.background.transparency / 100,
+          }}
+        />
+      )}
+      <div className="relative z-10">
       <header
         className="border-b border-[#E4E4E4]"
         style={{ backgroundColor: theme.header.background }}
@@ -124,8 +135,8 @@ export function CourseHomeView({
           )}
           <div className="relative space-y-4">
             <h1
-              className="text-3xl font-semibold text-white"
-              style={{ fontFamily: "var(--font-secondary)" }}
+              className="text-3xl font-semibold"
+              style={{ fontFamily: "var(--font-secondary)", color: theme.hero.titleColor ?? "#ffffff" }}
             >
               {course.title}
             </h1>
@@ -135,11 +146,15 @@ export function CourseHomeView({
             {firstIncomplete && (
               <a
                 href={`${homeHref}/${firstIncomplete.id}`}
-                className="inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-semibold"
-                style={{
-                  backgroundColor: theme.hero.buttonColor,
-                  color: theme.hero.buttonTextColor,
-                }}
+                className="theme-btn inline-flex items-center gap-2 rounded-md border px-6 py-3 text-sm font-semibold"
+                style={themeBtnStyle({
+                  fill: theme.hero.buttonColor,
+                  fillHover: theme.hero.buttonColorHover ?? theme.hero.buttonColor,
+                  border: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
+                  borderHover: theme.hero.buttonBorderColorHover ?? theme.hero.buttonColor,
+                  text: theme.hero.buttonTextColor,
+                  textHover: theme.hero.buttonTextColorHover ?? theme.hero.buttonTextColor,
+                })}
               >
                 {theme.hero.buttonText}
               </a>
@@ -159,6 +174,7 @@ export function CourseHomeView({
               courseCoverUrl={course.coverUrl}
               lessonHrefBase={homeHref}
               brand={theme.hero.buttonColor}
+              theme={theme.categoryBlock}
             />
 
             {bodyBlocks.map((block) => (
@@ -232,6 +248,7 @@ export function CourseHomeView({
             })}
           </aside>
         </div>
+      </div>
       </div>
     </div>
   );

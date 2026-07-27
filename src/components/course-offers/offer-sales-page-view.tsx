@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import {
   CourseBlockView,
+  themeBtnStyle,
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
 import { isCoreSidebarBlock } from "@/types/course-theme";
@@ -70,6 +71,16 @@ export function OfferSalesPageView({
 
   return (
     <div className="min-h-screen bg-[#F8F7F5]" style={pageStyle}>
+      {theme.background.imageUrl && (
+        <div
+          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${theme.background.imageUrl})`,
+            opacity: theme.background.transparency / 100,
+          }}
+        />
+      )}
+      <div className="relative z-10">
       <header
         className="border-b border-[#E4E4E4]"
         style={{ backgroundColor: theme.header.background }}
@@ -123,16 +134,26 @@ export function OfferSalesPageView({
             />
           )}
           <div className="relative space-y-4">
+            <h1
+              className="text-3xl font-semibold tracking-tight"
+              style={{ fontFamily: "var(--font-secondary)", color: theme.hero.titleColor ?? "#ffffff" }}
+            >
+              {offer.title}
+            </h1>
             {theme.hero.tagline && (
               <p className="text-lg font-medium text-white">{theme.hero.tagline}</p>
             )}
             <a
               href="#enroll"
-              className="inline-flex items-center gap-2 rounded-md px-6 py-3 text-sm font-semibold"
-              style={{
-                backgroundColor: theme.hero.buttonColor,
-                color: theme.hero.buttonTextColor,
-              }}
+              className="theme-btn inline-flex items-center gap-2 rounded-md border px-6 py-3 text-sm font-semibold"
+              style={themeBtnStyle({
+                fill: theme.hero.buttonColor,
+                fillHover: theme.hero.buttonColorHover ?? theme.hero.buttonColor,
+                border: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
+                borderHover: theme.hero.buttonBorderColorHover ?? theme.hero.buttonColor,
+                text: theme.hero.buttonTextColor,
+                textHover: theme.hero.buttonTextColorHover ?? theme.hero.buttonTextColor,
+              })}
             >
               {theme.hero.buttonText}
             </a>
@@ -145,12 +166,14 @@ export function OfferSalesPageView({
           {/* Left — the sales column */}
           <div className="space-y-5">
             <div className="space-y-1">
-              <h1
-                className="text-3xl font-semibold tracking-tight text-[#202124]"
-                style={{ fontFamily: "var(--font-secondary)" }}
-              >
-                {offer.title}
-              </h1>
+              {!theme.hero.visible && (
+                <h1
+                  className="text-3xl font-semibold tracking-tight text-[#202124]"
+                  style={{ fontFamily: "var(--font-secondary)" }}
+                >
+                  {offer.title}
+                </h1>
+              )}
               <div className="flex items-center gap-3 text-sm text-[#909090]">
                 <span>{priceLabel}</span>
               </div>
@@ -300,6 +323,7 @@ export function OfferSalesPageView({
             </div>
           </aside>
         </div>
+      </div>
       </div>
     </div>
   );

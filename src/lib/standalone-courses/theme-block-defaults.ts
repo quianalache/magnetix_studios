@@ -39,7 +39,11 @@ export function createDefaultBlock(type: CourseBlockType, order: number): Course
         buttonType: "solid",
         buttonAlign: "left",
         buttonColor: "#202124",
+        buttonBorderColor: "#202124",
         buttonTextColor: "#ffffff",
+        buttonColorHover: "#3a3a44",
+        buttonBorderColorHover: "#3a3a44",
+        buttonTextColorHover: "#ffffff",
         linkUrl: "",
       };
     case "crossSell":
@@ -53,7 +57,11 @@ export function createDefaultBlock(type: CourseBlockType, order: number): Course
         priceColor: "#1d2939",
         buttonText: "Get it now!",
         buttonColor: "#202124",
+        buttonBorderColor: "#202124",
         buttonTextColor: "#ffffff",
+        buttonColorHover: "#3a3a44",
+        buttonBorderColorHover: "#3a3a44",
+        buttonTextColorHover: "#ffffff",
       };
     case "callToAction":
       return {
@@ -64,7 +72,11 @@ export function createDefaultBlock(type: CourseBlockType, order: number): Course
         buttonType: "solid",
         buttonAlign: "left",
         buttonColor: "#202124",
+        buttonBorderColor: "#202124",
         buttonTextColor: "#ffffff",
+        buttonColorHover: "#3a3a44",
+        buttonBorderColorHover: "#3a3a44",
+        buttonTextColorHover: "#ffffff",
         linkUrl: "",
       };
   }
@@ -79,13 +91,22 @@ export const BLOCK_TYPE_LABELS: Record<CourseBlockType, string> = {
   callToAction: "Call To Action",
 };
 
-export const ADDABLE_BLOCK_TYPES: CourseBlockType[] = [
+/** Body's "Add block" picker — matches the GHL reference, which doesn't
+ *  offer Cross Sell/Call To Action there (those are sidebar-only). */
+export const BODY_ADDABLE_BLOCK_TYPES: CourseBlockType[] = [
   "text",
   "image",
   "video",
   "custom",
+];
+
+/** Sidebar's "Add block" picker — matches the GHL reference, which doesn't
+ *  offer Text/Video there (those are body-only). */
+export const SIDEBAR_ADDABLE_BLOCK_TYPES: CourseBlockType[] = [
+  "image",
   "crossSell",
   "callToAction",
+  "custom",
 ];
 
 export const BLOCK_TYPE_ICONS: Record<SidebarBlockType, LucideIcon> = {

@@ -247,12 +247,16 @@ export default function CourseThemeEditorPage({
                 <LayoutPanel
                   colors={theme.colors}
                   fonts={theme.fonts}
+                  background={theme.background}
                   onColorsChange={(colors) => setTheme({ ...theme, colors })}
                   onFontsChange={(fonts) => setTheme({ ...theme, fonts })}
+                  onBackgroundChange={(background) => setTheme({ ...theme, background })}
+                  onUploadImage={(file) =>
+                    uploadCourseThemeImage(file, subAccountId, courseId, "background")
+                  }
                   saId={subAccountId}
                   applyTarget={{ courseId }}
                   onApplied={setTheme}
-                  onGoToHero={() => setTab("Hero")}
                 />
               )}
               {tab === "Header" && (
@@ -274,6 +278,10 @@ export default function CourseThemeEditorPage({
                 <BodyPanel
                   blocks={theme.body}
                   onChange={(body) => setTheme({ ...theme, body })}
+                  categoryBlockTheme={theme.categoryBlock}
+                  onCategoryBlockThemeChange={(categoryBlock) =>
+                    setTheme({ ...theme, categoryBlock })
+                  }
                   saId={subAccountId}
                   courseId={courseId}
                   otherCourses={selectableOtherCourses}

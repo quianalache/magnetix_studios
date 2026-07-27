@@ -9,7 +9,8 @@ import {
   createDefaultBlock,
   BLOCK_TYPE_LABELS,
   BLOCK_TYPE_ICONS,
-  ADDABLE_BLOCK_TYPES,
+  BODY_ADDABLE_BLOCK_TYPES,
+  SIDEBAR_ADDABLE_BLOCK_TYPES,
 } from "@/lib/standalone-courses/theme-block-defaults";
 import { uploadCourseOfferThemeImage } from "@/lib/community/upload-image";
 import type { CourseBlock, CourseBlockType } from "@/types/course-theme";
@@ -28,17 +29,24 @@ export function OfferBlockPanel({
   saId,
   offerId,
   otherCourses,
+  region,
 }: {
   blocks: CourseBlock[];
   onChange: (blocks: CourseBlock[]) => void;
   saId: string;
   offerId: string;
   otherCourses: StandaloneCourse[];
+  /** Which "Add block" menu to offer — matches the region restriction the
+   *  Standalone Course editor uses (Body: text/image/video/custom; Sidebar:
+   *  image/crossSell/callToAction/custom). */
+  region: "body" | "sidebar";
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
   const [addOpen, setAddOpen] = useState(false);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const selected = sorted.find((b) => b.id === selectedId) ?? null;
+  const addableTypes =
+    region === "body" ? BODY_ADDABLE_BLOCK_TYPES : SIDEBAR_ADDABLE_BLOCK_TYPES;
 
   function addBlock(type: CourseBlockType) {
     const maxOrder = blocks.reduce((m, b) => Math.max(m, b.order), -1);
@@ -90,7 +98,7 @@ export function OfferBlockPanel({
           </Button>
           {addOpen && (
             <div className="absolute z-10 mt-1 w-full space-y-0.5 rounded-xl border bg-background p-1.5 shadow-lg">
-              {ADDABLE_BLOCK_TYPES.map((t) => {
+              {addableTypes.map((t) => {
                 const Icon = BLOCK_TYPE_ICONS[t];
                 return (
                   <button

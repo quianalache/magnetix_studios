@@ -298,6 +298,26 @@ body {
   animation: progress-sheen 2.4s ease-in-out infinite;
 }
 
+/* Course Theme buttons (Hero, Custom/Cross Sell/Call To Action blocks) —
+   regular + hover colors are set as inline custom properties per-instance;
+   this is what actually applies the hover swap with zero client JS. */
+.theme-btn {
+  background-color: var(--btn-fill);
+  border-color: var(--btn-border);
+  color: var(--btn-text);
+}
+.theme-btn:hover {
+  background-color: var(--btn-fill-hover);
+  border-color: var(--btn-border-hover);
+  color: var(--btn-text-hover);
+}
+
+/* Category Block (curriculum accordion) hover — same per-instance custom
+   property technique as .theme-btn above. */
+.category-block-card:hover {
+  background-color: var(--category-hover);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progress-fill {
     animation: none;

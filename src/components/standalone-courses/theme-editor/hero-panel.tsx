@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ColorInput } from "@/components/ui/color-input";
 import { ImageUpload } from "@/components/community/image-upload";
+import { ButtonColorFields } from "./button-color-fields";
 import type { HeroTheme, HeroVerticalSpacing } from "@/types/course-theme";
 
 export function HeroPanel({
@@ -97,7 +98,15 @@ export function HeroPanel({
           )}
 
           <div className="space-y-1.5">
-            <Label>Tagline</Label>
+            <Label>Course Title Color</Label>
+            <ColorInput
+              value={value.titleColor ?? "#ffffff"}
+              onChange={(v) => onChange({ ...value, titleColor: v })}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Course Description</Label>
             <Input
               value={value.tagline}
               onChange={(e) => onChange({ ...value, tagline: e.target.value })}
@@ -113,18 +122,25 @@ export function HeroPanel({
               maxLength={300}
             />
           </div>
-          <div className="flex flex-col gap-3">
-            <ColorInput
-              label="Button Color"
-              value={value.buttonColor}
-              onChange={(v) => onChange({ ...value, buttonColor: v })}
-            />
-            <ColorInput
-              label="Button Text Color"
-              value={value.buttonTextColor}
-              onChange={(v) => onChange({ ...value, buttonTextColor: v })}
-            />
-          </div>
+          <ButtonColorFields
+            color={value.buttonColor}
+            borderColor={value.buttonBorderColor ?? value.buttonColor}
+            textColor={value.buttonTextColor}
+            colorHover={value.buttonColorHover ?? value.buttonColor}
+            borderColorHover={value.buttonBorderColorHover ?? value.buttonColor}
+            textColorHover={value.buttonTextColorHover ?? value.buttonTextColor}
+            onChange={(next) =>
+              onChange({
+                ...value,
+                buttonColor: next.color,
+                buttonBorderColor: next.borderColor,
+                buttonTextColor: next.textColor,
+                buttonColorHover: next.colorHover,
+                buttonBorderColorHover: next.borderColorHover,
+                buttonTextColorHover: next.textColorHover,
+              })
+            }
+          />
 
           <div className="space-y-1.5">
             <Label>Vertical Spacing</Label>

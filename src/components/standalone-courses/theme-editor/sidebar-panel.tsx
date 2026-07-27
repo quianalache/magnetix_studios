@@ -9,7 +9,7 @@ import {
   createDefaultBlock,
   BLOCK_TYPE_LABELS,
   BLOCK_TYPE_ICONS,
-  ADDABLE_BLOCK_TYPES,
+  SIDEBAR_ADDABLE_BLOCK_TYPES,
 } from "@/lib/standalone-courses/theme-block-defaults";
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import { isCoreSidebarBlock } from "@/types/course-theme";
@@ -92,7 +92,7 @@ export function SidebarPanel({
           </Button>
           {addOpen && (
             <div className="absolute z-10 mt-1 w-full space-y-0.5 rounded-xl border bg-background p-1.5 shadow-lg">
-              {ADDABLE_BLOCK_TYPES.map((t) => {
+              {SIDEBAR_ADDABLE_BLOCK_TYPES.map((t) => {
                 const Icon = BLOCK_TYPE_ICONS[t];
                 return (
                   <button

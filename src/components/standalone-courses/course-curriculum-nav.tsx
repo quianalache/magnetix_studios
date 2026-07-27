@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import { BookOpen, CheckCircle2, Circle } from "lucide-react";
+import type { CategoryBlockTheme } from "@/types/course-theme";
 
 /**
  * Clickable version of `CurriculumOutline` (the pre-purchase, summary-only
@@ -6,7 +8,8 @@ import { BookOpen, CheckCircle2, Circle } from "lucide-react";
  * section expands to real, linkable lesson rows instead of just a count.
  * Every row reuses the course's own cover image (no per-lesson thumbnail
  * field exists, and the GHL reference repeats the same course thumbnail on
- * every lesson row, so there's nothing to build there).
+ * every lesson row, so there's nothing to build there). Styled by
+ * `theme.categoryBlock`, same as `CurriculumOutline`.
  */
 
 export interface CurriculumNavSection {
@@ -27,6 +30,7 @@ export function CourseCurriculumNav({
   courseCoverUrl,
   lessonHrefBase,
   brand,
+  theme,
 }: {
   sections: CurriculumNavSection[];
   lessons: CurriculumNavLesson[];
@@ -35,6 +39,7 @@ export function CourseCurriculumNav({
   /** Base path a lesson id gets appended to. */
   lessonHrefBase: string;
   brand: string;
+  theme: CategoryBlockTheme;
 }) {
   if (lessons.length === 0) return null;
 
@@ -47,6 +52,12 @@ export function CourseCurriculumNav({
         : l.sectionId === sid,
     );
   const other = inSection(null);
+
+  const cardStyle: CSSProperties = {
+    backgroundColor: theme.background,
+    borderColor: theme.borderColor,
+    ["--category-hover" as string]: theme.hoverColor,
+  } as CSSProperties;
 
   const Row = ({ l }: { l: CurriculumNavLesson }) => (
     <a
@@ -70,7 +81,9 @@ export function CourseCurriculumNav({
           {l.title.charAt(0).toUpperCase()}
         </div>
       )}
-      <span className="text-sm font-medium text-[#202124]">{l.title}</span>
+      <span className="text-sm font-medium" style={{ color: theme.lessonTitleColor }}>
+        {l.title}
+      </span>
     </a>
   );
 
@@ -83,10 +96,14 @@ export function CourseCurriculumNav({
         return (
           <details
             key={s.id}
-            className="group rounded-lg border border-[#E4E4E4] bg-white"
+            className="category-block-card group rounded-lg border transition-colors"
+            style={cardStyle}
             open={i === 0}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium text-[#202124]">
+            <summary
+              className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium"
+              style={{ color: theme.categoryTitleColor }}
+            >
               <span className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4 shrink-0 text-[#909090]" />
                 {i + 1}. {s.title}
@@ -104,7 +121,10 @@ export function CourseCurriculumNav({
         );
       })}
       {other.length > 0 && (
-        <div className="divide-y divide-[#E4E4E4] rounded-lg border border-[#E4E4E4] bg-white">
+        <div
+          className="category-block-card divide-y divide-[#E4E4E4] rounded-lg border transition-colors"
+          style={cardStyle}
+        >
           {other.map((l) => (
             <Row key={l.id} l={l} />
           ))}

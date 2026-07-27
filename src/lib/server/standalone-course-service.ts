@@ -5,7 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
-import { DEFAULT_COURSE_THEME } from "@/types/course-theme";
+import { DEFAULT_COURSE_THEME, normalizeCourseTheme } from "@/types/course-theme";
 import type { OfferType } from "@/types/course-offers";
 import type { ResourceLink } from "@/types/community";
 import {
@@ -251,7 +251,7 @@ function withCourseDefaults(
   return {
     id,
     ...data,
-    theme: data.theme ?? DEFAULT_COURSE_THEME,
+    theme: normalizeCourseTheme(data.theme, DEFAULT_COURSE_THEME),
     linkedCommunityGroupIds: data.linkedCommunityGroupIds ?? [],
     instructor: data.instructor ?? DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
     learningExperience:

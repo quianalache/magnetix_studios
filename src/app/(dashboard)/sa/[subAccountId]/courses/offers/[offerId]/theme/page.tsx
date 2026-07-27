@@ -276,12 +276,16 @@ export default function OfferThemeEditorPage({
                 <LayoutPanel
                   colors={theme.colors}
                   fonts={theme.fonts}
+                  background={theme.background}
                   onColorsChange={(colors) => setTheme({ ...theme, colors })}
                   onFontsChange={(fonts) => setTheme({ ...theme, fonts })}
+                  onBackgroundChange={(background) => setTheme({ ...theme, background })}
+                  onUploadImage={(file) =>
+                    uploadCourseOfferThemeImage(file, subAccountId, offerId, "background")
+                  }
                   saId={subAccountId}
                   applyTarget={{ offerId }}
                   onApplied={setTheme}
-                  onGoToHero={() => setTab("Hero")}
                 />
               )}
               {tab === "Header" && (
@@ -306,6 +310,7 @@ export default function OfferThemeEditorPage({
                   saId={subAccountId}
                   offerId={offerId}
                   otherCourses={selectableCourses}
+                  region="body"
                 />
               )}
               {tab === "Sidebar" && (
@@ -319,6 +324,7 @@ export default function OfferThemeEditorPage({
                   saId={subAccountId}
                   offerId={offerId}
                   otherCourses={selectableCourses}
+                  region="sidebar"
                 />
               )}
               {tab === "Extra Info" && (

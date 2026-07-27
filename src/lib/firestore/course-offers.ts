@@ -12,7 +12,7 @@ import {
   DEFAULT_COURSE_OFFER_ADVANCED,
   DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
 } from "@/types/course-offers";
-import { DEFAULT_OFFER_THEME } from "@/types/course-theme";
+import { DEFAULT_OFFER_THEME, normalizeCourseTheme } from "@/types/course-theme";
 import type {
   CourseOffer,
   CourseOfferPurchase,
@@ -38,7 +38,7 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     advanced:
       (data.advanced as CourseOffer["advanced"]) ??
       DEFAULT_COURSE_OFFER_ADVANCED,
-    theme: (data.theme as CourseOffer["theme"]) ?? DEFAULT_OFFER_THEME,
+    theme: normalizeCourseTheme(data.theme as CourseOffer["theme"], DEFAULT_OFFER_THEME),
     checkoutSettings:
       (data.checkoutSettings as CourseOffer["checkoutSettings"]) ??
       DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,

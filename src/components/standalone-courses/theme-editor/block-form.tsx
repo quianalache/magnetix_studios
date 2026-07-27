@@ -6,12 +6,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { ColorInput } from "@/components/ui/color-input";
 import { ImageUpload } from "@/components/community/image-upload";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
+import { ButtonColorFields } from "./button-color-fields";
 import { uploadCourseThemeImage } from "@/lib/community/upload-image";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import type {
   CourseBlock,
   ProgressSidebarBlock,
   InstructorSidebarBlock,
+  CategoryBlockTheme,
   ButtonAlign,
   ButtonType,
 } from "@/types/course-theme";
@@ -244,18 +246,25 @@ export function BlockForm({
                 value={block.buttonAlign}
                 onChange={(v) => onChange({ ...block, buttonAlign: v })}
               />
-              <div className="flex flex-col gap-3">
-                <ColorInput
-                  label="Button Color"
-                  value={block.buttonColor}
-                  onChange={(v) => onChange({ ...block, buttonColor: v })}
-                />
-                <ColorInput
-                  label="Button Text Color"
-                  value={block.buttonTextColor}
-                  onChange={(v) => onChange({ ...block, buttonTextColor: v })}
-                />
-              </div>
+              <ButtonColorFields
+                color={block.buttonColor}
+                borderColor={block.buttonBorderColor ?? block.buttonColor}
+                textColor={block.buttonTextColor}
+                colorHover={block.buttonColorHover ?? block.buttonColor}
+                borderColorHover={block.buttonBorderColorHover ?? block.buttonColor}
+                textColorHover={block.buttonTextColorHover ?? block.buttonTextColor}
+                onChange={(next) =>
+                  onChange({
+                    ...block,
+                    buttonColor: next.color,
+                    buttonBorderColor: next.borderColor,
+                    buttonTextColor: next.textColor,
+                    buttonColorHover: next.colorHover,
+                    buttonBorderColorHover: next.borderColorHover,
+                    buttonTextColorHover: next.textColorHover,
+                  })
+                }
+              />
               <div className="space-y-1.5">
                 <Label>Go to URL</Label>
                 <Input
@@ -313,18 +322,25 @@ export function BlockForm({
               onChange={(e) => onChange({ ...block, buttonText: e.target.value })}
             />
           </div>
-          <div className="flex flex-col gap-3">
-            <ColorInput
-              label="Button Color"
-              value={block.buttonColor}
-              onChange={(v) => onChange({ ...block, buttonColor: v })}
-            />
-            <ColorInput
-              label="Button Text Color"
-              value={block.buttonTextColor}
-              onChange={(v) => onChange({ ...block, buttonTextColor: v })}
-            />
-          </div>
+          <ButtonColorFields
+            color={block.buttonColor}
+            borderColor={block.buttonBorderColor ?? block.buttonColor}
+            textColor={block.buttonTextColor}
+            colorHover={block.buttonColorHover ?? block.buttonColor}
+            borderColorHover={block.buttonBorderColorHover ?? block.buttonColor}
+            textColorHover={block.buttonTextColorHover ?? block.buttonTextColor}
+            onChange={(next) =>
+              onChange({
+                ...block,
+                buttonColor: next.color,
+                buttonBorderColor: next.borderColor,
+                buttonTextColor: next.textColor,
+                buttonColorHover: next.colorHover,
+                buttonBorderColorHover: next.borderColorHover,
+                buttonTextColorHover: next.textColorHover,
+              })
+            }
+          />
         </div>
       );
 
@@ -346,18 +362,25 @@ export function BlockForm({
             value={block.buttonAlign}
             onChange={(v) => onChange({ ...block, buttonAlign: v })}
           />
-          <div className="flex flex-col gap-3">
-            <ColorInput
-              label="Button Color"
-              value={block.buttonColor}
-              onChange={(v) => onChange({ ...block, buttonColor: v })}
-            />
-            <ColorInput
-              label="Button Text Color"
-              value={block.buttonTextColor}
-              onChange={(v) => onChange({ ...block, buttonTextColor: v })}
-            />
-          </div>
+          <ButtonColorFields
+            color={block.buttonColor}
+            borderColor={block.buttonBorderColor ?? block.buttonColor}
+            textColor={block.buttonTextColor}
+            colorHover={block.buttonColorHover ?? block.buttonColor}
+            borderColorHover={block.buttonBorderColorHover ?? block.buttonColor}
+            textColorHover={block.buttonTextColorHover ?? block.buttonTextColor}
+            onChange={(next) =>
+              onChange({
+                ...block,
+                buttonColor: next.color,
+                buttonBorderColor: next.borderColor,
+                buttonTextColor: next.textColor,
+                buttonColorHover: next.colorHover,
+                buttonBorderColorHover: next.borderColorHover,
+                buttonTextColorHover: next.textColorHover,
+              })
+            }
+          />
           <div className="space-y-1.5">
             <Label>Go to URL</Label>
             <Input
@@ -465,6 +488,15 @@ export function InstructorBlockForm({
         blank, in which case the fields below (e.g. from an applied template)
         are used instead.
       </p>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={block.headshotVisible ?? true}
+          onChange={(e) => onChange({ ...block, headshotVisible: e.target.checked })}
+          className="h-4 w-4"
+        />
+        Show headshot
+      </label>
       <ImageUpload
         label="Headshot"
         hint="Square, ~100×100."
@@ -478,37 +510,105 @@ export function InstructorBlockForm({
         value={block.background}
         onChange={(v) => onChange({ ...block, background: v })}
       />
-      <div className="flex flex-col gap-3">
-        <div className="space-y-1.5">
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
           <Label>Heading</Label>
           <Input
             value={block.heading}
             onChange={(e) => onChange({ ...block, heading: e.target.value })}
           />
         </div>
-        <div className="space-y-1.5">
+        <ColorInput
+          value={block.headingColor ?? "#909090"}
+          onChange={(v) => onChange({ ...block, headingColor: v })}
+        />
+      </div>
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
           <Label>Name</Label>
           <Input
             value={block.name}
             onChange={(e) => onChange({ ...block, name: e.target.value })}
           />
         </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label>Title</Label>
-        <Input
-          value={block.title}
-          onChange={(e) => onChange({ ...block, title: e.target.value })}
+        <ColorInput
+          value={block.nameColor ?? "#202124"}
+          onChange={(v) => onChange({ ...block, nameColor: v })}
         />
       </div>
-      <div className="space-y-1.5">
-        <Label>Bio</Label>
-        <Textarea
-          value={block.bio}
-          onChange={(e) => onChange({ ...block, bio: e.target.value })}
-          rows={4}
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label>Title</Label>
+          <Input
+            value={block.title}
+            onChange={(e) => onChange({ ...block, title: e.target.value })}
+          />
+        </div>
+        <ColorInput
+          value={block.titleColor ?? "#909090"}
+          onChange={(v) => onChange({ ...block, titleColor: v })}
         />
       </div>
+      <div className="flex items-end gap-2">
+        <div className="flex-1 space-y-1.5">
+          <Label>Bio</Label>
+          <Textarea
+            value={block.bio}
+            onChange={(e) => onChange({ ...block, bio: e.target.value })}
+            rows={4}
+          />
+        </div>
+        <ColorInput
+          value={block.bioColor ?? "#202124"}
+          onChange={(v) => onChange({ ...block, bioColor: v })}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The curriculum accordion's own settings ("Category Block" in GHL's
+ * naming) — a fixed, non-deletable page element like Progress/Instructor,
+ * editing `theme.categoryBlock` directly rather than an entry in the
+ * `blocks` array.
+ */
+export function CategoryBlockForm({
+  value,
+  onChange,
+}: {
+  value: CategoryBlockTheme;
+  onChange: (next: CategoryBlockTheme) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3">
+        <ColorInput
+          label="Background Color"
+          value={value.background}
+          onChange={(v) => onChange({ ...value, background: v })}
+        />
+        <ColorInput
+          label="Border Color"
+          value={value.borderColor}
+          onChange={(v) => onChange({ ...value, borderColor: v })}
+        />
+        <ColorInput
+          label="Hover Color"
+          value={value.hoverColor}
+          onChange={(v) => onChange({ ...value, hoverColor: v })}
+        />
+      </div>
+      <ColorInput
+        label="Category Title Color"
+        value={value.categoryTitleColor}
+        onChange={(v) => onChange({ ...value, categoryTitleColor: v })}
+      />
+      <ColorInput
+        label="Lesson Title Color"
+        value={value.lessonTitleColor}
+        onChange={(v) => onChange({ ...value, lessonTitleColor: v })}
+      />
     </div>
   );
 }
