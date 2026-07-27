@@ -443,6 +443,21 @@ export function InstructorBlockForm({
         />
         Show instructor block
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={block.syncFromProfile}
+          onChange={(e) => onChange({ ...block, syncFromProfile: e.target.checked })}
+          className="h-4 w-4"
+        />
+        Sync from course Instructor details
+      </label>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        When on, this block shows the Instructor fields from the course&apos;s
+        Settings tab instead of the fields below — unless those are left
+        blank, in which case the fields below (e.g. from an applied template)
+        are used instead.
+      </p>
       <ImageUpload
         label="Headshot"
         hint="Square, ~100×100."

@@ -6,6 +6,7 @@ import type {
   InstructorSidebarBlock,
   ButtonAlign,
 } from "@/types/course-theme";
+import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
 
 /**
  * Renderers for the theme's customizable block types. Deliberately
@@ -260,47 +261,87 @@ export function ProgressBlockView({
   );
 }
 
-export function InstructorBlockView({ block }: { block: InstructorSidebarBlock }) {
+/**
+ * Precedence between the course-level Instructor profile (Settings tab —
+ * `StandaloneCourse.instructor`) and this block's own stored fields (which
+ * may have been authored directly, or carried in from an applied Theme
+ * Template — templates are copy-on-apply, so there's no live reference to
+ * check, just whatever ended up in the block): when `syncFromProfile` is on
+ * AND the course profile actually has a name filled in, the course-level
+ * profile wins. Otherwise (syncing is off, or the course profile is blank —
+ * e.g. a template shipped its own complete instructor persona) the block's
+ * own fields are used as-is.
+ */
+function resolveInstructor(
+  block: InstructorSidebarBlock,
+  instructor: StandaloneCourseInstructor,
+): Pick<InstructorSidebarBlock, "heading" | "name" | "title" | "bio" | "headshotUrl"> {
+  const useProfile = block.syncFromProfile && instructor.name.trim() !== "";
+  return useProfile
+    ? {
+        heading: instructor.heading,
+        name: instructor.name,
+        title: instructor.title,
+        bio: instructor.bio,
+        headshotUrl: instructor.headshotUrl,
+      }
+    : {
+        heading: block.heading,
+        name: block.name,
+        title: block.title,
+        bio: block.bio,
+        headshotUrl: block.headshotUrl,
+      };
+}
+
+export function InstructorBlockView({
+  block,
+  instructor,
+}: {
+  block: InstructorSidebarBlock;
+  instructor: StandaloneCourseInstructor;
+}) {
   if (!block.visible) return null;
   const text = readableTextOn(block.background);
+  const resolved = resolveInstructor(block, instructor);
   return (
     <div
       className="space-y-2 rounded-xl border border-[#E4E4E4] p-4"
       style={{ backgroundColor: block.background }}
     >
-      {block.heading && (
+      {resolved.heading && (
         <p
           className="text-xs font-semibold uppercase tracking-wide"
           style={{ color: text.muted }}
         >
-          {block.heading}
+          {resolved.heading}
         </p>
       )}
       <div className="flex items-center gap-3">
-        {block.headshotUrl ? (
+        {resolved.headshotUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={block.headshotUrl}
-            alt={block.name}
+            src={resolved.headshotUrl}
+            alt={resolved.name}
             className="h-12 w-12 rounded-lg object-cover"
           />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-black/10 text-sm font-semibold">
-            {block.name.charAt(0).toUpperCase()}
+            {resolved.name.charAt(0).toUpperCase()}
           </div>
         )}
         <div>
           <p className="text-sm font-semibold" style={{ color: text.strong }}>
-            {block.name}
+            {resolved.name}
           </p>
           <p className="text-xs" style={{ color: text.muted }}>
-            {block.title}
+            {resolved.title}
           </p>
         </div>
       </div>
-      {block.bio && (
+      {resolved.bio && (
         <p className="text-xs leading-relaxed" style={{ color: text.strong }}>
-          {block.bio}
+          {resolved.bio}
         </p>
       )}
     </div>

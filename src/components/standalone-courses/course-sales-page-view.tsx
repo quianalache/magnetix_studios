@@ -260,7 +260,11 @@ export function CourseSalesPageView({
                     totalCount={totalLessons}
                   />
                 ) : (
-                  <InstructorBlockView key={block.id} block={block} />
+                  <InstructorBlockView
+                    key={block.id}
+                    block={block}
+                    instructor={course.instructor}
+                  />
                 );
               }
               return (
