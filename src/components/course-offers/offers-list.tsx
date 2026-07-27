@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, ExternalLink, Loader2, Plus } from "lucide-react";
+import { Eye, Link2, Loader2, Pencil, Plus } from "lucide-react";
 import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CreateOfferModal } from "./create-offer-modal";
-import type { CourseOffer } from "@/types/course-offers";
+import type { CourseOffer, OfferVisibility } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
 type VisibilityFilter = "published" | "draft" | "all";
@@ -77,6 +77,22 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
     const url = `${window.location.origin}/offer/${subAccountId}/${offer.id}`;
     navigator.clipboard.writeText(url);
     toast.success("Link copied");
+  }
+
+  async function updateVisibility(offer: CourseOffer, visibility: OfferVisibility) {
+    const res = await fetch(
+      `/api/sub-accounts/${subAccountId}/course-offers/${offer.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility }),
+      },
+    );
+    if (res.ok) {
+      toast.success(visibility === "published" ? "Published." : "Unpublished.");
+    } else {
+      toast.error("Couldn't update visibility");
+    }
   }
 
   return (
@@ -161,26 +177,31 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
                     {priceLabel(offer)}
                   </td>
                   <td className="px-3 py-2.5">
-                    <span
+                    <select
+                      value={offer.visibility}
+                      onChange={(e) =>
+                        updateVisibility(offer, e.target.value as OfferVisibility)
+                      }
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                        "rounded-full border-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground [&>option]:normal-case",
                         offer.visibility === "published"
                           ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                           : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
                       )}
                     >
-                      {offer.visibility}
-                    </span>
+                      <option value="published">Published</option>
+                      <option value="draft">Draft</option>
+                    </select>
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1 text-muted-foreground">
-                      <button
-                        onClick={() => copyLink(offer)}
-                        title="Copy link"
+                      <Link
+                        href={`/sa/${subAccountId}/courses/offers/${offer.id}`}
+                        title="Edit"
                         className="rounded p-1 hover:bg-muted hover:text-foreground"
                       >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Link>
                       {offer.visibility === "published" && (
                         <a
                           href={`/offer/${subAccountId}/${offer.id}`}
@@ -189,9 +210,16 @@ export function OffersList({ subAccountId }: { subAccountId: string }) {
                           title="Preview"
                           className="rounded p-1 hover:bg-muted hover:text-foreground"
                         >
-                          <ExternalLink className="h-3.5 w-3.5" />
+                          <Eye className="h-3.5 w-3.5" />
                         </a>
                       )}
+                      <button
+                        onClick={() => copyLink(offer)}
+                        title="Get link"
+                        className="rounded p-1 hover:bg-muted hover:text-foreground"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
