@@ -68,6 +68,21 @@ export function parseVideoUrl(raw: string): ParsedVideo | null {
   return null;
 }
 
+/**
+ * Parse a pasted generic embed — either a full `<iframe>` embed code (pull
+ * `src` out of it) or a bare URL — for the rich-text editor's Embed button's
+ * fallback when the input isn't a recognized YouTube/Vimeo/Loom/Descript
+ * link. Only `https://` survives (matches the `iframe` scheme restriction in
+ * `lesson-html.ts`'s sanitizer, the actual security boundary on render).
+ */
+export function extractEmbedSrc(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const iframeMatch = trimmed.match(/<iframe[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+  const src = (iframeMatch ? iframeMatch[1] : trimmed).trim();
+  return /^https:\/\//i.test(src) ? src : null;
+}
+
 export function embedUrlFor(
   provider: VideoProvider | null,
   id: string | null,

@@ -18,17 +18,17 @@ export {
  * stored HTML on the way out.
  *
  * Allowed: standard formatting + headings + lists + blockquote + code/pre +
- * <img> + <a> + <iframe> RESTRICTED to YouTube / Vimeo / Loom / Descript embed
- * hosts (the inline `lesson-video` node). Everything else (scripts, event
- * handlers, arbitrary iframes) is stripped.
+ * <img> + <a> + <iframe>. Any `https://` iframe src survives (the inline
+ * `lesson-video`/`lesson-embed` nodes) — course staff author this content for
+ * their own students, same trust model as any course platform's "embed code"
+ * feature, so there's no third-party-host allowlist to maintain. Scripts,
+ * event handlers, and every attribute not explicitly listed below (including
+ * `srcdoc`, which would otherwise let an iframe inline its own script) are
+ * always stripped — that's the actual security boundary here, not the host.
  *
  * This module pulls in sanitize-html (a Node HTML parser) — keep it OFF the
  * client import path. Client components use ./lesson-html-shared instead.
  */
-
-// Only iframes pointing at these embed hosts survive sanitization.
-const SAFE_IFRAME_SRC =
-  /^https:\/\/(www\.youtube\.com\/embed\/|player\.vimeo\.com\/video\/|www\.loom\.com\/embed\/|share\.descript\.com\/embed\/)/;
 
 /** Sanitize lesson HTML for rendering to members. Server-side (no DOM). */
 export function sanitizeLessonHtml(html: string): string {
@@ -43,21 +43,12 @@ export function sanitizeLessonHtml(html: string): string {
       a: ["href", "target", "rel"],
       img: ["src", "alt", "title", "class"],
       iframe: ["src", "allow", "allowfullscreen", "frameborder"],
-      div: ["class", "data-provider", "data-id"],
+      div: ["class", "data-provider", "data-id", "data-src"],
       span: ["class"],
       "*": ["class"],
     },
     allowedSchemes: ["http", "https", "mailto"],
     allowedSchemesByTag: { img: ["http", "https"], iframe: ["https"] },
-    // iframes are doubly restricted: known host AND known embed path.
-    allowedIframeHostnames: [
-      "www.youtube.com",
-      "player.vimeo.com",
-      "www.loom.com",
-      "share.descript.com",
-    ],
-    exclusiveFilter: (frame) =>
-      frame.tag === "iframe" && !SAFE_IFRAME_SRC.test(frame.attribs.src ?? ""),
     // Harden every surviving link.
     transformTags: {
       a: (tagName, attribs) => ({

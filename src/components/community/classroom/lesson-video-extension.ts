@@ -93,10 +93,18 @@ export const LessonVideo = Node.create({
 
   addCommands() {
     return {
+      // Insert the atom + a trailing empty paragraph as ONE insertContent
+      // call so the selection lands in that paragraph afterward instead of
+      // staying a NodeSelection on the atom — otherwise a second insertion
+      // right after (another video, an embed, an image) would REPLACE this
+      // one instead of appending after it.
       setLessonVideo:
         (attrs) =>
         ({ commands }) =>
-          commands.insertContent({ type: "lessonVideo", attrs }),
+          commands.insertContent([
+            { type: "lessonVideo", attrs },
+            { type: "paragraph" },
+          ]),
     };
   },
 });

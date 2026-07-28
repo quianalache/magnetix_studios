@@ -27,7 +27,8 @@ import {
   Video,
 } from "lucide-react";
 import { LessonVideo } from "./lesson-video-extension";
-import { parseVideoUrl } from "@/lib/community/video-embed";
+import { LessonEmbed } from "./lesson-embed-extension";
+import { parseVideoUrl, extractEmbedSrc } from "@/lib/community/video-embed";
 import { lessonBodyToEditorHtml } from "@/lib/community/lesson-html-shared";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,9 @@ import { cn } from "@/lib/utils";
  * `onChange`; the public player sanitizes it on render (see lesson-html.ts).
  * Images upload straight to Firebase Storage via the shared community helper;
  * the Video button embeds a YouTube/Vimeo/Loom/Descript player inline (the
- * LessonVideo node).
+ * LessonVideo node) when it recognizes the link, otherwise falls back to a
+ * generic https:// iframe embed (the LessonEmbed node) — for audio hosts,
+ * scheduling widgets, or any other third-party embed code.
  *
  * Mounted with a `key={lesson.id}` parent so it remounts per lesson — initial
  * content is read once, no value→editor syncing needed.
@@ -70,6 +73,7 @@ export function RichTextEditor({
       }),
       Image.configure({ HTMLAttributes: { class: "rounded-lg" } }),
       LessonVideo,
+      LessonEmbed,
     ],
     content: lessonBodyToEditorHtml(value),
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
@@ -121,18 +125,25 @@ export function RichTextEditor({
   }
 
   function addVideo() {
-    const url = window.prompt("YouTube, Vimeo, Loom, or Descript URL");
-    if (!url) return;
-    const parsed = parseVideoUrl(url);
-    if (!parsed) {
-      toast.error("Not a recognized YouTube, Vimeo, Loom, or Descript link.");
+    const input = window.prompt(
+      "YouTube, Vimeo, Loom, or Descript URL — or paste any other embed code / https:// embed URL",
+    );
+    if (!input) return;
+    const parsed = parseVideoUrl(input);
+    if (parsed) {
+      editor!
+        .chain()
+        .focus()
+        .setLessonVideo({ provider: parsed.provider, videoId: parsed.id })
+        .run();
       return;
     }
-    editor!
-      .chain()
-      .focus()
-      .setLessonVideo({ provider: parsed.provider, videoId: parsed.id })
-      .run();
+    const src = extractEmbedSrc(input);
+    if (!src) {
+      toast.error("Paste a video link (YouTube/Vimeo/Loom/Descript) or an https:// embed code/URL.");
+      return;
+    }
+    editor!.chain().focus().setLessonEmbed({ src }).run();
   }
 
   return (
@@ -157,7 +168,7 @@ export function RichTextEditor({
         <ToolbarBtn onClick={() => fileRef.current?.click()} title="Image" disabled={uploading}>
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
         </ToolbarBtn>
-        <ToolbarBtn onClick={addVideo} title="Embed video"><Video className="h-4 w-4" /></ToolbarBtn>
+        <ToolbarBtn onClick={addVideo} title="Embed video or code"><Video className="h-4 w-4" /></ToolbarBtn>
         <ToolbarBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider"><Minus className="h-4 w-4" /></ToolbarBtn>
         <Divider />
         <ToolbarBtn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo"><Undo2 className="h-4 w-4" /></ToolbarBtn>
