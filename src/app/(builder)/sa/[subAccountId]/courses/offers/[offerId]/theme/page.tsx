@@ -185,7 +185,7 @@ export default function OfferThemeEditorPage({
   );
 
   return (
-    <div className="flex h-[calc(100vh-1px)] flex-col">
+    <div className="flex h-dvh flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-4 border-b px-4 py-3">
         <Link
