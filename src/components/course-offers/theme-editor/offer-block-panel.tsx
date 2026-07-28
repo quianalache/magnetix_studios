@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { ChevronLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BlockListRow } from "@/components/standalone-courses/theme-editor/block-list-row";
 import { BlockForm } from "@/components/standalone-courses/theme-editor/block-form";
@@ -21,7 +21,11 @@ import type { CourseOffer } from "@/types/course-offers";
  * optional block types, same as `BodyPanel` for courses. One shared
  * component covers both tabs since, unlike courses, an Offer's sidebar has
  * no core Progress/Instructor blocks to special-case (see
- * `DEFAULT_OFFER_THEME`'s doc comment).
+ * `DEFAULT_OFFER_THEME`'s doc comment). List and the selected block's
+ * settings form are two full-width views (not a side-by-side split) — the
+ * settings panel is only ~320px wide, and splitting that further left the
+ * form column too narrow for its own content (the rich-text editor in
+ * particular).
  */
 export function OfferBlockPanel({
   blocks,
@@ -41,7 +45,7 @@ export function OfferBlockPanel({
    *  image/crossSell/callToAction/custom). */
   region: "body" | "sidebar";
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(blocks[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const sorted = [...blocks].sort((a, b) => a.order - b.order);
   const selected = sorted.find((b) => b.id === selectedId) ?? null;
@@ -71,63 +75,65 @@ export function OfferBlockPanel({
     if (selectedId === id) setSelectedId(null);
   }
 
-  return (
-    <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-      <div className="space-y-1">
-        {sorted.map((b, i) => (
-          <BlockListRow
-            key={b.id}
-            label={BLOCK_TYPE_LABELS[b.type]}
-            icon={BLOCK_TYPE_ICONS[b.type]}
-            selected={selectedId === b.id}
-            onSelect={() => setSelectedId(b.id)}
-            onMoveUp={() => move(b.id, -1)}
-            onMoveDown={() => move(b.id, 1)}
-            onDelete={() => remove(b.id)}
-            canMoveUp={i > 0}
-            canMoveDown={i < sorted.length - 1}
-          />
-        ))}
-        <div className="relative pt-1">
-          <Button
-            size="sm"
-            onClick={() => setAddOpen((o) => !o)}
-            className="w-full rounded-full bg-rose-100 text-rose-950 hover:bg-rose-200"
-          >
-            <Plus className="h-4 w-4" /> Add Block
-          </Button>
-          {addOpen && (
-            <div className="absolute z-10 mt-1 w-full space-y-0.5 rounded-xl border bg-background p-1.5 shadow-lg">
-              {addableTypes.map((t) => {
-                const Icon = BLOCK_TYPE_ICONS[t];
-                return (
-                  <button
-                    key={t}
-                    onClick={() => addBlock(t)}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-muted"
-                  >
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    {BLOCK_TYPE_LABELS[t]}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+  if (selected) {
+    return (
+      <div className="space-y-4">
+        <button
+          onClick={() => setSelectedId(null)}
+          className="flex items-center gap-1 text-sm font-medium text-foreground hover:text-muted-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" /> {BLOCK_TYPE_LABELS[selected.type]}
+        </button>
+        <BlockForm
+          block={selected}
+          onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
+          onUploadImage={(file) => uploadCourseOfferThemeImage(file, saId, offerId, "block")}
+          otherOffers={otherOffers}
+        />
       </div>
+    );
+  }
 
-      <div>
-        {selected ? (
-          <BlockForm
-            block={selected}
-            onChange={(next) => onChange(blocks.map((b) => (b.id === next.id ? next : b)))}
-            onUploadImage={(file) => uploadCourseOfferThemeImage(file, saId, offerId, "block")}
-            otherOffers={otherOffers}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {blocks.length === 0 ? "No blocks yet — add one to get started." : "Select a block to edit."}
-          </p>
+  return (
+    <div className="space-y-1">
+      {sorted.map((b, i) => (
+        <BlockListRow
+          key={b.id}
+          label={BLOCK_TYPE_LABELS[b.type]}
+          icon={BLOCK_TYPE_ICONS[b.type]}
+          selected={false}
+          onSelect={() => setSelectedId(b.id)}
+          onMoveUp={() => move(b.id, -1)}
+          onMoveDown={() => move(b.id, 1)}
+          onDelete={() => remove(b.id)}
+          canMoveUp={i > 0}
+          canMoveDown={i < sorted.length - 1}
+        />
+      ))}
+      <div className="relative pt-1">
+        <Button
+          size="sm"
+          onClick={() => setAddOpen((o) => !o)}
+          className="w-full rounded-full bg-rose-100 text-rose-950 hover:bg-rose-200"
+        >
+          <Plus className="h-4 w-4" /> Add Block
+        </Button>
+        {addOpen && (
+          <div className="absolute z-10 mt-1 w-full space-y-0.5 rounded-xl border bg-background p-1.5 shadow-lg">
+            {addableTypes.map((t) => {
+              const Icon = BLOCK_TYPE_ICONS[t];
+              return (
+                <button
+                  key={t}
+                  onClick={() => addBlock(t)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-muted"
+                >
+                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  {BLOCK_TYPE_LABELS[t]}
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
