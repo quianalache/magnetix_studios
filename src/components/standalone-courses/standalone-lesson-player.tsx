@@ -244,11 +244,11 @@ export function StandaloneLessonPlayer({
 
           <div className="grid gap-6 md:grid-cols-[1fr_300px]">
             <div
-              className="min-w-0 space-y-4 rounded-2xl border border-[#E4E4E4] p-5 shadow-sm sm:p-6"
+              className="min-w-0 space-y-4 rounded-2xl p-5 shadow-sm sm:p-6"
               style={{ backgroundColor: lessonTheme.player.backgroundColor }}
             >
               {current.embedUrl && (
-                <div className="aspect-video w-full overflow-hidden rounded-xl border border-[#E4E4E4] bg-black">
+                <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
                   <iframe
                     src={current.embedUrl}
                     title={current.title}
@@ -330,7 +330,7 @@ export function StandaloneLessonPlayer({
                   return (
                     <div
                       key={block.id}
-                      className="rounded-lg border border-[#E4E4E4] p-3"
+                      className="rounded-lg p-3"
                       style={{ backgroundColor: block.background }}
                     >
                       <div className="mb-2 flex items-center justify-between px-1">
