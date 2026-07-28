@@ -229,13 +229,11 @@ export interface CourseThemeBackground {
 
 /**
  * Styling for the curriculum accordion ("Category Block" in GHL's own
- * naming) — a fixed, non-deletable page element (same treatment as
- * Progress/Instructor), not one of the 6 optional block types, but still
- * fully styleable. Only the fields that map to something the accordion
- * actually renders today are included — no lesson-description snippet or
- * nested-subcategory concept exists in our curriculum, so those reference
- * fields (Lesson Description Color, Sub Category *, Subcategory Margin)
- * are intentionally not modeled.
+ * naming). Only the fields that map to something the accordion actually
+ * renders today are included — no lesson-description snippet or nested-
+ * subcategory concept exists in our curriculum, so those reference fields
+ * (Lesson Description Color, Sub Category *, Subcategory Margin) are
+ * intentionally not modeled.
  */
 export interface CategoryBlockTheme {
   background: string;
@@ -245,14 +243,30 @@ export interface CategoryBlockTheme {
   lessonTitleColor: string;
 }
 
+/**
+ * The curriculum accordion as a real entry in the `body` list — reorderable
+ * like any other block (not pinned first), but still not deletable, same
+ * treatment as Progress/Instructor in the sidebar.
+ */
+export interface CategoryCoreBlock extends BlockBase, CategoryBlockTheme {
+  type: "category";
+}
+
+/** Body entries: the curriculum accordion (fixed core, not deletable) mixed
+ *  into the same ordered list as the 6 optional block types. */
+export type BodyBlock = CourseBlock | CategoryCoreBlock;
+
+export function isCoreBodyBlock(block: BodyBlock): block is CategoryCoreBlock {
+  return block.type === "category";
+}
+
 export interface CourseTheme {
   colors: CourseThemeColors;
   fonts: CourseThemeFonts;
   background: CourseThemeBackground;
   header: HeaderTheme;
   hero: HeroTheme;
-  categoryBlock: CategoryBlockTheme;
-  body: CourseBlock[];
+  body: BodyBlock[];
   sidebar: SidebarBlock[];
 }
 
@@ -422,14 +436,18 @@ export const DEFAULT_COURSE_THEME: CourseTheme = {
     buttonTextColorHover: "#ffffff",
     verticalSpacing: "medium",
   },
-  categoryBlock: {
-    background: "#ffffff",
-    borderColor: "#e4e4e4",
-    hoverColor: "#f8f7f5",
-    categoryTitleColor: "#202124",
-    lessonTitleColor: "#202124",
-  },
-  body: [],
+  body: [
+    {
+      id: "core-category",
+      order: 0,
+      type: "category",
+      background: "#ffffff",
+      borderColor: "#e4e4e4",
+      hoverColor: "#f8f7f5",
+      categoryTitleColor: "#202124",
+      lessonTitleColor: "#202124",
+    },
+  ],
   sidebar: [
     {
       id: "core-progress",
@@ -480,6 +498,10 @@ export const DEFAULT_OFFER_THEME: CourseTheme = {
     ...DEFAULT_COURSE_THEME.header,
     searchPlaceholder: "Search",
   },
+  // No curriculum accordion for an Offer (it bundles courses, not lessons of
+  // its own), so the Category Block core entry doesn't apply — same
+  // reasoning as the empty sidebar below.
+  body: [],
   sidebar: [],
 };
 
@@ -580,9 +602,9 @@ export const DEFAULT_LESSON_THEME: LessonTheme = {
 
 /**
  * Backfills top-level fields added to `CourseTheme` after a course/offer's
- * theme was first saved (`background`, `categoryBlock`) — Firestore docs
- * written before those fields existed simply don't have the keys, so a
- * plain `data.theme ?? DEFAULT_*_THEME` (which only covers a theme missing
+ * theme was first saved — Firestore docs written before those fields
+ * existed simply don't have the keys, so a plain
+ * `data.theme ?? DEFAULT_*_THEME` (which only covers a theme missing
  * *entirely*) leaves them `undefined` at render time. Nested per-field
  * additions (e.g. `hero.titleColor`) are handled separately, with a `??`
  * fallback at each render site, since those live inside an already-present
@@ -593,12 +615,37 @@ export function normalizeCourseTheme(
   fallbackDefault: CourseTheme,
 ): CourseTheme {
   if (!theme) return fallbackDefault;
-  return {
+  const merged: CourseTheme = {
     ...fallbackDefault,
     ...theme,
     background: theme.background ?? fallbackDefault.background,
-    categoryBlock: theme.categoryBlock ?? fallbackDefault.categoryBlock,
   };
+  if (!merged.body.some((b) => b.type === "category")) {
+    // Two legacy shapes collapse into the same fallback here: (a) a course
+    // saved before the Category Block existed at all, or (b) one saved in
+    // the brief window it lived as its own top-level `categoryBlock` field,
+    // before becoming a reorderable `body` entry — reuse that old field's
+    // styling if present, otherwise fall back to the default. Offers never
+    // get one added (`DEFAULT_OFFER_THEME.body` has no category entry to
+    // fall back to), matching how they've never had a curriculum.
+    const legacyCategoryBlock = (theme as unknown as { categoryBlock?: CategoryBlockTheme })
+      .categoryBlock;
+    const defaultCategoryBlock = fallbackDefault.body.find(
+      (b): b is CategoryCoreBlock => b.type === "category",
+    );
+    if (legacyCategoryBlock || defaultCategoryBlock) {
+      merged.body = [
+        {
+          id: "core-category",
+          order: -1,
+          type: "category",
+          ...(legacyCategoryBlock ?? defaultCategoryBlock!),
+        },
+        ...merged.body,
+      ];
+    }
+  }
+  return merged;
 }
 
 /** Same top-level-key backfill as `normalizeCourseTheme`, for

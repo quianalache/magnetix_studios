@@ -31,6 +31,7 @@ export function CourseCurriculumNav({
   lessonHrefBase,
   brand,
   theme,
+  interactive = true,
 }: {
   sections: CurriculumNavSection[];
   lessons: CurriculumNavLesson[];
@@ -40,6 +41,9 @@ export function CourseCurriculumNav({
   lessonHrefBase: string;
   brand: string;
   theme: CategoryBlockTheme;
+  /** false in the theme editor's live preview — rows render as inert,
+   *  non-navigating lookalikes instead of real links. */
+  interactive?: boolean;
 }) {
   if (lessons.length === 0) return null;
 
@@ -59,33 +63,42 @@ export function CourseCurriculumNav({
     ["--category-hover" as string]: theme.hoverColor,
   } as CSSProperties;
 
-  const Row = ({ l }: { l: CurriculumNavLesson }) => (
-    <a
-      href={`${lessonHrefBase}/${l.id}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.03]"
-    >
-      {completed.has(l.id) ? (
-        <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: brand }} />
-      ) : (
-        <Circle className="h-4 w-4 shrink-0 text-[#c4c4c4]" />
-      )}
-      {courseCoverUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={courseCoverUrl}
-          alt=""
-          className="h-10 w-16 shrink-0 rounded-md object-cover"
-        />
-      ) : (
-        <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-xs font-semibold text-[#909090]">
-          {l.title.charAt(0).toUpperCase()}
-        </div>
-      )}
-      <span className="text-sm font-medium" style={{ color: theme.lessonTitleColor }}>
-        {l.title}
-      </span>
-    </a>
-  );
+  const Row = ({ l }: { l: CurriculumNavLesson }) => {
+    const content = (
+      <>
+        {completed.has(l.id) ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: brand }} />
+        ) : (
+          <Circle className="h-4 w-4 shrink-0 text-[#c4c4c4]" />
+        )}
+        {courseCoverUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={courseCoverUrl}
+            alt=""
+            className="h-10 w-16 shrink-0 rounded-md object-cover"
+          />
+        ) : (
+          <div className="flex h-10 w-16 shrink-0 items-center justify-center rounded-md bg-black/[0.05] text-xs font-semibold text-[#909090]">
+            {l.title.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <span className="text-sm font-medium" style={{ color: theme.lessonTitleColor }}>
+          {l.title}
+        </span>
+      </>
+    );
+    return interactive ? (
+      <a
+        href={`${lessonHrefBase}/${l.id}`}
+        className="flex items-center gap-3 px-4 py-3 hover:bg-black/[0.03]"
+      >
+        {content}
+      </a>
+    ) : (
+      <div className="flex items-center gap-3 px-4 py-3">{content}</div>
+    );
+  };
 
   return (
     <div className="space-y-2">

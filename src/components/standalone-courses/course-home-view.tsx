@@ -39,6 +39,7 @@ export function CourseHomeView({
   member,
   completedLessonIds,
   crossSellTargets,
+  interactive = true,
 }: {
   saId: string;
   courseId: string;
@@ -49,6 +50,10 @@ export function CourseHomeView({
   member: Member;
   completedLessonIds: string[];
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
+  /** false in the theme editor's live preview — the curriculum and the
+   *  Hero's "into first lesson" CTA become non-navigating so clicking them
+   *  doesn't take over the whole editor. */
+  interactive?: boolean;
 }) {
   const bodyBlocks = [...theme.body].sort((a, b) => a.order - b.order);
   const sidebarBlocks = [...theme.sidebar].sort((a, b) => a.order - b.order);
@@ -144,20 +149,36 @@ export function CourseHomeView({
               <p className="text-lg font-medium text-white">{theme.hero.tagline}</p>
             )}
             {firstIncomplete && (
-              <a
-                href={`${homeHref}/${firstIncomplete.id}`}
-                className="theme-btn inline-flex items-center gap-2 rounded-md border px-6 py-3 text-sm font-semibold"
-                style={themeBtnStyle({
-                  fill: theme.hero.buttonColor,
-                  fillHover: theme.hero.buttonColorHover ?? theme.hero.buttonColor,
-                  border: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
-                  borderHover: theme.hero.buttonBorderColorHover ?? theme.hero.buttonColor,
-                  text: theme.hero.buttonTextColor,
-                  textHover: theme.hero.buttonTextColorHover ?? theme.hero.buttonTextColor,
-                })}
-              >
-                {theme.hero.buttonText}
-              </a>
+              interactive ? (
+                <a
+                  href={`${homeHref}/${firstIncomplete.id}`}
+                  className="theme-btn inline-flex items-center gap-2 rounded-md border px-6 py-3 text-sm font-semibold"
+                  style={themeBtnStyle({
+                    fill: theme.hero.buttonColor,
+                    fillHover: theme.hero.buttonColorHover ?? theme.hero.buttonColor,
+                    border: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
+                    borderHover: theme.hero.buttonBorderColorHover ?? theme.hero.buttonColor,
+                    text: theme.hero.buttonTextColor,
+                    textHover: theme.hero.buttonTextColorHover ?? theme.hero.buttonTextColor,
+                  })}
+                >
+                  {theme.hero.buttonText}
+                </a>
+              ) : (
+                <span
+                  className="theme-btn inline-flex items-center gap-2 rounded-md border px-6 py-3 text-sm font-semibold"
+                  style={themeBtnStyle({
+                    fill: theme.hero.buttonColor,
+                    fillHover: theme.hero.buttonColor,
+                    border: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
+                    borderHover: theme.hero.buttonBorderColor ?? theme.hero.buttonColor,
+                    text: theme.hero.buttonTextColor,
+                    textHover: theme.hero.buttonTextColor,
+                  })}
+                >
+                  {theme.hero.buttonText}
+                </span>
+              )
             )}
           </div>
         </div>
@@ -165,26 +186,32 @@ export function CourseHomeView({
 
       <div className="px-4 py-10">
         <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-[1fr_340px]">
-          {/* Left — curriculum */}
+          {/* Left — curriculum. One ordered pass so the Category Block can be
+              freely reordered against the other body blocks (e.g. an intro
+              Video block placed above it), instead of always being first. */}
           <div className="space-y-5">
-            <CourseCurriculumNav
-              sections={sections}
-              lessons={lessons}
-              completedIds={completedLessonIds}
-              courseCoverUrl={course.coverUrl}
-              lessonHrefBase={homeHref}
-              brand={theme.hero.buttonColor}
-              theme={theme.categoryBlock}
-            />
-
-            {bodyBlocks.map((block) => (
-              <CourseBlockView
-                key={block.id}
-                block={block}
-                saId={saId}
-                crossSellTargets={crossSellTargets}
-              />
-            ))}
+            {bodyBlocks.map((block) =>
+              block.type === "category" ? (
+                <CourseCurriculumNav
+                  key={block.id}
+                  sections={sections}
+                  lessons={lessons}
+                  completedIds={completedLessonIds}
+                  courseCoverUrl={course.coverUrl}
+                  lessonHrefBase={homeHref}
+                  brand={theme.hero.buttonColor}
+                  theme={block}
+                  interactive={interactive}
+                />
+              ) : (
+                <CourseBlockView
+                  key={block.id}
+                  block={block}
+                  saId={saId}
+                  crossSellTargets={crossSellTargets}
+                />
+              ),
+            )}
           </div>
 
           {/* Right — course card + sidebar blocks */}

@@ -159,6 +159,7 @@ export function ThemeLivePreview({
       member={PREVIEW_MEMBER}
       completedLessonIds={[]}
       crossSellTargets={crossSellTargets}
+      interactive={false}
     />
   );
 }

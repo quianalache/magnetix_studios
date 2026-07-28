@@ -223,16 +223,18 @@ export function CourseSalesPageView({
               </div>
             )}
 
-            <CurriculumOutline sections={outline} theme={theme.categoryBlock} />
-
-            {bodyBlocks.map((block) => (
-              <CourseBlockView
-                key={block.id}
-                block={block}
-                saId={saId}
-                crossSellTargets={crossSellTargets}
-              />
-            ))}
+            {bodyBlocks.map((block) =>
+              block.type === "category" ? (
+                <CurriculumOutline key={block.id} sections={outline} theme={block} />
+              ) : (
+                <CourseBlockView
+                  key={block.id}
+                  block={block}
+                  saId={saId}
+                  crossSellTargets={crossSellTargets}
+                />
+              ),
+            )}
           </div>
 
           {/* Right — the enroll card */}

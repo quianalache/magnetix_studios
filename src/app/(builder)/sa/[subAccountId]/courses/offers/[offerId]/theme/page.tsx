@@ -39,7 +39,7 @@ import {
   type CourseOffer,
   type CourseOfferCheckoutSettings,
 } from "@/types/course-offers";
-import { isCoreSidebarBlock } from "@/types/course-theme";
+import { isCoreSidebarBlock, isCoreBodyBlock } from "@/types/course-theme";
 import type { CourseTheme } from "@/types/course-theme";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
@@ -310,7 +310,11 @@ export default function OfferThemeEditorPage({
               )}
               {tab === "Body" && (
                 <OfferBlockPanel
-                  blocks={theme.body}
+                  // An Offer's body never has a Category Block (no curriculum
+                  // — see DEFAULT_OFFER_THEME) — filtered defensively in case
+                  // a template that had one slipped through before apply-time
+                  // stripping, same as OfferSalesPageView does.
+                  blocks={theme.body.filter((b) => !isCoreBodyBlock(b))}
                   onChange={(body) => setTheme({ ...theme, body })}
                   saId={subAccountId}
                   offerId={offerId}

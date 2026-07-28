@@ -343,10 +343,6 @@ export default function CourseThemeEditorPage({
                 <BodyPanel
                   blocks={theme.body}
                   onChange={(body) => setTheme({ ...theme, body })}
-                  categoryBlockTheme={theme.categoryBlock}
-                  onCategoryBlockThemeChange={(categoryBlock) =>
-                    setTheme({ ...theme, categoryBlock })
-                  }
                   saId={subAccountId}
                   courseId={courseId}
                   otherOffers={selectableOffers}

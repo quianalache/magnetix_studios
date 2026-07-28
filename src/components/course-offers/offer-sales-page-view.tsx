@@ -4,7 +4,7 @@ import {
   themeBtnStyle,
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
-import { isCoreSidebarBlock } from "@/types/course-theme";
+import { isCoreSidebarBlock, isCoreBodyBlock } from "@/types/course-theme";
 import { EnrollOfferModal } from "@/app/offer/[saId]/[offerId]/enroll-modal";
 import type { CourseTheme } from "@/types/course-theme";
 import type { CourseOffer } from "@/types/course-offers";
@@ -56,7 +56,12 @@ export function OfferSalesPageView({
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
   interactive: boolean;
 }) {
-  const bodyBlocks = [...theme.body].sort((a, b) => a.order - b.order);
+  // No Category Block for an Offer (no curriculum — see DEFAULT_OFFER_THEME);
+  // filtered defensively same as sidebar below, in case a template that had
+  // one slipped through before apply-time stripping.
+  const bodyBlocks = [...theme.body]
+    .filter((b) => !isCoreBodyBlock(b))
+    .sort((a, b) => a.order - b.order);
   const sidebarBlocks = [...theme.sidebar]
     .filter((b) => !isCoreSidebarBlock(b))
     .sort((a, b) => a.order - b.order);
