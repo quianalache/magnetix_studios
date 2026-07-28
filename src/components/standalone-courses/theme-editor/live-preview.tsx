@@ -5,7 +5,7 @@ import {
   subscribeToStandaloneSections,
   subscribeToStandaloneLessons,
 } from "@/lib/firestore/standalone-courses";
-import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
+import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
 import {
   StandaloneLessonPlayer,
   type PlayerSection,
@@ -18,47 +18,40 @@ import type {
   StandaloneCourse,
   StandaloneCourseSection,
   StandaloneLesson,
-  StandaloneCourseCurriculumSection,
 } from "@/types/standalone-courses";
 import type { CourseOffer } from "@/types/course-offers";
 import type { CourseTheme, LessonTheme } from "@/types/course-theme";
+import type { Member } from "@/types/community";
 
-function formatPrice(cents: number | null, currency: string | null): string {
-  if (cents == null) return "";
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency ?? "USD",
-      maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
-    }).format(cents / 100);
-  } catch {
-    return `$${(cents / 100).toFixed(0)}`;
-  }
-}
-
-/** Client-side mirror of `getCurriculumOutline` (Admin SDK, server-only) —
- *  same "lessons with no section are never attributed to a section" quirk,
- *  since this must match what the real public page actually shows. */
-function computeOutline(
-  sections: StandaloneCourseSection[],
-  lessons: StandaloneLesson[],
-): StandaloneCourseCurriculumSection[] {
-  const counts = new Map<string, number>();
-  for (const l of lessons) {
-    if (!l.published || !l.sectionId) continue;
-    counts.set(l.sectionId, (counts.get(l.sectionId) ?? 0) + 1);
-  }
-  return [...sections]
-    .sort((a, b) => a.order - b.order)
-    .map((s) => ({ id: s.id, title: s.title, order: s.order, lessonCount: counts.get(s.id) ?? 0 }));
-}
+/** A fake "already enrolled" member for the preview pane only — `CourseHomeView`
+ *  (the "Product" page) is always viewed by someone with access, so it always
+ *  needs a member, unlike the old sales-page preview which showed the
+ *  signed-out state. Never persisted or fetched. */
+const PREVIEW_MEMBER: Member = {
+  id: "preview",
+  subAccountId: "preview",
+  agencyId: "preview",
+  email: "preview@example.com",
+  displayName: "Preview",
+  avatarUrl: null,
+  bio: "",
+  phone: null,
+  address: null,
+  contactId: null,
+  status: "active",
+  createdAt: null,
+  updatedAt: null,
+  lastSeenAt: null,
+};
 
 /**
  * Live preview pane for the theme editor — renders the SAME
- * `CourseSalesPageView` the real public page uses, fed by the in-progress
- * local `theme` state instead of saved data, so edits show up instantly
- * with no save/reload round trip. Always shows the signed-out, not-yet-
- * enrolled state (member=null) since that's what a new visitor sees.
+ * `CourseHomeView` the real public page uses (the "Product" page, in
+ * Quiana's terms — the enrolled member's curriculum/course-home hub, NOT
+ * the pre-purchase pricing page, which is a separate, unrelated page not
+ * covered by this "Product" tab at all), fed by the in-progress local
+ * `theme` state instead of saved data, so edits show up instantly with no
+ * save/reload round trip.
  */
 export function ThemeLivePreview({
   saId,
@@ -75,7 +68,7 @@ export function ThemeLivePreview({
   theme: CourseTheme;
   lessonTheme: LessonTheme;
   /** Which page the "Pages: Product / Lesson" switcher currently has
-   *  selected — Product renders `CourseSalesPageView`, Lesson renders
+   *  selected — Product renders `CourseHomeView`, Lesson renders
    *  `StandaloneLessonPlayer` against the course's first lesson (or an
    *  empty-state message if it has none yet). */
   page: "product" | "lesson";
@@ -93,9 +86,6 @@ export function ThemeLivePreview({
     };
   }, [saId, courseId]);
 
-  const outline = useMemo(() => computeOutline(sections, lessons), [sections, lessons]);
-  const totalLessons = outline.reduce((sum, s) => sum + s.lessonCount, 0);
-
   const crossSellTargets = useMemo(() => {
     const map = new Map<string, CrossSellTargetInfo>();
     for (const o of otherOffers) {
@@ -110,15 +100,6 @@ export function ThemeLivePreview({
     }
     return map;
   }, [otherOffers]);
-
-  const priceLabel =
-    course.access === "purchase" ? formatPrice(course.priceCents, course.currency) : "Free";
-  // `sanitizeLessonHtml` pulls in a Node-only HTML parser (server-only) — not
-  // usable from this client component. Not needed here anyway: this is the
-  // staff's own already-authored content (edited elsewhere, in Course
-  // Settings), viewed only by themselves in their own dashboard session.
-  // The REAL public page still fully sanitizes before showing it to visitors.
-  const aboutHtml = course.aboutHtml;
 
   if (page === "lesson") {
     const playerSections: PlayerSection[] = [...sections]
@@ -168,20 +149,16 @@ export function ThemeLivePreview({
   }
 
   return (
-    <CourseSalesPageView
+    <CourseHomeView
       saId={saId}
       courseId={courseId}
       course={course}
       theme={theme}
-      outline={outline}
-      priceLabel={priceLabel}
-      aboutHtml={aboutHtml}
-      member={null}
-      enrollment={null}
-      totalLessons={totalLessons}
-      completedCount={0}
+      sections={sections}
+      lessons={lessons}
+      member={PREVIEW_MEMBER}
+      completedLessonIds={[]}
       crossSellTargets={crossSellTargets}
-      interactive={false}
     />
   );
 }
