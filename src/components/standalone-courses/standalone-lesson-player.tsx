@@ -410,7 +410,7 @@ export function StandaloneLessonPlayer({
                   return (
                     <div
                       key={block.id}
-                      className="space-y-2 rounded-lg border border-[#E4E4E4] p-3"
+                      className="space-y-2 rounded-lg p-3"
                       style={{ backgroundColor: block.background }}
                     >
                       <p

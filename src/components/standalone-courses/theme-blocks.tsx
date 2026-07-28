@@ -131,7 +131,7 @@ export function CourseBlockView({
       if (!html) return null;
       return (
         <div
-          className="rounded-xl border border-[#E4E4E4] p-5 prose prose-sm max-w-none leading-relaxed"
+          className="rounded-xl p-5 prose prose-sm max-w-none leading-relaxed"
           style={{ backgroundColor: block.background, ...proseColorStyle(block.textColor) }}
           dangerouslySetInnerHTML={{ __html: html }}
         />
@@ -145,7 +145,7 @@ export function CourseBlockView({
         <img
           src={block.imageUrl}
           alt=""
-          className="w-full rounded-xl border border-[#E4E4E4] object-cover"
+          className="w-full rounded-xl object-cover"
         />
       );
       return block.linkUrl ? (
@@ -161,7 +161,7 @@ export function CourseBlockView({
       const src = embedUrlFor(block.videoProvider, block.videoId);
       if (!src) return null;
       return (
-        <div className="aspect-video w-full overflow-hidden rounded-xl border border-[#E4E4E4] bg-black">
+        <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
           <iframe
             src={src}
             title="Video"
@@ -241,7 +241,7 @@ export function CourseBlockView({
         target.type === "free" ? "Free" : formatPriceCents(target.priceCents, target.currency);
       return (
         <div
-          className="space-y-2 rounded-xl border border-[#E4E4E4] p-4"
+          className="space-y-2 rounded-xl p-4"
           style={{ backgroundColor: block.background }}
         >
           <p className="text-sm font-semibold" style={{ color: block.titleColor }}>
@@ -316,7 +316,7 @@ export function ProgressBlockView({
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
   return (
     <div
-      className="space-y-2 rounded-xl border border-[#E4E4E4] p-4"
+      className="space-y-2 rounded-xl p-4"
       style={{ backgroundColor: block.background }}
     >
       <p className="text-sm" style={{ color: block.textColor }}>
@@ -391,7 +391,7 @@ export function InstructorBlockView({
   const resolved = resolveInstructor(block, instructor);
   return (
     <div
-      className="space-y-2 rounded-xl border border-[#E4E4E4] p-4"
+      className="space-y-2 rounded-xl p-4"
       style={{ backgroundColor: block.background }}
     >
       {resolved.heading && (

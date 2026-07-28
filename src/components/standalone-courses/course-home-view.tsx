@@ -214,39 +214,12 @@ export function CourseHomeView({
             )}
           </div>
 
-          {/* Right — course card + sidebar blocks */}
-          <aside className="h-fit space-y-4 rounded-xl border border-[#E4E4E4] bg-white p-5 shadow-sm md:sticky md:top-10">
-            {course.coverUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={course.coverUrl}
-                alt=""
-                className="aspect-video w-full rounded-lg object-cover"
-              />
-            ) : (
-              <div
-                className="flex aspect-video w-full items-center justify-center rounded-lg text-lg font-semibold text-white"
-                style={{ backgroundColor: theme.hero.buttonColor }}
-              >
-                {course.title.charAt(0)}
-              </div>
-            )}
-            <h2 className="text-lg font-semibold text-[#202124]">{course.title}</h2>
-            <div className="space-y-1.5">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-black/10">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0}%`,
-                    backgroundColor: theme.hero.buttonColor,
-                  }}
-                />
-              </div>
-              <p className="text-xs text-[#909090]">
-                {completedCount} of {totalLessons} lessons complete
-              </p>
-            </div>
-
+          {/* Right — sidebar blocks. No separate course-cover/progress header
+              here — that duplicated the Progress block's own thumbnail +
+              text + bar (a real, themeable block), and GHL's own reference
+              doesn't have one either; the course's title/cover are already
+              shown in the Header and Hero above. */}
+          <aside className="h-fit space-y-4 md:sticky md:top-10">
             {sidebarBlocks.map((block) => {
               if (isCoreSidebarBlock(block)) {
                 return block.type === "progress" ? (
