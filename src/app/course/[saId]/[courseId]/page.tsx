@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireCoursePageAccess } from "@/lib/standalone-courses/course-access";
 import {
   getCurriculumOutline,
@@ -44,10 +44,14 @@ export default async function CourseSalesPage({
   const { course, member } = access;
   const theme = course.theme;
 
-  const [outline, enrollment] = await Promise.all([
-    getCurriculumOutline(saId, courseId),
-    member ? getStandaloneEnrollment(saId, courseId, member.id) : null,
-  ]);
+  const enrollment = member ? await getStandaloneEnrollment(saId, courseId, member.id) : null;
+  // A member who already has access never sees the pricing/Enroll page —
+  // they land straight on the Product page (`CourseHomeView`, the
+  // curriculum/course-home hub), matching GHL: pricing only exists to get
+  // someone access in the first place, never shown again afterward.
+  if (enrollment) redirect(`/course/${saId}/${courseId}/classroom`);
+
+  const outline = await getCurriculumOutline(saId, courseId);
 
   // Batch-resolve every Cross Sell block's target offer up front, so
   // `CourseBlockView` itself stays a plain sync component reusable by the
@@ -84,7 +88,6 @@ export default async function CourseSalesPage({
       : "Free";
   const aboutHtml = sanitizeLessonHtml(course.aboutHtml);
   const totalLessons = outline.reduce((sum, s) => sum + s.lessonCount, 0);
-  const completedCount = enrollment?.completedLessonIds.length ?? 0;
 
   return (
     <CourseSalesPageView
@@ -96,9 +99,11 @@ export default async function CourseSalesPage({
       priceLabel={priceLabel}
       aboutHtml={aboutHtml}
       member={member}
-      enrollment={enrollment}
+      // Always null here — an existing enrollment redirects above before
+      // this point is ever reached.
+      enrollment={null}
       totalLessons={totalLessons}
-      completedCount={completedCount}
+      completedCount={0}
       crossSellTargets={crossSellTargets}
       interactive
     />
