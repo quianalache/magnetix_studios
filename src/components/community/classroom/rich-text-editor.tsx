@@ -77,7 +77,7 @@ export function RichTextEditor({
       attributes: {
         class: cn(
           "prose prose-sm dark:prose-invert max-w-none focus:outline-none",
-          "min-h-[240px] px-3 py-2.5",
+          "min-h-[420px] px-3 py-2.5",
         ),
       },
     },
@@ -85,7 +85,7 @@ export function RichTextEditor({
 
   if (!editor) {
     return (
-      <div className="flex min-h-[280px] items-center justify-center rounded-lg border">
+      <div className="flex min-h-[460px] items-center justify-center rounded-lg border">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
