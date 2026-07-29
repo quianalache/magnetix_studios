@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { qstashIsConfigured, verifyQStashSignature } from "@/lib/automations/qstash";
-import { sendEmail, emailIsConfigured, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
+import { sendTenantEmail, emailIsConfigured } from "@/lib/comms/resend";
 import { resolveMergeTags } from "@/lib/automations/merge-tags";
 import { buildUnsubscribeUrl } from "@/lib/automations/unsubscribe-token";
 import type {
@@ -211,13 +211,12 @@ export async function POST(request: Request) {
   let resendMessageId: string | null = null;
   let error: string | null = null;
   try {
-    const result = await sendEmail({
+    const result = await sendTenantEmail({
+      sub: subAccount,
       to: contact.email,
       subject: subject || "(no subject)",
       text,
       html,
-      replyTo: resolveReplyTo(subAccount),
-      from: tenantFrom(subAccount),
     });
     resendMessageId = result.id;
   } catch (err) {

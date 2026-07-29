@@ -2,14 +2,10 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
-
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
 import {
   computeAvailability,
@@ -349,29 +345,22 @@ async function runRescheduleSideEffects(args: {
 
     if (eventStatus(event) === "awaiting_payment") {
       // Skip ICS for unconfirmed holds — same logic as the book route.
-      await sendEmail({
+      await sendTenantEmail({
+        sub,
         to: contact.email,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: resolveReplyTo(sub),
-        from: tenantFrom(sub),
       });
       return;
     }
 
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error("RESEND_API_KEY missing");
-    const client = new Resend(key);
-    const from = tenantFrom(sub) ?? process.env.EMAIL_FROM;
-    if (!from) throw new Error("EMAIL_FROM missing");
-    await client.emails.send({
-      from,
+    await sendTenantEmail({
+      sub,
       to: contact.email,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: resolveReplyTo(sub),
       attachments: [
         {
           filename: "invite.ics",

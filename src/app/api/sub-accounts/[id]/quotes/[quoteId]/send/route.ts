@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { territoryGateForContact } from "@/lib/auth/territory-filter";
-import { emailIsConfigured, sendEmail, tenantFrom } from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { renderQuoteEmail } from "@/lib/quotes/email";
 import {
   emitQuoteWebhook,
@@ -183,13 +183,13 @@ export async function POST(
     publicUrl,
   });
   try {
-    await sendEmail({
+    await sendTenantEmail({
+      sub,
       to: recipientEmail,
       subject: email.subject,
       text: email.text,
       html: email.html,
       replyTo: access.email || undefined,
-      from: tenantFrom(sub),
     });
   } catch (err) {
     console.error("[quotes/send] Resend send failed", err);

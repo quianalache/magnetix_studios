@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { emailIsConfigured, sendEmail, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail, NoTenantDomainError } from "@/lib/comms/resend";
 import { requireContactAccessible, requireUid } from "@/lib/comms/route-auth";
 import { recordSend } from "@/lib/comms/usage";
 import type { SubAccountDoc } from "@/types";
@@ -47,28 +47,24 @@ export async function POST(request: Request) {
     );
   }
 
-  // Reply-To: the sub-account's nominated reply address AND, once a
-  // dedicated domain is verified, that domain's own address too (so a
-  // reply lands in Conversations as well as their personal inbox — see
-  // resolveReplyTo). Falls back to the teammate's email if neither is
-  // configured yet, preserving old behavior for unconfigured deployments.
   const subAccountSnap = await getAdminDb()
     .doc(`subAccounts/${contact.subAccountId}`)
     .get();
   const subAccount = subAccountSnap.data() as SubAccountDoc | undefined;
-  const replyTo = resolveReplyTo(subAccount) ?? auth.email ?? undefined;
 
   let messageId: string;
   try {
-    const result = await sendEmail({
+    const result = await sendTenantEmail({
+      sub: subAccount,
       to: contact.email,
       subject,
       text: body,
-      replyTo,
-      from: tenantFrom(subAccount),
     });
     messageId = result.id;
   } catch (err) {
+    if (err instanceof NoTenantDomainError) {
+      return NextResponse.json({ error: err.message }, { status: 422 });
+    }
     const message =
       err instanceof Error ? err.message : "Failed to send email";
     return NextResponse.json({ error: message }, { status: 502 });

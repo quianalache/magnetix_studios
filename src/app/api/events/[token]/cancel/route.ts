@@ -6,9 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
 import {
   hashEventToken,
@@ -153,13 +151,12 @@ async function runSideEffects(event: CalendarEvent): Promise<void> {
           "by_visitor",
         );
         try {
-          await sendEmail({
+          await sendTenantEmail({
+            sub,
             to: contact.email,
             subject: rendered.subject,
             text: rendered.text,
             html: rendered.html,
-            replyTo: resolveReplyTo(sub),
-            from: tenantFrom(sub),
           });
         } catch (err) {
           console.warn("[events/cancel] confirmation send failed", err);

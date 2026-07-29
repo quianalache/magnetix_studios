@@ -5,9 +5,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
 import { verifyQStashSignature } from "@/lib/automations/qstash";
 import {
@@ -167,13 +165,12 @@ export async function POST(request: Request) {
   );
 
   try {
-    await sendEmail({
+    await sendTenantEmail({
+      sub,
       to: contact.email,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: resolveReplyTo(sub),
-      from: tenantFrom(sub),
     });
   } catch (err) {
     console.warn("[events/reminder] send failed", err);

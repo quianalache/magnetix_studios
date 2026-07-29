@@ -81,6 +81,7 @@ export async function sendEmail({
   html,
   replyTo,
   from,
+  attachments,
 }: {
   to: string;
   subject: string;
@@ -97,6 +98,7 @@ export async function sendEmail({
    * EMAIL_FROM shared sender.
    */
   from?: string;
+  attachments?: { filename: string; content: string }[];
 }): Promise<{ id: string }> {
   const resolvedFrom = from ?? process.env.EMAIL_FROM;
   if (!resolvedFrom) {
@@ -112,6 +114,7 @@ export async function sendEmail({
     text,
     ...(html ? { html } : {}),
     replyTo,
+    ...(attachments ? { attachments } : {}),
   });
   if (result.error) {
     throw new Error(result.error.message || "Resend send failed");
@@ -120,6 +123,71 @@ export async function sendEmail({
     throw new Error("Resend send failed: no message id returned");
   }
   return { id: result.data.id };
+}
+
+/** Thrown by `sendTenantEmail` when the sub-account has no verified
+ *  dedicated sending domain — callers decide whether to surface this to an
+ *  operator or log-and-continue (see the function's doc comment). */
+export class NoTenantDomainError extends Error {
+  constructor() {
+    super(
+      "This sub-account has no verified dedicated sending domain. Set one up in Settings → Email before sending.",
+    );
+    this.name = "NoTenantDomainError";
+  }
+}
+
+/**
+ * Sends an email on a sub-account's behalf — REQUIRES a verified dedicated
+ * domain (`tenantFrom` must resolve), throwing `NoTenantDomainError`
+ * instead of silently falling back to the shared platform sender
+ * (`EMAIL_FROM`, "LeadStack <notifications@…>"). Deliberate product
+ * decision: every sub-account's customer-facing email — booking
+ * confirmations, broadcasts, automations, purchase receipts — must be
+ * branded to that sub-account's own domain, never the shared one, even if
+ * that means an unconfigured sub-account's email doesn't go out at all
+ * until they finish domain setup. Use bare `sendEmail` + `EMAIL_FROM`
+ * directly for genuine platform-level sends (password resets, agency
+ * notifications) that were never meant to carry a sub-account's branding.
+ */
+export async function sendTenantEmail({
+  sub,
+  to,
+  subject,
+  text,
+  html,
+  attachments,
+  replyTo,
+}: {
+  sub:
+    | {
+        resendConfig?: ResendConfig | null;
+        emailDomainEnabledByAgency?: boolean;
+        replyToEmail?: string | null;
+      }
+    | null
+    | undefined;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  attachments?: { filename: string; content: string }[];
+  /** Overrides `resolveReplyTo(sub)` for the rare send that needs a
+   *  different reply target (e.g. quotes reply to the staff member who
+   *  sent them, not the sub-account's general address). */
+  replyTo?: string | string[];
+}): Promise<{ id: string }> {
+  const from = tenantFrom(sub);
+  if (!from) throw new NoTenantDomainError();
+  return sendEmail({
+    to,
+    subject,
+    text,
+    html,
+    from,
+    replyTo: replyTo ?? resolveReplyTo(sub),
+    attachments,
+  });
 }
 
 /**

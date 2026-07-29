@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { getAdminDb } from "@/lib/firebase/admin";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import { signMemberMagicLinkToken } from "@/lib/community/member-auth";
-import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
+import type { SubAccountDoc } from "@/types";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +47,11 @@ export async function POST(
     if (emailIsConfigured()) {
       const token = signMemberMagicLinkToken(saId, email, undefined, courseId);
       const link = `${appUrl}/api/course/${saId}/login/verify?token=${encodeURIComponent(token)}`;
+      const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
+      const sub = subSnap.data() as SubAccountDoc | undefined;
 
-      await sendEmail({
+      await sendTenantEmail({
+        sub,
         to: email,
         subject: "Your sign-in link",
         text: `Hi,

@@ -6,9 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
 import { verifyQStashSignature } from "@/lib/automations/qstash";
 import {
@@ -158,13 +156,12 @@ async function runExpireSideEffects(event: CalendarEvent): Promise<void> {
           "payment_expired",
         );
         try {
-          await sendEmail({
+          await sendTenantEmail({
+            sub,
             to: contact.email,
             subject: rendered.subject,
             text: rendered.text,
             html: rendered.html,
-            replyTo: resolveReplyTo(sub),
-            from: tenantFrom(sub),
           });
         } catch (err) {
           console.warn("[events/payment/expire] notify send failed", err);

@@ -11,7 +11,7 @@ import {
   getStandaloneCourse,
   enrollInStandaloneCourseServerSide,
 } from "@/lib/server/standalone-course-service";
-import { emailIsConfigured, sendEmail, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundle-email";
 import type {
   CourseOfferAccess,
@@ -340,13 +340,12 @@ async function sendOfferBookingBundleEmail(opts: {
       bookingUrl,
     });
 
-    await sendEmail({
+    await sendTenantEmail({
+      sub: sub as Parameters<typeof sendTenantEmail>[0]["sub"],
       to: member.email as string,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: resolveReplyTo(sub as Parameters<typeof tenantFrom>[0]),
-      from: tenantFrom(sub as Parameters<typeof tenantFrom>[0]),
     });
   } catch (err) {
     console.warn("[course-offer] booking bundle email send failed", err);

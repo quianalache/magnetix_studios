@@ -2,14 +2,11 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
-
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
+  NoTenantDomainError,
 } from "@/lib/comms/resend";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import {
@@ -225,18 +222,12 @@ async function runMarkPaidSideEffects(args: {
   });
 
   try {
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error("RESEND_API_KEY missing");
-    const client = new Resend(key);
-    const from = tenantFrom(sub) ?? process.env.EMAIL_FROM;
-    if (!from) throw new Error("EMAIL_FROM missing");
-    await client.emails.send({
-      from,
+    await sendTenantEmail({
+      sub,
       to: contact.email,
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: resolveReplyTo(sub),
       attachments: [
         {
           filename: "invite.ics",
@@ -245,17 +236,20 @@ async function runMarkPaidSideEffects(args: {
       ],
     });
   } catch (err) {
-    // Fall back to the standard wrapper without ICS so the visitor at
-    // least gets the text confirmation.
+    if (err instanceof NoTenantDomainError) {
+      console.warn("[events/mark-paid] confirmation not sent — no verified domain");
+      return;
+    }
+    // Fall back to the standard send without ICS so the visitor at least
+    // gets the text confirmation, in case the failure was ICS-specific.
     console.warn("[events/mark-paid] resend-with-ics failed, retrying without", err);
     try {
-      await sendEmail({
+      await sendTenantEmail({
+        sub,
         to: contact.email,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: resolveReplyTo(sub),
-        from: tenantFrom(sub),
       });
     } catch (err2) {
       console.warn("[events/mark-paid] confirmation send failed", err2);

@@ -6,11 +6,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
-import { Resend } from "resend";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import {
   computeAvailability,
@@ -522,12 +519,11 @@ export async function POST(
         : undefined;
 
       await sendEmailWithIcs({
+        sub,
         to: email,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: resolveReplyTo(sub),
-        from: tenantFrom(sub),
         icsAttachment: attachments,
       });
     } catch (err) {
@@ -620,18 +616,14 @@ function labelForField(page: BookingPage, id: string): string {
 
 // ── ICS attachment helper ──────────────────────────────────────────
 // Resend supports attachments via the `attachments` field — pass a
-// content string (base64) + filename + content type. The high-level
-// sendEmail wrapper doesn't expose attachments, so we invoke Resend
-// directly when an ICS needs to ride along. Falls back to the standard
-// wrapper when no attachment is required.
+// content string (base64) + filename + content type.
 
 interface SendWithIcs {
+  sub: SubAccountDoc;
   to: string;
   subject: string;
   text: string;
   html: string;
-  replyTo?: string | string[];
-  from?: string;
   icsAttachment?: { filename: string; content: string };
 }
 
@@ -670,35 +662,12 @@ function buildIcsAttachment(params: {
 }
 
 async function sendEmailWithIcs(input: SendWithIcs): Promise<void> {
-  if (!input.icsAttachment) {
-    await sendEmail({
-      to: input.to,
-      subject: input.subject,
-      text: input.text,
-      html: input.html,
-      replyTo: input.replyTo,
-      from: input.from,
-    });
-    return;
-  }
-  const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error("RESEND_API_KEY missing");
-  const client = new Resend(key);
-  const from = input.from ?? process.env.EMAIL_FROM;
-  if (!from) throw new Error("EMAIL_FROM missing");
-  const res = await client.emails.send({
-    from,
+  await sendTenantEmail({
+    sub: input.sub,
     to: input.to,
     subject: input.subject,
     text: input.text,
     html: input.html,
-    replyTo: input.replyTo,
-    attachments: [
-      {
-        filename: input.icsAttachment.filename,
-        content: input.icsAttachment.content,
-      },
-    ],
+    attachments: input.icsAttachment ? [input.icsAttachment] : undefined,
   });
-  if (res.error) throw new Error(res.error.message || "Resend failed");
 }

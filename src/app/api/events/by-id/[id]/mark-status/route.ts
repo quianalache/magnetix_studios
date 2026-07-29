@@ -7,9 +7,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import {
   emailIsConfigured,
-  sendEmail,
-  tenantFrom,
-  resolveReplyTo,
+  sendTenantEmail,
 } from "@/lib/comms/resend";
 import {
   fireBookingTrigger,
@@ -278,13 +276,12 @@ async function runStatusSideEffects(
       "by_operator",
     );
     try {
-      await sendEmail({
+      await sendTenantEmail({
+        sub,
         to: contact.email,
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: resolveReplyTo(sub),
-        from: tenantFrom(sub),
       });
       return { emailSent: true };
     } catch (err) {
