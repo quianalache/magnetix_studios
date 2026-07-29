@@ -7,6 +7,7 @@ import {
   updateContactServerSide,
 } from "@/lib/server/contacts-service";
 import type { Member } from "@/types/community";
+import type { ContactAttribution } from "@/types/contacts";
 
 /**
  * Look up a member identity by email within a sub-account. Email is the natural
@@ -47,6 +48,10 @@ interface EnsureMemberInput {
    * paths share this same member identity + reconciliation logic.
    */
   source?: string;
+  /** Captured from the checkout/signup page's URL at landing time — see
+   *  `normalizeAttribution`. First-touch only: backfilled onto the linked
+   *  contact only when it has none yet. */
+  attribution?: ContactAttribution | null;
 }
 
 /**
@@ -78,6 +83,7 @@ export async function ensureMember({
   phone,
   address,
   source = "community",
+  attribution,
 }: EnsureMemberInput): Promise<Member> {
   const db = getAdminDb();
   const normalizedEmail = email.trim().toLowerCase();
@@ -97,6 +103,21 @@ export async function ensureMember({
     if (trimmedAddress && trimmedAddress !== existing.address) {
       patch.address = trimmedAddress;
     }
+
+    // First-touch attribution backfill only — never overwrites an
+    // existing contact's original source.
+    if (attribution && existing.contactId) {
+      const contactSnap = await db.doc(`contacts/${existing.contactId}`).get();
+      if (contactSnap.exists && !contactSnap.data()?.attribution) {
+        await updateContactServerSide({
+          contactId: existing.contactId,
+          patch: { attribution },
+        }).catch((err) =>
+          console.warn("[community/member-account] attribution backfill failed", err),
+        );
+      }
+    }
+
     if (Object.keys(patch).length === 0) return existing;
 
     await db
@@ -152,6 +173,7 @@ export async function ensureMember({
         address: address?.trim() || "",
         source,
         tags: [],
+        attribution: attribution ?? null,
       });
       contactId = result.id;
     }

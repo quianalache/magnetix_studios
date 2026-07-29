@@ -1,5 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { CourseTheme } from "./course-theme";
+import type { ContactAttribution } from "./contacts";
 
 /**
  * Course Offers — the commerce/pricing layer on top of Standalone Courses
@@ -178,6 +179,12 @@ export interface CourseOfferPurchase {
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;
   paidAt: Timestamp | FieldValue | null;
+  /** UTM/referrer data captured from the offer's checkout page at landing
+   *  time — see `normalizeAttribution` in `src/lib/attribution.ts`. Not
+   *  threaded into one-click-upsell purchases (the buyer never landed on
+   *  that offer's own checkout page), so this is deliberately null there —
+   *  used to exclude upsells from conversion counts. */
+  attribution?: ContactAttribution | null;
 }
 
 /**

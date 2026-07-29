@@ -19,6 +19,8 @@ import type {
   CourseOfferPurchase,
 } from "@/types/course-offers";
 import type { PayPalConfig } from "@/types";
+import type { ContactAttribution } from "@/types/contacts";
+import { bumpAttributionVisit } from "@/lib/attribution-visits";
 
 /**
  * Purchases for a Course Offer — generalizes
@@ -127,6 +129,11 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   memberId: string;
   memberEmail: string;
   returnUrl: string;
+  /** Captured from the offer's checkout page at landing time. Deliberately
+   *  NOT passed by the one-click-upsell path (see `grantCourseOfferAccessServerSide`
+   *  doc comment) — a buyer charged off-session for an upsell never landed
+   *  on that offer's own page. */
+  attribution?: ContactAttribution | null;
 }): Promise<{ clientSecret: string }> {
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
   if (!offer || offer.type === "free" || !offer.priceCents) {
@@ -217,6 +224,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     grantedByUid: null,
     requestedAt: FieldValue.serverTimestamp(),
     paidAt: null,
+    attribution: opts.attribution ?? null,
   });
 
   return { clientSecret: session.client_secret };
@@ -392,6 +400,21 @@ export async function grantCourseOfferAccessServerSide(opts: {
       ? { stripeCustomerId: opts.stripeCustomerId }
       : {}),
   });
+
+  // Only real checkout-page landings carry attribution (see
+  // startCourseOfferStripeCheckoutServerSide) — one-click upsell purchases
+  // never set it, so this naturally and correctly excludes them from the
+  // conversion count without a separate flag.
+  if (purchase.attribution) {
+    void bumpAttributionVisit({
+      subAccountId: opts.subAccountId,
+      agencyId: purchase.agencyId,
+      pageType: "offer",
+      pageId: opts.offerId,
+      attribution: purchase.attribution,
+      field: "conversions",
+    }).catch((err) => console.warn("[course-offer] attribution bump failed", err));
+  }
 
   for (const courseId of purchase.courseIds) {
     await enrollInStandaloneCourseServerSide({

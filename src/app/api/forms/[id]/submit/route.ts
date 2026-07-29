@@ -17,49 +17,12 @@ import {
 import { defaultSmsConsentText } from "@/types/forms";
 import type { FormField, LeadForm } from "@/types/forms";
 import type { Contact, ContactAttribution } from "@/types/contacts";
+import { normalizeAttribution } from "@/lib/attribution";
 
 type SubmitBody = {
   values: Record<string, string>;
   attribution?: Partial<ContactAttribution>;
 };
-
-const ATTRIBUTION_KEYS: (keyof ContactAttribution)[] = [
-  "utmSource",
-  "utmMedium",
-  "utmCampaign",
-  "utmContent",
-  "utmTerm",
-  "fbclid",
-  "gclid",
-  "landingPage",
-  "referrer",
-];
-
-function normalizeAttribution(
-  input: Partial<ContactAttribution> | undefined,
-): ContactAttribution | null {
-  if (!input || typeof input !== "object") return null;
-  const out: ContactAttribution = {
-    utmSource: null,
-    utmMedium: null,
-    utmCampaign: null,
-    utmContent: null,
-    utmTerm: null,
-    fbclid: null,
-    gclid: null,
-    landingPage: null,
-    referrer: null,
-  };
-  let touched = false;
-  for (const key of ATTRIBUTION_KEYS) {
-    const raw = input[key];
-    if (typeof raw === "string" && raw.trim().length > 0) {
-      out[key] = raw.trim().slice(0, 500);
-      touched = true;
-    }
-  }
-  return touched ? out : null;
-}
 
 function interpolate(template: string, values: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_m, key: string) => values[key] ?? "");

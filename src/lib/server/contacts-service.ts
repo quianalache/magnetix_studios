@@ -142,6 +142,9 @@ export interface UpdateContactPatch {
   source?: string;
   tags?: string[];
   pipelineStage?: string | null;
+  /** First-touch backfill only — callers should check the contact has no
+   *  existing attribution before including this in a patch. */
+  attribution?: ContactAttribution | null;
 }
 
 /**

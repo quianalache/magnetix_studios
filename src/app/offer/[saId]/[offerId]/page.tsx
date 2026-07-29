@@ -5,6 +5,7 @@ import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { hasPaidCourseOffer } from "@/lib/server/course-offer-purchase-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { OfferSalesPageView } from "@/components/course-offers/offer-sales-page-view";
+import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 
 export const dynamic = "force-dynamic";
@@ -91,19 +92,22 @@ export default async function OfferPage({
     : false;
 
   return (
-    <OfferSalesPageView
-      saId={saId}
-      offerId={offerId}
-      offer={offer}
-      theme={theme}
-      priceLabel={priceLabel}
-      descriptionHtml={descriptionHtml}
-      includedCourses={includedCourses}
-      member={member}
-      alreadyPurchased={alreadyPurchased}
-      firstCourseId={offer.courseIds[0] ?? null}
-      crossSellTargets={crossSellTargets}
-      interactive
-    />
+    <>
+      <AttributionVisitLogger subAccountId={saId} pageType="offer" pageId={offerId} />
+      <OfferSalesPageView
+        saId={saId}
+        offerId={offerId}
+        offer={offer}
+        theme={theme}
+        priceLabel={priceLabel}
+        descriptionHtml={descriptionHtml}
+        includedCourses={includedCourses}
+        member={member}
+        alreadyPurchased={alreadyPurchased}
+        firstCourseId={offer.courseIds[0] ?? null}
+        crossSellTargets={crossSellTargets}
+        interactive
+      />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   CalendarClock,
   CheckCircle2,
@@ -11,6 +11,8 @@ import {
   Info,
 } from "lucide-react";
 import type { BookingPage, IntakeField } from "@/types/booking";
+import { readAttributionFromBrowser } from "@/lib/attribution";
+import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 
 /**
  * Visitor-facing booking surface. Self-contained client component:
@@ -186,6 +188,11 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
 
   return (
     <main className="min-h-screen bg-muted/30 px-4 py-10 text-foreground sm:py-16">
+      <AttributionVisitLogger
+        subAccountId={subAccountId}
+        pageType="booking"
+        pageId={page.slug}
+      />
       <article className="mx-auto max-w-3xl space-y-8 rounded-3xl border bg-card p-6 shadow-sm sm:p-10">
         {/* ── Hero ──────────────────────────────────────────── */}
         <header className="space-y-3 text-center">
@@ -397,6 +404,9 @@ function IntakeFormSection({
   const [extras, setExtras] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Snapshot on mount, same pattern as the hosted-form flow — before
+  // anything could change window.location.
+  const attributionRef = useRef(readAttributionFromBrowser());
 
   function setExtra(id: string, value: string) {
     setExtras((prev) => ({ ...prev, [id]: value }));
@@ -428,6 +438,7 @@ function IntakeFormSection({
             email: email.trim(),
             phone: phone.trim(),
             extras,
+            attribution: attributionRef.current,
           }),
         },
       );

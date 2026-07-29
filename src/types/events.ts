@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { ContactAttribution } from "./contacts";
 
 /**
  * Lifecycle of a calendar event. Defaults to `"scheduled"` for legacy
@@ -60,6 +61,9 @@ export interface CalendarEvent {
    * and the "view in booking page" deep-link.
    */
   bookingPageSlug?: string | null;
+  /** UTM/referrer data captured from the booking page's URL at landing
+   *  time — see `normalizeAttribution` in `src/lib/attribution.ts`. */
+  attribution?: ContactAttribution | null;
   /**
    * Snapshot of the booking page's `meetingUrl` at booking time. Stays
    * even if the page config later changes its URL. Surfaced in the

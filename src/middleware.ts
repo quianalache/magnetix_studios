@@ -45,6 +45,11 @@ const PUBLIC_PATHS = [
   // + best-effort failure handling inside the route — never breaks
   // the landing experience.
   "/api/landing/heartbeat",
+  // Booking/offer page visit + conversion beacon — public POST from every
+  // visitor landing on those public pages (most have no session at all).
+  // Existence + published-status checked inside the route; best-effort,
+  // never blocks the page it's tracking.
+  "/api/track/visit",
   "/api/webhooks/twilio",
   "/api/webhooks/stripe",
   // Resend inbound-email webhook — public POST from Resend's cloud.

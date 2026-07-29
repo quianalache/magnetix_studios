@@ -39,8 +39,9 @@ export type ContactSource =
 
 /**
  * Marketing attribution captured at contact creation time. Populated by
- * /api/forms/[id]/submit when the hosted form page (/f/[id]) forwards
- * the original URL params + referrer from the visit that converted.
+ * /api/forms/[id]/submit (hosted forms), the booking page, and course-offer
+ * checkout when they forward the original URL params + referrer from the
+ * visit that converted — see `normalizeAttribution` in `src/lib/attribution.ts`.
  *
  * All fields are nullable — contacts created via CSV import, manual
  * entry, or pre-attribution-capture submissions will have null values.
@@ -58,6 +59,12 @@ export interface ContactAttribution {
   gclid: string | null;
   landingPage: string | null;
   referrer: string | null;
+  /** Auto-detected channel from `referrer`, populated ONLY when utmSource
+   *  is absent. Never overwrites explicit UTM tagging — server-derived by
+   *  `normalizeAttribution`, never client-supplied (a client submitting a
+   *  bare `referrer` can't spoof this field for itself). See
+   *  `src/lib/attribution-source.ts`. */
+  referrerSource: string | null;
 }
 
 export interface Contact {

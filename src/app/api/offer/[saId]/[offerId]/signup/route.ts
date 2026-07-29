@@ -12,6 +12,9 @@ import {
 import { ensureMember } from "@/lib/community/member-account";
 import { signMemberSessionToken } from "@/lib/community/member-auth";
 import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { normalizeAttribution } from "@/lib/attribution";
+import { bumpAttributionVisit } from "@/lib/attribution-visits";
+import type { ContactAttribution } from "@/types/contacts";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +47,13 @@ export async function POST(
     phone?: string;
     address?: string;
     serviceAgreementAccepted?: boolean;
+    attribution?: Partial<ContactAttribution>;
   } | null;
   const name = body?.name?.trim() ?? "";
   const email = body?.email?.trim().toLowerCase() ?? "";
   const phone = body?.phone?.trim() ?? "";
   const address = body?.address?.trim() ?? "";
+  const attribution = normalizeAttribution(body?.attribution);
   const { collectPhoneNumber, collectAddress, serviceAgreement } =
     offer.checkoutSettings;
 
@@ -84,6 +89,7 @@ export async function POST(
     phone: collectPhoneNumber ? phone : null,
     address: collectAddress ? address : null,
     source: "course",
+    attribution,
   });
 
   const token = signMemberSessionToken(saId, member.id, member.email);
@@ -111,6 +117,18 @@ export async function POST(
       offerTitle: offer.title,
       booking: offer.booking,
     });
+    // Free offers have no purchase doc — the visit rollup + Contact are the
+    // only places this conversion is recorded.
+    if (attribution) {
+      void bumpAttributionVisit({
+        subAccountId: saId,
+        agencyId: gate.agencyId,
+        pageType: "offer",
+        pageId: offerId,
+        attribution,
+        field: "conversions",
+      }).catch((err) => console.warn("[offer/signup] attribution bump failed", err));
+    }
     return NextResponse.json({ ok: true, mode: "free", redirectTo: classroomUrl });
   }
 
@@ -123,6 +141,7 @@ export async function POST(
       memberId: member.id,
       memberEmail: member.email,
       returnUrl,
+      attribution,
     });
     return NextResponse.json({ ok: true, mode: "paid", clientSecret });
   } catch (err) {

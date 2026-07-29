@@ -5,7 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitContactCreatedById } from "@/lib/server/contacts-service";
 import { GLOBAL_TERRITORY_ID } from "@/types";
-import type { Contact } from "@/types/contacts";
+import type { Contact, ContactAttribution } from "@/types/contacts";
 
 /**
  * Reconcile a visitor identity (email / phone / name) to a Contact in
@@ -41,6 +41,10 @@ interface ReconcileInput {
    * the contact exists).
    */
   defaultTerritoryId?: string | null;
+  /** Captured from the booking page's URL at landing time — see
+   *  `normalizeAttribution`. First-touch only: backfilled onto an existing
+   *  contact only when it has none yet, never overwritten. */
+  attribution?: ContactAttribution | null;
 }
 
 export interface ReconciledContact {
@@ -73,6 +77,7 @@ export async function reconcileBookingContact(
     const patch: Record<string, unknown> = {};
     if (name && !data.name) patch.name = name;
     if (phone && !data.phone) patch.phone = phone;
+    if (input.attribution && !data.attribution) patch.attribution = input.attribution;
     if (Object.keys(patch).length > 0) {
       patch.updatedAt = FieldValue.serverTimestamp();
       try {
@@ -100,7 +105,7 @@ export async function reconcileBookingContact(
     source: "booking-page",
     tags: [],
     pipelineStage: null,
-    attribution: null,
+    attribution: input.attribution ?? null,
     agencyId: input.agencyId,
     subAccountId: input.subAccountId,
     // The booking system creates the contact, not a logged-in user.

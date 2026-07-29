@@ -13,6 +13,10 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
+import {
+  subscribeToAttributionVisits,
+  type AttributionVisitRow,
+} from "@/lib/firestore/attribution-visits";
 import { formatCurrency, toDate } from "@/lib/format";
 import {
   AreaChart,
@@ -48,6 +52,7 @@ export default function ReportsPage() {
     useEffectiveTerritoryFilter();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [attributionVisits, setAttributionVisits] = useState<AttributionVisitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>("30d");
   const [tab, setTab] = useState<TabKey>("overview");
@@ -63,8 +68,9 @@ export default function ReportsPage() {
     const scope = { agencyId, subAccountId };
     let dealsReady = false;
     let contactsReady = false;
+    let visitsReady = false;
     const settle = () => {
-      if (dealsReady && contactsReady) setLoading(false);
+      if (dealsReady && contactsReady && visitsReady) setLoading(false);
     };
     const unsubD = subscribeToDeals(scope, { territoryFilter }, (l) => {
       setDeals(l);
@@ -76,9 +82,15 @@ export default function ReportsPage() {
       contactsReady = true;
       settle();
     });
+    const unsubV = subscribeToAttributionVisits(scope, (l) => {
+      setAttributionVisits(l);
+      visitsReady = true;
+      settle();
+    });
     return () => {
       unsubD();
       unsubC();
+      unsubV();
     };
   }, [
     user,
@@ -268,6 +280,7 @@ export default function ReportsPage() {
         <AttributionReport
           contacts={contacts}
           deals={deals}
+          visits={attributionVisits}
           rangeDays={rangeDays}
           rangeCutoff={rangeCutoff}
           currency={currency}

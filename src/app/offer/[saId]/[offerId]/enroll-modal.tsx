@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import {
@@ -8,6 +8,7 @@ import {
   EmbeddedCheckout,
 } from "@stripe/react-stripe-js";
 import { getStripe } from "@/lib/stripe/client";
+import { readAttributionFromBrowser } from "@/lib/attribution";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,9 @@ export function EnrollOfferModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // Snapshot on mount, same pattern as the hosted-form flow — before
+  // anything could change window.location.
+  const attributionRef = useRef(readAttributionFromBrowser());
 
   const cta = type === "free" ? "Enroll Now" : `Enroll Now — ${priceLabel}`;
   const { serviceAgreement } = checkoutSettings;
@@ -85,6 +89,7 @@ export function EnrollOfferModal({
           phone,
           address,
           serviceAgreementAccepted: agreementAccepted,
+          attribution: attributionRef.current,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {

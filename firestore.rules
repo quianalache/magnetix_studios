@@ -727,6 +727,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---------- attributionVisits (booking/offer visit + conversion rollup) ----------
+    // One doc per (page, day, UTM/referrer-dimensions) bucket, incremented
+    // server-side via the Admin SDK (bumpAttributionVisit in
+    // src/lib/attribution-visits.ts) from the public /api/track/visit
+    // beacon and the booking/offer conversion paths. No per-visit PII —
+    // safe for sub-account members to read for the Attribution report.
+    match /attributionVisits/{visitId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+
     match /contacts/{contactId} {
       // Reads honor territory scoping when enabled — collaborators only
       // see contacts whose `territoryId` is in their assigned list (or

@@ -40,6 +40,9 @@ import { GLOBAL_TERRITORY_ID } from "@/types";
 import type { BookingPage } from "@/types/booking";
 import type { CalendarEvent } from "@/types/events";
 import type { SubAccountDoc } from "@/types/tenancy";
+import type { ContactAttribution } from "@/types/contacts";
+import { normalizeAttribution } from "@/lib/attribution";
+import { bumpAttributionVisit } from "@/lib/attribution-visits";
 
 /**
  * Public booking submission. Unauthenticated; security comes from:
@@ -115,6 +118,7 @@ interface BookBody {
   email?: string;
   phone?: string;
   extras?: Record<string, string>;
+  attribution?: Partial<ContactAttribution>;
 }
 
 export async function POST(
@@ -223,6 +227,8 @@ export async function POST(
     }
     if (value) extras[f.id] = value;
   }
+
+  const attribution = normalizeAttribution(body.attribution);
 
   const subSnap = await db.doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists) {
@@ -358,6 +364,7 @@ export async function POST(
         name,
         phone,
         defaultTerritoryId: page.defaultTerritoryId,
+        attribution,
       });
 
       const territoryId =
@@ -407,6 +414,7 @@ export async function POST(
         status,
         source: "booking_page",
         bookingPageSlug: page.slug,
+        attribution,
         publicTokenHash: hash,
         paymentRequired,
         paymentAmount: page.payment?.amount ?? null,
@@ -455,6 +463,16 @@ export async function POST(
   }
 
   // ── Post-write side effects (best-effort) ──────────────────────
+  if (attribution) {
+    void bumpAttributionVisit({
+      subAccountId: saId,
+      agencyId,
+      pageType: "booking",
+      pageId: slug,
+      attribution,
+      field: "conversions",
+    }).catch((err) => console.warn("[booking/book] attribution bump failed", err));
+  }
   const publicEventUrl = buildEventPublicUrl(created.rawToken);
   const appHost =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, "")

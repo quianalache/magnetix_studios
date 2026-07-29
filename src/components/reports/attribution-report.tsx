@@ -7,6 +7,7 @@ import { FunnelChart } from "@/components/reports/charts";
 import { SourceBadge, sourceLabel } from "@/components/contacts/source-badge";
 import type { Contact } from "@/types/contacts";
 import type { Deal } from "@/types/deals";
+import type { AttributionVisitRow } from "@/lib/firestore/attribution-visits";
 import { cn } from "@/lib/utils";
 
 /**
@@ -49,12 +50,14 @@ function emptyStats(): RowStats {
 export function AttributionReport({
   contacts,
   deals,
+  visits,
   rangeDays,
   rangeCutoff,
   currency,
 }: {
   contacts: Contact[];
   deals: Deal[];
+  visits: AttributionVisitRow[];
   rangeDays: number | null;
   rangeCutoff: number;
   currency: string;
@@ -153,6 +156,64 @@ export function AttributionReport({
     return { rows, totals };
   }, [contacts, deals, rangeDays, rangeCutoff]);
 
+  const [visitPageFilter, setVisitPageFilter] = useState<
+    "all" | "booking" | "offer"
+  >("all");
+
+  // "day" is a UTC "YYYY-MM-DD" string — compare against the same cutoff
+  // used for contacts/deals, treating each bucket's day as its own instant.
+  const visitRows = useMemo(() => {
+    const cutoffDay = rangeDays
+      ? new Date(rangeCutoff).toISOString().slice(0, 10)
+      : null;
+    const filtered = visits.filter((v) => {
+      if (visitPageFilter !== "all" && v.pageType !== visitPageFilter) {
+        return false;
+      }
+      return !cutoffDay || v.day >= cutoffDay;
+    });
+    const byDimensions = new Map<
+      string,
+      {
+        pageType: string;
+        source: string;
+        medium: string;
+        campaign: string;
+        content: string;
+        term: string;
+        visits: number;
+        conversions: number;
+      }
+    >();
+    for (const v of filtered) {
+      // Explicitly-tagged UTM source wins; an auto-detected referrer is
+      // labeled distinctly so it's never confused with real UTM tagging.
+      const source = v.utmSource || (v.referrerSource ? `${v.referrerSource} (referrer)` : "");
+      const key = [v.pageType, source, v.utmMedium, v.utmCampaign, v.utmContent, v.utmTerm].join(
+        "|",
+      );
+      let row = byDimensions.get(key);
+      if (!row) {
+        row = {
+          pageType: v.pageType,
+          source,
+          medium: v.utmMedium ?? "",
+          campaign: v.utmCampaign ?? "",
+          content: v.utmContent ?? "",
+          term: v.utmTerm ?? "",
+          visits: 0,
+          conversions: 0,
+        };
+        byDimensions.set(key, row);
+      }
+      row.visits += v.visits ?? 0;
+      row.conversions += v.conversions ?? 0;
+    }
+    return Array.from(byDimensions.values()).sort(
+      (a, b) => b.visits - a.visits,
+    );
+  }, [visits, visitPageFilter, rangeDays, rangeCutoff]);
+
   const revenueBars = rows
     .filter((r) => r.wonValue > 0)
     .slice(0, 6)
@@ -171,12 +232,13 @@ export function AttributionReport({
     });
   };
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && visitRows.length === 0) {
     return (
       <div className="flex h-48 flex-col items-center justify-center gap-1 rounded-2xl border border-dashed text-sm text-muted-foreground">
-        <p>No leads or deals in this range yet.</p>
+        <p>No leads, deals, or page visits in this range yet.</p>
         <p className="text-xs">
-          Attribution builds up as contacts and won deals accumulate.
+          Attribution builds up as contacts, won deals, and booking/checkout
+          visits accumulate.
         </p>
       </div>
     );
@@ -254,6 +316,108 @@ export function AttributionReport({
             </tfoot>
           </table>
         </div>
+      </section>
+
+      <section className="rounded-2xl border bg-card">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5 pb-4">
+          <div>
+            <h2 className="text-sm font-semibold">Page visits &amp; conversions</h2>
+            <p className="text-xs text-muted-foreground">
+              Every landing on a booking or checkout page, whether or not it
+              converted, broken down by UTM tag — or, for untagged traffic, an
+              auto-detected referrer.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-0.5">
+            {(["all", "booking", "offer"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setVisitPageFilter(f)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+                  visitPageFilter === f
+                    ? "bg-background shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {f === "all" ? "All pages" : f}
+              </button>
+            ))}
+          </div>
+        </div>
+        {visitRows.length === 0 ? (
+          <div className="flex h-32 items-center justify-center text-xs text-muted-foreground">
+            No page visits in this range yet.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="px-5 py-2.5 font-medium">Source</th>
+                  <th className="px-3 py-2.5 font-medium">Medium</th>
+                  <th className="px-3 py-2.5 font-medium">Campaign</th>
+                  <th className="px-3 py-2.5 font-medium">Content</th>
+                  <th className="px-3 py-2.5 font-medium">Term</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Visits</th>
+                  <th className="px-3 py-2.5 text-right font-medium">
+                    Conversions
+                  </th>
+                  <th className="px-5 py-2.5 text-right font-medium">
+                    Conv %
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visitRows.map((r, i) => {
+                  const convPct =
+                    r.visits > 0
+                      ? Math.round((r.conversions / r.visits) * 100)
+                      : null;
+                  return (
+                    <tr
+                      key={`${r.pageType}|${r.source}|${r.medium}|${r.campaign}|${r.content}|${r.term}|${i}`}
+                      className="border-b last:border-b-0"
+                    >
+                      <td className="px-5 py-2.5">
+                        {r.source ? (
+                          r.source
+                        ) : (
+                          <span className="text-muted-foreground">Direct</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {r.medium || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {r.campaign || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {r.content || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground">
+                        {r.term || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {r.visits}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {r.conversions}
+                      </td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">
+                        {convPct === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          `${convPct}%`
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
