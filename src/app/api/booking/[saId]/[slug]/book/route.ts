@@ -8,6 +8,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import { Resend } from "resend";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
@@ -525,7 +526,7 @@ export async function POST(
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: sub.replyToEmail ?? undefined,
+        replyTo: resolveReplyTo(sub),
         from: tenantFrom(sub),
         icsAttachment: attachments,
       });
@@ -629,7 +630,7 @@ interface SendWithIcs {
   subject: string;
   text: string;
   html: string;
-  replyTo?: string;
+  replyTo?: string | string[];
   from?: string;
   icsAttachment?: { filename: string; content: string };
 }

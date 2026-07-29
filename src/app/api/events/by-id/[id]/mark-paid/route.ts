@@ -9,6 +9,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import {
@@ -235,7 +236,7 @@ async function runMarkPaidSideEffects(args: {
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: sub.replyToEmail ?? undefined,
+      replyTo: resolveReplyTo(sub),
       attachments: [
         {
           filename: "invite.ics",
@@ -253,7 +254,7 @@ async function runMarkPaidSideEffects(args: {
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: sub.replyToEmail ?? undefined,
+        replyTo: resolveReplyTo(sub),
         from: tenantFrom(sub),
       });
     } catch (err2) {

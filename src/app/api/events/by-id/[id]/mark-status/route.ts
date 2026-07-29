@@ -9,6 +9,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import {
   fireBookingTrigger,
@@ -282,7 +283,7 @@ async function runStatusSideEffects(
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: sub.replyToEmail ?? undefined,
+        replyTo: resolveReplyTo(sub),
         from: tenantFrom(sub),
       });
       return { emailSent: true };

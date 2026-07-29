@@ -7,6 +7,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import { verifyQStashSignature } from "@/lib/automations/qstash";
 import {
@@ -171,7 +172,7 @@ export async function POST(request: Request) {
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: sub.replyToEmail ?? undefined,
+      replyTo: resolveReplyTo(sub),
       from: tenantFrom(sub),
     });
   } catch (err) {

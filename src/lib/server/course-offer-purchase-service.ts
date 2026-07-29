@@ -11,7 +11,7 @@ import {
   getStandaloneCourse,
   enrollInStandaloneCourseServerSide,
 } from "@/lib/server/standalone-course-service";
-import { emailIsConfigured, sendEmail, tenantFrom } from "@/lib/comms/resend";
+import { emailIsConfigured, sendEmail, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
 import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundle-email";
 import type {
   CourseOfferAccess,
@@ -345,7 +345,7 @@ async function sendOfferBookingBundleEmail(opts: {
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: (sub?.replyToEmail as string) ?? undefined,
+      replyTo: resolveReplyTo(sub as Parameters<typeof tenantFrom>[0]),
       from: tenantFrom(sub as Parameters<typeof tenantFrom>[0]),
     });
   } catch (err) {

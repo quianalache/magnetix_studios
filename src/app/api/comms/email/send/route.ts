@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { emailIsConfigured, sendEmail, tenantFrom } from "@/lib/comms/resend";
+import { emailIsConfigured, sendEmail, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
 import { requireContactAccessible, requireUid } from "@/lib/comms/route-auth";
 import { recordSend } from "@/lib/comms/usage";
 import type { SubAccountDoc } from "@/types";
@@ -47,16 +47,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // Reply-To: prefer the sub-account's nominated reply address (single
-  // source of truth — every reply for this client lands consistently in
-  // one inbox regardless of which teammate triggered the send). Falls
-  // back to the teammate's email if the sub-account hasn't set one yet,
-  // which preserves the old behavior for unconfigured deployments.
+  // Reply-To: the sub-account's nominated reply address AND, once a
+  // dedicated domain is verified, that domain's own address too (so a
+  // reply lands in Conversations as well as their personal inbox — see
+  // resolveReplyTo). Falls back to the teammate's email if neither is
+  // configured yet, preserving old behavior for unconfigured deployments.
   const subAccountSnap = await getAdminDb()
     .doc(`subAccounts/${contact.subAccountId}`)
     .get();
   const subAccount = subAccountSnap.data() as SubAccountDoc | undefined;
-  const replyTo = subAccount?.replyToEmail ?? auth.email ?? undefined;
+  const replyTo = resolveReplyTo(subAccount) ?? auth.email ?? undefined;
 
   let messageId: string;
   try {

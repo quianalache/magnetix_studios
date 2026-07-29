@@ -98,7 +98,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Set a Reply-To address on the Automations settings page first. Replies to broadcasts and automated emails would otherwise bounce — the sending subdomain has no inbox by default.",
+          "Set a Reply-To address on the Automations settings page first. Replies to broadcasts and automated emails go there in addition to the sending domain's own inbox once it's verified.",
       },
       { status: 400 },
     );

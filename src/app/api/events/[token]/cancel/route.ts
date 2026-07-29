@@ -8,6 +8,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import {
   hashEventToken,
@@ -157,7 +158,7 @@ async function runSideEffects(event: CalendarEvent): Promise<void> {
             subject: rendered.subject,
             text: rendered.text,
             html: rendered.html,
-            replyTo: sub.replyToEmail ?? undefined,
+            replyTo: resolveReplyTo(sub),
             from: tenantFrom(sub),
           });
         } catch (err) {

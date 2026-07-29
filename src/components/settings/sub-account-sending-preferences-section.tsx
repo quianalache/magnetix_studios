@@ -141,8 +141,10 @@ export function SubAccountSendingPreferencesSection() {
           />
           <p className="mt-1 text-xs text-muted-foreground">
             Replies to every automated and broadcast email come back to this
-            address. Required before sending from a dedicated domain — the
-            domain has no inbox, so replies bounce without it.
+            address — and, once a dedicated sending domain is verified
+            (Settings → Email), also to that domain&apos;s own inbox, which
+            shows up in Conversations. Required before sending from a
+            dedicated domain.
           </p>
         </div>
 

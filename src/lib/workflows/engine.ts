@@ -2,7 +2,7 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { sendEmail, emailIsConfigured, tenantFrom } from "@/lib/comms/resend";
+import { sendEmail, emailIsConfigured, tenantFrom, resolveReplyTo } from "@/lib/comms/resend";
 import {
   sendSmsForSubAccount,
   sendWhatsappTemplateForSubAccount,
@@ -125,7 +125,7 @@ const execSendEmail: NodeExecutor = async (ctx) => {
       subject: subject || "(no subject)",
       text,
       html,
-      replyTo: ctx.subAccount?.replyToEmail ?? undefined,
+      replyTo: resolveReplyTo(ctx.subAccount),
       from: tenantFrom(ctx.subAccount),
     });
     return { result: { kind: "next" }, log: "ok" };

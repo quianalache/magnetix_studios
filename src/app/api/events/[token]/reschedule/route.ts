@@ -9,6 +9,7 @@ import {
   emailIsConfigured,
   sendEmail,
   tenantFrom,
+  resolveReplyTo,
 } from "@/lib/comms/resend";
 import {
   computeAvailability,
@@ -353,7 +354,7 @@ async function runRescheduleSideEffects(args: {
         subject: rendered.subject,
         text: rendered.text,
         html: rendered.html,
-        replyTo: sub.replyToEmail ?? undefined,
+        replyTo: resolveReplyTo(sub),
         from: tenantFrom(sub),
       });
       return;
@@ -370,7 +371,7 @@ async function runRescheduleSideEffects(args: {
       subject: rendered.subject,
       text: rendered.text,
       html: rendered.html,
-      replyTo: sub.replyToEmail ?? undefined,
+      replyTo: resolveReplyTo(sub),
       attachments: [
         {
           filename: "invite.ics",

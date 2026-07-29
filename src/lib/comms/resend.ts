@@ -48,6 +48,32 @@ export function tenantFrom(
   return cfg && cfg.status === "verified" ? cfg.emailFrom : undefined;
 }
 
+/**
+ * Resolves Reply-To for every email this CRM sends on a sub-account's
+ * behalf. Two addresses can both be right at once: the sub-account's own
+ * `replyToEmail` (their real inbox — often what they actually want to
+ * triage from day to day) AND, once a dedicated domain is verified, that
+ * domain's own address (its replies land in the Conversations inbox via
+ * the Resend inbound webhook). Sending BOTH as a Reply-To list — Resend
+ * supports an array here — means a plain "Reply" populates both in most
+ * mail clients, so neither channel loses the thread. `replyToEmail` alone
+ * predates inbound support and used to be described as "required" for
+ * dedicated-domain sending (the domain had no inbox); it's additive now,
+ * not a replacement.
+ */
+export function resolveReplyTo(
+  sub?: {
+    resendConfig?: ResendConfig | null;
+    emailDomainEnabledByAgency?: boolean;
+    replyToEmail?: string | null;
+  } | null,
+): string | string[] | undefined {
+  const personal = sub?.replyToEmail?.trim() || undefined;
+  const domain = tenantFrom(sub);
+  if (personal && domain) return [personal, domain];
+  return personal ?? domain;
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -62,7 +88,8 @@ export async function sendEmail({
   text: string;
   /** Optional rich-text body. Resend uses html when present, text as fallback. */
   html?: string;
-  replyTo?: string;
+  /** Use `resolveReplyTo` — an array here (personal + dedicated domain) is fine, Resend sends it as multiple Reply-To addresses. */
+  replyTo?: string | string[];
   /**
    * Per-sub-account sender override. When a sub-account has a verified
    * dedicated sending domain, pass its `emailFrom` here (use `tenantFrom`).
