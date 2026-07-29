@@ -15,18 +15,27 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * the detail page can read the contact's message subcollections directly.
  *
  * Only created when a real message row is written — i.e. dedicated-Twilio SMS,
- * a configured WhatsApp sender, or (beta) a connected Meta inbox. Shared-sender
- * SMS (no message rows) produces no conversation, consistent with the
- * per-contact threads. Message subcollections by channel:
+ * a configured WhatsApp sender, (beta) a connected Meta inbox, or an inbound
+ * email to a sub-account's verified receiving domain. Shared-sender SMS (no
+ * message rows) produces no conversation, consistent with the per-contact
+ * threads. Message subcollections by channel:
  *   sms → contacts/{id}/messages, whatsapp → contacts/{id}/whatsappMessages,
- *   messenger + instagram → contacts/{id}/metaMessages (channel-discriminated).
+ *   messenger + instagram → contacts/{id}/metaMessages (channel-discriminated),
+ *   email → contacts/{id}/emailMessages.
  */
 
 /**
  * `messenger` + `instagram` are the BETA Meta channels — gated by the agency
  * `metaInboxEnabledByAgency` flag, so they only ever appear once that's on.
+ * `email` is inbound-only in Phase 1 — no reply-from-thread composer yet, see
+ * `src/app/api/webhooks/resend/inbound/route.ts`.
  */
-export type ConversationChannel = "sms" | "whatsapp" | "messenger" | "instagram";
+export type ConversationChannel =
+  | "sms"
+  | "whatsapp"
+  | "messenger"
+  | "instagram"
+  | "email";
 
 export type ConversationStatus = "open" | "closed" | "snoozed";
 

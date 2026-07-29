@@ -22,6 +22,7 @@ const CHANNEL_LABEL: Record<ConversationChannel, string> = {
   whatsapp: "WhatsApp",
   messenger: "Messenger",
   instagram: "Instagram",
+  email: "Email",
 };
 
 const CHANNEL_CHIP: Record<ConversationChannel, string> = {
@@ -29,6 +30,7 @@ const CHANNEL_CHIP: Record<ConversationChannel, string> = {
   whatsapp: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   messenger: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
   instagram: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
+  email: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
 };
 
 /** Meta rows carry their own channel discriminator on the doc. */
@@ -51,9 +53,11 @@ export function ConversationThread({
   const [sms, setSms] = useState<MessageDoc[]>([]);
   const [wa, setWa] = useState<MessageDoc[]>([]);
   const [meta, setMeta] = useState<MetaMessageDoc[]>([]);
+  const [email, setEmail] = useState<MessageDoc[]>([]);
   const [smsReady, setSmsReady] = useState(false);
   const [waReady, setWaReady] = useState(false);
   const [metaReady, setMetaReady] = useState(false);
+  const [emailReady, setEmailReady] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -94,10 +98,22 @@ export function ConversationThread({
       },
       () => setMetaReady(true),
     );
+    const unsubEmail = onSnapshot(
+      query(
+        collection(db, `contacts/${contactId}/emailMessages`),
+        orderBy("createdAt", "asc"),
+      ),
+      (snap) => {
+        setEmail(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MessageDoc));
+        setEmailReady(true);
+      },
+      () => setEmailReady(true),
+    );
     return () => {
       unsubSms();
       unsubWa();
       unsubMeta();
+      unsubEmail();
     };
   }, [contactId]);
 
@@ -109,12 +125,13 @@ export function ConversationThread({
         ...m,
         channel: (m.channel ?? "messenger") as ConversationChannel,
       })),
+      ...email.map((m) => ({ ...m, channel: "email" as const })),
     ];
     all.sort((a, b) => toMillis(a.createdAt) - toMillis(b.createdAt));
     return all;
-  }, [sms, wa, meta]);
+  }, [sms, wa, meta, email]);
 
-  const hydrated = smsReady && waReady && metaReady;
+  const hydrated = smsReady && waReady && metaReady && emailReady;
 
   useEffect(() => {
     if (scrollerRef.current) {
@@ -171,6 +188,10 @@ function bubbleClasses(
         ? "rounded-br-sm bg-gradient-to-br from-[#a033ff] via-[#ff5280] to-[#ff7061] text-white"
         : "rounded-bl-sm bg-[#efefef] text-black dark:bg-[#3b3b3d] dark:text-white";
     }
+    if (channel === "email") {
+      // Letter-like, not a chat-bubble color — inbound only today.
+      return "rounded-bl-sm bg-white text-[#111b21] ring-1 ring-black/5 dark:bg-[#202c33] dark:text-[#e9edef] dark:ring-0";
+    }
     // SMS → iMessage palette
     return isOutbound
       ? "rounded-br-sm bg-[#007aff] text-white"
@@ -199,15 +220,21 @@ function ChannelBubble({
     native && isOutbound && message.channel === "whatsapp" &&
     message.status !== "failed";
 
+  const isEmail = message.channel === "email";
+
   return (
     <div className={cn("flex flex-col", isOutbound ? "items-end" : "items-start")}>
       <div
         className={cn(
-          "max-w-[78%] rounded-2xl px-3 py-2 text-sm",
+          "rounded-2xl px-3 py-2 text-sm",
+          isEmail ? "max-w-[92%]" : "max-w-[78%]",
           bubbleClasses(message.channel, isOutbound, theme),
           message.status === "failed" && "ring-2 ring-destructive",
         )}
       >
+        {isEmail && message.subject && (
+          <p className="mb-1 font-semibold">{message.subject}</p>
+        )}
         <p className="whitespace-pre-wrap break-words">{message.body}</p>
       </div>
       <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">

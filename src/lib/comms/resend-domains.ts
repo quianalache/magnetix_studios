@@ -145,12 +145,23 @@ export interface CreateDomainResult {
   error: string | null;
 }
 
-/** Registers a new sending domain with Resend and returns its id + DNS records. */
+/**
+ * Registers a new sending domain with Resend and returns its id + DNS
+ * records. Receiving is requested on by default alongside sending — a
+ * verified sub-account domain is meant to both send AND receive (inbound
+ * lands in Conversations, see the Resend webhook route) with no separate
+ * opt-in. Resend folds whatever extra DNS record that needs (an MX record)
+ * into the same `records` array this already returns, so callers don't need
+ * to change anything to display it.
+ */
 export async function createSendingDomain(
   name: string,
 ): Promise<CreateDomainResult> {
   try {
-    const { data, error } = await getResend().domains.create({ name });
+    const { data, error } = await getResend().domains.create({
+      name,
+      capabilities: { sending: "enabled", receiving: "enabled" },
+    });
     if (error || !data?.id) {
       return {
         ok: false,
@@ -190,7 +201,9 @@ export async function getSendingDomain(
   domainId: string,
 ): Promise<DomainStatusResult> {
   try {
-    const { data, error } = await getResend().domains.get(domainId);
+    const first = await getResend().domains.get(domainId);
+    let data = first.data;
+    const error = first.error;
     if (error || !data) {
       return {
         ok: false,
@@ -198,6 +211,21 @@ export async function getSendingDomain(
         records: [],
         error: error?.message ?? "Domain not found on Resend.",
       };
+    }
+    // Self-heal domains verified before receiving was requested by default
+    // (createSendingDomain) — flip it on here so nobody needs a one-off
+    // migration to backfill existing sub-accounts. Cheap: only fires on the
+    // (rare) domain that still has it off, and this route is only hit when
+    // the Settings page loads/refreshes.
+    if (data.capabilities?.receiving !== "enabled") {
+      const updated = await getResend().domains.update({
+        id: domainId,
+        capabilities: { receiving: "enabled" },
+      });
+      if (!updated.error) {
+        const refetched = await getResend().domains.get(domainId);
+        if (!refetched.error && refetched.data) data = refetched.data;
+      }
     }
     return {
       ok: true,

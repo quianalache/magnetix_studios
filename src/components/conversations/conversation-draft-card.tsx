@@ -14,6 +14,9 @@ const LABEL = {
   whatsapp: "WhatsApp",
   messenger: "Messenger",
   instagram: "Instagram",
+  // The AI never drafts email replies (no send path yet) — present only so
+  // this satisfies ConversationChannel exhaustively.
+  email: "Email",
 } as const;
 
 /**

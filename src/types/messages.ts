@@ -42,6 +42,10 @@ export interface MessageDoc {
   to: string;
   /** Twilio MessageSid — populated once the API call returns / on inbound. */
   twilioMessageSid: string | null;
+  /** Email only (contacts/{id}/emailMessages rows). Resend's inbound email id — used as the doc id too, so retried webhook deliveries stay idempotent. */
+  resendEmailId?: string | null;
+  /** Email only. Null/absent for every other channel. */
+  subject?: string | null;
   /** Outbound only: which user clicked Send. Null for automation-generated sends. */
   sentByUid: string | null;
   /** Populated when status === "failed". */

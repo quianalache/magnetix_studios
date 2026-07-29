@@ -17,6 +17,10 @@ const LABEL: Record<ConversationChannel, string> = {
   whatsapp: "WhatsApp",
   messenger: "Messenger",
   instagram: "Instagram",
+  // Never offered as a reply channel here (no send path yet) — see the
+  // ConversationChannel doc comment. Only present so this Record stays
+  // exhaustive.
+  email: "Email",
 };
 
 /**

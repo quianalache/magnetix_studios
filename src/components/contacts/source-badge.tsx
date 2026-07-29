@@ -20,6 +20,7 @@ const LABELS: Record<Exclude<ContactSource, "">, string> = {
   other: "Other",
   facebook: "Facebook",
   instagram: "Instagram",
+  email: "Inbound Email",
 };
 
 const STYLES: Record<Exclude<ContactSource, "">, string> = {
@@ -44,6 +45,8 @@ const STYLES: Record<Exclude<ContactSource, "">, string> = {
     "bg-blue-500/10 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300",
   instagram:
     "bg-pink-500/10 text-pink-700 dark:bg-pink-400/15 dark:text-pink-300",
+  email:
+    "bg-indigo-500/10 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300",
 };
 
 const FALLBACK_STYLE =

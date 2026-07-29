@@ -156,6 +156,7 @@ const CHANNEL_COLLECTION: Record<ConversationChannel, string> = {
   whatsapp: "whatsappMessages",
   messenger: "metaMessages",
   instagram: "metaMessages",
+  email: "emailMessages",
 };
 
 interface JudgeVerdict {

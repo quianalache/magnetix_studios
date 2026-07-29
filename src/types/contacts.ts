@@ -14,6 +14,12 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  *   - "facebook" / "instagram"  Auto-set when a contact is created from a
  *                     BETA Facebook Messenger / Instagram DM inbound. Not
  *                     manual-create options — the Meta webhook stamps them.
+ *   - "email"         Auto-set when the Resend inbound-email webhook creates
+ *                     a contact for a sender with no existing match. Not a
+ *                     manual-create option. These contacts are stamped
+ *                     `emailOptedOut: true` — receiving an unsolicited email
+ *                     at a sub-account's receiving domain isn't consent to
+ *                     be marketed to, see the webhook route's doc comment.
  *   - ""              Unknown — no badge rendered.
  */
 export type ContactSource =
@@ -28,6 +34,7 @@ export type ContactSource =
   | "other"
   | "facebook"
   | "instagram"
+  | "email"
   | "";
 
 /**
