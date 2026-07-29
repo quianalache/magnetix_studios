@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DictateButton } from "@/components/ui/dictate-button";
 import { addNote } from "@/lib/firestore/contacts";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -32,9 +33,12 @@ export function AddNoteInput({ contactId }: { contactId: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-xl border bg-card p-4">
-      <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-        <Pencil className="h-4 w-4 text-muted-foreground" />
-        Add a note
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <Pencil className="h-4 w-4 text-muted-foreground" />
+          Add a note
+        </span>
+        <DictateButton value={content} onChange={setContent} />
       </div>
       <Textarea
         value={content}

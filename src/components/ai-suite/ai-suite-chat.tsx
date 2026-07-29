@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DictateButton } from "@/components/ui/dictate-button";
 import { AiSuiteMarkdown } from "@/components/ai-suite/ai-suite-markdown";
 import { cn } from "@/lib/utils";
 import type {
@@ -355,6 +356,11 @@ export function AiSuiteChat({
         placeholder="Ask a question, or ask me to create something…"
         disabled={loading}
         className="max-h-48 flex-1 resize-none overflow-y-auto rounded-lg border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      />
+      <DictateButton
+        value={input}
+        onChange={setInput}
+        className="h-9 w-9 rounded-lg border"
       />
       <Button
         type="submit"

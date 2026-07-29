@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -19,6 +19,7 @@ import {
   List,
   ListOrdered,
   Loader2,
+  Mic,
   Minus,
   Quote,
   Redo2,
@@ -30,6 +31,7 @@ import { LessonVideo } from "./lesson-video-extension";
 import { LessonEmbed } from "./lesson-embed-extension";
 import { parseVideoUrl, extractEmbedSrc } from "@/lib/community/video-embed";
 import { lessonBodyToEditorHtml } from "@/lib/community/lesson-html-shared";
+import { useDictation } from "@/hooks/use-dictation";
 import { cn } from "@/lib/utils";
 
 /**
@@ -86,6 +88,26 @@ export function RichTextEditor({
       },
     },
   });
+
+  // Final chunks only (not interim) — a growing "live" partial-word node
+  // mid-document is much riskier to get right than a plain-textarea append,
+  // and most speech engines finalize every few seconds anyway so it still
+  // feels live.
+  const {
+    supported: dictationSupported,
+    listening: dictating,
+    toggle: toggleDictation,
+    error: dictationError,
+  } = useDictation((transcript, isFinal) => {
+    if (!isFinal) return;
+    const trimmed = transcript.trim();
+    if (!trimmed || !editor) return;
+    editor.chain().focus().insertContent(`${trimmed} `).run();
+  });
+
+  useEffect(() => {
+    if (dictationError) toast.error(dictationError);
+  }, [dictationError]);
 
   if (!editor) {
     return (
@@ -169,6 +191,15 @@ export function RichTextEditor({
           {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
         </ToolbarBtn>
         <ToolbarBtn onClick={addVideo} title="Embed video or code"><Video className="h-4 w-4" /></ToolbarBtn>
+        {dictationSupported && (
+          <ToolbarBtn
+            active={dictating}
+            onClick={toggleDictation}
+            title={dictating ? "Stop dictation" : "Dictate"}
+          >
+            <Mic className={cn("h-4 w-4", dictating && "animate-pulse")} />
+          </ToolbarBtn>
+        )}
         <ToolbarBtn onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Divider"><Minus className="h-4 w-4" /></ToolbarBtn>
         <Divider />
         <ToolbarBtn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo"><Undo2 className="h-4 w-4" /></ToolbarBtn>
