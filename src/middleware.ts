@@ -47,6 +47,10 @@ const PUBLIC_PATHS = [
   "/api/landing/heartbeat",
   "/api/webhooks/twilio",
   "/api/webhooks/stripe",
+  // Resend inbound-email webhook — public POST from Resend's cloud.
+  // Security: Svix signature (RESEND_WEBHOOK_SECRET) verified inside the
+  // route before anything else runs.
+  "/api/webhooks/resend",
   // Meta (Facebook Messenger + Instagram DM) webhook — BETA. Public from the
   // Meta cloud: GET is the verify-token handshake, POST carries message events.
   // Security: X-Hub-Signature-256 (HMAC of the raw body with the app secret)
