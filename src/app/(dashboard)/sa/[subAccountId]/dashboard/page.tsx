@@ -3,19 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Briefcase,
-  Users,
   TrendingUp,
-  Trophy,
+  UserPlus,
+  MessageCircle,
+  CalendarClock,
+  CheckCircle2,
+  Send,
   ArrowRight,
-  Plus,
   Sparkles,
-  GitBranch,
-  Clock,
-  FileText,
   Upload,
   Download,
-  Zap,
+  Users,
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
@@ -25,28 +23,52 @@ import { useUnreadConversationsCount } from "@/hooks/use-unread-conversations";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
-import { subscribeToForms } from "@/lib/firestore/forms";
-import { formatCurrency, daysSince, toDate } from "@/lib/format";
-import { getStage, type Deal } from "@/types/deals";
+import { subscribeToEvents } from "@/lib/firestore/events";
+import { subscribeToQuotes } from "@/lib/firestore/quotes";
+import { computeQuoteTotals } from "@/lib/quotes/calc";
+import { formatCurrency, toDate } from "@/lib/format";
+import { eventStatus } from "@/types/events";
+import type { CalendarEvent } from "@/types/events";
+import type { Deal } from "@/types/deals";
 import { usePipelineStages } from "@/hooks/use-pipeline-stages";
 import type { Contact } from "@/types/contacts";
-import type { AutomationDoc } from "@/types";
-import type { LeadForm } from "@/types/forms";
+import type { Quote } from "@/types/quotes";
+import type { BroadcastDoc } from "@/types/broadcasts";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/stat-card";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { LeadsMap } from "@/components/dashboard/leads-map";
 
+const STAGE_BAR_COLORS: Record<string, string> = {
+  new: "bg-slate-400 dark:bg-slate-500",
+  contacted: "bg-blue-400 dark:bg-blue-500",
+  qualified: "bg-indigo-400 dark:bg-indigo-500",
+  proposal: "bg-amber-400 dark:bg-amber-500",
+  won: "bg-emerald-400 dark:bg-emerald-500",
+  lost: "bg-rose-400 dark:bg-rose-500",
+};
+
+type ActivityKind = "lead" | "won" | "sent" | "paid";
+
+interface ActivityItem {
+  id: string;
+  kind: ActivityKind;
+  title: React.ReactNode;
+  meta: string;
+  time: number;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { subAccount, subAccountId, agencyId, saPath } = useSubAccount();
+  const { subAccountId, agencyId, saPath } = useSubAccount();
   const { ready: filterReady, filter: territoryFilter } =
     useEffectiveTerritoryFilter();
   const unreadConversations = useUnreadConversationsCount();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [forms, setForms] = useState<LeadForm[]>([]);
-  const [automations, setAutomations] = useState<AutomationDoc[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [recentBroadcasts, setRecentBroadcasts] = useState<BroadcastDoc[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -72,19 +94,23 @@ export default function DashboardPage() {
       dealsReady = true;
       settle();
     });
-    const unsubF = subscribeToForms(scope, setForms);
-    const automationsQ = query(
-      collection(getFirebaseDb(), "automations"),
+    const unsubE = subscribeToEvents(scope, { territoryFilter }, setEvents);
+    const unsubQ = subscribeToQuotes(scope, { territoryFilter }, setQuotes);
+    const broadcastsQ = query(
+      collection(getFirebaseDb(), "broadcasts"),
       where("subAccountId", "==", subAccountId),
     );
-    const unsubA = onSnapshot(automationsQ, (snap) => {
-      setAutomations(snap.docs.map((d) => d.data() as AutomationDoc));
+    const unsubB = onSnapshot(broadcastsQ, (snap) => {
+      setRecentBroadcasts(
+        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BroadcastDoc),
+      );
     });
     return () => {
       unsubC();
       unsubD();
-      unsubF();
-      unsubA();
+      unsubE();
+      unsubQ();
+      unsubB();
     };
   }, [user, agencyId, subAccountId, filterReady, territoryFilter]);
 
@@ -96,38 +122,59 @@ export default function DashboardPage() {
   );
   const currency = deals[0]?.currency ?? "USD";
   const pipelineValue = openDeals.reduce((s, d) => s + (d.value || 0), 0);
-  const wonThisMonth = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(1);
-    cutoff.setHours(0, 0, 0, 0);
-    return deals
-      .filter((d) => d.stageId === "won")
-      .filter((d) => {
-        const date = toDate(d.stageChangedAt);
-        return date && date.getTime() >= cutoff.getTime();
-      })
-      .reduce((s, d) => s + (d.value || 0), 0);
-  }, [deals]);
-  const newContactsThisWeek = useMemo(() => {
-    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    return contacts.filter((c) => {
-      const d = toDate(c.createdAt);
-      return d && d.getTime() >= cutoff;
-    }).length;
-  }, [contacts]);
+
+  const { todayStart, todayEnd } = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return { todayStart: start, todayEnd: end };
+  }, []);
+
+  const newLeadsToday = useMemo(
+    () =>
+      contacts.filter((c) => {
+        const d = toDate(c.createdAt);
+        return d && d.getTime() >= todayStart.getTime();
+      }).length,
+    [contacts, todayStart],
+  );
+
+  const bookingsToday = useMemo(
+    () =>
+      events
+        .filter((e) => eventStatus(e) === "scheduled")
+        .filter((e) => {
+          const d = toDate(e.startAt);
+          return (
+            d && d.getTime() >= todayStart.getTime() && d.getTime() < todayEnd.getTime()
+          );
+        })
+        .sort(
+          (a, b) => (toDate(a.startAt)?.getTime() ?? 0) - (toDate(b.startAt)?.getTime() ?? 0),
+        ),
+    [events, todayStart, todayEnd],
+  );
+
+  const saleToday = useMemo(() => {
+    const wonDealToday = deals.some((d) => {
+      if (d.stageId !== "won") return false;
+      const d2 = toDate(d.stageChangedAt);
+      return d2 && d2.getTime() >= todayStart.getTime();
+    });
+    const paidQuoteToday = quotes.some((q) => {
+      if (q.status !== "paid") return false;
+      const d = toDate(q.paidAt);
+      return d && d.getTime() >= todayStart.getTime();
+    });
+    return wonDealToday || paidQuoteToday;
+  }, [deals, quotes, todayStart]);
 
   const contactById = useMemo(() => {
     const m = new Map<string, Contact>();
     for (const c of contacts) m.set(c.id, c);
     return m;
   }, [contacts]);
-
-  const recentDeals = openDeals.slice(0, 5);
-  const recentContacts = [...contacts]
-    .sort(
-      (a, b) => (toDate(b.createdAt)?.getTime() ?? 0) - (toDate(a.createdAt)?.getTime() ?? 0),
-    )
-    .slice(0, 5);
 
   const stages = usePipelineStages();
   const stageCounts = useMemo(() => {
@@ -136,7 +183,83 @@ export default function DashboardPage() {
     for (const d of deals) m.set(d.stageId, (m.get(d.stageId) ?? 0) + 1);
     return m;
   }, [deals, stages]);
-  const maxStageCount = Math.max(1, ...Array.from(stageCounts.values()));
+
+  const activityItems = useMemo(() => {
+    const items: ActivityItem[] = [];
+
+    for (const c of contacts) {
+      const d = toDate(c.createdAt);
+      if (!d) continue;
+      items.push({
+        id: `lead-${c.id}`,
+        kind: "lead",
+        title: (
+          <>
+            New lead — <b className="font-semibold">{c.name || c.email || "Unnamed"}</b>
+          </>
+        ),
+        meta: c.source || c.company || "—",
+        time: d.getTime(),
+      });
+    }
+
+    for (const d of deals) {
+      if (d.stageId !== "won") continue;
+      const changed = toDate(d.stageChangedAt);
+      if (!changed) continue;
+      const c = contactById.get(d.contactId);
+      items.push({
+        id: `won-${d.id}`,
+        kind: "won",
+        title: (
+          <>
+            Deal marked <b className="font-semibold">Won</b> — {d.title}
+          </>
+        ),
+        meta: `${formatCurrency(d.value, d.currency)}${c?.name ? ` · ${c.name}` : ""}`,
+        time: changed.getTime(),
+      });
+    }
+
+    for (const b of recentBroadcasts) {
+      if (b.status !== "completed") continue;
+      const sent = toDate(b.completedAt) ?? toDate(b.createdAt);
+      if (!sent) continue;
+      items.push({
+        id: `sent-${b.id}`,
+        kind: "sent",
+        title: (
+          <>
+            Broadcast sent — <b className="font-semibold">{b.subjectPreview || "Untitled"}</b>
+          </>
+        ),
+        meta: `${b.totals?.sent ?? 0} recipients`,
+        time: sent.getTime(),
+      });
+    }
+
+    for (const q of quotes) {
+      if (q.status !== "paid") continue;
+      const paid = toDate(q.paidAt);
+      if (!paid) continue;
+      const c = contactById.get(q.contactId);
+      const { total } = computeQuoteTotals(q);
+      items.push({
+        id: `paid-${q.id}`,
+        kind: "paid",
+        title: (
+          <>
+            {q.kind === "invoice" ? "Invoice" : "Quote"} paid —{" "}
+            <b className="font-semibold">{c?.name ?? "Unknown"}</b>
+          </>
+        ),
+        meta: formatCurrency(total, q.currency),
+        time: paid.getTime(),
+      });
+    }
+
+    return items.sort((a, b) => b.time - a.time).slice(0, 6);
+  }, [contacts, deals, recentBroadcasts, quotes, contactById]);
 
   const isEmpty = !loading && contacts.length === 0 && deals.length === 0;
   const today = new Date().toLocaleDateString("en-US", {
@@ -147,6 +270,23 @@ export default function DashboardPage() {
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  const subtitle = useMemo(() => {
+    if (isEmpty) return "Let's get your first lead in.";
+    const parts: string[] = [];
+    if (newLeadsToday > 0) {
+      parts.push(`${newLeadsToday} new lead${newLeadsToday === 1 ? "" : "s"} today`);
+    }
+    if (bookingsToday.length > 0) {
+      parts.push(
+        `${bookingsToday.length} booking${bookingsToday.length === 1 ? "" : "s"} scheduled`,
+      );
+    }
+    if (saleToday) parts.push("a sale came in");
+    if (parts.length === 0) return "Here's what's moving in your pipeline.";
+    if (parts.length === 1) return `${parts[0]}.`;
+    return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}.`;
+  }, [isEmpty, newLeadsToday, bookingsToday.length, saleToday]);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -163,11 +303,7 @@ export default function DashboardPage() {
             </span>{" "}
             today.
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {isEmpty
-              ? "Let's get your first lead in."
-              : "Here's what's moving in your pipeline."}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
         </div>
         {!isEmpty && (
           <div className="flex items-center gap-2">
@@ -199,81 +335,45 @@ export default function DashboardPage() {
         </Link>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          href={saPath("/pipeline")}
-          icon={<Briefcase className="h-4 w-4" />}
-          label="Open deals"
-          value={String(openDeals.length)}
-          hint={`${deals.length - openDeals.length} closed`}
-          tone="text-[#5E2574] dark:text-[#C892DE]"
-          iconBg="bg-[#5E2574]/10 dark:bg-[#C892DE]/15"
+          href={saPath("/contacts")}
+          icon={<UserPlus className="h-4 w-4" />}
+          label="New leads today"
+          value={String(newLeadsToday)}
+          hint={`${contacts.length} total`}
+          tone="text-[#A8386B] dark:text-[#F3D9D7]"
+          iconBg="bg-[#F3D9D7]/50 dark:bg-[#F3D9D7]/15"
           loading={loading}
         />
         <StatCard
           href={saPath("/pipeline")}
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Pipeline value"
+          label="Open pipeline value"
           value={formatCurrency(pipelineValue, currency)}
-          hint="Across open stages"
+          hint={`${openDeals.length} open deals`}
+          tone="text-[#5E2574] dark:text-[#C892DE]"
+          iconBg="bg-[#5E2574]/10 dark:bg-[#C892DE]/15"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/conversations")}
+          icon={<MessageCircle className="h-4 w-4" />}
+          label="Unread conversations"
+          value={String(unreadConversations)}
+          hint="Across your inbox"
           tone="text-teal-700 dark:text-[#9EDBDD]"
           iconBg="bg-[#9EDBDD]/25 dark:bg-[#9EDBDD]/15"
           loading={loading}
         />
         <StatCard
-          href={saPath("/pipeline")}
-          icon={<Trophy className="h-4 w-4" />}
-          label="Won this month"
-          value={formatCurrency(wonThisMonth, currency)}
-          hint="Closed-won revenue"
-          tone="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-500/10"
-          loading={loading}
-        />
-        <StatCard
-          href={saPath("/contacts")}
-          icon={<Users className="h-4 w-4" />}
-          label="New contacts · 7d"
-          value={String(newContactsThisWeek)}
-          hint={`${contacts.length} total`}
-          tone="text-amber-600 dark:text-amber-400"
-          iconBg="bg-amber-500/10"
-          loading={loading}
-        />
-        <StatCard
-          href={saPath("/forms")}
-          icon={<FileText className="h-4 w-4" />}
-          label="Forms"
-          value={String(forms.length)}
-          hint="Public + embeddable"
-          tone="text-sky-600 dark:text-sky-400"
-          iconBg="bg-sky-500/10"
-          loading={loading}
-        />
-        <StatCard
-          href={saPath("/automations")}
-          icon={<Zap className="h-4 w-4" />}
-          label="Automations"
-          value={
-            subAccount?.automationsPaused
-              ? "Paused"
-              : String(automations.filter((a) => a.enabled).length)
-          }
-          hint={
-            subAccount?.automationsPaused
-              ? `${automations.length} affected`
-              : `${automations.length} total`
-          }
-          tone={
-            subAccount?.automationsPaused
-              ? "text-amber-600 dark:text-amber-400"
-              : "text-rose-600 dark:text-rose-400"
-          }
-          iconBg={
-            subAccount?.automationsPaused
-              ? "bg-amber-500/10"
-              : "bg-rose-500/10"
-          }
+          href={saPath("/calendar")}
+          icon={<CalendarClock className="h-4 w-4" />}
+          label="Bookings today"
+          value={String(bookingsToday.length)}
+          hint={bookingsToday.length ? "Scheduled" : "Nothing on the calendar"}
+          tone="text-[#6E1F49] dark:text-[#E8B7C8]"
+          iconBg="bg-[#E8B7C8]/50 dark:bg-[#E8B7C8]/20"
           loading={loading}
         />
       </div>
@@ -283,15 +383,111 @@ export default function DashboardPage() {
       {isEmpty ? (
         <GettingStarted />
       ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <section className="rounded-2xl border bg-card p-5">
+            <div className="mb-1 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold">Recent activity</h2>
+                <p className="text-xs text-muted-foreground">
+                  Across every channel, newest first.
+                </p>
+              </div>
+            </div>
+            {activityItems.length === 0 ? (
+              <p className="py-8 text-center text-xs text-muted-foreground">
+                Nothing has happened yet — once you get a lead, a won deal, or a
+                sale, it&apos;ll show up here.
+              </p>
+            ) : (
+              <ul className="mt-3 divide-y">
+                {activityItems.map((item) => {
+                  const dotStyle =
+                    item.kind === "lead"
+                      ? "bg-[#F3D9D7] text-[#A8386B]"
+                      : item.kind === "sent"
+                        ? "bg-[#F3E4F0] text-[#5E2574] dark:bg-[#341E42] dark:text-[#C892DE]"
+                        : "bg-[#9EDBDD]/40 text-[#1D7A7C]";
+                  const Icon =
+                    item.kind === "lead"
+                      ? UserPlus
+                      : item.kind === "sent"
+                        ? Send
+                        : CheckCircle2;
+                  return (
+                    <li key={item.id} className="flex items-start gap-3 py-2.5">
+                      <span
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${dotStyle}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{item.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.meta}
+                        </p>
+                      </div>
+                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-[11px] text-muted-foreground">
+                        {relativeTime(item.time)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <div className="space-y-4">
             <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold">Pipeline snapshot</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Deals by stage — click to open the board.
-                  </p>
-                </div>
+              <h2 className="text-sm font-semibold">Today&apos;s bookings</h2>
+              <p className="mb-3 text-xs text-muted-foreground">
+                {bookingsToday.length > 0
+                  ? `${bookingsToday.length} scheduled.`
+                  : "Nothing on the calendar today."}
+              </p>
+              {bookingsToday.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  No bookings today.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {bookingsToday.map((e) => {
+                    const start = toDate(e.startAt);
+                    const contact = e.contactId
+                      ? contactById.get(e.contactId)
+                      : null;
+                    return (
+                      <li key={e.id}>
+                        <Link
+                          href={saPath("/calendar")}
+                          className="flex items-center gap-3 rounded-lg bg-muted/50 p-2.5 transition-colors hover:bg-muted"
+                        >
+                          <span className="flex w-16 shrink-0 items-center justify-center rounded-lg bg-accent px-1 py-2 text-center text-[11px] font-bold tabular-nums text-accent-foreground">
+                            {start
+                              ? start.toLocaleTimeString("en-US", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })
+                              : "--"}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {e.title}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {contact?.name ? `with ${contact.name}` : "No contact linked"}
+                            </p>
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section className="rounded-2xl border bg-card p-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold">Pipeline</h2>
                 <Button
                   render={<Link href={saPath("/pipeline")} />}
                   size="sm"
@@ -301,214 +497,51 @@ export default function DashboardPage() {
                   Open <ArrowRight className="h-3 w-3" />
                 </Button>
               </div>
-              <div className="space-y-2">
+              <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted">
                 {stages.map((s) => {
                   const count = stageCounts.get(s.id) ?? 0;
-                  const pct = (count / maxStageCount) * 100;
+                  if (!count || deals.length === 0) return null;
                   return (
-                    <Link
+                    <span
                       key={s.id}
-                      href={saPath("/pipeline")}
-                      className="group flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50"
-                    >
-                      <span
-                        className={`w-24 shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-medium ${s.tone}`}
-                      >
-                        {s.label}
-                      </span>
-                      <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="mx-hero-gradient h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="w-8 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
-                        {count}
-                      </span>
-                    </Link>
+                      className={`h-full ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
+                      style={{ width: `${(count / deals.length) * 100}%` }}
+                    />
                   );
                 })}
               </div>
-
-              {recentDeals.length > 0 && (
-                <>
-                  <div className="my-4 border-t" />
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Most recent open deals
-                    </h3>
-                  </div>
-                  <ul className="space-y-1">
-                    {recentDeals.map((d) => {
-                      const stage = getStage(d.stageId, stages);
-                      const c = contactById.get(d.contactId);
-                      const days = daysSince(d.stageChangedAt);
-                      return (
-                        <li key={d.id}>
-                          <Link
-                            href={saPath("/pipeline")}
-                            className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50"
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <Briefcase className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{d.title}</p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {c?.name ?? "Unknown"} ·{" "}
-                                  {formatCurrency(d.value, d.currency)}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-2">
-                              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                {days}d
-                              </span>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${stage.tone}`}
-                              >
-                                {stage.label}
-                              </span>
-                            </div>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </section>
-
-            <div className="space-y-4">
-              <section className="rounded-2xl border bg-card p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold">Recent contacts</h2>
-                    <p className="text-xs text-muted-foreground">
-                      Newest leads in your list.
-                    </p>
-                  </div>
-                  <Button
-                    render={<Link href={saPath("/contacts")} />}
-                    size="sm"
-                    variant="ghost"
-                    className="gap-1"
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+                {stages.map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
                   >
-                    View all <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </div>
-                {recentContacts.length === 0 ? (
-                  <p className="py-4 text-center text-xs text-muted-foreground">
-                    No contacts yet.
-                  </p>
-                ) : (
-                  <ul className="space-y-1">
-                    {recentContacts.map((c) => {
-                      const initials = (c.name || c.email || "?")
-                        .split(" ")
-                        .map((s) => s[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase();
-                      return (
-                        <li key={c.id}>
-                          <Link
-                            href={saPath(`/contacts/${c.id}`)}
-                            className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50"
-                          >
-                            <span className="mx-hero-gradient flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400/80 via-violet-400/80 to-pink-400/80 text-[10px] font-semibold text-white">
-                              {initials}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium">
-                                {c.name || "Unnamed"}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
-                                {c.email || c.company || "—"}
-                              </p>
-                            </div>
-                            <span className="text-[11px] text-muted-foreground">
-                              {daysSince(c.createdAt)}d
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-
-              <section className="mx-wash-gradient rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
-                <div className="mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-500" />
-                  <h2 className="text-sm font-semibold">Quick actions</h2>
-                </div>
-                <div className="grid gap-2">
-                  <QuickLink
-                    href={saPath("/contacts")}
-                    icon={<Users className="h-4 w-4" />}
-                    title="Add a contact"
-                    desc="Log a new lead in 10 seconds"
-                  />
-                  <NewDealDialog
-                    contacts={contacts}
-                    trigger={
-                      <div className="flex cursor-pointer items-center gap-3 rounded-lg border bg-background p-3 transition-all hover:border-primary/40 hover:shadow-sm">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600">
-                          <Briefcase className="h-4 w-4" />
-                        </span>
-                        <div className="flex-1 text-left">
-                          <p className="text-sm font-medium">Open a deal</p>
-                          <p className="text-xs text-muted-foreground">
-                            Track a new opportunity
-                          </p>
-                        </div>
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                    }
-                  />
-                  <QuickLink
-                    href={saPath("/pipeline")}
-                    icon={<GitBranch className="h-4 w-4" />}
-                    title="Open pipeline"
-                    desc="Move deals between stages"
-                  />
-                </div>
-              </section>
-            </div>
+                    <span
+                      className={`h-2 w-2 rounded-sm ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
+                    />
+                    {s.label} ({stageCounts.get(s.id) ?? 0})
+                  </span>
+                ))}
+              </div>
+            </section>
           </div>
+        </div>
       )}
     </div>
   );
 }
 
-
-function QuickLink({
-  href,
-  icon,
-  title,
-  desc,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-lg border bg-background p-3 transition-all hover:border-primary/40 hover:shadow-sm"
-    >
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600">
-        {icon}
-      </span>
-      <div className="flex-1">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{desc}</p>
-      </div>
-      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-    </Link>
-  );
+function relativeTime(ms: number): string {
+  const diffSec = Math.round((Date.now() - ms) / 1000);
+  const diffMin = Math.round(diffSec / 60);
+  const diffHr = Math.round(diffMin / 60);
+  const diffDay = Math.round(diffHr / 24);
+  if (diffSec < 30) return "just now";
+  if (diffMin < 1) return `${diffSec}s ago`;
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function GettingStarted() {
