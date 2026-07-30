@@ -9,7 +9,7 @@ import {
   onSnapshot,
   query,
 } from "firebase/firestore";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail, MailCheck, Eye, MousePointerClick, TriangleAlert, Ban } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
@@ -120,7 +120,7 @@ export default function BroadcastDetailPage() {
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400">
                 <Mail className="h-4 w-4" />
               </span>
-              {broadcast.templateName}
+              {broadcast.subject || broadcast.templateName || "(untitled broadcast)"}
             </h1>
             {broadcast.subjectPreview && (
               <p className="mt-1 text-sm text-muted-foreground">
@@ -145,6 +145,16 @@ export default function BroadcastDetailPage() {
         <SummaryCard label="Failed" value={t.failed} tone="rose" />
         <SummaryCard label="Audience" value={t.audienceSize} tone="muted" />
       </div>
+
+      {t.sent > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <RateCard icon={MailCheck} label="Delivered" count={t.delivered} of={t.sent} tone="emerald" />
+          <RateCard icon={Eye} label="Opened" count={t.opened} of={t.sent} tone="blue" />
+          <RateCard icon={MousePointerClick} label="Clicked" count={t.clicked} of={t.sent} tone="violet" />
+          <RateCard icon={TriangleAlert} label="Bounced" count={t.bounced} of={t.sent} tone="amber" />
+          <RateCard icon={Ban} label="Complaints" count={t.complained} of={t.sent} tone="rose" />
+        </div>
+      )}
 
       {broadcast.status !== "completed" && broadcast.status !== "failed" && (
         <div className="rounded-xl border bg-card p-4">
@@ -193,6 +203,7 @@ export default function BroadcastDetailPage() {
                     {s.toEmail}
                   </p>
                 </div>
+                <EngagementBadges send={s} />
                 <SendStatus send={s} />
                 <span className="text-xs text-muted-foreground">
                   {formatContactDate(s.sentAt) === "—"
@@ -298,6 +309,80 @@ function SummaryCard({
       <p className={`mt-1 font-mono text-2xl font-semibold ${valueClass}`}>
         {value}
       </p>
+    </div>
+  );
+}
+
+const RATE_TONE_CLASS: Record<string, string> = {
+  emerald: "text-emerald-600 dark:text-emerald-400",
+  blue: "text-blue-600 dark:text-blue-400",
+  violet: "text-violet-600 dark:text-violet-400",
+  amber: "text-amber-600 dark:text-amber-400",
+  rose: "text-rose-600 dark:text-rose-400",
+};
+
+function RateCard({
+  icon: Icon,
+  label,
+  count,
+  of,
+  tone,
+}: {
+  icon: typeof Mail;
+  label: string;
+  count: number;
+  of: number;
+  tone: "emerald" | "blue" | "violet" | "amber" | "rose";
+}) {
+  const pct = of > 0 ? Math.round((count / of) * 100) : 0;
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <p className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </p>
+      <p className={`mt-1 font-mono text-2xl font-semibold ${RATE_TONE_CLASS[tone]}`}>
+        {pct}%
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{count} of {of}</p>
+    </div>
+  );
+}
+
+/** Small icon row on each recipient's row — only meaningful once
+ *  `send.engagement` starts populating (async, via the Resend events
+ *  webhook), so it renders nothing for a still-in-flight or never-tracked
+ *  row rather than a row of empty placeholders. */
+function EngagementBadges({ send }: { send: BroadcastSendDoc }) {
+  const e = send.engagement;
+  if (!e) return null;
+  return (
+    <div className="flex items-center gap-1.5 text-muted-foreground">
+      {e.delivered && (
+        <span title="Delivered">
+          <MailCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+        </span>
+      )}
+      {e.opened && (
+        <span title={`Opened${e.openCount > 1 ? ` (${e.openCount}x)` : ""}`}>
+          <Eye className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+        </span>
+      )}
+      {e.clicked && (
+        <span title={`Clicked${e.clickCount > 1 ? ` (${e.clickCount}x)` : ""}`}>
+          <MousePointerClick className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+        </span>
+      )}
+      {e.bounced && (
+        <span title={`Bounced (${e.bounceType ?? "unknown"})`}>
+          <TriangleAlert className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        </span>
+      )}
+      {e.complained && (
+        <span title="Marked as spam">
+          <Ban className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+        </span>
+      )}
     </div>
   );
 }

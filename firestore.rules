@@ -1069,6 +1069,28 @@ service cloud.firestore {
       );
     }
 
+    // User-owned broadcast composer templates — NEVER seeded by us, only
+    // created via the composer's "Save as template" action. Same access
+    // pattern as message_templates.
+    match /broadcastTemplates/{templateId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
     // Per-contact execution rows — created and mutated server-side only by
     // the trigger helper and the QStash step executor (Admin SDK bypasses
     // these rules). Active members can read for debugging / activity drill-

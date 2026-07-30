@@ -8,7 +8,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { Mail, Send, Users } from "lucide-react";
+import { Mail, Send } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
@@ -62,7 +62,7 @@ export default function BroadcastsListPage() {
             Bulk email sends. Open any one for per-recipient delivery status.
           </p>
         </div>
-        <Button render={<Link href={saPath("/contacts")} />} variant="outline">
+        <Button render={<Link href={saPath("/broadcasts/new")} />} variant="outline">
           <Mail className="mr-1 h-4 w-4" />
           Send a new broadcast
         </Button>
@@ -78,7 +78,7 @@ export default function BroadcastsListPage() {
           ))}
         </div>
       ) : broadcasts.length === 0 ? (
-        <EmptyState contactsHref={saPath("/contacts")} />
+        <EmptyState newBroadcastHref={saPath("/broadcasts/new")} />
       ) : (
         <ul className="space-y-2">
           {broadcasts.map((b) => (
@@ -94,7 +94,7 @@ export default function BroadcastsListPage() {
                         <Mail className="h-3.5 w-3.5" />
                       </span>
                       <p className="truncate font-medium">
-                        {b.templateName}
+                        {b.subject || b.templateName || "(untitled broadcast)"}
                       </p>
                       <StatusBadge status={b.status} />
                     </div>
@@ -187,7 +187,7 @@ function Stat({
   );
 }
 
-function EmptyState({ contactsHref }: { contactsHref: string }) {
+function EmptyState({ newBroadcastHref }: { newBroadcastHref: string }) {
   return (
     <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -199,9 +199,9 @@ function EmptyState({ contactsHref }: { contactsHref: string }) {
         pipeline stage. Opted-out contacts are skipped automatically.
       </p>
       <div className="mt-6 flex justify-center">
-        <Button render={<Link href={contactsHref} />}>
-          <Users className="mr-1 h-4 w-4" />
-          Go to contacts
+        <Button render={<Link href={newBroadcastHref} />}>
+          <Mail className="mr-1 h-4 w-4" />
+          Build your first broadcast
         </Button>
       </div>
     </div>

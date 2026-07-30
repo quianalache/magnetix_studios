@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "broadcastTemplates",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [
@@ -178,6 +186,13 @@
     {
       "collectionGroup": "submissions",
       "fieldPath": "contactId",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sends",
+      "fieldPath": "resendMessageId",
       "indexes": [
         { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
       ]

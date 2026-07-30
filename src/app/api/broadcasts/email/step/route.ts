@@ -5,13 +5,18 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { qstashIsConfigured, verifyQStashSignature } from "@/lib/automations/qstash";
 import { sendTenantEmail, emailIsConfigured } from "@/lib/comms/resend";
-import { resolveMergeTags } from "@/lib/automations/merge-tags";
 import { buildUnsubscribeUrl } from "@/lib/automations/unsubscribe-token";
+import {
+  formatMailingAddress,
+  buildBroadcastUnsubscribeHeaders,
+} from "@/lib/broadcasts/compliance";
+import {
+  renderBroadcastEmailHtml,
+  renderBroadcastEmailText,
+} from "@/lib/broadcasts/render-email";
 import type {
-  AgencyDoc,
   BroadcastDoc,
   BroadcastSendDoc,
-  MessageTemplateDoc,
   SubAccountDoc,
 } from "@/types";
 import type { Contact } from "@/types/contacts";
@@ -111,15 +116,12 @@ export async function POST(request: Request) {
   }
 
   // Load the contact (live read — opt-out may have flipped since fan-out)
-  // along with the template, sub-account, and agency for merge-tag context.
+  // along with the sub-account.
   const contactRef = db.collection("contacts").doc(contactId);
-  const [contactSnap, templateSnap, subAccountSnap, agencySnap] =
-    await Promise.all([
-      contactRef.get(),
-      db.collection("message_templates").doc(broadcast.templateId).get(),
-      db.collection("subAccounts").doc(broadcast.subAccountId).get(),
-      db.collection("agencies").doc(broadcast.agencyId).get(),
-    ]);
+  const [contactSnap, subAccountSnap] = await Promise.all([
+    contactRef.get(),
+    db.collection("subAccounts").doc(broadcast.subAccountId).get(),
+  ]);
 
   if (!contactSnap.exists) {
     await markSkipped(sendRef, broadcastRef, "contact_missing");
@@ -145,68 +147,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, status: "skipped" });
   }
 
-  if (!templateSnap.exists) {
+  if (!broadcast.content || !broadcast.subject) {
+    // Legacy (pre-composer-rebuild) broadcast still mid-flight — extremely
+    // unlikely (QStash fan-out drains in minutes/hours, not across a
+    // deploy), but fail cleanly rather than crash if it ever happens.
     await markFailed(
       sendRef,
       broadcastRef,
-      `Template ${broadcast.templateId} not found`,
+      "This broadcast has no renderable content (sent under a retired content model).",
     );
     await maybeMarkBroadcastCompleted(broadcastRef);
     return NextResponse.json({ ok: true, status: "failed" });
   }
-  const template = templateSnap.data() as MessageTemplateDoc;
   const subAccount = subAccountSnap.exists
     ? (subAccountSnap.data() as SubAccountDoc)
     : null;
-  const agency = agencySnap.exists ? (agencySnap.data() as AgencyDoc) : null;
 
-  // Owner snapshot for merge tags (matches the automation executor pattern).
-  let ownerDisplayName = "";
-  let ownerEmail = "";
-  if (agency?.ownerUid) {
-    try {
-      const ownerSnap = await db.collection("users").doc(agency.ownerUid).get();
-      const data = ownerSnap.data();
-      ownerDisplayName = (data?.displayName as string) ?? "";
-      ownerEmail = (data?.email as string) ?? "";
-    } catch {
-      // Empty strings tolerate cleanly in merge-tag resolution.
-    }
+  // Defensive re-check — the send route already required this at fan-out
+  // time, but the address could theoretically be cleared mid-batch.
+  if (!subAccount?.mailingAddress) {
+    await markFailed(
+      sendRef,
+      broadcastRef,
+      "Mailing address was removed mid-send — required for CAN-SPAM compliance.",
+    );
+    await maybeMarkBroadcastCompleted(broadcastRef);
+    return NextResponse.json({ ok: true, status: "failed" });
   }
+  const formattedAddress = formatMailingAddress(subAccount.mailingAddress);
 
   const unsubscribeLink = buildUnsubscribeUrl(contact.id);
-  const baseSubject = {
-    contact: {
-      name: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-    },
-    owner: { displayName: ownerDisplayName, email: ownerEmail },
-    workspace: { name: subAccount?.name ?? "" },
-    bookingLink: subAccount?.bookingLink ?? "",
-  } as const;
+  const renderOpts = {
+    unsubscribeUrl: unsubscribeLink,
+    mailingAddress: formattedAddress,
+    businessName: subAccount?.name ?? "",
+  };
+  const subject = broadcast.subject;
+  const html = renderBroadcastEmailHtml(broadcast.content, renderOpts);
+  const text = renderBroadcastEmailText(broadcast.content, renderOpts);
 
-  const text = resolveMergeTags(template.body, {
-    ...baseSubject,
+  const unsubscribeHeaders = buildBroadcastUnsubscribeHeaders(
+    subAccount,
     unsubscribeLink,
-  });
-  const subject = resolveMergeTags(template.subject ?? "", {
-    ...baseSubject,
-    unsubscribeLink,
-  });
-
-  // HTML body: identical render as the automation executor — anchor-tag the
-  // unsubscribe link, convert newlines to <br>, wrap in a minimal styled
-  // shell. v1 doesn't escape author content because templates are
-  // admin-authored, not user input.
-  const htmlAnchor = unsubscribeLink
-    ? `<a href="${unsubscribeLink}">Unsubscribe</a>`
-    : "";
-  const htmlInner = resolveMergeTags(template.body, {
-    ...baseSubject,
-    unsubscribeLink: htmlAnchor,
-  }).replace(/\r?\n/g, "<br>");
-  const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+  );
 
   let resendMessageId: string | null = null;
   let error: string | null = null;
@@ -217,6 +200,7 @@ export async function POST(request: Request) {
       subject: subject || "(no subject)",
       text,
       html,
+      headers: unsubscribeHeaders,
     });
     resendMessageId = result.id;
   } catch (err) {
@@ -242,7 +226,7 @@ export async function POST(request: Request) {
       .collection("activities")
       .add({
         type: "email_sent",
-        content: `Bulk email: ${broadcast.templateName}`,
+        content: `Bulk email: ${broadcast.subject}`,
         createdBy: "broadcast",
         meta: {
           broadcastId,

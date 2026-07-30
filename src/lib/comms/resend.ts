@@ -82,6 +82,7 @@ export async function sendEmail({
   replyTo,
   from,
   attachments,
+  headers,
 }: {
   to: string;
   subject: string;
@@ -99,6 +100,12 @@ export async function sendEmail({
    */
   from?: string;
   attachments?: { filename: string; content: string }[];
+  /**
+   * Raw custom headers, passed straight through to Resend. Used for
+   * `List-Unsubscribe`/`List-Unsubscribe-Post` on broadcast sends (see
+   * `src/lib/broadcasts/compliance.ts`) — not needed for ordinary sends.
+   */
+  headers?: Record<string, string>;
 }): Promise<{ id: string }> {
   const resolvedFrom = from ?? process.env.EMAIL_FROM;
   if (!resolvedFrom) {
@@ -115,6 +122,7 @@ export async function sendEmail({
     ...(html ? { html } : {}),
     replyTo,
     ...(attachments ? { attachments } : {}),
+    ...(headers ? { headers } : {}),
   });
   if (result.error) {
     throw new Error(result.error.message || "Resend send failed");
@@ -158,6 +166,7 @@ export async function sendTenantEmail({
   html,
   attachments,
   replyTo,
+  headers,
 }: {
   sub:
     | {
@@ -176,6 +185,7 @@ export async function sendTenantEmail({
    *  different reply target (e.g. quotes reply to the staff member who
    *  sent them, not the sub-account's general address). */
   replyTo?: string | string[];
+  headers?: Record<string, string>;
 }): Promise<{ id: string }> {
   const from = tenantFrom(sub);
   if (!from) throw new NoTenantDomainError();
@@ -187,6 +197,7 @@ export async function sendTenantEmail({
     from,
     replyTo: replyTo ?? resolveReplyTo(sub),
     attachments,
+    headers,
   });
 }
 

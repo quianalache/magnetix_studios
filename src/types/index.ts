@@ -4,6 +4,7 @@ export * from "./social";
 export * from "./custom-fields";
 export * from "./automations";
 export * from "./broadcasts";
+export * from "./broadcast-content";
 export * from "./voice-campaigns";
 export * from "./messages";
 export * from "./whatsapp-templates";

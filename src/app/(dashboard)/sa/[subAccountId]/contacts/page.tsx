@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { ContactsTable } from "@/components/contacts/contacts-table";
 import { AddContactModal } from "@/components/contacts/add-contact-modal";
 import { ImportContactsDialog } from "@/components/contacts/import-contacts-dialog";
-import { BulkEmailDialog } from "@/components/contacts/bulk-email-dialog";
 import { BulkCallDialog } from "@/components/contacts/bulk-call-dialog";
 import type { Contact } from "@/types/contacts";
 import type { TerritoryDoc } from "@/types";
@@ -54,7 +53,8 @@ function ImportQueryWatcher({ onOpen }: { onOpen: () => void }) {
 
 export default function ContactsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subAccountId, agencyId, subAccount } = useSubAccount();
+  const router = useRouter();
+  const { subAccountId, agencyId, subAccount, saPath } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
   const { ready: filterReady, filter: territoryFilter } =
     useEffectiveTerritoryFilter();
@@ -63,7 +63,6 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [importOpen, setImportOpen] = useState(false);
-  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [bulkCallOpen, setBulkCallOpen] = useState(false);
   const outboundVoiceOn = subAccount?.outboundVoiceEnabledByAgency === true;
   const openImport = useCallback(() => setImportOpen(true), []);
@@ -138,7 +137,7 @@ export default function ContactsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => setBulkEmailOpen(true)}
+            onClick={() => router.push(saPath("/broadcasts/new"))}
             disabled={contacts.length === 0}
           >
             <Mail className="mr-1 h-4 w-4" />
@@ -196,11 +195,6 @@ export default function ContactsPage() {
       )}
 
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
-      <BulkEmailDialog
-        open={bulkEmailOpen}
-        onOpenChange={setBulkEmailOpen}
-        contacts={contacts}
-      />
       {outboundVoiceOn && (
         <BulkCallDialog
           open={bulkCallOpen}

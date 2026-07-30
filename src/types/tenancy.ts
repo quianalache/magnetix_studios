@@ -509,6 +509,28 @@ export interface SubAccountDoc {
    * extra requests. See {@link import("./billing").SubAccountBilling}.
    */
   billing?: import("./billing").SubAccountBilling | null;
+  /**
+   * Physical mailing address for CAN-SPAM compliance footers on bulk email
+   * broadcasts. Required (gated at send time — see
+   * `src/lib/broadcasts/compliance.ts`) before a broadcast can go out; the
+   * automations "Send Email" workflow step is NOT gated on this (deliberate,
+   * narrower scope — see the broadcast rebuild plan). Null = not set yet.
+   */
+  mailingAddress?: SubAccountMailingAddress | null;
+}
+
+/**
+ * CAN-SPAM-required physical mailing address, rendered automatically in
+ * every broadcast's compliance footer by `renderBroadcastEmailHtml` — never
+ * user-editable per-send, never a merge tag. See {@link SubAccountDoc.mailingAddress}.
+ */
+export interface SubAccountMailingAddress {
+  line1: string;
+  line2: string | null;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
 }
 
 export interface GhlImportConfig {

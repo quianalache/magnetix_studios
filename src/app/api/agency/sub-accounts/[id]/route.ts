@@ -12,7 +12,7 @@ import {
   SubAccountNotEmptyError,
   SubAccountNotFoundError,
 } from "@/lib/server/sub-accounts-service";
-import type { SendWindow, AccountContact } from "@/types";
+import type { SendWindow, AccountContact, SubAccountMailingAddress } from "@/types";
 
 interface PatchBody {
   name?: string;
@@ -25,6 +25,14 @@ interface PatchBody {
     name?: string | null;
     email?: string | null;
     phone?: string | null;
+  } | null;
+  mailingAddress?: {
+    line1?: string | null;
+    line2?: string | null;
+    city?: string | null;
+    region?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
   } | null;
 }
 
@@ -188,6 +196,48 @@ export async function PATCH(
               phone: phone || null,
             };
       update.accountContact = normalized;
+    }
+  }
+
+  if (body.mailingAddress !== undefined) {
+    if (body.mailingAddress === null) {
+      update.mailingAddress = null;
+    } else if (typeof body.mailingAddress !== "object") {
+      return NextResponse.json(
+        { error: "mailingAddress must be an object or null." },
+        { status: 400 },
+      );
+    } else {
+      const raw = body.mailingAddress;
+      const line1 = typeof raw.line1 === "string" ? raw.line1.trim() : "";
+      const line2 = typeof raw.line2 === "string" ? raw.line2.trim() : "";
+      const city = typeof raw.city === "string" ? raw.city.trim() : "";
+      const region = typeof raw.region === "string" ? raw.region.trim() : "";
+      const postalCode =
+        typeof raw.postalCode === "string" ? raw.postalCode.trim() : "";
+      const country = typeof raw.country === "string" ? raw.country.trim() : "";
+      const core = [line1, city, region, postalCode, country];
+      if (core.every((v) => v === "")) {
+        update.mailingAddress = null;
+      } else if (core.some((v) => v === "")) {
+        return NextResponse.json(
+          {
+            error:
+              "Mailing address needs a street, city, region, postal code, and country — required by CAN-SPAM for broadcast emails.",
+          },
+          { status: 400 },
+        );
+      } else {
+        const normalized: SubAccountMailingAddress = {
+          line1,
+          line2: line2 || null,
+          city,
+          region,
+          postalCode,
+          country,
+        };
+        update.mailingAddress = normalized;
+      }
     }
   }
 

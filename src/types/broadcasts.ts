@@ -50,6 +50,16 @@ export interface BroadcastTotals {
   skipped: number;
   /** Recipients where the Resend API call returned an error. */
   failed: number;
+  /** Unique recipients Resend confirmed actual mailbox delivery for (email.delivered). */
+  delivered: number;
+  /** Unique recipients who opened (email.opened) — counted once even across repeat opens. */
+  opened: number;
+  /** Unique recipients who clicked a link (email.clicked) — counted once even across repeat clicks. */
+  clicked: number;
+  /** Recipients whose send bounced (email.bounced, hard or soft). */
+  bounced: number;
+  /** Recipients who marked the email as spam (email.complained). */
+  complained: number;
 }
 
 export interface BroadcastDoc {
@@ -57,11 +67,23 @@ export interface BroadcastDoc {
   agencyId: string;
   subAccountId: string;
   channel: BroadcastChannel;
-  templateId: string;
+  /**
+   * Legacy content path (`message_templates`-based) — present only on
+   * broadcasts sent before the block-composer rebuild. New broadcasts use
+   * `content`/`subject`/`preheader` instead; the detail page branches on
+   * whichever is present so old broadcasts still render correctly.
+   */
+  templateId?: string;
   /** Snapshot of the template name at send time — survives template renames. */
-  templateName: string;
+  templateName?: string;
   /** Snapshot of the resolved subject (after merge tags). Useful for the list view. */
   subjectPreview: string;
+  /** Block-schema content, present on every broadcast sent via the composer. */
+  content?: import("./broadcast-content").BroadcastContent;
+  subject?: string;
+  preheader?: string | null;
+  /** Which saved template (if any) this broadcast started from — audit only, content is always the source of truth. */
+  sourceTemplateId?: string | null;
   audienceFilter: BroadcastAudienceFilter;
   status: BroadcastStatus;
   totals: BroadcastTotals;
@@ -116,4 +138,30 @@ export interface BroadcastSendDoc {
   attempts: number;
   queuedAt: Timestamp | FieldValue | null;
   sentAt: Timestamp | FieldValue | null;
+  /**
+   * Post-send engagement, populated asynchronously by the Resend events
+   * webhook (matched back to this row via `resendMessageId` — see
+   * src/lib/broadcasts/engagement-webhook.ts). Null until the first event
+   * arrives, and stays null forever for `skipped`/`failed` rows (no
+   * `resendMessageId` to match on). Orthogonal to `status`: `status` is the
+   * send-attempt outcome, `engagement` is what happened after.
+   */
+  engagement: SendEngagement | null;
+}
+
+export interface SendEngagement {
+  delivered: boolean;
+  deliveredAt: Timestamp | FieldValue | null;
+  opened: boolean;
+  openedAt: Timestamp | FieldValue | null;
+  openCount: number;
+  clicked: boolean;
+  clickedAt: Timestamp | FieldValue | null;
+  clickCount: number;
+  lastClickedUrl: string | null;
+  bounced: boolean;
+  bounceType: "hard" | "soft" | "undetermined" | null;
+  bouncedAt: Timestamp | FieldValue | null;
+  complained: boolean;
+  complainedAt: Timestamp | FieldValue | null;
 }

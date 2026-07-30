@@ -5,17 +5,38 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getResend } from "@/lib/comms/resend";
 import { upsertConversationForMessage } from "@/lib/server/conversations-service";
+import {
+  handleBroadcastEngagementEvent,
+  BROADCAST_ENGAGEMENT_EVENT_TYPES,
+} from "@/lib/broadcasts/engagement-webhook";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import type { SubAccountDoc } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Resend inbound-email webhook — the `email.received` event. Every
- * sub-account's dedicated Resend sending domain also receives by default
- * (see `createSendingDomain`/`getSendingDomain` in resend-domains.ts), so
- * any mail sent to that domain lands here and gets dropped into the same
- * unified Conversations inbox SMS/WhatsApp/Meta already use.
+ * Resend webhook endpoint — handles TWO event families that happen to share
+ * one Resend-dashboard endpoint (and one signing secret), dispatched by
+ * `event.type` below:
+ *
+ *   - `email.received` — inbound mail, routed into Conversations (this
+ *     file's original purpose, see below).
+ *   - `email.delivered/opened/clicked/bounced/complained` — broadcast
+ *     engagement + auto-suppression, handled by
+ *     src/lib/broadcasts/engagement-webhook.ts. Deliberately NOT a separate
+ *     endpoint/route: Resend issues one signing secret per endpoint, and
+ *     reusing this one (already configured, already verified in
+ *     production) means enabling broadcast analytics is just checking a few
+ *     more event-type boxes on the existing webhook in the Resend
+ *     dashboard — no new secret, no new PUBLIC_PATHS entry, no redeploy of
+ *     webhook config. The file is still named `inbound/` for URL stability
+ *     (renaming would break the already-configured dashboard endpoint).
+ *
+ * Every sub-account's dedicated Resend sending domain also receives by
+ * default (see `createSendingDomain`/`getSendingDomain` in
+ * resend-domains.ts), so any mail sent to that domain lands here too and
+ * gets dropped into the same unified Conversations inbox SMS/WhatsApp/Meta
+ * already use.
  *
  * Contact matching policy (explicit product decision, not an oversight):
  *   - Sender matches an existing contact (by email, scoped to the resolved
@@ -111,8 +132,15 @@ export async function POST(request: Request) {
     return new NextResponse("Invalid signature", { status: 403 });
   }
 
+  if (BROADCAST_ENGAGEMENT_EVENT_TYPES.includes(event.type)) {
+    await handleBroadcastEngagementEvent(
+      event as { type: string; data: { email_id: string } },
+    );
+    return NextResponse.json({ ok: true });
+  }
+
   if (event.type !== "email.received") {
-    // Any other subscribed event type (delivery/bounce/etc.) — ack and ignore.
+    // Any other subscribed event type not handled above — ack and ignore.
     return NextResponse.json({ ok: true });
   }
 

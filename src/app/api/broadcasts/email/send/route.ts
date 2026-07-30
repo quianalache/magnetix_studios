@@ -7,21 +7,27 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
 import { emailIsConfigured } from "@/lib/comms/resend";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
-import { resolveMergeTags, validateEmailBody } from "@/lib/automations/merge-tags";
 import { resolveAudience } from "@/lib/broadcasts/audience";
+import {
+  requireMailingAddress,
+  MissingMailingAddressError,
+} from "@/lib/broadcasts/compliance";
 import type {
   BroadcastAudienceFilter,
+  BroadcastContent,
   BroadcastDoc,
   BroadcastSendDoc,
-  MessageTemplateDoc,
 } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 interface SendBody {
   subAccountId?: string;
-  templateId?: string;
+  content?: BroadcastContent;
+  subject?: string;
+  preheader?: string | null;
   audienceFilter?: BroadcastAudienceFilter;
+  sourceTemplateId?: string | null;
 }
 
 /**
@@ -63,12 +69,21 @@ export async function POST(request: Request) {
   }
 
   const subAccountId = payload.subAccountId?.trim();
-  const templateId = payload.templateId?.trim();
+  const content = payload.content;
+  const subject = payload.subject?.trim();
+  const preheader = payload.preheader?.trim() || null;
   const audienceFilter = payload.audienceFilter;
+  const sourceTemplateId = payload.sourceTemplateId?.trim() || null;
 
-  if (!subAccountId || !templateId || !audienceFilter) {
+  if (!subAccountId || !content || !subject || !audienceFilter) {
     return NextResponse.json(
-      { error: "subAccountId, templateId, and audienceFilter are required" },
+      { error: "subAccountId, content, subject, and audienceFilter are required" },
+      { status: 400 },
+    );
+  }
+  if (!Array.isArray(content.blocks) || content.blocks.length === 0) {
+    return NextResponse.json(
+      { error: "content must have at least one block" },
       { status: 400 },
     );
   }
@@ -109,30 +124,16 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate template — must exist, must be email, must contain unsubscribeLink.
-  const templateSnap = await db
-    .collection("message_templates")
-    .doc(templateId)
-    .get();
-  if (!templateSnap.exists) {
-    return NextResponse.json({ error: "Template not found" }, { status: 404 });
-  }
-  const template = templateSnap.data() as MessageTemplateDoc;
-  if (template.subAccountId !== subAccountId) {
-    return NextResponse.json(
-      { error: "Template belongs to a different sub-account" },
-      { status: 403 },
-    );
-  }
-  if (template.type !== "email") {
-    return NextResponse.json(
-      { error: "Template is not an email template" },
-      { status: 400 },
-    );
-  }
-  const bodyValidation = validateEmailBody(template.body);
-  if (bodyValidation) {
-    return NextResponse.json({ error: bodyValidation }, { status: 400 });
+  // CAN-SPAM requires a physical mailing address in every marketing email —
+  // checked here (batch-level, not per-recipient) so a broadcast can't even
+  // start without one. See src/lib/broadcasts/compliance.ts.
+  try {
+    requireMailingAddress(subSnap.data());
+  } catch (err) {
+    if (err instanceof MissingMailingAddressError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    throw err;
   }
 
   // Resolve audience. A scoped collaborator only reaches contacts in
@@ -171,28 +172,18 @@ export async function POST(request: Request) {
     // Fall through with the email as the display name.
   }
 
-  // Pre-render the subject for the broadcast list view. Uses an empty
-  // contact context — merge tags in the subject still work for the per-send
-  // pass; this is just a label.
-  const subjectPreview = (template.subject ?? "")
-    .slice(0, 200);
-
-  const agencyId = templateSnap.data()?.agencyId as string;
+  const agencyId = subSnap.data()?.agencyId as string;
   const broadcastRef = db.collection("broadcasts").doc();
 
   const broadcast: Omit<BroadcastDoc, "id"> = {
     agencyId,
     subAccountId,
     channel: "email",
-    templateId,
-    templateName: template.name,
-    subjectPreview: resolveMergeTags(subjectPreview, {
-      contact: { name: "", email: "", phone: "" },
-      owner: { displayName: "", email: "" },
-      workspace: { name: "" },
-      bookingLink: "",
-      unsubscribeLink: "",
-    }),
+    subjectPreview: subject.slice(0, 200),
+    content,
+    subject,
+    preheader,
+    sourceTemplateId,
     audienceFilter,
     status: "queued",
     totals: {
@@ -201,6 +192,11 @@ export async function POST(request: Request) {
       sent: 0,
       skipped: audience.skipped.length,
       failed: 0,
+      delivered: 0,
+      opened: 0,
+      clicked: 0,
+      bounced: 0,
+      complained: 0,
     },
     createdByUid: access.uid,
     createdBy: { displayName: createdByName, email: access.email },
@@ -234,6 +230,7 @@ export async function POST(request: Request) {
         attempts: 0,
         queuedAt: FieldValue.serverTimestamp() as unknown as null,
         sentAt: null,
+        engagement: null,
       };
       batch.set(sendRef, { id: contact.id, ...sendDoc });
     }
@@ -262,6 +259,7 @@ export async function POST(request: Request) {
         attempts: 0,
         queuedAt: FieldValue.serverTimestamp() as unknown as null,
         sentAt: FieldValue.serverTimestamp() as unknown as null,
+        engagement: null,
       };
       batch.set(sendRef, { id: contact.id, ...sendDoc });
     }

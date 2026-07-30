@@ -21,6 +21,7 @@ import { GhlImportWizard } from "@/components/import/ghl-import-wizard";
 import { SubAccountSmsSection } from "@/components/settings/sub-account-sms-section";
 import { SubAccountMetaSection } from "@/components/settings/sub-account-meta-section";
 import { SubAccountEmailDomainSection } from "@/components/settings/sub-account-email-domain-section";
+import { SubAccountBroadcastComplianceSection } from "@/components/settings/sub-account-broadcast-compliance-section";
 import { SubAccountPayPalSection } from "@/components/settings/sub-account-paypal-section";
 import { SubAccountPlanBillingSection } from "@/components/settings/sub-account-plan-billing-section";
 import { SubAccountSendingPreferencesSection } from "@/components/settings/sub-account-sending-preferences-section";
@@ -287,6 +288,10 @@ export default function SettingsPage() {
 
           {/* Email sending domain — opt-in dedicated Resend domain. */}
           <SubAccountEmailDomainSection />
+
+          {/* Business mailing address — CAN-SPAM footer requirement, gates
+              broadcast sending. */}
+          <SubAccountBroadcastComplianceSection />
 
           {/* Google reviews — SMS / WhatsApp review-request sends. */}
           <SubAccountGoogleReviewSection />
