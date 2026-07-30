@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Briefcase,
-  Building2,
   Users,
   TrendingUp,
   Trophy,
@@ -14,8 +13,6 @@ import {
   GitBranch,
   Clock,
   FileText,
-  Mail,
-  Phone,
   Upload,
   Download,
   Zap,
@@ -24,6 +21,7 @@ import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
+import { useUnreadConversationsCount } from "@/hooks/use-unread-conversations";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
@@ -44,6 +42,7 @@ export default function DashboardPage() {
   const { subAccount, subAccountId, agencyId, saPath } = useSubAccount();
   const { ready: filterReady, filter: territoryFilter } =
     useEffectiveTerritoryFilter();
+  const unreadConversations = useUnreadConversationsCount();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [forms, setForms] = useState<LeadForm[]>([]);
@@ -145,54 +144,29 @@ export default function DashboardPage() {
     month: "long",
     day: "numeric",
   });
-
-  const accountContact = subAccount?.accountContact ?? null;
-  const hasContact =
-    !!accountContact &&
-    (!!accountContact.name || !!accountContact.email || !!accountContact.phone);
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
-      {hasContact && accountContact && (
-        <Link
-          href={saPath("/dashboard/settings")}
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/50"
-        >
-          <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-            <Building2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-            Account contact
-          </span>
-          {accountContact.name && <span>{accountContact.name}</span>}
-          {accountContact.email && (
-            <span className="inline-flex items-center gap-1">
-              <Mail className="h-3 w-3" />
-              {accountContact.email}
-            </span>
-          )}
-          {accountContact.phone && (
-            <span className="inline-flex items-center gap-1">
-              <Phone className="h-3 w-3" />
-              {accountContact.phone}
-            </span>
-          )}
-        </Link>
-      )}
-
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {today}
           </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tighter sm:text-4xl">
-            Welcome back
-            {displayName ? (
-              <>
-                , <span className="font-serif font-normal italic">{displayName}</span>
-              </>
-            ) : null}
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">
+            {greeting}
+            {displayName ? `, ${displayName}` : ""}. Here&apos;s{" "}
+            <span className="mx-gradient-text text-primary">
+              what&apos;s moving
+            </span>{" "}
+            today.
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Here&apos;s what&apos;s moving in your pipeline.
+            {isEmpty
+              ? "Let's get your first lead in."
+              : "Here's what's moving in your pipeline."}
           </p>
         </div>
         {!isEmpty && (
@@ -201,6 +175,29 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      {!loading && unreadConversations > 0 && (
+        <Link
+          href={saPath("/conversations")}
+          className="mx-banner-gradient flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 p-6 text-white shadow-sm transition-transform hover:-translate-y-px sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white/75">
+              Needs a reply
+            </p>
+            <h2 className="text-lg font-bold tracking-tight">
+              {unreadConversations} conversation
+              {unreadConversations === 1 ? "" : "s"} waiting for a reply
+            </h2>
+            <p className="text-sm text-white/85">
+              Catch up in your unified inbox.
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-[11px] bg-white px-4 py-2.5 text-sm font-bold text-primary sm:self-auto">
+            Open inbox <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard

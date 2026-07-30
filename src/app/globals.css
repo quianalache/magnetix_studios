@@ -298,6 +298,20 @@ body {
 .theme-magnetix .mx-wash-gradient {
   background-image: linear-gradient(135deg, var(--mx-blush-veil) 0%, var(--mx-lavender-mist) 100%);
 }
+.theme-magnetix .mx-banner-gradient {
+  background-image: var(--mx-gradient-banner);
+}
+/* Gradient-clipped headline text (Dashboard hero). Base class carries a
+   plain text-primary fallback color for every other theme; this rule
+   swaps in the clip-to-transparent + gradient treatment only under
+   magnetix, where the fallback color would otherwise show through
+   underneath the (here, actually-applied) gradient. */
+.theme-magnetix .mx-gradient-text {
+  background-image: var(--mx-gradient-hero);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
 
 @layer base {
   * {
