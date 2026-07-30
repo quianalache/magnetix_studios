@@ -375,7 +375,7 @@ function SidebarContent({
                 : "Coming soon"
           }
           className={cn(
-            "flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-sidebar-foreground/35",
+            "flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-sidebar-foreground/55",
             collapsed ? "justify-center" : "justify-between",
           )}
         >
@@ -384,7 +384,7 @@ function SidebarContent({
             {!collapsed && item.label}
           </span>
           {!collapsed && (
-            <span className="flex items-center gap-1 rounded-full border border-sidebar-border/40 px-1.5 text-[10px] uppercase tracking-wide text-sidebar-foreground/50">
+            <span className="flex items-center gap-1 rounded-full border border-sidebar-border/40 px-1.5 text-[10px] uppercase tracking-wide text-sidebar-foreground/70">
               {lockedByGate && <Lock className="h-2.5 w-2.5" />}
               {lockedByGate ? "Locked" : "Soon"}
             </span>
@@ -410,7 +410,7 @@ function SidebarContent({
           collapsed ? "justify-center" : "justify-between",
           isActive
             ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
         )}
       >
         {isActive && !collapsed && (
@@ -473,7 +473,7 @@ function SidebarContent({
           <button
             onClick={onToggleCollapsed}
             title="Collapse menu"
-            className="rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            className="rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <ChevronsLeft className="h-4 w-4" />
           </button>
@@ -484,7 +484,7 @@ function SidebarContent({
         <button
           onClick={onToggleCollapsed}
           title="Expand menu"
-          className="flex items-center justify-center border-b border-sidebar-border py-2 text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          className="flex items-center justify-center border-b border-sidebar-border py-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
           <ChevronsRight className="h-4 w-4" />
         </button>
@@ -496,7 +496,7 @@ function SidebarContent({
         {(agencyRole === "owner" || memberships.length > 1) && (
           <div className="mb-3">
             {!collapsed && (
-              <p className="mb-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40">
+              <p className="mb-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
                 Agency
               </p>
             )}
@@ -509,7 +509,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/get-started")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Compass className="h-4 w-4 shrink-0" />
@@ -524,7 +524,7 @@ function SidebarContent({
                 collapsed && "justify-center",
                 pathname === "/agency"
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
               )}
             >
               <Building2 className="h-4 w-4 shrink-0" />
@@ -539,7 +539,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/sub-accounts")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Users className="h-4 w-4 shrink-0" />
@@ -555,7 +555,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/billing")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <CreditCard className="h-4 w-4 shrink-0" />
@@ -573,7 +573,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/ai-suite")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Sparkles className="h-4 w-4 shrink-0" />
@@ -589,7 +589,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/settings")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -603,7 +603,7 @@ function SidebarContent({
           <div>
             {(agencyRole === "owner" || memberships.length > 1) && !collapsed && (
               <p
-                className="mb-1 truncate px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40"
+                className="mb-1 truncate px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60"
                 title={subSectionLabel}
               >
                 {subSectionLabel}
@@ -625,7 +625,7 @@ function SidebarContent({
                   {group.label && !collapsed && (
                     <button
                       onClick={() => toggleGroup(group.label!)}
-                      className="mb-1 flex w-full items-center gap-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/40 hover:text-sidebar-foreground"
+                      className="mb-1 flex w-full items-center gap-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60 hover:text-sidebar-foreground"
                     >
                       {isGroupCollapsed ? (
                         <ChevronRight className="h-3 w-3" />
@@ -643,7 +643,7 @@ function SidebarContent({
         )}
 
         {!showSubNav && !loading && !collapsed && (
-          <p className="rounded-md border border-dashed border-sidebar-border/40 px-3 py-3 text-xs text-sidebar-foreground/60">
+          <p className="rounded-md border border-dashed border-sidebar-border/40 px-3 py-3 text-xs text-sidebar-foreground/80">
             Pick a sub-account from{" "}
             <Link href="/agency" className="text-sidebar-foreground underline">
               Agency home
