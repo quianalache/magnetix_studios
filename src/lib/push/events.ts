@@ -1,6 +1,8 @@
 import "server-only";
 
+import { getAdminDb } from "@/lib/firebase/admin";
 import { sendPushForEvent } from "@/lib/push/send";
+import { formatCurrency } from "@/lib/format";
 import type { EmitWebhookEventInput } from "@/lib/api/webhooks/dispatch";
 
 /**
@@ -9,10 +11,17 @@ import type { EmitWebhookEventInput } from "@/lib/api/webhooks/dispatch";
  * API-subscription early-return, so push fires even when no external
  * webhook is registered).
  *
- * Only the four speed-to-lead events notify (locked v1 pick); everything
+ * Speed-to-lead events (contact/booking/message/call) plus the "money
+ * landed" events the operator picked (quote/invoice paid, course/community/
+ * offer purchases — deal.won was explicitly left out) notify; everything
  * else is a silent no-op. Payloads arrive as `unknown` (the wire payloads
- * built at each emit site), so every field read here is defensive —
- * a shape drift degrades the notification copy, never throws.
+ * built at each emit site), so every field read here is defensive — a
+ * shape drift degrades the notification copy, never throws.
+ *
+ * The four sale events don't carry a human-readable name/title in their
+ * webhook payload (external subscribers only need the ids), so this file
+ * does one extra Firestore read per sale to look it up — same trade the
+ * `sendPushForEvent` call already makes for recipient resolution.
  */
 
 const NEW_LEAD_SOURCE_LABELS: Record<string, string> = {
@@ -38,6 +47,36 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 function str(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+async function lookupContactName(contactId: string): Promise<string | null> {
+  try {
+    const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
+    return str(snap.data()?.name) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Members (community/course buyers) live at subAccounts/{id}/members/{memberId}
+ *  and carry both a display name and a linked contactId — one read covers both. */
+async function lookupMember(
+  subAccountId: string,
+  memberId: string,
+): Promise<{ name: string | null; contactId: string | null }> {
+  try {
+    const snap = await getAdminDb()
+      .doc(`subAccounts/${subAccountId}/members/${memberId}`)
+      .get();
+    const data = snap.data();
+    return { name: str(data?.name), contactId: str(data?.contactId) };
+  } catch {
+    return { name: null, contactId: null };
+  }
 }
 
 function rec(v: unknown): Record<string, unknown> {
@@ -136,6 +175,90 @@ export async function dispatchPushForWebhookEvent(
             ? `/sa/${input.subAccountId}/contacts/${contactId}`
             : `/sa/${input.subAccountId}/contacts`,
           tag: contactId ? `call-${contactId}` : undefined,
+        });
+        return;
+      }
+      case "quote.paid": {
+        const quote = rec(payload.quote);
+        const id = str(quote.id);
+        const contactId = str(quote.contact_id);
+        const total = num(quote.total);
+        const currency = str(quote.currency) ?? "USD";
+        const kind = quote.kind === "invoice" ? "Invoice" : "Quote";
+        const contactName = contactId ? await lookupContactName(contactId) : null;
+        await sendPushForEvent({
+          ...base,
+          title: `${kind} paid`,
+          body: [contactName, total !== null ? formatCurrency(total, currency) : null]
+            .filter(Boolean)
+            .join(" · "),
+          url: contactId
+            ? `/sa/${input.subAccountId}/contacts/${contactId}`
+            : `/sa/${input.subAccountId}/quotes`,
+          tag: id ? `quote-${id}` : undefined,
+        });
+        return;
+      }
+      case "community.purchase.paid": {
+        const memberId = str(payload.memberId);
+        const purchaseId = str(payload.purchaseId);
+        const amountCents = num(payload.amountCents);
+        const currency = str(payload.currency) ?? "USD";
+        const { name, contactId } = memberId
+          ? await lookupMember(input.subAccountId, memberId)
+          : { name: null, contactId: null };
+        await sendPushForEvent({
+          ...base,
+          title: "New community sale",
+          body: [name, amountCents !== null ? formatCurrency(amountCents / 100, currency) : null]
+            .filter(Boolean)
+            .join(" · "),
+          url: contactId
+            ? `/sa/${input.subAccountId}/contacts/${contactId}`
+            : `/sa/${input.subAccountId}/community`,
+          tag: purchaseId ? `purchase-${purchaseId}` : undefined,
+        });
+        return;
+      }
+      case "course.purchase.paid": {
+        const memberId = str(payload.memberId);
+        const purchaseId = str(payload.purchaseId);
+        const amountCents = num(payload.amountCents);
+        const currency = str(payload.currency) ?? "USD";
+        const { name, contactId } = memberId
+          ? await lookupMember(input.subAccountId, memberId)
+          : { name: null, contactId: null };
+        await sendPushForEvent({
+          ...base,
+          title: "New course sale",
+          body: [name, amountCents !== null ? formatCurrency(amountCents / 100, currency) : null]
+            .filter(Boolean)
+            .join(" · "),
+          url: contactId
+            ? `/sa/${input.subAccountId}/contacts/${contactId}`
+            : `/sa/${input.subAccountId}/courses`,
+          tag: purchaseId ? `purchase-${purchaseId}` : undefined,
+        });
+        return;
+      }
+      case "course.offer.purchase.paid": {
+        const memberId = str(payload.memberId);
+        const purchaseId = str(payload.purchaseId);
+        const amountCents = num(payload.amountCents);
+        const currency = str(payload.currency) ?? "USD";
+        const { name, contactId } = memberId
+          ? await lookupMember(input.subAccountId, memberId)
+          : { name: null, contactId: null };
+        await sendPushForEvent({
+          ...base,
+          title: "New offer sale",
+          body: [name, amountCents !== null ? formatCurrency(amountCents / 100, currency) : null]
+            .filter(Boolean)
+            .join(" · "),
+          url: contactId
+            ? `/sa/${input.subAccountId}/contacts/${contactId}`
+            : `/sa/${input.subAccountId}/courses`,
+          tag: purchaseId ? `purchase-${purchaseId}` : undefined,
         });
         return;
       }
