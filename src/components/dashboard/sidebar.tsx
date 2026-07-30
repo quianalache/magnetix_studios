@@ -41,7 +41,6 @@ import {
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
 import { signOutUser } from "@/lib/firebase/auth";
-import { useIsStandalone } from "@/hooks/use-standalone";
 import { useDueTodayCount } from "@/hooks/use-due-today";
 import { useUnreadConversationsCount } from "@/hooks/use-unread-conversations";
 import { useAuth } from "@/hooks/use-auth";
@@ -172,21 +171,6 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/**
- * The drawer menu inside the INSTALLED PWA trims to on-the-go essentials —
- * the bottom tab bar already covers Dashboard/Conversations/Contacts/
- * Pipeline, and builder/config surfaces (Forms, Website, Workflows, …) are
- * desktop work. Browser use (mobile or desktop) always shows the full nav.
- */
-const PWA_CORE_HREFS = new Set([
-  "/calendar",
-  "/booking",
-  "/tasks",
-  "/quotes",
-  "/reports",
-  "/dashboard/settings",
-]);
-
 const COLLAPSE_STORAGE_KEY = "ls_sidebar_collapsed";
 /** Which of the 7 category groups (CRM, Calendar, Marketing, Sales, AI,
  *  Memberships, Insights) are collapsed — stored as a JSON array of group
@@ -206,11 +190,9 @@ function activeSubAccountFromPath(pathname: string): string | null {
 }
 
 function SidebarContent({
-  trimmed = false,
   collapsed = false,
   onToggleCollapsed,
 }: {
-  trimmed?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
 }) {
@@ -508,7 +490,7 @@ function SidebarContent({
                 Agency
               </p>
             )}
-            {agencyRole === "owner" && !trimmed && (
+            {agencyRole === "owner" && (
               <Link
                 href="/agency/get-started"
                 title={collapsed ? "Get started" : undefined}
@@ -554,7 +536,7 @@ function SidebarContent({
                 {!collapsed && "Sub-accounts"}
               </Link>
             )}
-            {agencyRole === "owner" && !trimmed && (
+            {agencyRole === "owner" && (
               <Link
                 href="/agency/billing"
                 title={collapsed ? "Client billing" : undefined}
@@ -588,7 +570,7 @@ function SidebarContent({
                 {!collapsed && "Agency Assistant"}
               </Link>
             )}
-            {agencyRole === "owner" && !trimmed && (
+            {agencyRole === "owner" && (
               <Link
                 href="/agency/settings"
                 title={collapsed ? "Settings Agency" : undefined}
@@ -618,9 +600,7 @@ function SidebarContent({
               </p>
             )}
             {SUB_ACCOUNT_NAV_GROUPS.map((group, groupIdx) => {
-              const visibleItems = group.items.filter(
-                (item) => !trimmed || PWA_CORE_HREFS.has(item.href),
-              );
+              const visibleItems = group.items;
               if (visibleItems.length === 0) return null;
 
               // Dashboard / Sub-Account Settings (label === null) always
@@ -683,7 +663,6 @@ function SidebarContent({
 
 export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const pathname = usePathname();
-  const standalone = useIsStandalone();
   const [collapsed, setCollapsed] = useState(false);
 
   // Hydrate the collapse preference from localStorage after mount (avoids
@@ -720,8 +699,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
         <SidebarContent collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </aside>
 
-      {/* The drawer trims to PWA core items ONLY when running installed
-          (standalone) — regular mobile-browser use keeps the full menu. The
+      {/* The drawer shows the exact same full nav as the desktop <aside> —
+          installed-PWA use and regular browser use see identical menus. The
           collapse-to-icons feature is desktop-only; the drawer always shows
           full labels since it's an overlay you dismiss, not a persistent rail. */}
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -729,7 +708,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
-          <SidebarContent trimmed={standalone} />
+          <SidebarContent />
         </SheetContent>
       </Sheet>
     </>
