@@ -31,7 +31,7 @@ interface PatchBody {
   agencyAssistantModel?: "opus" | "sonnet";
 }
 
-const APP_THEMES = new Set(["leadstack", "green", "neutral"]);
+const APP_THEMES = new Set(["leadstack", "green", "neutral", "magnetix"]);
 
 const URL_RE = /^https?:\/\/.+/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -202,7 +202,7 @@ export async function PATCH(request: Request) {
       !APP_THEMES.has(body.appTheme)
     ) {
       return NextResponse.json(
-        { error: "appTheme must be one of: leadstack, green, neutral." },
+        { error: "appTheme must be one of: leadstack, green, neutral, magnetix." },
         { status: 400 },
       );
     } else {

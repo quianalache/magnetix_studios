@@ -54,6 +54,113 @@ body {
   --sidebar-ring: oklch(0.511 0.262 276.97);
 }
 
+/* Magnetix — Quiana's approved visual direction. Broadened override vs.
+   theme-green/theme-leadstack on purpose: this is a full reskin, not just
+   an accent swap. --destructive, the --chart- series, and --radius are
+   intentionally NOT overridden — they cascade from :root, same as the
+   other theme classes. The --mx- raw palette constants are scoped to THIS
+   class (not a bare :root) deliberately — anything that reads
+   var(--mx-rose-quartz, ...) with a fallback correctly no-ops on every
+   other theme, since the property is genuinely undefined there, not just
+   "not overridden". They also apply under .dark.theme-magnetix without
+   being redeclared there: both classes sit on the same <html> element at
+   once, so a property only .theme-magnetix defines still cascades in dark
+   mode. */
+.theme-magnetix {
+  --mx-lavender-mist: #EDD9EC;
+  --mx-rose-quartz: #E8B7C8;
+  --mx-blush-veil: #F3D9D7;
+  --mx-aqua-glow: #9EDBDD;
+  --mx-purple: #5E2574;
+  --mx-purple-deep: #3D1652;
+  --mx-purple-deeper: #2A0F3A;
+  --background: #F7F0F6;
+  --foreground: #2B1830;
+  --card: #FFFFFF;
+  --card-foreground: #2B1830;
+  --popover: #FFFFFF;
+  --popover-foreground: #2B1830;
+  --primary: #5E2574;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3E4F0;
+  --secondary-foreground: #2B1830;
+  --muted: #F1E6EF;
+  --muted-foreground: #8A7690;
+  --accent: #F3E4F0;
+  --accent-foreground: #5E2574;
+  --border: #E9DCE8;
+  --input: #E9DCE8;
+  --ring: #5E2574;
+  --sidebar: var(--mx-purple-deep);
+  --sidebar-foreground: #EDE0EF;
+  --sidebar-primary: #FFFFFF;
+  --sidebar-primary-foreground: var(--mx-purple-deeper);
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #EDE0EF;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: var(--mx-aqua-glow);
+  --mx-border-soft: #F0E4EF;
+  --mx-shadow-card: 0 1px 2px rgba(43, 24, 48, 0.04), 0 8px 24px -12px rgba(94, 37, 116, 0.18);
+  --mx-gradient-hero: linear-gradient(120deg, var(--mx-rose-quartz) 0%, var(--mx-purple) 100%);
+  --mx-gradient-banner: linear-gradient(115deg, var(--mx-rose-quartz) 0%, #C6699A 45%, var(--mx-purple) 100%);
+}
+.dark.theme-magnetix {
+  --background: #1B0F22;
+  --foreground: #F3EAF3;
+  --card: #241530;
+  --card-foreground: #F3EAF3;
+  --popover: #241530;
+  --popover-foreground: #F3EAF3;
+  --primary: #C892DE;
+  --primary-foreground: #2A0F3A;
+  --secondary: #341E42;
+  --secondary-foreground: #F3EAF3;
+  --muted: #2E1B38;
+  --muted-foreground: #9884A0;
+  --accent: #341E42;
+  --accent-foreground: #C892DE;
+  --border: #3A2444;
+  --input: #3A2444;
+  --ring: #C892DE;
+  /* Sidebar tokens IDENTICAL to the light block above — this is the
+     "always purple chrome regardless of light/dark" requirement, achieved
+     for free by not varying these values between the two blocks. */
+  --sidebar: var(--mx-purple-deep);
+  --sidebar-foreground: #EDE0EF;
+  --sidebar-primary: #FFFFFF;
+  --sidebar-primary-foreground: var(--mx-purple-deeper);
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #EDE0EF;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: var(--mx-aqua-glow);
+  --mx-border-soft: #2E1B38;
+  --mx-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 8px 24px -12px rgba(0, 0, 0, 0.4);
+  --mx-gradient-hero: linear-gradient(120deg, var(--mx-rose-quartz) 0%, #C892DE 100%);
+  --mx-gradient-banner: linear-gradient(115deg, #B87CA0 0%, #8A4A87 45%, var(--mx-purple) 100%);
+}
+
+/* Fixed dark-purple sidebar chrome for the Magnetix theme — a CSS custom
+   property populated with background-color can't also drive
+   background-image, so the gradient is applied here rather than via
+   --sidebar directly. --sidebar (solid) still renders correctly as a
+   fallback if this rule is ever missing. */
+.theme-magnetix .app-sidebar,
+.dark.theme-magnetix .app-sidebar {
+  background-image: linear-gradient(180deg, var(--mx-purple-deep) 0%, var(--mx-purple-deeper) 100%);
+}
+
+/* Dashboard-page gradient spots that were literal indigo/violet/pink
+   Tailwind classes (not CSS vars), so the token cascade alone can't reach
+   them. Base classes stay as the non-magnetix fallback; these rules win
+   on specificity (compound selector beats the single-class utility) so
+   there's no reliance on Tailwind's generated-CSS ordering. */
+.theme-magnetix .mx-hero-gradient {
+  background-image: var(--mx-gradient-hero);
+}
+.theme-magnetix .mx-wash-gradient {
+  background-image: linear-gradient(135deg, var(--mx-blush-veil) 0%, var(--mx-lavender-mist) 100%);
+}
+
 /* Inline lesson video embeds (rich-text editor + public player share this). */
 .lesson-video {
   position: relative;
@@ -75,7 +182,7 @@ body {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-serif: var(--font-instrument-serif);
   --color-sidebar-ring: var(--sidebar-ring);

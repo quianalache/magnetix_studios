@@ -3,17 +3,20 @@ export type SubAccountRole = "admin" | "collaborator";
 export type SubAccountStatus = "active" | "archived";
 
 /**
- * Dashboard accent theme (Agency → Settings → App theme). Drives the
- * `--primary`/`--ring` CSS variables via a class on <html> (see
- * globals.css + components/theme/app-accent.tsx):
+ * Dashboard accent theme (Agency → Settings → App theme). Drives CSS
+ * variables via a class on <html> (see globals.css +
+ * components/theme/app-accent.tsx):
  *   - "leadstack" — indigo/violet, the LeadStack design language
  *   - "green"     — the emerald "my CRM" palette from the custom landing
  *   - "neutral"   — stock zinc monochrome
+ *   - "magnetix"  — Quiana's lavender/rose/blush/aqua/purple palette, a
+ *     full reskin (background/card/border/muted/sidebar too, not just
+ *     --primary/--ring like the other three)
  * Unset defaults per deployment mode: "green" when LANDING_VARIANT is
  * "custom", "neutral" on the LeadStack demo (so demo branding never
  * changes unprompted).
  */
-export type AppTheme = "leadstack" | "green" | "neutral";
+export type AppTheme = "leadstack" | "green" | "neutral" | "magnetix";
 
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { SubscriptionStatus, MemberStatus } from "./firebase";

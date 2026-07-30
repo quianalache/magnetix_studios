@@ -22,6 +22,7 @@ import type { AppTheme } from "@/types";
 const THEME_CLASSES: Record<Exclude<AppTheme, "neutral">, string> = {
   green: "theme-green",
   leadstack: "theme-leadstack",
+  magnetix: "theme-magnetix",
 };
 
 export function AppAccent() {
@@ -31,10 +32,10 @@ export function AppAccent() {
     const resolved: AppTheme =
       appTheme ?? (LANDING_VARIANT === "custom" ? "green" : "neutral");
     const el = document.documentElement;
-    el.classList.remove("theme-green", "theme-leadstack");
+    el.classList.remove("theme-green", "theme-leadstack", "theme-magnetix");
     if (resolved !== "neutral") el.classList.add(THEME_CLASSES[resolved]);
     return () => {
-      el.classList.remove("theme-green", "theme-leadstack");
+      el.classList.remove("theme-green", "theme-leadstack", "theme-magnetix");
     };
   }, [appTheme]);
 

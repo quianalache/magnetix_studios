@@ -14,6 +14,8 @@ import { PIPELINE_STAGES, type Deal } from "@/types/deals";
 import type { Contact } from "@/types/contacts";
 import type { TerritoryDoc } from "@/types";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/ui/stat-card";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import {
@@ -177,15 +179,11 @@ export default function PipelinePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
-          <p className="text-sm text-muted-foreground">
-            Drag deals across stages. Your team sees every move in real time.
-          </p>
-        </div>
-        <NewDealDialog contacts={contacts} />
-      </div>
+      <PageHeader
+        title="Pipeline"
+        description="Drag deals across stages. Your team sees every move in real time."
+        actions={<NewDealDialog contacts={contacts} />}
+      />
 
       {!loading && deals.length > 0 && (
         <PipelineFilters
@@ -241,26 +239,6 @@ export default function PipelinePage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: string;
-}) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className={`mt-1 text-2xl font-semibold tracking-tight ${tone ?? ""}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
 
 function BoardSkeleton() {
   return (

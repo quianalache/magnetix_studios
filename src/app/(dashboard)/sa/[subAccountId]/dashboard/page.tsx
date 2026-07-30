@@ -35,6 +35,7 @@ import type { Contact } from "@/types/contacts";
 import type { AutomationDoc } from "@/types";
 import type { LeadForm } from "@/types/forms";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/ui/stat-card";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { LeadsMap } from "@/components/dashboard/leads-map";
 
@@ -206,79 +207,79 @@ export default function DashboardPage() {
           href={saPath("/pipeline")}
           icon={<Briefcase className="h-4 w-4" />}
           label="Open deals"
-              value={String(openDeals.length)}
-              hint={`${deals.length - openDeals.length} closed`}
-              tone="text-indigo-600 dark:text-indigo-400"
-              bg="bg-indigo-500/10"
-              loading={loading}
-            />
-            <StatCard
-              href={saPath("/pipeline")}
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Pipeline value"
-              value={formatCurrency(pipelineValue, currency)}
-              hint="Across open stages"
-              tone="text-violet-600 dark:text-violet-400"
-              bg="bg-violet-500/10"
-              loading={loading}
-            />
-            <StatCard
-              href={saPath("/pipeline")}
-              icon={<Trophy className="h-4 w-4" />}
-              label="Won this month"
-              value={formatCurrency(wonThisMonth, currency)}
-              hint="Closed-won revenue"
-              tone="text-emerald-600 dark:text-emerald-400"
-              bg="bg-emerald-500/10"
-              loading={loading}
-            />
-            <StatCard
-              href={saPath("/contacts")}
-              icon={<Users className="h-4 w-4" />}
-              label="New contacts · 7d"
-              value={String(newContactsThisWeek)}
-              hint={`${contacts.length} total`}
-              tone="text-amber-600 dark:text-amber-400"
-              bg="bg-amber-500/10"
-              loading={loading}
-            />
-            <StatCard
-              href={saPath("/forms")}
-              icon={<FileText className="h-4 w-4" />}
-              label="Forms"
-              value={String(forms.length)}
-              hint="Public + embeddable"
-              tone="text-sky-600 dark:text-sky-400"
-              bg="bg-sky-500/10"
-              loading={loading}
-            />
-            <StatCard
-              href={saPath("/automations")}
-              icon={<Zap className="h-4 w-4" />}
-              label="Automations"
-              value={
-                subAccount?.automationsPaused
-                  ? "Paused"
-                  : String(automations.filter((a) => a.enabled).length)
-              }
-              hint={
-                subAccount?.automationsPaused
-                  ? `${automations.length} affected`
-                  : `${automations.length} total`
-              }
-              tone={
-                subAccount?.automationsPaused
-                  ? "text-amber-600 dark:text-amber-400"
-                  : "text-rose-600 dark:text-rose-400"
-              }
-              bg={
-                subAccount?.automationsPaused
-                  ? "bg-amber-500/10"
-                  : "bg-rose-500/10"
-              }
-              loading={loading}
-            />
-          </div>
+          value={String(openDeals.length)}
+          hint={`${deals.length - openDeals.length} closed`}
+          tone="text-[#5E2574] dark:text-[#C892DE]"
+          iconBg="bg-[#5E2574]/10 dark:bg-[#C892DE]/15"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/pipeline")}
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Pipeline value"
+          value={formatCurrency(pipelineValue, currency)}
+          hint="Across open stages"
+          tone="text-teal-700 dark:text-[#9EDBDD]"
+          iconBg="bg-[#9EDBDD]/25 dark:bg-[#9EDBDD]/15"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/pipeline")}
+          icon={<Trophy className="h-4 w-4" />}
+          label="Won this month"
+          value={formatCurrency(wonThisMonth, currency)}
+          hint="Closed-won revenue"
+          tone="text-emerald-600 dark:text-emerald-400"
+          iconBg="bg-emerald-500/10"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/contacts")}
+          icon={<Users className="h-4 w-4" />}
+          label="New contacts · 7d"
+          value={String(newContactsThisWeek)}
+          hint={`${contacts.length} total`}
+          tone="text-amber-600 dark:text-amber-400"
+          iconBg="bg-amber-500/10"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/forms")}
+          icon={<FileText className="h-4 w-4" />}
+          label="Forms"
+          value={String(forms.length)}
+          hint="Public + embeddable"
+          tone="text-sky-600 dark:text-sky-400"
+          iconBg="bg-sky-500/10"
+          loading={loading}
+        />
+        <StatCard
+          href={saPath("/automations")}
+          icon={<Zap className="h-4 w-4" />}
+          label="Automations"
+          value={
+            subAccount?.automationsPaused
+              ? "Paused"
+              : String(automations.filter((a) => a.enabled).length)
+          }
+          hint={
+            subAccount?.automationsPaused
+              ? `${automations.length} affected`
+              : `${automations.length} total`
+          }
+          tone={
+            subAccount?.automationsPaused
+              ? "text-amber-600 dark:text-amber-400"
+              : "text-rose-600 dark:text-rose-400"
+          }
+          iconBg={
+            subAccount?.automationsPaused
+              ? "bg-amber-500/10"
+              : "bg-rose-500/10"
+          }
+          loading={loading}
+        />
+      </div>
 
       <LeadsMap contacts={contacts} deals={deals} />
 
@@ -320,7 +321,7 @@ export default function DashboardPage() {
                       </span>
                       <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 transition-all"
+                          className="mx-hero-gradient h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 transition-all"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -418,7 +419,7 @@ export default function DashboardPage() {
                             href={saPath(`/contacts/${c.id}`)}
                             className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50"
                           >
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400/80 via-violet-400/80 to-pink-400/80 text-[10px] font-semibold text-white">
+                            <span className="mx-hero-gradient flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400/80 via-violet-400/80 to-pink-400/80 text-[10px] font-semibold text-white">
                               {initials}
                             </span>
                             <div className="min-w-0 flex-1">
@@ -440,7 +441,7 @@ export default function DashboardPage() {
                 )}
               </section>
 
-              <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
+              <section className="mx-wash-gradient rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-violet-500" />
                   <h2 className="text-sm font-semibold">Quick actions</h2>
@@ -484,56 +485,6 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({
-  href,
-  icon,
-  label,
-  value,
-  hint,
-  tone,
-  bg,
-  loading,
-}: {
-  href?: string;
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  hint: string;
-  tone: string;
-  bg: string;
-  loading?: boolean;
-}) {
-  const content = (
-    <>
-      <span
-        className={`flex h-8 w-8 items-center justify-center rounded-lg ${bg} ${tone}`}
-      >
-        {icon}
-      </span>
-      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      {loading ? (
-        <div className="mt-1 h-8 w-24 animate-pulse rounded bg-muted" />
-      ) : (
-        <p className="mt-0.5 text-2xl font-semibold tracking-tight">{value}</p>
-      )}
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-    </>
-  );
-
-  const baseClass =
-    "block rounded-2xl border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-sm";
-
-  if (href) {
-    return (
-      <Link href={href} className={baseClass}>
-        {content}
-      </Link>
-    );
-  }
-  return <div className={baseClass}>{content}</div>;
-}
 
 function QuickLink({
   href,
@@ -566,8 +517,8 @@ function QuickLink({
 function GettingStarted() {
   const { saPath } = useSubAccount();
   return (
-    <div className="rounded-2xl border border-dashed bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">
+    <div className="mx-wash-gradient rounded-2xl border border-dashed bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-10 text-center">
+      <div className="mx-hero-gradient mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">
         <Sparkles className="h-6 w-6" />
       </div>
       <h2 className="text-xl font-semibold tracking-tight">

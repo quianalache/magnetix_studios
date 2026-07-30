@@ -43,6 +43,12 @@ const OPTIONS: {
     hint: "Monochrome — buttons and highlights follow light/dark foreground.",
     swatch: "bg-gradient-to-r from-zinc-800 to-zinc-500 dark:from-zinc-200 dark:to-zinc-400",
   },
+  {
+    value: "magnetix",
+    label: "Magnetix",
+    hint: "Lavender, rosé, blush, aqua, and purple — the full Magnetix look, including a dark-purple sidebar.",
+    swatch: "bg-gradient-to-r from-[#E8B7C8] via-[#5E2574] to-[#9EDBDD]",
+  },
 ];
 
 export function AppThemeSection() {
@@ -87,7 +93,7 @@ export function AppThemeSection() {
         </div>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {OPTIONS.map((opt) => {
           const selected = active === opt.value;
           return (
