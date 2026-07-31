@@ -37,6 +37,7 @@ import {
   ChevronsRight,
   ChevronDown,
   ChevronRight,
+  QrCode,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -125,6 +126,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
       { href: "/templates", label: "Templates", icon: FileText, enabled: true },
       { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
+      { href: "/qr-codes", label: "QR Codes", icon: QrCode, enabled: true },
     ],
   },
   {

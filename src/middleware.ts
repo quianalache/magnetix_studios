@@ -114,6 +114,11 @@ const PUBLIC_PATHS = [
   // `event.publicTokenHash`. Reschedule rotates the token so any
   // previously-mailed link invalidates cleanly.
   "/e",
+  // Public QR redirect (/qr/[qrId]) — an unguessable Firestore doc id is
+  // the slug, same trust model as /f, /b, /e, /q. Logs a scan then 302s to
+  // the saved destination; a missing/unset code renders a small fallback
+  // page instead of a raw 404.
+  "/qr",
   // Booking reminder + payment-auto-expire QStash callbacks. Security:
   // Upstash-Signature header verification inside the route.
   "/api/events/reminder",
