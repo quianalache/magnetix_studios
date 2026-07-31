@@ -14,10 +14,13 @@ import {
 import { getFirebaseDb } from "@/lib/firebase/client";
 import {
   defaultQrStyle,
+  normalizeQrCode,
   type QrCodeDoc,
   type QrCodeKind,
   type QrCodeStyle,
   type QrCodeVcard,
+  type QrDestinationRef,
+  type QrDestinationType,
 } from "@/types/qr-codes";
 import type { TenantScope } from "@/types";
 
@@ -35,8 +38,8 @@ export function subscribeToQrCodes(
   return onSnapshot(
     q,
     (snap) => {
-      const codes = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as Omit<QrCodeDoc, "id">) }),
+      const codes = snap.docs.map((d) =>
+        normalizeQrCode({ id: d.id, ...(d.data() as Omit<QrCodeDoc, "id">) }),
       );
       codes.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
       callback(codes);
@@ -57,7 +60,9 @@ export function subscribeToQrCode(
         callback(null);
         return;
       }
-      callback({ id: snap.id, ...(snap.data() as Omit<QrCodeDoc, "id">) });
+      callback(
+        normalizeQrCode({ id: snap.id, ...(snap.data() as Omit<QrCodeDoc, "id">) }),
+      );
     },
     (err) => onError?.(err),
   );
@@ -70,17 +75,23 @@ export async function createQrCode(
     name: string;
     kind: QrCodeKind;
     destinationUrl?: string | null;
+    destinationType?: QrDestinationType;
+    destinationRef?: QrDestinationRef | null;
     vcard?: QrCodeVcard | null;
     style?: QrCodeStyle;
+    folderId?: string | null;
   },
 ): Promise<string> {
   const ref = await addDoc(collection(getFirebaseDb(), QR_CODES), {
     name: input.name,
     kind: input.kind,
     destinationUrl: input.destinationUrl ?? null,
+    destinationType: input.destinationType ?? "custom",
+    destinationRef: input.destinationRef ?? null,
     scanCount: 0,
     vcard: input.vcard ?? null,
     style: input.style ?? defaultQrStyle(),
+    folderId: input.folderId ?? null,
     agencyId: scope.agencyId,
     subAccountId: scope.subAccountId,
     createdByUid,
@@ -117,7 +128,7 @@ export async function deleteQrCode(id: string): Promise<void> {
 export async function getQrCode(id: string): Promise<QrCodeDoc | null> {
   const snap = await getDoc(doc(getFirebaseDb(), QR_CODES, id));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...(snap.data() as Omit<QrCodeDoc, "id">) };
+  return normalizeQrCode({ id: snap.id, ...(snap.data() as Omit<QrCodeDoc, "id">) });
 }
 
 function toMillis(v: unknown): number {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link2, Contact, Download, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { QrStylePanel } from "@/components/qr-codes/qr-style-panel";
 import { QrPreview, type QrPreviewHandle } from "@/components/qr-codes/qr-preview";
+import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
+import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
+import type { BookingPage } from "@/types/booking";
+import type { CourseOffer } from "@/types/course-offers";
 import {
   buildVcardText,
   defaultQrStyle,
@@ -16,12 +20,16 @@ import {
   type QrCodeKind,
   type QrCodeStyle,
   type QrCodeVcard,
+  type QrDestinationRef,
+  type QrDestinationType,
 } from "@/types/qr-codes";
 
 export interface QrCodeFormValues {
   name: string;
   kind: QrCodeKind;
   destinationUrl: string;
+  destinationType: QrDestinationType;
+  destinationRef: QrDestinationRef | null;
   vcard: QrCodeVcard;
   style: QrCodeStyle;
 }
@@ -35,6 +43,16 @@ const VCARD_FIELDS: { key: keyof QrCodeVcard; label: string; placeholder: string
   { key: "website", label: "Website", placeholder: "https://example.com" },
   { key: "address", label: "Address", placeholder: "123 Main St, Springfield" },
 ];
+
+const DESTINATION_TYPES: { value: QrDestinationType; label: string }[] = [
+  { value: "custom", label: "Custom URL" },
+  { value: "booking", label: "Booking Page" },
+  { value: "offer", label: "Offer" },
+];
+
+function appOrigin(): string {
+  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+}
 
 export function QrCodeBuilder({
   initial,
@@ -56,16 +74,54 @@ export function QrCodeBuilder({
 }) {
   const [name, setName] = useState(initial.name);
   const [kind, setKind] = useState<QrCodeKind>(initial.kind);
+  const [destinationType, setDestinationType] = useState<QrDestinationType>(initial.destinationType);
   const [destinationUrl, setDestinationUrl] = useState(initial.destinationUrl);
+  const [destinationRef, setDestinationRef] = useState<QrDestinationRef | null>(initial.destinationRef);
   const [vcard, setVcard] = useState<QrCodeVcard>(initial.vcard ?? emptyVcard());
   const [style, setStyle] = useState<QrCodeStyle>(initial.style ?? defaultQrStyle());
   const [submitting, setSubmitting] = useState(false);
+  const [bookingPages, setBookingPages] = useState<BookingPage[]>([]);
+  const [offers, setOffers] = useState<CourseOffer[]>([]);
   const previewHandle = useRef<QrPreviewHandle | null>(null);
+
+  useEffect(() => {
+    const unsubPages = subscribeToBookingPages(subAccountId, (pages) =>
+      setBookingPages(pages.filter((p) => p.status === "published")),
+    );
+    const unsubOffers = subscribeToCourseOffers(subAccountId, (list) =>
+      setOffers(list.filter((o) => o.visibility === "published")),
+    );
+    return () => {
+      unsubPages();
+      unsubOffers();
+    };
+  }, [subAccountId]);
 
   const qrData = useMemo(() => {
     if (kind === "contact") return buildVcardText(vcard);
     return redirectUrl || destinationUrl || "";
   }, [kind, vcard, redirectUrl, destinationUrl]);
+
+  function pickBookingPage(pageId: string) {
+    const page = bookingPages.find((p) => p.id === pageId);
+    if (!page) return;
+    setDestinationUrl(`${appOrigin()}/b/${subAccountId}/${page.slug}`);
+    setDestinationRef({ type: "booking", id: page.id });
+  }
+
+  function pickOffer(offerId: string) {
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) return;
+    setDestinationUrl(`${appOrigin()}/offer/${subAccountId}/${offer.id}`);
+    setDestinationRef({ type: "offer", id: offerId });
+  }
+
+  function handleDestinationTypeChange(type: QrDestinationType) {
+    setDestinationType(type);
+    if (type === "custom") {
+      setDestinationRef(null);
+    }
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -83,7 +139,15 @@ export function QrCodeBuilder({
     }
     setSubmitting(true);
     try {
-      await onSubmit({ name: name.trim(), kind, destinationUrl: destinationUrl.trim(), vcard, style });
+      await onSubmit({
+        name: name.trim(),
+        kind,
+        destinationUrl: destinationUrl.trim(),
+        destinationType,
+        destinationRef,
+        vcard,
+        style,
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save this QR code.");
     } finally {
@@ -126,17 +190,76 @@ export function QrCodeBuilder({
         </div>
 
         {kind === "link" ? (
-          <div className="space-y-1.5">
-            <Label>Destination</Label>
-            <Input
-              type="url"
-              value={destinationUrl}
-              onChange={(e) => setDestinationUrl(e.target.value)}
-              placeholder="https://your-booking-page.com"
-            />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Destination type</Label>
+              <div className="flex gap-2">
+                {DESTINATION_TYPES.map((t) => (
+                  <KindButton
+                    key={t.value}
+                    active={destinationType === t.value}
+                    icon={null}
+                    label={t.label}
+                    onClick={() => handleDestinationTypeChange(t.value)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {destinationType === "booking" ? (
+              <div className="space-y-1.5">
+                <Label>Booking page</Label>
+                <select
+                  value={destinationRef?.type === "booking" ? destinationRef.id : ""}
+                  onChange={(e) => pickBookingPage(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground"
+                >
+                  <option value="" disabled>
+                    {bookingPages.length ? "Choose a booking page…" : "No published booking pages yet"}
+                  </option>
+                  {bookingPages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : destinationType === "offer" ? (
+              <div className="space-y-1.5">
+                <Label>Offer</Label>
+                <select
+                  value={destinationRef?.type === "offer" ? destinationRef.id : ""}
+                  onChange={(e) => pickOffer(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground"
+                >
+                  <option value="" disabled>
+                    {offers.length ? "Choose an offer…" : "No published offers yet"}
+                  </option>
+                  {offers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Destination</Label>
+                <Input
+                  type="url"
+                  value={destinationUrl}
+                  onChange={(e) => {
+                    setDestinationUrl(e.target.value);
+                    setDestinationRef(null);
+                  }}
+                  placeholder="https://your-booking-page.com"
+                />
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               The printed code points at a short link of ours — you can
-              change this destination later without reprinting it.
+              change this destination later without reprinting it. Scan the
+              preview with your phone any time to test it.
             </p>
           </div>
         ) : (

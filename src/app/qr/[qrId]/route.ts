@@ -43,8 +43,12 @@ export async function GET(
     return deadLink("No destination has been set for this code yet.");
   }
 
-  // Fire-and-forget — never block the redirect on the counter write.
+  // Fire-and-forget — never block the redirect on either write.
   void ref.update({ scanCount: FieldValue.increment(1) }).catch(() => {});
+  void ref
+    .collection("scans")
+    .add({ scannedAt: FieldValue.serverTimestamp() })
+    .catch(() => {});
 
   return NextResponse.redirect(data.destinationUrl, 302);
 }

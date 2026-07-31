@@ -1,47 +1,17 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type QRCodeStyling from "qr-code-styling";
-import type { Options } from "qr-code-styling";
+import { useEffect, useRef, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { renderQrToBlob } from "@/lib/qr-codes/render";
 import type { QrCodeStyle } from "@/types/qr-codes";
 
 /**
- * Live QR preview + download, backed by `qr-code-styling`. The library
- * touches `document`/canvas at construction time, so it's loaded via a
- * runtime `import()` inside an effect rather than a static import — safe
- * under Next.js SSR without a `next/dynamic` wrapper.
+ * Live QR preview. Renders through the exact same `renderQrToBlob` pipeline
+ * used for downloads (compositing shape/rim-text/background-image on top of
+ * `qr-code-styling`'s raw output), so what's on screen is guaranteed to
+ * match what gets downloaded — no separate "preview-only" rendering path to
+ * drift out of sync.
  */
-
-const DOT_TYPE_MAP: Record<
-  QrCodeStyle["dotStyle"],
-  NonNullable<Options["dotsOptions"]>["type"]
-> = {
-  square: "square",
-  rounded: "rounded",
-  dots: "dots",
-  classy: "classy",
-};
-
-function buildOptions(data: string, style: QrCodeStyle, size: number): Partial<Options> {
-  const roundedCorners = style.dotStyle !== "square";
-  return {
-    width: size,
-    height: size,
-    data: data || " ",
-    image: style.logoUrl ?? undefined,
-    dotsOptions: { type: DOT_TYPE_MAP[style.dotStyle], color: style.fgColor },
-    cornersSquareOptions: {
-      type: roundedCorners ? "extra-rounded" : "square",
-      color: style.fgColor,
-    },
-    cornersDotOptions: {
-      type: roundedCorners ? "dot" : "square",
-      color: style.fgColor,
-    },
-    backgroundOptions: { color: style.bgColor },
-    imageOptions: { crossOrigin: "anonymous", margin: 4, imageSize: 0.35 },
-  };
-}
 
 export interface QrPreviewHandle {
   download: (extension: "png" | "svg", name: string) => void;
@@ -50,7 +20,7 @@ export interface QrPreviewHandle {
 export function QrPreview({
   data,
   style,
-  size = 240,
+  size = 260,
   onReady,
 }: {
   data: string;
@@ -58,43 +28,68 @@ export function QrPreview({
   size?: number;
   onReady?: (handle: QrPreviewHandle) => void;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const qrRef = useRef<QRCodeStyling | null>(null);
-  const latest = useRef({ data, style });
-  latest.current = { data, style };
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
+  const prevUrl = useRef<string | null>(null);
 
   useEffect(() => {
+    const id = ++requestId.current;
+    setLoading(true);
     let cancelled = false;
     (async () => {
-      const { default: QRCodeStylingCtor } = await import("qr-code-styling");
-      if (cancelled || !containerRef.current) return;
-      const qr = new QRCodeStylingCtor(
-        buildOptions(latest.current.data, latest.current.style, size),
-      );
-      qrRef.current = qr;
-      containerRef.current.innerHTML = "";
-      qr.append(containerRef.current);
-      onReady?.({
-        download: (extension, name) => void qr.download({ name, extension }),
-      });
+      try {
+        const blob = await renderQrToBlob(data, style, "png", size);
+        if (cancelled || id !== requestId.current) return;
+        const url = URL.createObjectURL(blob);
+        if (prevUrl.current) URL.revokeObjectURL(prevUrl.current);
+        prevUrl.current = url;
+        setImgUrl(url);
+      } catch {
+        // Leave the previous preview showing on a transient render error.
+      } finally {
+        if (!cancelled && id === requestId.current) setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
-    // Intentionally mount-only — `size` changes are rare (fixed preview
-    // sizes) and prop changes are handled by the effect below via `.update()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size]);
+  }, [data, JSON.stringify(style), size]);
 
   useEffect(() => {
-    qrRef.current?.update(buildOptions(data, style, size));
-  }, [data, style, size]);
+    onReady?.({
+      download: (extension, name) => {
+        void (async () => {
+          const { downloadQrCode } = await import("@/lib/qr-codes/render");
+          await downloadQrCode(data, style, extension, name);
+        })();
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, JSON.stringify(style)]);
+
+  useEffect(
+    () => () => {
+      if (prevUrl.current) URL.revokeObjectURL(prevUrl.current);
+    },
+    [],
+  );
 
   return (
     <div
-      ref={containerRef}
-      className="flex items-center justify-center overflow-hidden rounded-xl border bg-white p-3"
-      style={{ width: size + 24, height: size + 24 }}
-    />
+      className="relative flex items-center justify-center overflow-hidden rounded-xl border bg-[repeating-conic-gradient(#e5e7eb_0%_25%,transparent_0%_50%)] bg-[length:16px_16px] p-3"
+      style={{ width: size + 24, height: (size + 24) * 1.15 }}
+    >
+      {imgUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imgUrl} alt="QR code preview" className="max-h-full max-w-full" />
+      )}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
+    </div>
   );
 }

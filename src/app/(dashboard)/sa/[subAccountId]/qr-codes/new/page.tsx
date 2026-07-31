@@ -18,6 +18,8 @@ const BLANK: QrCodeFormValues = {
   name: "",
   kind: "link",
   destinationUrl: "",
+  destinationType: "custom",
+  destinationRef: null,
   vcard: emptyVcard(),
   style: defaultQrStyle(),
 };
@@ -51,6 +53,8 @@ export default function NewQrCodePage() {
       name: values.name,
       kind: values.kind,
       destinationUrl: values.kind === "link" ? values.destinationUrl : null,
+      destinationType: values.kind === "link" ? values.destinationType : "custom",
+      destinationRef: values.kind === "link" ? values.destinationRef : null,
       vcard: values.kind === "contact" ? values.vcard : null,
       style: values.style,
     });

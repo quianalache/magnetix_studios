@@ -13,6 +13,7 @@ import {
   QrCodeBuilder,
   type QrCodeFormValues,
 } from "@/components/qr-codes/qr-code-builder";
+import { QrScanChart } from "@/components/qr-codes/qr-scan-chart";
 
 export default function EditQrCodePage() {
   const params = useParams<{ qrId: string }>();
@@ -39,6 +40,8 @@ export default function EditQrCodePage() {
       name: values.name,
       kind: values.kind,
       destinationUrl: values.kind === "link" ? values.destinationUrl : null,
+      destinationType: values.kind === "link" ? values.destinationType : "custom",
+      destinationRef: values.kind === "link" ? values.destinationRef : null,
       vcard: values.kind === "contact" ? values.vcard : null,
       style: values.style,
     });
@@ -91,12 +94,15 @@ export default function EditQrCodePage() {
           </p>
         )}
       </div>
+      {code.kind === "link" && <QrScanChart qrId={id} />}
       {isAdmin ? (
         <QrCodeBuilder
           initial={{
             name: code.name,
             kind: code.kind,
             destinationUrl: code.destinationUrl ?? "",
+            destinationType: code.destinationType,
+            destinationRef: code.destinationRef,
             vcard: code.vcard ?? emptyVcard(),
             style: code.style ?? defaultQrStyle(),
           }}

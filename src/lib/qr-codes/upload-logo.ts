@@ -26,3 +26,23 @@ export async function uploadQrLogo(
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
 }
+
+export const MAX_QR_BACKGROUND_BYTES = 5 * 1024 * 1024; // 5 MB — full-bleed image
+
+export async function uploadQrBackgroundImage(
+  file: File,
+  saId: string,
+  qrId: string,
+): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
+  }
+  if (file.size > MAX_QR_BACKGROUND_BYTES) {
+    throw new Error("Background image is too large — keep it under 5 MB.");
+  }
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "img";
+  const path = `qr-codes/${saId}/${qrId}/background-${Date.now()}.${ext}`;
+  const storageRef = ref(getFirebaseStorage(), path);
+  await uploadBytes(storageRef, file, { contentType: file.type });
+  return getDownloadURL(storageRef);
+}
