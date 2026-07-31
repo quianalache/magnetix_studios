@@ -119,6 +119,56 @@ export async function writeImportChunk(
     }
   }
 
+  // ── Contacts only: batched live-dedup so an import never creates a
+  //    duplicate of a contact that already exists from another source
+  //    (manual add, another importer, a form, etc). Only records with no
+  //    existing importMapping are checked — an already-mapped record is
+  //    a genuine update-by-external-id, not a candidate for this lookup.
+  //    Email match wins over phone if a record's values hit both. ──
+  const liveMatchByIndex = new Map<number, string>();
+  if (entity === "contacts") {
+    const emailToIndices = new Map<string, number[]>();
+    const phoneToIndices = new Map<string, number[]>();
+    for (let i = 0; i < records.length; i++) {
+      const ext = recExt[i];
+      if (ext && existing.has(mappingKey(source, entity, ext))) continue;
+      const r = (records[i] ?? {}) as Record<string, unknown>;
+      const email = str(r.email)?.toLowerCase() ?? null;
+      const phone = str(r.phone);
+      if (email) {
+        const list = emailToIndices.get(email) ?? [];
+        list.push(i);
+        emailToIndices.set(email, list);
+      }
+      if (phone) {
+        const list = phoneToIndices.get(phone) ?? [];
+        list.push(i);
+        phoneToIndices.set(phone, list);
+      }
+    }
+    const IN_CHUNK = 30;
+    const lookupBy = async (field: "email" | "phone", map: Map<string, number[]>) => {
+      const values = [...map.keys()];
+      for (let start = 0; start < values.length; start += IN_CHUNK) {
+        const chunk = values.slice(start, start + IN_CHUNK);
+        const snap = await db
+          .collection("contacts")
+          .where("subAccountId", "==", subAccountId)
+          .where(field, "in", chunk)
+          .get();
+        for (const d of snap.docs) {
+          const raw = (d.data()[field] as string) ?? "";
+          const key = field === "email" ? raw.toLowerCase() : raw;
+          for (const idx of map.get(key) ?? []) {
+            if (!liveMatchByIndex.has(idx)) liveMatchByIndex.set(idx, d.id);
+          }
+        }
+      }
+    };
+    await lookupBy("email", emailToIndices);
+    await lookupBy("phone", phoneToIndices);
+  }
+
   const defs: CustomFieldDef[] =
     entity === "contacts"
       ? await loadCustomFieldDefs(subAccountId, "contact")
@@ -154,6 +204,22 @@ export async function writeImportChunk(
         ? existing.get(mappingKey(source, entity, externalId))
         : undefined;
 
+      // A live email/phone match with no prior mapping — resolve onto
+      // the existing contact instead of creating a duplicate.
+      const liveMatchId = !ownMap ? liveMatchByIndex.get(i) : undefined;
+      const effectiveExisting: ImportMappingDoc | undefined =
+        ownMap ??
+        (liveMatchId
+          ? {
+              entity,
+              system: source,
+              externalId: externalId ?? "",
+              leadstackId: liveMatchId,
+              parentId: null,
+              createdAt: null,
+            }
+          : undefined);
+
       const built = buildWrite(db, {
         entity,
         raw,
@@ -164,7 +230,7 @@ export async function writeImportChunk(
         agencyId,
         subAccountId,
         createdByUid,
-        existing: ownMap,
+        existing: effectiveExisting,
       });
       if (!built.ok) {
         fail(result, entity, externalId, built.error);
@@ -193,7 +259,7 @@ export async function writeImportChunk(
         });
       }
 
-      if (ownMap) result.updated++;
+      if (effectiveExisting) result.updated++;
       else result.created++;
 
       if (ops >= BATCH_OP_LIMIT) await flush();

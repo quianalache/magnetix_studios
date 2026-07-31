@@ -3,7 +3,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { createContactServerSide } from "@/lib/server/contacts-service";
+import {
+  createContactServerSide,
+  findExistingContactId,
+} from "@/lib/server/contacts-service";
 
 /**
  * Dashboard-facing contact creation. The "Add contact" modal used to write
@@ -54,8 +57,24 @@ export async function POST(request: Request) {
   }
 
   // The sub-account doc is the source of truth for which agency to stamp.
-  const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  const db = getAdminDb();
+  const subSnap = await db.doc(`subAccounts/${subAccountId}`).get();
   const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
+
+  const phone = str(body.phone);
+  const existingId = await findExistingContactId(db, subAccountId, {
+    email,
+    phone,
+  });
+  if (existingId) {
+    return NextResponse.json(
+      {
+        error: "A contact with this email or phone already exists.",
+        existingContactId: existingId,
+      },
+      { status: 409 },
+    );
+  }
 
   const { id, contact } = await createContactServerSide({
     subAccountId,
@@ -66,7 +85,7 @@ export async function POST(request: Request) {
     mode: "live",
     name,
     email,
-    phone: str(body.phone),
+    phone,
     company: str(body.company),
     address: str(body.address),
     source: str(body.source),

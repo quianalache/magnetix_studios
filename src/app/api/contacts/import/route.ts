@@ -3,7 +3,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { createContactServerSide } from "@/lib/server/contacts-service";
+import {
+  createContactServerSide,
+  findExistingContactId,
+} from "@/lib/server/contacts-service";
 
 /**
  * Dashboard-facing CSV import. The client parses + maps + validates the CSV
@@ -57,7 +60,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  const db = getAdminDb();
+  const subSnap = await db.doc(`subAccounts/${subAccountId}`).get();
   const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
 
   let created = 0;
@@ -71,6 +75,18 @@ export async function POST(request: Request) {
       errors.push({ index: i, message: "Missing name and email" });
       continue;
     }
+    const phone = str(row.phone);
+    const existingId = await findExistingContactId(db, subAccountId, {
+      email,
+      phone,
+    });
+    if (existingId) {
+      errors.push({
+        index: i,
+        message: "A contact with this email or phone already exists",
+      });
+      continue;
+    }
     try {
       await createContactServerSide({
         subAccountId,
@@ -79,7 +95,7 @@ export async function POST(request: Request) {
         mode: "live",
         name,
         email,
-        phone: str(row.phone),
+        phone,
         company: str(row.company),
         address: str(row.address),
         source: str(row.source),

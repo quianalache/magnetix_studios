@@ -264,3 +264,38 @@ export function emitContactDeleted(opts: {
     payload: { contact },
   });
 }
+
+/**
+ * Exact-match dedup check: email first, then phone, both scoped to the
+ * sub-account. Mirrors the pattern already proven in the Get Leads
+ * importer (`/api/sub-accounts/[id]/get-leads/import`) — equality-only
+ * queries, no composite index needed. Not name — names vary too much
+ * ("Bob" vs "Robert") to be a reliable identity key.
+ */
+export async function findExistingContactId(
+  db: FirebaseFirestore.Firestore,
+  subAccountId: string,
+  { email, phone }: { email?: string; phone?: string },
+): Promise<string | null> {
+  const cleanEmail = email?.trim().toLowerCase();
+  if (cleanEmail) {
+    const dupe = await db
+      .collection("contacts")
+      .where("subAccountId", "==", subAccountId)
+      .where("email", "==", cleanEmail)
+      .limit(1)
+      .get();
+    if (!dupe.empty) return dupe.docs[0].id;
+  }
+  const cleanPhone = phone?.trim();
+  if (cleanPhone) {
+    const dupe = await db
+      .collection("contacts")
+      .where("subAccountId", "==", subAccountId)
+      .where("phone", "==", cleanPhone)
+      .limit(1)
+      .get();
+    if (!dupe.empty) return dupe.docs[0].id;
+  }
+  return null;
+}

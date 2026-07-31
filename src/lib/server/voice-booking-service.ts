@@ -22,7 +22,10 @@ import {
   fireBookingTrigger,
   recordBookingActivity,
 } from "@/lib/booking/lifecycle";
-import { emitContactCreatedById } from "@/lib/server/contacts-service";
+import {
+  emitContactCreatedById,
+  findExistingContactId,
+} from "@/lib/server/contacts-service";
 import { eventOccupiesSlot, eventStatus } from "@/types/events";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import type { BookingPage } from "@/types/booking";
@@ -199,6 +202,25 @@ export async function bookVoiceSlot(input: {
   let contactId = input.contactId;
   let contactCreated = false;
   if (!contactId) {
+    contactId = await findExistingContactId(db, subAccountId, {
+      phone: callerPhone,
+    });
+  }
+  if (contactId && callerName) {
+    // Best-effort: fill a missing name on a contact matched by phone.
+    try {
+      const snap = await db.collection("contacts").doc(contactId).get();
+      if (snap.exists && !(snap.data()?.name as string | undefined)) {
+        await snap.ref.update({
+          name: callerName,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch {
+      // Non-fatal.
+    }
+  }
+  if (!contactId) {
     const ref = await db.collection("contacts").add({
       name: callerName,
       email: "",
@@ -226,19 +248,6 @@ export async function bookVoiceSlot(input: {
     contactId = ref.id;
     contactCreated = true;
     void emitContactCreatedById({ subAccountId, agencyId, contactId: ref.id });
-  } else if (callerName) {
-    // Best-effort: fill a missing name on the existing contact.
-    try {
-      const snap = await db.collection("contacts").doc(contactId).get();
-      if (snap.exists && !(snap.data()?.name as string | undefined)) {
-        await snap.ref.update({
-          name: callerName,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-    } catch {
-      // Non-fatal.
-    }
   }
 
   // ── Transactional create with re-verify (mirrors the book route) ──
