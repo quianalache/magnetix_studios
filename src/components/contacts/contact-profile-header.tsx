@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { SourceBadge } from "@/components/contacts/source-badge";
 import { LinkContactButton } from "@/components/contacts/link-contact-button";
+import { MergeContactButton } from "@/components/contacts/merge-contact-button";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { SendEmailDialog } from "@/components/contacts/send-email-dialog";
 import { SendSmsDialog } from "@/components/contacts/send-sms-dialog";
@@ -311,6 +312,8 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
             {/* Self-gates: only renders for a Facebook/Instagram (metaUserId)
                 contact, for an admin. */}
             <LinkContactButton contact={contact} />
+            {/* Self-gates: admin only. */}
+            <MergeContactButton contact={contact} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-1 h-3.5 w-3.5" />
               Edit
