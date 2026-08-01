@@ -41,14 +41,20 @@ export function subscribeToContentItems(
 export async function createContentItem(
   scope: TenantScope,
   createdByUid: string,
-  input: Partial<ReturnType<typeof emptyContentItem>> & { title: string },
+  input: Partial<ReturnType<typeof emptyContentItem>> & {
+    title: string;
+    publishDate?: Date | null;
+    deadline?: Date | null;
+  },
 ): Promise<string> {
   const defaults = emptyContentItem();
+  const { publishDate, deadline, ...rest } = input;
   const ref = await addDoc(collection(getFirebaseDb(), CONTENT_ITEMS), {
     ...defaults,
-    ...input,
-    publishDate: null,
-    deadline: null,
+    ...rest,
+    publishDate: publishDate ?? null,
+    deadline: deadline ?? null,
+    linkedProjectId: null,
     linkedSocialPostId: null,
     agencyId: scope.agencyId,
     subAccountId: scope.subAccountId,
@@ -62,8 +68,11 @@ export async function createContentItem(
 export async function updateContentItem(
   id: string,
   data: Partial<
-    Omit<ContentItemDoc, "id" | "agencyId" | "subAccountId" | "createdByUid" | "createdAt">
-  >,
+    Omit<
+      ContentItemDoc,
+      "id" | "agencyId" | "subAccountId" | "createdByUid" | "createdAt" | "publishDate" | "deadline"
+    >
+  > & { publishDate?: Date | null; deadline?: Date | null },
 ): Promise<void> {
   await updateDoc(doc(getFirebaseDb(), CONTENT_ITEMS, id), {
     ...data,

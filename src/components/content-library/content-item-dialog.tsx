@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Plus, X } from "lucide-react";
+import { Plus, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
+import { TagInput } from "@/components/content-library/tag-input";
 import { uploadContentImage } from "@/lib/content-library/upload-image";
+import { toDate } from "@/lib/format";
 import {
   CONTENT_PLATFORMS,
   CONTENT_PRIORITIES,
@@ -55,12 +57,15 @@ export function ContentItemDialog({
   /** Prefills a brand-new item from a template's fields. */
   fromTemplate?: ContentTemplateDoc | null;
   subAccountId: string;
-  onSave: (values: ContentItemFormValues) => Promise<void>;
+  onSave: (
+    values: ContentItemFormValues & { publishDate: Date | null; deadline: Date | null },
+  ) => Promise<void>;
 }) {
   const [values, setValues] = useState<ContentItemFormValues>(emptyContentItem());
   const [saving, setSaving] = useState(false);
-  const [tagsText, setTagsText] = useState("");
   const [newChecklistText, setNewChecklistText] = useState("");
+  const [publishDateStr, setPublishDateStr] = useState("");
+  const [deadlineStr, setDeadlineStr] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -79,10 +84,12 @@ export function ContentItemDialog({
         cta: initial.cta,
         repurposingNotes: initial.repurposingNotes,
         isEvergreen: initial.isEvergreen,
+        isFocus: initial.isFocus,
         checklist: initial.checklist,
         tags: initial.tags,
       });
-      setTagsText(initial.tags.join(", "));
+      setPublishDateStr(dateInputValue(initial.publishDate));
+      setDeadlineStr(dateInputValue(initial.deadline));
     } else if (fromTemplate) {
       setValues({
         title: fromTemplate.name,
@@ -98,13 +105,16 @@ export function ContentItemDialog({
         cta: fromTemplate.ctaTemplate,
         repurposingNotes: fromTemplate.repurposingNotes,
         isEvergreen: fromTemplate.isEvergreen,
+        isFocus: false,
         checklist: fromTemplate.checklist.map((text) => ({ text, done: false })),
         tags: fromTemplate.defaultTags,
       });
-      setTagsText(fromTemplate.defaultTags.join(", "));
     } else {
       setValues(emptyContentItem());
-      setTagsText("");
+    }
+    if (!initial) {
+      setPublishDateStr("");
+      setDeadlineStr("");
     }
   }, [open, initial, fromTemplate]);
 
@@ -137,10 +147,8 @@ export function ContentItemDialog({
     try {
       await onSave({
         ...values,
-        tags: tagsText
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
+        publishDate: publishDateStr ? new Date(publishDateStr) : null,
+        deadline: deadlineStr ? new Date(deadlineStr) : null,
       });
       onOpenChange(false);
     } catch (err) {
@@ -255,6 +263,32 @@ export function ContentItemDialog({
                 </select>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Publish Date</Label>
+                <Input
+                  type="date"
+                  value={publishDateStr}
+                  onChange={(e) => setPublishDateStr(e.target.value)}
+                  className="rounded-xl bg-muted/30"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Deadline</Label>
+                <Input
+                  type="date"
+                  value={deadlineStr}
+                  onChange={(e) => setDeadlineStr(e.target.value)}
+                  className="rounded-xl bg-muted/30"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Linked Project</Label>
+              <select value="none" disabled className={SELECT_CLS} title="Projects isn't built yet">
+                <option value="none">None</option>
+              </select>
+            </div>
             <div className="space-y-2">
               <Label>Description / Notes</Label>
               <RichTextEditor
@@ -288,24 +322,25 @@ export function ContentItemDialog({
                 />
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
-              <div>
-                <p className="text-sm font-medium">Evergreen</p>
-                <p className="text-xs text-muted-foreground">Safe to repurpose anytime</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium">
+                  <Star className="h-3.5 w-3.5" />
+                  Focus Content
+                </span>
+                <Switch checked={values.isFocus} onCheckedChange={(v) => set("isFocus", v)} />
               </div>
-              <Switch
-                checked={values.isEvergreen}
-                onCheckedChange={(v) => set("isEvergreen", v)}
-              />
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                <span className="text-sm font-medium">Evergreen</span>
+                <Switch
+                  checked={values.isEvergreen}
+                  onCheckedChange={(v) => set("isEvergreen", v)}
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Tags</Label>
-              <Input
-                value={tagsText}
-                onChange={(e) => setTagsText(e.target.value)}
-                placeholder="comma, separated, tags"
-                className="rounded-xl bg-muted/30"
-              />
+              <TagInput value={values.tags} onChange={(tags) => set("tags", tags)} />
             </div>
           </TabsContent>
 
@@ -402,4 +437,9 @@ export function ContentItemDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function dateInputValue(v: ContentItemDoc["publishDate"]): string {
+  const d = toDate(v);
+  return d ? d.toISOString().slice(0, 10) : "";
 }

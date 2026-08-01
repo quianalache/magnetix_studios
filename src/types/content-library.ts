@@ -37,6 +37,28 @@ export const CONTENT_STAGES: {
   { value: "repurposed", label: "Repurposed", emoji: "♻️" },
 ];
 
+/** The Pipeline tab's summary stat row rolls the 10 granular stages up
+ *  into 5 buckets — Ideas/In Progress/Scheduled/Published/Repurposed —
+ *  matching MomentumOS's dashboard-style stat cards. */
+export type ContentStageBucket = "ideas" | "inProgress" | "scheduled" | "published" | "repurposed";
+
+const STAGE_BUCKET: Record<ContentStage, ContentStageBucket> = {
+  idea: "ideas",
+  research: "ideas",
+  outline: "inProgress",
+  script: "inProgress",
+  recording: "inProgress",
+  editing: "inProgress",
+  assets: "inProgress",
+  scheduled: "scheduled",
+  published: "published",
+  repurposed: "repurposed",
+};
+
+export function stageBucket(stage: ContentStage): ContentStageBucket {
+  return STAGE_BUCKET[stage];
+}
+
 /** Exactly MomentumOS's `op` object. */
 export type ContentType =
   | "youtube_long"
@@ -106,8 +128,15 @@ export interface ContentItemDoc {
   repurposingNotes: string;
 
   isEvergreen: boolean;
+  /** MomentumOS's "Focus Content" toggle — a starred/prioritized item. */
+  isFocus: boolean;
   checklist: ContentChecklistItem[];
   tags: string[];
+
+  /** Real field in MomentumOS, always "None" here for now — the CRM has
+   *  no Projects feature yet (a later phase). Kept on the schema/UI for
+   *  visual fidelity; functionally inert until Projects ships. */
+  linkedProjectId: string | null;
 
   /** CRM-specific bridge into the Social Planner — MomentumOS has no
    *  equivalent since it doesn't publish anything itself. Set once this
@@ -167,6 +196,7 @@ export function emptyContentItem(): Pick<
   | "cta"
   | "repurposingNotes"
   | "isEvergreen"
+  | "isFocus"
   | "checklist"
   | "tags"
 > {
@@ -184,6 +214,7 @@ export function emptyContentItem(): Pick<
     cta: "",
     repurposingNotes: "",
     isEvergreen: false,
+    isFocus: false,
     checklist: [],
     tags: [],
   };

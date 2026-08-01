@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
+import { TagInput } from "@/components/content-library/tag-input";
 import { uploadContentImage } from "@/lib/content-library/upload-image";
 import {
   CONTENT_PLATFORMS,
@@ -53,7 +54,6 @@ export function ContentTemplateDialog({
 }) {
   const [values, setValues] = useState<ContentTemplateFormValues>(emptyContentTemplate());
   const [saving, setSaving] = useState(false);
-  const [tagsText, setTagsText] = useState("");
   const [newChecklistItem, setNewChecklistItem] = useState("");
 
   useEffect(() => {
@@ -78,10 +78,8 @@ export function ContentTemplateDialog({
         keywords: initial.keywords,
         isEvergreen: initial.isEvergreen,
       });
-      setTagsText(initial.defaultTags.join(", "));
     } else {
       setValues(emptyContentTemplate());
-      setTagsText("");
     }
   }, [open, initial]);
 
@@ -105,10 +103,7 @@ export function ContentTemplateDialog({
     }
     setSaving(true);
     try {
-      await onSave({
-        ...values,
-        defaultTags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-      });
+      await onSave(values);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
@@ -282,12 +277,7 @@ export function ContentTemplateDialog({
           </div>
           <div className="space-y-2">
             <Label>Default Tags</Label>
-            <Input
-              value={tagsText}
-              onChange={(e) => setTagsText(e.target.value)}
-              placeholder="comma, separated, tags"
-              className="rounded-xl bg-muted/30"
-            />
+            <TagInput value={values.defaultTags} onChange={(tags) => set("defaultTags", tags)} />
           </div>
 
           <div className="space-y-2">
