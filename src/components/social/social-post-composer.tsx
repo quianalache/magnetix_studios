@@ -47,6 +47,9 @@ export function SocialPostComposer({
   canInstagram,
   pageName,
   igUsername,
+  /** Seeds the caption when the dialog opens — e.g. a Content Library
+   *  card being promoted to a real scheduled post. */
+  initialCaption,
   onCreated,
 }: {
   open: boolean;
@@ -56,14 +59,23 @@ export function SocialPostComposer({
   canInstagram: boolean;
   pageName?: string | null;
   igUsername?: string | null;
-  onCreated?: () => void;
+  initialCaption?: string;
+  onCreated?: (postId: string) => void;
 }) {
-  const [caption, setCaption] = useState("");
+  const [caption, setCaption] = useState(initialCaption ?? "");
   const [imageUrl, setImageUrl] = useState("");
   const [toFacebook, setToFacebook] = useState(canFacebook);
   const [toInstagram, setToInstagram] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState<"draft" | "schedule" | null>(null);
+
+  // Re-seed the caption every time the dialog opens fresh (the component
+  // stays mounted between opens, so a plain useState initializer only
+  // fires once at first mount).
+  useEffect(() => {
+    if (open) setCaption(initialCaption ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   function reset() {
     setCaption("");
@@ -119,6 +131,7 @@ export function SocialPostComposer({
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
+        id?: string;
       };
       if (!res.ok || !data.ok) {
         toast.error(data.error ?? "Couldn't save the post.");
@@ -127,7 +140,7 @@ export function SocialPostComposer({
       toast.success(mode === "schedule" ? "Post scheduled." : "Draft saved.");
       reset();
       onOpenChange(false);
-      onCreated?.();
+      if (data.id) onCreated?.(data.id);
     } catch {
       toast.error("Couldn't save the post. Please try again.");
     } finally {

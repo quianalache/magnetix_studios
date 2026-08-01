@@ -1069,6 +1069,76 @@ service cloud.firestore {
       );
     }
 
+    // QR Code Generator — same access pattern as forms/message_templates:
+    // visible to every active member, admin-only to create/edit/delete.
+    match /qrCodes/{qrId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+
+      // Per-scan log, written server-side only (fire-and-forget from the
+      // public /qr/[qrId] redirect route via the Admin SDK).
+      match /scans/{scanId} {
+        allow read: if canAccessSub(
+          get(/databases/$(database)/documents/qrCodes/$(qrId)).data.subAccountId,
+          get(/databases/$(database)/documents/qrCodes/$(qrId)).data.agencyId
+        );
+        allow write: if false;
+      }
+    }
+
+    match /qrFolders/{folderId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    // Content Library — same access pattern as qrCodes.
+    match /contentItems/{contentId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
     // User-owned broadcast composer templates — NEVER seeded by us, only
     // created via the composer's "Save as template" action. Same access
     // pattern as message_templates.

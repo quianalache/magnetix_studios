@@ -38,6 +38,7 @@ import {
   ChevronDown,
   ChevronRight,
   QrCode,
+  Layers,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -118,6 +119,13 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Content",
+    items: [
+      { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
+      { href: "/content", label: "Content Library", icon: Layers, enabled: true },
+    ],
+  },
+  {
     label: "Marketing",
     items: [
       { href: "/forms", label: "Forms", icon: FileText, enabled: true },
@@ -125,7 +133,6 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
       { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
       { href: "/templates", label: "Templates", icon: FileText, enabled: true },
-      { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
       { href: "/qr-codes", label: "QR Codes", icon: QrCode, enabled: true },
     ],
   },
@@ -174,8 +181,8 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
 ];
 
 const COLLAPSE_STORAGE_KEY = "ls_sidebar_collapsed";
-/** Which of the 7 category groups (CRM, Calendar, Marketing, Sales, AI,
- *  Memberships, Insights) are collapsed — stored as a JSON array of group
+/** Which of the 8 category groups (CRM, Calendar, Content, Marketing, Sales,
+ *  AI, Memberships, Insights) are collapsed — stored as a JSON array of group
  *  labels. The Dashboard/Sub-Account Settings entries and the Agency/
  *  Sub-account identity sections are never collapsible, per product
  *  decision — only the named category groups get an expand/collapse. */
