@@ -47,7 +47,8 @@ export async function createContentItem(
   const ref = await addDoc(collection(getFirebaseDb(), CONTENT_ITEMS), {
     ...defaults,
     ...input,
-    targetPublishDate: null,
+    publishDate: null,
+    deadline: null,
     linkedSocialPostId: null,
     agencyId: scope.agencyId,
     subAccountId: scope.subAccountId,

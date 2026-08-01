@@ -313,6 +313,62 @@ body {
   color: transparent;
 }
 
+/* Content Library — scoped MomentumOS brand tokens (purple/pink/teal),
+   transcribed from MomentumOS's own production CSS. Applies only inside
+   .momentum-scope (the Content page's root), leaving the rest of the CRM
+   on whatever app theme is active. Same class-scoped-override pattern as
+   .theme-magnetix above (and must stay positioned AFTER :root/.dark for
+   the same cascade-specificity reason we already fixed once — :root and
+   a single class selector tie on specificity, so source order decides).
+   Values are hsl(...)-wrapped (not raw H S% L% triplets) because this
+   app's tokens are consumed as complete color values (e.g.
+   `background: var(--background)`), not run through Tailwind's
+   `hsl(var(--x))` convention the way MomentumOS itself does. */
+.momentum-scope {
+  --background: hsl(4 30% 98%);
+  --foreground: hsl(283 52% 30%);
+  --card: hsl(303 38% 89%);
+  --card-foreground: hsl(283 52% 30%);
+  --popover: hsl(303 38% 89%);
+  --popover-foreground: hsl(283 52% 30%);
+  --primary: hsl(283 52% 30%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(339 48% 81%);
+  --secondary-foreground: hsl(283 52% 30%);
+  --muted: hsl(4 52% 90%);
+  --muted-foreground: hsl(283 30% 45%);
+  --accent: hsl(182 45% 74%);
+  --accent-foreground: hsl(283 52% 30%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --border: hsl(339 48% 81%);
+  --input: hsl(339 48% 81%);
+  --ring: hsl(182 45% 74%);
+  --radius: 1rem;
+  background-color: var(--background);
+  color: var(--foreground);
+  padding: 1.5rem;
+}
+.dark .momentum-scope {
+  --background: hsl(283 52% 10%);
+  --foreground: hsl(303 38% 89%);
+  --card: hsl(283 40% 15%);
+  --card-foreground: hsl(303 38% 89%);
+  --popover: hsl(283 40% 15%);
+  --popover-foreground: hsl(303 38% 89%);
+  --primary: hsl(182 45% 74%);
+  --primary-foreground: hsl(283 52% 10%);
+  --secondary: hsl(283 30% 25%);
+  --secondary-foreground: hsl(303 38% 89%);
+  --muted: hsl(283 30% 20%);
+  --muted-foreground: hsl(339 48% 81%);
+  --accent: hsl(339 48% 81%);
+  --accent-foreground: hsl(283 52% 10%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --border: hsl(283 30% 25%);
+  --input: hsl(283 30% 25%);
+  --ring: hsl(182 45% 74%);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

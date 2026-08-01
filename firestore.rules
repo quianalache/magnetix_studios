@@ -1139,6 +1139,29 @@ service cloud.firestore {
       );
     }
 
+    // Content Library templates — same access pattern as contentItems.
+    // System vs. custom is a UI-level distinction (system templates hide
+    // their edit/delete actions); the write gate itself is admin-only for
+    // both, same trust model as every other admin-managed collection.
+    match /contentTemplates/{templateId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
     // User-owned broadcast composer templates — NEVER seeded by us, only
     // created via the composer's "Save as template" action. Same access
     // pattern as message_templates.
