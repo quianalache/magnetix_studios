@@ -18,7 +18,7 @@ import { ContactPicker } from "@/components/quotes/contact-picker";
 import { useSubAccount } from "@/context/sub-account-context";
 import { updateTask, deleteTask } from "@/lib/firestore/tasks";
 import { toDate } from "@/lib/format";
-import type { Task, TaskFormData } from "@/types/tasks";
+import { TASK_TIME_BLOCKS, type Task, type TaskFormData, type TaskTimeBlock } from "@/types/tasks";
 import type { Contact } from "@/types/contacts";
 
 interface TaskDialogProps {
@@ -56,6 +56,7 @@ export function TaskDialog({
   const [notes, setNotes] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
+  const [timeBlock, setTimeBlock] = useState<TaskTimeBlock | null>(null);
   const [contactId, setContactId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -69,12 +70,14 @@ export function TaskDialog({
       setNotes(task.notes ?? "");
       setDueDate(d ? toDateInput(d) : "");
       setDueTime(d ? toTimeInput(d) : "");
+      setTimeBlock(task.timeBlock ?? null);
       setContactId(task.contactId);
     } else {
       setTitle("");
       setNotes("");
       setDueDate("");
       setDueTime("");
+      setTimeBlock(null);
       setContactId(defaultContactId ?? null);
     }
     setErrors({});
@@ -100,6 +103,7 @@ export function TaskDialog({
       contactId,
       dealId: task?.dealId ?? null,
       eventId: task?.eventId ?? null,
+      timeBlock,
     };
 
     setSaving(true);
@@ -121,6 +125,7 @@ export function TaskDialog({
             contactId: payload.contactId,
             dealId: payload.dealId,
             eventId: payload.eventId,
+            timeBlock: payload.timeBlock,
           }),
         });
         if (!res.ok) {
@@ -204,6 +209,30 @@ export function TaskDialog({
                 disabled={!dueDate}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="task-time-block">Time block</Label>
+            <select
+              id="task-time-block"
+              value={timeBlock ?? ""}
+              onChange={(e) =>
+                setTimeBlock(
+                  e.target.value ? (e.target.value as TaskTimeBlock) : null,
+                )
+              }
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">Unset</option>
+              {TASK_TIME_BLOCKS.map((tb) => (
+                <option key={tb.value} value={tb.value}>
+                  {tb.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Sorts this task into a slot on the Calendar page&apos;s Today&apos;s Time Blocks panel.
+            </p>
           </div>
 
           <div className="space-y-1.5">

@@ -41,6 +41,7 @@ export interface CreateTaskInput {
   contactId: string | null;
   dealId: string | null;
   eventId: string | null;
+  timeBlock?: "am" | "midday" | "pm" | "anytime" | null;
 }
 
 export interface TaskWriteResult {
@@ -65,6 +66,7 @@ export async function createTaskServerSide(
     contactId: input.contactId,
     dealId: input.dealId,
     eventId: input.eventId,
+    timeBlock: input.timeBlock ?? null,
     agencyId: input.agencyId,
     subAccountId: input.subAccountId,
     createdByUid: input.createdByUid,

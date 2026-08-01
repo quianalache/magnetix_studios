@@ -21,6 +21,13 @@ function parseDue(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+const TIME_BLOCKS = new Set(["am", "midday", "pm", "anytime"]);
+function parseTimeBlock(v: unknown): "am" | "midday" | "pm" | "anytime" | null {
+  return typeof v === "string" && TIME_BLOCKS.has(v)
+    ? (v as "am" | "midday" | "pm" | "anytime")
+    : null;
+}
+
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
   try {
@@ -56,6 +63,7 @@ export async function POST(request: Request) {
     contactId: typeof body.contactId === "string" ? body.contactId : null,
     dealId: typeof body.dealId === "string" ? body.dealId : null,
     eventId: typeof body.eventId === "string" ? body.eventId : null,
+    timeBlock: parseTimeBlock(body.timeBlock),
   });
 
   return NextResponse.json({ id, task }, { status: 201 });

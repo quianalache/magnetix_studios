@@ -6,9 +6,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToEvents } from "@/lib/firestore/events";
+import { subscribeToTasks } from "@/lib/firestore/tasks";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
+import type { Task } from "@/types/tasks";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default function CalendarPage() {
@@ -18,6 +20,7 @@ export default function CalendarPage() {
     useEffectiveTerritoryFilter();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,8 +30,9 @@ export default function CalendarPage() {
     const scope = { agencyId, subAccountId };
     let eventsReady = false;
     let contactsReady = false;
+    let tasksReady = false;
     const settle = () => {
-      if (eventsReady && contactsReady) setLoading(false);
+      if (eventsReady && contactsReady && tasksReady) setLoading(false);
     };
     const unsubE = subscribeToEvents(scope, { territoryFilter }, (l) => {
       setEvents(l);
@@ -40,9 +44,15 @@ export default function CalendarPage() {
       contactsReady = true;
       settle();
     });
+    const unsubT = subscribeToTasks(scope, { territoryFilter }, (l) => {
+      setTasks(l);
+      tasksReady = true;
+      settle();
+    });
     return () => {
       unsubE();
       unsubC();
+      unsubT();
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
@@ -59,7 +69,7 @@ export default function CalendarPage() {
       {loading ? (
         <CalendarSkeleton />
       ) : (
-        <CalendarView events={events} contacts={contacts} />
+        <CalendarView events={events} contacts={contacts} tasks={tasks} />
       )}
     </div>
   );

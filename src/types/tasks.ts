@@ -1,5 +1,14 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 
+export type TaskTimeBlock = "am" | "midday" | "pm" | "anytime";
+
+export const TASK_TIME_BLOCKS: { value: TaskTimeBlock; label: string }[] = [
+  { value: "am", label: "AM" },
+  { value: "midday", label: "Midday" },
+  { value: "pm", label: "PM" },
+  { value: "anytime", label: "Anytime" },
+];
+
 export interface Task {
   id: string;
   title: string;
@@ -10,6 +19,12 @@ export interface Task {
   contactId: string | null;
   dealId: string | null;
   eventId: string | null;
+  /**
+   * Optional time-of-day bucket for the Calendar page's "Today's Time
+   * Blocks" panel. `null` = unset — treated as "anytime" when bucketing,
+   * so legacy tasks (written before this field existed) still surface.
+   */
+  timeBlock: TaskTimeBlock | null;
   agencyId: string;
   subAccountId: string;
   createdByUid: string;
@@ -31,6 +46,7 @@ export type TaskFormData = {
   contactId: string | null;
   dealId: string | null;
   eventId: string | null;
+  timeBlock?: TaskTimeBlock | null;
 };
 
 export type TaskFilter = "today" | "overdue" | "upcoming" | "done" | "all";
