@@ -61,6 +61,13 @@ const SCHEDULES: ScheduleSpec[] = [
     description:
       "Hourly Inbox Follow-up Watchdog sweep (Labs custom agent).",
   },
+  {
+    scheduleId: "leadstack-google-calendar-sync",
+    path: "/api/cron/google-calendar-sync",
+    cron: "*/15 * * * *",
+    description:
+      "Pull in changes from every connected Google Calendar (Phase 1 read-only sync).",
+  },
 ];
 
 const MARKER_PATH = "system/scheduleRegistration";

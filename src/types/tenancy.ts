@@ -520,6 +520,20 @@ export interface SubAccountDoc {
    * narrower scope — see the broadcast rebuild plan). Null = not set yet.
    */
   mailingAddress?: SubAccountMailingAddress | null;
+  /**
+   * Agency-controlled gate for Google Calendar two-way sync (Phase 1:
+   * read-only pull-in of a connected member's events onto the Calendar
+   * page). Only the agency owner can flip it (PATCH
+   * /api/agency/sub-accounts/[id]/feature-gates). When `false` (or
+   * undefined on legacy docs): the connect route 403s and the Settings
+   * card renders a "Locked by your agency" state. Per-member, not
+   * sub-account-wide — see {@link import("./google-calendar").GoogleCalendarConnection}.
+   * No tear-down on disable — existing connections + synced events are
+   * preserved, so re-enabling resumes instantly. Defaults to `false` at
+   * creation (explicit allowlist). Read `=== true` so legacy docs stay
+   * locked.
+   */
+  googleCalendarSyncEnabledByAgency?: boolean;
 }
 
 /**

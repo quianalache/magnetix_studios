@@ -38,6 +38,7 @@ export const PLAN_GATE_KEYS = [
   "missedCallTextBackEnabledByAgency",
   "aiSuiteEnabledByAgency",
   "labsEnabledByAgency",
+  "googleCalendarSyncEnabledByAgency",
 ] as const;
 
 export type PlanGateKey = (typeof PLAN_GATE_KEYS)[number];
@@ -61,6 +62,7 @@ export const PLAN_GATE_LABELS: Record<PlanGateKey, string> = {
   missedCallTextBackEnabledByAgency: "Missed Call Text Back",
   aiSuiteEnabledByAgency: "AI Suite assistant",
   labsEnabledByAgency: "Labs (pre-release features)",
+  googleCalendarSyncEnabledByAgency: "Google Calendar sync",
 };
 
 /** Full gate bundle a plan carries — every key present, true = enabled. */

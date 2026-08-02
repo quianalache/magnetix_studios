@@ -30,6 +30,7 @@ import { SubAccountStripeSection } from "@/components/settings/sub-account-strip
 import { SubAccountApiKeysSection } from "@/components/settings/sub-account-api-keys-section";
 import { SubAccountApiRecipesSection } from "@/components/settings/sub-account-api-recipes-section";
 import { SubAccountCalendarSyncSection } from "@/components/settings/sub-account-calendar-sync-section";
+import { SubAccountGoogleCalendarSection } from "@/components/settings/sub-account-google-calendar-section";
 import { SubAccountWebhooksSection } from "@/components/settings/sub-account-webhooks-section";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -213,6 +214,10 @@ export default function SettingsPage() {
 
           {/* Calendar sync — per-sub-account .ics subscription URL. */}
           <SubAccountCalendarSyncSection />
+
+          {/* Google Calendar two-way sync (Phase 1) — the reverse
+              direction: pull a connected member's own events in. */}
+          <SubAccountGoogleCalendarSection />
 
           {/* Your subscription — Client Billing v1. Self-gating: only renders
               when this workspace is billed through the platform by the agency

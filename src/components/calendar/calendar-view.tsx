@@ -19,6 +19,7 @@ import { TASK_TIME_BLOCKS } from "@/types/tasks";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Task } from "@/types/tasks";
+import type { ExternalCalendarEvent } from "@/types/google-calendar";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 type CalendarViewMode = "month" | "week" | "day";
@@ -32,11 +33,14 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   contacts: Contact[];
   tasks: Task[];
+  /** Read-only events pulled in from the viewer's own connected Google Calendar. */
+  googleEvents: ExternalCalendarEvent[];
 }
 
 type DayItem =
   | { kind: "event"; event: CalendarEvent }
-  | { kind: "task"; task: Task };
+  | { kind: "task"; task: Task }
+  | { kind: "google"; event: ExternalCalendarEvent };
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -79,7 +83,7 @@ function formatShortDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function CalendarView({ events, contacts, tasks }: CalendarViewProps) {
+export function CalendarView({ events, contacts, tasks, googleEvents }: CalendarViewProps) {
   const today = useMemo(() => dayOnly(new Date()), []);
   const [cursor, setCursor] = useState<Date>(() => dayOnly(new Date()));
   const [view, setView] = useState<CalendarViewMode>("month");
@@ -131,6 +135,14 @@ export function CalendarView({ events, contacts, tasks }: CalendarViewProps) {
       arr.push({ kind: "event", event: ev });
       map.set(key, arr);
     }
+    for (const ge of googleEvents) {
+      const start = toDate(ge.startAt);
+      if (!start) continue;
+      const key = dayKey(start);
+      const arr = map.get(key) ?? [];
+      arr.push({ kind: "google", event: ge });
+      map.set(key, arr);
+    }
     for (const t of tasks) {
       if (t.completed) continue;
       const due = toDate(t.dueAt);
@@ -140,10 +152,17 @@ export function CalendarView({ events, contacts, tasks }: CalendarViewProps) {
       arr.push({ kind: "task", task: t });
       map.set(key, arr);
     }
+    const kindRank: Record<DayItem["kind"], number> = { event: 0, google: 1, task: 2 };
     for (const arr of map.values()) {
       arr.sort((a, b) => {
-        if (a.kind !== b.kind) return a.kind === "event" ? -1 : 1;
+        if (a.kind !== b.kind) return kindRank[a.kind] - kindRank[b.kind];
         if (a.kind === "event" && b.kind === "event") {
+          return (
+            (toDate(a.event.startAt)?.getTime() ?? 0) -
+            (toDate(b.event.startAt)?.getTime() ?? 0)
+          );
+        }
+        if (a.kind === "google" && b.kind === "google") {
           return (
             (toDate(a.event.startAt)?.getTime() ?? 0) -
             (toDate(b.event.startAt)?.getTime() ?? 0)
@@ -153,7 +172,7 @@ export function CalendarView({ events, contacts, tasks }: CalendarViewProps) {
       });
     }
     return map;
-  }, [events, tasks]);
+  }, [events, googleEvents, tasks]);
 
   const contactById = useMemo(() => {
     const m = new Map<string, Contact>();
@@ -502,6 +521,29 @@ export function CalendarView({ events, contacts, tasks }: CalendarViewProps) {
                                   </span>
                                 )}
                               </span>
+                            </button>
+                          );
+                        }
+                        if (item.kind === "google") {
+                          const ge = item.event;
+                          const start = toDate(ge.startAt);
+                          return (
+                            <button
+                              key={`gcal-${ge.id}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (ge.htmlLink) window.open(ge.htmlLink, "_blank", "noopener,noreferrer");
+                              }}
+                              className="flex w-full items-center gap-1 truncate rounded-md border border-transparent bg-blue-500/10 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-blue-700 transition-colors hover:border-blue-500/30 dark:text-blue-400"
+                            >
+                              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
+                              {start && !ge.allDay && (
+                                <span className="shrink-0 text-blue-700/70 dark:text-blue-400/70">
+                                  {formatTime(start)}
+                                </span>
+                              )}
+                              <span className="truncate">{ge.title}</span>
                             </button>
                           );
                         }

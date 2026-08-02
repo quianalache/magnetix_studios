@@ -1184,6 +1184,28 @@ service cloud.firestore {
       );
     }
 
+    // Google Calendar two-way sync (Phase 1, read-only pull-in). Connection
+    // docs hold OAuth tokens and are NEVER read by the client — the Settings
+    // UI gets a token-free {connected, googleAccountEmail, lastSyncedAt}
+    // projection from a server route instead. Written only by the Admin SDK
+    // (connect/callback/disconnect routes + the sync cron job).
+    match /googleCalendarConnections/{connectionId} {
+      allow read, write: if false;
+    }
+
+    // Events pulled in from a connected Google Calendar. Read-only mirror —
+    // written only by the sync cron job (Admin SDK). Members can read so the
+    // Calendar page can render them; scoping to "only the connecting
+    // member's own events" happens in the query (where uid == caller), not
+    // in the rule, same as every other subAccountId-scoped collection here.
+    match /externalCalendarEvents/{externalEventId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow write: if false;
+    }
+
     // Per-contact execution rows — created and mutated server-side only by
     // the trigger helper and the QStash step executor (Admin SDK bypasses
     // these rules). Active members can read for debugging / activity drill-

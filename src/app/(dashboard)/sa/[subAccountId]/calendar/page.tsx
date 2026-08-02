@@ -7,10 +7,12 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToEvents } from "@/lib/firestore/events";
 import { subscribeToTasks } from "@/lib/firestore/tasks";
+import { subscribeToExternalCalendarEvents } from "@/lib/firestore/external-calendar-events";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Task } from "@/types/tasks";
+import type { ExternalCalendarEvent } from "@/types/google-calendar";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default function CalendarPage() {
@@ -21,6 +23,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [googleEvents, setGoogleEvents] = useState<ExternalCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,8 +34,11 @@ export default function CalendarPage() {
     let eventsReady = false;
     let contactsReady = false;
     let tasksReady = false;
+    let googleEventsReady = false;
     const settle = () => {
-      if (eventsReady && contactsReady && tasksReady) setLoading(false);
+      if (eventsReady && contactsReady && tasksReady && googleEventsReady) {
+        setLoading(false);
+      }
     };
     const unsubE = subscribeToEvents(scope, { territoryFilter }, (l) => {
       setEvents(l);
@@ -49,10 +55,16 @@ export default function CalendarPage() {
       tasksReady = true;
       settle();
     });
+    const unsubG = subscribeToExternalCalendarEvents(scope, user.uid, (l) => {
+      setGoogleEvents(l);
+      googleEventsReady = true;
+      settle();
+    });
     return () => {
       unsubE();
       unsubC();
       unsubT();
+      unsubG();
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
@@ -69,7 +81,12 @@ export default function CalendarPage() {
       {loading ? (
         <CalendarSkeleton />
       ) : (
-        <CalendarView events={events} contacts={contacts} tasks={tasks} />
+        <CalendarView
+          events={events}
+          contacts={contacts}
+          tasks={tasks}
+          googleEvents={googleEvents}
+        />
       )}
     </div>
   );
