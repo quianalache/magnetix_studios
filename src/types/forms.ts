@@ -91,10 +91,28 @@ export interface LeadForm {
   updatedAt: Timestamp | FieldValue | null;
 }
 
+/** One answered field on a submission, snapshotted with its label as it read AT SUBMIT TIME — stays accurate even if the form's fields are later renamed or removed. */
+export interface FormSubmissionAnswer {
+  fieldId: string;
+  label: string;
+  value: string;
+}
+
 export interface FormSubmission {
   id: string;
   formId: string;
+  /**
+   * Snapshotted at submit time so a cross-form list (the contact profile's
+   * Submitted Forms section) doesn't need to look up every referenced form.
+   * Undefined on submissions written before this field existed.
+   */
+  formName?: string;
+  /** Raw field-id-keyed values, kept for existing consumers (webhook payloads, the HTML snippet's `name` attributes). */
   values: Record<string, string>;
+  /** The four contact-mapped fields, denormalized for a quick row preview. Undefined on legacy submissions. */
+  mapped?: { name: string; email: string; phone: string; company: string };
+  /** Every field's label + value, in form order — the human-readable view. Undefined on legacy submissions (fall back to `values`). */
+  answers?: FormSubmissionAnswer[];
   contactId: string | null;
   dealId: string | null;
   createdAt: Timestamp | FieldValue | null;

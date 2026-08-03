@@ -33,7 +33,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactPicker } from "@/components/quotes/contact-picker";
 import { useSubAccount } from "@/context/sub-account-context";
-import { updateEvent, deleteEvent } from "@/lib/firestore/events";
 import { BookingReassign } from "@/components/calendar/booking-reassign";
 import { toDate } from "@/lib/format";
 import {
@@ -163,8 +162,26 @@ export function EventDialog({
     setSaving(true);
     try {
       if (isEdit && event) {
-        // Plain edit has no webhook event — stays a client-side write.
-        await updateEvent(event.id, payload);
+        // Goes through the server so an edit can also re-push to the
+        // creator's connected Google Calendar.
+        const res = await fetch(`/api/events/by-id/${event.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: payload.title,
+            startAt: payload.startAt.toISOString(),
+            endAt: payload.endAt.toISOString(),
+            contactId: payload.contactId,
+            location: payload.location,
+            notes: payload.notes,
+            meetingUrl: payload.meetingUrl,
+          }),
+        });
+        if (!res.ok) {
+          const b = (await res.json().catch(() => ({}))) as { error?: string };
+          toast.error(b.error ?? "Couldn't save event. Try again.");
+          return;
+        }
         toast.success("Event updated");
       } else {
         // Create goes through the server so event.created fires.
@@ -203,7 +220,14 @@ export function EventDialog({
     if (!confirm(`Delete "${event.title}"?`)) return;
     setDeleting(true);
     try {
-      await deleteEvent(event.id);
+      const res = await fetch(`/api/events/by-id/${event.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(b.error ?? "Couldn't delete event.");
+        return;
+      }
       toast.success("Event deleted");
       onOpenChange(false);
     } catch (err) {

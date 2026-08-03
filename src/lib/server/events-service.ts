@@ -7,19 +7,20 @@ import {
   serializeEventForApi,
   type EventApiObject,
 } from "@/lib/api/serializers/events";
+import { pushEventCreate } from "@/lib/google-calendar/push";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 /**
  * Server-side calendar-event create — fires `event.created` from the
- * dashboard calendar (it used to be a direct client Firestore write).
- * Event edits + deletes have no webhook event, so they stay client-side.
- * Booking-page events go through the booking lifecycle (booking.created),
- * not this path.
+ * dashboard calendar (it used to be a direct client Firestore write), and
+ * best-effort mirrors the event onto the creator's connected Google
+ * Calendar. Booking-page events go through the booking lifecycle
+ * (booking.created), not this path.
  */
 
 type Mode = "live" | "test";
 
-async function territoryForContact(contactId: string | null): Promise<string> {
+export async function territoryForContact(contactId: string | null): Promise<string> {
   if (!contactId) return GLOBAL_TERRITORY_ID;
   try {
     const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
@@ -85,6 +86,21 @@ export async function createEventServerSide(
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(doc);
+
+  // Best-effort: mirror onto the creator's own connected Google Calendar.
+  // Never blocks the response — a missing connection or a Google-side
+  // failure just means this event stays CRM-only.
+  const googleEventId = await pushEventCreate(input.subAccountId, input.createdByUid, {
+    title: input.title,
+    startAt: input.startAt,
+    endAt: input.endAt,
+    location: input.location,
+    notes: input.notes,
+    meetingUrl: input.meetingUrl ?? null,
+  });
+  if (googleEventId) {
+    await ref.update({ googleEventId });
+  }
 
   // Mirror the client's activity write so the contact timeline is unchanged.
   if (input.contactId) {

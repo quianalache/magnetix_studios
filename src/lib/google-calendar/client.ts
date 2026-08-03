@@ -3,8 +3,10 @@ import "server-only";
 import crypto from "node:crypto";
 
 /**
- * Google Calendar integration wrapper — Phase 1, read-only pull-in of a
- * connected member's events. Mirrors the shape of `lib/comms/meta.ts`: pure
+ * Google Calendar integration wrapper — two-way sync of a connected member's
+ * events (pull-in from Google + push CRM-created events out to Google), to
+ * match MomentumOS's calendar functionality. Mirrors the shape of
+ * `lib/comms/meta.ts`: pure
  * `fetch` helpers, no Firestore writes, no `googleapis` SDK dependency (this
  * codebase has none installed; the Meta integration already proved the
  * plain-fetch style works fine for OAuth + REST). Everything here is INERT
@@ -20,8 +22,14 @@ const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 const CALENDAR_EVENTS_URL =
   "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
-/** Read-only, events-only — least privilege for a pull-in-only v1. */
-const SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly";
+/**
+ * Matches MomentumOS's scope set exactly — full calendar + events
+ * read/write, plus email for the connected-account display. Exported so
+ * the callback route can persist the actual granted scope on the
+ * connection doc instead of a hand-typed copy that can drift out of sync.
+ */
+export const SCOPE =
+  "https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events email";
 
 /** True when the deployment has Google OAuth app credentials. Gate every connect/sync on this. */
 export function googleCalendarAppConfigured(): boolean {
@@ -287,4 +295,87 @@ export async function fetchCalendarEvents(
   }
 
   return { events, nextSyncToken };
+}
+
+// ---------------------------------------------------------------------------
+// Push — mirroring a CRM-created event onto the connected member's own
+// primary Google Calendar (create/update/delete), matching MomentumOS.
+// ---------------------------------------------------------------------------
+
+export interface CalendarEventInput {
+  summary: string;
+  description?: string | null;
+  location?: string | null;
+  /** ISO 8601 with offset/zone, e.g. from `Date.toISOString()`. */
+  start: string;
+  end: string;
+}
+
+function toGoogleEventBody(input: CalendarEventInput) {
+  return {
+    summary: input.summary,
+    description: input.description || undefined,
+    location: input.location || undefined,
+    start: { dateTime: input.start },
+    end: { dateTime: input.end },
+  };
+}
+
+/** Create an event on the connected member's primary Google Calendar. */
+export async function createCalendarEvent(
+  accessToken: string,
+  input: CalendarEventInput,
+): Promise<GoogleCalendarEventDto> {
+  const res = await fetch(CALENDAR_EVENTS_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(toGoogleEventBody(input)),
+  });
+  if (!res.ok) {
+    throw new Error(`Google Calendar event create failed (${res.status})`);
+  }
+  return (await res.json()) as GoogleCalendarEventDto;
+}
+
+/** Update a previously-pushed event on the connected member's calendar. */
+export async function updateCalendarEvent(
+  accessToken: string,
+  googleEventId: string,
+  input: CalendarEventInput,
+): Promise<GoogleCalendarEventDto> {
+  const res = await fetch(
+    `${CALENDAR_EVENTS_URL}/${encodeURIComponent(googleEventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(toGoogleEventBody(input)),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Google Calendar event update failed (${res.status})`);
+  }
+  return (await res.json()) as GoogleCalendarEventDto;
+}
+
+/** Delete a previously-pushed event. A 404/410 (already gone) is treated as success. */
+export async function deleteCalendarEvent(
+  accessToken: string,
+  googleEventId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${CALENDAR_EVENTS_URL}/${encodeURIComponent(googleEventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    throw new Error(`Google Calendar event delete failed (${res.status})`);
+  }
 }

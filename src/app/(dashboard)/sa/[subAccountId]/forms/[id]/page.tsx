@@ -23,7 +23,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
-import { subscribeToForm, updateForm } from "@/lib/firestore/forms";
+import {
+  subscribeToForm,
+  subscribeToFormSubmissions,
+  updateForm,
+} from "@/lib/firestore/forms";
+import { FormSubmissionsList } from "@/components/forms/form-submissions-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +48,7 @@ import {
   type FormField,
   type FormFieldType,
   type FormSettings,
+  type FormSubmission,
   type LeadForm,
 } from "@/types/forms";
 
@@ -292,6 +298,9 @@ export default function FormBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copiedTag, setCopiedTag] = useState("");
+  const [tab, setTab] = useState<"build" | "submissions">("build");
+  const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading || !user || !id) return;
@@ -299,6 +308,16 @@ export default function FormBuilderPage() {
     const unsub = subscribeToForm(id, (f) => {
       setForm(f);
       setLoading(false);
+    });
+    return () => unsub();
+  }, [id, user, authLoading]);
+
+  useEffect(() => {
+    if (authLoading || !user || !id) return;
+    setSubmissionsLoading(true);
+    const unsub = subscribeToFormSubmissions(id, (list) => {
+      setSubmissions(list);
+      setSubmissionsLoading(false);
     });
     return () => unsub();
   }, [id, user, authLoading]);
@@ -447,7 +466,13 @@ export default function FormBuilderPage() {
           </Button>
           <Button
             size="sm"
-            render={<a href={`/f/${form.id}`} target="_blank" rel="noreferrer" />}
+            render={
+              <a
+                href={`/f/${form.id}?leadstack_preview=1&leadstack_back=${encodeURIComponent(saPath(`/forms/${form.id}`))}`}
+                target="_blank"
+                rel="noreferrer"
+              />
+            }
           >
             <ExternalLink className="mr-1 h-3.5 w-3.5" />
             Preview
@@ -455,6 +480,41 @@ export default function FormBuilderPage() {
         </div>
       </div>
 
+      <div className="flex gap-1 border-b">
+        <button
+          type="button"
+          onClick={() => setTab("build")}
+          className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            tab === "build"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Build
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("submissions")}
+          className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            tab === "submissions"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Submissions
+          {form.submissionCount > 0 && (
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              {form.submissionCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === "submissions" && (
+        <FormSubmissionsList submissions={submissions} loading={submissionsLoading} />
+      )}
+
+      {tab === "build" && (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         {/* Fields column — visually on the right at lg+, source order kept
             for sensible mobile stacking. */}
@@ -861,6 +921,7 @@ export default function FormBuilderPage() {
           </section>
         </aside>
       </div>
+      )}
     </div>
   );
 }

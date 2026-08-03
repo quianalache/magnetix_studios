@@ -38,6 +38,12 @@ const PUBLIC_PATHS = [
   // Hourly Inbox Follow-up Watchdog sweep (Labs). QStash-scheduled;
   // signature-verified inside the route.
   "/api/agents/watchdog/step",
+  // Google Calendar pull-in sync — QStash-scheduled (every 15 min) plus a
+  // one-off immediate trigger right after a new connection. Missing from
+  // this list meant every call was silently 307-redirected by the auth
+  // check before ever reaching the route's own signature verification,
+  // so connections would show "Connected" but never actually sync.
+  "/api/cron/google-calendar-sync",
   "/api/landing/metrics",
   "/api/landing/recent-purchases",
   // Live-visitors heartbeat ping for the agency dashboard's world map.

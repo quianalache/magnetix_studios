@@ -346,10 +346,27 @@ async function handleSubmit(
     dealId = dealRef.id;
   }
 
+  // Human-readable snapshot of every answer, in form order — labels are
+  // captured NOW so the submissions view stays accurate even if the form's
+  // fields are later renamed, reordered, or removed.
+  const answers = form.fields.map((f) => ({
+    fieldId: f.id,
+    label: f.label,
+    value:
+      f.type === "sms_consent"
+        ? consentChecked
+          ? "Yes"
+          : "No"
+        : (body.values[f.id] ?? "").toString(),
+  }));
+
   // Store submission record (admin-side only; rules deny client writes).
   const submissionRef = await formRef.collection("submissions").add({
     formId: id,
+    formName: form.name,
     values: body.values,
+    mapped,
+    answers,
     contactId: contactRef.id,
     dealId,
     createdAt: FieldValue.serverTimestamp(),

@@ -24,16 +24,29 @@ export default async function PublicFormPage({
 
   const appearance = resolveAppearance(sp, form.settings);
 
+  // Operator preview, set only by the builder's own "Preview" link — never
+  // present for a real visitor filling out the form. Surfaces a way back
+  // into the app, since an installed PWA's `target="_blank"` link doesn't
+  // open a real browser tab (no chrome, no back button) — it just
+  // navigates the standalone view in place, trapping the operator with no
+  // way back short of force-quitting the app.
+  const isPreview = sp.leadstack_preview === "1" && !appearance.embed;
+  const previewBackHref =
+    typeof sp.leadstack_back === "string" ? sp.leadstack_back : null;
+
   if (!form.enabled) {
     return (
-      <FormFrame appearance={appearance}>
-        <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center">
-          <h1 className="text-xl font-semibold">This form is paused</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Please check back later.
-          </p>
-        </div>
-      </FormFrame>
+      <>
+        {isPreview && <PreviewBar backHref={previewBackHref} />}
+        <FormFrame appearance={appearance}>
+          <div className="w-full max-w-md rounded-2xl border bg-card p-8 text-center">
+            <h1 className="text-xl font-semibold">This form is paused</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Please check back later.
+            </p>
+          </div>
+        </FormFrame>
+      </>
     );
   }
 
@@ -44,36 +57,61 @@ export default async function PublicFormPage({
   };
 
   return (
-    <FormFrame appearance={appearance}>
-      <div className="w-full max-w-lg">
-        {!appearance.hideChrome && (
-          <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-block h-4 w-4 rounded-sm bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
-            <span className="font-medium text-foreground">LeadStack</span>
-          </div>
-        )}
-        <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
-          {!appearance.hideTitle && (
-            <>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                {form.name}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Fill this out and we&apos;ll be in touch shortly.
-              </p>
-            </>
+    <>
+      {isPreview && <PreviewBar backHref={previewBackHref} />}
+      <FormFrame appearance={appearance}>
+        <div className="w-full max-w-lg">
+          {!appearance.hideChrome && (
+            <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="inline-block h-4 w-4 rounded-sm bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
+              <span className="font-medium text-foreground">LeadStack</span>
+            </div>
           )}
-          <div className={appearance.hideTitle ? "" : "mt-6"}>
-            <PublicForm form={safe} />
+          <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+            {!appearance.hideTitle && (
+              <>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {form.name}
+                </h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Fill this out and we&apos;ll be in touch shortly.
+                </p>
+              </>
+            )}
+            <div className={appearance.hideTitle ? "" : "mt-6"}>
+              <PublicForm form={safe} />
+            </div>
           </div>
+          {!appearance.hideChrome && (
+            <p className="mt-4 text-center text-[11px] text-muted-foreground">
+              Powered by LeadStack
+            </p>
+          )}
         </div>
-        {!appearance.hideChrome && (
-          <p className="mt-4 text-center text-[11px] text-muted-foreground">
-            Powered by LeadStack
-          </p>
-        )}
-      </div>
-    </FormFrame>
+      </FormFrame>
+    </>
+  );
+}
+
+/**
+ * Sticky, theme-independent chrome so it reads as "app UI" rather than
+ * part of the form itself, regardless of the form's own light/dark/accent
+ * settings. Occupies real space in normal document flow (not `fixed`) so
+ * it never overlaps the form content below it.
+ */
+function PreviewBar({ backHref }: { backHref: string | null }) {
+  return (
+    <div className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-amber-600/30 bg-amber-400 px-4 py-2 text-sm font-medium text-amber-950">
+      <span>You&apos;re previewing this form — visitors never see this bar.</span>
+      {backHref && (
+        <a
+          href={backHref}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-950/10 px-3 py-1 text-xs font-semibold transition-colors hover:bg-amber-950/20"
+        >
+          ← Back to Forms
+        </a>
+      )}
+    </div>
   );
 }
 

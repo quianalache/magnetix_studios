@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { publishCallback } from "@/lib/automations/qstash";
 import {
+  SCOPE,
   exchangeCodeForTokens,
   fetchGoogleAccountEmail,
   googleCalendarAppConfigured,
@@ -127,7 +128,7 @@ export async function GET(request: Request) {
       accessToken: tokens.accessToken,
       refreshToken,
       expiresAt: Timestamp.fromMillis(Date.now() + tokens.expiresInSec * 1000),
-      scope: "https://www.googleapis.com/auth/calendar.events.readonly",
+      scope: SCOPE,
       syncToken: null,
       connectedAt: FieldValue.serverTimestamp(),
       lastSyncedAt: null,

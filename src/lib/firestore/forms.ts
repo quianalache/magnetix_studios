@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -17,6 +18,7 @@ import {
   contactFormSettings,
   defaultFormFields,
   defaultFormSettings,
+  type FormSubmission,
   type FormTemplate,
   type LeadForm,
 } from "@/types/forms";
@@ -69,6 +71,28 @@ export function subscribeToForm(
         return;
       }
       callback({ id: snap.id, ...(snap.data() as Omit<LeadForm, "id">) });
+    },
+    (err) => onError?.(err),
+  );
+}
+
+/** Submissions for ONE form, newest first — powers the builder's Submissions tab. */
+export function subscribeToFormSubmissions(
+  formId: string,
+  callback: (submissions: FormSubmission[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), FORMS, formId, "submissions"),
+    orderBy("createdAt", "desc"),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const submissions = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<FormSubmission, "id">) }),
+      );
+      callback(submissions);
     },
     (err) => onError?.(err),
   );

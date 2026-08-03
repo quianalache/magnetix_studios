@@ -108,6 +108,14 @@ export interface CalendarEvent {
   cancelReason?: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
+  /**
+   * Id of the mirrored event on `createdByUid`'s connected Google Calendar,
+   * set the first time a push succeeds (on create, or on the first edit
+   * after connecting if the member connected after this event already
+   * existed). `null`/undefined = never pushed — either the creator has no
+   * Google Calendar connection, or the push failed.
+   */
+  googleEventId?: string | null;
 }
 
 export type EventFormData = {

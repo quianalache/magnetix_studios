@@ -4,10 +4,10 @@ import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { verifyQStashSignature } from "@/lib/automations/qstash";
+import { getValidAccessToken } from "@/lib/google-calendar/connection";
 import {
   SyncTokenExpiredError,
   fetchCalendarEvents,
-  refreshAccessToken,
   type GoogleCalendarEventDto,
 } from "@/lib/google-calendar/client";
 import type { GoogleCalendarConnection } from "@/types/google-calendar";
@@ -29,7 +29,6 @@ import type { GoogleCalendarConnection } from "@/types/google-calendar";
 
 const WINDOW_BACK_DAYS = 7;
 const WINDOW_FORWARD_DAYS = 60;
-const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
 function toIsoDate(googleDate: { dateTime?: string; date?: string }): {
   value: Date | null;
@@ -47,22 +46,10 @@ async function syncOneConnection(
   const db = getAdminDb();
   const connRef = db.doc(`googleCalendarConnections/${connId}`);
 
-  // Refresh the access token if it's near/at expiry.
-  let accessToken = conn.accessToken;
-  const expiresAtMs =
-    conn.expiresAt instanceof Timestamp ? conn.expiresAt.toMillis() : 0;
-  if (expiresAtMs - Date.now() < REFRESH_MARGIN_MS) {
-    try {
-      const refreshed = await refreshAccessToken(conn.refreshToken);
-      accessToken = refreshed.accessToken;
-      await connRef.update({
-        accessToken,
-        expiresAt: Timestamp.fromMillis(Date.now() + refreshed.expiresInSec * 1000),
-      });
-    } catch (err) {
-      console.warn(`[google-calendar-sync] token refresh failed conn=${connId}`, err);
-      return { ok: false, synced: 0 };
-    }
+  const accessToken = await getValidAccessToken(conn.subAccountId, conn.uid);
+  if (!accessToken) {
+    console.warn(`[google-calendar-sync] no valid token conn=${connId}`);
+    return { ok: false, synced: 0 };
   }
 
   let result;

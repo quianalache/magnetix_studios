@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "submissions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "contactId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "broadcastTemplates",
       "queryScope": "COLLECTION",
       "fields": [
