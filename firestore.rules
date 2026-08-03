@@ -827,6 +827,25 @@ service cloud.firestore {
         ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
         allow create, delete: if false;
       }
+      // Email thread (inbound via the Resend webhook + the /api/conversations
+      // email-send route) — same model as the SMS/WhatsApp/Meta threads
+      // above. This block was missing entirely, which meant every read of
+      // this subcollection hit the default-deny catch-all at the bottom of
+      // this file: the conversation LIST preview still showed a snippet
+      // (written server-side via the Admin SDK, which bypasses rules), but
+      // the detail thread's client-side onSnapshot got a silent
+      // permission-denied and rendered as an empty "No messages yet" thread.
+      match /emailMessages/{messageId} {
+        allow read: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        );
+        allow update: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+        allow create, delete: if false;
+      }
     }
 
     match /deals/{dealId} {
