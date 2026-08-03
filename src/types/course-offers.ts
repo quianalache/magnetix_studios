@@ -98,6 +98,12 @@ export interface CourseOffer {
   /** Maps straight to Stripe Checkout's `allow_promotion_codes` — no
    *  home-grown discount-code system needed. */
   discountCodesEnabled: boolean;
+  /** Opt-in social-proof popup on the public checkout page ("Sarah in
+   *  Austin just purchased..."). Off by default — showing a customer's
+   *  purchase activity publicly is a real choice, not everyone wants it.
+   *  Shows first name + city/country only, sourced from the buyer's Member
+   *  -> Contact record; never email, phone, or exact address. */
+  showRecentPurchasePopup: boolean;
   access: CourseOfferAccess;
   advanced: CourseOfferAdvanced;
   /** Visual theme for the Offer's public checkout page — same system

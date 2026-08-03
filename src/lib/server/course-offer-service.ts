@@ -65,6 +65,7 @@ export async function createCourseOfferServerSide(opts: {
     version: 1,
     thumbnailUrl: null,
     discountCodesEnabled: false,
+    showRecentPurchasePopup: false,
     access: DEFAULT_COURSE_OFFER_ACCESS,
     advanced: DEFAULT_COURSE_OFFER_ADVANCED,
     theme: DEFAULT_OFFER_THEME,
@@ -90,6 +91,7 @@ export interface CourseOfferPatch {
   visibility?: OfferVisibility;
   thumbnailUrl?: string | null;
   discountCodesEnabled?: boolean;
+  showRecentPurchasePopup?: boolean;
   access?: Partial<CourseOfferAccess>;
   advanced?: Partial<CourseOfferAdvanced>;
   checkoutSettings?: Partial<CourseOfferCheckoutSettings>;
@@ -144,6 +146,9 @@ export async function updateCourseOfferServerSide(opts: {
   if (p.thumbnailUrl !== undefined) updates.thumbnailUrl = p.thumbnailUrl;
   if (typeof p.discountCodesEnabled === "boolean") {
     updates.discountCodesEnabled = p.discountCodesEnabled;
+  }
+  if (typeof p.showRecentPurchasePopup === "boolean") {
+    updates.showRecentPurchasePopup = p.showRecentPurchasePopup;
   }
   if (p.access) {
     for (const [key, value] of Object.entries(p.access)) {

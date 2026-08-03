@@ -69,6 +69,9 @@ export function OfferDetailsTab({
   const [discountCodesEnabled, setDiscountCodesEnabled] = useState(
     offer.discountCodesEnabled,
   );
+  const [showRecentPurchasePopup, setShowRecentPurchasePopup] = useState(
+    offer.showRecentPurchasePopup === true,
+  );
   const [beginAtSpecificDate, setBeginAtSpecificDate] = useState(
     offer.access.beginAtSpecificDate,
   );
@@ -118,6 +121,7 @@ export function OfferDetailsTab({
     setPriceTextOverride(offer.priceTextOverride ?? "");
     setThumbnailUrl(offer.thumbnailUrl);
     setDiscountCodesEnabled(offer.discountCodesEnabled);
+    setShowRecentPurchasePopup(offer.showRecentPurchasePopup === true);
     setBeginAtSpecificDate(offer.access.beginAtSpecificDate);
     setBeginDate(toDateInputValue(offer.access.beginDate));
     setRestrictToDays(offer.access.restrictToDays);
@@ -169,6 +173,7 @@ export function OfferDetailsTab({
         priceTextOverride: priceTextOverride.trim() || null,
         thumbnailUrl,
         discountCodesEnabled,
+        showRecentPurchasePopup,
         access: {
           beginAtSpecificDate,
           beginDate: beginAtSpecificDate && beginDate ? new Date(beginDate) : null,
@@ -450,6 +455,20 @@ export function OfferDetailsTab({
           </label>
           <p className="mt-1 text-[12px] text-muted-foreground">
             Allow customers to apply discount codes at checkout
+          </p>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <label className="flex items-center gap-2 text-[13px]">
+            <Checkbox
+              checked={showRecentPurchasePopup}
+              onCheckedChange={(v) => setShowRecentPurchasePopup(v === true)}
+            />
+            Show recent purchases popup
+          </label>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            A small notification cycles through recent buyers on the checkout
+            page (first name + city only — never email, phone, or address).
           </p>
         </div>
 

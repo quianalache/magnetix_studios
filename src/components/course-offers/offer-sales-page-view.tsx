@@ -6,6 +6,7 @@ import {
 } from "@/components/standalone-courses/theme-blocks";
 import { isCoreSidebarBlock, isCoreBodyBlock } from "@/types/course-theme";
 import { EnrollOfferModal } from "@/app/offer/[saId]/[offerId]/enroll-modal";
+import { RecentPurchasePopup } from "@/components/course-offers/recent-purchase-popup";
 import type { CourseTheme } from "@/types/course-theme";
 import type { CourseOffer } from "@/types/course-offers";
 import type { Member } from "@/types/community";
@@ -84,6 +85,9 @@ export function OfferSalesPageView({
             opacity: theme.background.transparency / 100,
           }}
         />
+      )}
+      {offer.showRecentPurchasePopup === true && (
+        <RecentPurchasePopup saId={saId} offerId={offerId} productName={offer.title} />
       )}
       <div className="relative z-10">
       <header
