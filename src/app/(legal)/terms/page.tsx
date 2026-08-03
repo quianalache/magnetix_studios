@@ -16,179 +16,121 @@ export default function TermsPage() {
       <article className="prose dark:prose-invert mt-8 max-w-none">
         <h1>Terms of Service</h1>
         <p className="text-sm text-muted-foreground">
-          Last updated: July 9, 2026
+          Last updated: August 3, 2026
         </p>
 
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By purchasing, downloading, or using LeadStack (&ldquo;the
-          Service&rdquo;), you agree to be bound by these Terms of Service. If
-          you do not agree, do not purchase or use the Service.
+          By accessing or using Magnetix Studios (&ldquo;the Service&rdquo;),
+          you agree to be bound by these Terms of Service. If you do not
+          agree, do not use the Service.
         </p>
 
         <h2>2. The Service</h2>
         <p>
-          LeadStack is a self-hosted, one-time-purchase software codebase. You
-          buy a license, receive access to the source code, and run it on
-          infrastructure you control. We do not host your deployment, store
-          your customer data, or provide a SaaS layer on top of the codebase.
+          Magnetix Studios is a hosted CRM platform provided by us
+          (&ldquo;we,&rdquo; &ldquo;us&rdquo;). We host the application, the
+          database, and the integrations it offers; you and your team access
+          it as a logged-in service rather than installing or running
+          anything yourselves.
         </p>
 
-        <h2>3. Purchase, Payment &amp; No Refunds</h2>
+        <h2>3. Accounts &amp; Sub-Accounts</h2>
         <p>
-          LeadStack is sold as a one-time purchase. There is no subscription
-          and no recurring fee charged by us.
-        </p>
-        <p>
-          <strong>All sales are final. No refunds.</strong> Because the
-          Service consists of source code delivered electronically, once
-          access has been granted, the purchase cannot be reversed,
-          partially refunded, or exchanged. Please review the public landing
-          page, FAQ, and any pre-sale materials carefully before purchasing.
+          Each business using the Service operates under its own sub-account.
+          You are responsible for the accuracy of the information you provide,
+          for keeping your login credentials secure, and for the actions
+          taken under your account by anyone you invite as a team member.
         </p>
 
-        <h2>4. Chargebacks &amp; Payment Disputes</h2>
+        <h2>4. Fees &amp; Billing</h2>
         <p>
-          If you have any concern about a charge, a billing issue, or the
-          Service itself, you agree to{" "}
-          <strong>
-            contact our support and make a good-faith effort to resolve the
-            matter first
-          </strong>
-          , before initiating any chargeback, payment dispute, or reversal with
-          your bank or card issuer. Most issues can be resolved quickly through
-          support.
-        </p>
-        <p>
-          Because the Service is source code delivered electronically and all
-          sales are final (Section 3), filing a chargeback, dispute, or payment
-          reversal without first contacting support to attempt a resolution is a
-          breach of these Terms.
-        </p>
-        <p>
-          If a chargeback, payment dispute, or reversal is filed against us, we
-          reserve the right to{" "}
-          <strong>
-            immediately and permanently revoke your license, your access to
-            support, and your access to all current and future updates
-          </strong>
-          , and to remove you from any associated source repositories, teams, or
-          related services. These remedies are in addition to, and without
-          prejudice to, any other remedies available to us, including recovering
-          the disputed amount together with any associated fees and costs.
+          Access to the Service is provided under the plan or arrangement
+          communicated to you separately at signup. We may change pricing on
+          a going-forward basis with reasonable notice; changes do not apply
+          retroactively to periods already paid for.
         </p>
 
-        <h2>5. License &amp; Intellectual Property</h2>
+        <h2>5. Your Data</h2>
         <p>
-          The LeadStack codebase is licensed under the{" "}
-          <a
-            href="https://polyformproject.org/licenses/perimeter/1.0.0"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            PolyForm Perimeter License 1.0.0
-          </a>
-          . The full license text ships as <code>LICENSE.md</code> in the
-          root of your repository.
-        </p>
-        <p>
-          In plain English: you may use, modify, and deploy the code for any
-          purpose, including running it for your own business and your
-          clients, with no time limit and no recurring fee. The one
-          restriction is that you may not offer the codebase &mdash; modified
-          or unmodified &mdash; as a product that competes with LeadStack.
-        </p>
-        <p>
-          You retain ownership of any modifications you make and any
-          customer data you collect through your deployment.
-        </p>
-        <p>
-          The Service may transmit limited operational telemetry data for verifying license compliance.
+          You own the contacts, leads, and other business data you and your
+          team enter into your sub-account. We store and process that data on
+          your behalf to provide the Service, and do not use it for any
+          purpose outside operating and improving the platform, as described
+          in our{" "}
+          <Link href="/privacy">Privacy Policy</Link>. You are responsible
+          for having the right to collect and store the customer information
+          you enter, and for complying with applicable data-protection,
+          electronic-communications, and consumer-protection laws for your
+          own customers.
         </p>
 
-        <h2>6. Future Updates</h2>
+        <h2>6. Third-Party Integrations</h2>
         <p>
-          Updates, improvements, bug fixes, and new features we release for the
-          LeadStack codebase are included with your one-time purchase at no
-          additional cost, and are made available to you through the same
-          delivery channel as your original purchase (for example, the source
-          repository) for as long as we continue to maintain and distribute
-          them.
-        </p>
-        <p>
-          Updates are provided on an <strong>optional, self-service basis</strong>.
-          Because LeadStack is self-hosted and you control your own deployment
-          and any modifications you have made, it is{" "}
-          <strong>
-            your responsibility to review, merge, test, and deploy any update
-            into your codebase
-          </strong>{" "}
-          if you choose to adopt it. We do not perform updates on your behalf,
-          and we are not responsible for any conflicts, regressions, downtime,
-          or data loss that may result from applying, or from choosing not to
-          apply, an update. You are under no obligation to adopt any update, and
-          you may continue to run an earlier version.
-        </p>
-        <p>
-          We make no guarantee as to the frequency, scope, timing, or continued
-          availability of future updates, and nothing in this section obligates
-          us to develop or release any particular feature, fix, or update.
+          The Service offers optional integrations with third-party providers
+          (for example: Google Calendar, payment processing, email, SMS, and
+          social messaging). Each integration only activates when you or a
+          team member explicitly connects it, and each is governed by that
+          provider&rsquo;s own terms. We are not responsible for a
+          third-party provider&rsquo;s availability, changes, or
+          discontinuation, and a given feature may have reduced functionality
+          if its provider is unavailable.
         </p>
 
-        <h2>7. Your Responsibilities</h2>
+        <h2>7. Acceptable Use</h2>
         <p>
-          You are solely responsible for hosting, deploying, configuring,
-          securing, and operating the Service. The Service is designed to
-          connect to third-party providers that you supply &mdash; these
-          include, but are not limited to, services for authentication and
-          database, payments, email, SMS and telephony, background job
-          processing, AI, website building, mapping, voice calling, analytics
-          and tracking, and live chat. You are responsible for creating and
-          maintaining your own accounts with these providers, configuring
-          them, and paying their fees directly.
-        </p>
-        <p>
-          Each third-party provider is governed by its own terms, pricing, and
-          availability, over which we have no control. We are not responsible
-          for any third-party service&rsquo;s cost, performance, downtime,
-          suspension, or discontinuation, and the Service may have reduced
-          functionality if a given provider is not connected.
-        </p>
-        <p>
-          You are responsible for complying with all laws applicable to your
-          use, including data-protection, electronic-communications, and
-          consumer-protection laws in the jurisdictions where you and your
-          customers are located.
+          You agree not to use the Service to send unlawful, deceptive, or
+          unsolicited communications (including in violation of CAN-SPAM,
+          TCPA, or equivalent laws in your jurisdiction), to store or
+          transmit content that infringes another party&rsquo;s rights, or to
+          attempt to disrupt, reverse-engineer, or gain unauthorized access to
+          the Service or other accounts.
         </p>
 
-        <h2>8. Disclaimer of Warranties</h2>
+        <h2>8. Availability</h2>
+        <p>
+          We aim to keep the Service reliably available but do not guarantee
+          uninterrupted or error-free operation. Scheduled maintenance or
+          issues with an underlying third-party provider may cause temporary
+          disruption.
+        </p>
+
+        <h2>9. Disclaimer of Warranties</h2>
         <p>
           The Service is provided &ldquo;as is&rdquo; and &ldquo;as
           available&rdquo; without warranty of any kind, express or implied,
           including merchantability, fitness for a particular purpose, and
-          non-infringement. We do not warrant that the Service will be
-          uninterrupted, error-free, or fit for your particular use case.
+          non-infringement.
         </p>
 
-        <h2>9. Limitation of Liability</h2>
+        <h2>10. Limitation of Liability</h2>
         <p>
           To the fullest extent permitted by law, we shall not be liable for
           any indirect, incidental, special, consequential, or punitive
           damages, or for any loss of profits, revenue, data, or goodwill,
-          arising out of or related to your purchase or use of the Service.
-          Our total aggregate liability for any claim shall not exceed the
-          amount you paid for the Service.
+          arising out of or related to your use of the Service. Our total
+          aggregate liability for any claim shall not exceed the amount you
+          paid for the Service in the three months preceding the claim.
         </p>
 
-        <h2>10. Changes to Terms</h2>
+        <h2>11. Termination</h2>
+        <p>
+          You may stop using the Service at any time. We may suspend or
+          terminate an account that violates these Terms, engages in abusive
+          use of the Service or its integrations, or where required by law.
+          We will make a reasonable effort to notify you before suspending an
+          account except where immediate action is necessary.
+        </p>
+
+        <h2>12. Changes to Terms</h2>
         <p>
           We may update these Terms from time to time. We will post the
           updated Terms on this page with a new &ldquo;Last updated&rdquo;
-          date. Your continued use of the Service after changes constitutes
+          date. Continued use of the Service after changes constitutes
           acceptance of the revised Terms.
         </p>
 
-        <h2>11. Contact</h2>
+        <h2>13. Contact</h2>
         <p>
           For questions about these Terms,{" "}
           <button
