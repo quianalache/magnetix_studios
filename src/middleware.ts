@@ -100,6 +100,10 @@ const PUBLIC_PATHS = [
   // apple-touch icon without credentials. Serves the owner-uploaded icon
   // or 302s to the static fallback; read-only, nothing sensitive.
   "/api/pwa",
+  // Brand-logo serving route — the public landing page renders the agency
+  // logo for anonymous visitors. Upload/delete stay behind auth (they're
+  // at /api/agency/logo, not /api/agency/logo/image); this is read-only.
+  "/api/agency/logo/image",
   "/u",
   "/api/u",
   // Public quote pages — recipient-facing /q/[token] view (server-rendered)

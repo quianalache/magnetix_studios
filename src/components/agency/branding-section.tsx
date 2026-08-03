@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { Globe, Mail, Palette, Save } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Globe, Loader2, Mail, Palette, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogoMark } from "@/components/brand/logo-mark";
+import { renderLogo } from "@/lib/brand/render-logo-client";
 
 const URL_RE = /^https?:\/\/.+/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,6 +21,8 @@ export function BrandingSection() {
   const [supportEmail, setSupportEmail] = useState<string>("");
   const [primaryDomain, setPrimaryDomain] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadBusy, setUploadBusy] = useState<"upload" | "remove" | null>(null);
 
   // Hydrate the form once the agency doc resolves. We don't reset on every
   // change, so the operator's in-flight edits aren't blown away when the
@@ -94,6 +97,46 @@ export function BrandingSection() {
     }
   }
 
+  async function handleUploadFile(file: File) {
+    setUploadBusy("upload");
+    try {
+      const image = await renderLogo(file);
+      const res = await fetch("/api/agency/logo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        logoUrl?: string;
+      };
+      if (!res.ok || !payload.logoUrl) {
+        throw new Error(payload.error ?? "Upload failed.");
+      }
+      setLogoUrl(payload.logoUrl);
+      toast.success("Logo uploaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploadBusy(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveLogo() {
+    setUploadBusy("remove");
+    try {
+      const res = await fetch("/api/agency/logo", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setLogoUrl("");
+      toast.success("Logo removed — back to the default mark.");
+    } catch {
+      toast.error("Couldn't remove the logo. Try again.");
+    } finally {
+      setUploadBusy(null);
+    }
+  }
+
   return (
     <form onSubmit={handleSave} className="space-y-5 rounded-2xl border bg-card p-5">
       <div className="flex items-center gap-2">
@@ -127,19 +170,69 @@ export function BrandingSection() {
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="logo-url">Logo URL</Label>
-        <Input
-          id="logo-url"
-          type="url"
-          value={logoUrl}
-          onChange={(e) => setLogoUrl(e.target.value)}
-          placeholder="https://yourcdn.com/agency-logo.svg"
-        />
+        <Label htmlFor="logo-file">Logo</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            id="logo-file"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleUploadFile(file);
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={uploadBusy !== null}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploadBusy === "upload" ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="mr-1 h-3.5 w-3.5" />
+            )}
+            {uploadBusy === "upload" ? "Uploading…" : "Upload logo"}
+          </Button>
+          {logoUrl.trim() && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={uploadBusy !== null}
+              onClick={handleRemoveLogo}
+              className="text-destructive hover:bg-destructive/5 hover:text-destructive"
+            >
+              {uploadBusy === "remove" ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
+              )}
+              Remove
+            </Button>
+          )}
+        </div>
         <p className="text-[11px] text-muted-foreground">
-          Public https URL pointing at your logo (SVG or PNG, transparent
-          background works best). Renders in the sidebar at 24px tall. Leave
-          blank to fall back to the LeadStack chevron mark.
+          PNG, JPG, WebP, or SVG — transparent background works best.
+          Renders in the sidebar at 24px tall. Leave empty to fall back to
+          the default mark.
         </p>
+        <details className="text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer select-none">
+            Or paste a URL instead
+          </summary>
+          <Input
+            id="logo-url"
+            type="url"
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            placeholder="https://yourcdn.com/agency-logo.svg"
+            className="mt-2"
+          />
+        </details>
       </div>
 
       <div className="space-y-1.5">
