@@ -27,8 +27,10 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
 /**
  * `messenger` + `instagram` are the BETA Meta channels — gated by the agency
  * `metaInboxEnabledByAgency` flag, so they only ever appear once that's on.
- * `email` is inbound-only in Phase 1 — no reply-from-thread composer yet, see
- * `src/app/api/webhooks/resend/inbound/route.ts`.
+ * `email` replies (in addition to inbound, see
+ * `src/app/api/webhooks/resend/inbound/route.ts`) require the sub-account's
+ * own verified sending domain — `sendTenantEmail` has no shared-sender
+ * fallback, see `src/lib/comms/resend.ts`.
  */
 export type ConversationChannel =
   | "sms"

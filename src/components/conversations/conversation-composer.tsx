@@ -17,17 +17,15 @@ const LABEL: Record<ConversationChannel, string> = {
   whatsapp: "WhatsApp",
   messenger: "Messenger",
   instagram: "Instagram",
-  // Never offered as a reply channel here (no send path yet) — see the
-  // ConversationChannel doc comment. Only present so this Record stays
-  // exhaustive.
   email: "Email",
 };
 
 /**
  * Channel-aware reply box. Posts to the EXISTING send routes
- * (/api/comms/sms/send, /api/comms/whatsapp/send) — the snapshot listener in
- * ConversationThread surfaces the new row. Defaults to the channel the contact
- * last used; the operator can switch when more than one is available.
+ * (/api/comms/sms/send, /api/comms/whatsapp/send, /api/comms/email/send) —
+ * the snapshot listener in ConversationThread surfaces the new row.
+ * Defaults to the channel the contact last used; the operator can switch
+ * when more than one is available.
  */
 export function ConversationComposer({
   contact,
@@ -81,13 +79,23 @@ export function ConversationComposer({
     ? false
     : channel === "sms"
       ? !!contact.smsOptedOut
-      : !!contact.whatsappOptedOut;
+      : channel === "whatsapp"
+        ? !!contact.whatsappOptedOut
+        : channel === "email"
+          ? !!contact.emailOptedOut
+          : false;
   const endpoint = isMeta
     ? "/api/comms/meta/send"
     : channel === "sms"
       ? "/api/comms/sms/send"
-      : "/api/comms/whatsapp/send";
-  const hasIdentity = isMeta ? !!contact.metaUserId : !!contact.phone;
+      : channel === "email"
+        ? "/api/comms/email/send"
+        : "/api/comms/whatsapp/send";
+  const hasIdentity = isMeta
+    ? !!contact.metaUserId
+    : channel === "email"
+      ? !!contact.email
+      : !!contact.phone;
   const disabled = optedOut || sending || !hasIdentity;
 
   async function handleSubmit(e: FormEvent) {
@@ -98,7 +106,9 @@ export function ConversationComposer({
       toast.error(
         isMeta
           ? "This contact hasn't messaged via Facebook/Instagram."
-          : "This contact has no phone number.",
+          : channel === "email"
+            ? "This contact has no email address."
+            : "This contact has no phone number.",
       );
       return;
     }
@@ -161,7 +171,11 @@ export function ConversationComposer({
           optedOut
             ? `Contact opted out of ${LABEL[channel]}`
             : `Reply via ${LABEL[channel]} to ${
-                (isMeta ? contact.name : contact.phone) || "this contact"
+                (isMeta
+                  ? contact.name
+                  : channel === "email"
+                    ? contact.email
+                    : contact.phone) || "this contact"
               }…`
         }
         rows={2}

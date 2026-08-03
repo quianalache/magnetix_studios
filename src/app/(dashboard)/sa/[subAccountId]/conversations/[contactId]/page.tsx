@@ -85,6 +85,18 @@ export default function ConversationDetailPage() {
 
   const availableChannels: ConversationChannel[] = [];
   if (subAccount?.twilioConfig?.enabled) availableChannels.push("sms");
+  // Email replies require the sub-account's OWN verified sending domain
+  // (sendTenantEmail has no shared-sender fallback — see resend.ts) AND a
+  // known address for this contact. Available regardless of whether they've
+  // ever emailed in, unlike Meta below, since From/To addresses work either
+  // direction the same way SMS does.
+  if (
+    subAccount?.emailDomainEnabledByAgency === true &&
+    subAccount?.resendConfig?.status === "verified" &&
+    contact?.email
+  ) {
+    availableChannels.push("email");
+  }
   if (
     subAccount?.twilioConfig?.whatsappFromNumber &&
     subAccount?.whatsappEnabledByAgency === true

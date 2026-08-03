@@ -1,13 +1,25 @@
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { emailIsConfigured, sendTenantEmail, NoTenantDomainError } from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail, tenantFrom, NoTenantDomainError } from "@/lib/comms/resend";
 import { requireContactAccessible, requireUid } from "@/lib/comms/route-auth";
 import { recordSend } from "@/lib/comms/usage";
+import { upsertConversationForMessage } from "@/lib/server/conversations-service";
 import type { SubAccountDoc } from "@/types";
 
 type Body = { contactId?: string; subject?: string; body?: string };
 
+/**
+ * Send an email to a contact — used by two callers: the Contact-profile
+ * "Send email" dialog (always passes an explicit `subject`) and the
+ * Conversations reply composer (omits it, since a reply box has no subject
+ * field — this derives "Re: {last email's subject}" instead, same
+ * convention every mail client uses). Either way, this now writes to
+ * contacts/{id}/emailMessages and updates the conversation index, so the
+ * send shows up in the unified Conversations thread — it previously only
+ * logged an activity-feed row, so a manually-sent email was invisible in
+ * Conversations even though an inbound reply to it would show up fine.
+ */
 export async function POST(request: Request) {
   if (!emailIsConfigured()) {
     return NextResponse.json(
@@ -27,12 +39,12 @@ export async function POST(request: Request) {
   }
 
   const contactId = payload.contactId?.trim();
-  const subject = payload.subject?.trim();
+  const explicitSubject = payload.subject?.trim();
   const body = payload.body?.trim();
 
-  if (!contactId || !subject || !body) {
+  if (!contactId || !body) {
     return NextResponse.json(
-      { error: "contactId, subject, and body are required" },
+      { error: "contactId and body are required" },
       { status: 400 },
     );
   }
@@ -47,10 +59,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const subAccountSnap = await getAdminDb()
+  const db = getAdminDb();
+  const subAccountSnap = await db
     .doc(`subAccounts/${contact.subAccountId}`)
     .get();
   const subAccount = subAccountSnap.data() as SubAccountDoc | undefined;
+
+  let subject = explicitSubject;
+  if (!subject) {
+    const lastEmailSnap = await db
+      .collection("contacts")
+      .doc(contactId)
+      .collection("emailMessages")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    const lastSubject = lastEmailSnap.empty
+      ? null
+      : (lastEmailSnap.docs[0].data().subject as string | undefined);
+    subject = lastSubject
+      ? lastSubject.match(/^re:/i)
+        ? lastSubject
+        : `Re: ${lastSubject}`
+      : `Message from ${subAccount?.name ?? "us"}`;
+  }
 
   let messageId: string;
   try {
@@ -71,7 +103,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await getAdminDb()
+    await db
       .collection("contacts")
       .doc(contactId)
       .collection("activities")
@@ -85,6 +117,45 @@ export async function POST(request: Request) {
   } catch (err) {
     console.warn("[email/send] activity write failed", err);
   }
+
+  try {
+    await db
+      .collection("contacts")
+      .doc(contactId)
+      .collection("emailMessages")
+      .doc(messageId)
+      .set({
+        agencyId: contact.agencyId,
+        subAccountId: contact.subAccountId,
+        contactId,
+        direction: "outbound",
+        status: "sent",
+        body,
+        subject,
+        from: tenantFrom(subAccount) ?? "",
+        to: contact.email,
+        resendEmailId: messageId,
+        twilioMessageSid: null,
+        sentByUid: auth.uid,
+        error: null,
+        readAt: null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+  } catch (err) {
+    console.warn("[email/send] message-row write failed", err);
+  }
+
+  await upsertConversationForMessage({
+    contactId,
+    subAccountId: contact.subAccountId,
+    agencyId: contact.agencyId,
+    contactName: contact.name ?? "",
+    contactPhone: null,
+    channel: "email",
+    direction: "outbound",
+    body: `${subject}\n${body}`,
+    pauseBot: true,
+  });
 
   await recordSend(auth.uid, "email");
 
