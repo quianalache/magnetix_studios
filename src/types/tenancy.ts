@@ -349,6 +349,26 @@ export interface SubAccountDoc {
    */
   standaloneCoursesEnabledByAgency?: boolean;
   /**
+   * TEMPORARY compliance lockdown, not a normal feature gate — the inverse
+   * of every other `*EnabledByAgency` flag here. Course Offer / Standalone
+   * Course Stripe checkout currently has exactly one path and it ALWAYS
+   * charges through the platform's own shared Stripe account
+   * (STRIPE_SECRET_KEY), regardless of which sub-account's product is being
+   * bought — so a sub-account's course sale currently deposits into the
+   * AGENCY OWNER's Stripe account, not theirs. That's fine for the agency
+   * owner's own sub-account; it is NOT fine for anyone else's, and this
+   * flag blocks Stripe checkout entirely (falls back to an error rather
+   * than any silent misroute of funds) for any sub-account where it isn't
+   * explicitly `true`. Remove this flag once Stripe Connect ships and
+   * checkout routes through each sub-account's own connected account
+   * instead — at that point every sub-account can safely use Stripe and
+   * this gate becomes meaningless. Set directly in Firestore for the
+   * agency owner's own sub-account; no UI toggle — this should not be
+   * something an agency owner can casually flip on for someone else before
+   * Connect exists. Read `=== true`.
+   */
+  stripeCourseCheckoutEnabledByAgency?: boolean;
+  /**
    * Agency-controlled gate for Missed Call Text Back (MCTB). When `false` (or
    * undefined on legacy docs) the sub-account can't enable the feature — the
    * settings card shows a locked state and the config route 403s. When on, the

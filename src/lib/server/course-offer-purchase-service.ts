@@ -140,6 +140,17 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     throw new Error("This offer isn't for sale.");
   }
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  // TEMPORARY compliance lockdown — see stripeCourseCheckoutEnabledByAgency's
+  // doc comment in types/tenancy.ts. Stripe checkout has one shared platform
+  // account today, so it must not run for any sub-account that hasn't been
+  // explicitly allowlisted, until Stripe Connect ships per-sub-account
+  // accounts. PayPal (below, requestCourseOfferPaypalServerSide) is
+  // unaffected — it already pays out to each sub-account's own PayPal.
+  if (subSnap.data()?.stripeCourseCheckoutEnabledByAgency !== true) {
+    throw new Error(
+      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
+    );
+  }
   const agencyId = (subSnap.data()?.agencyId as string) ?? "";
   const amountCents = offer.priceCents;
   const currency = offer.currency ?? "USD";

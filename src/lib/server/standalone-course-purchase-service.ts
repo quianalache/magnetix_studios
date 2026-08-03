@@ -123,6 +123,14 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     throw new Error("This course isn't for sale.");
   }
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  // TEMPORARY compliance lockdown — see stripeCourseCheckoutEnabledByAgency's
+  // doc comment in types/tenancy.ts. Same gate as Course Offers' Stripe
+  // checkout, same reason: one shared platform Stripe account today.
+  if (subSnap.data()?.stripeCourseCheckoutEnabledByAgency !== true) {
+    throw new Error(
+      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
+    );
+  }
   const agencyId = (subSnap.data()?.agencyId as string) ?? "";
   const amountCents = course.priceCents;
   const currency = course.currency ?? "USD";
