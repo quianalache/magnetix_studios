@@ -372,9 +372,11 @@ async function handleSubmit(
     createdAt: FieldValue.serverTimestamp(),
   });
 
-  // Bump form submission counter.
+  // Bump form submission counters — unreadSubmissionCount resets to 0 when
+  // an operator opens the Submissions tab (markFormSubmissionsRead).
   await formRef.update({
     submissionCount: FieldValue.increment(1),
+    unreadSubmissionCount: FieldValue.increment(1),
     updatedAt: FieldValue.serverTimestamp(),
   });
 

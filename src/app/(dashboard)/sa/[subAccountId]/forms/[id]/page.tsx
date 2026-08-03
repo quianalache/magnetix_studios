@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
+  markFormSubmissionsRead,
   subscribeToForm,
   subscribeToFormSubmissions,
   updateForm,
@@ -292,15 +293,28 @@ function newField(type: FormFieldType = "text"): FormField {
 export default function FormBuilderPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { saPath, subAccount } = useSubAccount();
   const [form, setForm] = useState<LeadForm | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copiedTag, setCopiedTag] = useState("");
-  const [tab, setTab] = useState<"build" | "submissions">("build");
+  const [tab, setTab] = useState<"build" | "submissions">(
+    searchParams.get("tab") === "submissions" ? "submissions" : "build",
+  );
   const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(true);
+
+  // Clear the unread badge whenever the Submissions tab is actually viewed
+  // (covers both clicking the in-page tab and landing here via ?tab=
+  // submissions from the Forms list). Best-effort — a non-admin member
+  // can view submissions but the form-doc write rule is admin-only, same
+  // restriction as every other form edit, so this silently no-ops for them.
+  useEffect(() => {
+    if (tab !== "submissions" || !id) return;
+    void markFormSubmissionsRead(id).catch(() => {});
+  }, [tab, id]);
 
   useEffect(() => {
     if (authLoading || !user || !id) return;

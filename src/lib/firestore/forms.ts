@@ -98,6 +98,13 @@ export function subscribeToFormSubmissions(
   );
 }
 
+/** Clears the unread badge — call when the Submissions tab is opened. */
+export async function markFormSubmissionsRead(formId: string): Promise<void> {
+  await updateDoc(doc(getFirebaseDb(), FORMS, formId), {
+    unreadSubmissionCount: 0,
+  });
+}
+
 export async function createForm(
   scope: TenantScope,
   createdByUid: string,

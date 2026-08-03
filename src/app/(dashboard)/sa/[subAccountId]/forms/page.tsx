@@ -11,6 +11,7 @@ import {
   Copy,
   Trash2,
   MessageSquare,
+  Inbox,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -149,6 +150,7 @@ export default function FormsPage() {
               key={form.id}
               form={form}
               editHref={saPath(`/forms/${form.id}`)}
+              submissionsHref={saPath(`/forms/${form.id}?tab=submissions`)}
               onCopy={() => copyLink(form)}
               onDelete={() => handleDelete(form)}
             />
@@ -200,15 +202,18 @@ export default function FormsPage() {
 function FormCard({
   form,
   editHref,
+  submissionsHref,
   onCopy,
   onDelete,
 }: {
   form: LeadForm;
   editHref: string;
+  submissionsHref: string;
   onCopy: () => void;
   onDelete: () => void;
 }) {
   const created = toDate(form.createdAt);
+  const unread = form.unreadSubmissionCount ?? 0;
   return (
     <div className="group flex flex-col rounded-2xl border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -244,6 +249,20 @@ function FormCard({
         <Button size="sm" render={<Link href={editHref} />}>
           <Pencil className="mr-1 h-3.5 w-3.5" />
           Edit
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="relative"
+          render={<Link href={submissionsHref} />}
+        >
+          <Inbox className="mr-1 h-3.5 w-3.5" />
+          Submissions
+          {unread > 0 && (
+            <span className="ml-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white">
+              {unread > 99 ? "99+" : unread}
+            </span>
+          )}
         </Button>
         <Button size="sm" variant="outline" onClick={onCopy}>
           <Copy className="mr-1 h-3.5 w-3.5" />

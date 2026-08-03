@@ -87,6 +87,8 @@ export interface LeadForm {
   createdByUid: string;
   enabled: boolean;
   submissionCount: number;
+  /** Submissions since the Submissions tab was last opened. Undefined on forms created before this shipped — treated as 0. */
+  unreadSubmissionCount?: number;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
