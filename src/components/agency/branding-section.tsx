@@ -10,7 +10,10 @@ import { Label } from "@/components/ui/label";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { renderLogo } from "@/lib/brand/render-logo-client";
 
-const URL_RE = /^https?:\/\/.+/i;
+// Accepts a full https:// URL (manually pasted) OR our own served path from
+// an in-app upload (POST /api/agency/logo writes a relative
+// "/api/agency/logo/image?v=..." — not an absolute URL).
+const URL_RE = /^(https?:\/\/.+|\/.+)$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DOMAIN_RE = /^[a-z0-9.-]+\.[a-z]{2,}$/i;
 

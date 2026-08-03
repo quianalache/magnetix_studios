@@ -49,7 +49,7 @@ interface AgencyData {
  * SSR matches the first client paint.
  */
 export function useAgency(): AgencySummary {
-  const { agencyId } = useAuth();
+  const { agencyId, loading: authLoading } = useAuth();
   const [data, setData] = useState<AgencyData>({
     name: "LeadStack",
     logoUrl: null,
@@ -59,13 +59,24 @@ export function useAgency(): AgencySummary {
     agencyAssistantEnabled: false,
     agencyAssistantModel: "opus",
   });
-  const [loading, setLoading] = useState<boolean>(!!agencyId);
+  // Starts true and stays true until auth resolves — `agencyId` reads
+  // `null` both before auth has resolved AND when there's genuinely no
+  // agency, and those two cases must not be conflated. A consumer that
+  // snapshots this into local state once loading flips false (the
+  // Branding settings form) was doing exactly that: agencyId was still
+  // null on the very first render because auth hadn't resolved yet, the
+  // old `!!agencyId` initializer read that as "done loading," and the
+  // form locked itself onto blank defaults before the real Firestore
+  // data ever arrived a moment later.
+  const [snapLoading, setSnapLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!agencyId) {
-      setLoading(false);
+      setSnapLoading(false);
       return;
     }
+    setSnapLoading(true);
     const ref = doc(getFirebaseDb(), `agencies/${agencyId}`);
     const unsub = onSnapshot(
       ref,
@@ -83,12 +94,12 @@ export function useAgency(): AgencySummary {
               d.agencyAssistantModel === "sonnet" ? "sonnet" : "opus",
           });
         }
-        setLoading(false);
+        setSnapLoading(false);
       },
-      () => setLoading(false),
+      () => setSnapLoading(false),
     );
     return () => unsub();
-  }, [agencyId]);
+  }, [agencyId, authLoading]);
 
-  return { ...data, loading };
+  return { ...data, loading: authLoading || snapLoading };
 }
