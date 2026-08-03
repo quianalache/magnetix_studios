@@ -185,6 +185,15 @@ export interface CourseOfferPurchase {
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;
   paidAt: Timestamp | FieldValue | null;
+  /** From Stripe's collected billing address (`session.customer_details.address`)
+   *  at the moment this purchase completed — real, buyer-confirmed data,
+   *  not an IP-geolocation guess like the Contact record's city/country.
+   *  Null for PayPal purchases (no Stripe session) or purchases made before
+   *  billing-address collection was turned on. Powers the recent-purchases
+   *  popup's location line; falls back to the Contact's fields when absent. */
+  billingCity: string | null;
+  billingState: string | null;
+  billingCountry: string | null;
   /** UTM/referrer data captured from the offer's checkout page at landing
    *  time — see `normalizeAttribution` in `src/lib/attribution.ts`. Not
    *  threaded into one-click-upsell purchases (the buyer never landed on

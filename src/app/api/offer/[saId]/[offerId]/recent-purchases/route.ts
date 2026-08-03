@@ -89,9 +89,16 @@ export async function GET(
     const fullName = member?.displayName || contact?.name || "";
     const firstName = fullName.trim().split(/\s+/)[0] || "Someone";
 
-    const city = contact?.city?.trim() || "";
-    const country = contact?.country?.trim() || "";
-    const location = [city, country].filter(Boolean).join(", ") || null;
+    // Prefer Stripe's collected billing address (real, buyer-confirmed at
+    // purchase time, and the only source with state-level data) over the
+    // Contact's IP-geolocated city/country. Falls back for PayPal purchases
+    // and anything bought before billing-address collection was turned on.
+    const city = purchase.billingCity?.trim() || contact?.city?.trim() || "";
+    const state = purchase.billingState?.trim() || "";
+    const country =
+      purchase.billingCountry?.trim() || contact?.country?.trim() || "";
+    const location =
+      [city, state || country].filter(Boolean).join(", ") || null;
 
     const paidAtMs =
       purchase.paidAt && typeof (purchase.paidAt as { toMillis?: () => number }).toMillis === "function"

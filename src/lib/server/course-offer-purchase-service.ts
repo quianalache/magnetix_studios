@@ -158,6 +158,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
           mode: "subscription",
           ui_mode: "embedded",
           customer_email: opts.memberEmail,
+          billing_address_collection: "required",
           line_items: [
             {
               price_data: {
@@ -182,6 +183,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
           ui_mode: "embedded",
           customer_email: opts.memberEmail,
           customer_creation: "always",
+          billing_address_collection: "required",
           payment_intent_data: {
             metadata,
             setup_future_usage: "off_session",
@@ -225,6 +227,9 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     requestedAt: FieldValue.serverTimestamp(),
     paidAt: null,
     attribution: opts.attribution ?? null,
+    billingCity: null,
+    billingState: null,
+    billingCountry: null,
   });
 
   return { clientSecret: session.client_secret };
@@ -374,6 +379,9 @@ export async function grantCourseOfferAccessServerSide(opts: {
   grantedByUid: string | null;
   stripePaymentIntentId?: string | null;
   stripeCustomerId?: string | null;
+  billingCity?: string | null;
+  billingState?: string | null;
+  billingCountry?: string | null;
 }): Promise<{ ok: boolean }> {
   const ref = purchasesCol(opts.subAccountId, opts.offerId).doc(
     opts.purchaseId,
@@ -398,6 +406,11 @@ export async function grantCourseOfferAccessServerSide(opts: {
       : {}),
     ...(opts.stripeCustomerId !== undefined
       ? { stripeCustomerId: opts.stripeCustomerId }
+      : {}),
+    ...(opts.billingCity !== undefined ? { billingCity: opts.billingCity } : {}),
+    ...(opts.billingState !== undefined ? { billingState: opts.billingState } : {}),
+    ...(opts.billingCountry !== undefined
+      ? { billingCountry: opts.billingCountry }
       : {}),
   });
 
@@ -488,6 +501,7 @@ export async function handleCourseOfferCheckoutCompleted(
   if (subscriptionId) {
     await snap.docs[0].ref.update({ stripeSubscriptionId: subscriptionId });
   }
+  const address = session.customer_details?.address ?? null;
   await grantCourseOfferAccessServerSide({
     subAccountId,
     offerId,
@@ -497,6 +511,9 @@ export async function handleCourseOfferCheckoutCompleted(
       typeof session.payment_intent === "string" ? session.payment_intent : null,
     stripeCustomerId:
       typeof session.customer === "string" ? session.customer : null,
+    billingCity: address?.city ?? null,
+    billingState: address?.state ?? null,
+    billingCountry: address?.country ?? null,
   });
 }
 
