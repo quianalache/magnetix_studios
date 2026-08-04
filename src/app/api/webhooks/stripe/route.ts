@@ -22,16 +22,32 @@ export async function POST(request: Request) {
   }
 
   const stripe = getStripeServer();
-  let event: Stripe.Event;
 
-  try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!,
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+  // Two separate Stripe event destinations point at this endpoint — one
+  // scoped "Your account" (platform-level: our own Pro/Founders
+  // subscriptions, disputes on our own charges) and one scoped "Connected
+  // accounts" (course/offer purchases that ran as a direct charge on a
+  // sub-account's own connected Stripe account, see stripe/connect.ts).
+  // Stripe signs each destination with its own secret, so we try both.
+  const secrets = [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
+  ].filter((s): s is string => !!s);
+
+  let event: Stripe.Event | null = null;
+  let lastError: unknown = null;
+  for (const secret of secrets) {
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, secret);
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!event) {
+    const message =
+      lastError instanceof Error ? lastError.message : "Unknown error";
     console.error(`Webhook signature verification failed: ${message}`);
     return NextResponse.json(
       { error: `Webhook Error: ${message}` },
