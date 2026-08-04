@@ -89,6 +89,7 @@ export default async function PublicFormPage({
           )}
         </div>
       </FormFrame>
+      {appearance.customCss.trim() && <style>{appearance.customCss}</style>}
     </>
   );
 }

@@ -163,6 +163,15 @@ export interface FormAppearance {
    * when the host page already has its own heading above the iframe.
    */
   hideTitle: boolean;
+  /**
+   * Raw CSS injected into a `<style>` tag on the hosted/embed page, after
+   * every built-in style — lets an operator override anything the
+   * theme/accent controls don't cover. Saved-settings only, never
+   * overridable via URL param (unlike theme/accent/hideChrome/hideTitle)
+   * to keep arbitrary-CSS injection scoped to the account owner's own
+   * saved form, not to whoever constructs the embed URL.
+   */
+  customCss: string;
 }
 
 export interface FormSettings {
@@ -345,5 +354,6 @@ export function defaultFormAppearance(): FormAppearance {
     accent: "#7c3aed",
     hideChrome: false,
     hideTitle: false,
+    customCss: "",
   };
 }

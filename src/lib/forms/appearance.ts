@@ -41,6 +41,9 @@ export function resolveAppearance(
     hideChrome: embed || fromSettings.hideChrome,
     hideTitle:
       titleParam === "0" ? true : titleParam === "1" ? false : fromSettings.hideTitle,
+    // Saved-settings only — see the FormAppearance.customCss doc comment
+    // for why this deliberately has no URL-param override.
+    customCss: fromSettings.customCss ?? "",
     embed,
   };
 }

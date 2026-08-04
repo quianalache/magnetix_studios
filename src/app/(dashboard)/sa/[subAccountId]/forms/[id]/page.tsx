@@ -232,6 +232,56 @@ ${fieldsHtml}
 </script>`;
 }
 
+/**
+ * Popup / slide-in embed — a floating trigger button that opens the hosted
+ * form (embedded via iframe, same as the plain iframe embed snippet) in an
+ * overlay. Popup centers with a dimmed backdrop; slide-in anchors bottom-
+ * right with no backdrop, so it doesn't block the rest of the host page.
+ * Self-contained vanilla JS/CSS, same "paste before </body>" pattern as
+ * the raw HTML snippet — no build step, no dependency on this app's CSS.
+ */
+function buildFloatingEmbedSnippet(
+  form: LeadForm,
+  origin: string,
+  mode: "popup" | "slideIn",
+): string {
+  const uid = form.id;
+  const a = form.settings.appearance ?? defaultFormAppearance();
+  const embedUrl = `${origin}/f/${form.id}?embed=1&theme=${a.theme}&accent=${encodeURIComponent(a.accent)}`;
+  const triggerLabel = form.name || "Contact us";
+
+  const overlayStyle =
+    mode === "popup"
+      ? "background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:16px"
+      : "background:transparent;align-items:flex-end;justify-content:flex-end;padding:16px;pointer-events:none";
+  const panelStyle =
+    mode === "popup"
+      ? "position:relative;width:100%;max-width:480px;height:min(640px,90vh);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)"
+      : "position:relative;width:360px;max-width:calc(100vw - 32px);height:520px;max-height:80vh;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);pointer-events:auto";
+
+  return `<!-- LeadStack ${mode === "popup" ? "popup" : "slide-in"} form embed -->
+<button id="ls-float-trigger-${uid}" type="button" style="position:fixed;bottom:24px;right:24px;z-index:999998;padding:14px 22px;border:none;border-radius:999px;background:${a.accent};color:#fff;font:600 14px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)">${triggerLabel}</button>
+<div id="ls-float-overlay-${uid}" style="display:none;position:fixed;inset:0;z-index:999999;${overlayStyle}">
+  <div style="${panelStyle}">
+    <button id="ls-float-close-${uid}" type="button" aria-label="Close" style="position:absolute;top:6px;right:10px;background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#666;z-index:1">&times;</button>
+    <iframe src="${embedUrl}" style="width:100%;height:100%;border:0;background:transparent" title="${form.name.replace(/"/g, "&quot;")}"></iframe>
+  </div>
+</div>
+<script>
+(function () {
+  var trigger = document.getElementById("ls-float-trigger-${uid}");
+  var overlay = document.getElementById("ls-float-overlay-${uid}");
+  var close = document.getElementById("ls-float-close-${uid}");
+  if (!trigger || !overlay || !close) return;
+  function open() { overlay.style.display = "flex"; trigger.style.display = "none"; }
+  function shut() { overlay.style.display = "none"; trigger.style.display = "block"; }
+  trigger.addEventListener("click", open);
+  close.addEventListener("click", shut);
+  ${mode === "popup" ? 'overlay.addEventListener("click", function (e) { if (e.target === overlay) shut(); });' : ""}
+})();
+</script>`;
+}
+
 const FIELD_TYPES: {
   value: FormFieldType;
   label: string;
@@ -553,13 +603,16 @@ export default function FormBuilderPage() {
     return `${origin}/f/${form!.id}${qs ? `?${qs}` : ""}`;
   }
 
-  function copyTag(kind: "link" | "script" | "html") {
+  function copyTag(kind: "link" | "script" | "html" | "popup" | "slideIn") {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
     const text =
       kind === "link"
         ? buildPublicUrl(false)
         : kind === "script"
           ? `<iframe src="${buildPublicUrl(true)}" width="100%" height="600" style="border:0;background:transparent" allowtransparency="true"></iframe>`
-          : buildHtmlSnippet(form!, typeof window !== "undefined" ? window.location.origin : "");
+          : kind === "html"
+            ? buildHtmlSnippet(form!, origin)
+            : buildFloatingEmbedSnippet(form!, origin, kind);
     navigator.clipboard.writeText(text);
     setCopiedTag(kind);
     toast.success(
@@ -567,7 +620,11 @@ export default function FormBuilderPage() {
         ? "Link copied"
         : kind === "script"
           ? "Embed snippet copied"
-          : "HTML snippet copied",
+          : kind === "html"
+            ? "HTML snippet copied"
+            : kind === "popup"
+              ? "Popup embed copied"
+              : "Slide-in embed copied",
     );
     setTimeout(() => setCopiedTag(""), 2000);
   }
@@ -1269,7 +1326,7 @@ export default function FormBuilderPage() {
           <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
             <h2 className="mb-1 text-sm font-semibold">Share</h2>
             <p className="mb-3 text-[11px] text-muted-foreground">
-              Three ways to collect submissions. All flow to the same contact +
+              Five ways to collect submissions. All flow to the same contact +
               automation pipeline.
             </p>
             <div className="space-y-2 text-sm">
@@ -1294,6 +1351,24 @@ export default function FormBuilderPage() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => copyTag("popup")}
+                className="w-full justify-start"
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" />
+                {copiedTag === "popup" ? "Popup copied" : "Copy popup embed"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyTag("slideIn")}
+                className="w-full justify-start"
+              >
+                <Copy className="mr-1 h-3.5 w-3.5" />
+                {copiedTag === "slideIn" ? "Slide-in copied" : "Copy slide-in embed"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => copyTag("html")}
                 className="w-full justify-start"
               >
@@ -1302,6 +1377,10 @@ export default function FormBuilderPage() {
               </Button>
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+              <strong className="text-foreground">Popup / slide-in</strong> = a
+              floating button that opens the form in an overlay — popup centers
+              with a dimmed backdrop, slide-in anchors bottom-right without
+              blocking the page.{" "}
               <strong className="text-foreground">HTML snippet</strong> = an
               unstyled form + tiny script your developer drops into any site.
               Style it with your own CSS; submissions still create contacts and
@@ -1445,6 +1524,24 @@ function EmbedAppearanceSection({
             Hide form title (use when the host page already has a heading)
           </span>
         </label>
+
+        <div className="space-y-1.5 pt-1">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Custom CSS (advanced)
+          </Label>
+          <Textarea
+            rows={4}
+            value={appearance.customCss}
+            onChange={(e) => onChange({ customCss: e.target.value })}
+            className="min-h-0 font-mono text-xs"
+            placeholder={".ls-form { }\nbutton[type=submit] { border-radius: 999px; }"}
+          />
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Injected after every other style on the hosted/iframe form.
+            Doesn&apos;t apply to the raw HTML export snippet — style that
+            one yourself, it&apos;s unstyled by design.
+          </p>
+        </div>
 
         <div className="rounded-lg border border-dashed bg-muted/30 p-3">
           <p className="text-[11px] text-muted-foreground">Preview</p>
