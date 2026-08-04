@@ -38,8 +38,40 @@ export function PublicForm({ form }: PublicFormProps) {
     attributionRef.current = readAttributionFromBrowser();
   }, []);
 
+  // Hidden fields auto-capture a URL query param on mount — invisible to
+  // the visitor, submitted like any other field.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const captured: Record<string, string> = {};
+    for (const f of form.fields) {
+      if (f.type === "hidden" && f.queryParam) {
+        captured[f.id] = params.get(f.queryParam) ?? "";
+      }
+    }
+    if (Object.keys(captured).length > 0) {
+      setValues((prev) => ({ ...prev, ...captured }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function setValue(id: string, v: string) {
     setValues((prev) => ({ ...prev, [id]: v }));
+  }
+
+  // Checkboxes store their selection as one comma-joined string (same
+  // Record<string, string> shape every other field uses) rather than an
+  // array — split/rejoin on toggle.
+  function toggleCheckboxOption(id: string, option: string, checked: boolean) {
+    setValues((prev) => {
+      const current = (prev[id] ?? "")
+        .split(", ")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const next = checked
+        ? [...current, option]
+        : current.filter((o) => o !== option);
+      return { ...prev, [id]: next.join(", ") };
+    });
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -47,7 +79,7 @@ export function PublicForm({ form }: PublicFormProps) {
     setApiError(null);
     const next: Record<string, string> = {};
     for (const f of form.fields) {
-      if (f.type === "text_block") continue; // Display-only, never answerable.
+      if (f.type === "text_block" || f.type === "hidden") continue; // Never answerable by the visitor.
       if (f.type === "sms_consent") {
         // Consent is opt-in: a value of "true" means checked. Only blocks
         // submission when the operator marked the consent field required.
@@ -127,7 +159,9 @@ export function PublicForm({ form }: PublicFormProps) {
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      {form.fields.map((f) =>
+      {form.fields
+        .filter((f) => f.type !== "hidden")
+        .map((f) =>
         f.type === "text_block" ? (
           <div key={f.id} className="space-y-1">
             {f.label.trim() && (
@@ -173,6 +207,43 @@ export function PublicForm({ form }: PublicFormProps) {
               rows={4}
               aria-invalid={!!errors[f.id]}
             />
+          ) : f.type === "radio" ? (
+            <div className="space-y-1.5">
+              {f.options.map((opt) => (
+                <label
+                  key={opt}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <input
+                    type="radio"
+                    name={f.id}
+                    checked={values[f.id] === opt}
+                    onChange={() => setValue(f.id, opt)}
+                    className="h-4 w-4 shrink-0 cursor-pointer"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
+          ) : f.type === "checkboxes" ? (
+            <div className="space-y-1.5">
+              {f.options.map((opt) => (
+                <label
+                  key={opt}
+                  className="flex cursor-pointer items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(values[f.id] ?? "").split(", ").includes(opt)}
+                    onChange={(e) =>
+                      toggleCheckboxOption(f.id, opt, e.target.checked)
+                    }
+                    className="h-4 w-4 shrink-0 cursor-pointer"
+                  />
+                  {opt}
+                </label>
+              ))}
+            </div>
           ) : f.type === "select" ? (
             <select
               id={f.id}

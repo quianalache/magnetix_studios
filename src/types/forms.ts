@@ -24,7 +24,20 @@ export type FormFieldType =
   // through your question, then paste the link below"). Never required,
   // never mapped to a Contact field, and excluded from the submission's
   // `answers` snapshot. See `content` below.
-  | "text_block";
+  | "text_block"
+  // Single-choice, same `options` list as `select` but rendered as a radio
+  // group instead of a dropdown — GHL calls this "Multiple choice".
+  | "radio"
+  // Multi-choice — same `options` list, rendered as a checkbox group. The
+  // selected options are stored as ONE comma-joined string in `values[id]`
+  // (e.g. "Option A, Option C"), same shape every other field uses, rather
+  // than restructuring the values model to support arrays.
+  | "checkboxes"
+  // Invisible to the visitor — auto-populated from a URL query parameter
+  // (e.g. "utm_source") when the form page loads, then submitted like any
+  // other field. Never required (there's nothing for the visitor to fill
+  // in), never rendered. See `queryParam` below.
+  | "hidden";
 
 export interface FormField {
   id: string;
@@ -48,6 +61,11 @@ export interface FormField {
    * frequency, "message & data rates may apply", and STOP/HELP instructions.
    */
   consentText?: string;
+  /**
+   * Only used by the `hidden` field type — the URL query parameter name
+   * (e.g. "utm_source") this field auto-captures from on page load.
+   */
+  queryParam?: string;
 }
 
 /**

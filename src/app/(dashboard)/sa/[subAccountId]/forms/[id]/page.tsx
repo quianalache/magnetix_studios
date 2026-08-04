@@ -9,9 +9,12 @@ import {
   ArrowLeft,
   AtSign,
   Building2,
+  CheckSquare,
   ChevronDown,
   ChevronUp,
+  CircleDot,
   Copy,
+  EyeOff,
   ExternalLink,
   Hash,
   Link2,
@@ -108,6 +111,30 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
           .filter(Boolean)
           .join("\n");
       }
+      if (f.type === "radio" || f.type === "checkboxes") {
+        const inputType = f.type === "radio" ? "radio" : "checkbox";
+        // Every option shares one name (the field id) — native radio-group
+        // behavior submits one value; the submit script below accumulates
+        // repeated checkbox names into one comma-joined string.
+        const opts = (f.options ?? [])
+          .map((o, idx) => {
+            const optId = `${id}-${idx}`;
+            return [
+              `  <label for="${optId}">`,
+              `    <input type="${inputType}" id="${optId}" name="${escAttr(f.id)}" value="${escAttr(o)}" />`,
+              `    <span>${escText(o)}</span>`,
+              `  </label>`,
+            ].join("\n");
+          })
+          .join("\n");
+        return [`  <p>${labelText}</p>`, opts].filter(Boolean).join("\n");
+      }
+      if (f.type === "hidden") {
+        // No label, no visible input. data-leadstack-query-param tells the
+        // submit script below which URL query param to read into .value
+        // before the form is read into FormData.
+        return `  <input type="hidden" id="${id}" name="${escAttr(f.id)}" data-leadstack-query-param="${escAttr(f.queryParam ?? "")}" />`;
+      }
       if (f.type === "sms_consent") {
         // Checkbox with value="true" so FormData yields "true" when ticked
         // and omits it when not — matching the submit route's `=== "true"`.
@@ -155,10 +182,17 @@ ${fieldsHtml}
   var form = document.querySelector('[data-leadstack-form="${form.id}"]');
   if (!form) return;
   var status = form.querySelector("[data-leadstack-status]");
+  var params = new URLSearchParams(window.location.search);
+  form.querySelectorAll("[data-leadstack-query-param]").forEach(function (el) {
+    var key = el.getAttribute("data-leadstack-query-param");
+    if (key) { el.value = params.get(key) || ""; }
+  });
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var values = {};
-    new FormData(form).forEach(function (v, k) { values[k] = String(v); });
+    new FormData(form).forEach(function (v, k) {
+      values[k] = values.hasOwnProperty(k) ? values[k] + ", " + String(v) : String(v);
+    });
     if (status) { status.hidden = false; status.textContent = "Sending…"; }
     fetch(${JSON.stringify(apiUrl)}, {
       method: "POST",
@@ -252,6 +286,26 @@ const FIELD_TYPES: {
     },
   },
   {
+    value: "radio",
+    label: "Multiple choice",
+    icon: CircleDot,
+    tone: {
+      border: "border-fuchsia-400/30 hover:border-fuchsia-400/60",
+      iconBg: "bg-fuchsia-500/10",
+      iconText: "text-fuchsia-600 dark:text-fuchsia-300",
+    },
+  },
+  {
+    value: "checkboxes",
+    label: "Checkboxes",
+    icon: CheckSquare,
+    tone: {
+      border: "border-rose-400/30 hover:border-rose-400/60",
+      iconBg: "bg-rose-500/10",
+      iconText: "text-rose-600 dark:text-rose-300",
+    },
+  },
+  {
     value: "sms_consent",
     label: "SMS consent",
     icon: ShieldCheck,
@@ -281,6 +335,16 @@ const FIELD_TYPES: {
       iconText: "text-neutral-600 dark:text-neutral-300",
     },
   },
+  {
+    value: "hidden",
+    label: "Hidden (UTM capture)",
+    icon: EyeOff,
+    tone: {
+      border: "border-zinc-400/30 hover:border-zinc-400/60",
+      iconBg: "bg-zinc-500/10",
+      iconText: "text-zinc-600 dark:text-zinc-300",
+    },
+  },
 ];
 
 function typeMeta(value: FormFieldType) {
@@ -306,9 +370,12 @@ const DEFAULTS_BY_TYPE: Record<
   company: { label: "Company", placeholder: "Acme Inc.", mapsTo: "company" },
   textarea: { label: "Message", placeholder: "", mapsTo: "notes" },
   select: { label: "Dropdown", placeholder: "", mapsTo: null },
+  radio: { label: "Multiple choice", placeholder: "", mapsTo: null },
+  checkboxes: { label: "Checkboxes", placeholder: "", mapsTo: null },
   sms_consent: { label: "SMS consent", placeholder: "", mapsTo: null },
   url: { label: "Link", placeholder: "https://loom.com/share/…", mapsTo: null },
   text_block: { label: "", placeholder: "", mapsTo: null },
+  hidden: { label: "UTM source", placeholder: "", mapsTo: null },
 };
 
 function newField(type: FormFieldType = "text"): FormField {
@@ -320,6 +387,7 @@ function newField(type: FormFieldType = "text"): FormField {
     ...(type === "text_block"
       ? { content: "Add your instructions here…" }
       : {}),
+    ...(type === "hidden" ? { queryParam: "utm_source" } : {}),
     id: `f_${Math.random().toString(36).slice(2, 9)}`,
     type,
     label: d.label,
@@ -652,7 +720,7 @@ export default function FormBuilderPage() {
                       }
                       className="h-7 flex-1 border-none bg-transparent px-1.5 text-sm font-medium shadow-none focus-visible:ring-0"
                     />
-                    {f.type !== "text_block" && (
+                    {f.type !== "text_block" && f.type !== "hidden" && (
                       <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted">
                         <Checkbox
                           checked={f.required}
@@ -676,12 +744,14 @@ export default function FormBuilderPage() {
 
                   {/* Compact meta strip — mapsTo + placeholder are irrelevant
                       for the consent checkbox, so it gets its own editor
-                      below instead. The text block only needs the type
-                      selector (no mapsTo/placeholder — it has no value). */}
+                      below instead. The text block and hidden field only
+                      need the type selector (no mapsTo/placeholder — a
+                      hidden field's value comes from the query param, not
+                      typed input). */}
                   {f.type !== "sms_consent" && (
                   <div
                     className={`grid grid-cols-1 gap-1.5 border-t bg-muted/20 px-2 py-1.5 text-xs ${
-                      f.type === "text_block"
+                      f.type === "text_block" || f.type === "hidden"
                         ? "sm:grid-cols-[110px_1fr]"
                         : "sm:grid-cols-[110px_180px_1fr]"
                     }`}
@@ -706,7 +776,7 @@ export default function FormBuilderPage() {
                         </option>
                       ))}
                     </select>
-                    {f.type !== "text_block" && (
+                    {f.type !== "text_block" && f.type !== "hidden" && (
                       <>
                         <select
                           value={f.mapsTo ?? ""}
@@ -786,7 +856,32 @@ export default function FormBuilderPage() {
                     </div>
                   )}
 
-                  {f.type === "select" && (
+                  {f.type === "hidden" && (
+                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
+                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <EyeOff className="h-3 w-3" /> URL query parameter to capture
+                      </Label>
+                      <Input
+                        value={f.queryParam ?? ""}
+                        onChange={(e) =>
+                          updateField(f.id, { queryParam: e.target.value.trim() })
+                        }
+                        placeholder="utm_source"
+                        className="h-7 px-2 text-[11px]"
+                      />
+                      <p className="text-[10px] leading-snug text-muted-foreground">
+                        Invisible to visitors. When someone lands on this form
+                        with <code>?{f.queryParam || "utm_source"}=…</code> in
+                        the URL, that value is captured and submitted
+                        automatically — useful for tracking traffic source
+                        without asking the visitor anything.
+                      </p>
+                    </div>
+                  )}
+
+                  {(f.type === "select" ||
+                    f.type === "radio" ||
+                    f.type === "checkboxes") && (
                     <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
                       <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                         <Hash className="h-3 w-3" /> Options · one per line
