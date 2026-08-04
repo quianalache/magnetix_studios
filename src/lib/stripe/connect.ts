@@ -1,7 +1,10 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import type Stripe from "stripe";
 import { getStripeServer } from "@/lib/stripe/server";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * Stripe Connect (Standard, OAuth) — lets each sub-account link their OWN
@@ -124,6 +127,39 @@ export async function exchangeStripeConnectCode(
     chargesEnabled: account.charges_enabled === true,
     payoutsEnabled: account.payouts_enabled === true,
   };
+}
+
+/**
+ * `account.updated` webhook — the OAuth callback only snapshots
+ * chargesEnabled/payoutsEnabled once, at the moment a sub-account finishes
+ * connecting. Stripe onboarding often isn't fully verified yet at that
+ * instant (see the "still needs a bit more info" banner in
+ * SubAccountStripeSection), so without this the stored flags go stale
+ * forever even after the sub-account owner finishes Stripe's requirements.
+ * Fires on the "Connected accounts" event destination (see webhooks/stripe
+ * /route.ts's dual-secret handling) — every capability change on a
+ * connected account re-syncs here.
+ */
+export async function handleStripeConnectAccountUpdated(
+  account: Stripe.Account,
+): Promise<void> {
+  const snap = await getAdminDb()
+    .collection("subAccounts")
+    .where("stripeConnect.accountId", "==", account.id)
+    .limit(1)
+    .get();
+  if (snap.empty) return;
+
+  await snap.docs[0].ref.set(
+    {
+      stripeConnect: {
+        chargesEnabled: account.charges_enabled === true,
+        payoutsEnabled: account.payouts_enabled === true,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
 }
 
 /** Best-effort deauthorize on disconnect — the connection doc is cleared regardless. */

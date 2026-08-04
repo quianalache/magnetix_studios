@@ -6,6 +6,7 @@ import {
   handleSubscriptionDeleted,
 } from "@/lib/stripe/webhooks";
 import { handleChargeDispute } from "@/lib/stripe/dispute";
+import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,14 @@ export async function POST(request: Request) {
       // Stripe webhook endpoint to subscribe to `charge.dispute.created`.
       case "charge.dispute.created":
         await handleChargeDispute(event.data.object as Stripe.Dispute);
+        break;
+      // Fires whenever a connected sub-account's capabilities change —
+      // keeps stripeConnect.chargesEnabled/payoutsEnabled in sync after
+      // they finish Stripe's onboarding requirements post-connect.
+      case "account.updated":
+        await handleStripeConnectAccountUpdated(
+          event.data.object as Stripe.Account,
+        );
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
