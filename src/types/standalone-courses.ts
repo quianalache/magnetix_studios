@@ -210,6 +210,8 @@ export interface StandaloneCoursePurchase {
   paypalUrl: string | null;
   stripeCheckoutSessionId: string | null;
   stripePaymentIntentId: string | null;
+  /** The connected Stripe account this charge ran on, or null when it used the shared platform account or PayPal. */
+  stripeConnectAccountId?: string | null;
   /** Saved for subscription purchases so a canceled subscription can be
    *  looked back up by `stripeSubscriptionId`. */
   stripeCustomerId?: string | null;

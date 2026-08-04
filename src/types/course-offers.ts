@@ -181,6 +181,8 @@ export interface CourseOfferPurchase {
   /** Only set for `type === "recurring"` offers. */
   stripeSubscriptionId: string | null;
   stripePaymentIntentId: string | null;
+  /** The connected Stripe account this charge ran on (`{stripeAccount: id}`), or null when it used the shared platform account (stripeCourseCheckoutEnabledByAgency) or PayPal. Lets any later off-session charge (e.g. a one-click upsell) know which account to target. */
+  stripeConnectAccountId: string | null;
   status: CourseOfferPurchaseStatus;
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;

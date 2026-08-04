@@ -123,15 +123,20 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     throw new Error("This course isn't for sale.");
   }
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
-  // TEMPORARY compliance lockdown — see stripeCourseCheckoutEnabledByAgency's
-  // doc comment in types/tenancy.ts. Same gate as Course Offers' Stripe
-  // checkout, same reason: one shared platform Stripe account today.
-  if (subSnap.data()?.stripeCourseCheckoutEnabledByAgency !== true) {
+  const subData = subSnap.data();
+  // Real fix (Stripe Connect) when connected — see the matching comment in
+  // course-offer-purchase-service.ts for the full reasoning.
+  const connectAccountId = subData?.stripeConnect?.accountId ?? null;
+  const useSharedAccount = subData?.stripeCourseCheckoutEnabledByAgency === true;
+  if (!connectAccountId && !useSharedAccount) {
     throw new Error(
       "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
     );
   }
-  const agencyId = (subSnap.data()?.agencyId as string) ?? "";
+  const stripeRequestOptions = connectAccountId
+    ? { stripeAccount: connectAccountId }
+    : undefined;
+  const agencyId = (subData?.agencyId as string) ?? "";
   const amountCents = course.priceCents;
   const currency = course.currency ?? "USD";
   const isRecurring = course.billingType === "recurring";
@@ -185,6 +190,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
           metadata,
           payment_intent_data: { metadata },
         },
+    stripeRequestOptions,
   );
   if (!session.client_secret) {
     throw new Error("Stripe did not return a client secret.");
@@ -200,6 +206,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     method: "stripe",
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
+    stripeConnectAccountId: connectAccountId,
     stripePaymentIntentId: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,

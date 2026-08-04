@@ -140,18 +140,26 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     throw new Error("This offer isn't for sale.");
   }
   const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
-  // TEMPORARY compliance lockdown — see stripeCourseCheckoutEnabledByAgency's
-  // doc comment in types/tenancy.ts. Stripe checkout has one shared platform
-  // account today, so it must not run for any sub-account that hasn't been
-  // explicitly allowlisted, until Stripe Connect ships per-sub-account
-  // accounts. PayPal (below, requestCourseOfferPaypalServerSide) is
-  // unaffected — it already pays out to each sub-account's own PayPal.
-  if (subSnap.data()?.stripeCourseCheckoutEnabledByAgency !== true) {
+  const subData = subSnap.data();
+  // Real fix (Stripe Connect) if this sub-account has linked their own
+  // account — checkout runs as a direct charge on THEM
+  // (`{stripeAccount: id}`) instead of the shared platform account.
+  // `stripeCourseCheckoutEnabledByAgency` is the narrower, TEMPORARY
+  // exception for the agency owner's own sub-account only (see its doc
+  // comment in types/tenancy.ts) — everyone else must connect Stripe or
+  // use PayPal (requestCourseOfferPaypalServerSide, below — already
+  // correctly per-sub-account, unaffected by any of this).
+  const connectAccountId = subData?.stripeConnect?.accountId ?? null;
+  const useSharedAccount = subData?.stripeCourseCheckoutEnabledByAgency === true;
+  if (!connectAccountId && !useSharedAccount) {
     throw new Error(
       "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
     );
   }
-  const agencyId = (subSnap.data()?.agencyId as string) ?? "";
+  const stripeRequestOptions = connectAccountId
+    ? { stripeAccount: connectAccountId }
+    : undefined;
+  const agencyId = (subData?.agencyId as string) ?? "";
   const amountCents = offer.priceCents;
   const currency = offer.currency ?? "USD";
 
@@ -213,6 +221,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
           metadata,
           allow_promotion_codes: offer.discountCodesEnabled,
         },
+    stripeRequestOptions,
   );
   if (!session.client_secret) {
     throw new Error("Stripe did not return a client secret.");
@@ -230,6 +239,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     method: "stripe",
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
+    stripeConnectAccountId: connectAccountId,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
     stripePaymentIntentId: null,

@@ -482,6 +482,20 @@ export interface SubAccountDoc {
    */
   paypalConfig: PayPalConfig | null;
   /**
+   * Per-sub-account Stripe Connect (Standard, OAuth) — the real fix for the
+   * "student's course sale deposits into the agency owner's Stripe account"
+   * problem (see the Aug 2026 lockdown: stripeCourseCheckoutEnabledByAgency
+   * below). Once connected, Course Offer / Standalone Course checkout runs
+   * as a direct charge on THIS account (`{stripeAccount: accountId}` on the
+   * platform's own secret key) instead of the shared platform account.
+   * No access/refresh token stored — Standard-account direct charges only
+   * need the account id alongside the platform's own key, and not storing
+   * a token we don't need is one less secret to protect. Null = not
+   * connected — Stripe checkout is unavailable for this sub-account unless
+   * `stripeCourseCheckoutEnabledByAgency` covers it instead.
+   */
+  stripeConnect?: StripeConnectAccount | null;
+  /**
    * Google review-request config (SMS / WhatsApp "leave us a review" sends
    * after payment or on demand). Optional — legacy/undefined reads as off.
    */
@@ -735,6 +749,17 @@ export interface PayPalConfig {
    */
   username: string;
   connectedAt: Date;
+}
+
+export interface StripeConnectAccount {
+  /** The connected account's id, e.g. "acct_...". Returned as `stripe_user_id` from the OAuth token exchange. */
+  accountId: string;
+  /** The connected account's own email, shown in Settings so the operator can confirm which account it is. */
+  email: string | null;
+  connectedAt: Timestamp | FieldValue | null;
+  /** Mirrors Stripe's own account flags — a freshly-connected Standard account can take a moment to finish its own onboarding before it can actually accept charges. */
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
 }
 
 /**
