@@ -37,7 +37,16 @@ export type FormFieldType =
   // (e.g. "utm_source") when the form page loads, then submitted like any
   // other field. Never required (there's nothing for the visitor to fill
   // in), never rendered. See `queryParam` below.
-  | "hidden";
+  | "hidden"
+  // A marker, not an answerable field — everything after this point (until
+  // the next one) becomes a new step. The hosted/embed form (PublicForm)
+  // groups fields into steps by splitting on these markers and shows a
+  // progress bar + Back/Next; a form with zero page breaks renders exactly
+  // as before (single scrolling page, no progress bar). The raw HTML
+  // export snippet — a power-user escape hatch — does NOT implement real
+  // multi-step JS; it renders this as a plain `<hr>` divider instead, since
+  // that path is meant to stay simple, unstyled, framework-free HTML.
+  | "page_break";
 
 export interface FormField {
   id: string;

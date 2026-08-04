@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { defaultSmsConsentText, type LeadForm } from "@/types/forms";
+import { defaultSmsConsentText, type FormField, type LeadForm } from "@/types/forms";
 import type { ContactAttribution } from "@/types/contacts";
 import {
   readAttributionFromBrowser,
@@ -15,6 +15,27 @@ import {
 
 interface PublicFormProps {
   form: LeadForm;
+}
+
+/**
+ * Groups fields into steps by splitting on `page_break` markers (which are
+ * themselves excluded from every step's field list) — `hidden` fields are
+ * dropped too since they never render and their value is captured
+ * separately on mount regardless of step. A form with zero page breaks
+ * yields exactly one step, so single-step forms render identically to
+ * before this feature existed (no progress bar, no Back/Next).
+ */
+function groupIntoSteps(fields: FormField[]): FormField[][] {
+  const steps: FormField[][] = [[]];
+  for (const f of fields) {
+    if (f.type === "hidden") continue;
+    if (f.type === "page_break") {
+      steps.push([]);
+      continue;
+    }
+    steps[steps.length - 1].push(f);
+  }
+  return steps;
 }
 
 export function PublicForm({ form }: PublicFormProps) {
@@ -31,6 +52,9 @@ export function PublicForm({ form }: PublicFormProps) {
   } | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const attributionRef = useRef<ContactAttribution | null>(null);
+  const steps = groupIntoSteps(form.fields);
+  const [stepIndex, setStepIndex] = useState(0);
+  const isLastStep = stepIndex === steps.length - 1;
 
   // Snapshot attribution on mount — before the user navigates, refreshes, or
   // the URL is rewritten by a redirect after submission.
@@ -74,11 +98,9 @@ export function PublicForm({ form }: PublicFormProps) {
     });
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setApiError(null);
+  function validateFields(fields: FormField[]): Record<string, string> {
     const next: Record<string, string> = {};
-    for (const f of form.fields) {
+    for (const f of fields) {
       if (f.type === "text_block" || f.type === "hidden") continue; // Never answerable by the visitor.
       if (f.type === "sms_consent") {
         // Consent is opt-in: a value of "true" means checked. Only blocks
@@ -102,8 +124,26 @@ export function PublicForm({ form }: PublicFormProps) {
         }
       }
     }
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    return next;
+  }
+
+  function handleNext() {
+    const stepErrors = validateFields(steps[stepIndex]);
+    setErrors((prev) => ({ ...prev, ...stepErrors }));
+    if (Object.keys(stepErrors).length > 0) return;
+    setStepIndex((s) => Math.min(s + 1, steps.length - 1));
+  }
+
+  function handleBack() {
+    setStepIndex((s) => Math.max(s - 1, 0));
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setApiError(null);
+    const stepErrors = validateFields(steps[stepIndex]);
+    setErrors((prev) => ({ ...prev, ...stepErrors }));
+    if (Object.keys(stepErrors).length > 0) return;
 
     setSubmitting(true);
     try {
@@ -157,130 +197,153 @@ export function PublicForm({ form }: PublicFormProps) {
     );
   }
 
-  return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
-      {form.fields
-        .filter((f) => f.type !== "hidden")
-        .map((f) =>
-        f.type === "text_block" ? (
-          <div key={f.id} className="space-y-1">
-            {f.label.trim() && (
-              <h3 className="text-sm font-semibold">{f.label}</h3>
-            )}
-            {f.content?.trim() && (
-              <p className="text-sm whitespace-pre-line text-muted-foreground">
-                {f.content}
-              </p>
-            )}
-          </div>
-        ) : f.type === "sms_consent" ? (
-          <div key={f.id} className="space-y-1.5">
-            <label className="flex cursor-pointer items-start gap-2 text-sm leading-snug text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={values[f.id] === "true"}
-                onChange={(e) => setValue(f.id, e.target.checked ? "true" : "")}
-                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
-                aria-invalid={!!errors[f.id]}
-              />
-              <span>
-                {f.consentText?.trim() || defaultSmsConsentText()}
-                {f.required && <span className="text-destructive"> *</span>}
-              </span>
-            </label>
-            {errors[f.id] && (
-              <p className="text-xs text-destructive">{errors[f.id]}</p>
-            )}
-          </div>
-        ) : (
-        <div key={f.id} className="space-y-1.5">
-          <Label htmlFor={f.id}>
-            {f.label}
-            {f.required && <span className="text-destructive">*</span>}
-          </Label>
-          {f.type === "textarea" ? (
-            <Textarea
-              id={f.id}
-              value={values[f.id] ?? ""}
-              onChange={(e) => setValue(f.id, e.target.value)}
-              placeholder={f.placeholder}
-              rows={4}
-              aria-invalid={!!errors[f.id]}
-            />
-          ) : f.type === "radio" ? (
-            <div className="space-y-1.5">
-              {f.options.map((opt) => (
-                <label
-                  key={opt}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
-                >
-                  <input
-                    type="radio"
-                    name={f.id}
-                    checked={values[f.id] === opt}
-                    onChange={() => setValue(f.id, opt)}
-                    className="h-4 w-4 shrink-0 cursor-pointer"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-          ) : f.type === "checkboxes" ? (
-            <div className="space-y-1.5">
-              {f.options.map((opt) => (
-                <label
-                  key={opt}
-                  className="flex cursor-pointer items-center gap-2 text-sm"
-                >
-                  <input
-                    type="checkbox"
-                    checked={(values[f.id] ?? "").split(", ").includes(opt)}
-                    onChange={(e) =>
-                      toggleCheckboxOption(f.id, opt, e.target.checked)
-                    }
-                    className="h-4 w-4 shrink-0 cursor-pointer"
-                  />
-                  {opt}
-                </label>
-              ))}
-            </div>
-          ) : f.type === "select" ? (
-            <select
-              id={f.id}
-              value={values[f.id] ?? ""}
-              onChange={(e) => setValue(f.id, e.target.value)}
-              className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-            >
-              <option value="">— Choose —</option>
-              {f.options.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <Input
-              id={f.id}
-              type={
-                f.type === "email"
-                  ? "email"
-                  : f.type === "phone"
-                    ? "tel"
-                    : f.type === "url"
-                      ? "url"
-                      : "text"
-              }
-              value={values[f.id] ?? ""}
-              onChange={(e) => setValue(f.id, e.target.value)}
-              placeholder={f.placeholder}
-              aria-invalid={!!errors[f.id]}
-            />
+  function renderField(f: FormField) {
+    if (f.type === "text_block") {
+      return (
+        <div key={f.id} className="space-y-1">
+          {f.label.trim() && (
+            <h3 className="text-sm font-semibold">{f.label}</h3>
           )}
+          {f.content?.trim() && (
+            <p className="text-sm whitespace-pre-line text-muted-foreground">
+              {f.content}
+            </p>
+          )}
+        </div>
+      );
+    }
+    if (f.type === "sms_consent") {
+      return (
+        <div key={f.id} className="space-y-1.5">
+          <label className="flex cursor-pointer items-start gap-2 text-sm leading-snug text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={values[f.id] === "true"}
+              onChange={(e) => setValue(f.id, e.target.checked ? "true" : "")}
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer"
+              aria-invalid={!!errors[f.id]}
+            />
+            <span>
+              {f.consentText?.trim() || defaultSmsConsentText()}
+              {f.required && <span className="text-destructive"> *</span>}
+            </span>
+          </label>
           {errors[f.id] && (
             <p className="text-xs text-destructive">{errors[f.id]}</p>
           )}
         </div>
-      ))}
+      );
+    }
+    return (
+      <div key={f.id} className="space-y-1.5">
+        <Label htmlFor={f.id}>
+          {f.label}
+          {f.required && <span className="text-destructive">*</span>}
+        </Label>
+        {f.type === "textarea" ? (
+          <Textarea
+            id={f.id}
+            value={values[f.id] ?? ""}
+            onChange={(e) => setValue(f.id, e.target.value)}
+            placeholder={f.placeholder}
+            rows={4}
+            aria-invalid={!!errors[f.id]}
+          />
+        ) : f.type === "radio" ? (
+          <div className="space-y-1.5">
+            {f.options.map((opt) => (
+              <label
+                key={opt}
+                className="flex cursor-pointer items-center gap-2 text-sm"
+              >
+                <input
+                  type="radio"
+                  name={f.id}
+                  checked={values[f.id] === opt}
+                  onChange={() => setValue(f.id, opt)}
+                  className="h-4 w-4 shrink-0 cursor-pointer"
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        ) : f.type === "checkboxes" ? (
+          <div className="space-y-1.5">
+            {f.options.map((opt) => (
+              <label
+                key={opt}
+                className="flex cursor-pointer items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={(values[f.id] ?? "").split(", ").includes(opt)}
+                  onChange={(e) =>
+                    toggleCheckboxOption(f.id, opt, e.target.checked)
+                  }
+                  className="h-4 w-4 shrink-0 cursor-pointer"
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        ) : f.type === "select" ? (
+          <select
+            id={f.id}
+            value={values[f.id] ?? ""}
+            onChange={(e) => setValue(f.id, e.target.value)}
+            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+          >
+            <option value="">— Choose —</option>
+            {f.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            id={f.id}
+            type={
+              f.type === "email"
+                ? "email"
+                : f.type === "phone"
+                  ? "tel"
+                  : f.type === "url"
+                    ? "url"
+                    : "text"
+            }
+            value={values[f.id] ?? ""}
+            onChange={(e) => setValue(f.id, e.target.value)}
+            placeholder={f.placeholder}
+            aria-invalid={!!errors[f.id]}
+          />
+        )}
+        {errors[f.id] && (
+          <p className="text-xs text-destructive">{errors[f.id]}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      {steps.length > 1 && (
+        <div className="space-y-1.5">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{
+                width: `${((stepIndex + 1) / steps.length) * 100}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Step {stepIndex + 1} of {steps.length}
+          </p>
+        </div>
+      )}
+
+      {steps[stepIndex].map(renderField)}
 
       {apiError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -288,16 +351,35 @@ export function PublicForm({ form }: PublicFormProps) {
         </div>
       )}
 
-      <Button type="submit" className="w-full" disabled={submitting}>
-        {submitting ? (
-          <>
-            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            Submitting…
-          </>
-        ) : (
-          "Submit"
+      <div className="flex items-center gap-2">
+        {stepIndex > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={handleBack}
+            disabled={submitting}
+          >
+            Back
+          </Button>
         )}
-      </Button>
+        {isLastStep ? (
+          <Button type="submit" className="flex-1" disabled={submitting}>
+            {submitting ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                Submitting…
+              </>
+            ) : (
+              "Submit"
+            )}
+          </Button>
+        ) : (
+          <Button type="button" className="flex-1" onClick={handleNext}>
+            Next
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

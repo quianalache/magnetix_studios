@@ -21,6 +21,7 @@ import {
   ListChecks,
   Phone as PhoneIcon,
   Plus,
+  SeparatorHorizontal,
   ShieldCheck,
   TextCursor,
   Trash2,
@@ -128,6 +129,12 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
           })
           .join("\n");
         return [`  <p>${labelText}</p>`, opts].filter(Boolean).join("\n");
+      }
+      if (f.type === "page_break") {
+        // The raw HTML export stays a single scrolling page — no real
+        // multi-step JS here, just a visual divider matching what the
+        // hosted/embed form treats as a step boundary.
+        return `  <hr />`;
       }
       if (f.type === "hidden") {
         // No label, no visible input. data-leadstack-query-param tells the
@@ -345,6 +352,16 @@ const FIELD_TYPES: {
       iconText: "text-zinc-600 dark:text-zinc-300",
     },
   },
+  {
+    value: "page_break",
+    label: "Page break",
+    icon: SeparatorHorizontal,
+    tone: {
+      border: "border-orange-400/30 hover:border-orange-400/60",
+      iconBg: "bg-orange-500/10",
+      iconText: "text-orange-600 dark:text-orange-300",
+    },
+  },
 ];
 
 function typeMeta(value: FormFieldType) {
@@ -376,6 +393,7 @@ const DEFAULTS_BY_TYPE: Record<
   url: { label: "Link", placeholder: "https://loom.com/share/…", mapsTo: null },
   text_block: { label: "", placeholder: "", mapsTo: null },
   hidden: { label: "UTM source", placeholder: "", mapsTo: null },
+  page_break: { label: "", placeholder: "", mapsTo: null },
 };
 
 function newField(type: FormFieldType = "text"): FormField {
@@ -675,6 +693,49 @@ export default function FormBuilderPage() {
             {form.fields.map((f, i) => {
               const meta = typeMeta(f.type);
               const Icon = meta.icon;
+              if (f.type === "page_break") {
+                return (
+                  <div
+                    key={f.id}
+                    className="group/field flex items-center gap-2 py-1"
+                  >
+                    <div className="flex flex-col gap-px">
+                      <button
+                        type="button"
+                        onClick={() => moveField(f.id, -1)}
+                        disabled={i === 0}
+                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
+                        aria-label="Move up"
+                      >
+                        <ChevronUp className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveField(f.id, 1)}
+                        disabled={i === form.fields.length - 1}
+                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
+                        aria-label="Move down"
+                      >
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
+                    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-300">
+                      <SeparatorHorizontal className="h-3 w-3" /> New page
+                    </span>
+                    <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      onClick={() => removeField(f.id)}
+                      aria-label="Remove page break"
+                      className="text-muted-foreground/60 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              }
               return (
                 <div
                   key={f.id}
