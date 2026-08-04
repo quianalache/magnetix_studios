@@ -36,9 +36,13 @@ export default async function StandaloneCourseHomePage({
     courseId,
     includeUnpublished: false,
   });
-  if (!tree || !tree.course.published || tree.lessons.length === 0) {
+  if (!tree || !tree.course.published) {
     redirect(salesPage);
   }
+  // An enrolled member with zero published lessons must NOT bounce back to
+  // the sales page — that page redirects enrolled members straight back
+  // here, which loops the two pages forever. Render the (empty) classroom
+  // instead; CourseHomeView already handles an empty lessons array.
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
 

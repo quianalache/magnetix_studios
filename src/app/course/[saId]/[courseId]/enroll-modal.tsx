@@ -111,7 +111,11 @@ export function EnrollModal({
         {cta}
       </DialogTrigger>
       <DialogContent
-        className={step === "checkout" ? "sm:max-w-lg" : "sm:max-w-sm"}
+        className={
+          step === "checkout"
+            ? "max-h-[90vh] overflow-y-auto sm:max-w-lg"
+            : "sm:max-w-sm"
+        }
       >
         {step === "form" ? (
           <>
