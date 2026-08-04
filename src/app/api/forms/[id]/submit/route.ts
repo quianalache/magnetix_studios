@@ -14,7 +14,7 @@ import {
   locationFromPhone,
   mergeLocation,
 } from "@/lib/contacts/location";
-import { defaultSmsConsentText } from "@/types/forms";
+import { defaultSmsConsentText, evaluateCondition } from "@/types/forms";
 import type { FormField, LeadForm } from "@/types/forms";
 import type { Contact, ContactAttribution } from "@/types/contacts";
 import { normalizeAttribution } from "@/lib/attribution";
@@ -128,9 +128,13 @@ async function handleSubmit(
     );
   }
 
-  // Validate required fields
+  // Validate required fields. Skip any field whose conditional-visibility
+  // condition (evaluateCondition) isn't currently met — the visitor never
+  // saw it, so it can't have been required to fill it in. Matches the
+  // client-side gating in PublicForm exactly.
   for (const field of form.fields) {
     if (!field.required) continue;
+    if (!evaluateCondition(field.visibleIf, body.values)) continue;
     if (field.type === "sms_consent") {
       // Consent is satisfied only by an explicit "true" — guard against a
       // direct API POST sending "false"/"on" past the generic check below.

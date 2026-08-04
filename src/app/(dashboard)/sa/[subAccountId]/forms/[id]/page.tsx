@@ -16,6 +16,7 @@ import {
   Copy,
   EyeOff,
   ExternalLink,
+  GitBranch,
   Hash,
   Link2,
   ListChecks,
@@ -49,10 +50,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PIPELINE_STAGES, type PipelineStageId } from "@/types/deals";
 import {
+  CONDITION_OPERATOR_LABELS,
   defaultFormAppearance,
   defaultSmsConsentText,
   type FormAppearance,
   type FormField,
+  type FormFieldConditionOperator,
   type FormFieldType,
   type FormSettings,
   type FormSubmission,
@@ -68,6 +71,14 @@ import {
  * Input `name` attributes are the field's Firestore doc id. If the
  * developer wants to write their own form HTML, they can — just keep the
  * name attributes matching these ids.
+ *
+ * Does NOT implement conditional show/hide (`visibleIf`) — every field
+ * always renders here regardless of its condition. Same reasoning as
+ * page_break rendering as a plain `<hr>`: this export is meant to stay
+ * simple, framework-free HTML. Avoid marking a conditionally-shown field
+ * `required` if you're using this export path, since the visitor would be
+ * forced to fill it in even when its condition wouldn't have shown it on
+ * the hosted/embed form.
  *
  * CORS is enabled on the submit route so this works from any origin.
  */
@@ -961,6 +972,139 @@ export default function FormBuilderPage() {
                         className="min-h-0 text-xs"
                         placeholder={"Low budget\nMedium\nEnterprise"}
                       />
+                    </div>
+                  )}
+
+                  {f.type !== "hidden" && (
+                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
+                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <GitBranch className="h-3 w-3" /> Show this field only if
+                      </Label>
+                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                        <select
+                          value={f.visibleIf?.fieldId ?? ""}
+                          onChange={(e) => {
+                            const targetId = e.target.value;
+                            updateField(f.id, {
+                              visibleIf: targetId
+                                ? {
+                                    fieldId: targetId,
+                                    operator: f.visibleIf?.operator ?? "equals",
+                                    value: f.visibleIf?.value ?? "",
+                                  }
+                                : null,
+                            });
+                          }}
+                          aria-label="Condition field"
+                          className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                        >
+                          <option value="" className="bg-background text-foreground">
+                            Always show
+                          </option>
+                          {form.fields
+                            .slice(0, i)
+                            .filter(
+                              (pf) =>
+                                pf.type !== "page_break" &&
+                                pf.type !== "text_block",
+                            )
+                            .map((pf) => (
+                              <option
+                                key={pf.id}
+                                value={pf.id}
+                                className="bg-background text-foreground"
+                              >
+                                {pf.label || "(untitled field)"}
+                              </option>
+                            ))}
+                        </select>
+                        {f.visibleIf && (
+                          <>
+                            <select
+                              value={f.visibleIf.operator}
+                              onChange={(e) =>
+                                updateField(f.id, {
+                                  visibleIf: {
+                                    ...f.visibleIf!,
+                                    operator: e.target
+                                      .value as FormFieldConditionOperator,
+                                  },
+                                })
+                              }
+                              aria-label="Condition operator"
+                              className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                            >
+                              {Object.entries(CONDITION_OPERATOR_LABELS).map(
+                                ([op, opLabel]) => (
+                                  <option
+                                    key={op}
+                                    value={op}
+                                    className="bg-background text-foreground"
+                                  >
+                                    {opLabel}
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                            {f.visibleIf.operator !== "is_empty" &&
+                              f.visibleIf.operator !== "is_filled" &&
+                              (() => {
+                                const target = form.fields.find(
+                                  (pf) => pf.id === f.visibleIf?.fieldId,
+                                );
+                                const targetOptions =
+                                  target &&
+                                  (target.type === "select" ||
+                                    target.type === "radio" ||
+                                    target.type === "checkboxes")
+                                    ? target.options
+                                    : null;
+                                return targetOptions ? (
+                                  <select
+                                    value={f.visibleIf!.value}
+                                    onChange={(e) =>
+                                      updateField(f.id, {
+                                        visibleIf: {
+                                          ...f.visibleIf!,
+                                          value: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    aria-label="Condition value"
+                                    className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                                  >
+                                    <option value="" className="bg-background text-foreground">
+                                      Select…
+                                    </option>
+                                    {targetOptions.map((opt) => (
+                                      <option
+                                        key={opt}
+                                        value={opt}
+                                        className="bg-background text-foreground"
+                                      >
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <Input
+                                    value={f.visibleIf!.value}
+                                    onChange={(e) =>
+                                      updateField(f.id, {
+                                        visibleIf: {
+                                          ...f.visibleIf!,
+                                          value: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    placeholder="Value"
+                                    className="h-7 px-2 text-[11px]"
+                                  />
+                                );
+                              })()}
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

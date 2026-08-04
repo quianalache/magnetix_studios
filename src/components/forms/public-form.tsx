@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { defaultSmsConsentText, type FormField, type LeadForm } from "@/types/forms";
+import {
+  defaultSmsConsentText,
+  evaluateCondition,
+  type FormField,
+  type LeadForm,
+} from "@/types/forms";
 import type { ContactAttribution } from "@/types/contacts";
 import {
   readAttributionFromBrowser,
@@ -102,6 +107,7 @@ export function PublicForm({ form }: PublicFormProps) {
     const next: Record<string, string> = {};
     for (const f of fields) {
       if (f.type === "text_block" || f.type === "hidden") continue; // Never answerable by the visitor.
+      if (!evaluateCondition(f.visibleIf, values)) continue; // Conditionally hidden right now.
       if (f.type === "sms_consent") {
         // Consent is opt-in: a value of "true" means checked. Only blocks
         // submission when the operator marked the consent field required.
@@ -343,7 +349,9 @@ export function PublicForm({ form }: PublicFormProps) {
         </div>
       )}
 
-      {steps[stepIndex].map(renderField)}
+      {steps[stepIndex]
+        .filter((f) => evaluateCondition(f.visibleIf, values))
+        .map(renderField)}
 
       {apiError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">

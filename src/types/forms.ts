@@ -75,6 +75,65 @@ export interface FormField {
    * (e.g. "utm_source") this field auto-captures from on page load.
    */
   queryParam?: string;
+  /**
+   * Conditional show/hide — this field only renders (and is only
+   * validated) when the condition evaluates true against the current
+   * answers. Null/undefined = always shown, the default for every
+   * existing field. Not offered for `page_break` or `hidden` (structural
+   * markers, not something a visitor sees). Only ever points at a field
+   * EARLIER in `form.fields` than this one — the builder's picker enforces
+   * that so a condition can never reference an answer that hasn't been
+   * collected yet.
+   */
+  visibleIf?: FormFieldCondition | null;
+}
+
+export type FormFieldConditionOperator =
+  | "equals"
+  | "not_equals"
+  | "contains"
+  | "is_empty"
+  | "is_filled";
+
+export interface FormFieldCondition {
+  fieldId: string;
+  operator: FormFieldConditionOperator;
+  /** Unused (and not shown in the builder) for is_empty / is_filled. */
+  value: string;
+}
+
+export const CONDITION_OPERATOR_LABELS: Record<
+  FormFieldConditionOperator,
+  string
+> = {
+  equals: "is exactly",
+  not_equals: "is not",
+  contains: "contains",
+  is_empty: "is empty",
+  is_filled: "is filled in",
+};
+
+/** Shared by the builder (preview) and the public form (real gating). */
+export function evaluateCondition(
+  condition: FormFieldCondition | null | undefined,
+  values: Record<string, string>,
+): boolean {
+  if (!condition) return true;
+  const actual = (values[condition.fieldId] ?? "").trim();
+  switch (condition.operator) {
+    case "equals":
+      return actual === condition.value;
+    case "not_equals":
+      return actual !== condition.value;
+    case "contains":
+      return actual.toLowerCase().includes(condition.value.toLowerCase());
+    case "is_empty":
+      return actual === "";
+    case "is_filled":
+      return actual !== "";
+    default:
+      return true;
+  }
 }
 
 /**
