@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  AlignLeft,
   ArrowLeft,
   AtSign,
   Building2,
@@ -13,6 +14,7 @@ import {
   Copy,
   ExternalLink,
   Hash,
+  Link2,
   ListChecks,
   Phone as PhoneIcon,
   Plus,
@@ -117,8 +119,21 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
           `  </label>`,
         ].join("\n");
       }
+      if (f.type === "text_block") {
+        // Display-only — no input, no name attribute, nothing submitted.
+        const heading = f.label.trim()
+          ? `  <h3>${escText(f.label)}</h3>\n`
+          : "";
+        return `${heading}  <p>${escText(f.content?.trim() ?? "")}</p>`;
+      }
       const inputType =
-        f.type === "email" ? "email" : f.type === "phone" ? "tel" : "text";
+        f.type === "email"
+          ? "email"
+          : f.type === "phone"
+            ? "tel"
+            : f.type === "url"
+              ? "url"
+              : "text";
       return [
         `  <label for="${id}">${labelText}</label>`,
         `  <input type="${inputType}" ${common} />`,
@@ -246,6 +261,26 @@ const FIELD_TYPES: {
       iconText: "text-teal-600 dark:text-teal-300",
     },
   },
+  {
+    value: "url",
+    label: "Link (URL)",
+    icon: Link2,
+    tone: {
+      border: "border-cyan-400/30 hover:border-cyan-400/60",
+      iconBg: "bg-cyan-500/10",
+      iconText: "text-cyan-600 dark:text-cyan-300",
+    },
+  },
+  {
+    value: "text_block",
+    label: "Text / instructions",
+    icon: AlignLeft,
+    tone: {
+      border: "border-neutral-400/30 hover:border-neutral-400/60",
+      iconBg: "bg-neutral-500/10",
+      iconText: "text-neutral-600 dark:text-neutral-300",
+    },
+  },
 ];
 
 function typeMeta(value: FormFieldType) {
@@ -272,6 +307,8 @@ const DEFAULTS_BY_TYPE: Record<
   textarea: { label: "Message", placeholder: "", mapsTo: "notes" },
   select: { label: "Dropdown", placeholder: "", mapsTo: null },
   sms_consent: { label: "SMS consent", placeholder: "", mapsTo: null },
+  url: { label: "Link", placeholder: "https://loom.com/share/…", mapsTo: null },
+  text_block: { label: "", placeholder: "", mapsTo: null },
 };
 
 function newField(type: FormFieldType = "text"): FormField {
@@ -279,6 +316,9 @@ function newField(type: FormFieldType = "text"): FormField {
   return {
     ...(type === "sms_consent"
       ? { consentText: defaultSmsConsentText() }
+      : {}),
+    ...(type === "text_block"
+      ? { content: "Add your instructions here…" }
       : {}),
     id: `f_${Math.random().toString(36).slice(2, 9)}`,
     type,
@@ -605,18 +645,24 @@ export default function FormBuilderPage() {
                       onChange={(e) =>
                         updateField(f.id, { label: e.target.value })
                       }
-                      placeholder="Field label"
+                      placeholder={
+                        f.type === "text_block"
+                          ? "Heading (optional)"
+                          : "Field label"
+                      }
                       className="h-7 flex-1 border-none bg-transparent px-1.5 text-sm font-medium shadow-none focus-visible:ring-0"
                     />
-                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted">
-                      <Checkbox
-                        checked={f.required}
-                        onCheckedChange={(v) =>
-                          updateField(f.id, { required: !!v })
-                        }
-                      />
-                      Required
-                    </label>
+                    {f.type !== "text_block" && (
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted">
+                        <Checkbox
+                          checked={f.required}
+                          onCheckedChange={(v) =>
+                            updateField(f.id, { required: !!v })
+                          }
+                        />
+                        Required
+                      </label>
+                    )}
                     <Button
                       size="icon-xs"
                       variant="ghost"
@@ -629,9 +675,17 @@ export default function FormBuilderPage() {
                   </div>
 
                   {/* Compact meta strip — mapsTo + placeholder are irrelevant
-                      for the consent checkbox, so it gets its own editor below. */}
+                      for the consent checkbox, so it gets its own editor
+                      below instead. The text block only needs the type
+                      selector (no mapsTo/placeholder — it has no value). */}
                   {f.type !== "sms_consent" && (
-                  <div className="grid grid-cols-1 gap-1.5 border-t bg-muted/20 px-2 py-1.5 text-xs sm:grid-cols-[110px_180px_1fr]">
+                  <div
+                    className={`grid grid-cols-1 gap-1.5 border-t bg-muted/20 px-2 py-1.5 text-xs ${
+                      f.type === "text_block"
+                        ? "sm:grid-cols-[110px_1fr]"
+                        : "sm:grid-cols-[110px_180px_1fr]"
+                    }`}
+                  >
                     <select
                       value={f.type}
                       onChange={(e) =>
@@ -652,35 +706,39 @@ export default function FormBuilderPage() {
                         </option>
                       ))}
                     </select>
-                    <select
-                      value={f.mapsTo ?? ""}
-                      onChange={(e) =>
-                        updateField(f.id, {
-                          mapsTo:
-                            (e.target.value || null) as FormField["mapsTo"],
-                        })
-                      }
-                      aria-label="Maps to contact"
-                      className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                    >
-                      {MAP_OPTIONS.map((o) => (
-                        <option
-                          key={o.label}
-                          value={o.value ?? ""}
-                          className="bg-background text-foreground"
+                    {f.type !== "text_block" && (
+                      <>
+                        <select
+                          value={f.mapsTo ?? ""}
+                          onChange={(e) =>
+                            updateField(f.id, {
+                              mapsTo:
+                                (e.target.value || null) as FormField["mapsTo"],
+                            })
+                          }
+                          aria-label="Maps to contact"
+                          className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
                         >
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Input
-                      value={f.placeholder}
-                      onChange={(e) =>
-                        updateField(f.id, { placeholder: e.target.value })
-                      }
-                      placeholder="Placeholder (optional)"
-                      className="h-7 px-2 text-[11px]"
-                    />
+                          {MAP_OPTIONS.map((o) => (
+                            <option
+                              key={o.label}
+                              value={o.value ?? ""}
+                              className="bg-background text-foreground"
+                            >
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        <Input
+                          value={f.placeholder}
+                          onChange={(e) =>
+                            updateField(f.id, { placeholder: e.target.value })
+                          }
+                          placeholder="Placeholder (optional)"
+                          className="h-7 px-2 text-[11px]"
+                        />
+                      </>
+                    )}
                   </div>
                   )}
 
@@ -708,6 +766,23 @@ export default function FormBuilderPage() {
                         to submit. Add your Privacy Policy + Terms links on the
                         surrounding page.
                       </p>
+                    </div>
+                  )}
+
+                  {f.type === "text_block" && (
+                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
+                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <AlignLeft className="h-3 w-3" /> Instructional text
+                      </Label>
+                      <Textarea
+                        rows={3}
+                        value={f.content ?? ""}
+                        onChange={(e) =>
+                          updateField(f.id, { content: e.target.value })
+                        }
+                        className="min-h-0 text-xs"
+                        placeholder="e.g. Record a quick Loom walking through your question, then paste the link in the field below."
+                      />
                     </div>
                   )}
 

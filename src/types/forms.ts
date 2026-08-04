@@ -14,7 +14,17 @@ export type FormFieldType =
   // a form HAS a consent field and the box is left unchecked, the contact is
   // created `smsOptedOut: true` (no consent → never SMS them). Forms without
   // a consent field keep the existing default behaviour.
-  | "sms_consent";
+  | "sms_consent"
+  // A link field — a Loom/Descript/video/portfolio URL the submitter pastes
+  // in. Stored and validated like `text` but rendered with a link icon and
+  // browser URL-format validation (type="url").
+  | "url"
+  // A display-only block, not an answerable field — instructional copy the
+  // form owner drops between real fields (e.g. "Record a quick Loom walking
+  // through your question, then paste the link below"). Never required,
+  // never mapped to a Contact field, and excluded from the submission's
+  // `answers` snapshot. See `content` below.
+  | "text_block";
 
 export interface FormField {
   id: string;
@@ -26,6 +36,11 @@ export interface FormField {
   // Maps this field's value back to the Contact shape.
   // "name" | "email" | "phone" | "company" | "notes" | null
   mapsTo: "name" | "email" | "phone" | "company" | "notes" | null;
+  /**
+   * Only used by the `text_block` field type — the paragraph copy rendered
+   * in place of an input. `label` doubles as an optional heading above it.
+   */
+  content?: string;
   /**
    * Only used by the `sms_consent` field type — the disclosure paragraph
    * rendered next to the checkbox (and stored verbatim as the proof-of-consent

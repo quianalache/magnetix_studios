@@ -47,6 +47,7 @@ export function PublicForm({ form }: PublicFormProps) {
     setApiError(null);
     const next: Record<string, string> = {};
     for (const f of form.fields) {
+      if (f.type === "text_block") continue; // Display-only, never answerable.
       if (f.type === "sms_consent") {
         // Consent is opt-in: a value of "true" means checked. Only blocks
         // submission when the operator marked the consent field required.
@@ -60,6 +61,12 @@ export function PublicForm({ form }: PublicFormProps) {
       } else if (f.type === "email" && values[f.id]) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values[f.id])) {
           next[f.id] = "Enter a valid email";
+        }
+      } else if (f.type === "url" && values[f.id]) {
+        try {
+          new URL(values[f.id]);
+        } catch {
+          next[f.id] = "Enter a valid link (include https://)";
         }
       }
     }
@@ -121,7 +128,18 @@ export function PublicForm({ form }: PublicFormProps) {
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
       {form.fields.map((f) =>
-        f.type === "sms_consent" ? (
+        f.type === "text_block" ? (
+          <div key={f.id} className="space-y-1">
+            {f.label.trim() && (
+              <h3 className="text-sm font-semibold">{f.label}</h3>
+            )}
+            {f.content?.trim() && (
+              <p className="text-sm whitespace-pre-line text-muted-foreground">
+                {f.content}
+              </p>
+            )}
+          </div>
+        ) : f.type === "sms_consent" ? (
           <div key={f.id} className="space-y-1.5">
             <label className="flex cursor-pointer items-start gap-2 text-sm leading-snug text-muted-foreground">
               <input
@@ -177,7 +195,9 @@ export function PublicForm({ form }: PublicFormProps) {
                   ? "email"
                   : f.type === "phone"
                     ? "tel"
-                    : "text"
+                    : f.type === "url"
+                      ? "url"
+                      : "text"
               }
               value={values[f.id] ?? ""}
               onChange={(e) => setValue(f.id, e.target.value)}
