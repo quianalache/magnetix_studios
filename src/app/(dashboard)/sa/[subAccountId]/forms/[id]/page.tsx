@@ -21,6 +21,7 @@ import {
   Link2,
   ListChecks,
   Phone as PhoneIcon,
+  Palette,
   Plus,
   Search,
   SeparatorHorizontal,
@@ -802,6 +803,39 @@ function CanvasStepDivider({ onRemove }: { onRemove: () => void }) {
  *  inline per-field now lives here, opened by selecting a field on the
  *  canvas. Field tab = content/validation; Logic tab = conditional
  *  visibility (hidden fields skip Logic entirely, same as before). */
+/** Whole-form appearance, opened from the rail's Design button — edited
+ *  live against the same canvas she's building fields in, per her
+ *  explicit ask, instead of context-switching to a separate settings tab
+ *  with only a small detached preview to check against. */
+function DesignPanel({
+  appearance,
+  onChange,
+  onClose,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <aside className="flex w-80 shrink-0 flex-col border-l bg-card">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Palette className="h-3.5 w-3.5" />
+          </span>
+          <p className="text-xs font-semibold">Design</p>
+        </div>
+        <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close">
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
+        <AppearanceFieldsCore appearance={appearance} onChange={onChange} />
+      </div>
+    </aside>
+  );
+}
+
 function FieldSettingsPanel({
   form,
   field: f,
@@ -1156,6 +1190,9 @@ export default function FormBuilderPage() {
   const [panelTab, setPanelTab] = useState<"field" | "logic">("field");
   const [dragFieldId, setDragFieldId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // Design panel — mutually exclusive with a selected field; both share the
+  // same right-hand slot so the canvas only ever loses width for one at a time.
+  const [designPanelOpen, setDesignPanelOpen] = useState(false);
 
   // Clear the unread badge whenever the Submissions tab is actually viewed
   // (covers both clicking the in-page tab and landing here via ?tab=
@@ -1441,8 +1478,12 @@ export default function FormBuilderPage() {
 
       {tab === "build" && (
       <div className="flex overflow-hidden rounded-2xl border bg-card" style={{ minHeight: 560 }}>
-        {/* Rail — a single persistent "Add field" entry point, mirroring the
-            canvas insert-gap affordance for anyone who doesn't hover a gap. */}
+        {/* Rail — "Add field" (mirroring the canvas insert-gap affordance
+            for anyone who doesn't hover a gap) and "Design" (whole-form
+            appearance, edited live against this same canvas — moved here
+            from a separate Settings tab per her explicit ask: "as they're
+            modifying the appearance, we are very easily able to see it,
+            not in a preview, but on the actual form"). */}
         <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r bg-muted/20 py-3">
           <FieldTypePicker
             onPick={(t) => addField(t)}
@@ -1457,6 +1498,21 @@ export default function FormBuilderPage() {
               </button>
             )}
           />
+          <button
+            type="button"
+            onClick={() => {
+              setDesignPanelOpen((v) => !v);
+              setSelectedFieldId(null);
+            }}
+            aria-label="Design"
+            className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+              designPanelOpen
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            <Palette className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Canvas — the live form IS the editor. Click a field to edit it on
@@ -1493,6 +1549,7 @@ export default function FormBuilderPage() {
                         onSelect={() => {
                           setSelectedFieldId(f.id);
                           setPanelTab("field");
+                          setDesignPanelOpen(false);
                         }}
                         onRemove={() => {
                           if (selectedFieldId === f.id) setSelectedFieldId(null);
@@ -1530,8 +1587,10 @@ export default function FormBuilderPage() {
           </div>
         </div>
 
-        {/* Settings panel — only takes up space while a field is selected,
-            so the canvas gets full width the rest of the time. */}
+        {/* Right panel — only takes up space while a field is selected or
+            Design is open, so the canvas gets full width the rest of the
+            time. Mutually exclusive with each other (see the rail/select
+            handlers above). */}
         {selectedFieldId &&
           (() => {
             const selIndex = form.fields.findIndex((f) => f.id === selectedFieldId);
@@ -1549,6 +1608,13 @@ export default function FormBuilderPage() {
               />
             );
           })()}
+        {designPanelOpen && !selectedFieldId && (
+          <DesignPanel
+            appearance={appearance}
+            onChange={updateAppearance}
+            onClose={() => setDesignPanelOpen(false)}
+          />
+        )}
       </div>
       )}
 
@@ -1807,24 +1873,20 @@ const ACCENT_PRESETS: { label: string; value: string }[] = [
   { label: "Slate", value: "#475569" },
 ];
 
-function EmbedAppearanceSection({
+/** Every control that changes how the form itself looks — shared between
+ *  the Build tab's Design panel (edited live against the actual canvas)
+ *  and used to live under Settings before she pointed out that "embed
+ *  appearance" was the wrong place for something that also applies to the
+ *  standalone link. */
+function AppearanceFieldsCore({
   appearance,
   onChange,
-  previewUrl,
 }: {
   appearance: FormAppearance;
   onChange: (patch: Partial<FormAppearance>) => void;
-  previewUrl: string;
 }) {
   return (
-    <section className="rounded-2xl border bg-card p-5">
-      <h2 className="mb-1 text-sm font-semibold">Embed appearance</h2>
-      <p className="mb-3 text-[11px] text-muted-foreground">
-        How the form itself looks — theme, accent, and text size apply on
-        the standalone link too, not just the iframe embed below. Hide
-        chrome / hide title are the two that only make sense embedded.
-      </p>
-      <div className="space-y-3 text-sm">
+    <>
         <div className="space-y-1.5">
           <Label>Theme</Label>
           <div className="grid grid-cols-2 gap-1.5">
@@ -2009,8 +2071,32 @@ function EmbedAppearanceSection({
             </p>
           </div>
         </div>
+    </>
+  );
+}
 
-        <label className="flex items-center gap-2 pt-1">
+/** What's left under Settings once the actual look-and-feel controls moved
+ *  to the Build tab's Design panel: things that only make sense for the
+ *  embed/output surface specifically, not the form's own appearance. */
+function EmbedAppearanceSection({
+  appearance,
+  onChange,
+  previewUrl,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+  previewUrl: string;
+}) {
+  return (
+    <section className="rounded-2xl border bg-card p-5">
+      <h2 className="mb-1 text-sm font-semibold">Embed options</h2>
+      <p className="mb-3 text-[11px] text-muted-foreground">
+        Looking for theme, accent, font, or spacing? Those moved to the
+        Design panel on the Build tab, so you can see them change against
+        the real form as you edit. These three only matter when embedded.
+      </p>
+      <div className="space-y-3 text-sm">
+        <label className="flex items-center gap-2">
           <Checkbox
             checked={appearance.hideChrome}
             onCheckedChange={(v) => onChange({ hideChrome: !!v })}
