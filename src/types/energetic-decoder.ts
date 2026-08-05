@@ -1,3 +1,4 @@
+import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 
 /**
@@ -6,10 +7,20 @@ import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
  * later phases sharing the same birth-data foundation). Deliberately
  * system-agnostic naming since a sub-account picks which system(s) they
  * offer, not us.
+ *
+ * Structured after researching bodygraph.com (2026-08-05, at her request):
+ * its "dashboard" is a practitioner business tool (saved client charts,
+ * chart design/branding, embeddable lead-capture tool), not a personal
+ * dashboard for whoever gets a reading — the end customer just gets a
+ * one-time chart, no login. She explicitly wants a sales-stats dashboard
+ * skipped, saved client charts linked on the Contact profile, a chart
+ * design tool, and the embeddable tool.
  */
 
 export interface EnergeticDecoderRequest {
   name: string;
+  /** Required — this is what links the reading to a Contact record. */
+  email: string;
   /** YYYY-MM-DD. */
   birthDate: string;
   /** HH:MM, 24-hour. */
@@ -32,4 +43,42 @@ export interface EnergeticDecoderResult {
   birthPlace: string;
   timeZone: string;
   spheres: GeneKeysSphereResult[];
+}
+
+/**
+ * A saved reading — `subAccounts/{saId}/energeticDecoderReadings/{id}` in
+ * spirit, but stored as a flat top-level collection with subAccountId/
+ * agencyId fields (matching `forms`/`contacts`), since listing "every
+ * reading for this contact" and "every reading for this sub-account" are
+ * both flat queries, not nested-under-one-parent lookups.
+ */
+export interface EnergeticDecoderReading {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  contactId: string;
+  system: "geneKeys";
+  name: string;
+  birthDate: string;
+  birthTime: string;
+  birthPlace: string;
+  timeZone: string;
+  spheres: GeneKeysSphereResult[];
+  createdAt: Timestamp | FieldValue | null;
+}
+
+/**
+ * Chart/report design — accent color + logo for now, applied to the
+ * public embeddable tool and (once built) the PDF. One per sub-account,
+ * stored on the sub-account doc itself (`energeticDecoderTheme`) — same
+ * shape convention as `FormAppearance`, just not per-instance since a
+ * practitioner has one brand, not one per reading.
+ */
+export interface EnergeticDecoderTheme {
+  accent: string;
+  logoUrl: string | null;
+}
+
+export function defaultEnergeticDecoderTheme(): EnergeticDecoderTheme {
+  return { accent: "#7c3aed", logoUrl: null };
 }

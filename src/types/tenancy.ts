@@ -20,6 +20,7 @@ export type AppTheme = "leadstack" | "green" | "neutral" | "magnetix";
 
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { SubscriptionStatus, MemberStatus } from "./firebase";
+import type { EnergeticDecoderTheme } from "./energetic-decoder";
 
 export interface AgencyDoc {
   id: string;
@@ -481,6 +482,12 @@ export interface SubAccountDoc {
    * connected. v2 will add Stripe Connect alongside.
    */
   paypalConfig: PayPalConfig | null;
+  /**
+   * Chart/report branding for the Energetic Decoder — accent color + logo,
+   * applied to the public embeddable tool and (once built) the PDF. Null
+   * until the practitioner sets it; falls back to defaultEnergeticDecoderTheme().
+   */
+  energeticDecoderTheme?: EnergeticDecoderTheme | null;
   /**
    * Per-sub-account Stripe Connect (Standard, OAuth) — the real fix for the
    * "student's course sale deposits into the agency owner's Stripe account"

@@ -162,6 +162,12 @@ const PUBLIC_PATHS = [
   // inside each route/page, mirroring /course + /api/course above.
   "/offer",
   "/api/offer",
+  // Energetic Decoder's embeddable public tool — a visitor enters birth
+  // details, gets their reading, and (via the create route) becomes a
+  // Contact. No session of any kind; tenancy checked inside the route by
+  // subAccountId in the URL.
+  "/decoder",
+  "/api/decoder",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid

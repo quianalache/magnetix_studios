@@ -1045,6 +1045,19 @@ service cloud.firestore {
       }
     }
 
+    // ---------- energetic decoder readings ----------
+    // Saved Gene Keys / Human Design / astrology readings, each linked to a
+    // Contact — the Contact profile's "Energetic Readings" section queries
+    // this by contactId. All writes happen server-side (calculation runs
+    // in the Admin SDK), same as form submissions.
+    match /energeticDecoderReadings/{readingId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow write: if false;
+    }
+
     // ---------- automations ----------
     // Configurations (one per attach point). Sub-account admins manage them;
     // every active member can read so dashboards can show "this form is
