@@ -2049,6 +2049,33 @@ function AppearanceFieldsCore({
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between">
+            <Label>Background colour</Label>
+            {appearance.backgroundColor && (
+              <button
+                type="button"
+                onClick={() => onChange({ backgroundColor: null })}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Reset to theme default
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={appearance.backgroundColor ?? (appearance.theme === "dark" ? "#141414" : "#ffffff")}
+              onChange={(e) => onChange({ backgroundColor: e.target.value })}
+              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
+              aria-label="Pick background colour"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {appearance.backgroundColor ? appearance.backgroundColor : "Matches theme (default)"}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
             <Label>Border colour</Label>
             {appearance.borderColor && (
               <button
@@ -2137,7 +2164,7 @@ function EmbedAppearanceSection({
         <div className="rounded-lg border border-dashed bg-muted/30 p-3">
           <p className="text-[11px] text-muted-foreground">Preview</p>
           <iframe
-            key={`${appearance.theme}-${appearance.accent}-${appearance.fontSize}-${appearance.cornerRadius}-${appearance.buttonStyle}-${appearance.fontFamily}-${appearance.borderColor}-${appearance.fieldSpacing}-${appearance.hideChrome}`}
+            key={`${appearance.theme}-${appearance.accent}-${appearance.backgroundColor}-${appearance.fontSize}-${appearance.cornerRadius}-${appearance.buttonStyle}-${appearance.fontFamily}-${appearance.borderColor}-${appearance.fieldSpacing}-${appearance.hideChrome}`}
             src={previewUrl}
             className="mt-2 h-72 w-full rounded-md border bg-transparent"
             style={{ background: "transparent" }}

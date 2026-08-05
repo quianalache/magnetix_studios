@@ -157,6 +157,16 @@ export interface FormAppearance {
   /** Hex string with leading #. Drives the submit button + focus ring. */
   accent: string;
   /**
+   * Override for the form card's own background (`--card`/`--background`).
+   * Hex string, or null/undefined to inherit the theme's default (white
+   * for light, near-black for dark — the behavior before this shipped).
+   * Deliberately separate from `accent` — GHL's own docs are explicit that
+   * primary/accent color only drives interactive states (focus rings,
+   * selected checkboxes, hover) and never touches background, so this
+   * needed its own field rather than being folded into accent.
+   */
+  backgroundColor?: string | null;
+  /**
    * Base text size for the whole form (title, labels, inputs, button), in
    * px. A continuous slider (12–24px), not presets — matches
    * `cornerRadius` below. Optional — undefined on docs saved before this
@@ -414,6 +424,7 @@ export function defaultFormAppearance(): FormAppearance {
   return {
     theme: "light",
     accent: "#7c3aed",
+    backgroundColor: null,
     fontSize: 16,
     cornerRadius: 10,
     buttonStyle: "fill",

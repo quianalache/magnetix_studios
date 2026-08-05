@@ -40,6 +40,7 @@ export function resolveAppearance(
           ? "light"
           : fromSettings.theme,
     accent: normaliseHex(accentParam) ?? fromSettings.accent,
+    backgroundColor: fromSettings.backgroundColor ?? null,
     fontSize: normalizeFontSizePx(fromSettings.fontSize),
     cornerRadius: fromSettings.cornerRadius ?? 10,
     buttonStyle: fromSettings.buttonStyle ?? "fill",
@@ -78,6 +79,19 @@ function normaliseHex(input: string | undefined): string | null {
  * --primary is overridden with the accent so `bg-primary` on the submit
  * button picks up the user's colour.
  *
+ * `backgroundColor` overrides `--card` + `--background` together (the form
+ * renders as one flat card, no separate page-behind-the-card surface, so
+ * both tokens should read the same custom colour) — deliberately separate
+ * from `accent`/primary, matching GHL's own docs: primary only drives
+ * interactive states, background is its own control. Text colour is NOT
+ * auto-adjusted for contrast against a custom background — it stays
+ * whatever the light/dark theme's fixed foreground is, same scoped-override
+ * approach `borderColor` already uses (only touches border/input, not
+ * text). A poorly chosen combo (e.g. a near-black custom background on the
+ * light theme, whose text is also dark) can end up low-contrast; adding an
+ * independent text-colour control is the natural next step if that comes
+ * up, not part of this fix.
+ *
  * `fontSize` sets the actual CSS font-size on this wrapper (not a custom
  * property) — every text element inside that doesn't set its own size
  * inherits it directly; the handful that do (title, labels, inputs) use
@@ -99,6 +113,9 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
   const borderOverride = a.borderColor
     ? { "--border": a.borderColor, "--input": a.borderColor }
     : {};
+  const backgroundOverride = a.backgroundColor
+    ? { "--card": a.backgroundColor, "--background": a.backgroundColor }
+    : {};
   if (a.theme === "dark") {
     return {
       fontSize,
@@ -116,6 +133,7 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
       "--primary": a.accent,
       "--primary-foreground": "oklch(0.985 0 0)",
       ...borderOverride,
+      ...backgroundOverride,
     } as unknown as CSSProperties;
   }
   return {
@@ -134,5 +152,6 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
     "--primary": a.accent,
     "--primary-foreground": "oklch(0.985 0 0)",
     ...borderOverride,
+    ...backgroundOverride,
   } as unknown as CSSProperties;
 }
