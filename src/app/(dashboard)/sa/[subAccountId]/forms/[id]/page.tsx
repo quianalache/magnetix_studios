@@ -567,7 +567,16 @@ export default function FormBuilderPage() {
   }
 
   function removeField(fid: string) {
-    save({ fields: form!.fields.filter((f) => f.id !== fid) });
+    // Also clear `visibleIf` on any other field that conditioned itself on
+    // this one — otherwise it's left pointing at a fieldId that no longer
+    // exists, which `evaluateCondition` reads as permanently "" (silently
+    // stuck hidden or shown, never what the operator intended).
+    const next = form!.fields
+      .filter((f) => f.id !== fid)
+      .map((f) =>
+        f.visibleIf?.fieldId === fid ? { ...f, visibleIf: null } : f,
+      );
+    save({ fields: next });
   }
 
   function moveField(fid: string, dir: -1 | 1) {
@@ -577,7 +586,21 @@ export default function FormBuilderPage() {
     const target = idx + dir;
     if (target < 0 || target >= next.length) return;
     [next[idx], next[target]] = [next[target], next[idx]];
-    save({ fields: next });
+    // A `visibleIf` is only ever meant to reference a field EARLIER in the
+    // list (see the FormField.visibleIf doc comment) — the builder's picker
+    // enforces that at selection time, but a reorder can silently turn a
+    // valid backward reference into a forward one, which the public form
+    // then evaluates against an unanswered ("") value forever. Strip any
+    // condition that the swap just invalidated.
+    const idOrder = new Map(next.map((f, i) => [f.id, i]));
+    const sanitized = next.map((f, i) => {
+      if (!f.visibleIf) return f;
+      const targetIdx = idOrder.get(f.visibleIf.fieldId);
+      return targetIdx === undefined || targetIdx >= i
+        ? { ...f, visibleIf: null }
+        : f;
+    });
+    save({ fields: sanitized });
   }
 
   function updateSettings(patch: Partial<FormSettings>) {
