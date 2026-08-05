@@ -1,14 +1,17 @@
 import "server-only";
 
 /**
- * Minimal Vercel REST client for the in-app setup form.
- *
- * Powers three things and nothing else:
+ * Minimal Vercel REST client, originally built for the in-app env-var setup
+ * form:
  *   1. Reading the project's env-var KEY NAMES (never values) so the form can
  *      show what's already stored vs. still missing.
  *   2. Upserting env vars the agency owner submits.
  *   3. Triggering a redeploy so the new values take effect (Next bakes env at
  *      build time — a redeploy is mandatory, especially for NEXT_PUBLIC_*).
+ *
+ * `requireConfig`/`url`/`vercelFetch` are exported so `src/lib/vercel/
+ * domains.ts` (custom-domain verification) can reuse the same authenticated
+ * fetch plumbing instead of duplicating it — same token, same project.
  *
  * All calls require `VERCEL_TOKEN` + `VERCEL_PROJECT_ID`; `VERCEL_TEAM_ID` is
  * only needed when the project lives under a Vercel team. The deploy hook is a
@@ -39,7 +42,7 @@ export function vercelConfigured(): boolean {
   );
 }
 
-function requireConfig(): { token: string; projectId: string; teamId?: string } {
+export function requireConfig(): { token: string; projectId: string; teamId?: string } {
   const token = process.env.VERCEL_TOKEN?.trim();
   const projectId = process.env.VERCEL_PROJECT_ID?.trim();
   if (!token || !projectId) {
@@ -51,14 +54,14 @@ function requireConfig(): { token: string; projectId: string; teamId?: string } 
   return { token, projectId, teamId };
 }
 
-function url(path: string, teamId?: string, extra?: Record<string, string>): string {
+export function url(path: string, teamId?: string, extra?: Record<string, string>): string {
   const params = new URLSearchParams(extra);
   if (teamId) params.set("teamId", teamId);
   const qs = params.toString();
   return `${API}${path}${qs ? `?${qs}` : ""}`;
 }
 
-async function vercelFetch(
+export async function vercelFetch(
   path: string,
   init: RequestInit,
   teamId?: string,

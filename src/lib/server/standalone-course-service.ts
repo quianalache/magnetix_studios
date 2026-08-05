@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
 import {
   DEFAULT_COURSE_THEME,
@@ -70,10 +71,16 @@ export async function createStandaloneCourseServerSide(opts: {
   const access: StandaloneCourseAccess = opts.access ?? "open";
   const billingType: StandaloneCourseBillingType | null =
     access === "purchase" ? (opts.billingType ?? "oneTime") : null;
+  const slug = await ensureUniqueSlug({
+    db: getAdminDb(),
+    collectionPath: `subAccounts/${opts.subAccountId}/standaloneCourses`,
+    base: opts.title,
+  });
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     title: opts.title.trim(),
+    slug,
     aboutHtml: opts.aboutHtml?.trim() ?? "",
     coverUrl: opts.coverUrl ?? null,
     category: opts.category?.trim() || null,
@@ -128,6 +135,10 @@ export async function createStandaloneCourseServerSide(opts: {
 
 export interface StandaloneCoursePatch {
   title?: string;
+  /** Explicit slug edit. Throws if the format is invalid or another course
+   *  in this sub-account already has it — see `isValidSlugFormat`/
+   *  `isSlugAvailable` in `src/lib/slug.ts`. */
+  slug?: string;
   aboutHtml?: string;
   coverUrl?: string | null;
   category?: string | null;
@@ -159,6 +170,24 @@ export async function updateStandaloneCourseServerSide(opts: {
   };
   const p = opts.patch;
   if (typeof p.title === "string") updates.title = p.title.trim();
+  if (typeof p.slug === "string") {
+    const slug = p.slug.trim().toLowerCase();
+    if (!isValidSlugFormat(slug)) {
+      throw new Error(
+        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen.",
+      );
+    }
+    const available = await isSlugAvailable({
+      db: getAdminDb(),
+      collectionPath: `subAccounts/${opts.subAccountId}/standaloneCourses`,
+      slug,
+      excludeDocId: opts.courseId,
+    });
+    if (!available) {
+      throw new Error(`"${slug}" is already used by another course.`);
+    }
+    updates.slug = slug;
+  }
   if (typeof p.aboutHtml === "string") updates.aboutHtml = p.aboutHtml.trim();
   if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
   if (p.category !== undefined) updates.category = p.category?.trim() || null;
@@ -282,6 +311,20 @@ export async function getStandaloneCourse(
     snap.id,
     snap.data() as Omit<StandaloneCourse, "id">,
   );
+}
+
+/** Slug lookup for the human-readable custom-domain route (/courses/{slug}). Published-only — an unpublished course 404s on its pretty URL same as it would on the opaque one. */
+export async function getStandaloneCourseBySlug(
+  saId: string,
+  slug: string,
+): Promise<StandaloneCourse | null> {
+  const snap = await coursesCol(saId).where("slug", "==", slug).limit(1).get();
+  if (snap.empty) return null;
+  const course = withCourseDefaults(
+    snap.docs[0].id,
+    snap.docs[0].data() as Omit<StandaloneCourse, "id">,
+  );
+  return course.published ? course : null;
 }
 
 /** Full-object replace of a course's theme (staff-only, via the theme editor). */

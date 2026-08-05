@@ -80,6 +80,15 @@ export interface StandaloneCourse {
   subAccountId: string;
   agencyId: string;
   title: string;
+  /**
+   * URL slug, unique within the sub-account (see `ensureUniqueSlug` in
+   * `src/lib/slug.ts`). Powers the human-readable custom-domain route
+   * `/courses/{slug}` (see `src/app/courses/[slug]/page.tsx`) — the opaque
+   * `/course/{saId}/{courseId}` route keeps working regardless. Null on
+   * courses created before this field existed; backfilled from `title` on
+   * first save after, and lazily by the migration script for the rest.
+   */
+  slug: string | null;
   /** Rich-text "About this course" copy, sanitized at render (reuses sanitizeLessonHtml). */
   aboutHtml: string;
   /** Banner/hero image on the public sales page. */

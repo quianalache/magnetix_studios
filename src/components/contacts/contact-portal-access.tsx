@@ -5,18 +5,16 @@ import { toast } from "sonner";
 import { Check, Copy, Loader2, Send } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
+import { buildPortalLoginUrl } from "@/lib/domains/public-url";
 import type { Contact } from "@/types/contacts";
 
 /** Client Portal access for this contact — copy their sign-in link or email it to them directly. */
 export function ContactPortalAccess({ contact }: { contact: Contact }) {
-  const { subAccountId } = useSubAccount();
+  const { subAccountId, subAccount } = useSubAccount();
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const portalUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/portal/${subAccountId}/login`
-      : `/portal/${subAccountId}/login`;
+  const portalUrl = buildPortalLoginUrl({ subAccount, subAccountId });
 
   async function handleCopy() {
     await navigator.clipboard.writeText(portalUrl);

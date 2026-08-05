@@ -138,6 +138,24 @@ export interface SubAccountDoc {
    */
   emailDomainEnabledByAgency?: boolean;
   /**
+   * Per-sub-account custom domain for PUBLIC-FACING pages (booking, the
+   * Energetic Decoder tool, course/offer sales pages, the client portal) —
+   * distinct from `resendConfig`, which only covers outbound email. Null
+   * (or any non-"verified" status) means every public link keeps using the
+   * opaque-ID `/b/[saId]/[slug]`-style routes on the shared platform
+   * domain, same as before this feature existed. See
+   * `src/lib/domains/custom-domain-service.ts`.
+   */
+  customDomain?: SubAccountCustomDomain | null;
+  /**
+   * Agency-controlled gate for the custom-domain feature. Only the agency
+   * owner can flip this. When `false` (or undefined on legacy docs), the
+   * settings card shows a locked state and the add/verify/remove routes
+   * 403 — mirrors `emailDomainEnabledByAgency`'s shape exactly. Defaults to
+   * `false` at creation (explicit allowlist); read `=== true`.
+   */
+  customDomainEnabledByAgency?: boolean;
+  /**
    * Agency-controlled gate for the public API (slice 1-9 v1). Only the
    * agency owner can flip this (PATCH /api/agency/sub-accounts/[id]/
    * feature-gates). When `false` (or undefined on legacy docs): every
@@ -818,6 +836,44 @@ export interface ResendConfig {
   status: "pending" | "verified" | "failed";
   /** Last time we successfully polled Resend and confirmed the domain status. */
   lastValidatedAt: Date | null;
+}
+
+/**
+ * A DNS record Vercel wants added at the registrar to verify/route a custom
+ * domain — shape mirrors what the Vercel Domains API returns (`verification`
+ * on add, `misconfigured`/`verification` on a status check).
+ */
+export interface CustomDomainVerificationRecord {
+  type: string;
+  domain: string;
+  value: string;
+  reason?: string;
+}
+
+export interface SubAccountCustomDomain {
+  /** Apex or subdomain, no scheme, no trailing slash, e.g. "quianalache.com". */
+  domain: string;
+  /** Vercel's domain id, from POST /v10/projects/{id}/domains. Null until the add call succeeds. */
+  vercelDomainId: string | null;
+  /**
+   * "pending" — added to the Vercel project, DNS not yet verified/propagated.
+   * "verified" — Vercel confirms the domain resolves to this project; public
+   * link-builders + the host-resolving routes only activate at this status.
+   * "error" — Vercel reported a misconfiguration on last check.
+   */
+  status: "pending" | "verified" | "error";
+  /** DNS records still needed, from Vercel's verification challenge — shown in the settings UI. Empty once verified. */
+  verificationRecords: CustomDomainVerificationRecord[];
+  /**
+   * Where the bare root path ("/") redirects visitors when this sub-account
+   * has no dedicated homepage of its own yet — e.g. an existing community/
+   * landing page the domain used to point at. Null = the domain's root
+   * shows a minimal built-in placeholder instead of redirecting anywhere.
+   */
+  rootRedirectUrl: string | null;
+  addedAt: Date;
+  verifiedAt: Date | null;
+  lastCheckedAt: Date | null;
 }
 
 export interface BookingConfig {

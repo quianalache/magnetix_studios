@@ -75,6 +75,15 @@ export interface CourseOffer {
   subAccountId: string;
   agencyId: string;
   title: string;
+  /**
+   * URL slug, unique within the sub-account (see `ensureUniqueSlug` in
+   * `src/lib/slug.ts`). Powers the human-readable custom-domain route
+   * `/courses/{slug}` (see `src/app/courses/[slug]/page.tsx`, which tries
+   * an Offer match before a Standalone Course match) — the opaque
+   * `/offer/{saId}/{offerId}` route keeps working regardless. Null on
+   * offers created before this field existed.
+   */
+  slug: string | null;
   /** Rich text; used as the checkout description when set. */
   descriptionHtml: string;
   /** Attached Products (courses) — the bundle. At least one required to publish. */

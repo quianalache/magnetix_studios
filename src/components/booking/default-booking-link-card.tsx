@@ -7,6 +7,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { buildBookingUrl } from "@/lib/domains/public-url";
 import type { BookingPage } from "@/types/booking";
 
 // House pattern for native selects — explicit bg + text on the select AND
@@ -36,11 +37,10 @@ export function DefaultBookingLinkCard({ pages }: { pages: BookingPage[] }) {
   const [customUrl, setCustomUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
   const published = pages.filter((p) => p.status === "published");
 
   function urlForSlug(slug: string): string {
-    return `${appUrl}/b/${subAccountId}/${slug}`;
+    return buildBookingUrl({ subAccount, subAccountId, slug });
   }
 
   // Hydrate from the stored link: a URL matching one of our published

@@ -9,6 +9,8 @@ import {
   subscribeToCourseOffers,
 } from "@/lib/firestore/course-offers";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
+import { useSubAccount } from "@/context/sub-account-context";
+import { buildOfferUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OfferDetailsTab } from "@/components/course-offers/offer-details-tab";
@@ -22,6 +24,7 @@ export default function CourseOfferDetailPage({
   params: Promise<{ subAccountId: string; offerId: string }>;
 }) {
   const { subAccountId, offerId } = use(params);
+  const { subAccount } = useSubAccount();
   const [offer, setOffer] = useState<CourseOffer | null>(null);
   const [allOffers, setAllOffers] = useState<CourseOffer[]>([]);
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
@@ -47,7 +50,12 @@ export default function CourseOfferDetailPage({
 
   function copyLink() {
     if (!offer) return;
-    const url = `${window.location.origin}/offer/${subAccountId}/${offer.id}`;
+    const url = buildOfferUrl({
+      subAccount,
+      subAccountId,
+      offerId: offer.id,
+      slug: offer.slug,
+    });
     navigator.clipboard.writeText(url);
     toast.success("Link copied");
   }

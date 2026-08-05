@@ -1,6 +1,9 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { LANDING_VARIANT } from "@/config/landing";
 import { resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import { resolveHeroVariant } from "@/lib/hero-variant-server";
+import { getSubAccountByCustomDomain } from "@/lib/domains/custom-domain-service";
 
 import { AnnouncementBar } from "@/components/landing/announcement-bar";
 import { Navbar as LeadStackNavbar } from "@/components/landing/navbar";
@@ -45,6 +48,21 @@ import { Footer as CustomFooter } from "@/components/landing-custom/footer";
  * variant live in src/config/landing.ts (CUSTOM_BRAND).
  */
 export default async function HomePage() {
+  // A verified sub-account custom domain's bare root ("/") is NOT this
+  // platform's own marketing landing — send it wherever that sub-account
+  // has configured (their existing site, a community, etc.), or a minimal
+  // placeholder if they haven't set one. The shared platform domain
+  // (crm.magnetixstudios.com and its `.vercel.app` origin) is unaffected —
+  // getSubAccountByCustomDomain only matches a registered custom domain.
+  const host = (await headers()).get("host");
+  const customDomainSub = await getSubAccountByCustomDomain(host);
+  if (customDomainSub) {
+    if (customDomainSub.customDomain?.rootRedirectUrl) {
+      redirect(customDomainSub.customDomain.rootRedirectUrl);
+    }
+    redirect(`/portal/${customDomainSub.id}`);
+  }
+
   if (LANDING_VARIANT === "custom") {
     const brand = await resolveCustomBrand();
     return (

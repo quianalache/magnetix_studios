@@ -20,6 +20,7 @@ import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
 import { Button } from "@/components/ui/button";
 import { BookingHelpDialog } from "@/components/booking/booking-help-dialog";
 import { DefaultBookingLinkCard } from "@/components/booking/default-booking-link-card";
+import { buildBookingUrl } from "@/lib/domains/public-url";
 import type { BookingPage } from "@/types/booking";
 
 /**
@@ -32,7 +33,7 @@ import type { BookingPage } from "@/types/booking";
  */
 export default function BookingListPage() {
   const router = useRouter();
-  const { subAccountId, saPath, isAdmin } = useSubAccount();
+  const { subAccountId, subAccount, saPath, isAdmin } = useSubAccount();
   const [pages, setPages] = useState<BookingPage[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -51,10 +52,8 @@ export default function BookingListPage() {
     return () => unsub();
   }, [subAccountId]);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-
   function publicLinkFor(slug: string): string {
-    return `${appUrl.replace(/\/$/, "")}/b/${subAccountId}/${slug}`;
+    return buildBookingUrl({ subAccount, subAccountId, slug });
   }
 
   function copyLink(slug: string) {

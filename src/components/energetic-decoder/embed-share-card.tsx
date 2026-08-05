@@ -6,15 +6,15 @@ import { toast } from "sonner";
 import { ArrowUpRight, Copy, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubAccount } from "@/context/sub-account-context";
+import { buildDecoderUrl } from "@/lib/domains/public-url";
 
 /** The public embeddable chart tool — her "embeddable chart tool" ask, mirrors bodygraph.com's embed. */
 export function EnergeticDecoderEmbedShareCard({ subAccountId }: { subAccountId: string }) {
-  const { saPath } = useSubAccount();
+  const { subAccount, saPath } = useSubAccount();
   const [copied, setCopied] = useState<"link" | "script" | null>(null);
 
   function buildUrl() {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/decoder/${subAccountId}`;
+    return buildDecoderUrl({ subAccount, subAccountId });
   }
 
   function copy(kind: "link" | "script") {

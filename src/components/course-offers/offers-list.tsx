@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Eye, Link2, Loader2, Palette, Pencil, Plus } from "lucide-react";
 import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
+import { useSubAccount } from "@/context/sub-account-context";
+import { buildOfferUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -44,6 +46,7 @@ export function OffersList({
    *  single course's own "Offers" tab (which offers include this course). */
   courseId?: string;
 }) {
+  const { subAccount } = useSubAccount();
   const [offers, setOffers] = useState<CourseOffer[]>([]);
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -83,7 +86,12 @@ export function OffersList({
   }, [offers, courseId, filter, search]);
 
   function copyLink(offer: CourseOffer) {
-    const url = `${window.location.origin}/offer/${subAccountId}/${offer.id}`;
+    const url = buildOfferUrl({
+      subAccount,
+      subAccountId,
+      offerId: offer.id,
+      slug: offer.slug,
+    });
     navigator.clipboard.writeText(url);
     toast.success("Link copied");
   }

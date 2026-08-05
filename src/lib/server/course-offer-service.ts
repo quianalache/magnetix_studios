@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
 import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
@@ -48,10 +49,16 @@ export async function createCourseOfferServerSide(opts: {
   booking?: CourseOfferBookingBundle | null;
 }): Promise<CourseOffer> {
   const type: OfferType = opts.type ?? "free";
+  const slug = await ensureUniqueSlug({
+    db: getAdminDb(),
+    collectionPath: `subAccounts/${opts.subAccountId}/courseOffers`,
+    base: opts.title,
+  });
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     title: opts.title.trim(),
+    slug,
     descriptionHtml: "",
     courseIds: opts.courseIds,
     type,
@@ -80,6 +87,10 @@ export async function createCourseOfferServerSide(opts: {
 
 export interface CourseOfferPatch {
   title?: string;
+  /** Explicit slug edit. Throws if the format is invalid or another Offer
+   *  in this sub-account already has it — see `isValidSlugFormat`/
+   *  `isSlugAvailable` in `src/lib/slug.ts`. */
+  slug?: string;
   descriptionHtml?: string;
   courseIds?: string[];
   type?: OfferType;
@@ -112,6 +123,24 @@ export async function updateCourseOfferServerSide(opts: {
     version: FieldValue.increment(1),
   };
   if (typeof p.title === "string") updates.title = p.title.trim();
+  if (typeof p.slug === "string") {
+    const slug = p.slug.trim().toLowerCase();
+    if (!isValidSlugFormat(slug)) {
+      throw new Error(
+        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen.",
+      );
+    }
+    const available = await isSlugAvailable({
+      db: getAdminDb(),
+      collectionPath: `subAccounts/${opts.subAccountId}/courseOffers`,
+      slug,
+      excludeDocId: opts.offerId,
+    });
+    if (!available) {
+      throw new Error(`"${slug}" is already used by another offer.`);
+    }
+    updates.slug = slug;
+  }
   if (typeof p.descriptionHtml === "string") {
     updates.descriptionHtml = p.descriptionHtml;
   }
@@ -210,6 +239,17 @@ export async function getCourseOffer(
   const snap = await offerDoc(saId, offerId).get();
   if (!snap.exists) return null;
   return withDefaults(snap.id, snap.data()!);
+}
+
+/** Slug lookup for the human-readable custom-domain route (/courses/{slug}). Published-only — an unpublished offer 404s on its pretty URL same as it would on the opaque one. */
+export async function getCourseOfferBySlug(
+  saId: string,
+  slug: string,
+): Promise<CourseOffer | null> {
+  const snap = await offersCol(saId).where("slug", "==", slug).limit(1).get();
+  if (snap.empty) return null;
+  const offer = withDefaults(snap.docs[0].id, snap.docs[0].data());
+  return offer.visibility === "published" ? offer : null;
 }
 
 export async function listCourseOffers(saId: string): Promise<CourseOffer[]> {

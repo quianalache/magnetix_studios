@@ -119,6 +119,11 @@ const PUBLIC_PATHS = [
   //    visitor can't double-book a slot
   "/b",
   "/api/booking",
+  // Human-readable custom-domain mirror of "/b" — /booking/[slug], only
+  // ever resolves on a verified custom domain (opaque saId+slug still
+  // required on the shared platform domain). Same trust model as /b: the
+  // actual data reads/writes go through /api/booking either way.
+  "/booking",
   // Public event-management page (/e/[token]) + cancel/reschedule
   // endpoints. All gated by HMAC-token + hash match against the stored
   // `event.publicTokenHash`. Reschedule rotates the token so any
@@ -162,6 +167,10 @@ const PUBLIC_PATHS = [
   // inside each route/page, mirroring /course + /api/course above.
   "/offer",
   "/api/offer",
+  // Human-readable custom-domain mirror of "/course" + "/offer" combined —
+  // /courses/[slug], only ever resolves on a verified custom domain. See
+  // src/app/courses/[slug]/page.tsx.
+  "/courses",
   // Energetic Decoder's embeddable public tool — a visitor enters birth
   // details, gets their reading, and (via the create route) becomes a
   // Contact. No session of any kind; tenancy checked inside the route by

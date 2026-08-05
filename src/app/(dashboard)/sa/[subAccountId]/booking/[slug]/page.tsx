@@ -19,6 +19,7 @@ import {
 } from "@/lib/firestore/booking-pages";
 import { Button } from "@/components/ui/button";
 import { BookingPageEditor } from "@/components/booking/booking-page-editor";
+import { buildBookingUrl } from "@/lib/domains/public-url";
 import { toDate } from "@/lib/format";
 import { eventStatus } from "@/types/events";
 import type { BookingPage } from "@/types/booking";
@@ -33,7 +34,7 @@ import type { CalendarEvent } from "@/types/events";
 export default function EditBookingPagePage() {
   const params = useParams<{ subAccountId: string; slug: string }>();
   const slug = params.slug;
-  const { subAccountId, saPath, isAdmin } = useSubAccount();
+  const { subAccountId, subAccount, saPath, isAdmin } = useSubAccount();
   const [page, setPage] = useState<BookingPage | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -75,10 +76,7 @@ export default function EditBookingPagePage() {
     return { total: events.length, upcoming, awaiting };
   })();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const publicLink = page
-    ? `${appUrl.replace(/\/$/, "")}/b/${subAccountId}/${page.slug}`
-    : "";
+  const publicLink = page ? buildBookingUrl({ subAccount, subAccountId, slug: page.slug }) : "";
 
   function copyLink() {
     if (!publicLink) return;
