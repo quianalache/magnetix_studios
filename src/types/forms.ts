@@ -194,10 +194,18 @@ export interface FormAppearance {
    */
   borderColor?: string | null;
   /**
-   * Vertical rhythm between fields and within a field's own label/input
-   * stack. Optional, defaults to "comfortable" (the existing spacing).
+   * Vertical gap between fields, in px. A continuous slider (4–32px), not
+   * presets — matches `fontSize`/`cornerRadius`. The smaller gap within one
+   * field's own label/input stack is derived from this (~45% of it), not
+   * independently configurable. Optional — undefined on docs saved before
+   * this shipped, treated as 16px (the old "comfortable" preset). Docs
+   * saved when this was a 3-option "compact"|"comfortable"|"spacious" enum
+   * still have those string values on disk; every read goes through
+   * `normalizeFieldSpacingPx()` so old forms keep rendering at the exact
+   * gap they always did (compact=8, comfortable=16, spacious=24) without a
+   * migration.
    */
-  fieldSpacing?: "compact" | "comfortable" | "spacious";
+  fieldSpacing?: number | "compact" | "comfortable" | "spacious";
   /** Hide the LeadStack header + "Powered by" footer when embedded. */
   hideChrome: boolean;
   /**
@@ -411,7 +419,7 @@ export function defaultFormAppearance(): FormAppearance {
     buttonStyle: "fill",
     fontFamily: "system",
     borderColor: null,
-    fieldSpacing: "comfortable",
+    fieldSpacing: 16,
     hideChrome: false,
     hideTitle: false,
     customCss: "",
@@ -437,4 +445,30 @@ export function normalizeFontSizePx(value: FormAppearance["fontSize"]): number {
     return LEGACY_FONT_SIZE_PX[value];
   }
   return LEGACY_FONT_SIZE_PX.md;
+}
+
+/** Legacy 3-option values, kept only so old saved forms render unchanged. */
+const LEGACY_FIELD_SPACING_PX: Record<"compact" | "comfortable" | "spacious", number> = {
+  compact: 8,
+  comfortable: 16,
+  spacious: 24,
+};
+
+export const FIELD_SPACING_MIN_PX = 4;
+export const FIELD_SPACING_MAX_PX = 32;
+
+/** Resolve a saved `fieldSpacing` (old string enum, new number, or undefined) to a concrete, clamped px value. */
+export function normalizeFieldSpacingPx(value: FormAppearance["fieldSpacing"]): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.min(FIELD_SPACING_MAX_PX, Math.max(FIELD_SPACING_MIN_PX, value));
+  }
+  if (value === "compact" || value === "comfortable" || value === "spacious") {
+    return LEGACY_FIELD_SPACING_PX[value];
+  }
+  return LEGACY_FIELD_SPACING_PX.comfortable;
+}
+
+/** The smaller gap within one field's own label/input stack — derived from the field-to-field gap, not independently configurable. */
+export function fieldInnerGapPx(fieldSpacingPx: number): number {
+  return Math.max(2, Math.round(fieldSpacingPx * 0.45));
 }

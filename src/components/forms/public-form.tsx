@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import {
   defaultFormAppearance,
   defaultSmsConsentText,
   evaluateCondition,
+  fieldInnerGapPx,
+  normalizeFieldSpacingPx,
   type FormAppearance,
   type FormField,
   type LeadForm,
@@ -45,14 +47,6 @@ function groupIntoSteps(fields: FormField[]): FormField[][] {
   return steps;
 }
 
-const FIELD_SPACING_CLASSES: Record<
-  NonNullable<FormAppearance["fieldSpacing"]>,
-  { formGap: string; fieldGap: string }
-> = {
-  compact: { formGap: "space-y-2", fieldGap: "space-y-1" },
-  comfortable: { formGap: "space-y-4", fieldGap: "space-y-1.5" },
-  spacious: { formGap: "space-y-6", fieldGap: "space-y-2.5" },
-};
 
 /** variant + extra classes so an "outline"/"text" button reads in the
  *  operator's accent colour rather than the neutral default — the base
@@ -90,7 +84,13 @@ export function PublicForm({ form }: PublicFormProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const isLastStep = stepIndex === steps.length - 1;
   const appearance = form.settings.appearance ?? defaultFormAppearance();
-  const spacing = FIELD_SPACING_CLASSES[appearance.fieldSpacing ?? "comfortable"];
+  const formGapPx = normalizeFieldSpacingPx(appearance.fieldSpacing);
+  const fieldGapPx = fieldInnerGapPx(formGapPx);
+  const fieldGapStyle: CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: `${fieldGapPx}px`,
+  };
   const btn = buttonAppearance(appearance.buttonStyle ?? "fill");
 
   // Snapshot attribution on mount — before the user navigates, refreshes, or
@@ -252,7 +252,7 @@ export function PublicForm({ form }: PublicFormProps) {
     }
     if (f.type === "sms_consent") {
       return (
-        <div key={f.id} className={spacing.fieldGap}>
+        <div key={f.id} style={fieldGapStyle}>
           <label className="flex cursor-pointer items-start gap-2 text-[0.875em] leading-snug text-muted-foreground">
             <input
               type="checkbox"
@@ -273,7 +273,7 @@ export function PublicForm({ form }: PublicFormProps) {
       );
     }
     return (
-      <div key={f.id} className={spacing.fieldGap}>
+      <div key={f.id} style={fieldGapStyle}>
         <Label htmlFor={f.id} className="text-[0.875em]">
           {f.label}
           {f.required && <span className="text-destructive">*</span>}
@@ -366,7 +366,10 @@ export function PublicForm({ form }: PublicFormProps) {
   }
 
   return (
-    <form className={spacing.formGap} onSubmit={handleSubmit}>
+    <form
+      style={{ display: "flex", flexDirection: "column", gap: `${formGapPx}px` }}
+      onSubmit={handleSubmit}
+    >
       {steps.length > 1 && (
         <div className="space-y-1.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">

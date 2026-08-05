@@ -52,9 +52,12 @@ import {
   CONDITION_OPERATOR_LABELS,
   defaultFormAppearance,
   defaultSmsConsentText,
+  FIELD_SPACING_MAX_PX,
+  FIELD_SPACING_MIN_PX,
   FONT_FAMILY_STACKS,
   FONT_SIZE_MAX_PX,
   FONT_SIZE_MIN_PX,
+  normalizeFieldSpacingPx,
   normalizeFontSizePx,
   type FormAppearance,
   type FormField,
@@ -1988,23 +1991,21 @@ function AppearanceFieldsCore({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Field spacing</Label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["compact", "comfortable", "spacious"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onChange({ fieldSpacing: s })}
-                className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
-                  (appearance.fieldSpacing ?? "comfortable") === s
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
+          <div className="flex items-baseline justify-between">
+            <Label>Field spacing</Label>
+            <span className="text-[11px] text-muted-foreground">
+              {normalizeFieldSpacingPx(appearance.fieldSpacing)}px
+            </span>
           </div>
+          <input
+            type="range"
+            min={FIELD_SPACING_MIN_PX}
+            max={FIELD_SPACING_MAX_PX}
+            step={1}
+            value={normalizeFieldSpacingPx(appearance.fieldSpacing)}
+            onChange={(e) => onChange({ fieldSpacing: Number(e.target.value) })}
+            className="w-full accent-primary"
+          />
         </div>
 
         <div className="space-y-1.5">
