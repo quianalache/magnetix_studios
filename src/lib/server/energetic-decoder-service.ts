@@ -8,7 +8,16 @@ import {
 } from "@/lib/server/contacts-service";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
-import type { EnergeticDecoderReading, EnergeticDecoderRequest } from "@/types/energetic-decoder";
+import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
+import {
+  ACTIVATION_SEQUENCE_SPHERES,
+  PEARL_SEQUENCE_SPHERES,
+  VENUS_SEQUENCE_SPHERES,
+  defaultEnergeticDecoderReportConfig,
+  type EnergeticDecoderReading,
+  type EnergeticDecoderRequest,
+} from "@/types/energetic-decoder";
+import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 
 export interface CreateReadingInput extends EnergeticDecoderRequest {
   subAccountId: string;
@@ -52,7 +61,32 @@ export async function createEnergeticDecoderReading(
     timeZone: place.timeZone,
   });
 
+  // Merge in the sub-account's own interpretive text per gate (their
+  // rewrite, or the shipped default when they haven't customized that
+  // gate yet) — the calculator itself has no Firestore access, so this
+  // enrichment happens here, not inside calculateGeneKeysProfile.
+  const spheresWithContent = await Promise.all(
+    profile.spheres.map(async (sphere) => {
+      const content = await resolveGateContent(input.subAccountId, sphere.gate);
+      return { ...sphere, ...content };
+    }),
+  );
+
   const db = getAdminDb();
+
+  // Filter to only the sequences this sub-account has chosen to include
+  // (Reports tab checkboxes) — defaults to all three when unset.
+  const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
+  const reportConfig = subSnap.data()?.energeticDecoderReportConfig ?? defaultEnergeticDecoderReportConfig();
+  const includedSpheres = new Set<string>([
+    ...(reportConfig.includeActivation ? ACTIVATION_SEQUENCE_SPHERES : []),
+    ...(reportConfig.includeVenus ? VENUS_SEQUENCE_SPHERES : []),
+    ...(reportConfig.includePearl ? PEARL_SEQUENCE_SPHERES : []),
+  ]);
+  const filteredSpheres: GeneKeysSphereResult[] = spheresWithContent.filter((s) =>
+    includedSpheres.has(s.sphere),
+  );
+
   let contactId = await findExistingContactId(db, input.subAccountId, { email });
   if (!contactId) {
     const { id } = await createContactServerSide({
@@ -82,7 +116,7 @@ export async function createEnergeticDecoderReading(
     birthTime,
     birthPlace: place.displayName,
     timeZone: place.timeZone,
-    spheres: profile.spheres,
+    spheres: filteredSpheres,
     createdAt: FieldValue.serverTimestamp(),
   };
   await readingRef.set(doc);

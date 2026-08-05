@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, Share2 } from "lucide-react";
+import { ArrowUpRight, Copy, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSubAccount } from "@/context/sub-account-context";
 
 /** The public embeddable chart tool — her "embeddable chart tool" ask, mirrors bodygraph.com's embed. */
 export function EnergeticDecoderEmbedShareCard({ subAccountId }: { subAccountId: string }) {
+  const { saPath } = useSubAccount();
   const [copied, setCopied] = useState<"link" | "script" | null>(null);
 
   function buildUrl() {
@@ -48,6 +51,15 @@ export function EnergeticDecoderEmbedShareCard({ subAccountId }: { subAccountId:
         <Button variant="outline" size="sm" onClick={() => copy("script")} className="w-full justify-start">
           <Copy className="mr-1 h-3.5 w-3.5" />
           {copied === "script" ? "Embed copied" : "Copy iframe embed"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          render={<Link href={saPath("/qr-codes")} />}
+        >
+          <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
+          Generate a QR code (opens QR Codes)
         </Button>
       </div>
     </section>

@@ -20,7 +20,7 @@ export type AppTheme = "leadstack" | "green" | "neutral" | "magnetix";
 
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { SubscriptionStatus, MemberStatus } from "./firebase";
-import type { EnergeticDecoderTheme } from "./energetic-decoder";
+import type { EnergeticDecoderTheme, EnergeticDecoderReportConfig } from "./energetic-decoder";
 
 export interface AgencyDoc {
   id: string;
@@ -488,6 +488,8 @@ export interface SubAccountDoc {
    * until the practitioner sets it; falls back to defaultEnergeticDecoderTheme().
    */
   energeticDecoderTheme?: EnergeticDecoderTheme | null;
+  /** Which Gene Keys sequences a reading includes — falls back to defaultEnergeticDecoderReportConfig() (all on). */
+  energeticDecoderReportConfig?: EnergeticDecoderReportConfig | null;
   /**
    * Per-sub-account Stripe Connect (Standard, OAuth) — the real fix for the
    * "student's course sale deposits into the agency owner's Stripe account"

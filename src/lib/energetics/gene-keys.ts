@@ -114,6 +114,15 @@ export interface GeneKeysSphereResult {
   shadow: string;
   gift: string;
   siddhi: string;
+  /**
+   * Practitioner-editable interpretive text (see
+   * energetic-decoder-gate-content-service.ts) — undefined here, since
+   * this pure calculator has no Firestore/sub-account access. Filled in
+   * by createEnergeticDecoderReading() after calculation, from the
+   * sub-account's own per-gate content (override or shipped default).
+   */
+  showsUp?: string;
+  giftText?: string;
 }
 
 export interface GeneKeysBirthInput {

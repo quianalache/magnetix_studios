@@ -418,6 +418,20 @@ service cloud.firestore {
         }
       }
 
+      // Per-gate Gene Keys interpretive text overrides — a practitioner's
+      // own rewrite of the shipped default content (see
+      // gate-content-defaults.ts). Doc id is the gate number as a string.
+      // Staff-readable/writable via /api/sub-accounts/[id]/energetic-decoder/gate-content/*;
+      // reading generation (server-side) falls back to the default when no
+      // override doc exists for a gate.
+      match /energeticDecoderGateContent/{gate} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
       // Reusable, sub-account-scoped course-theme templates (staff-only,
       // never shared across sub-accounts/agencies). All CRUD goes through
       // /api/sub-accounts/[id]/course-theme-templates/* — staff-readable

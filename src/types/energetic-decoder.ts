@@ -82,3 +82,24 @@ export interface EnergeticDecoderTheme {
 export function defaultEnergeticDecoderTheme(): EnergeticDecoderTheme {
   return { accent: "#7c3aed", logoUrl: null };
 }
+
+/**
+ * Which Gene Keys sequences a sub-account's reading actually includes —
+ * the Reports tab's sequence checkboxes. All on by default. Stored on the
+ * sub-account doc (`energeticDecoderReportConfig`), same one-per-
+ * sub-account convention as the theme above.
+ */
+export interface EnergeticDecoderReportConfig {
+  includeActivation: boolean;
+  includeVenus: boolean;
+  includePearl: boolean;
+}
+
+export function defaultEnergeticDecoderReportConfig(): EnergeticDecoderReportConfig {
+  return { includeActivation: true, includeVenus: true, includePearl: true };
+}
+
+/** Sphere → sequence membership, used to filter a reading's spheres by the report config above. */
+export const ACTIVATION_SEQUENCE_SPHERES = ["Life's Work", "Evolution", "Radiance", "Purpose"] as const;
+export const VENUS_SEQUENCE_SPHERES = ["Attraction", "IQ", "EQ", "SQ"] as const;
+export const PEARL_SEQUENCE_SPHERES = ["Vocation", "Brand", "Culture", "Pearl"] as const;
