@@ -17,6 +17,22 @@
       ]
     },
     {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "contactId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "contactId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "energeticDecoderReadings",
       "queryScope": "COLLECTION",
       "fields": [
@@ -210,6 +226,13 @@
     {
       "collectionGroup": "submissions",
       "fieldPath": "contactId",
+      "indexes": [
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "enrollments",
+      "fieldPath": "memberId",
       "indexes": [
         { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING" }
       ]

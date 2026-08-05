@@ -168,6 +168,13 @@ const PUBLIC_PATHS = [
   // subAccountId in the URL.
   "/decoder",
   "/api/decoder",
+  // Client Portal — one login per Contact surfacing their courses, saved
+  // Energetic Decoder readings, upcoming bookings, and invoices. Same
+  // magic-link HMAC session model as Community/Standalone Courses (shared
+  // member identity), but NOT gated on Community being enabled — every
+  // sub-account gets a Portal. Auth checks happen inside each route/page.
+  "/portal",
+  "/api/portal",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid
