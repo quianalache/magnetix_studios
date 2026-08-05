@@ -156,6 +156,14 @@ export interface FormAppearance {
   theme: "light" | "dark";
   /** Hex string with leading #. Drives the submit button + focus ring. */
   accent: string;
+  /**
+   * Base text size for the whole form (title, labels, inputs, button).
+   * Optional — undefined on docs saved before this shipped, treated as
+   * "md" everywhere it's read. "sm"=14px, "md"=16px, "lg"=18px — every
+   * text element in the public form and embed scales off this via `em`,
+   * not a fixed rem size.
+   */
+  fontSize?: "sm" | "md" | "lg";
   /** Hide the LeadStack header + "Powered by" footer when embedded. */
   hideChrome: boolean;
   /**
@@ -352,8 +360,15 @@ export function defaultFormAppearance(): FormAppearance {
   return {
     theme: "light",
     accent: "#7c3aed",
+    fontSize: "md",
     hideChrome: false,
     hideTitle: false,
     customCss: "",
   };
 }
+
+export const FONT_SIZE_PX: Record<NonNullable<FormAppearance["fontSize"]>, number> = {
+  sm: 14,
+  md: 16,
+  lg: 18,
+};

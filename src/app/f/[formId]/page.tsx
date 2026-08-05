@@ -70,10 +70,10 @@ export default async function PublicFormPage({
           <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
             {!appearance.hideTitle && (
               <>
-                <h1 className="text-2xl font-semibold tracking-tight">
+                <h1 className="text-[1.5em] font-semibold tracking-tight">
                   {form.name}
                 </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-[0.875em] text-muted-foreground">
                   Fill this out and we&apos;ll be in touch shortly.
                 </p>
               </>

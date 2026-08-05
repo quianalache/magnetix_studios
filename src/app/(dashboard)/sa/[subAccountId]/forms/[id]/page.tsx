@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
   ListChecks,
   Phone as PhoneIcon,
   Plus,
+  Search,
   SeparatorHorizontal,
   Settings2,
   ShieldCheck,
@@ -44,13 +45,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { PIPELINE_STAGES, type PipelineStageId } from "@/types/deals";
+import { appearanceStyle } from "@/lib/forms/appearance";
 import {
   CONDITION_OPERATOR_LABELS,
   defaultFormAppearance,
@@ -431,6 +427,13 @@ function typeMeta(value: FormFieldType) {
   return FIELD_TYPES.find((t) => t.value === value) ?? FIELD_TYPES[0];
 }
 
+const FIELD_TYPE_GROUPS: { label: string; types: FormFieldType[] }[] = [
+  { label: "Basic", types: ["text", "email", "phone", "company", "textarea", "url"] },
+  { label: "Choice", types: ["select", "radio", "checkboxes"] },
+  { label: "Advanced", types: ["sms_consent", "hidden"] },
+  { label: "Layout", types: ["text_block", "page_break"] },
+];
+
 const MAP_OPTIONS: { value: FormField["mapsTo"]; label: string }[] = [
   { value: null, label: "Don't map (store only)" },
   { value: "name", label: "Contact name" },
@@ -633,28 +636,144 @@ function CanvasInsertGap({
 }) {
   return (
     <div className="group/gap relative h-2.5">
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              aria-label="Insert field here"
-              className="absolute left-1/2 top-1/2 z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-background text-muted-foreground opacity-0 transition-opacity hover:border-primary hover:text-primary group-hover/gap:opacity-100"
-            />
-          }
-        >
-          <Plus className="h-3 w-3" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="w-44">
-          {FIELD_TYPES.map((t) => (
-            <DropdownMenuItem key={t.value} onClick={() => onPick(t.value, atIndex)}>
-              <t.icon className="mr-2 h-3.5 w-3.5" />
-              {t.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <FieldTypePicker
+        align="center"
+        onPick={(t) => onPick(t, atIndex)}
+        trigger={({ onClick, open }) => (
+          <button
+            type="button"
+            onClick={onClick}
+            aria-label="Insert field here"
+            className={`absolute left-1/2 top-1/2 z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-background text-muted-foreground transition-opacity hover:border-primary hover:text-primary group-hover/gap:opacity-100 ${
+              open ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        )}
+      />
     </div>
+  );
+}
+
+/** Grouped (Basic/Choice/Advanced/Layout), searchable field-type picker —
+ *  shared by the rail's "Add field" button and every canvas insert-gap.
+ *  Custom popover rather than the DropdownMenu primitive so a search input
+ *  can live inside it without fighting the menu's own keyboard handling. */
+function FieldTypePicker({
+  onPick,
+  trigger,
+  align = "start",
+}: {
+  onPick: (type: FormFieldType) => void;
+  trigger: (props: { onClick: () => void; open: boolean }) => React.ReactNode;
+  align?: "start" | "center";
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  function pick(t: FormFieldType) {
+    onPick(t);
+    setOpen(false);
+    setQuery("");
+  }
+
+  const q = query.trim().toLowerCase();
+  const filtered = q ? FIELD_TYPES.filter((t) => t.label.toLowerCase().includes(q)) : null;
+
+  return (
+    <div ref={wrapRef} className="relative inline-block">
+      {trigger({ onClick: () => setOpen((v) => !v), open })}
+      {open && (
+        <div
+          className={`absolute z-30 mt-1.5 w-56 rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg ${
+            align === "center" ? "left-1/2 -translate-x-1/2" : "left-0"
+          }`}
+        >
+          <div className="relative mb-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search field types…"
+              className="h-7 w-full rounded-md border border-input bg-transparent pl-6 pr-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {filtered ? (
+              filtered.length === 0 ? (
+                <p className="px-2 py-3 text-center text-[11px] text-muted-foreground">
+                  No matches
+                </p>
+              ) : (
+                filtered.map((t) => (
+                  <FieldTypeItem key={t.value} t={t} onClick={() => pick(t.value)} />
+                ))
+              )
+            ) : (
+              FIELD_TYPE_GROUPS.map((g) => (
+                <div key={g.label} className="mb-1 last:mb-0">
+                  <p className="px-2 pb-0.5 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {g.label}
+                  </p>
+                  {g.types.map((val) => (
+                    <FieldTypeItem key={val} t={typeMeta(val)} onClick={() => pick(val)} />
+                  ))}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FieldTypeItem({
+  t,
+  onClick,
+}: {
+  t: (typeof FIELD_TYPES)[number];
+  onClick: () => void;
+}) {
+  const Icon = t.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${t.tone.iconBg} ${t.tone.iconText}`}
+      >
+        <Icon className="h-3 w-3" />
+      </span>
+      {t.label}
+    </button>
   );
 }
 
@@ -1208,6 +1327,12 @@ export default function FormBuilderPage() {
     setTimeout(() => setCopiedTag(""), 2000);
   }
 
+  // The canvas renders the ACTUAL form appearance (its own light/dark +
+  // accent), not the CRM's own dark sidebar theme — same CSS-variable
+  // override the real public form page uses, so what she edits here is
+  // what a visitor (and the "Preview" link) actually sees.
+  const appearance = form.settings.appearance ?? defaultFormAppearance();
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1318,27 +1443,19 @@ export default function FormBuilderPage() {
         {/* Rail — a single persistent "Add field" entry point, mirroring the
             canvas insert-gap affordance for anyone who doesn't hover a gap. */}
         <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r bg-muted/20 py-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label="Add field"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/15"
-                />
-              }
-            >
-              <Plus className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="right" className="w-44">
-              {FIELD_TYPES.map((t) => (
-                <DropdownMenuItem key={t.value} onClick={() => addField(t.value)}>
-                  <t.icon className="mr-2 h-3.5 w-3.5" />
-                  {t.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <FieldTypePicker
+            onPick={(t) => addField(t)}
+            trigger={({ onClick }) => (
+              <button
+                type="button"
+                onClick={onClick}
+                aria-label="Add field"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/15"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
+          />
         </div>
 
         {/* Canvas — the live form IS the editor. Click a field to edit it on
@@ -1347,8 +1464,11 @@ export default function FormBuilderPage() {
             mockup, adapted to a two-tier split (this canvas + per-field
             panel here, whole-form settings moved to their own tab). */}
         <div className="min-w-0 flex-1 overflow-y-auto bg-muted/10 px-4 py-7 sm:px-8">
-          <div className="mx-auto max-w-lg rounded-2xl border bg-background p-6 shadow-sm">
-            <p className="text-lg font-semibold">{form.name}</p>
+          <div
+            style={appearanceStyle(appearance)}
+            className="mx-auto max-w-lg rounded-2xl border bg-card p-6 text-card-foreground shadow-sm"
+          >
+            <p className="text-[1.5em] font-semibold">{form.name}</p>
             {form.fields.length === 0 ? (
               <div className="mt-4 rounded-lg border border-dashed py-10 text-center text-xs text-muted-foreground">
                 No fields yet. Use <span className="font-medium">Add field</span> to get started.
@@ -1395,7 +1515,7 @@ export default function FormBuilderPage() {
                 )}
               </div>
             )}
-            <div className="mt-5 rounded-lg bg-foreground py-2.5 text-center text-sm font-semibold text-background">
+            <div className="mt-5 rounded-lg bg-primary py-2.5 text-center text-[1em] font-semibold text-primary-foreground">
               Submit
             </div>
           </div>
@@ -1691,8 +1811,9 @@ function EmbedAppearanceSection({
     <section className="rounded-2xl border bg-card p-5">
       <h2 className="mb-1 text-sm font-semibold">Embed appearance</h2>
       <p className="mb-3 text-[11px] text-muted-foreground">
-        How the form looks when embedded as an iframe. The standalone link
-        ignores these — they only kick in for the iframe snippet below.
+        How the form itself looks — theme, accent, and text size apply on
+        the standalone link too, not just the iframe embed below. Hide
+        chrome / hide title are the two that only make sense embedded.
       </p>
       <div className="space-y-3 text-sm">
         <div className="space-y-1.5">
@@ -1710,6 +1831,26 @@ function EmbedAppearanceSection({
                 }`}
               >
                 {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Text size</Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["sm", "md", "lg"] as const).map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => onChange({ fontSize: size })}
+                className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                  (appearance.fontSize ?? "md") === size
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                {size === "sm" ? "Small" : size === "md" ? "Default" : "Large"}
               </button>
             ))}
           </div>
@@ -1793,7 +1934,7 @@ function EmbedAppearanceSection({
         <div className="rounded-lg border border-dashed bg-muted/30 p-3">
           <p className="text-[11px] text-muted-foreground">Preview</p>
           <iframe
-            key={`${appearance.theme}-${appearance.accent}-${appearance.hideChrome}`}
+            key={`${appearance.theme}-${appearance.accent}-${appearance.fontSize}-${appearance.hideChrome}`}
             src={previewUrl}
             className="mt-2 h-72 w-full rounded-md border bg-transparent"
             style={{ background: "transparent" }}

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import {
   defaultFormAppearance,
+  FONT_SIZE_PX,
   type FormAppearance,
   type FormSettings,
 } from "@/types/forms";
@@ -38,6 +39,7 @@ export function resolveAppearance(
           ? "light"
           : fromSettings.theme,
     accent: normaliseHex(accentParam) ?? fromSettings.accent,
+    fontSize: fromSettings.fontSize ?? "md",
     hideChrome: embed || fromSettings.hideChrome,
     hideTitle:
       titleParam === "0" ? true : titleParam === "1" ? false : fromSettings.hideTitle,
@@ -69,10 +71,18 @@ function normaliseHex(input: string | undefined): string | null {
  *
  * --primary is overridden with the accent so `bg-primary` on the submit
  * button picks up the user's colour.
+ *
+ * `fontSize` sets the actual CSS font-size on this wrapper (not a custom
+ * property) — every text element inside that doesn't set its own size
+ * inherits it directly; the handful that do (title, labels, inputs) use
+ * `em`-relative Tailwind classes instead of fixed `rem` ones specifically
+ * so they scale off this instead of the page root.
  */
 export function appearanceStyle(a: FormAppearance): CSSProperties {
+  const fontSize = `${FONT_SIZE_PX[a.fontSize ?? "md"]}px`;
   if (a.theme === "dark") {
     return {
+      fontSize,
       "--background": "oklch(0.145 0 0)",
       "--foreground": "oklch(0.985 0 0)",
       "--card": "oklch(0.205 0 0)",
@@ -87,6 +97,7 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
     } as CSSProperties;
   }
   return {
+    fontSize,
     "--background": "oklch(1 0 0)",
     "--foreground": "oklch(0.145 0 0)",
     "--card": "oklch(1 0 0)",

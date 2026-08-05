@@ -198,7 +198,7 @@ export function PublicForm({ form }: PublicFormProps) {
         <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white">
           <Check className="h-5 w-5" />
         </div>
-        <p className="text-sm font-medium">{success.message}</p>
+        <p className="text-[1em] font-medium">{success.message}</p>
       </div>
     );
   }
@@ -208,10 +208,10 @@ export function PublicForm({ form }: PublicFormProps) {
       return (
         <div key={f.id} className="space-y-1">
           {f.label.trim() && (
-            <h3 className="text-sm font-semibold">{f.label}</h3>
+            <h3 className="text-[1em] font-semibold">{f.label}</h3>
           )}
           {f.content?.trim() && (
-            <p className="text-sm whitespace-pre-line text-muted-foreground">
+            <p className="text-[1em] whitespace-pre-line text-muted-foreground">
               {f.content}
             </p>
           )}
@@ -221,7 +221,7 @@ export function PublicForm({ form }: PublicFormProps) {
     if (f.type === "sms_consent") {
       return (
         <div key={f.id} className="space-y-1.5">
-          <label className="flex cursor-pointer items-start gap-2 text-sm leading-snug text-muted-foreground">
+          <label className="flex cursor-pointer items-start gap-2 text-[0.875em] leading-snug text-muted-foreground">
             <input
               type="checkbox"
               checked={values[f.id] === "true"}
@@ -235,14 +235,14 @@ export function PublicForm({ form }: PublicFormProps) {
             </span>
           </label>
           {errors[f.id] && (
-            <p className="text-xs text-destructive">{errors[f.id]}</p>
+            <p className="text-[0.75em] text-destructive">{errors[f.id]}</p>
           )}
         </div>
       );
     }
     return (
       <div key={f.id} className="space-y-1.5">
-        <Label htmlFor={f.id}>
+        <Label htmlFor={f.id} className="text-[0.875em]">
           {f.label}
           {f.required && <span className="text-destructive">*</span>}
         </Label>
@@ -254,13 +254,14 @@ export function PublicForm({ form }: PublicFormProps) {
             placeholder={f.placeholder}
             rows={4}
             aria-invalid={!!errors[f.id]}
+            className="text-[1em] md:text-[1em]"
           />
         ) : f.type === "radio" ? (
           <div className="space-y-1.5">
             {f.options.map((opt) => (
               <label
                 key={opt}
-                className="flex cursor-pointer items-center gap-2 text-sm"
+                className="flex cursor-pointer items-center gap-2 text-[0.875em]"
               >
                 <input
                   type="radio"
@@ -278,7 +279,7 @@ export function PublicForm({ form }: PublicFormProps) {
             {f.options.map((opt) => (
               <label
                 key={opt}
-                className="flex cursor-pointer items-center gap-2 text-sm"
+                className="flex cursor-pointer items-center gap-2 text-[0.875em]"
               >
                 <input
                   type="checkbox"
@@ -297,7 +298,7 @@ export function PublicForm({ form }: PublicFormProps) {
             id={f.id}
             value={values[f.id] ?? ""}
             onChange={(e) => setValue(f.id, e.target.value)}
-            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-[0.875em] outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
           >
             <option value="">— Choose —</option>
             {f.options.map((opt) => (
@@ -322,10 +323,11 @@ export function PublicForm({ form }: PublicFormProps) {
             onChange={(e) => setValue(f.id, e.target.value)}
             placeholder={f.placeholder}
             aria-invalid={!!errors[f.id]}
+            className="text-[1em] md:text-[1em]"
           />
         )}
         {errors[f.id] && (
-          <p className="text-xs text-destructive">{errors[f.id]}</p>
+          <p className="text-[0.75em] text-destructive">{errors[f.id]}</p>
         )}
       </div>
     );
@@ -343,7 +345,7 @@ export function PublicForm({ form }: PublicFormProps) {
               }}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[0.75em] text-muted-foreground">
             Step {stepIndex + 1} of {steps.length}
           </p>
         </div>
@@ -354,7 +356,7 @@ export function PublicForm({ form }: PublicFormProps) {
         .map(renderField)}
 
       {apiError && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-[0.875em] text-destructive">
           {apiError}
         </div>
       )}
@@ -364,7 +366,7 @@ export function PublicForm({ form }: PublicFormProps) {
           <Button
             type="button"
             variant="outline"
-            className="flex-1"
+            className="flex-1 text-[1em]"
             onClick={handleBack}
             disabled={submitting}
           >
@@ -372,7 +374,7 @@ export function PublicForm({ form }: PublicFormProps) {
           </Button>
         )}
         {isLastStep ? (
-          <Button type="submit" className="flex-1" disabled={submitting}>
+          <Button type="submit" className="flex-1 text-[1em]" disabled={submitting}>
             {submitting ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -383,7 +385,7 @@ export function PublicForm({ form }: PublicFormProps) {
             )}
           </Button>
         ) : (
-          <Button type="button" className="flex-1" onClick={handleNext}>
+          <Button type="button" className="flex-1 text-[1em]" onClick={handleNext}>
             Next
           </Button>
         )}
