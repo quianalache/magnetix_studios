@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { LeadForm } from "@/types/forms";
 import { PublicForm } from "@/components/forms/public-form";
-import { appearanceStyle, resolveAppearance } from "@/lib/forms/appearance";
+import { appearanceStyle, cardStyle, resolveAppearance } from "@/lib/forms/appearance";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +67,20 @@ export default async function PublicFormPage({
               <span className="font-medium text-foreground">LeadStack</span>
             </div>
           )}
-          <div className="rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+          <div
+            className="overflow-hidden rounded-2xl border bg-card p-6 sm:p-8"
+            style={cardStyle(appearance)}
+          >
+            {appearance.headerImage && (
+              <div className="-mx-6 -mt-6 mb-6 sm:-mx-8 sm:-mt-8">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={appearance.headerImage}
+                  alt=""
+                  className="h-40 w-full object-cover"
+                />
+              </div>
+            )}
             {!appearance.hideTitle && (
               <>
                 <h1 className="text-[1.5em] font-semibold tracking-tight">

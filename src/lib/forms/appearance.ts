@@ -3,6 +3,8 @@ import {
   defaultFormAppearance,
   FONT_FAMILY_STACKS,
   normalizeFontSizePx,
+  normalizeShadow,
+  SHADOW_CSS,
   type FormAppearance,
   type FormSettings,
 } from "@/types/forms";
@@ -41,11 +43,18 @@ export function resolveAppearance(
           : fromSettings.theme,
     accent: normaliseHex(accentParam) ?? fromSettings.accent,
     backgroundColor: fromSettings.backgroundColor ?? null,
+    backgroundImage: fromSettings.backgroundImage ?? null,
+    headerImage: fromSettings.headerImage ?? null,
+    textColor: fromSettings.textColor ?? null,
+    shadow: normalizeShadow(fromSettings.shadow),
     fontSize: normalizeFontSizePx(fromSettings.fontSize),
     cornerRadius: fromSettings.cornerRadius ?? 10,
     buttonStyle: fromSettings.buttonStyle ?? "fill",
     fontFamily: fromSettings.fontFamily ?? "system",
     borderColor: fromSettings.borderColor ?? null,
+    input: fromSettings.input ?? {},
+    label: fromSettings.label ?? {},
+    placeholder: fromSettings.placeholder ?? {},
     fieldSpacing: fromSettings.fieldSpacing ?? "comfortable",
     hideChrome: embed || fromSettings.hideChrome,
     hideTitle:
@@ -83,14 +92,29 @@ function normaliseHex(input: string | undefined): string | null {
  * renders as one flat card, no separate page-behind-the-card surface, so
  * both tokens should read the same custom colour) — deliberately separate
  * from `accent`/primary, matching GHL's own docs: primary only drives
- * interactive states, background is its own control. Text colour is NOT
- * auto-adjusted for contrast against a custom background — it stays
- * whatever the light/dark theme's fixed foreground is, same scoped-override
- * approach `borderColor` already uses (only touches border/input, not
- * text). A poorly chosen combo (e.g. a near-black custom background on the
- * light theme, whose text is also dark) can end up low-contrast; adding an
- * independent text-colour control is the natural next step if that comes
- * up, not part of this fix.
+ * interactive states, background is its own control. `textColor` is the
+ * companion override for `--foreground`/`--card-foreground` (title +
+ * labels) — kept as a genuinely separate field from `backgroundColor`
+ * rather than auto-contrasted, so the operator has to deliberately pick a
+ * combo that works, same as GHL leaves it to the operator.
+ *
+ * `backgroundImage` sets a literal CSS `background-image` (cover/center)
+ * on top of whatever `backgroundColor`/theme default is set — the color
+ * shows through as a fallback while the image loads or if it fails.
+ *
+ * `shadow` maps to a real `box-shadow` value (see `SHADOW_CSS`) instead of
+ * a Tailwind `shadow-*` class, since it needs to be swappable per form
+ * instead of hardcoded on the card's className.
+ *
+ * Per-input/-label/-placeholder overrides (focus colour, input padding,
+ * label weight, etc.) are NOT computed here — most apply as direct
+ * `style` props on the individual `<Input>`/`<Label>` elements in
+ * `public-form.tsx`, colocated with where those elements actually
+ * render. Focus colour is the one exception forced back into this
+ * wrapper-level CSS-variable approach: `:focus-visible` is a pseudo-class
+ * React's inline `style` prop can't target at all, so overriding `--ring`
+ * here (already what `accent` drives) is the only way to make it
+ * independently swappable.
  *
  * `fontSize` sets the actual CSS font-size on this wrapper (not a custom
  * property) — every text element inside that doesn't set its own size
@@ -116,6 +140,13 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
   const backgroundOverride = a.backgroundColor
     ? { "--card": a.backgroundColor, "--background": a.backgroundColor }
     : {};
+  const textOverride = a.textColor
+    ? { "--foreground": a.textColor, "--card-foreground": a.textColor }
+    : {};
+  const focusOverride = a.input?.focusColor ? { "--ring": a.input.focusColor } : {};
+  const placeholderOverride = a.placeholder?.color
+    ? { "--ls-placeholder-color": a.placeholder.color }
+    : {};
   if (a.theme === "dark") {
     return {
       fontSize,
@@ -134,6 +165,9 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
       "--primary-foreground": "oklch(0.985 0 0)",
       ...borderOverride,
       ...backgroundOverride,
+      ...textOverride,
+      ...focusOverride,
+      ...placeholderOverride,
     } as unknown as CSSProperties;
   }
   return {
@@ -153,5 +187,69 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
     "--primary-foreground": "oklch(0.985 0 0)",
     ...borderOverride,
     ...backgroundOverride,
+    ...textOverride,
+    ...focusOverride,
+    ...placeholderOverride,
   } as unknown as CSSProperties;
+}
+
+/**
+ * Direct `style` for the form CARD element specifically (the `rounded-2xl
+ * border bg-card ...` div, not the page-level wrapper `appearanceStyle`
+ * targets) — shadow and background image both need to render on the card
+ * itself, not the surrounding page, and neither has an existing
+ * CSS-variable indirection to piggyback on the way `bg-card`/`rounded-2xl`
+ * do off `--card`/`--radius`.
+ */
+export function cardStyle(a: FormAppearance): CSSProperties {
+  return {
+    boxShadow: SHADOW_CSS[normalizeShadow(a.shadow)],
+    ...(a.backgroundImage
+      ? {
+          backgroundImage: `url(${JSON.stringify(a.backgroundImage)})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : {}),
+  };
+}
+
+/** Font-weight CSS values for `label.fontWeight` — matches Tailwind's own font-{weight} scale. */
+export const LABEL_FONT_WEIGHT_CSS: Record<
+  NonNullable<NonNullable<FormAppearance["label"]>["fontWeight"]>,
+  number
+> = {
+  normal: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+};
+
+/**
+ * Direct `style` overrides for one `<Input>`/`<Textarea>` element — text
+ * colour, padding, corner radius, border colour, shadow. Everything here
+ * is a plain CSS property (not a custom-property cascade) since it needs
+ * to win over the shadcn component's own hardcoded Tailwind classes
+ * regardless of class order, and none of it needs pseudo-class support
+ * (unlike focus colour, which `appearanceStyle`'s `--ring` override
+ * handles instead — see that function's doc comment).
+ */
+export function inputElementStyle(a: FormAppearance): CSSProperties {
+  const input = a.input ?? {};
+  return {
+    color: input.textColor ?? undefined,
+    padding: input.padding != null ? `${input.padding}px` : undefined,
+    borderRadius: input.cornerRadius != null ? `${input.cornerRadius}px` : undefined,
+    borderColor: input.borderColor ?? undefined,
+    boxShadow: input.shadow ? SHADOW_CSS[input.shadow] : undefined,
+  };
+}
+
+/** Direct `style` overrides for one `<Label>` element — colour + weight. */
+export function labelElementStyle(a: FormAppearance): CSSProperties {
+  const label = a.label ?? {};
+  return {
+    color: label.color ?? undefined,
+    fontWeight: label.fontWeight ? LABEL_FONT_WEIGHT_CSS[label.fontWeight] : undefined,
+  };
 }

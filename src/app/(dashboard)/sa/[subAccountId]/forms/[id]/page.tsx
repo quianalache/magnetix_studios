@@ -41,13 +41,15 @@ import {
   updateForm,
 } from "@/lib/firestore/forms";
 import { FormSubmissionsList } from "@/components/forms/form-submissions-list";
+import { ImageUpload } from "@/components/community/image-upload";
+import { uploadFormImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PIPELINE_STAGES, type PipelineStageId } from "@/types/deals";
-import { appearanceStyle } from "@/lib/forms/appearance";
+import { appearanceStyle, cardStyle, LABEL_FONT_WEIGHT_CSS } from "@/lib/forms/appearance";
 import {
   CONDITION_OPERATOR_LABELS,
   defaultFormAppearance,
@@ -57,8 +59,13 @@ import {
   FONT_FAMILY_STACKS,
   FONT_SIZE_MAX_PX,
   FONT_SIZE_MIN_PX,
+  INPUT_PADDING_MAX_PX,
+  INPUT_PADDING_MIN_PX,
+  INPUT_RADIUS_MAX_PX,
+  INPUT_RADIUS_MIN_PX,
   normalizeFieldSpacingPx,
   normalizeFontSizePx,
+  normalizeShadow,
   type FormAppearance,
   type FormField,
   type FormFieldConditionOperator,
@@ -813,15 +820,29 @@ function CanvasStepDivider({ onRemove }: { onRemove: () => void }) {
  *  live against the same canvas she's building fields in, per her
  *  explicit ask, instead of context-switching to a separate settings tab
  *  with only a small detached preview to check against. */
+type DesignTab = "theme" | "form" | "fields" | "background";
+
+const DESIGN_TABS: { key: DesignTab; label: string }[] = [
+  { key: "theme", label: "Theme" },
+  { key: "form", label: "Form" },
+  { key: "fields", label: "Fields" },
+  { key: "background", label: "Background" },
+];
+
 function DesignPanel({
   appearance,
   onChange,
   onClose,
+  subAccountId,
+  formId,
 }: {
   appearance: FormAppearance;
   onChange: (patch: Partial<FormAppearance>) => void;
   onClose: () => void;
+  subAccountId: string;
+  formId: string;
 }) {
+  const [tab, setTab] = useState<DesignTab>("theme");
   return (
     <aside className="flex w-80 shrink-0 flex-col border-l bg-card">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -835,10 +856,488 @@ function DesignPanel({
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
+      {/* Four groups instead of one long scroll — mirrors GHL's own
+          Styles/Themes/Advanced split (Layout+Colors, button presets,
+          per-Form/Input/Label/Placeholder), adapted to one panel instead
+          of three separate tabs since our control count per group is
+          smaller. */}
+      <div className="flex gap-1 border-b px-3 pt-2">
+        {DESIGN_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`rounded-t-md px-2.5 py-1.5 text-xs font-medium ${
+              tab === t.key
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
-        <AppearanceFieldsCore appearance={appearance} onChange={onChange} />
+        {tab === "theme" && (
+          <ThemeAppearanceFields appearance={appearance} onChange={onChange} />
+        )}
+        {tab === "form" && (
+          <FormStructureAppearanceFields appearance={appearance} onChange={onChange} />
+        )}
+        {tab === "fields" && (
+          <FieldsAppearanceFields appearance={appearance} onChange={onChange} />
+        )}
+        {tab === "background" && (
+          <BackgroundAppearanceFields
+            appearance={appearance}
+            onChange={onChange}
+            subAccountId={subAccountId}
+            formId={formId}
+          />
+        )}
       </div>
     </aside>
+  );
+}
+
+/** Nullable hex-color override — swatch + hex readout + "Reset to theme default" once set. Used by every color field across all four Design sub-tabs. */
+function ColorPickerField({
+  label,
+  value,
+  fallback,
+  onChange,
+  onReset,
+}: {
+  label: string;
+  value: string | null | undefined;
+  /** Swatch starting point when `value` is unset — the effective default, display-only. */
+  fallback: string;
+  onChange: (hex: string) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <Label>{label}</Label>
+        {value && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Reset to theme default
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value ?? fallback}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
+          aria-label={`Pick ${label.toLowerCase()}`}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {value ? value : "Matches theme (default)"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** Labeled px slider with a live numeric readout — the "an actual number, not presets" control used throughout this panel. */
+function PxSliderField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (px: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline justify-between">
+        <Label>{label}</Label>
+        <span className="text-[11px] text-muted-foreground">{value}px</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-primary"
+      />
+    </div>
+  );
+}
+
+/** none/sm/md/lg shadow picker — shared by the form's own shadow and the input-level override. */
+function ShadowField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: NonNullable<FormAppearance["shadow"]>;
+  onChange: (v: NonNullable<FormAppearance["shadow"]>) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="grid grid-cols-4 gap-1.5">
+        {(["none", "sm", "md", "lg"] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onChange(s)}
+            className={`rounded-lg border px-2 py-2 text-xs font-medium uppercase transition-colors ${
+              value === s
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ThemeAppearanceFields({
+  appearance,
+  onChange,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+}) {
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label>Theme</Label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {(["light", "dark"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onChange({ theme: t })}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                appearance.theme === t
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Accent colour</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={appearance.accent}
+            onChange={(e) => onChange({ accent: e.target.value })}
+            className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
+            aria-label="Pick accent colour"
+          />
+          <Input
+            value={appearance.accent}
+            onChange={(e) => onChange({ accent: e.target.value })}
+            className="h-8 flex-1 font-mono text-xs"
+            placeholder="#7c3aed"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {ACCENT_PRESETS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => onChange({ accent: p.value })}
+              className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                appearance.accent.toLowerCase() === p.value
+                  ? "border-foreground/40"
+                  : "border-input hover:bg-muted/50"
+              }`}
+            >
+              <span className="h-3 w-3 rounded-full" style={{ background: p.value }} />
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          Drives focus rings, selected checkboxes, and the submit button —
+          not background or text (see the Background tab and Text colour
+          below for those).
+        </p>
+      </div>
+
+      <ColorPickerField
+        label="Text colour"
+        value={appearance.textColor}
+        fallback={appearance.theme === "dark" ? "#fafafa" : "#252525"}
+        onChange={(hex) => onChange({ textColor: hex })}
+        onReset={() => onChange({ textColor: null })}
+      />
+
+      <div className="space-y-1.5">
+        <Label>Font</Label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(["system", "serif", "rounded", "mono"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => onChange({ fontFamily: f })}
+              style={{ fontFamily: FONT_FAMILY_STACKS[f] }}
+              className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
+                (appearance.fontFamily ?? "system") === f
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              Aa
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <PxSliderField
+        label="Text size"
+        value={normalizeFontSizePx(appearance.fontSize)}
+        min={FONT_SIZE_MIN_PX}
+        max={FONT_SIZE_MAX_PX}
+        onChange={(px) => onChange({ fontSize: px })}
+      />
+    </>
+  );
+}
+
+function FormStructureAppearanceFields({
+  appearance,
+  onChange,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+}) {
+  return (
+    <>
+      <PxSliderField
+        label="Corner radius"
+        value={appearance.cornerRadius ?? 10}
+        min={0}
+        max={24}
+        onChange={(px) => onChange({ cornerRadius: px })}
+      />
+
+      <ColorPickerField
+        label="Border colour"
+        value={appearance.borderColor}
+        fallback="#e4e4e7"
+        onChange={(hex) => onChange({ borderColor: hex })}
+        onReset={() => onChange({ borderColor: null })}
+      />
+
+      <ShadowField
+        label="Shadow"
+        value={normalizeShadow(appearance.shadow)}
+        onChange={(v) => onChange({ shadow: v })}
+      />
+
+      <div className="space-y-1.5">
+        <Label>Button style</Label>
+        <div className="grid grid-cols-3 gap-1.5">
+          {(["fill", "outline", "text"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onChange({ buttonStyle: s })}
+              className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                (appearance.buttonStyle ?? "fill") === s
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <PxSliderField
+        label="Field spacing"
+        value={normalizeFieldSpacingPx(appearance.fieldSpacing)}
+        min={FIELD_SPACING_MIN_PX}
+        max={FIELD_SPACING_MAX_PX}
+        onChange={(px) => onChange({ fieldSpacing: px })}
+      />
+    </>
+  );
+}
+
+function FieldsAppearanceFields({
+  appearance,
+  onChange,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+}) {
+  const input = appearance.input ?? {};
+  const label = appearance.label ?? {};
+  const placeholder = appearance.placeholder ?? {};
+
+  function updateInput(patch: Partial<NonNullable<FormAppearance["input"]>>) {
+    onChange({ input: { ...input, ...patch } });
+  }
+  function updateLabel(patch: Partial<NonNullable<FormAppearance["label"]>>) {
+    onChange({ label: { ...label, ...patch } });
+  }
+
+  return (
+    <>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        Overrides for the input box itself — leave any of these alone and
+        it falls back to the Form tab&apos;s own border/radius, or the
+        theme default.
+      </p>
+
+      <ColorPickerField
+        label="Input text colour"
+        value={input.textColor}
+        fallback={appearance.theme === "dark" ? "#fafafa" : "#252525"}
+        onChange={(hex) => updateInput({ textColor: hex })}
+        onReset={() => updateInput({ textColor: null })}
+      />
+
+      <ColorPickerField
+        label="Focus colour"
+        value={input.focusColor}
+        fallback={appearance.accent}
+        onChange={(hex) => updateInput({ focusColor: hex })}
+        onReset={() => updateInput({ focusColor: null })}
+      />
+
+      <ColorPickerField
+        label="Input border colour"
+        value={input.borderColor}
+        fallback={appearance.borderColor ?? "#e4e4e7"}
+        onChange={(hex) => updateInput({ borderColor: hex })}
+        onReset={() => updateInput({ borderColor: null })}
+      />
+
+      <PxSliderField
+        label="Input corner radius"
+        value={input.cornerRadius ?? appearance.cornerRadius ?? 10}
+        min={INPUT_RADIUS_MIN_PX}
+        max={INPUT_RADIUS_MAX_PX}
+        onChange={(px) => updateInput({ cornerRadius: px })}
+      />
+
+      <PxSliderField
+        label="Input padding"
+        value={input.padding ?? 10}
+        min={INPUT_PADDING_MIN_PX}
+        max={INPUT_PADDING_MAX_PX}
+        onChange={(px) => updateInput({ padding: px })}
+      />
+
+      <ShadowField
+        label="Input shadow"
+        value={input.shadow ?? "none"}
+        onChange={(v) => updateInput({ shadow: v })}
+      />
+
+      <div className="border-t pt-3">
+        <ColorPickerField
+          label="Label colour"
+          value={label.color}
+          fallback={appearance.theme === "dark" ? "#fafafa" : "#252525"}
+          onChange={(hex) => updateLabel({ color: hex })}
+          onReset={() => updateLabel({ color: null })}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Label weight</Label>
+        <div className="grid grid-cols-4 gap-1.5">
+          {(["normal", "medium", "semibold", "bold"] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => updateLabel({ fontWeight: w })}
+              className={`rounded-lg border px-2 py-2 text-[11px] capitalize transition-colors ${
+                (label.fontWeight ?? "normal") === w
+                  ? "border-primary bg-primary/10 text-foreground"
+                  : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+              }`}
+              style={{ fontWeight: LABEL_FONT_WEIGHT_CSS[w] }}
+            >
+              {w === "semibold" ? "Semi" : w}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t pt-3">
+        <ColorPickerField
+          label="Placeholder colour"
+          value={placeholder.color}
+          fallback="#a1a1aa"
+          onChange={(hex) => onChange({ placeholder: { ...placeholder, color: hex } })}
+          onReset={() => onChange({ placeholder: { ...placeholder, color: null } })}
+        />
+      </div>
+    </>
+  );
+}
+
+function BackgroundAppearanceFields({
+  appearance,
+  onChange,
+  subAccountId,
+  formId,
+}: {
+  appearance: FormAppearance;
+  onChange: (patch: Partial<FormAppearance>) => void;
+  subAccountId: string;
+  formId: string;
+}) {
+  return (
+    <>
+      <ColorPickerField
+        label="Background colour"
+        value={appearance.backgroundColor}
+        fallback={appearance.theme === "dark" ? "#141414" : "#ffffff"}
+        onChange={(hex) => onChange({ backgroundColor: hex })}
+        onReset={() => onChange({ backgroundColor: null })}
+      />
+
+      <ImageUpload
+        label="Background image"
+        hint="Sits behind the background colour — shows through while it loads or if it fails."
+        value={appearance.backgroundImage ?? null}
+        onChange={(url) => onChange({ backgroundImage: url })}
+        onUpload={(file) => uploadFormImage(file, subAccountId, formId, "background")}
+        aspect="video"
+      />
+
+      <ImageUpload
+        label="Header image"
+        hint="A banner shown above the form title."
+        value={appearance.headerImage ?? null}
+        onChange={(url) => onChange({ headerImage: url })}
+        onUpload={(file) => uploadFormImage(file, subAccountId, formId, "header")}
+        aspect="video"
+      />
+    </>
   );
 }
 
@@ -1179,7 +1678,7 @@ export default function FormBuilderPage() {
   const id = params.id;
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
-  const { saPath, subAccount } = useSubAccount();
+  const { saPath, subAccount, subAccountId } = useSubAccount();
   const [form, setForm] = useState<LeadForm | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1528,9 +2027,19 @@ export default function FormBuilderPage() {
             panel here, whole-form settings moved to their own tab). */}
         <div className="min-w-0 flex-1 overflow-y-auto bg-muted/10 px-4 py-7 sm:px-8">
           <div
-            style={appearanceStyle(appearance)}
-            className="mx-auto max-w-lg rounded-2xl border bg-card p-6 text-card-foreground shadow-sm"
+            style={{ ...appearanceStyle(appearance), ...cardStyle(appearance) }}
+            className="mx-auto max-w-lg overflow-hidden rounded-2xl border bg-card p-6 text-card-foreground"
           >
+            {appearance.headerImage && (
+              <div className="-mx-6 -mt-6 mb-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={appearance.headerImage}
+                  alt=""
+                  className="h-40 w-full object-cover"
+                />
+              </div>
+            )}
             <p className="text-[1.5em] font-semibold">{form.name}</p>
             {form.fields.length === 0 ? (
               <div className="mt-4 rounded-lg border border-dashed py-10 text-center text-xs text-muted-foreground">
@@ -1619,6 +2128,8 @@ export default function FormBuilderPage() {
             appearance={appearance}
             onChange={updateAppearance}
             onClose={() => setDesignPanelOpen(false)}
+            subAccountId={subAccountId}
+            formId={id}
           />
         )}
       </div>
@@ -1879,230 +2390,6 @@ const ACCENT_PRESETS: { label: string; value: string }[] = [
   { label: "Slate", value: "#475569" },
 ];
 
-/** Every control that changes how the form itself looks — shared between
- *  the Build tab's Design panel (edited live against the actual canvas)
- *  and used to live under Settings before she pointed out that "embed
- *  appearance" was the wrong place for something that also applies to the
- *  standalone link. */
-function AppearanceFieldsCore({
-  appearance,
-  onChange,
-}: {
-  appearance: FormAppearance;
-  onChange: (patch: Partial<FormAppearance>) => void;
-}) {
-  return (
-    <>
-        <div className="space-y-1.5">
-          <Label>Theme</Label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(["light", "dark"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onChange({ theme: t })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
-                  appearance.theme === t
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <Label>Text size</Label>
-            <span className="text-[11px] text-muted-foreground">
-              {normalizeFontSizePx(appearance.fontSize)}px
-            </span>
-          </div>
-          <input
-            type="range"
-            min={FONT_SIZE_MIN_PX}
-            max={FONT_SIZE_MAX_PX}
-            step={1}
-            value={normalizeFontSizePx(appearance.fontSize)}
-            onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
-            className="w-full accent-primary"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Font</Label>
-          <div className="grid grid-cols-4 gap-1.5">
-            {(["system", "serif", "rounded", "mono"] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => onChange({ fontFamily: f })}
-                style={{ fontFamily: FONT_FAMILY_STACKS[f] }}
-                className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
-                  (appearance.fontFamily ?? "system") === f
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                Aa
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <Label>Corner radius</Label>
-            <span className="text-[11px] text-muted-foreground">
-              {appearance.cornerRadius ?? 10}px
-            </span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={24}
-            step={1}
-            value={appearance.cornerRadius ?? 10}
-            onChange={(e) => onChange({ cornerRadius: Number(e.target.value) })}
-            className="w-full accent-primary"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Button style</Label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["fill", "outline", "text"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => onChange({ buttonStyle: s })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
-                  (appearance.buttonStyle ?? "fill") === s
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <Label>Field spacing</Label>
-            <span className="text-[11px] text-muted-foreground">
-              {normalizeFieldSpacingPx(appearance.fieldSpacing)}px
-            </span>
-          </div>
-          <input
-            type="range"
-            min={FIELD_SPACING_MIN_PX}
-            max={FIELD_SPACING_MAX_PX}
-            step={1}
-            value={normalizeFieldSpacingPx(appearance.fieldSpacing)}
-            onChange={(e) => onChange({ fieldSpacing: Number(e.target.value) })}
-            className="w-full accent-primary"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label>Accent colour</Label>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={appearance.accent}
-              onChange={(e) => onChange({ accent: e.target.value })}
-              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
-              aria-label="Pick accent colour"
-            />
-            <Input
-              value={appearance.accent}
-              onChange={(e) => onChange({ accent: e.target.value })}
-              className="h-8 flex-1 font-mono text-xs"
-              placeholder="#7c3aed"
-            />
-          </div>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            {ACCENT_PRESETS.map((p) => (
-              <button
-                key={p.value}
-                type="button"
-                onClick={() => onChange({ accent: p.value })}
-                className={`flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] transition-colors ${
-                  appearance.accent.toLowerCase() === p.value
-                    ? "border-foreground/40"
-                    : "border-input hover:bg-muted/50"
-                }`}
-              >
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ background: p.value }}
-                />
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <Label>Background colour</Label>
-            {appearance.backgroundColor && (
-              <button
-                type="button"
-                onClick={() => onChange({ backgroundColor: null })}
-                className="text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Reset to theme default
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={appearance.backgroundColor ?? (appearance.theme === "dark" ? "#141414" : "#ffffff")}
-              onChange={(e) => onChange({ backgroundColor: e.target.value })}
-              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
-              aria-label="Pick background colour"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {appearance.backgroundColor ? appearance.backgroundColor : "Matches theme (default)"}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <div className="flex items-baseline justify-between">
-            <Label>Border colour</Label>
-            {appearance.borderColor && (
-              <button
-                type="button"
-                onClick={() => onChange({ borderColor: null })}
-                className="text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Reset to theme default
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={appearance.borderColor ?? "#e4e4e7"}
-              onChange={(e) => onChange({ borderColor: e.target.value })}
-              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
-              aria-label="Pick border colour"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              {appearance.borderColor ? appearance.borderColor : "Matches theme (default)"}
-            </p>
-          </div>
-        </div>
-    </>
-  );
-}
 
 /** What's left under Settings once the actual look-and-feel controls moved
  *  to the Build tab's Design panel: things that only make sense for the
@@ -2164,7 +2451,7 @@ function EmbedAppearanceSection({
         <div className="rounded-lg border border-dashed bg-muted/30 p-3">
           <p className="text-[11px] text-muted-foreground">Preview</p>
           <iframe
-            key={`${appearance.theme}-${appearance.accent}-${appearance.backgroundColor}-${appearance.fontSize}-${appearance.cornerRadius}-${appearance.buttonStyle}-${appearance.fontFamily}-${appearance.borderColor}-${appearance.fieldSpacing}-${appearance.hideChrome}`}
+            key={`${appearance.theme}-${appearance.accent}-${appearance.backgroundColor}-${appearance.backgroundImage}-${appearance.headerImage}-${appearance.textColor}-${appearance.shadow}-${appearance.fontSize}-${appearance.cornerRadius}-${appearance.buttonStyle}-${appearance.fontFamily}-${appearance.borderColor}-${appearance.fieldSpacing}-${appearance.hideChrome}-${JSON.stringify(appearance.input)}-${JSON.stringify(appearance.label)}-${JSON.stringify(appearance.placeholder)}`}
             src={previewUrl}
             className="mt-2 h-72 w-full rounded-md border bg-transparent"
             style={{ background: "transparent" }}

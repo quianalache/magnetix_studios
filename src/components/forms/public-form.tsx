@@ -16,6 +16,7 @@ import {
   type FormField,
   type LeadForm,
 } from "@/types/forms";
+import { inputElementStyle, labelElementStyle } from "@/lib/forms/appearance";
 import type { ContactAttribution } from "@/types/contacts";
 import {
   readAttributionFromBrowser,
@@ -91,6 +92,8 @@ export function PublicForm({ form }: PublicFormProps) {
     flexDirection: "column",
     gap: `${fieldGapPx}px`,
   };
+  const inputStyle = inputElementStyle(appearance);
+  const labelStyle = labelElementStyle(appearance);
   const btn = buttonAppearance(appearance.buttonStyle ?? "fill");
 
   // Snapshot attribution on mount — before the user navigates, refreshes, or
@@ -274,7 +277,7 @@ export function PublicForm({ form }: PublicFormProps) {
     }
     return (
       <div key={f.id} style={fieldGapStyle}>
-        <Label htmlFor={f.id} className="text-[0.875em]">
+        <Label htmlFor={f.id} className="text-[0.875em]" style={labelStyle}>
           {f.label}
           {f.required && <span className="text-destructive">*</span>}
         </Label>
@@ -287,6 +290,7 @@ export function PublicForm({ form }: PublicFormProps) {
             rows={4}
             aria-invalid={!!errors[f.id]}
             className="text-[1em] md:text-[1em]"
+            style={inputStyle}
           />
         ) : f.type === "radio" ? (
           <div className="space-y-1.5">
@@ -331,6 +335,7 @@ export function PublicForm({ form }: PublicFormProps) {
             value={values[f.id] ?? ""}
             onChange={(e) => setValue(f.id, e.target.value)}
             className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-[0.875em] outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+            style={inputStyle}
           >
             <option value="">— Choose —</option>
             {f.options.map((opt) => (
@@ -356,6 +361,7 @@ export function PublicForm({ form }: PublicFormProps) {
             placeholder={f.placeholder}
             aria-invalid={!!errors[f.id]}
             className="text-[1em] md:text-[1em]"
+            style={inputStyle}
           />
         )}
         {errors[f.id] && (
@@ -366,10 +372,20 @@ export function PublicForm({ form }: PublicFormProps) {
   }
 
   return (
-    <form
-      style={{ display: "flex", flexDirection: "column", gap: `${formGapPx}px` }}
-      onSubmit={handleSubmit}
-    >
+    <>
+      {/* Permanent (non-editable) rule for placeholder colour — React's
+          inline `style` prop can't target the `::placeholder` pseudo-
+          element, so this reads the CSS custom property `appearanceStyle`
+          sets on the page wrapper instead. `!important` because it only
+          fires when the operator explicitly chose a placeholder colour
+          (the var is simply absent otherwise), same "operator override
+          must win" reasoning as the customCss escape hatch below. */}
+      <style>{`.ls-form ::placeholder { color: var(--ls-placeholder-color, inherit) !important; opacity: 1; }`}</style>
+      <form
+        className="ls-form"
+        style={{ display: "flex", flexDirection: "column", gap: `${formGapPx}px` }}
+        onSubmit={handleSubmit}
+      >
       {steps.length > 1 && (
         <div className="space-y-1.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -435,6 +451,7 @@ export function PublicForm({ form }: PublicFormProps) {
           </Button>
         )}
       </div>
-    </form>
+      </form>
+    </>
   );
 }

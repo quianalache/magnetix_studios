@@ -136,3 +136,27 @@ export async function uploadCourseOfferThemeImage(
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
 }
+
+/**
+ * Form Design panel — background/header images. Same validation +
+ * behavior, independent Storage path (`forms/{saId}/{formId}/{kind}-
+ * {timestamp}.{ext}`).
+ */
+export async function uploadFormImage(
+  file: File,
+  saId: string,
+  formId: string,
+  kind: "background" | "header",
+): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("Image is too large — keep it under 5 MB.");
+  }
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "img";
+  const path = `forms/${saId}/${formId}/${kind}-${Date.now()}.${ext}`;
+  const storageRef = ref(getFirebaseStorage(), path);
+  await uploadBytes(storageRef, file, { contentType: file.type });
+  return getDownloadURL(storageRef);
+}

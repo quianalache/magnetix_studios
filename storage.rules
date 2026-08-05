@@ -50,6 +50,17 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Form Design panel background/header images — same rules, independent
+    // path. Public read: the hosted /f/[formId] page and iframe embeds are
+    // both public, no session.
+    match /forms/{subAccountId}/{formId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Default deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;

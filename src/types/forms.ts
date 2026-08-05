@@ -167,6 +167,65 @@ export interface FormAppearance {
    */
   backgroundColor?: string | null;
   /**
+   * Background image URL for the form card — sits behind `backgroundColor`
+   * (the color still shows as a fallback/tint while the image loads, or if
+   * the image fails). `cover`/`center`, matching GHL's own background-image
+   * behavior. Null/undefined = no image (the behavior before this shipped).
+   */
+  backgroundImage?: string | null;
+  /**
+   * Banner image shown above the form title — GHL's "Header image". Full
+   * width of the card, positioned above everything else including the
+   * title (which stays visible below it, not overlaid). Null/undefined =
+   * no header image (the behavior before this shipped).
+   */
+  headerImage?: string | null;
+  /**
+   * Override for the form's general text (title + labels — NOT input
+   * values or placeholders, which have their own overrides under `label`/
+   * `input`/`placeholder` below). Hex string, or null/undefined to inherit
+   * the theme's fixed foreground color. Deliberately separate from
+   * `backgroundColor` so a custom background doesn't silently become
+   * unreadable — set both together for a real custom palette.
+   */
+  textColor?: string | null;
+  /**
+   * Drop shadow under the form card. "none" removes the shadow entirely
+   * (the built-in `shadow-sm` before this shipped is now the "sm" value —
+   * undefined/legacy docs read as "sm" so nothing visually changes for
+   * existing forms).
+   */
+  shadow?: "none" | "sm" | "md" | "lg";
+  /**
+   * Per-input-element overrides — text typed into the field, the border
+   * around it, its own corner radius/padding/shadow, and the color it
+   * highlights with on focus (independent from `accent`, matching GHL's
+   * Advanced tab splitting "Input Field -> Focus color" from the form's
+   * overall primary color). Every property optional and independently
+   * nullable; unset falls back to the form-level equivalent (border ->
+   * `borderColor`/theme default, radius -> `cornerRadius`, focus ->
+   * `accent`). Undefined object = every input styled exactly as before
+   * this shipped.
+   */
+  input?: {
+    textColor?: string | null;
+    focusColor?: string | null;
+    borderColor?: string | null;
+    cornerRadius?: number | null;
+    /** Padding in px, applied on all four sides. Null/undefined = the app default (~10px). */
+    padding?: number | null;
+    shadow?: "none" | "sm" | "md" | "lg";
+  };
+  /** Per-label-element overrides — the text above each field, not the input itself. Undefined = theme default color, normal weight (the behavior before this shipped). */
+  label?: {
+    color?: string | null;
+    fontWeight?: "normal" | "medium" | "semibold" | "bold";
+  };
+  /** Placeholder text color inside empty inputs. Undefined = the browser/theme default muted color (the behavior before this shipped). */
+  placeholder?: {
+    color?: string | null;
+  };
+  /**
    * Base text size for the whole form (title, labels, inputs, button), in
    * px. A continuous slider (12–24px), not presets — matches
    * `cornerRadius` below. Optional — undefined on docs saved before this
@@ -425,17 +484,56 @@ export function defaultFormAppearance(): FormAppearance {
     theme: "light",
     accent: "#7c3aed",
     backgroundColor: null,
+    backgroundImage: null,
+    headerImage: null,
+    textColor: null,
+    shadow: "sm",
     fontSize: 16,
     cornerRadius: 10,
     buttonStyle: "fill",
     fontFamily: "system",
     borderColor: null,
+    input: {
+      textColor: null,
+      focusColor: null,
+      borderColor: null,
+      cornerRadius: null,
+      padding: null,
+      shadow: "none",
+    },
+    label: {
+      color: null,
+      fontWeight: "normal",
+    },
+    placeholder: {
+      color: null,
+    },
     fieldSpacing: 16,
     hideChrome: false,
     hideTitle: false,
     customCss: "",
   };
 }
+
+/** Real CSS box-shadow values for each named level — matches Tailwind's own shadow-{sm,md,lg} so "sm" looks identical to the hardcoded shadow-sm class this replaces. */
+export const SHADOW_CSS: Record<NonNullable<FormAppearance["shadow"]>, string> = {
+  none: "none",
+  sm: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+  md: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+  lg: "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+};
+
+/** Undefined/legacy docs (saved before `shadow` existed) read as "sm" — the exact hardcoded shadow-sm class every form already rendered with. */
+export function normalizeShadow(
+  value: FormAppearance["shadow"] | undefined,
+): NonNullable<FormAppearance["shadow"]> {
+  return value ?? "sm";
+}
+
+export const INPUT_RADIUS_MIN_PX = 0;
+export const INPUT_RADIUS_MAX_PX = 24;
+export const INPUT_PADDING_MIN_PX = 4;
+export const INPUT_PADDING_MAX_PX = 20;
 
 /** Legacy 3-option values, kept only so old saved forms render unchanged. */
 const LEGACY_FONT_SIZE_PX: Record<"sm" | "md" | "lg", number> = {
