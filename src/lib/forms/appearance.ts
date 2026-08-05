@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import {
   defaultFormAppearance,
+  FONT_FAMILY_STACKS,
   FONT_SIZE_PX,
   type FormAppearance,
   type FormSettings,
@@ -40,6 +41,11 @@ export function resolveAppearance(
           : fromSettings.theme,
     accent: normaliseHex(accentParam) ?? fromSettings.accent,
     fontSize: fromSettings.fontSize ?? "md",
+    cornerRadius: fromSettings.cornerRadius ?? 10,
+    buttonStyle: fromSettings.buttonStyle ?? "fill",
+    fontFamily: fromSettings.fontFamily ?? "system",
+    borderColor: fromSettings.borderColor ?? null,
+    fieldSpacing: fromSettings.fieldSpacing ?? "comfortable",
     hideChrome: embed || fromSettings.hideChrome,
     hideTitle:
       titleParam === "0" ? true : titleParam === "1" ? false : fromSettings.hideTitle,
@@ -77,12 +83,27 @@ function normaliseHex(input: string | undefined): string | null {
  * inherits it directly; the handful that do (title, labels, inputs) use
  * `em`-relative Tailwind classes instead of fixed `rem` ones specifically
  * so they scale off this instead of the page root.
+ *
+ * `--radius` is the one base token the whole app derives every `rounded-*`
+ * size from (`--radius-lg: var(--radius)`, `--radius-2xl: var(--radius) *
+ * 1.8`, etc. — see globals.css) — overriding it here rescales the form
+ * card, inputs, and buttons together from one slider, no per-component
+ * changes needed. `--font-sans` replaces the app's own font for
+ * everything inside the wrapper; "system" resolves to the same stack the
+ * embed iframe already forced before this shipped.
  */
 export function appearanceStyle(a: FormAppearance): CSSProperties {
   const fontSize = `${FONT_SIZE_PX[a.fontSize ?? "md"]}px`;
+  const radius = `${a.cornerRadius ?? 10}px`;
+  const fontFamily = FONT_FAMILY_STACKS[a.fontFamily ?? "system"];
+  const borderOverride = a.borderColor
+    ? { "--border": a.borderColor, "--input": a.borderColor }
+    : {};
   if (a.theme === "dark") {
     return {
       fontSize,
+      "--radius": radius,
+      "--font-sans": fontFamily,
       "--background": "oklch(0.145 0 0)",
       "--foreground": "oklch(0.985 0 0)",
       "--card": "oklch(0.205 0 0)",
@@ -94,10 +115,13 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
       "--ring": a.accent,
       "--primary": a.accent,
       "--primary-foreground": "oklch(0.985 0 0)",
-    } as CSSProperties;
+      ...borderOverride,
+    } as unknown as CSSProperties;
   }
   return {
     fontSize,
+    "--radius": radius,
+    "--font-sans": fontFamily,
     "--background": "oklch(1 0 0)",
     "--foreground": "oklch(0.145 0 0)",
     "--card": "oklch(1 0 0)",
@@ -109,5 +133,6 @@ export function appearanceStyle(a: FormAppearance): CSSProperties {
     "--ring": a.accent,
     "--primary": a.accent,
     "--primary-foreground": "oklch(0.985 0 0)",
-  } as CSSProperties;
+    ...borderOverride,
+  } as unknown as CSSProperties;
 }

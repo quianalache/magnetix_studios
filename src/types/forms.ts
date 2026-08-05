@@ -164,6 +164,36 @@ export interface FormAppearance {
    * not a fixed rem size.
    */
   fontSize?: "sm" | "md" | "lg";
+  /**
+   * Corner radius in px, applied to the form card, inputs, and buttons
+   * together (they all derive from one `--radius` design token already,
+   * so overriding it rescales everything proportionally). Optional —
+   * undefined on docs saved before this shipped, treated as the app
+   * default (10px).
+   */
+  cornerRadius?: number;
+  /**
+   * Submit/Back/Next button treatment. "fill" = solid accent background
+   * (the only option before this shipped). Optional, defaults to "fill".
+   */
+  buttonStyle?: "fill" | "outline" | "text";
+  /**
+   * Curated web-safe font stacks only (no webfont loading, so no extra
+   * network request or FOUT) — "system" is the existing default.
+   * Optional, defaults to "system".
+   */
+  fontFamily?: "system" | "serif" | "rounded" | "mono";
+  /**
+   * Border color override for the card + inputs. Hex string, or null/
+   * undefined to inherit the theme's own neutral border color (the
+   * behavior before this shipped).
+   */
+  borderColor?: string | null;
+  /**
+   * Vertical rhythm between fields and within a field's own label/input
+   * stack. Optional, defaults to "comfortable" (the existing spacing).
+   */
+  fieldSpacing?: "compact" | "comfortable" | "spacious";
   /** Hide the LeadStack header + "Powered by" footer when embedded. */
   hideChrome: boolean;
   /**
@@ -181,6 +211,18 @@ export interface FormAppearance {
    */
   customCss: string;
 }
+
+export const FONT_FAMILY_STACKS: Record<
+  NonNullable<FormAppearance["fontFamily"]>,
+  string
+> = {
+  system:
+    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+  rounded:
+    'ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif',
+  mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+};
 
 export interface FormSettings {
   pipelineStageId: PipelineStageId | null;
@@ -361,6 +403,11 @@ export function defaultFormAppearance(): FormAppearance {
     theme: "light",
     accent: "#7c3aed",
     fontSize: "md",
+    cornerRadius: 10,
+    buttonStyle: "fill",
+    fontFamily: "system",
+    borderColor: null,
+    fieldSpacing: "comfortable",
     hideChrome: false,
     hideTitle: false,
     customCss: "",

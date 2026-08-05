@@ -51,6 +51,7 @@ import {
   CONDITION_OPERATOR_LABELS,
   defaultFormAppearance,
   defaultSmsConsentText,
+  FONT_FAMILY_STACKS,
   type FormAppearance,
   type FormField,
   type FormFieldConditionOperator,
@@ -1515,7 +1516,15 @@ export default function FormBuilderPage() {
                 )}
               </div>
             )}
-            <div className="mt-5 rounded-lg bg-primary py-2.5 text-center text-[1em] font-semibold text-primary-foreground">
+            <div
+              className={`mt-5 rounded-lg py-2.5 text-center text-[1em] font-semibold ${
+                appearance.buttonStyle === "outline"
+                  ? "border-2 border-primary text-primary"
+                  : appearance.buttonStyle === "text"
+                    ? "text-primary"
+                    : "bg-primary text-primary-foreground"
+              }`}
+            >
               Submit
             </div>
           </div>
@@ -1857,6 +1866,85 @@ function EmbedAppearanceSection({
         </div>
 
         <div className="space-y-1.5">
+          <Label>Font</Label>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(["system", "serif", "rounded", "mono"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => onChange({ fontFamily: f })}
+                style={{ fontFamily: FONT_FAMILY_STACKS[f] }}
+                className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
+                  (appearance.fontFamily ?? "system") === f
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                Aa
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
+            <Label>Corner radius</Label>
+            <span className="text-[11px] text-muted-foreground">
+              {appearance.cornerRadius ?? 10}px
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={24}
+            step={1}
+            value={appearance.cornerRadius ?? 10}
+            onChange={(e) => onChange({ cornerRadius: Number(e.target.value) })}
+            className="w-full accent-primary"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Button style</Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["fill", "outline", "text"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onChange({ buttonStyle: s })}
+                className={`rounded-lg border px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                  (appearance.buttonStyle ?? "fill") === s
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Field spacing</Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(["compact", "comfortable", "spacious"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onChange({ fieldSpacing: s })}
+                className={`rounded-lg border px-2 py-2 text-xs font-medium capitalize transition-colors ${
+                  (appearance.fieldSpacing ?? "comfortable") === s
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
           <Label>Accent colour</Label>
           <div className="flex items-center gap-2">
             <input
@@ -1892,6 +1980,33 @@ function EmbedAppearanceSection({
                 {p.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
+            <Label>Border colour</Label>
+            {appearance.borderColor && (
+              <button
+                type="button"
+                onClick={() => onChange({ borderColor: null })}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Reset to theme default
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={appearance.borderColor ?? "#e4e4e7"}
+              onChange={(e) => onChange({ borderColor: e.target.value })}
+              className="h-8 w-10 cursor-pointer rounded border border-input bg-transparent"
+              aria-label="Pick border colour"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {appearance.borderColor ? appearance.borderColor : "Matches theme (default)"}
+            </p>
           </div>
         </div>
 
@@ -1934,7 +2049,7 @@ function EmbedAppearanceSection({
         <div className="rounded-lg border border-dashed bg-muted/30 p-3">
           <p className="text-[11px] text-muted-foreground">Preview</p>
           <iframe
-            key={`${appearance.theme}-${appearance.accent}-${appearance.fontSize}-${appearance.hideChrome}`}
+            key={`${appearance.theme}-${appearance.accent}-${appearance.fontSize}-${appearance.cornerRadius}-${appearance.buttonStyle}-${appearance.fontFamily}-${appearance.borderColor}-${appearance.fieldSpacing}-${appearance.hideChrome}`}
             src={previewUrl}
             className="mt-2 h-72 w-full rounded-md border bg-transparent"
             style={{ background: "transparent" }}

@@ -116,15 +116,16 @@ function PreviewBar({ backHref }: { backHref: string | null }) {
   );
 }
 
-const SYSTEM_FONT_STACK =
-  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-
 /**
  * Wraps the form with the resolved theme. Forces `html` + `body` background
  * via an inline `<style>` tag because next-themes adds `.dark` to `<html>`
  * based on the visitor's system preference, which would otherwise leak a
  * dark body background through the wrapper. CSS variable overrides on the
  * wrapper only cascade to descendants — they don't reach `body`.
+ *
+ * `font-sans` class + the `--font-sans` var appearanceStyle() sets apply on
+ * every render now (not just embed) — the operator's font-family choice
+ * should show up on the standalone link too, not just the iframe.
  */
 function FormFrame({
   appearance,
@@ -133,10 +134,7 @@ function FormFrame({
   appearance: ReturnType<typeof resolveAppearance>;
   children: React.ReactNode;
 }) {
-  const style = {
-    ...appearanceStyle(appearance),
-    ...(appearance.embed ? { "--font-sans": SYSTEM_FONT_STACK } : {}),
-  };
+  const style = appearanceStyle(appearance);
 
   // Body background per mode. Embed = transparent so the host page shows
   // through. Otherwise an opaque colour matching the theme so the system
@@ -150,8 +148,8 @@ function FormFrame({
   const wrapperClass = appearance.embed
     ? "flex min-h-screen items-center justify-center bg-transparent p-4 font-sans text-foreground sm:p-6"
     : appearance.theme === "dark"
-      ? "flex min-h-screen items-center justify-center bg-[oklch(0.145_0_0)] p-4 text-foreground sm:p-6"
-      : "flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-4 text-foreground sm:p-6";
+      ? "flex min-h-screen items-center justify-center bg-[oklch(0.145_0_0)] p-4 font-sans text-foreground sm:p-6"
+      : "flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-4 font-sans text-foreground sm:p-6";
 
   return (
     <>

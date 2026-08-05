@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  defaultFormAppearance,
   defaultSmsConsentText,
   evaluateCondition,
+  type FormAppearance,
   type FormField,
   type LeadForm,
 } from "@/types/forms";
@@ -43,6 +45,33 @@ function groupIntoSteps(fields: FormField[]): FormField[][] {
   return steps;
 }
 
+const FIELD_SPACING_CLASSES: Record<
+  NonNullable<FormAppearance["fieldSpacing"]>,
+  { formGap: string; fieldGap: string }
+> = {
+  compact: { formGap: "space-y-2", fieldGap: "space-y-1" },
+  comfortable: { formGap: "space-y-4", fieldGap: "space-y-1.5" },
+  spacious: { formGap: "space-y-6", fieldGap: "space-y-2.5" },
+};
+
+/** variant + extra classes so an "outline"/"text" button reads in the
+ *  operator's accent colour rather than the neutral default — the base
+ *  variants alone don't touch colour, only border/background treatment. */
+function buttonAppearance(
+  style: NonNullable<FormAppearance["buttonStyle"]>,
+): { variant: "default" | "outline" | "ghost"; className: string } {
+  if (style === "outline") {
+    return {
+      variant: "outline",
+      className: "border-primary text-primary hover:bg-primary/10 hover:text-primary",
+    };
+  }
+  if (style === "text") {
+    return { variant: "ghost", className: "text-primary hover:bg-primary/10 hover:text-primary" };
+  }
+  return { variant: "default", className: "" };
+}
+
 export function PublicForm({ form }: PublicFormProps) {
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -60,6 +89,9 @@ export function PublicForm({ form }: PublicFormProps) {
   const steps = groupIntoSteps(form.fields);
   const [stepIndex, setStepIndex] = useState(0);
   const isLastStep = stepIndex === steps.length - 1;
+  const appearance = form.settings.appearance ?? defaultFormAppearance();
+  const spacing = FIELD_SPACING_CLASSES[appearance.fieldSpacing ?? "comfortable"];
+  const btn = buttonAppearance(appearance.buttonStyle ?? "fill");
 
   // Snapshot attribution on mount — before the user navigates, refreshes, or
   // the URL is rewritten by a redirect after submission.
@@ -220,7 +252,7 @@ export function PublicForm({ form }: PublicFormProps) {
     }
     if (f.type === "sms_consent") {
       return (
-        <div key={f.id} className="space-y-1.5">
+        <div key={f.id} className={spacing.fieldGap}>
           <label className="flex cursor-pointer items-start gap-2 text-[0.875em] leading-snug text-muted-foreground">
             <input
               type="checkbox"
@@ -241,7 +273,7 @@ export function PublicForm({ form }: PublicFormProps) {
       );
     }
     return (
-      <div key={f.id} className="space-y-1.5">
+      <div key={f.id} className={spacing.fieldGap}>
         <Label htmlFor={f.id} className="text-[0.875em]">
           {f.label}
           {f.required && <span className="text-destructive">*</span>}
@@ -334,7 +366,7 @@ export function PublicForm({ form }: PublicFormProps) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form className={spacing.formGap} onSubmit={handleSubmit}>
       {steps.length > 1 && (
         <div className="space-y-1.5">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -374,7 +406,12 @@ export function PublicForm({ form }: PublicFormProps) {
           </Button>
         )}
         {isLastStep ? (
-          <Button type="submit" className="flex-1 text-[1em]" disabled={submitting}>
+          <Button
+            type="submit"
+            variant={btn.variant}
+            className={`flex-1 text-[1em] ${btn.className}`}
+            disabled={submitting}
+          >
             {submitting ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -385,7 +422,12 @@ export function PublicForm({ form }: PublicFormProps) {
             )}
           </Button>
         ) : (
-          <Button type="button" className="flex-1 text-[1em]" onClick={handleNext}>
+          <Button
+            type="button"
+            variant={btn.variant}
+            className={`flex-1 text-[1em] ${btn.className}`}
+            onClick={handleNext}
+          >
             Next
           </Button>
         )}
