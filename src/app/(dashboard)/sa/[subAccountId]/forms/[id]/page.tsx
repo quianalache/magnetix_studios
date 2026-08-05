@@ -11,22 +11,24 @@ import {
   Building2,
   CheckSquare,
   ChevronDown,
-  ChevronUp,
   CircleDot,
   Copy,
   EyeOff,
   ExternalLink,
   GitBranch,
+  GripVertical,
   Hash,
   Link2,
   ListChecks,
   Phone as PhoneIcon,
   Plus,
   SeparatorHorizontal,
+  Settings2,
   ShieldCheck,
   TextCursor,
   Trash2,
   Type,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -477,6 +479,541 @@ function newField(type: FormFieldType = "text"): FormField {
   };
 }
 
+/** Read-only visual preview of a field's content inside the canvas — the
+ *  same information the operator used to edit inline, now just rendered,
+ *  since editing moved to the side panel. Not the real interactive public
+ *  form (see PublicForm) — no state, no validation, just a stand-in. */
+function CanvasFieldPreview({ field: f }: { field: FormField }) {
+  const hasLogic = !!f.visibleIf;
+
+  if (f.type === "text_block") {
+    return (
+      <div className="space-y-1 pr-5">
+        {f.label.trim() && <p className="text-sm font-semibold">{f.label}</p>}
+        <p className="whitespace-pre-line text-xs text-muted-foreground">
+          {f.content?.trim() || "Instructional text…"}
+        </p>
+      </div>
+    );
+  }
+  if (f.type === "hidden") {
+    return (
+      <div className="flex items-center gap-1.5 pr-5 text-xs text-muted-foreground">
+        <EyeOff className="h-3 w-3 shrink-0" />
+        Hidden — captures{" "}
+        <code className="mono">?{f.queryParam || "utm_source"}</code>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1 pr-5">
+      <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+        {f.label || "Untitled field"}
+        {f.required && <span className="text-destructive">*</span>}
+        {hasLogic && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary">
+            <GitBranch className="h-2.5 w-2.5" /> Logic
+          </span>
+        )}
+      </p>
+      {f.type === "textarea" ? (
+        <div className="h-12 rounded-md border bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+          {f.placeholder}
+        </div>
+      ) : f.type === "select" ? (
+        <div className="flex h-7 items-center justify-between rounded-md border bg-muted/40 px-2 text-xs text-muted-foreground">
+          <span>{f.options[0] ?? "Choose…"}</span>
+          <ChevronDown className="h-3 w-3 shrink-0" />
+        </div>
+      ) : f.type === "radio" || f.type === "checkboxes" ? (
+        <div className="space-y-1">
+          {(f.options.length ? f.options : ["Option"]).slice(0, 4).map((opt) => (
+            <div key={opt} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className={`h-3 w-3 shrink-0 border border-muted-foreground/40 ${
+                  f.type === "radio" ? "rounded-full" : "rounded-sm"
+                }`}
+              />
+              {opt}
+            </div>
+          ))}
+        </div>
+      ) : f.type === "sms_consent" ? (
+        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-muted-foreground/40" />
+          <span className="line-clamp-2">
+            {f.consentText?.trim() || defaultSmsConsentText()}
+          </span>
+        </div>
+      ) : (
+        <div className="h-7 rounded-md border bg-muted/40 px-2 text-xs leading-7 text-muted-foreground">
+          {f.placeholder}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CanvasFieldSlot({
+  field,
+  selected,
+  dragging,
+  dragOver,
+  onSelect,
+  onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: {
+  field: FormField;
+  selected: boolean;
+  dragging: boolean;
+  dragOver: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        onDragStart();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
+      onClick={onSelect}
+      className={`group/canvas-field relative mb-1 cursor-pointer rounded-xl border-2 px-3 py-2.5 pl-8 transition-colors ${
+        selected
+          ? "border-primary bg-primary/5"
+          : dragOver
+            ? "border-primary/50"
+            : "border-transparent hover:bg-muted/60"
+      } ${dragging ? "opacity-40" : ""}`}
+    >
+      <span className="absolute left-1.5 top-1/2 flex h-5 w-4 -translate-y-1/2 cursor-grab items-center justify-center text-muted-foreground/50 opacity-0 group-hover/canvas-field:opacity-100">
+        <GripVertical className="h-3.5 w-3.5" />
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        aria-label="Remove field"
+        className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/60 opacity-0 transition-opacity hover:text-destructive group-hover/canvas-field:opacity-100"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+      <CanvasFieldPreview field={field} />
+    </div>
+  );
+}
+
+/** Hover strip between two canvas fields — the "drag/drop into the form
+ *  itself" affordance she asked for: pick a type, it lands exactly here. */
+function CanvasInsertGap({
+  atIndex,
+  onPick,
+}: {
+  atIndex: number;
+  onPick: (type: FormFieldType, atIndex: number) => void;
+}) {
+  return (
+    <div className="group/gap relative h-2.5">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              type="button"
+              aria-label="Insert field here"
+              className="absolute left-1/2 top-1/2 z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-dashed border-muted-foreground/40 bg-background text-muted-foreground opacity-0 transition-opacity hover:border-primary hover:text-primary group-hover/gap:opacity-100"
+            />
+          }
+        >
+          <Plus className="h-3 w-3" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="center" className="w-44">
+          {FIELD_TYPES.map((t) => (
+            <DropdownMenuItem key={t.value} onClick={() => onPick(t.value, atIndex)}>
+              <t.icon className="mr-2 h-3.5 w-3.5" />
+              {t.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function CanvasStepDivider({ onRemove }: { onRemove: () => void }) {
+  return (
+    <div className="group/step relative my-3 flex items-center gap-2">
+      <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-300">
+        <SeparatorHorizontal className="h-3 w-3" /> New step
+      </span>
+      <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove page break"
+        className="absolute -right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity hover:text-destructive group-hover/step:opacity-100"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
+/** The right-side settings panel — everything that used to be permanently
+ *  inline per-field now lives here, opened by selecting a field on the
+ *  canvas. Field tab = content/validation; Logic tab = conditional
+ *  visibility (hidden fields skip Logic entirely, same as before). */
+function FieldSettingsPanel({
+  form,
+  field: f,
+  index: i,
+  panelTab,
+  onPanelTabChange,
+  onUpdateField,
+  onClose,
+}: {
+  form: LeadForm;
+  field: FormField;
+  index: number;
+  panelTab: "field" | "logic";
+  onPanelTabChange: (t: "field" | "logic") => void;
+  onUpdateField: (patch: Partial<FormField>) => void;
+  onClose: () => void;
+}) {
+  const meta = typeMeta(f.type);
+  const Icon = meta.icon;
+  const showLogicTab = f.type !== "hidden";
+  const showingField = !showLogicTab || panelTab === "field";
+
+  return (
+    <aside className="flex w-80 shrink-0 flex-col border-l bg-card">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${meta.tone.iconBg} ${meta.tone.iconText}`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {meta.label}
+            </p>
+            <p className="truncate text-xs font-semibold">{f.label || "Untitled field"}</p>
+          </div>
+        </div>
+        <Button size="icon-xs" variant="ghost" onClick={onClose} aria-label="Close">
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {showLogicTab && (
+        <div className="flex gap-1 border-b px-3 pt-2">
+          <button
+            type="button"
+            onClick={() => onPanelTabChange("field")}
+            className={`rounded-t-md px-2.5 py-1.5 text-xs font-medium ${
+              showingField ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Field
+          </button>
+          <button
+            type="button"
+            onClick={() => onPanelTabChange("logic")}
+            className={`flex items-center gap-1.5 rounded-t-md px-2.5 py-1.5 text-xs font-medium ${
+              !showingField ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Logic
+            {f.visibleIf && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+          </button>
+        </div>
+      )}
+
+      <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
+        {showingField ? (
+          <>
+            {f.type !== "text_block" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Label</Label>
+                <Input
+                  value={f.label}
+                  onChange={(e) => onUpdateField({ label: e.target.value })}
+                  placeholder="Field label"
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
+            {f.type === "text_block" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Heading (optional)</Label>
+                <Input
+                  value={f.label}
+                  onChange={(e) => onUpdateField({ label: e.target.value })}
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Field type</Label>
+              <select
+                value={f.type}
+                onChange={(e) => onUpdateField({ type: e.target.value as FormFieldType })}
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+              >
+                {FIELD_TYPES.map((t) => (
+                  <option key={t.value} value={t.value} className="bg-background text-foreground">
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {f.type !== "text_block" && f.type !== "hidden" && f.type !== "sms_consent" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Placeholder</Label>
+                  <Input
+                    value={f.placeholder}
+                    onChange={(e) => onUpdateField({ placeholder: e.target.value })}
+                    placeholder="Placeholder (optional)"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Maps to contact field</Label>
+                  <select
+                    value={f.mapsTo ?? ""}
+                    onChange={(e) =>
+                      onUpdateField({ mapsTo: (e.target.value || null) as FormField["mapsTo"] })
+                    }
+                    className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                  >
+                    {MAP_OPTIONS.map((o) => (
+                      <option key={o.label} value={o.value ?? ""} className="bg-background text-foreground">
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {(f.type === "select" || f.type === "radio" || f.type === "checkboxes") && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-xs">
+                  <Hash className="h-3 w-3" /> Options · one per line
+                </Label>
+                <Textarea
+                  rows={4}
+                  value={f.options.join("\n")}
+                  onChange={(e) =>
+                    onUpdateField({
+                      options: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean),
+                    })
+                  }
+                  className="text-sm"
+                  placeholder={"Low budget\nMedium\nEnterprise"}
+                />
+              </div>
+            )}
+
+            {f.type === "sms_consent" && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-xs">
+                  <ShieldCheck className="h-3 w-3" /> Consent text
+                </Label>
+                <Textarea
+                  rows={4}
+                  value={f.consentText ?? ""}
+                  onChange={(e) => onUpdateField({ consentText: e.target.value })}
+                  className="text-sm"
+                  placeholder={defaultSmsConsentText()}
+                />
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  For A2P 10DLC compliance the text must name your business and
+                  include message frequency, &ldquo;message &amp; data rates may
+                  apply,&rdquo; and STOP/HELP instructions. Add your Privacy
+                  Policy + Terms links on the surrounding page.
+                </p>
+              </div>
+            )}
+
+            {f.type === "text_block" && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-xs">
+                  <AlignLeft className="h-3 w-3" /> Instructional text
+                </Label>
+                <Textarea
+                  rows={5}
+                  value={f.content ?? ""}
+                  onChange={(e) => onUpdateField({ content: e.target.value })}
+                  className="text-sm"
+                  placeholder="e.g. Record a quick Loom walking through your question, then paste the link in the field below."
+                />
+              </div>
+            )}
+
+            {f.type === "hidden" && (
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1 text-xs">
+                  <EyeOff className="h-3 w-3" /> URL query parameter
+                </Label>
+                <Input
+                  value={f.queryParam ?? ""}
+                  onChange={(e) => onUpdateField({ queryParam: e.target.value.trim() })}
+                  placeholder="utm_source"
+                  className="h-8 text-sm"
+                />
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Invisible to visitors. Captures{" "}
+                  <code>?{f.queryParam || "utm_source"}=…</code> from the URL on load.
+                </p>
+              </div>
+            )}
+
+            {f.type !== "text_block" && f.type !== "hidden" && (
+              <label className="flex cursor-pointer items-center gap-2 pt-1 text-sm">
+                <Checkbox
+                  checked={f.required}
+                  onCheckedChange={(v) => onUpdateField({ required: !!v })}
+                />
+                Required
+              </label>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <GitBranch className="h-3.5 w-3.5" /> Only show this field when:
+            </p>
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <select
+                value={f.visibleIf?.fieldId ?? ""}
+                onChange={(e) => {
+                  const targetId = e.target.value;
+                  onUpdateField({
+                    visibleIf: targetId
+                      ? {
+                          fieldId: targetId,
+                          operator: f.visibleIf?.operator ?? "equals",
+                          value: f.visibleIf?.value ?? "",
+                        }
+                      : null,
+                  });
+                }}
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+              >
+                <option value="" className="bg-background text-foreground">
+                  Always show
+                </option>
+                {form.fields
+                  .slice(0, i)
+                  .filter((pf) => pf.type !== "page_break" && pf.type !== "text_block")
+                  .map((pf) => (
+                    <option key={pf.id} value={pf.id} className="bg-background text-foreground">
+                      {pf.label || "(untitled field)"}
+                    </option>
+                  ))}
+              </select>
+              {f.visibleIf && (
+                <>
+                  <select
+                    value={f.visibleIf.operator}
+                    onChange={(e) =>
+                      onUpdateField({
+                        visibleIf: {
+                          ...f.visibleIf!,
+                          operator: e.target.value as FormFieldConditionOperator,
+                        },
+                      })
+                    }
+                    className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                  >
+                    {Object.entries(CONDITION_OPERATOR_LABELS).map(([op, opLabel]) => (
+                      <option key={op} value={op} className="bg-background text-foreground">
+                        {opLabel}
+                      </option>
+                    ))}
+                  </select>
+                  {f.visibleIf.operator !== "is_empty" &&
+                    f.visibleIf.operator !== "is_filled" &&
+                    (() => {
+                      const target = form.fields.find((pf) => pf.id === f.visibleIf?.fieldId);
+                      const targetOptions =
+                        target &&
+                        (target.type === "select" ||
+                          target.type === "radio" ||
+                          target.type === "checkboxes")
+                          ? target.options
+                          : null;
+                      return targetOptions ? (
+                        <select
+                          value={f.visibleIf!.value}
+                          onChange={(e) =>
+                            onUpdateField({
+                              visibleIf: { ...f.visibleIf!, value: e.target.value },
+                            })
+                          }
+                          className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                        >
+                          <option value="" className="bg-background text-foreground">
+                            Select…
+                          </option>
+                          {targetOptions.map((opt) => (
+                            <option key={opt} value={opt} className="bg-background text-foreground">
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input
+                          value={f.visibleIf!.value}
+                          onChange={(e) =>
+                            onUpdateField({
+                              visibleIf: { ...f.visibleIf!, value: e.target.value },
+                            })
+                          }
+                          placeholder="Value"
+                          className="h-8 text-sm"
+                        />
+                      );
+                    })()}
+                </>
+              )}
+            </div>
+            {!f.visibleIf && (
+              <p className="text-[11px] text-muted-foreground">
+                Pick a field above to add a condition — this field always shows until you do.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </aside>
+  );
+}
+
 export default function FormBuilderPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
@@ -487,11 +1024,18 @@ export default function FormBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copiedTag, setCopiedTag] = useState("");
-  const [tab, setTab] = useState<"build" | "submissions">(
+  const [tab, setTab] = useState<"build" | "settings" | "submissions">(
     searchParams.get("tab") === "submissions" ? "submissions" : "build",
   );
   const [submissions, setSubmissions] = useState<FormSubmission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(true);
+  // Canvas builder — clicking a field selects it (opens the right settings
+  // panel); dragging reorders it directly in the canvas. Selection resets on
+  // navigating away from Build so the panel never shows stale state.
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [panelTab, setPanelTab] = useState<"field" | "logic">("field");
+  const [dragFieldId, setDragFieldId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Clear the unread badge whenever the Submissions tab is actually viewed
   // (covers both clicking the in-page tab and landing here via ?tab=
@@ -556,14 +1100,23 @@ export default function FormBuilderPage() {
     save({ fields: next });
   }
 
-  function addField(type: FormFieldType = "text") {
+  function addField(type: FormFieldType = "text", atIndex?: number) {
     const field = newField(type);
     // Seed the consent disclosure with the sub-account's business name so the
     // operator starts from compliant, branded copy (still fully editable).
     if (type === "sms_consent") {
       field.consentText = defaultSmsConsentText(subAccount?.name);
     }
-    save({ fields: [...form!.fields, field] });
+    const fields = [...form!.fields];
+    const insertAt = atIndex === undefined ? fields.length : atIndex;
+    fields.splice(insertAt, 0, field);
+    save({ fields });
+    // Land straight on the new field's settings — the canvas insert affordance
+    // is the point of entry, so skip the extra click to open it.
+    if (type !== "page_break") {
+      setSelectedFieldId(field.id);
+      setPanelTab("field");
+    }
   }
 
   function removeField(fid: string) {
@@ -579,28 +1132,31 @@ export default function FormBuilderPage() {
     save({ fields: next });
   }
 
-  function moveField(fid: string, dir: -1 | 1) {
-    const idx = form!.fields.findIndex((f) => f.id === fid);
-    if (idx < 0) return;
-    const next = [...form!.fields];
-    const target = idx + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[idx], next[target]] = [next[target], next[idx]];
-    // A `visibleIf` is only ever meant to reference a field EARLIER in the
-    // list (see the FormField.visibleIf doc comment) — the builder's picker
-    // enforces that at selection time, but a reorder can silently turn a
-    // valid backward reference into a forward one, which the public form
-    // then evaluates against an unanswered ("") value forever. Strip any
-    // condition that the swap just invalidated.
-    const idOrder = new Map(next.map((f, i) => [f.id, i]));
-    const sanitized = next.map((f, i) => {
+  // A `visibleIf` is only ever meant to reference a field EARLIER in the
+  // list (see the FormField.visibleIf doc comment) — the builder's picker
+  // enforces that at selection time, but a reorder can silently turn a
+  // valid backward reference into a forward one, which the public form
+  // then evaluates against an unanswered ("") value forever. Shared by
+  // every reorder path so none of them can reintroduce the bug.
+  function stripInvalidatedVisibleIf(fields: FormField[]): FormField[] {
+    const idOrder = new Map(fields.map((f, i) => [f.id, i]));
+    return fields.map((f, i) => {
       if (!f.visibleIf) return f;
       const targetIdx = idOrder.get(f.visibleIf.fieldId);
       return targetIdx === undefined || targetIdx >= i
         ? { ...f, visibleIf: null }
         : f;
     });
-    save({ fields: sanitized });
+  }
+
+  /** Canvas drag-to-reorder — drop `fid` so it lands at `toIndex` in the resulting array. */
+  function reorderField(fid: string, toIndex: number) {
+    const fields = [...form!.fields];
+    const fromIndex = fields.findIndex((f) => f.id === fid);
+    if (fromIndex < 0 || fromIndex === toIndex) return;
+    const [moved] = fields.splice(fromIndex, 1);
+    fields.splice(fromIndex < toIndex ? toIndex - 1 : toIndex, 0, moved);
+    save({ fields: stripInvalidatedVisibleIf(fields) });
   }
 
   function updateSettings(patch: Partial<FormSettings>) {
@@ -725,6 +1281,18 @@ export default function FormBuilderPage() {
         </button>
         <button
           type="button"
+          onClick={() => setTab("settings")}
+          className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            tab === "settings"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          Settings
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("submissions")}
           className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
             tab === "submissions"
@@ -746,460 +1314,117 @@ export default function FormBuilderPage() {
       )}
 
       {tab === "build" && (
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        {/* Fields column — visually on the right at lg+, source order kept
-            for sensible mobile stacking. */}
-        <section className="rounded-2xl border bg-card p-5 lg:order-2">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold">Fields</h2>
-              <p className="text-[11px] text-muted-foreground">
-                {form.fields.length} total · drag order with the arrows
-              </p>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button size="sm">
-                    <Plus className="mr-1 h-3.5 w-3.5" />
-                    Add field
-                    <ChevronDown className="ml-0.5 h-3 w-3 opacity-70" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-44">
-                {FIELD_TYPES.map((t) => (
-                  <DropdownMenuItem
-                    key={t.value}
-                    onClick={() => addField(t.value)}
-                  >
-                    <t.icon className="mr-2 h-3.5 w-3.5" />
-                    {t.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="space-y-1.5">
-            {form.fields.map((f, i) => {
-              const meta = typeMeta(f.type);
-              const Icon = meta.icon;
-              if (f.type === "page_break") {
-                return (
-                  <div
-                    key={f.id}
-                    className="group/field flex items-center gap-2 py-1"
-                  >
-                    <div className="flex flex-col gap-px">
-                      <button
-                        type="button"
-                        onClick={() => moveField(f.id, -1)}
-                        disabled={i === 0}
-                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
-                        aria-label="Move up"
-                      >
-                        <ChevronUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveField(f.id, 1)}
-                        disabled={i === form.fields.length - 1}
-                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
-                        aria-label="Move down"
-                      >
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
-                    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wide text-orange-600 dark:text-orange-300">
-                      <SeparatorHorizontal className="h-3 w-3" /> New page
-                    </span>
-                    <div className="h-px flex-1 border-t border-dashed border-orange-400/50" />
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      onClick={() => removeField(f.id)}
-                      aria-label="Remove page break"
-                      className="text-muted-foreground/60 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                );
+      <div className="flex overflow-hidden rounded-2xl border bg-card" style={{ minHeight: 560 }}>
+        {/* Rail — a single persistent "Add field" entry point, mirroring the
+            canvas insert-gap affordance for anyone who doesn't hover a gap. */}
+        <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r bg-muted/20 py-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Add field"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/15"
+                />
               }
-              return (
-                <div
-                  key={f.id}
-                  className={`group/field overflow-hidden rounded-lg border bg-background transition-colors ${meta.tone.border}`}
-                >
-                  {/* Header row */}
-                  <div className="flex items-center gap-1 px-2 py-1.5">
-                    <div className="flex flex-col gap-px">
-                      <button
-                        type="button"
-                        onClick={() => moveField(f.id, -1)}
-                        disabled={i === 0}
-                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
-                        aria-label="Move up"
-                      >
-                        <ChevronUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveField(f.id, 1)}
-                        disabled={i === form.fields.length - 1}
-                        className="rounded text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground disabled:opacity-20"
-                        aria-label="Move down"
-                      >
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
+            >
+              <Plus className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="right" className="w-44">
+              {FIELD_TYPES.map((t) => (
+                <DropdownMenuItem key={t.value} onClick={() => addField(t.value)}>
+                  <t.icon className="mr-2 h-3.5 w-3.5" />
+                  {t.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Canvas — the live form IS the editor. Click a field to edit it on
+            the right; drag it to reorder; hover a gap to insert exactly
+            there. Matches the GHL/Typeform pattern she reviewed in the
+            mockup, adapted to a two-tier split (this canvas + per-field
+            panel here, whole-form settings moved to their own tab). */}
+        <div className="min-w-0 flex-1 overflow-y-auto bg-muted/10 px-4 py-7 sm:px-8">
+          <div className="mx-auto max-w-lg rounded-2xl border bg-background p-6 shadow-sm">
+            <p className="text-lg font-semibold">{form.name}</p>
+            {form.fields.length === 0 ? (
+              <div className="mt-4 rounded-lg border border-dashed py-10 text-center text-xs text-muted-foreground">
+                No fields yet. Use <span className="font-medium">Add field</span> to get started.
+              </div>
+            ) : (
+              <div className="mt-3">
+                <CanvasInsertGap atIndex={0} onPick={(t, at) => addField(t, at)} />
+                {form.fields.map((f, i) =>
+                  f.type === "page_break" ? (
+                    <div key={f.id}>
+                      <CanvasStepDivider onRemove={() => removeField(f.id)} />
+                      <CanvasInsertGap atIndex={i + 1} onPick={(t, at) => addField(t, at)} />
                     </div>
-                    <span
-                      className={`ml-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${meta.tone.iconBg} ${meta.tone.iconText}`}
-                      title={meta.label}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                    </span>
-                    <Input
-                      value={f.label}
-                      onChange={(e) =>
-                        updateField(f.id, { label: e.target.value })
-                      }
-                      placeholder={
-                        f.type === "text_block"
-                          ? "Heading (optional)"
-                          : "Field label"
-                      }
-                      className="h-7 flex-1 border-none bg-transparent px-1.5 text-sm font-medium shadow-none focus-visible:ring-0"
-                    />
-                    {f.type !== "text_block" && f.type !== "hidden" && (
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted">
-                        <Checkbox
-                          checked={f.required}
-                          onCheckedChange={(v) =>
-                            updateField(f.id, { required: !!v })
-                          }
-                        />
-                        Required
-                      </label>
-                    )}
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      onClick={() => removeField(f.id)}
-                      aria-label="Remove field"
-                      className="text-muted-foreground/60 opacity-0 transition-opacity hover:text-destructive group-hover/field:opacity-100"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-
-                  {/* Compact meta strip — mapsTo + placeholder are irrelevant
-                      for the consent checkbox, so it gets its own editor
-                      below instead. The text block and hidden field only
-                      need the type selector (no mapsTo/placeholder — a
-                      hidden field's value comes from the query param, not
-                      typed input). */}
-                  {f.type !== "sms_consent" && (
-                  <div
-                    className={`grid grid-cols-1 gap-1.5 border-t bg-muted/20 px-2 py-1.5 text-xs ${
-                      f.type === "text_block" || f.type === "hidden"
-                        ? "sm:grid-cols-[110px_1fr]"
-                        : "sm:grid-cols-[110px_180px_1fr]"
-                    }`}
-                  >
-                    <select
-                      value={f.type}
-                      onChange={(e) =>
-                        updateField(f.id, {
-                          type: e.target.value as FormFieldType,
-                        })
-                      }
-                      aria-label="Field type"
-                      className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                    >
-                      {FIELD_TYPES.map((t) => (
-                        <option
-                          key={t.value}
-                          value={t.value}
-                          className="bg-background text-foreground"
-                        >
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                    {f.type !== "text_block" && f.type !== "hidden" && (
-                      <>
-                        <select
-                          value={f.mapsTo ?? ""}
-                          onChange={(e) =>
-                            updateField(f.id, {
-                              mapsTo:
-                                (e.target.value || null) as FormField["mapsTo"],
-                            })
-                          }
-                          aria-label="Maps to contact"
-                          className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                        >
-                          {MAP_OPTIONS.map((o) => (
-                            <option
-                              key={o.label}
-                              value={o.value ?? ""}
-                              className="bg-background text-foreground"
-                            >
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          value={f.placeholder}
-                          onChange={(e) =>
-                            updateField(f.id, { placeholder: e.target.value })
-                          }
-                          placeholder="Placeholder (optional)"
-                          className="h-7 px-2 text-[11px]"
-                        />
-                      </>
-                    )}
-                  </div>
-                  )}
-
-                  {f.type === "sms_consent" && (
-                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
-                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        <ShieldCheck className="h-3 w-3" /> Consent text (shown
-                        beside the checkbox)
-                      </Label>
-                      <Textarea
-                        rows={3}
-                        value={f.consentText ?? ""}
-                        onChange={(e) =>
-                          updateField(f.id, { consentText: e.target.value })
-                        }
-                        className="min-h-0 text-xs"
-                        placeholder={defaultSmsConsentText()}
+                  ) : (
+                    <div key={f.id}>
+                      <CanvasFieldSlot
+                        field={f}
+                        selected={selectedFieldId === f.id}
+                        dragging={dragFieldId === f.id}
+                        dragOver={dragOverId === f.id}
+                        onSelect={() => {
+                          setSelectedFieldId(f.id);
+                          setPanelTab("field");
+                        }}
+                        onRemove={() => {
+                          if (selectedFieldId === f.id) setSelectedFieldId(null);
+                          removeField(f.id);
+                        }}
+                        onDragStart={() => setDragFieldId(f.id)}
+                        onDragOver={() => setDragOverId(f.id)}
+                        onDrop={() => {
+                          if (dragFieldId) reorderField(dragFieldId, i);
+                          setDragFieldId(null);
+                          setDragOverId(null);
+                        }}
+                        onDragEnd={() => {
+                          setDragFieldId(null);
+                          setDragOverId(null);
+                        }}
                       />
-                      <p className="text-[10px] leading-snug text-muted-foreground">
-                        For A2P 10DLC compliance the text must name your
-                        business and include message frequency, &ldquo;message
-                        &amp; data rates may apply,&rdquo; and STOP/HELP
-                        instructions. The box stays unticked by default — tick
-                        &ldquo;Required&rdquo; only if SMS consent is mandatory
-                        to submit. Add your Privacy Policy + Terms links on the
-                        surrounding page.
-                      </p>
+                      <CanvasInsertGap atIndex={i + 1} onPick={(t, at) => addField(t, at)} />
                     </div>
-                  )}
-
-                  {f.type === "text_block" && (
-                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
-                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        <AlignLeft className="h-3 w-3" /> Instructional text
-                      </Label>
-                      <Textarea
-                        rows={3}
-                        value={f.content ?? ""}
-                        onChange={(e) =>
-                          updateField(f.id, { content: e.target.value })
-                        }
-                        className="min-h-0 text-xs"
-                        placeholder="e.g. Record a quick Loom walking through your question, then paste the link in the field below."
-                      />
-                    </div>
-                  )}
-
-                  {f.type === "hidden" && (
-                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
-                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        <EyeOff className="h-3 w-3" /> URL query parameter to capture
-                      </Label>
-                      <Input
-                        value={f.queryParam ?? ""}
-                        onChange={(e) =>
-                          updateField(f.id, { queryParam: e.target.value.trim() })
-                        }
-                        placeholder="utm_source"
-                        className="h-7 px-2 text-[11px]"
-                      />
-                      <p className="text-[10px] leading-snug text-muted-foreground">
-                        Invisible to visitors. When someone lands on this form
-                        with <code>?{f.queryParam || "utm_source"}=…</code> in
-                        the URL, that value is captured and submitted
-                        automatically — useful for tracking traffic source
-                        without asking the visitor anything.
-                      </p>
-                    </div>
-                  )}
-
-                  {(f.type === "select" ||
-                    f.type === "radio" ||
-                    f.type === "checkboxes") && (
-                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
-                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        <Hash className="h-3 w-3" /> Options · one per line
-                      </Label>
-                      <Textarea
-                        rows={3}
-                        value={f.options.join("\n")}
-                        onChange={(e) =>
-                          updateField(f.id, {
-                            options: e.target.value
-                              .split("\n")
-                              .map((s) => s.trim())
-                              .filter(Boolean),
-                          })
-                        }
-                        className="min-h-0 text-xs"
-                        placeholder={"Low budget\nMedium\nEnterprise"}
-                      />
-                    </div>
-                  )}
-
-                  {f.type !== "hidden" && (
-                    <div className="space-y-1 border-t bg-muted/20 px-2 py-1.5">
-                      <Label className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                        <GitBranch className="h-3 w-3" /> Show this field only if
-                      </Label>
-                      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-                        <select
-                          value={f.visibleIf?.fieldId ?? ""}
-                          onChange={(e) => {
-                            const targetId = e.target.value;
-                            updateField(f.id, {
-                              visibleIf: targetId
-                                ? {
-                                    fieldId: targetId,
-                                    operator: f.visibleIf?.operator ?? "equals",
-                                    value: f.visibleIf?.value ?? "",
-                                  }
-                                : null,
-                            });
-                          }}
-                          aria-label="Condition field"
-                          className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                        >
-                          <option value="" className="bg-background text-foreground">
-                            Always show
-                          </option>
-                          {form.fields
-                            .slice(0, i)
-                            .filter(
-                              (pf) =>
-                                pf.type !== "page_break" &&
-                                pf.type !== "text_block",
-                            )
-                            .map((pf) => (
-                              <option
-                                key={pf.id}
-                                value={pf.id}
-                                className="bg-background text-foreground"
-                              >
-                                {pf.label || "(untitled field)"}
-                              </option>
-                            ))}
-                        </select>
-                        {f.visibleIf && (
-                          <>
-                            <select
-                              value={f.visibleIf.operator}
-                              onChange={(e) =>
-                                updateField(f.id, {
-                                  visibleIf: {
-                                    ...f.visibleIf!,
-                                    operator: e.target
-                                      .value as FormFieldConditionOperator,
-                                  },
-                                })
-                              }
-                              aria-label="Condition operator"
-                              className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                            >
-                              {Object.entries(CONDITION_OPERATOR_LABELS).map(
-                                ([op, opLabel]) => (
-                                  <option
-                                    key={op}
-                                    value={op}
-                                    className="bg-background text-foreground"
-                                  >
-                                    {opLabel}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                            {f.visibleIf.operator !== "is_empty" &&
-                              f.visibleIf.operator !== "is_filled" &&
-                              (() => {
-                                const target = form.fields.find(
-                                  (pf) => pf.id === f.visibleIf?.fieldId,
-                                );
-                                const targetOptions =
-                                  target &&
-                                  (target.type === "select" ||
-                                    target.type === "radio" ||
-                                    target.type === "checkboxes")
-                                    ? target.options
-                                    : null;
-                                return targetOptions ? (
-                                  <select
-                                    value={f.visibleIf!.value}
-                                    onChange={(e) =>
-                                      updateField(f.id, {
-                                        visibleIf: {
-                                          ...f.visibleIf!,
-                                          value: e.target.value,
-                                        },
-                                      })
-                                    }
-                                    aria-label="Condition value"
-                                    className="h-7 rounded-md border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-                                  >
-                                    <option value="" className="bg-background text-foreground">
-                                      Select…
-                                    </option>
-                                    {targetOptions.map((opt) => (
-                                      <option
-                                        key={opt}
-                                        value={opt}
-                                        className="bg-background text-foreground"
-                                      >
-                                        {opt}
-                                      </option>
-                                    ))}
-                                  </select>
-                                ) : (
-                                  <Input
-                                    value={f.visibleIf!.value}
-                                    onChange={(e) =>
-                                      updateField(f.id, {
-                                        visibleIf: {
-                                          ...f.visibleIf!,
-                                          value: e.target.value,
-                                        },
-                                      })
-                                    }
-                                    placeholder="Value"
-                                    className="h-7 px-2 text-[11px]"
-                                  />
-                                );
-                              })()}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {form.fields.length === 0 && (
-              <div className="rounded-lg border border-dashed py-8 text-center text-xs text-muted-foreground">
-                No fields yet. Use <span className="font-medium">Add field</span> above to get started.
+                  ),
+                )}
               </div>
             )}
+            <div className="mt-5 rounded-lg bg-foreground py-2.5 text-center text-sm font-semibold text-background">
+              Submit
+            </div>
           </div>
-        </section>
+        </div>
 
-        {/* Settings column — visually on the left at lg+. */}
-        <aside className="space-y-4 lg:order-1">
+        {/* Settings panel — only takes up space while a field is selected,
+            so the canvas gets full width the rest of the time. */}
+        {selectedFieldId &&
+          (() => {
+            const selIndex = form.fields.findIndex((f) => f.id === selectedFieldId);
+            const selField = selIndex >= 0 ? form.fields[selIndex] : null;
+            if (!selField) return null;
+            return (
+              <FieldSettingsPanel
+                form={form}
+                field={selField}
+                index={selIndex}
+                panelTab={panelTab}
+                onPanelTabChange={setPanelTab}
+                onUpdateField={(patch) => updateField(selField.id, patch)}
+                onClose={() => setSelectedFieldId(null)}
+              />
+            );
+          })()}
+      </div>
+      )}
+
+      {tab === "settings" && (
+      <div className="mx-auto max-w-2xl space-y-4">
           <section className="rounded-2xl border bg-card p-5">
             <h2 className="mb-3 text-sm font-semibold">On submission</h2>
             <div className="space-y-3 text-sm">
@@ -1410,7 +1635,6 @@ export default function FormBuilderPage() {
               fire automations here.
             </p>
           </section>
-        </aside>
       </div>
       )}
     </div>
