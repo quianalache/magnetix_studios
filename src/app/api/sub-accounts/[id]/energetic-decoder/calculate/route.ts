@@ -27,7 +27,7 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, birthDate, birthTime, birthPlace } = body;
+  const { name, birthDate, birthTime, birthPlace, lat, lng, timeZone } = body;
   if (!name?.trim() || !birthDate?.trim() || !birthTime?.trim() || !birthPlace?.trim()) {
     return NextResponse.json(
       { error: "Name, birth date, birth time, and birth place are all required." },
@@ -35,7 +35,13 @@ export async function POST(
     );
   }
 
-  const place = await geocodeBirthPlace(birthPlace);
+  // Pre-resolved from an autocomplete pick — use it as-is rather than
+  // re-geocoding, so the calculation matches exactly what the visitor
+  // selected in the dropdown.
+  const place =
+    typeof lat === "number" && typeof lng === "number" && timeZone
+      ? { lat, lng, displayName: birthPlace, timeZone }
+      : await geocodeBirthPlace(birthPlace);
   if (!place) {
     return NextResponse.json(
       { error: `Couldn't find "${birthPlace}" — try a more specific place (city, state/country).` },

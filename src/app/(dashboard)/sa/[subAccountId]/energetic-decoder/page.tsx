@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Sparkles, Loader2, MapPin } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EnergeticDecoderResult } from "@/types/energetic-decoder";
+
+interface PlaceSuggestion {
+  lat: number;
+  lng: number;
+  displayName: string;
+  timeZone: string;
+}
 
 /**
  * Phase 1 of the Energetic Decoder build — proves the Gene Keys
@@ -21,9 +28,59 @@ export default function EnergeticDecoderPage() {
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [birthPlace, setBirthPlace] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EnergeticDecoderResult | null>(null);
+
+  // Debounced live search as the visitor types — free Nominatim API, no
+  // Google Places key needed. selectedPlace is cleared on every keystroke
+  // so the submit handler only sends pre-resolved coords when the text
+  // still matches an actual picked suggestion.
+  function handlePlaceChange(value: string) {
+    setBirthPlace(value);
+    setSelectedPlace(null);
+    setSuggestionsOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSuggestLoading(true);
+      try {
+        const res = await fetch(
+          `/api/sub-accounts/${subAccountId}/energetic-decoder/geocode?q=${encodeURIComponent(value)}`,
+        );
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          results?: PlaceSuggestion[];
+        };
+        setSuggestions(data.results ?? []);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setSuggestLoading(false);
+      }
+    }, 400);
+  }
+
+  function pickSuggestion(s: PlaceSuggestion) {
+    setBirthPlace(s.displayName);
+    setSelectedPlace(s);
+    setSuggestions([]);
+    setSuggestionsOpen(false);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,7 +93,19 @@ export default function EnergeticDecoderPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, birthDate, birthTime, birthPlace }),
+          body: JSON.stringify({
+            name,
+            birthDate,
+            birthTime,
+            birthPlace,
+            ...(selectedPlace && selectedPlace.displayName === birthPlace
+              ? {
+                  lat: selectedPlace.lat,
+                  lng: selectedPlace.lng,
+                  timeZone: selectedPlace.timeZone,
+                }
+              : {}),
+          }),
         },
       );
       const data = (await res.json().catch(() => ({}))) as {
@@ -88,15 +157,41 @@ export default function EnergeticDecoderPage() {
               required
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="relative space-y-1.5">
             <Label htmlFor="ed-place">Birth place</Label>
             <Input
               id="ed-place"
               value={birthPlace}
-              onChange={(e) => setBirthPlace(e.target.value)}
+              onChange={(e) => handlePlaceChange(e.target.value)}
+              onFocus={() => setSuggestionsOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
               placeholder="Austin, TX, USA"
+              autoComplete="off"
               required
             />
+            {suggestionsOpen && (suggestions.length > 0 || suggestLoading) && (
+              <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-md">
+                {suggestLoading && suggestions.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                    Searching…
+                  </p>
+                ) : (
+                  suggestions.map((s) => (
+                    <button
+                      key={`${s.lat},${s.lng}`}
+                      type="button"
+                      // onMouseDown (not onClick) fires before the input's
+                      // onBlur, so the pick registers before the dropdown closes.
+                      onMouseDown={() => pickSuggestion(s)}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left text-xs hover:bg-muted"
+                    >
+                      <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+                      <span>{s.displayName}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ed-date">Birth date</Label>

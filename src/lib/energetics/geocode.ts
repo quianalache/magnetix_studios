@@ -31,33 +31,53 @@ interface NominatimResult {
   display_name: string;
 }
 
-export async function geocodeBirthPlace(
+async function nominatimSearch(
   query: string,
-): Promise<GeocodedPlace | null> {
-  const trimmed = query.trim();
-  if (!trimmed) return null;
-
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(trimmed)}`;
+  limit: number,
+): Promise<NominatimResult[]> {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=${limit}&q=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
     headers: {
       // Nominatim's usage policy requires an identifying User-Agent.
       "User-Agent": "MagnetixStudiosCRM/1.0 (energetic-decoder)",
     },
   });
-  if (!res.ok) return null;
+  if (!res.ok) return [];
+  return (await res.json()) as NominatimResult[];
+}
 
-  const results = (await res.json()) as NominatimResult[];
-  const first = results[0];
-  if (!first) return null;
-
-  const lat = Number(first.lat);
-  const lng = Number(first.lon);
+function toGeocodedPlace(result: NominatimResult): GeocodedPlace | null {
+  const lat = Number(result.lat);
+  const lng = Number(result.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng, displayName: result.display_name, timeZone: tzLookup(lat, lng) };
+}
 
-  return {
-    lat,
-    lng,
-    displayName: first.display_name,
-    timeZone: tzLookup(lat, lng),
-  };
+export async function geocodeBirthPlace(
+  query: string,
+): Promise<GeocodedPlace | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  const results = await nominatimSearch(trimmed, 1);
+  const first = results[0];
+  return first ? toGeocodedPlace(first) : null;
+}
+
+/**
+ * Multiple candidate places for a live autocomplete dropdown, as the
+ * visitor types — same free Nominatim API, just more results. The
+ * frontend debounces calls (Nominatim's usage policy caps at ~1 req/sec)
+ * and lets the visitor pick the exact match, so calculation uses their
+ * confirmed coordinates directly instead of a second best-guess geocode.
+ */
+export async function searchBirthPlaces(
+  query: string,
+  limit = 5,
+): Promise<GeocodedPlace[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+  const results = await nominatimSearch(trimmed, limit);
+  return results
+    .map(toGeocodedPlace)
+    .filter((p): p is GeocodedPlace => p !== null);
 }
