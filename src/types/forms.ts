@@ -157,13 +157,17 @@ export interface FormAppearance {
   /** Hex string with leading #. Drives the submit button + focus ring. */
   accent: string;
   /**
-   * Base text size for the whole form (title, labels, inputs, button).
-   * Optional — undefined on docs saved before this shipped, treated as
-   * "md" everywhere it's read. "sm"=14px, "md"=16px, "lg"=18px — every
-   * text element in the public form and embed scales off this via `em`,
-   * not a fixed rem size.
+   * Base text size for the whole form (title, labels, inputs, button), in
+   * px. A continuous slider (12–24px), not presets — matches
+   * `cornerRadius` below. Optional — undefined on docs saved before this
+   * shipped, treated as 16px. Docs saved back when this was a 3-option
+   * "sm"|"md"|"lg" enum still have those string values on disk; every read
+   * goes through `normalizeFontSizePx()` so old forms keep rendering at
+   * the exact size they always did (sm=14, md=16, lg=18) without a
+   * migration. Every text element in the public form and embed scales off
+   * this via `em`, not a fixed rem size.
    */
-  fontSize?: "sm" | "md" | "lg";
+  fontSize?: number | "sm" | "md" | "lg";
   /**
    * Corner radius in px, applied to the form card, inputs, and buttons
    * together (they all derive from one `--radius` design token already,
@@ -402,7 +406,7 @@ export function defaultFormAppearance(): FormAppearance {
   return {
     theme: "light",
     accent: "#7c3aed",
-    fontSize: "md",
+    fontSize: 16,
     cornerRadius: 10,
     buttonStyle: "fill",
     fontFamily: "system",
@@ -414,8 +418,23 @@ export function defaultFormAppearance(): FormAppearance {
   };
 }
 
-export const FONT_SIZE_PX: Record<NonNullable<FormAppearance["fontSize"]>, number> = {
+/** Legacy 3-option values, kept only so old saved forms render unchanged. */
+const LEGACY_FONT_SIZE_PX: Record<"sm" | "md" | "lg", number> = {
   sm: 14,
   md: 16,
   lg: 18,
 };
+
+export const FONT_SIZE_MIN_PX = 12;
+export const FONT_SIZE_MAX_PX = 24;
+
+/** Resolve a saved `fontSize` (old string enum, new number, or undefined) to a concrete, clamped px value. */
+export function normalizeFontSizePx(value: FormAppearance["fontSize"]): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.min(FONT_SIZE_MAX_PX, Math.max(FONT_SIZE_MIN_PX, value));
+  }
+  if (value === "sm" || value === "md" || value === "lg") {
+    return LEGACY_FONT_SIZE_PX[value];
+  }
+  return LEGACY_FONT_SIZE_PX.md;
+}

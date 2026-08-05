@@ -53,6 +53,9 @@ import {
   defaultFormAppearance,
   defaultSmsConsentText,
   FONT_FAMILY_STACKS,
+  FONT_SIZE_MAX_PX,
+  FONT_SIZE_MIN_PX,
+  normalizeFontSizePx,
   type FormAppearance,
   type FormField,
   type FormFieldConditionOperator,
@@ -1908,23 +1911,21 @@ function AppearanceFieldsCore({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Text size</Label>
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["sm", "md", "lg"] as const).map((size) => (
-              <button
-                key={size}
-                type="button"
-                onClick={() => onChange({ fontSize: size })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
-                  (appearance.fontSize ?? "md") === size
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-input bg-background text-muted-foreground hover:bg-muted/50"
-                }`}
-              >
-                {size === "sm" ? "Small" : size === "md" ? "Default" : "Large"}
-              </button>
-            ))}
+          <div className="flex items-baseline justify-between">
+            <Label>Text size</Label>
+            <span className="text-[11px] text-muted-foreground">
+              {normalizeFontSizePx(appearance.fontSize)}px
+            </span>
           </div>
+          <input
+            type="range"
+            min={FONT_SIZE_MIN_PX}
+            max={FONT_SIZE_MAX_PX}
+            step={1}
+            value={normalizeFontSizePx(appearance.fontSize)}
+            onChange={(e) => onChange({ fontSize: Number(e.target.value) })}
+            className="w-full accent-primary"
+          />
         </div>
 
         <div className="space-y-1.5">

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import {
   defaultFormAppearance,
   FONT_FAMILY_STACKS,
-  FONT_SIZE_PX,
+  normalizeFontSizePx,
   type FormAppearance,
   type FormSettings,
 } from "@/types/forms";
@@ -40,7 +40,7 @@ export function resolveAppearance(
           ? "light"
           : fromSettings.theme,
     accent: normaliseHex(accentParam) ?? fromSettings.accent,
-    fontSize: fromSettings.fontSize ?? "md",
+    fontSize: normalizeFontSizePx(fromSettings.fontSize),
     cornerRadius: fromSettings.cornerRadius ?? 10,
     buttonStyle: fromSettings.buttonStyle ?? "fill",
     fontFamily: fromSettings.fontFamily ?? "system",
@@ -93,7 +93,7 @@ function normaliseHex(input: string | undefined): string | null {
  * embed iframe already forced before this shipped.
  */
 export function appearanceStyle(a: FormAppearance): CSSProperties {
-  const fontSize = `${FONT_SIZE_PX[a.fontSize ?? "md"]}px`;
+  const fontSize = `${normalizeFontSizePx(a.fontSize)}px`;
   const radius = `${a.cornerRadius ?? 10}px`;
   const fontFamily = FONT_FAMILY_STACKS[a.fontFamily ?? "system"];
   const borderOverride = a.borderColor
