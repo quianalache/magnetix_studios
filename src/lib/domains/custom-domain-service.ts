@@ -9,7 +9,11 @@ import {
   verifyProjectDomain,
 } from "@/lib/vercel/domains";
 import { VercelError } from "@/lib/vercel/client";
-import type { SubAccountCustomDomain, SubAccountDoc } from "@/types/tenancy";
+import type {
+  CustomDomainVerificationRecord,
+  SubAccountCustomDomain,
+  SubAccountDoc,
+} from "@/types/tenancy";
 
 /**
  * Per-sub-account custom domain for PUBLIC pages (booking/decoder/courses/
@@ -55,6 +59,33 @@ function subRef(subAccountId: string) {
 }
 
 /**
+ * Fallback DNS instructions when Vercel's API doesn't hand back anything in
+ * `verification` — which happens whenever ownership is granted trivially
+ * (the common case, no conflicting claim on the domain). That still leaves
+ * the operator needing to know WHAT to point at Vercel for routing to
+ * actually work; Vercel's own dashboard shows this contextually but the
+ * API doesn't return it from this endpoint, so these are the well-known,
+ * stable standard values (Vercel's own onboarding docs) rather than
+ * something fetched live. Apex (2-label) domains get an A record; anything
+ * else (a subdomain) gets a CNAME — a simple heuristic, not exhaustive for
+ * multi-part TLDs like .co.uk, but correct for the common case including
+ * this one.
+ */
+function STANDARD_DNS_RECORDS(domain: string): CustomDomainVerificationRecord[] {
+  const isApex = domain.split(".").length === 2;
+  return isApex
+    ? [{ type: "A", domain, value: "76.76.21.21", reason: "Points the root domain at Vercel" }]
+    : [
+        {
+          type: "CNAME",
+          domain,
+          value: "cname.vercel-dns.com",
+          reason: "Points this subdomain at Vercel",
+        },
+      ];
+}
+
+/**
  * Register `domain` with the Vercel project and persist the pending state +
  * whatever DNS records Vercel wants added. Replacing a previously-registered
  * domain removes the old one from the project first (best-effort) so Vercel
@@ -79,17 +110,37 @@ export async function addCustomDomain(opts: {
   }
 
   const added = await addDomainToProject(opts.domain);
+  // The add response's own `verified` flag is about OWNERSHIP only — Vercel
+  // grants that trivially whenever there's no conflicting claim on the
+  // domain elsewhere in the account, regardless of whether DNS actually
+  // routes traffic here yet. Trusting it alone was the bug that showed
+  // "Verified" while the domain was still parked at the registrar with
+  // zero records pointed at Vercel. `getDomainStatus()`'s `misconfigured`
+  // check is the one that reflects real routing — cross-check both before
+  // calling this "verified," same as `refreshCustomDomainStatus` already
+  // correctly does.
+  let status: Awaited<ReturnType<typeof getDomainStatus>>;
+  try {
+    status = await getDomainStatus(opts.domain);
+  } catch {
+    status = { verified: added.verified, verification: added.verification ?? [], misconfigured: true };
+  }
   // Vercel addresses project-domains by name, not a separate opaque id
   // (unlike env vars) — the domain string itself is what every subsequent
   // verify/status/remove call keys off.
+  const reallyVerified = status.verified && !status.misconfigured;
   const record: SubAccountCustomDomain = {
     domain: opts.domain,
     vercelDomainId: opts.domain,
-    status: added.verified ? "verified" : "pending",
-    verificationRecords: added.verification ?? [],
+    status: reallyVerified ? "verified" : status.misconfigured ? "error" : "pending",
+    verificationRecords: reallyVerified
+      ? []
+      : status.verification.length > 0
+        ? status.verification
+        : STANDARD_DNS_RECORDS(opts.domain),
     rootRedirectUrl: existing?.domain === opts.domain ? (existing.rootRedirectUrl ?? null) : null,
     addedAt: existing?.domain === opts.domain ? existing.addedAt : new Date(),
-    verifiedAt: added.verified ? new Date() : null,
+    verifiedAt: reallyVerified ? new Date() : null,
     lastCheckedAt: new Date(),
   };
   await ref.set(
@@ -125,11 +176,18 @@ export async function refreshCustomDomainStatus(
     throw e instanceof VercelError ? e : new Error("Couldn't reach Vercel to check domain status.");
   }
 
+  // Same ownership-vs-routing distinction as addCustomDomain above: only
+  // count it verified when BOTH are true, not just the ownership flag.
+  const reallyVerified = status.verified && !status.misconfigured;
   const updated: SubAccountCustomDomain = {
     ...current,
-    status: status.verified ? "verified" : status.misconfigured ? "error" : "pending",
-    verificationRecords: status.verification,
-    verifiedAt: status.verified ? (current.verifiedAt ?? new Date()) : null,
+    status: reallyVerified ? "verified" : status.misconfigured ? "error" : "pending",
+    verificationRecords: reallyVerified
+      ? []
+      : status.verification.length > 0
+        ? status.verification
+        : STANDARD_DNS_RECORDS(current.domain),
+    verifiedAt: reallyVerified ? (current.verifiedAt ?? new Date()) : null,
     lastCheckedAt: new Date(),
   };
   await ref.set({ customDomain: updated }, { merge: true });
