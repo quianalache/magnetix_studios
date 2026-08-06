@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 export function SignupForm() {
   const router = useRouter();
@@ -167,7 +168,7 @@ export function SignupForm() {
           {existingAccount && (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
               <p className="font-medium text-amber-700 dark:text-amber-400">
-                You already have a LeadStack account.
+                You already have a {CUSTOM_BRAND.name} account.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Sign in with{" "}

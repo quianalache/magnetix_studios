@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 /**
  * Read-only explainer for the multi-host ("team") booking feature. Opened
@@ -105,7 +106,7 @@ export function TeamBookingHelpDialog({
               </li>
               <li>
                 Assignment only considers{" "}
-                <strong className="text-foreground">LeadStack bookings</strong>
+                <strong className="text-foreground">{CUSTOM_BRAND.name} bookings</strong>
                 {" "}— it won&apos;t avoid time a host blocked in their personal
                 Google / Outlook calendar yet (that&apos;s the two-way-sync
                 upgrade).

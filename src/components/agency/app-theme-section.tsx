@@ -34,7 +34,7 @@ const OPTIONS: {
   {
     value: "leadstack",
     label: "Indigo",
-    hint: "The LeadStack design language — indigo/violet accents.",
+    hint: "The original design language — indigo/violet accents.",
     swatch: "bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500",
   },
   {

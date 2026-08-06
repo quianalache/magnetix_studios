@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { requireAgencyOwner } from "@/lib/auth/require-agency-owner";
 import { GROUPS, KNOWN_KEYS } from "@/lib/setup/catalog";
 import { aiIsConfigured, callAi } from "@/lib/comms/ai/openrouter";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 /**
  * ✨ AI "where do I get this key" mini-guide for one env var.
@@ -91,7 +92,7 @@ function extractContext(
   return out;
 }
 
-const SYSTEM_PROMPT = `You help an agency owner set up LeadStack, a self-hosted CRM, by telling them exactly where to obtain the value for one environment variable.
+const SYSTEM_PROMPT = `You help an agency owner set up ${CUSTOM_BRAND.name}, a self-hosted CRM, by telling them exactly where to obtain the value for one environment variable.
 
 Rules:
 - 2-3 short sentences. Under 70 words. No preamble, no sign-off, no markdown headings or bullets.

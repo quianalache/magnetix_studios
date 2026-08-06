@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type { LeadForm } from "@/types/forms";
 import { PublicForm } from "@/components/forms/public-form";
 import { appearanceStyle, cardStyle, resolveAppearance } from "@/lib/forms/appearance";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,7 @@ export default async function PublicFormPage({
           {!appearance.hideChrome && (
             <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
               <span className="inline-block h-4 w-4 rounded-sm bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
-              <span className="font-medium text-foreground">LeadStack</span>
+              <span className="font-medium text-foreground">{CUSTOM_BRAND.name}</span>
             </div>
           )}
           <div
@@ -97,7 +98,7 @@ export default async function PublicFormPage({
           </div>
           {!appearance.hideChrome && (
             <p className="mt-4 text-center text-[11px] text-muted-foreground">
-              Powered by LeadStack
+              Powered by {CUSTOM_BRAND.name}
             </p>
           )}
         </div>

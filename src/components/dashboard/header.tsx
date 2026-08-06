@@ -14,6 +14,7 @@ import {
   Building2,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { CUSTOM_BRAND } from "@/config/landing";
 import { signOutUser } from "@/lib/firebase/auth";
 import { maskEmail } from "@/lib/format";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -74,7 +75,7 @@ function titleFor(pathname: string): string {
   for (const [re, label] of TITLES) {
     if (re.test(pathname)) return label;
   }
-  return "LeadStack";
+  return CUSTOM_BRAND.name;
 }
 
 function activeSubAccountFromPath(pathname: string): string | null {

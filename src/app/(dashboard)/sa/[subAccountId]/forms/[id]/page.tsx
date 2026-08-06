@@ -47,6 +47,7 @@ import {
 import { FormSubmissionsList } from "@/components/forms/form-submissions-list";
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadFormImage } from "@/lib/community/upload-image";
+import { CUSTOM_BRAND } from "@/config/landing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -219,7 +220,7 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
     })
     .join("\n\n");
 
-  return `<!-- LeadStack form. Style with your own CSS — every element is unstyled. -->
+  return `<!-- ${CUSTOM_BRAND.name} form. Style with your own CSS — every element is unstyled. -->
 <!-- Submissions create contacts and fire automations in your workspace. -->
 <form data-leadstack-form="${form.id}" novalidate>
 ${fieldsHtml}
@@ -292,7 +293,7 @@ function buildFloatingEmbedSnippet(
       ? "position:relative;width:100%;max-width:480px;height:min(640px,90vh);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)"
       : "position:relative;width:360px;max-width:calc(100vw - 32px);height:520px;max-height:80vh;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);pointer-events:auto";
 
-  return `<!-- LeadStack ${mode === "popup" ? "popup" : "slide-in"} form embed -->
+  return `<!-- ${CUSTOM_BRAND.name} ${mode === "popup" ? "popup" : "slide-in"} form embed -->
 <button id="ls-float-trigger-${uid}" type="button" style="position:fixed;bottom:24px;right:24px;z-index:999998;padding:14px 22px;border:none;border-radius:999px;background:${a.accent};color:#fff;font:600 14px system-ui,-apple-system,sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)">${triggerLabel}</button>
 <div id="ls-float-overlay-${uid}" style="display:none;position:fixed;inset:0;z-index:999999;${overlayStyle}">
   <div style="${panelStyle}">
@@ -2510,7 +2511,7 @@ function EmbedAppearanceSection({
             checked={appearance.hideChrome}
             onCheckedChange={(v) => onChange({ hideChrome: !!v })}
           />
-          <span className="text-xs">Hide LeadStack header + footer</span>
+          <span className="text-xs">Hide {CUSTOM_BRAND.name} header + footer</span>
         </label>
 
         <label className="flex items-center gap-2">

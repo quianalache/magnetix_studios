@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
+import { CUSTOM_BRAND } from "@/config/landing";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { signOutUser } from "@/lib/firebase/auth";
 import { getUserDoc, updateUserDoc } from "@/lib/firestore/users";
@@ -99,7 +100,7 @@ export default function MySettingsPage() {
           <div>
             <h2 className="text-sm font-semibold">Profile</h2>
             <p className="text-xs text-muted-foreground">
-              How you appear across LeadStack.
+              How you appear across {CUSTOM_BRAND.name}.
             </p>
           </div>
         </div>
@@ -192,7 +193,7 @@ export default function MySettingsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
           <div>
-            <p className="text-sm font-medium">Sign out of LeadStack</p>
+            <p className="text-sm font-medium">Sign out of {CUSTOM_BRAND.name}</p>
             <p className="text-xs text-muted-foreground">
               Ends this session on this device. Profile data stays.
             </p>

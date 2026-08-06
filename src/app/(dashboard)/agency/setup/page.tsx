@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { SetupEnvForm } from "@/components/agency/setup-env-form";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 /**
  * Agency-owner-only "guided setup" surface. Houses the enable toggle + the env
@@ -36,7 +37,7 @@ export default function AgencySetupPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Guided setup</h1>
         <p className="text-sm text-muted-foreground">
-          Optionally enter your remaining API keys here and let LeadStack write
+          Optionally enter your remaining API keys here and let {CUSTOM_BRAND.name} write
           them to Vercel (and your local <code>.env.local</code>) for you. This
           is an alternative to setting environment variables by hand — both
           paths are fully supported.

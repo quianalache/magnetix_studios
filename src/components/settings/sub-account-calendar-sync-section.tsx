@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarCheck, Copy, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { CUSTOM_BRAND } from "@/config/landing";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -138,7 +139,7 @@ export function SubAccountCalendarSyncSection() {
                   <strong>Add calendar</strong>.
                 </>,
                 <>
-                  Your LeadStack bookings appear within a few hours. Google
+                  Your {CUSTOM_BRAND.name} bookings appear within a few hours. Google
                   polls subscribed calendars on its own schedule (typically
                   8&ndash;24 hours).
                 </>,

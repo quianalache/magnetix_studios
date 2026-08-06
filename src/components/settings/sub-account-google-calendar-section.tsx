@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CalendarSync, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { CUSTOM_BRAND } from "@/config/landing";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -31,7 +32,7 @@ const STATUS_MESSAGES: Record<string, { ok: boolean; text: string }> = {
   gate_off: { ok: false, text: "This feature is locked by your agency." },
   no_refresh_token: {
     ok: false,
-    text: "Google didn't grant offline access. Remove LeadStack's access at myaccount.google.com/permissions, then try Connect again.",
+    text: `Google didn't grant offline access. Remove ${CUSTOM_BRAND.name}'s access at myaccount.google.com/permissions, then try Connect again.`,
   },
   error: { ok: false, text: "Couldn't connect to Google Calendar. Please try again." },
 };

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CUSTOM_BRAND } from "@/config/landing";
 import {
   CheckCircle2,
   Clock,
@@ -890,7 +891,7 @@ export function SetupEnvForm() {
               Where to get {guideKey ?? ""}
             </DialogTitle>
             <DialogDescription>
-              AI-written from the LeadStack setup docs — quick orientation, not a
+              AI-written from the {CUSTOM_BRAND.name} setup docs — quick orientation, not a
               substitute for the provider&rsquo;s own steps.
             </DialogDescription>
           </DialogHeader>

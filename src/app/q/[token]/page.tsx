@@ -7,6 +7,7 @@ import { isQuoteExpired } from "@/lib/quotes/calc";
 import { emitQuoteWebhook, recordQuoteActivity } from "@/lib/quotes/lifecycle";
 import { PublicQuoteView } from "@/components/quotes/public-quote-view";
 import { LogoMark } from "@/components/brand/logo-mark";
+import { CUSTOM_BRAND } from "@/config/landing";
 import type { Quote } from "@/types/quotes";
 
 export const dynamic = "force-dynamic";
@@ -130,7 +131,7 @@ export default async function PublicQuotePage({ params }: PageProps) {
 
       <footer className="border-t bg-background py-4">
         <div className="container mx-auto px-4 text-center text-[11px] text-muted-foreground">
-          {quote.kind === "invoice" ? "Invoice" : "Quote"} sent via LeadStack.
+          {quote.kind === "invoice" ? "Invoice" : "Quote"} sent via {CUSTOM_BRAND.name}.
           Reply to the email to reach {businessName}.
         </div>
       </footer>

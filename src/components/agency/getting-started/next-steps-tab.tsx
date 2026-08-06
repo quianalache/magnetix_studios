@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CUSTOM_BRAND } from "@/config/landing";
 
 interface NextStep {
   title: string;
@@ -31,7 +32,7 @@ interface NextStep {
 const STEPS: NextStep[] = [
   {
     title: "Enter your API keys with Guided setup",
-    why: "Guided setup lists every integration key in one place — the required core (Firebase, cookies, app URL) plus the optional features (Stripe, Resend email, Twilio SMS, AI Agents, and more; each one just unlocks its feature). Type a key once and LeadStack writes it to Vercel and your local .env.local, then triggers the redeploy. Prefer setting environment variables by hand? That works too — this is a shortcut, not a requirement.",
+    why: `Guided setup lists every integration key in one place — the required core (Firebase, cookies, app URL) plus the optional features (Stripe, Resend email, Twilio SMS, AI Agents, and more; each one just unlocks its feature). Type a key once and ${CUSTOM_BRAND.name} writes it to Vercel and your local .env.local, then triggers the redeploy. Prefer setting environment variables by hand? That works too — this is a shortcut, not a requirement.`,
     cta: "Open Guided setup",
     href: "/agency/setup",
     icon: KeyRound,

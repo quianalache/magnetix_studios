@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
+import { CUSTOM_BRAND } from "@/config/landing";
 import type { AgencyDoc, AppTheme } from "@/types";
 
 interface AgencySummary {
-  /** Agency display name. Falls back to "LeadStack" until hydrated. */
+  /** Agency display name. Falls back to CUSTOM_BRAND.name until hydrated. */
   name: string;
-  /** Optional logo URL — when set, sidebar swaps the LeadStack chevron mark for this. */
+  /** Optional logo URL — when set, sidebar swaps the default chevron mark for this. */
   logoUrl: string | null;
   /** Public support / contact email. Null until set in Agency → Settings. */
   supportEmail: string | null;
@@ -51,7 +52,7 @@ interface AgencyData {
 export function useAgency(): AgencySummary {
   const { agencyId, loading: authLoading } = useAuth();
   const [data, setData] = useState<AgencyData>({
-    name: "LeadStack",
+    name: CUSTOM_BRAND.name,
     logoUrl: null,
     supportEmail: null,
     primaryDomain: null,
@@ -84,7 +85,7 @@ export function useAgency(): AgencySummary {
         if (snap.exists()) {
           const d = snap.data() as Partial<AgencyDoc>;
           setData({
-            name: (d.name as string) || "LeadStack",
+            name: (d.name as string) || CUSTOM_BRAND.name,
             logoUrl: (d.logoUrl as string | null) ?? null,
             supportEmail: (d.supportEmail as string | null) ?? null,
             primaryDomain: (d.primaryDomain as string | null) ?? null,

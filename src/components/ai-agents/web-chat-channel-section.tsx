@@ -9,6 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { CUSTOM_BRAND } from "@/config/landing";
 import {
   ArrowRight,
   Check,
@@ -360,7 +361,7 @@ export function WebChatChannelSection() {
             <p className="text-[11px] text-muted-foreground">
               One hostname per line, no protocol. Only these origins can load
               the widget. Leave empty during testing to allow{" "}
-              <code>localhost</code> + your LeadStack domain.
+              <code>localhost</code> + your {CUSTOM_BRAND.name} domain.
             </p>
           </div>
 
