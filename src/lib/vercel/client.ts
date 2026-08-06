@@ -32,7 +32,12 @@ export class VercelError extends Error {
 /**
  * Whether the preflight vars needed to talk to Vercel are present. This is the
  * env-derived boolean that ungrays the setup-form enable toggle. TEAM_ID is
- * intentionally NOT required — personal accounts don't have one.
+ * intentionally NOT required — personal accounts don't have one. Requires
+ * the deploy hook too, since the setup form's whole point is triggering a
+ * redeploy after writing env vars — that's a real requirement for THIS
+ * feature specifically, not a general "can we talk to Vercel at all" check.
+ * See `vercelApiConfigured()` for the narrower one other Vercel-API
+ * consumers (e.g. custom domains) should use instead.
  */
 export function vercelConfigured(): boolean {
   return (
@@ -40,6 +45,17 @@ export function vercelConfigured(): boolean {
     !!process.env.VERCEL_PROJECT_ID?.trim() &&
     !!process.env.VERCEL_DEPLOY_HOOK_URL?.trim()
   );
+}
+
+/**
+ * Whether the Vercel REST API is reachable at all — just token + project
+ * id, no deploy hook. Custom domains (and anything else that only calls
+ * the API directly, never the hook) should gate on this, not
+ * `vercelConfigured()` — requiring a deploy hook to add a domain was an
+ * unnecessary extra setup step this feature never actually needed.
+ */
+export function vercelApiConfigured(): boolean {
+  return !!process.env.VERCEL_TOKEN?.trim() && !!process.env.VERCEL_PROJECT_ID?.trim();
 }
 
 export function requireConfig(): { token: string; projectId: string; teamId?: string } {

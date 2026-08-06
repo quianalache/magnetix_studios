@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
-import { vercelConfigured } from "@/lib/vercel/client";
+import { vercelApiConfigured } from "@/lib/vercel/client";
 import {
   addCustomDomain,
   removeCustomDomain,
@@ -42,7 +42,7 @@ export async function POST(
   const access = await requireSubAccountAdmin(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  if (!vercelConfigured()) {
+  if (!vercelApiConfigured()) {
     return NextResponse.json(
       { error: "Vercel isn't configured on this deployment (VERCEL_TOKEN/VERCEL_PROJECT_ID)." },
       { status: 503 },
