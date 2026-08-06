@@ -9,16 +9,20 @@ import {
   ArrowLeft,
   AtSign,
   Building2,
+  Calendar,
   CheckSquare,
   ChevronDown,
   CircleDot,
   Copy,
+  DollarSign,
   EyeOff,
   ExternalLink,
   GitBranch,
   GripVertical,
   Hash,
+  Layers,
   Link2,
+  List,
   ListChecks,
   Phone as PhoneIcon,
   Palette,
@@ -119,7 +123,8 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
           `  <textarea ${common} rows="4"></textarea>`,
         ].join("\n");
       }
-      if (f.type === "select") {
+      if (f.type === "select" || f.type === "multiselect") {
+        const multiple = f.type === "multiselect";
         const opts = (f.options ?? [])
           .map(
             (o) =>
@@ -128,13 +133,23 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
           .join("\n");
         return [
           `  <label for="${id}">${labelText}</label>`,
-          `  <select ${common}>`,
-          `    <option value="">Select…</option>`,
+          `  <select ${common}${multiple ? " multiple" : ""}>`,
+          multiple ? "" : `    <option value="">Select…</option>`,
           opts,
           `  </select>`,
         ]
           .filter(Boolean)
           .join("\n");
+      }
+      if (f.type === "textbox_list") {
+        // The real hosted form supports add/remove rows via JS; the raw
+        // export stays plain HTML, so this degrades to a single text
+        // input capturing whatever's typed verbatim — same "simple,
+        // framework-free" tradeoff as page_break.
+        return [
+          `  <label for="${id}">${labelText}</label>`,
+          `  <input type="text" ${common} />`,
+        ].join("\n");
       }
       if (f.type === "radio" || f.type === "checkboxes") {
         const inputType = f.type === "radio" ? "radio" : "checkbox";
@@ -191,10 +206,15 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
             ? "tel"
             : f.type === "url"
               ? "url"
-              : "text";
+              : f.type === "date"
+                ? "date"
+                : f.type === "number" || f.type === "currency"
+                  ? "number"
+                  : "text";
+      const step = f.type === "currency" ? ` step="0.01"` : "";
       return [
         `  <label for="${id}">${labelText}</label>`,
-        `  <input type="${inputType}" ${common} />`,
+        `  <input type="${inputType}" ${common}${step} />`,
       ].join("\n");
     })
     .join("\n\n");
@@ -436,6 +456,56 @@ const FIELD_TYPES: {
       iconText: "text-orange-600 dark:text-orange-300",
     },
   },
+  {
+    value: "date",
+    label: "Date",
+    icon: Calendar,
+    tone: {
+      border: "border-indigo-400/30 hover:border-indigo-400/60",
+      iconBg: "bg-indigo-500/10",
+      iconText: "text-indigo-600 dark:text-indigo-300",
+    },
+  },
+  {
+    value: "number",
+    label: "Number",
+    icon: Hash,
+    tone: {
+      border: "border-sky-400/30 hover:border-sky-400/60",
+      iconBg: "bg-sky-500/10",
+      iconText: "text-sky-600 dark:text-sky-300",
+    },
+  },
+  {
+    value: "currency",
+    label: "Currency",
+    icon: DollarSign,
+    tone: {
+      border: "border-lime-400/30 hover:border-lime-400/60",
+      iconBg: "bg-lime-500/10",
+      iconText: "text-lime-600 dark:text-lime-300",
+    },
+  },
+  {
+    value: "multiselect",
+    label: "Multi-select dropdown",
+    icon: Layers,
+    tone: {
+      border: "border-purple-400/30 hover:border-purple-400/60",
+      iconBg: "bg-purple-500/10",
+      iconText: "text-purple-600 dark:text-purple-300",
+    },
+  },
+  {
+    value: "textbox_list",
+    label: "Textbox list",
+    icon: List,
+    tone: {
+      border: "border-yellow-400/30 hover:border-yellow-400/60",
+      iconBg: "bg-yellow-500/10",
+      iconText: "text-yellow-600 dark:text-yellow-300",
+    },
+  },
 ];
 
 function typeMeta(value: FormFieldType) {
@@ -443,8 +513,22 @@ function typeMeta(value: FormFieldType) {
 }
 
 const FIELD_TYPE_GROUPS: { label: string; types: FormFieldType[] }[] = [
-  { label: "Basic", types: ["text", "email", "phone", "company", "textarea", "url"] },
-  { label: "Choice", types: ["select", "radio", "checkboxes"] },
+  {
+    label: "Basic",
+    types: [
+      "text",
+      "email",
+      "phone",
+      "company",
+      "textarea",
+      "url",
+      "date",
+      "number",
+      "currency",
+      "textbox_list",
+    ],
+  },
+  { label: "Choice", types: ["select", "radio", "checkboxes", "multiselect"] },
   { label: "Advanced", types: ["sms_consent", "hidden"] },
   { label: "Layout", types: ["text_block", "page_break"] },
 ];
@@ -475,6 +559,11 @@ const DEFAULTS_BY_TYPE: Record<
   text_block: { label: "", placeholder: "", mapsTo: null },
   hidden: { label: "UTM source", placeholder: "", mapsTo: null },
   page_break: { label: "", placeholder: "", mapsTo: null },
+  date: { label: "Date", placeholder: "", mapsTo: null },
+  number: { label: "Number", placeholder: "", mapsTo: null },
+  currency: { label: "Amount", placeholder: "0.00", mapsTo: null },
+  multiselect: { label: "Multi-select dropdown", placeholder: "", mapsTo: null },
+  textbox_list: { label: "List", placeholder: "", mapsTo: null },
 };
 
 function newField(type: FormFieldType = "text"): FormField {
@@ -539,7 +628,7 @@ function CanvasFieldPreview({ field: f }: { field: FormField }) {
         <div className="h-12 rounded-md border bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
           {f.placeholder}
         </div>
-      ) : f.type === "select" ? (
+      ) : f.type === "select" || f.type === "multiselect" ? (
         <div className="flex h-7 items-center justify-between rounded-md border bg-muted/40 px-2 text-xs text-muted-foreground">
           <span>{f.options[0] ?? "Choose…"}</span>
           <ChevronDown className="h-3 w-3 shrink-0" />
@@ -1478,7 +1567,10 @@ function FieldSettingsPanel({
               </>
             )}
 
-            {(f.type === "select" || f.type === "radio" || f.type === "checkboxes") && (
+            {(f.type === "select" ||
+              f.type === "radio" ||
+              f.type === "checkboxes" ||
+              f.type === "multiselect") && (
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1 text-xs">
                   <Hash className="h-3 w-3" /> Options · one per line
@@ -1623,7 +1715,8 @@ function FieldSettingsPanel({
                         target &&
                         (target.type === "select" ||
                           target.type === "radio" ||
-                          target.type === "checkboxes")
+                          target.type === "checkboxes" ||
+                          target.type === "multiselect")
                           ? target.options
                           : null;
                       return targetOptions ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,6 +65,74 @@ function buttonAppearance(
     return { variant: "ghost", className: "text-primary hover:bg-primary/10 hover:text-primary" };
   }
   return { variant: "default", className: "" };
+}
+
+/**
+ * "Textbox list" field — a repeatable set of short free-text rows (e.g.
+ * "list your goals, one per line"). Stored as one flat string in the
+ * parent's `values[id]`, entries joined by "\n" (not ", " like
+ * checkboxes/multiselect — free-text entries can plausibly contain
+ * commas themselves). This component just splits/joins around that edge
+ * so the parent never needs to know rows exist.
+ */
+function TextboxListField({
+  value,
+  onChange,
+  placeholder,
+  inputStyle,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  inputStyle: CSSProperties;
+}) {
+  const entries = value ? value.split("\n") : [""];
+
+  function updateEntry(i: number, v: string) {
+    const next = [...entries];
+    next[i] = v;
+    onChange(next.join("\n"));
+  }
+  function addEntry() {
+    onChange([...entries, ""].join("\n"));
+  }
+  function removeEntry(i: number) {
+    const next = entries.filter((_, idx) => idx !== i);
+    onChange((next.length ? next : [""]).join("\n"));
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {entries.map((entry, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <Input
+            value={entry}
+            onChange={(e) => updateEntry(i, e.target.value)}
+            placeholder={placeholder}
+            className="text-[1em] md:text-[1em]"
+            style={inputStyle}
+          />
+          {entries.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeEntry(i)}
+              className="shrink-0 text-muted-foreground hover:text-destructive"
+              aria-label="Remove entry"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={addEntry}
+        className="flex items-center gap-1 text-[0.8em] font-medium text-primary hover:underline"
+      >
+        <Plus className="h-3 w-3" /> Add another
+      </button>
+    </div>
+  );
 }
 
 export function PublicForm({ form }: PublicFormProps) {
@@ -162,6 +230,18 @@ export function PublicForm({ form }: PublicFormProps) {
           new URL(values[f.id]);
         } catch {
           next[f.id] = "Enter a valid link (include https://)";
+        }
+      } else if (f.type === "date" && values[f.id]) {
+        if (Number.isNaN(Date.parse(values[f.id]))) {
+          next[f.id] = "Enter a valid date";
+        }
+      } else if (f.type === "number" && values[f.id]) {
+        if (!/^-?\d+(\.\d+)?$/.test(values[f.id].trim())) {
+          next[f.id] = "Enter a valid number";
+        }
+      } else if (f.type === "currency" && values[f.id]) {
+        if (!/^\d+(\.\d{1,2})?$/.test(values[f.id].trim())) {
+          next[f.id] = "Enter a valid amount (e.g. 25 or 25.00)";
         }
       }
     }
@@ -344,6 +424,51 @@ export function PublicForm({ form }: PublicFormProps) {
               </option>
             ))}
           </select>
+        ) : f.type === "multiselect" ? (
+          <select
+            id={f.id}
+            multiple
+            value={(values[f.id] ?? "").split(", ").filter(Boolean)}
+            onChange={(e) =>
+              setValue(
+                f.id,
+                Array.from(e.target.selectedOptions, (o) => o.value).join(", "),
+              )
+            }
+            className="flex h-24 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-[0.875em] outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+            style={inputStyle}
+          >
+            {f.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        ) : f.type === "textbox_list" ? (
+          <TextboxListField
+            value={values[f.id] ?? ""}
+            onChange={(v) => setValue(f.id, v)}
+            placeholder={f.placeholder}
+            inputStyle={inputStyle}
+          />
+        ) : f.type === "currency" ? (
+          <div className="relative">
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[0.875em] text-muted-foreground">
+              $
+            </span>
+            <Input
+              id={f.id}
+              type="number"
+              step="0.01"
+              min="0"
+              value={values[f.id] ?? ""}
+              onChange={(e) => setValue(f.id, e.target.value)}
+              placeholder={f.placeholder}
+              aria-invalid={!!errors[f.id]}
+              className="pl-6 text-[1em] md:text-[1em]"
+              style={inputStyle}
+            />
+          </div>
         ) : (
           <Input
             id={f.id}
@@ -354,7 +479,11 @@ export function PublicForm({ form }: PublicFormProps) {
                   ? "tel"
                   : f.type === "url"
                     ? "url"
-                    : "text"
+                    : f.type === "date"
+                      ? "date"
+                      : f.type === "number"
+                        ? "number"
+                        : "text"
             }
             value={values[f.id] ?? ""}
             onChange={(e) => setValue(f.id, e.target.value)}

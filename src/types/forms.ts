@@ -46,7 +46,33 @@ export type FormFieldType =
   // export snippet — a power-user escape hatch — does NOT implement real
   // multi-step JS; it renders this as a plain `<hr>` divider instead, since
   // that path is meant to stay simple, unstyled, framework-free HTML.
-  | "page_break";
+  | "page_break"
+  // Native date input (renders `<input type="date">`), stored as an ISO
+  // "YYYY-MM-DD" string. GHL calls this "Date picker".
+  | "date"
+  // Plain numeric input — `<input type="number">`. Distinct from `text` so
+  // the visitor gets a numeric keyboard on mobile and the value is
+  // validated as a real number on submit.
+  | "number"
+  // Numeric input with a "$" prefix and 2-decimal validation (budget, deal
+  // size, donation amount). Same storage shape as `number` (a plain
+  // string) — the "$" is presentational only, never part of the stored
+  // value. GHL calls this "Monetary".
+  | "currency"
+  // Same `options` list as `select`/`radio`/`checkboxes`, but multiple
+  // choices at once inside a dropdown instead of a flat checkbox list —
+  // GHL's "Multi Dropdown". Selected options are stored the same
+  // comma-joined way `checkboxes` already does.
+  | "multiselect"
+  // A repeatable list of short free-text answers (e.g. "list your goals,
+  // one per line") — the visitor can add/remove rows. Stored as the
+  // entries joined by "\n" (not ", " like `checkboxes`/`multiselect` —
+  // free-text entries can plausibly contain commas themselves, so a
+  // newline is the safer join character here). GHL calls this "Textbox
+  // List"; this is a best-effort interpretation of that name — their docs
+  // didn't spell out the exact behavior, so verify against a real GHL
+  // account if the two ever need to match pixel-for-pixel.
+  | "textbox_list";
 
 export interface FormField {
   id: string;
