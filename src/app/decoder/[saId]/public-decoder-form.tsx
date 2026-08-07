@@ -114,7 +114,7 @@ export function PublicDecoderForm({
           <span>Here&apos;s {reading.name}&apos;s reading.</span>
         </div>
         {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
-        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} />}
+        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} accent={accent} />}
         {reading.astrology && <AstrologySummary chart={reading.astrology} />}
         <Link
           href={`/decoder/${saId}/report/${reading.id}`}

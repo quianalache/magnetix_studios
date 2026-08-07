@@ -61,7 +61,7 @@ export default async function EnergeticDecoderReportPage({
         {hasAnySystem ? (
           <div className="space-y-4">
             {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
-            {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} />}
+            {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} accent={theme.accent} />}
             {reading.astrology && <AstrologySummary chart={reading.astrology} />}
           </div>
         ) : (

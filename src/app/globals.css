@@ -514,3 +514,26 @@ body {
     opacity: 0;
   }
 }
+
+/* Human Design / Astrology chart SVGs (human-design-chart.tsx,
+   astrology-wheel-chart.tsx) — undefined/background elements need a
+   neutral that actually shows on both themes; the accent colors
+   (defined centers, Personality/Design text, aspect lines) are passed
+   in as props/inline fills instead, since those carry real chart
+   meaning rather than just light/dark contrast. */
+:root {
+  --hd-center-empty: #e5e7eb;
+  --hd-center-outline: #9ca3af;
+  --hd-channel-empty: #d1d5db;
+  --hd-personality-text: #18181b;
+  --astro-wheel-line: #d1d5db;
+  --astro-wheel-text: #3f3f46;
+}
+.dark {
+  --hd-center-empty: #27272a;
+  --hd-center-outline: #52525b;
+  --hd-channel-empty: #3f3f46;
+  --hd-personality-text: #e4e4e7;
+  --astro-wheel-line: #3f3f46;
+  --astro-wheel-text: #d4d4d8;
+}

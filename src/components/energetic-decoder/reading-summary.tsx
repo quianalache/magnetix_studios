@@ -5,6 +5,8 @@ import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetic
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
+import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
+import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 
 /**
  * A saved reading's full display, for BOTH the admin Readings tab
@@ -53,8 +55,10 @@ export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
 
 export function HumanDesignSummary({
   profile,
+  accent,
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
+  accent?: string;
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -64,6 +68,13 @@ export function HumanDesignSummary({
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Bodygraph — Personality <span className="text-foreground">black</span>, Design <span className="text-rose-600">red</span>
+        </p>
+        <HumanDesignChart profile={profile} accent={accent} className="mx-auto w-full max-w-[280px]" />
+      </div>
+
       <div className="rounded-2xl border bg-card p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
         <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
@@ -143,6 +154,11 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
 
   return (
     <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Natal Chart</p>
+        <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[320px]" />
+      </div>
+
       <div className="rounded-2xl border bg-card p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Astrology — Western Tropical, {chart.houses.system === "placidus" ? "Placidus" : "Whole Sign"} houses
