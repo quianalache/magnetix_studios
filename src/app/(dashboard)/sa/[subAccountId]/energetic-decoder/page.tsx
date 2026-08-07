@@ -4,20 +4,24 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { EnergeticDecoderReportsTab } from "@/components/energetic-decoder/reports-tab";
+import { EnergeticDecoderContentTab } from "@/components/energetic-decoder/content-tab";
 import { EnergeticDecoderReadingsTab } from "@/components/energetic-decoder/readings-tab";
 import { EnergeticDecoderThemeCard } from "@/components/energetic-decoder/theme-card";
 import { EnergeticDecoderEmbedShareCard } from "@/components/energetic-decoder/embed-share-card";
 
-type Tab = "reports" | "readings" | "design" | "share";
+type Tab = "reports" | "content" | "readings" | "design" | "share";
 
 /**
- * Structured after researching bodygraph.com (2026-08-05, at her request,
- * twice — the second pass specifically on their Report Editor): its
- * "dashboard" is a practitioner business tool, not a personal dashboard
- * for whoever gets a reading. Rebuilt as real tabs instead of one long
- * stacked page, per her mockup review: Reports (build what you're
- * selling — sequences + per-gate content) lands first, then Readings
- * (saved client charts), Design (branding), Share (embed/link/QR).
+ * Structured after researching bodygraph.com (2026-08-05, then again more
+ * thoroughly 2026-08-08 at her explicit request — read their real Help
+ * Centre, not search summaries): their practitioner tool splits Chart
+ * Design (visual), Chart Content/Language (the interpretive text library,
+ * a single source of truth), and Reading Reports (assembly/delivery only
+ * — reports reference content via shortcodes, never store gate text
+ * directly) into three separate tools. The first build here nested gate
+ * content inside Reports, which she correctly called out as not matching
+ * that model. Content is now its own tab, mirroring the real split:
+ * Content decides WHAT A GATE SAYS, Reports decides WHAT'S INCLUDED.
  */
 export default function EnergeticDecoderPage() {
   const { subAccountId } = useSubAccount();
@@ -25,6 +29,7 @@ export default function EnergeticDecoderPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "reports", label: "Reports" },
+    { key: "content", label: "Content" },
     { key: "readings", label: "Readings" },
     { key: "design", label: "Design" },
     { key: "share", label: "Share" },
@@ -64,6 +69,7 @@ export default function EnergeticDecoderPage() {
       </div>
 
       {tab === "reports" && <EnergeticDecoderReportsTab />}
+      {tab === "content" && <EnergeticDecoderContentTab />}
       {tab === "readings" && <EnergeticDecoderReadingsTab />}
       {tab === "design" && <EnergeticDecoderThemeCard />}
       {tab === "share" && <EnergeticDecoderEmbedShareCard subAccountId={subAccountId} />}
