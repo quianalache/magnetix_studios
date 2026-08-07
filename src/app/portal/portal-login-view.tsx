@@ -4,14 +4,16 @@ import type { PortalBranding } from "@/types/portal-branding";
 /**
  * Shared login screen — rendered from both the opaque `/portal/{saId}/login`
  * route (shared platform domain) and the pretty `/portal/login` route (a
- * verified custom domain), so a client's whole sign-in flow can stay on
- * their coach's own branded domain instead of bouncing back to the shared
- * platform one partway through.
+ * verified custom domain).
  *
- * Real build of the "Client Portal — Branding Mockup" she reviewed
- * 2026-08-06/07 — portal name, welcome message, logo/initials, and accent
- * colour all come from `PortalBranding` (see portal-branding settings page)
- * instead of the sub-account's own internal `name` field.
+ * Real build of the "Client Portal — Branding Mockup" — rebuilt a second
+ * time (2026-08-07) after she caught that the first pass only wired real
+ * data into the OLD page's layout instead of actually matching the
+ * approved mockup's visual spec. Every value below (logo size/radius,
+ * heading size, spacing, button padding/radius) is copied from the
+ * mockup's own CSS, not approximated — centered card, serif headline
+ * (`font-serif` → Instrument Serif, this app's own display font token,
+ * same family the mockup's Georgia stand-in was gesturing at).
  */
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -50,12 +52,12 @@ export function PortalLoginView({
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4 py-16"
+      className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-6 py-16"
       style={{ ["--portal-accent" as string]: branding.accentColor }}
     >
-      <div className="w-full max-w-md rounded-xl border border-[#E4E4E4] bg-white p-8 shadow-sm">
+      <div className="w-full max-w-[300px] text-center">
         <div
-          className="mb-4 flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl text-[15px] font-bold text-white"
+          className="mx-auto mb-3.5 flex h-12 w-12 items-center justify-center overflow-hidden rounded-[13px] text-[18px] font-bold text-white"
           style={{ background: branding.logoUrl ? undefined : "var(--portal-accent)" }}
         >
           {branding.logoUrl ? (
@@ -65,20 +67,22 @@ export function PortalLoginView({
             initials(displayName)
           )}
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-[#202124]">
+        <h1 className="font-serif text-[18px] font-semibold text-balance text-[#202124]">
           Sign in to {displayName}
         </h1>
-        <p className="mt-2 text-sm text-[#909090]">{branding.welcomeMessage}</p>
+        <p className="mb-5 mt-1.5 text-[12px] leading-relaxed text-[#909090]">
+          {branding.welcomeMessage}
+        </p>
         {errorMessage && (
-          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-600">
+          <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-left text-[12px] text-red-600">
             {errorMessage}
           </div>
         )}
         <PortalLoginForm saId={saId} accentColor={branding.accentColor} />
         {branding.supportEmail && (
-          <p className="mt-6 border-t border-[#E4E4E4] pt-4 text-xs text-[#909090]">
+          <p className="mt-3.5 text-[10.5px] leading-relaxed text-[#909090]">
             Need help?{" "}
-            <a href={`mailto:${branding.supportEmail}`} className="font-medium" style={{ color: "var(--portal-accent)" }}>
+            <a href={`mailto:${branding.supportEmail}`} className="font-semibold" style={{ color: "var(--portal-accent)" }}>
               {branding.supportEmail}
             </a>
           </p>

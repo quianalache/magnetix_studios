@@ -2,9 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export function PortalLoginForm({ saId, accentColor }: { saId: string; accentColor?: string }) {
   const [email, setEmail] = useState("");
@@ -41,8 +38,8 @@ export function PortalLoginForm({ saId, accentColor }: { saId: string; accentCol
 
   if (sent) {
     return (
-      <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-[#202124]">
-        <p className="font-medium">Check your inbox.</p>
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-left text-[12px] text-[#202124]">
+        <p className="font-semibold">Check your inbox.</p>
         <p className="mt-1 text-[#909090]">
           If that email is valid, we&apos;ve sent a one-tap sign-in link to{" "}
           <span className="font-medium text-[#202124]">{email.trim()}</span>. The
@@ -53,39 +50,39 @@ export function PortalLoginForm({ saId, accentColor }: { saId: string; accentCol
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="email" className="text-[#202124]">
-          Email
-        </Label>
-        <Input
-          id="email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          required
-          autoFocus
-          className="border-[#E4E4E4] bg-white text-[#202124] placeholder:text-[#909090]"
-        />
-      </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <Button
+    <form onSubmit={handleSubmit} className="text-left">
+      <input
+        id="email"
+        type="email"
+        autoComplete="email"
+        aria-label="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        required
+        autoFocus
+        className="mb-2.5 w-full rounded-[9px] border border-[#E4E4E4] bg-white px-3 py-2.5 text-[13px] text-[#202124] outline-none placeholder:text-[#909090] focus-visible:ring-2 focus-visible:ring-offset-1"
+        style={accentColor ? ({ "--tw-ring-color": accentColor } as Record<string, string>) : undefined}
+      />
+      {error && <p className="mb-2 text-[11px] text-red-600">{error}</p>}
+      <button
         type="submit"
-        className="w-full text-white hover:opacity-90"
-        style={accentColor ? { background: accentColor } : undefined}
         disabled={submitting}
+        className="flex w-full items-center justify-center gap-2 rounded-[9px] px-3 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        style={{ background: accentColor || "#202124" }}
       >
         {submitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Sending link…
           </>
         ) : (
           "Send sign-in link"
         )}
-      </Button>
+      </button>
+      <p className="mt-3.5 text-center text-[10.5px] leading-relaxed text-[#909090]">
+        No password needed — we&apos;ll email you a one-time sign-in link.
+      </p>
     </form>
   );
 }
