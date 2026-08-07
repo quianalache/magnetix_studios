@@ -238,7 +238,7 @@ function OverviewPanel({
                       {toDate(t.date)?.toLocaleDateString() ?? ""} · {t.kind}
                     </p>
                   </div>
-                  <span className={cn("text-sm font-bold tabular-nums", t.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+                  <span className={cn("font-mono text-sm font-bold tabular-nums", t.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
                     {t.kind === "income" ? "+" : "-"}{fmtMoney(Math.abs(t.amount))}
                   </span>
                 </div>
@@ -268,9 +268,9 @@ function OverviewPanel({
 function StatCard({ label, value, sub, negative }: { label: string; value: string; sub: string; negative?: boolean }) {
   return (
     <div className="rounded-xl border bg-card p-3.5">
-      <p className="mb-2 text-[11px] font-semibold text-muted-foreground">{label}</p>
-      <p className={cn("text-xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
-      <p className="mt-1 text-[10.5px] text-muted-foreground">{sub}</p>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={cn("font-mono text-2xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -384,7 +384,7 @@ function SocialPanel({ subAccountId, platforms }: { subAccountId: string; platfo
                 </div>
                 <button onClick={() => removePlatform(p.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
               </div>
-              <p className="text-[26px] font-bold">{latest[p.id] ?? 0}</p>
+              <p className="font-mono text-[26px] font-bold tabular-nums">{latest[p.id] ?? 0}</p>
               <p className="mb-3 text-[11px] text-muted-foreground">followers / subscribers</p>
               {logFor === p.id ? (
                 <div className="flex items-center gap-2">
@@ -523,7 +523,7 @@ function MoneyPanel({
                           <p className="text-[11px] text-muted-foreground">{toDate(e.date)?.toLocaleDateString()}{e.recurring ? " · recurring" : ""}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold tabular-nums">{fmtMoney(e.amount)}</span>
+                          <span className="font-mono text-sm font-semibold tabular-nums">{fmtMoney(e.amount)}</span>
                           <button onClick={() => removeEntry(e.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
                         </div>
                       </div>
@@ -816,7 +816,7 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
       <section className="space-y-3">
         <p className="text-sm font-semibold">Momentum Score</p>
         <div className="max-w-xs rounded-xl border bg-card p-4">
-          <p className="text-2xl font-bold">{weekStats?.momentumScorePct != null ? `${weekStats.momentumScorePct}%` : "—"}</p>
+          <p className="font-mono text-2xl font-bold tabular-nums">{weekStats?.momentumScorePct != null ? `${weekStats.momentumScorePct}%` : "—"}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {weekStats?.momentumScorePct != null
               ? "Share of this week's due tasks you completed."
