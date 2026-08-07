@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSubAccount } from "@/context/sub-account-context";
-import { ASSET_ACCESS_LEVELS, ASSET_TYPES } from "@/types/assets";
+import { ASSET_ACCESS_LEVELS, ASSET_STATUSES, ASSET_TYPES } from "@/types/assets";
 import type { Asset, AssetIncludedIn, AssetStatus } from "@/types/assets";
 import type { Project } from "@/types/projects";
 import type { ContentItemDoc } from "@/types/content-library";
@@ -205,9 +205,7 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
               <div className="space-y-1.5">
                 <Label htmlFor="asset-status">Status</Label>
                 <select id="asset-status" value={status} onChange={(e) => setStatus(e.target.value as AssetStatus)} className={selectClass}>
-                  <option value="active">active</option>
-                  <option value="inactive">inactive</option>
-                  <option value="archived">archived</option>
+                  {ASSET_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5 sm:col-span-2">

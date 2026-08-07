@@ -17,7 +17,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * manual field even in the original.
  */
 
-export type AssetStatus = "active" | "inactive" | "archived";
+export type AssetStatus = "idea" | "draft" | "active" | "needs update" | "archived";
 export type AssetIncludedIn = "standard_membership" | "premium_membership" | "sold_standalone" | null;
 
 export interface Asset {
@@ -104,18 +104,25 @@ export interface OfferBundle {
   updatedAt: Timestamp | FieldValue | null;
 }
 
-// Provisional dropdown option lists — best-guess from visible cards/filters,
-// swap out the moment she sends the real lists.
+// Real dropdown option lists — confirmed against her actual "New Asset" /
+// "New Affiliate Link" popups (screenshotted 2026-08-07). Access Level is
+// still provisional (not screenshotted yet).
 export const ASSET_TYPES = [
+  "Tool",
   "Course",
   "Membership",
-  "Training",
-  "AI Tool",
-  "Digital Product",
-  "Tool",
   "Lead Magnet",
-  "Paid Product",
+  "Template",
+  "Workflow",
+  "Guide",
+  "Sales Funnel",
+  "Offer",
+  "Content Asset",
+  "Automation",
+  "Resource",
+  "Other",
 ] as const;
+export const ASSET_STATUSES = ["idea", "draft", "active", "needs update", "archived"] as const;
 export const ASSET_ACCESS_LEVELS = ["Public", "Premium Membership", "Standard Membership", "Private"] as const;
 export const AFFILIATE_CATEGORIES = [
   "Software",
@@ -126,5 +133,5 @@ export const AFFILIATE_CATEGORIES = [
   "Membership",
   "Other",
 ] as const;
-export const AFFILIATE_COMMISSION_TYPES = ["Percentage", "Flat Fee", "Tiered"] as const;
-export const AFFILIATE_PAYOUT_STRUCTURES = ["One-time", "Recurring", "Lifetime"] as const;
+export const AFFILIATE_COMMISSION_TYPES = ["Percentage", "Flat Fee", "Recurring", "Other"] as const;
+export const AFFILIATE_PAYOUT_STRUCTURES = ["One-Time", "Recurring", "Ongoing", "Limited Months", "Custom"] as const;

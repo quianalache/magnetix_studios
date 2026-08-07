@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createAsset, listAssets, type AssetInput } from "@/lib/server/asset-service";
+import { ASSET_STATUSES } from "@/types/assets";
 import type { AssetIncludedIn, AssetStatus } from "@/types/assets";
 
 function str(v: unknown, max = 2000): string {
@@ -14,8 +15,9 @@ function nullableStr(v: unknown): string | null {
   return s || null;
 }
 function parseInput(body: Record<string, unknown>): AssetInput {
-  const status: AssetStatus =
-    body.status === "inactive" || body.status === "archived" ? body.status : "active";
+  const status: AssetStatus = (ASSET_STATUSES as readonly string[]).includes(body.status as string)
+    ? (body.status as AssetStatus)
+    : "active";
   const includedIn: AssetIncludedIn =
     body.includedIn === "standard_membership" ||
     body.includedIn === "premium_membership" ||

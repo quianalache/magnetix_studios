@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { deleteAsset, getAsset, updateAsset, type AssetInput } from "@/lib/server/asset-service";
+import { ASSET_STATUSES } from "@/types/assets";
 import type { AssetIncludedIn, AssetStatus } from "@/types/assets";
 
 function str(v: unknown, max = 2000): string {
@@ -37,7 +38,7 @@ export async function PATCH(
   if (typeof body.name === "string") patch.name = str(body.name, 200);
   if (typeof body.type === "string") patch.type = str(body.type, 80);
   if (typeof body.description === "string") patch.description = str(body.description, 5000);
-  if (body.status === "active" || body.status === "inactive" || body.status === "archived") {
+  if ((ASSET_STATUSES as readonly string[]).includes(body.status as string)) {
     patch.status = body.status as AssetStatus;
   }
   if (Array.isArray(body.tags)) {
