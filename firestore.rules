@@ -940,6 +940,39 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---------- growth ----------
+    // MomentumOS Growth tab port (Social/Money/Goals/Business Pulse/Weekly
+    // Review). Same read-only-to-client-SDK pattern as projects — all
+    // mutations go through /api/sub-accounts/[id]/growth/* so validation
+    // and the Overview stat-row rollups live in one server-side place.
+    match /socialPlatforms/{platformId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /socialPlatforms/{platformId}/logs/{logId} {
+      allow read: if canAccessSub(
+        get(/databases/$(database)/documents/socialPlatforms/$(platformId)).data.subAccountId,
+        get(/databases/$(database)/documents/socialPlatforms/$(platformId)).data.agencyId
+      );
+      allow write: if false;
+    }
+    match /moneyEntries/{entryId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /goals/{goalId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /pagePerformance/{pageId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /weeklyReviews/{reviewId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+
     // ---------- quotes ----------
     // GHL-style "Estimates" — operator-built quote → public accept page.
     // Reads + edits by any active sub-account member (matches the

@@ -41,6 +41,7 @@ import {
   QrCode,
   Layers,
   Orbit,
+  TrendingUp,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -164,6 +165,12 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       { href: "/community", label: "Community", icon: GraduationCap, enabled: true },
       { href: "/courses", label: "Courses", icon: BookOpen, enabled: true },
       { href: "/energetic-decoder", label: "Energetic Decoder", icon: Orbit, enabled: true },
+    ],
+  },
+  {
+    label: "Growth",
+    items: [
+      { href: "/growth", label: "Growth", icon: TrendingUp, enabled: true },
     ],
   },
   {
