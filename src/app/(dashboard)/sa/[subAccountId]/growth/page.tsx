@@ -184,16 +184,17 @@ function OverviewPanel({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard label="Income This Month" value={fmtMoney(moneyStats?.incomeThisMonth ?? 0)} sub="Paid entries only" />
-        <StatCard label="Expenses This Month" value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)} sub="All logged expenses" />
-        <StatCard label="Current MRR" value={fmtMoney(moneyStats?.currentMrr ?? 0)} sub={`${moneyStats?.mrrRecordCount ?? 0} active records`} />
+        <StatCard tint="secondary" label="Income This Month" value={fmtMoney(moneyStats?.incomeThisMonth ?? 0)} sub="Paid entries only" />
+        <StatCard tint="negative" label="Expenses This Month" value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)} sub="All logged expenses" />
+        <StatCard tint="accent" label="Current MRR" value={fmtMoney(moneyStats?.currentMrr ?? 0)} sub={`${moneyStats?.mrrRecordCount ?? 0} active records`} />
         <StatCard
+          tint="muted"
           label="Projected Cash Flow"
           value={fmtMoney(moneyStats?.projectedCashFlow ?? 0)}
           sub="MRR − Recurring Exp."
           negative={(moneyStats?.projectedCashFlow ?? 0) < 0}
         />
-        <StatCard label="Net Profit / Loss" value={fmtMoney(moneyStats?.netProfitLoss ?? 0)} sub="Profit this month" />
+        <StatCard tint="secondary" label="Net Profit / Loss" value={fmtMoney(moneyStats?.netProfitLoss ?? 0)} sub="Profit this month" />
         <div className="rounded-xl border bg-muted/50 p-3.5">
           <p className="mb-2 text-[11px] font-semibold text-muted-foreground">Money Goal</p>
           <button onClick={() => onGoto("goals")} className="text-[13px] font-medium text-primary underline underline-offset-2">
@@ -238,7 +239,7 @@ function OverviewPanel({
                       {toDate(t.date)?.toLocaleDateString() ?? ""} · {t.kind}
                     </p>
                   </div>
-                  <span className={cn("font-mono text-sm font-bold tabular-nums", t.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+                  <span className={cn("text-sm font-bold tabular-nums", t.kind === "income" ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
                     {t.kind === "income" ? "+" : "-"}{fmtMoney(Math.abs(t.amount))}
                   </span>
                 </div>
@@ -265,11 +266,40 @@ function OverviewPanel({
   );
 }
 
-function StatCard({ label, value, sub, negative }: { label: string; value: string; sub: string; negative?: boolean }) {
+/**
+ * Matches the real, live MomentumOS markup (confirmed via her own DevTools
+ * inspection, 2026-08-07 — see Build Log): `rounded-lg border-none
+ * shadow-sm`, a semantic color token per card (not one flat repeated
+ * card color), plain body font on the number (no monospace at all),
+ * label in normal case, not uppercase. The Claude Artifact CSS this was
+ * previously built from was a stale/different build — don't reuse it
+ * for anything else without re-verifying against the real app the same
+ * way this was.
+ */
+const STAT_TINTS = {
+  secondary: "bg-secondary text-secondary-foreground",
+  muted: "bg-muted text-foreground",
+  accent: "bg-accent/30 text-accent-foreground",
+  negative: "bg-destructive/10 text-foreground",
+} as const;
+
+function StatCard({
+  label,
+  value,
+  sub,
+  negative,
+  tint = "secondary",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  negative?: boolean;
+  tint?: keyof typeof STAT_TINTS;
+}) {
   return (
-    <div className="rounded-xl border bg-card p-3.5">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className={cn("font-mono text-2xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
+    <div className={cn("rounded-lg p-3.5 shadow-sm", STAT_TINTS[tint])}>
+      <p className="mb-2 text-[11px] font-semibold text-muted-foreground">{label}</p>
+      <p className={cn("text-2xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
       <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
     </div>
   );
@@ -284,8 +314,8 @@ function GoalCard({ goal }: { goal: Goal }) {
         <span className="shrink-0 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">{goal.type}</span>
       </div>
       <div className="my-2 flex items-baseline gap-1.5">
-        <span className="font-mono text-2xl font-bold tabular-nums">{goal.current.toLocaleString()}</span>
-        <span className="font-mono text-sm text-muted-foreground">/ {goal.target.toLocaleString()}</span>
+        <span className="text-2xl font-bold tabular-nums">{goal.current.toLocaleString()}</span>
+        <span className="text-sm text-muted-foreground">/ {goal.target.toLocaleString()}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
@@ -384,7 +414,7 @@ function SocialPanel({ subAccountId, platforms }: { subAccountId: string; platfo
                 </div>
                 <button onClick={() => removePlatform(p.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
               </div>
-              <p className="font-mono text-[26px] font-bold tabular-nums">{latest[p.id] ?? 0}</p>
+              <p className="text-[26px] font-bold tabular-nums">{latest[p.id] ?? 0}</p>
               <p className="mb-3 text-[11px] text-muted-foreground">followers / subscribers</p>
               {logFor === p.id ? (
                 <div className="flex items-center gap-2">
@@ -487,9 +517,9 @@ function MoneyPanel({
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} sub="No data yet" />
-        <StatCard label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} sub="" />
-        <StatCard label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} sub="" />
+        <StatCard tint="secondary" label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} sub="No data yet" />
+        <StatCard tint="accent" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} sub="" />
+        <StatCard tint="muted" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} sub="" />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -523,7 +553,7 @@ function MoneyPanel({
                           <p className="text-[11px] text-muted-foreground">{toDate(e.date)?.toLocaleDateString()}{e.recurring ? " · recurring" : ""}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-semibold tabular-nums">{fmtMoney(e.amount)}</span>
+                          <span className="text-sm font-semibold tabular-nums">{fmtMoney(e.amount)}</span>
                           <button onClick={() => removeEntry(e.id)}><Trash2 className="h-3.5 w-3.5 text-muted-foreground" /></button>
                         </div>
                       </div>
@@ -655,9 +685,9 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Total Impressions" value={String(totalImpressions)} sub="" />
-        <StatCard label="Total Conversions" value={String(totalConversions)} sub="" />
-        <StatCard label="Avg. Conversion Rate" value={`${avgRate}%`} sub="" />
+        <StatCard tint="secondary" label="Total Impressions" value={String(totalImpressions)} sub="" />
+        <StatCard tint="accent" label="Total Conversions" value={String(totalConversions)} sub="" />
+        <StatCard tint="muted" label="Avg. Conversion Rate" value={`${avgRate}%`} sub="" />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -807,16 +837,16 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
       <section className="space-y-3">
         <p className="text-sm font-semibold">This Week&apos;s Performance</p>
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} sub="" />
-          <StatCard label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} sub="Manually logged below" />
-          <StatCard label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} sub="" />
+          <StatCard tint="secondary" label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} sub="" />
+          <StatCard tint="negative" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} sub="Manually logged below" />
+          <StatCard tint="accent" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} sub="" />
         </div>
       </section>
 
       <section className="space-y-3">
         <p className="text-sm font-semibold">Momentum Score</p>
         <div className="max-w-xs rounded-xl border bg-card p-4">
-          <p className="font-mono text-2xl font-bold tabular-nums">{weekStats?.momentumScorePct != null ? `${weekStats.momentumScorePct}%` : "—"}</p>
+          <p className="text-2xl font-bold tabular-nums">{weekStats?.momentumScorePct != null ? `${weekStats.momentumScorePct}%` : "—"}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {weekStats?.momentumScorePct != null
               ? "Share of this week's due tasks you completed."
