@@ -42,7 +42,7 @@ export default async function EnergeticDecoderReportPage({
       className="min-h-screen bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 px-4 py-10 sm:px-6"
       style={{ "--decoder-accent": theme.accent } as React.CSSProperties}
     >
-      <div className="mx-auto w-full max-w-lg">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="mb-6 flex items-center gap-2">
           {theme.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

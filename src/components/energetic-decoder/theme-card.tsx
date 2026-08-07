@@ -27,7 +27,16 @@ export function EnergeticDecoderThemeCard() {
   const [logoUrl, setLogoUrl] = useState(saved.logoUrl ?? "");
   const [saving, setSaving] = useState(false);
 
-  if (!isAdmin) return null;
+  if (!isAdmin) {
+    // Used to render nothing at all here — a genuinely blank tab with zero
+    // explanation, indistinguishable from a bug. Same admin-only rule as
+    // every other settings screen, just no longer silent about why.
+    return (
+      <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+        You need admin access on this sub-account to edit chart branding.
+      </p>
+    );
+  }
 
   async function handleSave() {
     setSaving(true);

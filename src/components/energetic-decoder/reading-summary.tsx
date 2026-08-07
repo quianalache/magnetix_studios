@@ -70,7 +70,7 @@ export function HumanDesignSummary({
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Bodygraph — Personality <span style={{ color: "#18181b" }}>black</span>, Design <span className="text-rose-600">red</span>
         </p>
-        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[280px]" />
+        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
@@ -154,7 +154,7 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
     <div className="space-y-4">
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Natal Chart</p>
-        <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[320px]" />
+        <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[520px]" />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
@@ -219,13 +219,13 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
                 <span className="font-medium capitalize">{a.bodyB}</span>
                 <span className="text-muted-foreground">
                   {" "}
-                  (orb {a.orb.toFixed(1)}°) — {content?.aspectTypes[a.type] || ASPECT_TYPE_CONTENT[a.type]}
+                  ({a.orb.toFixed(1)}° from exact) — {content?.aspectTypes[a.type] || ASPECT_TYPE_CONTENT[a.type]}
                 </span>
               </div>
             ))}
             {chart.aspects.length > 12 && (
               <p className="pt-1 text-[11px] italic text-muted-foreground">
-                +{chart.aspects.length - 12} more (tightest orbs shown)
+                +{chart.aspects.length - 12} more aspects
               </p>
             )}
           </div>
