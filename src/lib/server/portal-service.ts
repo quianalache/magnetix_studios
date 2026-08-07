@@ -2,10 +2,12 @@ import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import { listProjectsForContact, listSteps } from "@/lib/server/project-service";
 import type { StandaloneEnrollment } from "@/types/standalone-courses";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { eventStatus, type CalendarEvent } from "@/types/events";
 import type { Quote } from "@/types/quotes";
+import type { Project, ProjectStep } from "@/types/projects";
 
 /**
  * Client Portal MVP data aggregation — one login, everything a Contact has
@@ -114,6 +116,20 @@ export async function listPortalQuotes(
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as Quote)
     .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+}
+
+/** This contact's projects (coach-assigned or self-started), each with its steps attached — the Client Portal's "Your projects" section. */
+export async function listPortalProjects(
+  subAccountId: string,
+  contactId: string,
+): Promise<(Project & { steps: ProjectStep[] })[]> {
+  const projects = await listProjectsForContact(subAccountId, contactId);
+  const active = projects
+    .filter((p) => p.status === "active")
+    .sort((a, b) => tsMillis(b.updatedAt) - tsMillis(a.updatedAt));
+  return Promise.all(
+    active.map(async (p) => ({ ...p, steps: await listSteps(p.id) })),
+  );
 }
 
 function tsToDate(v: unknown): Date | null {

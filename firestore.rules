@@ -917,6 +917,29 @@ service cloud.firestore {
       );
     }
 
+    // ---------- projects ----------
+    // MomentumOS-parity work management. All writes go through server API
+    // routes (Admin SDK, bypasses these rules) — staff via
+    // /api/sub-accounts/[id]/projects, portal members via
+    // /api/portal/[saId]/projects — because a project can be edited from
+    // EITHER side (staff or the assigned client, who is not a Firebase Auth
+    // user and has no rules identity at all) and both paths need the same
+    // server-side permission + step-count-recompute logic. Client rules
+    // here are read-only, matching how the CRM's live project list/detail
+    // views subscribe (onSnapshot), same as `tasks`.
+    match /projects/{projectId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /projects/{projectId}/steps/{stepId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /projectTemplates/{templateId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+
     // ---------- quotes ----------
     // GHL-style "Estimates" — operator-built quote → public accept page.
     // Reads + edits by any active sub-account member (matches the

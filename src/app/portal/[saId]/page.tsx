@@ -4,12 +4,14 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { getCurrentMember } from "@/lib/community/member-session";
 import {
   listPortalCourses,
+  listPortalProjects,
   listPortalQuotes,
   listPortalReadings,
   listPortalUpcomingBookings,
 } from "@/lib/server/portal-service";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
 import { PortalLogoutButton } from "./logout-button";
+import { PortalProjectsPanel } from "./projects-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -37,13 +39,14 @@ export default async function PortalPage({ params }: PageProps) {
   const member = await getCurrentMember(saId);
   if (!member) redirect(`/portal/${saId}/login`);
 
-  const [courses, readings, bookings, quotes] = await Promise.all([
+  const [courses, readings, bookings, quotes, projects] = await Promise.all([
     listPortalCourses(saId, member.id),
     member.contactId ? listPortalReadings(saId, member.contactId) : Promise.resolve([]),
     member.contactId
       ? listPortalUpcomingBookings(saId, member.contactId)
       : Promise.resolve([]),
     member.contactId ? listPortalQuotes(saId, member.contactId) : Promise.resolve([]),
+    member.contactId ? listPortalProjects(saId, member.contactId) : Promise.resolve([]),
   ]);
 
   const openQuotes = quotes.filter((q) => q.kind === "invoice" && q.status !== "paid");
@@ -83,6 +86,10 @@ export default async function PortalPage({ params }: PageProps) {
               ))}
             </div>
           </Section>
+        )}
+
+        {member.contactId && (
+          <PortalProjectsPanel saId={saId} projects={projects} />
         )}
 
         {openQuotes.length > 0 && (
@@ -150,7 +157,8 @@ export default async function PortalPage({ params }: PageProps) {
           </Section>
         )}
 
-        {courses.length === 0 &&
+        {!member.contactId &&
+          courses.length === 0 &&
           readings.length === 0 &&
           bookings.length === 0 &&
           openQuotes.length === 0 && (
