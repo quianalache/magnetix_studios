@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Loader2, MapPin, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, Loader2, MapPin, Plus, Search } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,12 +16,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
-import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
-import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
-import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
-import type { AstrologyChart } from "@/lib/energetics/astrology";
-import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
+import { buildDecoderReportUrl } from "@/lib/domains/public-url";
+import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 
 interface PlaceSuggestion {
   lat: number;
@@ -32,7 +28,7 @@ interface PlaceSuggestion {
 
 /** Saved client charts + the "New reading" flow, per her explicit ask — this is the practitioner's client history, not a one-off calculator. */
 export function EnergeticDecoderReadingsTab() {
-  const { subAccountId } = useSubAccount();
+  const { subAccountId, subAccount } = useSubAccount();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -296,6 +292,19 @@ export function EnergeticDecoderReadingsTab() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const url = buildDecoderReportUrl({ subAccount, subAccountId, readingId: r.id });
+                      navigator.clipboard.writeText(url);
+                      toast.success("Report link copied — this is the actual deliverable, safe to send to the client.");
+                    }}
+                    className="flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    <Copy className="h-3 w-3" />
+                    Share report
+                  </button>
                   <Link
                     href={`/sa/${subAccountId}/contacts/${r.contactId}`}
                     onClick={(e) => e.stopPropagation()}
@@ -322,189 +331,6 @@ export function EnergeticDecoderReadingsTab() {
           {filtered.length === 0 && (
             <p className="py-8 text-center text-xs text-muted-foreground">No readings match.</p>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
-  return (
-    <div className="divide-y rounded-2xl border bg-card">
-      {spheres.map((s) => (
-        <div key={s.sphere} className="px-5 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
-              <p className="text-sm font-semibold">
-                Gene Key {s.gate}.{s.line}
-              </p>
-            </div>
-            <p className="text-right text-xs text-muted-foreground">
-              <span className="text-rose-500">{s.shadow}</span>
-              {" → "}
-              <span className="text-emerald-500">{s.gift}</span>
-              {" → "}
-              <span>☆ {s.siddhi}</span>
-            </p>
-          </div>
-          {(s.showsUp || s.giftText) && (
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              {s.showsUp} {s.giftText}
-            </p>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function HumanDesignSummary({ profile }: { profile: HumanDesignProfile }) {
-  const typeInfo = TYPE_CONTENT[profile.type];
-  const authorityInfo = AUTHORITY_CONTENT[profile.authority];
-  const definedSet = new Set(profile.definedCenters);
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
-        <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold">{profile.type}</p>
-            <p className="text-xs text-muted-foreground">Strategy: {typeInfo.strategy}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{typeInfo.description}</p>
-          </div>
-          <div>
-            <p className="text-sm font-semibold">{profile.authority} Authority</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{authorityInfo.description}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <span>
-            Profile: <span className="font-medium text-foreground">{profile.profile ?? "—"}</span>
-          </span>
-          <span>
-            Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
-          </span>
-          <span>
-            Gates activated: <span className="font-medium text-foreground">{profile.activatedGates.length}</span>
-          </span>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Centers</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {CENTERS.map((c) => {
-            const defined = definedSet.has(c);
-            return (
-              <div
-                key={c}
-                className={`rounded-lg border px-2.5 py-2 ${defined ? "border-primary/40 bg-primary/5" : ""}`}
-              >
-                <p className="flex items-center justify-between gap-1 text-xs font-semibold">
-                  {CENTER_LABELS[c]}
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${defined ? "bg-primary" : "bg-muted-foreground/30"}`}
-                  />
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-                  {defined ? CENTER_CONTENT[c].definedText : CENTER_CONTENT[c].undefinedText}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {profile.definedChannels.length > 0 && (
-        <div className="rounded-2xl border bg-card p-4">
-          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Defined Channels
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {profile.definedChannels.map((ch) => (
-              <span key={ch.key} className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs">
-                {ch.gates[0]}-{ch.gates[1]}
-                {ch.name ? ` · ${ch.name}` : ""}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AstrologySummary({ chart }: { chart: AstrologyChart }) {
-  const sun = chart.placements.find((p) => p.body === "sun");
-  const moon = chart.placements.find((p) => p.body === "moon");
-
-  return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Astrology — Western Tropical, {chart.houses.system === "placidus" ? "Placidus" : "Whole Sign"} houses
-        </p>
-        <div className="mt-1.5 grid gap-3 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] text-muted-foreground">Sun</p>
-            <p className="text-sm font-semibold">
-              {sun?.sign} {sun?.degInSign.toFixed(1)}°
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground">Moon</p>
-            <p className="text-sm font-semibold">
-              {moon?.sign} {moon?.degInSign.toFixed(1)}°
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground">Rising (Ascendant)</p>
-            <p className="text-sm font-semibold">
-              {chart.angles.ascendant.sign} {chart.angles.ascendant.degInSign.toFixed(1)}°
-            </p>
-          </div>
-        </div>
-        {chart.houses.fallbackReason && (
-          <p className="mt-2 text-[11px] italic text-muted-foreground">{chart.houses.fallbackReason}</p>
-        )}
-      </div>
-
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Placements</p>
-        <div className="divide-y">
-          {chart.placements.map((p) => (
-            <div key={p.body} className="flex items-center justify-between gap-3 py-1.5 text-xs">
-              <span className="w-16 shrink-0 font-medium capitalize">{p.body}</span>
-              <span className="flex-1">
-                {p.sign} {p.degInSign.toFixed(1)}°{p.retrograde ? " ℞" : ""}
-              </span>
-              <span className="text-muted-foreground">House {p.house}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {chart.aspects.length > 0 && (
-        <div className="rounded-2xl border bg-card p-4">
-          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Aspects ({chart.aspects.length})
-          </p>
-          <div className="space-y-1.5">
-            {chart.aspects.slice(0, 12).map((a, i) => (
-              <div key={i} className="text-xs">
-                <span className="font-medium capitalize">{a.bodyA}</span> {a.type.toLowerCase()}{" "}
-                <span className="font-medium capitalize">{a.bodyB}</span>
-                <span className="text-muted-foreground"> (orb {a.orb.toFixed(1)}°) — {ASPECT_TYPE_CONTENT[a.type]}</span>
-              </div>
-            ))}
-            {chart.aspects.length > 12 && (
-              <p className="pt-1 text-[11px] italic text-muted-foreground">
-                +{chart.aspects.length - 12} more (tightest orbs shown)
-              </p>
-            )}
-          </div>
         </div>
       )}
     </div>

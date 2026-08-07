@@ -48,6 +48,31 @@ export interface EnergeticDecoderResult {
 }
 
 /**
+ * The sub-account's own wording (or the shipped default, if they never
+ * rewrote it) at the moment this reading was generated — same snapshot
+ * principle as Gene Keys' `spheresWithContent`: a reading is a saved
+ * client chart as of when it was created, so a later content rewrite
+ * doesn't retroactively change readings already delivered. Resolved via
+ * energetic-decoder-chart-content-service.ts.
+ */
+export interface HumanDesignReadingContent {
+  typeStrategy: string;
+  typeDescription: string;
+  authorityDescription: string;
+  /** Keyed by CenterKey. All 9 resolved regardless of definition status, so the reading always has both texts available to display. */
+  centers: Record<string, { definedText: string; undefinedText: string }>;
+}
+
+export interface AstrologyReadingContent {
+  /** Keyed by ZodiacSign. */
+  signs: Record<string, string>;
+  /** Keyed by house number (as string). */
+  houses: Record<string, { theme: string; description: string }>;
+  /** Keyed by AspectType. */
+  aspectTypes: Record<string, string>;
+}
+
+/**
  * A saved reading — `subAccounts/{saId}/energeticDecoderReadings/{id}` in
  * spirit, but stored as a flat top-level collection with subAccountId/
  * agencyId fields (matching `forms`/`contacts`), since listing "every
@@ -68,10 +93,10 @@ export interface EnergeticDecoderReading {
   timeZone: string;
   /** Empty when Gene Keys wasn't included in this reading (report config). */
   spheres: GeneKeysSphereResult[];
-  /** Null when Human Design wasn't included in this reading (report config), or on readings created before this system existed. */
-  humanDesign?: HumanDesignProfile | null;
-  /** Null when Astrology wasn't included in this reading (report config), or on readings created before this system existed. */
-  astrology?: AstrologyChart | null;
+  /** Null when Human Design wasn't included in this reading (report config), or on readings created before this system existed. `content` itself is optional within this for the same reason — readings saved before the chart-content snapshot shipped (2026-08-08) have the calculated profile but no snapshotted wording; display code falls back to the hardcoded defaults for those. */
+  humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
+  /** Same as `humanDesign` above. */
+  astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
   createdAt: Timestamp | FieldValue | null;
 }
 

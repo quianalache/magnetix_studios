@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MapPin, Check } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Loader2, MapPin, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
+import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 
 interface PlaceSuggestion {
   lat: number;
@@ -100,33 +102,27 @@ export function PublicDecoderForm({
   }
 
   if (reading) {
+    // Used to only ever render `reading.spheres` — a sub-account with Human
+    // Design or Astrology enabled would calculate and save both, then never
+    // show the visitor either one. Fixed 2026-08-08: renders whatever the
+    // reading actually included, same shared components the coach's own
+    // Readings tab and the persistent report page use.
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
           <Check className="h-4 w-4 shrink-0 text-emerald-600" />
-          <span>Here&apos;s {reading.name}&apos;s Gene Keys profile.</span>
+          <span>Here&apos;s {reading.name}&apos;s reading.</span>
         </div>
-        <div className="divide-y rounded-xl border">
-          {reading.spheres.map((s) => (
-            <div key={s.sphere} className="flex items-center justify-between gap-4 px-4 py-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {s.sphere}
-                </p>
-                <p className="text-sm font-semibold">
-                  Gene Key {s.gate}.{s.line}
-                </p>
-              </div>
-              <p className="text-right text-xs text-muted-foreground">
-                <span className="text-rose-500">{s.shadow}</span>
-                {" → "}
-                <span className="text-emerald-500">{s.gift}</span>
-                {" → "}
-                <span>☆ {s.siddhi}</span>
-              </p>
-            </div>
-          ))}
-        </div>
+        {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
+        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} />}
+        {reading.astrology && <AstrologySummary chart={reading.astrology} />}
+        <Link
+          href={`/decoder/${saId}/report/${reading.id}`}
+          className="flex items-center justify-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted/50"
+        >
+          Save this link — view your full reading anytime
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
     );
   }

@@ -11,6 +11,7 @@ import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { calculateAstrologyChart } from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
+import { resolveReadingContent } from "@/lib/server/energetic-decoder-chart-content-service";
 import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
@@ -96,11 +97,11 @@ export async function createEnergeticDecoderReading(
     includedSpheres.has(s.sphere),
   );
 
-  const humanDesign = reportConfig.includeHumanDesign
+  const rawHumanDesign = reportConfig.includeHumanDesign
     ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
     : null;
 
-  const astrology = reportConfig.includeAstrology
+  const rawAstrology = reportConfig.includeAstrology
     ? calculateAstrologyChart({
         date: birthDate,
         time: birthTime,
@@ -109,6 +110,17 @@ export async function createEnergeticDecoderReading(
         lng: place.lng,
       })
     : null;
+
+  // Same reasoning as spheresWithContent above — the calculators themselves
+  // have no Firestore access, so the sub-account's own wording (or the
+  // shipped default) gets merged in here, once, and snapshotted onto the
+  // reading. One query covers both systems' content at once.
+  const { humanDesign: hdContent, astrology: astroContent } = await resolveReadingContent(
+    input.subAccountId,
+    { type: rawHumanDesign?.type, authority: rawHumanDesign?.authority },
+  );
+  const humanDesign = rawHumanDesign ? { ...rawHumanDesign, content: hdContent } : null;
+  const astrology = rawAstrology ? { ...rawAstrology, content: astroContent } : null;
 
   let contactId = await findExistingContactId(db, input.subAccountId, { email });
   if (!contactId) {
@@ -169,4 +181,23 @@ export async function listReadingsForSubAccount(
   return snap.docs.map(
     (d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading,
   );
+}
+
+/**
+ * Powers the public, shareable report page — the actual deliverable a
+ * client opens (mirrors bodygraph.com's emailed "download link to your
+ * report": a durable link instead of a one-time in-browser view). No auth;
+ * the reading ID itself (an unguessable Firestore doc ID) is the access
+ * key, same convention this app already uses for other opaque public
+ * links. Scoped to subAccountId so a reading ID can't be used to peek at
+ * a different sub-account's client chart even if somehow guessed.
+ */
+export async function getReadingById(
+  subAccountId: string,
+  readingId: string,
+): Promise<EnergeticDecoderReading | null> {
+  const snap = await getAdminDb().doc(`energeticDecoderReadings/${readingId}`).get();
+  if (!snap.exists) return null;
+  const reading = { id: snap.id, ...snap.data() } as EnergeticDecoderReading;
+  return reading.subAccountId === subAccountId ? reading : null;
 }

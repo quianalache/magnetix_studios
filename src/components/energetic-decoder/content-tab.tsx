@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ChartContentEditor } from "@/components/energetic-decoder/chart-content-editor";
 
 interface ResolvedGate {
   gate: number;
@@ -26,8 +27,50 @@ interface ResolvedGate {
  * here — Reports (sequences a reading includes) never touches gate text;
  * this is the one place it lives, rewrite a gate once and every reading
  * that includes it picks up the change.
+ *
+ * Extended 2026-08-08: shipped with only the Gene Keys gate editor even
+ * after Human Design and Astrology went live — their content had real
+ * defaults but no way to touch them, an inconsistency she caught. Now a
+ * three-way switcher; Human Design/Astrology delegate to the shared
+ * ChartContentEditor (chart-content-editor.tsx) rather than a hand-built
+ * copy of this file's own gate-list UI.
  */
 export function EnergeticDecoderContentTab() {
+  const [system, setSystem] = useState<"geneKeys" | "hd" | "astro">("geneKeys");
+
+  return (
+    <div className="space-y-5">
+      <div className="flex gap-1.5">
+        {(
+          [
+            { key: "geneKeys", label: "Gene Keys" },
+            { key: "hd", label: "Human Design" },
+            { key: "astro", label: "Astrology" },
+          ] as const
+        ).map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setSystem(s.key)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+              system === s.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {system === "geneKeys" && <GeneKeysGateEditor />}
+      {system === "hd" && <ChartContentEditor system="hd" />}
+      {system === "astro" && <ChartContentEditor system="astro" />}
+    </div>
+  );
+}
+
+function GeneKeysGateEditor() {
   const { subAccountId } = useSubAccount();
 
   const [gates, setGates] = useState<ResolvedGate[]>([]);

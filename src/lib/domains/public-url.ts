@@ -46,6 +46,25 @@ export function buildDecoderUrl(opts: {
   return domain ? `https://${domain}/decoder` : `${platformOrigin()}/decoder/${opts.subAccountId}`;
 }
 
+/**
+ * The actual client-facing report link — "Share report" in the Readings
+ * tab, and what the public tool's success screen points a visitor to
+ * after they generate their own reading. Host-aware from the start
+ * (learned that lesson the hard way with the Portal's magic-link
+ * invite — see Build Log, Aug 7): a coach's own verified domain, not the
+ * shared platform domain, same as every other public link here.
+ */
+export function buildDecoderReportUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  subAccountId: string;
+  readingId: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/decoder/report/${opts.readingId}`
+    : `${platformOrigin()}/decoder/${opts.subAccountId}/report/${opts.readingId}`;
+}
+
 /** `slug` is nullable so callers with a legacy (pre-slug) doc degrade gracefully to the opaque URL instead of building a broken link. */
 export function buildCourseUrl(opts: {
   subAccount: HasCustomDomain | null | undefined;
