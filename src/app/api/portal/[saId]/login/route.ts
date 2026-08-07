@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { signMemberMagicLinkToken } from "@/lib/community/member-auth";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
+import { resolvePortalOrigin } from "@/lib/domains/public-url";
 import type { SubAccountDoc } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -41,12 +42,16 @@ export async function POST(
     return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // Prefer this sub-account's own verified custom domain, so a client who
+  // requests a sign-in link from quianalache.com/portal doesn't get emailed
+  // a link back to the shared platform domain — the whole point of having
+  // a custom domain was to keep them on it end to end.
+  const origin = resolvePortalOrigin(sub);
 
   try {
     if (emailIsConfigured()) {
       const token = signMemberMagicLinkToken(saId, email);
-      const link = `${appUrl}/api/portal/${saId}/login/verify?token=${encodeURIComponent(token)}`;
+      const link = `${origin}/api/portal/${saId}/login/verify?token=${encodeURIComponent(token)}`;
 
       await sendTenantEmail({
         sub,

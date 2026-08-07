@@ -6,6 +6,7 @@ import {
 } from "@/lib/community/member-auth";
 import { ensureMember } from "@/lib/community/member-account";
 import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { getSubAccountByCustomDomain } from "@/lib/domains/custom-domain-service";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,14 @@ export const dynamic = "force-dynamic";
  * Verify a Portal magic-link token and exchange it for a 30-day session
  * cookie, creating (or reusing) the member identity + reconciling a contact
  * on the way. Mirrors `/api/community/[saId]/login/verify` but with no
- * community-gate check and no group auto-join — the Portal always redirects
- * straight to `/portal/{saId}`.
+ * community-gate check and no group auto-join.
+ *
+ * Redirects to the pretty `/portal` (+ `/login` on error) when this request
+ * arrived on the sub-account's own verified custom domain, else falls back
+ * to the opaque `/portal/{saId}` — same domain-or-platform choice as
+ * `buildPortalLoginUrl`, just decided by the INCOMING host here rather than
+ * a stored subAccount doc, since that's what determines what `request.url`'s
+ * origin actually is.
  */
 export async function GET(
   request: Request,
@@ -22,8 +29,15 @@ export async function GET(
 ) {
   const { saId } = await params;
   const url = new URL(request.url);
+
+  const host = request.headers.get("host");
+  const customDomainSub = await getSubAccountByCustomDomain(host);
+  const onCustomDomain = customDomainSub?.id === saId;
+  const homePath = onCustomDomain ? "/portal" : `/portal/${saId}`;
+  const loginPath = onCustomDomain ? "/portal/login" : `/portal/${saId}/login`;
+
   const loginUrl = (error: string) =>
-    NextResponse.redirect(new URL(`/portal/${saId}/login?error=${error}`, url));
+    NextResponse.redirect(new URL(`${loginPath}?error=${error}`, url));
 
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists) {
@@ -51,5 +65,5 @@ export async function GET(
     return loginUrl("error");
   }
 
-  return NextResponse.redirect(new URL(`/portal/${saId}`, url));
+  return NextResponse.redirect(new URL(homePath, url));
 }

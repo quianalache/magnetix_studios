@@ -87,3 +87,14 @@ export function buildPortalLoginUrl(opts: {
     ? `https://${domain}/portal`
     : `${platformOrigin()}/portal/${opts.subAccountId}/login`;
 }
+
+/**
+ * Bare origin (no path) for building portal links FROM the server side —
+ * the magic-link email's verify URL, the "sign in" redirect target, etc.
+ * Same domain-or-platform choice as `buildPortalLoginUrl`, just without a
+ * path baked in, since these callers append their own.
+ */
+export function resolvePortalOrigin(subAccount: HasCustomDomain | null | undefined): string {
+  const domain = verifiedDomain(subAccount);
+  return domain ? `https://${domain}` : platformOrigin();
+}

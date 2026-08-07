@@ -1,22 +1,21 @@
 import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getSubAccountByCustomDomain } from "@/lib/domains/custom-domain-service";
+import { PortalHomeView } from "./portal-home-view";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Human-readable custom-domain portal entry: yourdomain.com/portal.
- *
- * Unlike booking/decoder/courses, this is a plain redirect to the existing
- * opaque `/portal/{saId}` route rather than a full pretty-URL mirror — the
- * portal is a login-gated client area, not a public/shareable marketing
- * surface, so once a visitor is past this entry point an opaque URL is
- * normal (same pattern as e.g. a Stripe customer portal: the link you
- * SHARE is clean, what you land on once authenticated doesn't need to be).
+ * Human-readable custom-domain portal entry: yourdomain.com/portal — a real
+ * pretty-URL mirror now (same pattern as booking/decoder/courses), not a
+ * redirect. Previously this bounced to the opaque `/portal/{saId}`, which
+ * itself then bounced unauthenticated visitors to `/portal/{saId}/login` —
+ * two redirects that left the pretty entry point undone by the time anyone
+ * actually saw a URL. Fixed 2026-08-07.
  */
 export default async function CustomDomainPortalEntry() {
   const host = (await headers()).get("host");
   const sub = await getSubAccountByCustomDomain(host);
   if (!sub) notFound();
-  redirect(`/portal/${sub.id}`);
+  return <PortalHomeView saId={sub.id} loginPath="/portal/login" />;
 }
