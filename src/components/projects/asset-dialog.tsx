@@ -56,7 +56,8 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
   const [status, setStatus] = useState<AssetStatus>("active");
   const [tags, setTags] = useState("");
 
-  const [accessLevel, setAccessLevel] = useState<string>(ASSET_ACCESS_LEVELS[0]);
+  const [accessLevelChoice, setAccessLevelChoice] = useState<string>(ASSET_ACCESS_LEVELS[0]);
+  const [customAccessText, setCustomAccessText] = useState("");
   const [includedIn, setIncludedIn] = useState<AssetIncludedIn>(null);
 
   const [directLink, setDirectLink] = useState("");
@@ -83,7 +84,16 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
       setDescription(asset.description);
       setStatus(asset.status);
       setTags(asset.tags.join(", "));
-      setAccessLevel(asset.accessLevel || ASSET_ACCESS_LEVELS[0]);
+      if (asset.accessLevel && (ASSET_ACCESS_LEVELS as readonly string[]).includes(asset.accessLevel)) {
+        setAccessLevelChoice(asset.accessLevel);
+        setCustomAccessText("");
+      } else if (asset.accessLevel) {
+        setAccessLevelChoice("Custom");
+        setCustomAccessText(asset.accessLevel);
+      } else {
+        setAccessLevelChoice(ASSET_ACCESS_LEVELS[0]);
+        setCustomAccessText("");
+      }
       setIncludedIn(asset.includedIn);
       setDirectLink(asset.directLink);
       setCommunitySafeLink(asset.communitySafeLink);
@@ -103,7 +113,7 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
       }
     } else {
       setName(""); setType(ASSET_TYPES[0]); setDescription(""); setStatus("active"); setTags("");
-      setAccessLevel(ASSET_ACCESS_LEVELS[0]); setIncludedIn(null);
+      setAccessLevelChoice(ASSET_ACCESS_LEVELS[0]); setCustomAccessText(""); setIncludedIn(null);
       setDirectLink(""); setCommunitySafeLink(""); setLandingPageLink(""); setCheckoutLink("");
       setLinkedProjectId(""); setLinkedContentId(""); setLinkedGoalId(""); setLinkedOfferId("");
       setInternalNotes(""); setRevenueCents(null);
@@ -122,7 +132,7 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
       description: description.trim(),
       status,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-      accessLevel,
+      accessLevel: accessLevelChoice === "Custom" ? customAccessText.trim() : accessLevelChoice,
       includedIn,
       directLink: directLink.trim(),
       communitySafeLink: communitySafeLink.trim(),
@@ -223,9 +233,22 @@ export function AssetDialog({ open, onOpenChange, asset, projects, contentItems,
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="asset-access">Access Level</Label>
-                <select id="asset-access" value={accessLevel} onChange={(e) => setAccessLevel(e.target.value)} className={selectClass}>
+                <select
+                  id="asset-access"
+                  value={accessLevelChoice}
+                  onChange={(e) => setAccessLevelChoice(e.target.value)}
+                  className={selectClass}
+                >
                   {ASSET_ACCESS_LEVELS.map((a) => <option key={a} value={a}>{a}</option>)}
+                  <option value="Custom">Custom</option>
                 </select>
+                {accessLevelChoice === "Custom" && (
+                  <Input
+                    value={customAccessText}
+                    onChange={(e) => setCustomAccessText(e.target.value)}
+                    placeholder="e.g. VIP, Founding Members"
+                  />
+                )}
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
                 {([

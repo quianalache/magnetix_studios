@@ -123,7 +123,18 @@ export const ASSET_TYPES = [
   "Other",
 ] as const;
 export const ASSET_STATUSES = ["idea", "draft", "active", "needs update", "archived"] as const;
-export const ASSET_ACCESS_LEVELS = ["Public", "Premium Membership", "Standard Membership", "Private"] as const;
+// Real list (screenshotted 2026-08-07). "Custom" isn't a stored value —
+// picking it in the UI reveals a free-text field, and whatever's typed
+// there becomes the actual `accessLevel` string.
+export const ASSET_ACCESS_LEVELS = [
+  "Public",
+  "Lead Magnet",
+  "Standard Membership",
+  "Premium Membership",
+  "Paid Standalone",
+  "Private/Internal",
+  "Client Only",
+] as const;
 export const AFFILIATE_CATEGORIES = [
   "Software",
   "Course",
