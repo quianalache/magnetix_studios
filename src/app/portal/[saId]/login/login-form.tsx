@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function PortalLoginForm({ saId }: { saId: string }) {
+export function PortalLoginForm({ saId, accentColor }: { saId: string; accentColor?: string }) {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
@@ -73,7 +73,8 @@ export function PortalLoginForm({ saId }: { saId: string }) {
       {error && <p className="text-xs text-red-600">{error}</p>}
       <Button
         type="submit"
-        className="w-full bg-[#202124] text-white hover:bg-[#202124]/90"
+        className="w-full text-white hover:opacity-90"
+        style={accentColor ? { background: accentColor } : undefined}
         disabled={submitting}
       >
         {submitting ? (

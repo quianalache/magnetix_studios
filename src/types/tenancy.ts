@@ -21,6 +21,7 @@ export type AppTheme = "leadstack" | "green" | "neutral" | "magnetix";
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { SubscriptionStatus, MemberStatus } from "./firebase";
 import type { EnergeticDecoderTheme, EnergeticDecoderReportConfig } from "./energetic-decoder";
+import type { PortalBranding } from "./portal-branding";
 
 export interface AgencyDoc {
   id: string;
@@ -155,6 +156,13 @@ export interface SubAccountDoc {
    * `false` at creation (explicit allowlist); read `=== true`.
    */
   customDomainEnabledByAgency?: boolean;
+  /**
+   * Client Portal branding + module visibility — see
+   * `src/types/portal-branding.ts`. Null/undefined on every sub-account
+   * that's never opened the settings page; always read through
+   * `resolvePortalBranding()`, never this raw field directly.
+   */
+  portalBranding?: PortalBranding | null;
   /**
    * Agency-controlled gate for the public API (slice 1-9 v1). Only the
    * agency owner can flip this (PATCH /api/agency/sub-accounts/[id]/

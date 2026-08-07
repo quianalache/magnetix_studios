@@ -8,6 +8,7 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { eventStatus, type CalendarEvent } from "@/types/events";
 import type { Quote } from "@/types/quotes";
 import type { Project, ProjectStep } from "@/types/projects";
+import type { CourseOfferPurchase } from "@/types/course-offers";
 
 /**
  * Client Portal MVP data aggregation — one login, everything a Contact has
@@ -116,6 +117,77 @@ export async function listPortalQuotes(
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as Quote)
     .sort((a, b) => tsMillis(b.createdAt) - tsMillis(a.createdAt));
+}
+
+export interface PortalSessionBundle {
+  bookingPageSlug: string;
+  bookingPageName: string;
+  total: number;
+  used: number;
+  remaining: number;
+}
+
+/**
+ * Real session-credit tracking for the portal's Sessions module — replaces
+ * the mockup's typed-in "0 of 1 / 1 of 3" numbers with actual purchase +
+ * booking data. `total` comes from every paid Course Offer purchase's
+ * snapshotted booking bundle (`CourseOfferBookingBundle.sessionCount`);
+ * `used` counts this member's non-cancelled events sourced from that same
+ * booking page.
+ *
+ * One known limitation, called out rather than hidden: if a member buys
+ * the SAME bundle (same booking page) more than once, their usage is
+ * summed across both purchases rather than tracked per-purchase, since
+ * booked events aren't tagged with which purchase redeemed them — good
+ * enough for the common one-bundle-at-a-time case, worth revisiting if
+ * repeat purchases of the same bundle turn out to be common.
+ */
+export async function listPortalSessionBundles(
+  subAccountId: string,
+  memberId: string,
+  contactId: string | null,
+): Promise<PortalSessionBundle[]> {
+  const purchaseSnap = await getAdminDb()
+    .collectionGroup("purchases")
+    .where("subAccountId", "==", subAccountId)
+    .where("memberId", "==", memberId)
+    .where("status", "==", "paid")
+    .get();
+
+  const byPage = new Map<string, { name: string; total: number }>();
+  for (const doc of purchaseSnap.docs) {
+    // The Community group "purchases" subcollection shares the same
+    // collection id — this collectionGroup query legitimately returns both.
+    // Only Course Offer purchases have a `booking` bundle; everything else
+    // (including Community's, which has no such field) is skipped here.
+    const data = doc.data() as Partial<CourseOfferPurchase>;
+    if (!data.booking) continue;
+    const key = data.booking.bookingPageSlug;
+    const existing = byPage.get(key);
+    byPage.set(key, {
+      name: data.booking.bookingPageName,
+      total: (existing?.total ?? 0) + data.booking.sessionCount,
+    });
+  }
+  if (byPage.size === 0 || !contactId) return [];
+
+  const eventSnap = await getAdminDb()
+    .collection("events")
+    .where("subAccountId", "==", subAccountId)
+    .where("contactId", "==", contactId)
+    .get();
+  const usedByPage = new Map<string, number>();
+  for (const doc of eventSnap.docs) {
+    const e = doc.data() as Omit<CalendarEvent, "id">;
+    if (!e.bookingPageSlug || !byPage.has(e.bookingPageSlug)) continue;
+    if (eventStatus(e) === "cancelled") continue;
+    usedByPage.set(e.bookingPageSlug, (usedByPage.get(e.bookingPageSlug) ?? 0) + 1);
+  }
+
+  return [...byPage.entries()].map(([slug, { name, total }]) => {
+    const used = Math.min(total, usedByPage.get(slug) ?? 0);
+    return { bookingPageSlug: slug, bookingPageName: name, total, used, remaining: total - used };
+  });
 }
 
 /** This contact's projects (coach-assigned or self-started), each with its steps attached — the Client Portal's "Your projects" section. */

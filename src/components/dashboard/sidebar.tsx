@@ -42,6 +42,7 @@ import {
   Layers,
   Orbit,
   TrendingUp,
+  LayoutPanelTop,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -165,6 +166,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       { href: "/community", label: "Community", icon: GraduationCap, enabled: true },
       { href: "/courses", label: "Courses", icon: BookOpen, enabled: true },
       { href: "/energetic-decoder", label: "Energetic Decoder", icon: Orbit, enabled: true },
+      { href: "/client-portal", label: "Client Portal", icon: LayoutPanelTop, enabled: true },
     ],
   },
   {

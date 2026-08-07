@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getSubAccountByCustomDomain } from "@/lib/domains/custom-domain-service";
+import { resolvePortalBranding } from "@/types/portal-branding";
 import { PortalLoginView } from "../portal-login-view";
 
 export const dynamic = "force-dynamic";
@@ -22,5 +23,12 @@ export default async function CustomDomainPortalLoginPage({
   if (!sub) notFound();
 
   const sp = await searchParams;
-  return <PortalLoginView saId={sub.id} subName={sub.name ?? "your portal"} errorCode={sp.error} />;
+  return (
+    <PortalLoginView
+      saId={sub.id}
+      branding={resolvePortalBranding(sub.portalBranding)}
+      fallbackName={sub.name ?? "your portal"}
+      errorCode={sp.error}
+    />
+  );
 }
