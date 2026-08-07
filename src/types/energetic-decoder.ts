@@ -1,5 +1,6 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
+import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 
 /**
  * "Energetic Decoder" — the Memberships-tab home for chart-reading
@@ -57,13 +58,17 @@ export interface EnergeticDecoderReading {
   subAccountId: string;
   agencyId: string;
   contactId: string;
+  /** Legacy discriminator — kept for existing docs; a reading can now hold both systems at once (see `spheres`/`humanDesign` below), so this is no longer exhaustive. */
   system: "geneKeys";
   name: string;
   birthDate: string;
   birthTime: string;
   birthPlace: string;
   timeZone: string;
+  /** Empty when Gene Keys wasn't included in this reading (report config). */
   spheres: GeneKeysSphereResult[];
+  /** Null when Human Design wasn't included in this reading (report config), or on readings created before this system existed. */
+  humanDesign?: HumanDesignProfile | null;
   createdAt: Timestamp | FieldValue | null;
 }
 
@@ -93,10 +98,12 @@ export interface EnergeticDecoderReportConfig {
   includeActivation: boolean;
   includeVenus: boolean;
   includePearl: boolean;
+  /** Compute + store a full Human Design bodygraph (Type/Authority/Profile/Centers/Channels) alongside Gene Keys for every new reading. */
+  includeHumanDesign: boolean;
 }
 
 export function defaultEnergeticDecoderReportConfig(): EnergeticDecoderReportConfig {
-  return { includeActivation: true, includeVenus: true, includePearl: true };
+  return { includeActivation: true, includeVenus: true, includePearl: true, includeHumanDesign: true };
 }
 
 /** Sphere → sequence membership, used to filter a reading's spheres by the report config above. */

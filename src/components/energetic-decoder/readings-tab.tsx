@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/dialog";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
+import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
+import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
 
 interface PlaceSuggestion {
   lat: number;
@@ -306,8 +309,9 @@ export function EnergeticDecoderReadingsTab() {
                 </div>
               </button>
               {expandedId === r.id && (
-                <div className="border-t bg-muted/20 px-5 py-3">
-                  <SphereList spheres={r.spheres} />
+                <div className="space-y-4 border-t bg-muted/20 px-5 py-3">
+                  {r.spheres.length > 0 && <SphereList spheres={r.spheres} />}
+                  {r.humanDesign && <HumanDesignSummary profile={r.humanDesign} />}
                 </div>
               )}
             </div>
@@ -348,6 +352,83 @@ function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function HumanDesignSummary({ profile }: { profile: HumanDesignProfile }) {
+  const typeInfo = TYPE_CONTENT[profile.type];
+  const authorityInfo = AUTHORITY_CONTENT[profile.authority];
+  const definedSet = new Set(profile.definedCenters);
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
+        <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold">{profile.type}</p>
+            <p className="text-xs text-muted-foreground">Strategy: {typeInfo.strategy}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{typeInfo.description}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">{profile.authority} Authority</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{authorityInfo.description}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <span>
+            Profile: <span className="font-medium text-foreground">{profile.profile ?? "—"}</span>
+          </span>
+          <span>
+            Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
+          </span>
+          <span>
+            Gates activated: <span className="font-medium text-foreground">{profile.activatedGates.length}</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Centers</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {CENTERS.map((c) => {
+            const defined = definedSet.has(c);
+            return (
+              <div
+                key={c}
+                className={`rounded-lg border px-2.5 py-2 ${defined ? "border-primary/40 bg-primary/5" : ""}`}
+              >
+                <p className="flex items-center justify-between gap-1 text-xs font-semibold">
+                  {CENTER_LABELS[c]}
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${defined ? "bg-primary" : "bg-muted-foreground/30"}`}
+                  />
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                  {defined ? CENTER_CONTENT[c].definedText : CENTER_CONTENT[c].undefinedText}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {profile.definedChannels.length > 0 && (
+        <div className="rounded-2xl border bg-card p-4">
+          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Defined Channels
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {profile.definedChannels.map((ch) => (
+              <span key={ch.key} className="rounded-full border bg-muted/40 px-2.5 py-1 text-xs">
+                {ch.gates[0]}-{ch.gates[1]}
+                {ch.name ? ` · ${ch.name}` : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

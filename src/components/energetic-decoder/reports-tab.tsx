@@ -29,9 +29,10 @@ const SEQUENCES: {
  */
 export function EnergeticDecoderReportsTab() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
-  const [config, setConfig] = useState<EnergeticDecoderReportConfig>(
-    subAccount?.energeticDecoderReportConfig ?? defaultEnergeticDecoderReportConfig(),
-  );
+  const [config, setConfig] = useState<EnergeticDecoderReportConfig>({
+    ...defaultEnergeticDecoderReportConfig(),
+    ...(subAccount?.energeticDecoderReportConfig ?? {}),
+  });
   const [savingConfig, setSavingConfig] = useState(false);
 
   async function toggleSequence(key: keyof EnergeticDecoderReportConfig) {
@@ -85,6 +86,29 @@ export function EnergeticDecoderReportsTab() {
             </label>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-2xl border bg-card p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold">Human Design Reading</h3>
+          <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Live
+          </span>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Type, Strategy, Authority, Profile, Definition, and every defined Center and Channel — a
+          full bodygraph computed from the same birth data as the Gene Keys reading.
+        </p>
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={config.includeHumanDesign}
+            onChange={() => isAdmin && toggleSequence("includeHumanDesign")}
+            disabled={!isAdmin || savingConfig}
+            className="h-4 w-4 shrink-0"
+          />
+          <span className="flex-1 font-medium">Include Human Design in new readings</span>
+        </label>
       </div>
     </div>
   );

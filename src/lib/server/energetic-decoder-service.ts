@@ -7,6 +7,7 @@ import {
   findExistingContactId,
 } from "@/lib/server/contacts-service";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
+import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
 import {
@@ -75,9 +76,16 @@ export async function createEnergeticDecoderReading(
   const db = getAdminDb();
 
   // Filter to only the sequences this sub-account has chosen to include
-  // (Reports tab checkboxes) — defaults to all three when unset.
+  // (Reports tab checkboxes) — merged over the defaults (not just a
+  // whole-object fallback) so a sub-account whose config was saved BEFORE
+  // includeHumanDesign existed still gets it on, matching every other
+  // toggle's "on by default" behavior, instead of a missing field reading
+  // as silently off.
   const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
-  const reportConfig = subSnap.data()?.energeticDecoderReportConfig ?? defaultEnergeticDecoderReportConfig();
+  const reportConfig = {
+    ...defaultEnergeticDecoderReportConfig(),
+    ...(subSnap.data()?.energeticDecoderReportConfig ?? {}),
+  };
   const includedSpheres = new Set<string>([
     ...(reportConfig.includeActivation ? ACTIVATION_SEQUENCE_SPHERES : []),
     ...(reportConfig.includeVenus ? VENUS_SEQUENCE_SPHERES : []),
@@ -86,6 +94,10 @@ export async function createEnergeticDecoderReading(
   const filteredSpheres: GeneKeysSphereResult[] = spheresWithContent.filter((s) =>
     includedSpheres.has(s.sphere),
   );
+
+  const humanDesign = reportConfig.includeHumanDesign
+    ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
+    : null;
 
   let contactId = await findExistingContactId(db, input.subAccountId, { email });
   if (!contactId) {
@@ -117,6 +129,7 @@ export async function createEnergeticDecoderReading(
     birthPlace: place.displayName,
     timeZone: place.timeZone,
     spheres: filteredSpheres,
+    humanDesign,
     createdAt: FieldValue.serverTimestamp(),
   };
   await readingRef.set(doc);

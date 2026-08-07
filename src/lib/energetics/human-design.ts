@@ -1,0 +1,282 @@
+import "server-only";
+
+import { Body, MakeTime } from "astronomy-engine";
+import { trueNode } from "astronomia/moonposition";
+import { nutation } from "astronomia/nutation";
+import {
+  eclipticLongitude,
+  findDesignTime,
+  longitudeToGateLine,
+  parseBirthToUtc,
+  type WallClockBirthInput,
+} from "./gate-wheel";
+import {
+  CENTERS,
+  CHANNELS,
+  MOTOR_CENTERS,
+  type CenterKey,
+  type Channel,
+} from "./human-design-data";
+
+/**
+ * Human Design bodygraph calculator. Reuses the exact same proven gate-
+ * wheel math as Gene Keys (gate-wheel.ts) — same Personality/Design dual-
+ * chart mechanic, same 88°-solar-arc Design-time search — just computes
+ * all 13 activation points Human Design uses (Gene Keys only needs 6) and
+ * derives Type/Authority/Profile/Definition from the resulting gate
+ * pattern, using the standard Ra Uru Hu / Jovian Archive bodygraph rules
+ * (see human-design-data.ts for provenance).
+ *
+ * The one genuinely new astronomical piece: the lunar Nodes. `astronomy-
+ * engine` has no direct node-longitude function (only node-CROSSING event
+ * search), so the true ascending Node comes from `astronomia`
+ * (MIT-licensed, Meeus-algorithm-based) — apparent position (nutation-
+ * corrected) to stay consistent with how `gate-wheel.ts` computes every
+ * other body. South Node is always exactly 180° from North Node.
+ */
+
+const R2D = 180 / Math.PI;
+const J2000_JD = 2451545.0;
+
+function northNodeLongitude(date: Date): number {
+  const tt = MakeTime(date).tt; // days since J2000, Terrestrial Time
+  const jde = J2000_JD + tt;
+  const [dpsi] = nutation(jde);
+  let deg = ((trueNode(jde) + dpsi) * R2D) % 360;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
+export type HdBodyName =
+  | "sun"
+  | "earth"
+  | "moon"
+  | "northNode"
+  | "southNode"
+  | "mercury"
+  | "venus"
+  | "mars"
+  | "jupiter"
+  | "saturn"
+  | "uranus"
+  | "neptune"
+  | "pluto";
+
+export interface HdActivation {
+  body: HdBodyName;
+  gate: number;
+  line: number;
+}
+
+const ASTRONOMY_ENGINE_BODIES: { body: HdBodyName; engineBody: Body }[] = [
+  { body: "moon", engineBody: Body.Moon },
+  { body: "mercury", engineBody: Body.Mercury },
+  { body: "venus", engineBody: Body.Venus },
+  { body: "mars", engineBody: Body.Mars },
+  { body: "jupiter", engineBody: Body.Jupiter },
+  { body: "saturn", engineBody: Body.Saturn },
+  { body: "uranus", engineBody: Body.Uranus },
+  { body: "neptune", engineBody: Body.Neptune },
+  { body: "pluto", engineBody: Body.Pluto },
+];
+
+function computeActivations(date: Date): HdActivation[] {
+  const sunLon = eclipticLongitude(Body.Sun, date);
+  const northNodeLon = northNodeLongitude(date);
+
+  const longitudes: { body: HdBodyName; lon: number }[] = [
+    { body: "sun", lon: sunLon },
+    { body: "earth", lon: (sunLon + 180) % 360 },
+    { body: "northNode", lon: northNodeLon },
+    { body: "southNode", lon: (northNodeLon + 180) % 360 },
+    ...ASTRONOMY_ENGINE_BODIES.map(({ body, engineBody }) => ({
+      body,
+      lon: eclipticLongitude(engineBody, date),
+    })),
+  ];
+
+  return longitudes.map(({ body, lon }) => {
+    const { gate, line } = longitudeToGateLine(lon);
+    return { body, gate, line };
+  });
+}
+
+// ── bodygraph derivation ────────────────────────────────────────────────
+
+function buildAdjacency(
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): Map<CenterKey, Set<CenterKey>> {
+  const adj = new Map<CenterKey, Set<CenterKey>>();
+  for (const c of definedCenters) adj.set(c, new Set());
+  for (const ch of definedChannels) {
+    const [c1, c2] = ch.centers;
+    if (adj.has(c1) && adj.has(c2)) {
+      adj.get(c1)!.add(c2);
+      adj.get(c2)!.add(c1);
+    }
+  }
+  return adj;
+}
+
+/** BFS reachability from `start` to the Throat, through defined centers only. */
+function centerReachesThroat(
+  start: CenterKey,
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): boolean {
+  if (!definedCenters.has("throat") || !definedCenters.has(start)) return false;
+  const adj = buildAdjacency(definedCenters, definedChannels);
+  const seen = new Set<CenterKey>([start]);
+  const queue: CenterKey[] = [start];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === "throat") return true;
+    for (const next of adj.get(cur) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+function anyMotorReachesThroat(
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): boolean {
+  return MOTOR_CENTERS.some(
+    (m) => definedCenters.has(m) && centerReachesThroat(m, definedCenters, definedChannels),
+  );
+}
+
+export type HdType = "Manifestor" | "Generator" | "Manifesting Generator" | "Projector" | "Reflector";
+
+function determineType(
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): HdType {
+  if (definedCenters.size === 0) return "Reflector";
+  const sacral = definedCenters.has("sacral");
+  const motorThroat = anyMotorReachesThroat(definedCenters, definedChannels);
+  if (sacral) return motorThroat ? "Manifesting Generator" : "Generator";
+  return motorThroat ? "Manifestor" : "Projector";
+}
+
+export type HdAuthority =
+  | "Emotional (Solar Plexus)"
+  | "Sacral"
+  | "Splenic"
+  | "Ego (Heart)"
+  | "Self-Projected (G)"
+  | "Mental (Environmental)"
+  | "Lunar (Reflector)";
+
+/** Standard priority order — the first center in this list that's defined wins. */
+function determineAuthority(
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): HdAuthority {
+  if (definedCenters.size === 0) return "Lunar (Reflector)";
+  if (definedCenters.has("solarplexus")) return "Emotional (Solar Plexus)";
+  if (definedCenters.has("sacral")) return "Sacral";
+  if (definedCenters.has("spleen")) return "Splenic";
+  if (definedCenters.has("heart")) return "Ego (Heart)";
+  if (definedCenters.has("g") && centerReachesThroat("g", definedCenters, definedChannels)) {
+    return "Self-Projected (G)";
+  }
+  return "Mental (Environmental)";
+}
+
+const DEFINITION_LABELS: Record<number, string> = {
+  0: "No Definition",
+  1: "Single Definition",
+  2: "Split Definition",
+  3: "Triple Split Definition",
+  4: "Quadruple Split Definition",
+};
+
+/** Number of separate connected groups the defined centers form via defined channels — NOT the channel count (a mislabeling in some reference implementations). 0 = Reflector's "No Definition". */
+function countDefinitionGroups(
+  definedCenters: Set<CenterKey>,
+  definedChannels: readonly Channel[],
+): number {
+  if (definedCenters.size === 0) return 0;
+  const adj = buildAdjacency(definedCenters, definedChannels);
+  const seen = new Set<CenterKey>();
+  let groups = 0;
+  for (const start of definedCenters) {
+    if (seen.has(start)) continue;
+    groups++;
+    const queue: CenterKey[] = [start];
+    seen.add(start);
+    while (queue.length) {
+      const cur = queue.shift()!;
+      for (const next of adj.get(cur) ?? []) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+  return groups;
+}
+
+export interface HumanDesignProfile {
+  type: HdType;
+  authority: HdAuthority;
+  /** Personality Sun line / Design Sun line, e.g. "1/3". Null only if the calculation somehow failed to find either Sun activation. */
+  profile: string | null;
+  definitionLabel: string;
+  activatedGates: number[];
+  definedCenters: CenterKey[];
+  openCenters: CenterKey[];
+  definedChannels: Channel[];
+  personality: HdActivation[];
+  design: HdActivation[];
+}
+
+export function calculateHumanDesignProfile(
+  input: WallClockBirthInput,
+): HumanDesignProfile {
+  const birthUtc = parseBirthToUtc(input);
+  const personalitySun = eclipticLongitude(Body.Sun, birthUtc);
+  const designTime = findDesignTime(birthUtc, personalitySun);
+
+  const personality = computeActivations(birthUtc);
+  const design = computeActivations(designTime);
+
+  const gateSet = new Set([...personality, ...design].map((a) => a.gate));
+
+  const definedChannels = CHANNELS.filter(
+    (ch) => gateSet.has(ch.gates[0]) && gateSet.has(ch.gates[1]),
+  );
+  const definedCentersSet = new Set<CenterKey>();
+  for (const ch of definedChannels) {
+    definedCentersSet.add(ch.centers[0]);
+    definedCentersSet.add(ch.centers[1]);
+  }
+  const definedCenters = CENTERS.filter((c) => definedCentersSet.has(c));
+  const openCenters = CENTERS.filter((c) => !definedCentersSet.has(c));
+
+  const pSun = personality.find((a) => a.body === "sun");
+  const dSun = design.find((a) => a.body === "sun");
+  const profile = pSun && dSun ? `${pSun.line}/${dSun.line}` : null;
+
+  const groups = countDefinitionGroups(definedCentersSet, definedChannels);
+
+  return {
+    type: determineType(definedCentersSet, definedChannels),
+    authority: determineAuthority(definedCentersSet, definedChannels),
+    profile,
+    definitionLabel: DEFINITION_LABELS[groups] ?? `${groups}-Way Split Definition`,
+    activatedGates: [...gateSet].sort((a, b) => a - b),
+    definedCenters,
+    openCenters,
+    definedChannels,
+    personality,
+    design,
+  };
+}

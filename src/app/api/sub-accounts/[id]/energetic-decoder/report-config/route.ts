@@ -20,6 +20,7 @@ export async function POST(
     includeActivation: body.includeActivation !== false,
     includeVenus: body.includeVenus !== false,
     includePearl: body.includePearl !== false,
+    includeHumanDesign: body.includeHumanDesign !== false,
   };
 
   await getAdminDb()

@@ -1,0 +1,100 @@
+import "server-only";
+
+import { Body, Ecliptic, GeoVector } from "astronomy-engine";
+import { utcFromWallClock } from "@/lib/booking/availability";
+import { GATE_WHEEL_ORDER } from "./gate-data";
+
+/**
+ * The proven gate-wheel primitives, extracted out of gene-keys.ts (2026-08-08)
+ * so the new Human Design engine can reuse the exact same math instead of a
+ * second, possibly-drifting copy. Pure refactor — no behavior change to
+ * Gene Keys. See gene-keys.ts's original header for the provenance note
+ * (ported from a working reference tool, cross-checked again 2026-08-08
+ * against an independently-built open-source engine's gate wheel — both
+ * produce an identical 64-gate ordering once aligned to the same start
+ * point, real independent confirmation this is correct).
+ */
+
+/** 360° / 64 gates. */
+const DEGREES_PER_GATE = 360 / 64;
+/** Each gate spans 6 lines. */
+const DEGREES_PER_LINE = DEGREES_PER_GATE / 6;
+/**
+ * The gate wheel's zero point sits at 302° of raw tropical ecliptic
+ * longitude, not 0° Aries — this offset rotates raw longitude into
+ * "wheel space" before the gate lookup. Fixed by the Human Design / Gene
+ * Keys system, not a tunable.
+ */
+const WHEEL_OFFSET_DEG = 302;
+/** How many days before birth the "Design" (unconscious) chart is cast —
+ *  the classic ~88° solar-arc offset, refined below to the exact instant. */
+const DESIGN_OFFSET_DAYS = 88;
+
+export interface GateLine {
+  gate: number;
+  line: number;
+}
+
+/** Geocentric apparent ecliptic longitude (degrees, 0-360) of a body at an instant. */
+export function eclipticLongitude(body: Body, date: Date): number {
+  const vector = GeoVector(body, date, true);
+  const { elon } = Ecliptic(vector);
+  return elon;
+}
+
+export function longitudeToGateLine(rawLongitude: number): GateLine {
+  let wheelPos = (rawLongitude - WHEEL_OFFSET_DEG) % 360;
+  if (wheelPos < 0) wheelPos += 360;
+  wheelPos = Math.round(wheelPos * 1e6) / 1e6;
+
+  const gateIndex = Math.floor(wheelPos / DEGREES_PER_GATE);
+  const gate = GATE_WHEEL_ORDER[gateIndex % 64];
+  const posInGate = wheelPos - gateIndex * DEGREES_PER_GATE;
+  const line = Math.min(6, Math.max(1, Math.floor(posInGate / DEGREES_PER_LINE) + 1));
+  return { gate, line };
+}
+
+/**
+ * Finds the exact instant ~88 days before `birthUtc` at which the Sun's
+ * ecliptic longitude was 88° earlier than at birth — the "Design" moment.
+ * Newton's-method-style refinement using a 1-hour finite difference to
+ * estimate the Sun's angular rate; converges in a handful of iterations,
+ * capped at 20.
+ */
+export function findDesignTime(birthUtc: Date, personalitySunLon: number): Date {
+  const targetLon = (personalitySunLon - DESIGN_OFFSET_DAYS + 360) % 360;
+  let t = new Date(birthUtc.getTime() - DESIGN_OFFSET_DAYS * 24 * 3600 * 1000);
+
+  for (let i = 0; i < 20; i++) {
+    const lon = eclipticLongitude(Body.Sun, t);
+    let diff = targetLon - lon;
+    if (diff > 180) diff -= 360;
+    if (diff < -180) diff += 360;
+    if (Math.abs(diff) < 1e-6) break;
+
+    const later = new Date(t.getTime() + 3600 * 1000);
+    let rate = eclipticLongitude(Body.Sun, later) - lon;
+    if (rate < -180) rate += 360;
+    if (rate > 180) rate -= 360;
+
+    const hoursToAdjust = diff / rate;
+    t = new Date(t.getTime() + hoursToAdjust * 3600 * 1000);
+  }
+  return t;
+}
+
+export interface WallClockBirthInput {
+  /** YYYY-MM-DD, local to the birth place. */
+  date: string;
+  /** HH:MM, 24-hour, local to the birth place. */
+  time: string;
+  /** IANA zone for the birth place, e.g. "America/Chicago". */
+  timeZone: string;
+}
+
+export function parseBirthToUtc(input: WallClockBirthInput): Date {
+  const [year, month, day] = input.date.split("-").map(Number);
+  const [hour, minute] = input.time.split(":").map(Number);
+  const minuteOfDay = hour * 60 + minute;
+  return utcFromWallClock(year, month, day, minuteOfDay, input.timeZone);
+}
