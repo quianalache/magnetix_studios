@@ -1,6 +1,7 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import type { AstrologyChart } from "@/lib/energetics/astrology";
 
 /**
  * "Energetic Decoder" — the Memberships-tab home for chart-reading
@@ -69,6 +70,8 @@ export interface EnergeticDecoderReading {
   spheres: GeneKeysSphereResult[];
   /** Null when Human Design wasn't included in this reading (report config), or on readings created before this system existed. */
   humanDesign?: HumanDesignProfile | null;
+  /** Null when Astrology wasn't included in this reading (report config), or on readings created before this system existed. */
+  astrology?: AstrologyChart | null;
   createdAt: Timestamp | FieldValue | null;
 }
 
@@ -100,10 +103,18 @@ export interface EnergeticDecoderReportConfig {
   includePearl: boolean;
   /** Compute + store a full Human Design bodygraph (Type/Authority/Profile/Centers/Channels) alongside Gene Keys for every new reading. */
   includeHumanDesign: boolean;
+  /** Compute + store a full Western Tropical natal chart (placements/houses/aspects) alongside the others. Requires the birth place to have real coordinates (geocoded), not just a timezone. */
+  includeAstrology: boolean;
 }
 
 export function defaultEnergeticDecoderReportConfig(): EnergeticDecoderReportConfig {
-  return { includeActivation: true, includeVenus: true, includePearl: true, includeHumanDesign: true };
+  return {
+    includeActivation: true,
+    includeVenus: true,
+    includePearl: true,
+    includeHumanDesign: true,
+    includeAstrology: true,
+  };
 }
 
 /** Sphere → sequence membership, used to filter a reading's spheres by the report config above. */

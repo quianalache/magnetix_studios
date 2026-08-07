@@ -20,6 +20,8 @@ import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
+import type { AstrologyChart } from "@/lib/energetics/astrology";
+import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 
 interface PlaceSuggestion {
   lat: number;
@@ -312,6 +314,7 @@ export function EnergeticDecoderReadingsTab() {
                 <div className="space-y-4 border-t bg-muted/20 px-5 py-3">
                   {r.spheres.length > 0 && <SphereList spheres={r.spheres} />}
                   {r.humanDesign && <HumanDesignSummary profile={r.humanDesign} />}
+                  {r.astrology && <AstrologySummary chart={r.astrology} />}
                 </div>
               )}
             </div>
@@ -426,6 +429,81 @@ function HumanDesignSummary({ profile }: { profile: HumanDesignProfile }) {
                 {ch.name ? ` · ${ch.name}` : ""}
               </span>
             ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AstrologySummary({ chart }: { chart: AstrologyChart }) {
+  const sun = chart.placements.find((p) => p.body === "sun");
+  const moon = chart.placements.find((p) => p.body === "moon");
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Astrology — Western Tropical, {chart.houses.system === "placidus" ? "Placidus" : "Whole Sign"} houses
+        </p>
+        <div className="mt-1.5 grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[11px] text-muted-foreground">Sun</p>
+            <p className="text-sm font-semibold">
+              {sun?.sign} {sun?.degInSign.toFixed(1)}°
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Moon</p>
+            <p className="text-sm font-semibold">
+              {moon?.sign} {moon?.degInSign.toFixed(1)}°
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Rising (Ascendant)</p>
+            <p className="text-sm font-semibold">
+              {chart.angles.ascendant.sign} {chart.angles.ascendant.degInSign.toFixed(1)}°
+            </p>
+          </div>
+        </div>
+        {chart.houses.fallbackReason && (
+          <p className="mt-2 text-[11px] italic text-muted-foreground">{chart.houses.fallbackReason}</p>
+        )}
+      </div>
+
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Placements</p>
+        <div className="divide-y">
+          {chart.placements.map((p) => (
+            <div key={p.body} className="flex items-center justify-between gap-3 py-1.5 text-xs">
+              <span className="w-16 shrink-0 font-medium capitalize">{p.body}</span>
+              <span className="flex-1">
+                {p.sign} {p.degInSign.toFixed(1)}°{p.retrograde ? " ℞" : ""}
+              </span>
+              <span className="text-muted-foreground">House {p.house}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {chart.aspects.length > 0 && (
+        <div className="rounded-2xl border bg-card p-4">
+          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Aspects ({chart.aspects.length})
+          </p>
+          <div className="space-y-1.5">
+            {chart.aspects.slice(0, 12).map((a, i) => (
+              <div key={i} className="text-xs">
+                <span className="font-medium capitalize">{a.bodyA}</span> {a.type.toLowerCase()}{" "}
+                <span className="font-medium capitalize">{a.bodyB}</span>
+                <span className="text-muted-foreground"> (orb {a.orb.toFixed(1)}°) — {ASPECT_TYPE_CONTENT[a.type]}</span>
+              </div>
+            ))}
+            {chart.aspects.length > 12 && (
+              <p className="pt-1 text-[11px] italic text-muted-foreground">
+                +{chart.aspects.length - 12} more (tightest orbs shown)
+              </p>
+            )}
           </div>
         </div>
       )}

@@ -110,6 +110,29 @@ export function EnergeticDecoderReportsTab() {
           <span className="flex-1 font-medium">Include Human Design in new readings</span>
         </label>
       </div>
+
+      <div className="rounded-2xl border bg-card p-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h3 className="text-base font-semibold">Astrology Reading</h3>
+          <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Live
+          </span>
+        </div>
+        <p className="mb-4 text-sm text-muted-foreground">
+          A full Western Tropical natal chart — Sun, Moon, Rising, every planet&apos;s sign and house,
+          and the aspects between them. Placidus houses by default.
+        </p>
+        <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={config.includeAstrology}
+            onChange={() => isAdmin && toggleSequence("includeAstrology")}
+            disabled={!isAdmin || savingConfig}
+            className="h-4 w-4 shrink-0"
+          />
+          <span className="flex-1 font-medium">Include Astrology in new readings</span>
+        </label>
+      </div>
     </div>
   );
 }

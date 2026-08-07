@@ -21,6 +21,7 @@ export async function POST(
     includeVenus: body.includeVenus !== false,
     includePearl: body.includePearl !== false,
     includeHumanDesign: body.includeHumanDesign !== false,
+    includeAstrology: body.includeAstrology !== false,
   };
 
   await getAdminDb()

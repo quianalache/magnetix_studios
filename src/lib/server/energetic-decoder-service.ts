@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/contacts-service";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
+import { calculateAstrologyChart } from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
 import {
@@ -99,6 +100,16 @@ export async function createEnergeticDecoderReading(
     ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
     : null;
 
+  const astrology = reportConfig.includeAstrology
+    ? calculateAstrologyChart({
+        date: birthDate,
+        time: birthTime,
+        timeZone: place.timeZone,
+        lat: place.lat,
+        lng: place.lng,
+      })
+    : null;
+
   let contactId = await findExistingContactId(db, input.subAccountId, { email });
   if (!contactId) {
     const { id } = await createContactServerSide({
@@ -130,6 +141,7 @@ export async function createEnergeticDecoderReading(
     timeZone: place.timeZone,
     spheres: filteredSpheres,
     humanDesign,
+    astrology,
     createdAt: FieldValue.serverTimestamp(),
   };
   await readingRef.set(doc);
