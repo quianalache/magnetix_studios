@@ -246,7 +246,7 @@ export default function ClientPortalSettingsPage() {
           <ModuleRow
             icon={<Calendar className="h-4 w-4" />}
             title="Sessions"
-            desc="Booking credits — scheduled & still available to use"
+            desc="Booked sessions & how many are still available to schedule"
             checked={branding.modules.sessions}
             onChange={(v) => save({ modules: { ...branding.modules, sessions: v } })}
           />

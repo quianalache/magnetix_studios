@@ -128,9 +128,12 @@ export interface PortalSessionBundle {
 }
 
 /**
- * Real session-credit tracking for the portal's Sessions module — replaces
+ * Real session-count tracking for the portal's Sessions module — replaces
  * the mockup's typed-in "0 of 1 / 1 of 3" numbers with actual purchase +
- * booking data. `total` comes from every paid Course Offer purchase's
+ * booking data. Sessions, not "credits" — there's no separate token/credit
+ * system in this CRM, this is purely "how many sessions did the purchased
+ * bundle include vs. how many has this person actually booked." `total`
+ * comes from every paid Course Offer purchase's
  * snapshotted booking bundle (`CourseOfferBookingBundle.sessionCount`);
  * `used` counts this member's non-cancelled events sourced from that same
  * booking page.
