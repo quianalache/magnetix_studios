@@ -973,6 +973,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---------- assets / offer bundles / affiliate links ----------
+    // The third Projects sub-tab. Same read-only-to-client-SDK pattern as
+    // projects/growth — writes go through /api/sub-accounts/[id]/assets*,
+    // /affiliate-links*, /offer-bundles* so the revenue rollup (real Course
+    // Offer purchase data) stays server-side in one place.
+    match /assets/{assetId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /affiliateLinks/{linkId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+    match /offerBundles/{bundleId} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write: if false;
+    }
+
     // ---------- quotes ----------
     // GHL-style "Estimates" — operator-built quote → public accept page.
     // Reads + edits by any active sub-account member (matches the

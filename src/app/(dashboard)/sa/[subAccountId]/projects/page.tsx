@@ -13,11 +13,12 @@ import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/projects/project-card";
 import { ProjectDialog } from "@/components/projects/project-dialog";
 import { TemplateDialog } from "@/components/projects/template-dialog";
+import { AssetsTab } from "@/components/projects/assets-tab";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
 import type { Project, ProjectTemplate } from "@/types/projects";
 
-type ProjectTab = "active" | "templates" | "archived";
+type ProjectTab = "active" | "templates" | "assets" | "archived";
 
 export default function ProjectsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -94,6 +95,7 @@ export default function ProjectsPage() {
   const TABS: { id: ProjectTab; label: string; count?: number }[] = [
     { id: "active", label: "Active Projects", count: activeProjects.length },
     { id: "templates", label: "Templates" },
+    { id: "assets", label: "Assets" },
     { id: "archived", label: "Archived" },
   ];
 
@@ -196,6 +198,8 @@ export default function ProjectsPage() {
             ))}
           </div>
         )
+      ) : tab === "assets" ? (
+        <AssetsTab />
       ) : archivedProjects.length === 0 ? (
         <div className="rounded-xl border border-dashed bg-card/50 p-10 text-center">
           <p className="text-sm text-muted-foreground">No archived projects yet.</p>
