@@ -10,7 +10,15 @@ import type { AstrologyChart, AspectType, ZodiacSign } from "@/lib/energetics/as
  * its own true longitude offset from the Ascendant — NOT forced into an
  * evenly-spaced ring, so an unequal house system (Placidus) draws
  * correctly uneven, exactly like a real chart.
+ *
+ * Same white-chart-surface treatment as the Human Design bodygraph
+ * (2026-08-08): renders on a fixed white background regardless of the
+ * app's own theme, like every real chart tool, with fixed dark-ink line/
+ * text colors rather than colors that flip with dark mode.
  */
+
+const WHEEL_LINE = "#a1a1aa"; // zinc-400
+const WHEEL_TEXT = "#3f3f46"; // zinc-700
 
 const SIGN_GLYPH: Record<ZodiacSign, string> = {
   Aries: "♈", Taurus: "♉", Gemini: "♊", Cancer: "♋", Leo: "♌", Virgo: "♍",
@@ -72,10 +80,11 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
   });
 
   return (
-    <svg viewBox="0 0 100 100" className={className} role="img" aria-label="Astrology natal chart wheel">
+    <div className={className} style={{ background: "#fff", borderRadius: 12, padding: "5%" }}>
+      <svg viewBox="0 0 100 100" role="img" aria-label="Astrology natal chart wheel">
       {/* Sign ring — 12 wedges + glyphs, boundaries at each sign's true 30° start relative to ASC */}
-      <circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke="var(--astro-wheel-line)" strokeWidth={0.4} />
-      <circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke="var(--astro-wheel-line)" strokeWidth={0.4} />
+      <circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+      <circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
       {(Object.keys(SIGN_GLYPH) as ZodiacSign[]).map((sign, i) => {
         const signStartLon = i * 30;
         const a1 = screenAngle(signStartLon, ascLon);
@@ -90,10 +99,10 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
               y1={toXY(a1, SIGN_RING_INNER).y}
               x2={p1.x}
               y2={p1.y}
-              stroke="var(--astro-wheel-line)"
+              stroke={WHEEL_LINE}
               strokeWidth={0.3}
             />
-            <text x={glyphPos.x} y={glyphPos.y + 1.4} fontSize={3.2} textAnchor="middle" fill="var(--astro-wheel-text)">
+            <text x={glyphPos.x} y={glyphPos.y + 1.4} fontSize={3.2} textAnchor="middle" fill={WHEEL_TEXT}>
               {SIGN_GLYPH[sign]}
             </text>
             <line
@@ -101,7 +110,7 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
               y1={toXY(a2, SIGN_RING_INNER).y}
               x2={toXY(a2, SIGN_RING_OUTER).x}
               y2={toXY(a2, SIGN_RING_OUTER).y}
-              stroke="var(--astro-wheel-line)"
+              stroke={WHEEL_LINE}
               strokeWidth={0.3}
             />
           </g>
@@ -122,10 +131,10 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
               y1={inner.y}
               x2={outer.x}
               y2={outer.y}
-              stroke="var(--astro-wheel-line)"
+              stroke={WHEEL_LINE}
               strokeWidth={isAngle ? 0.9 : 0.4}
             />
-            <text x={label.x} y={label.y + 1} fontSize={2.4} textAnchor="middle" fill="var(--astro-wheel-text)">
+            <text x={label.x} y={label.y + 1} fontSize={2.4} textAnchor="middle" fill={WHEEL_TEXT}>
               {cusp.house}
             </text>
           </g>
@@ -163,8 +172,8 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
         const pos = toXY(plot.angle, plot.r);
         return (
           <g key={p.body}>
-            <circle cx={pos.x} cy={pos.y} r={2.6} fill="var(--card, #fff)" stroke="var(--astro-wheel-text)" strokeWidth={0.3} />
-            <text x={pos.x} y={pos.y + 1.1} fontSize={2.8} textAnchor="middle" fill="var(--astro-wheel-text)">
+            <circle cx={pos.x} cy={pos.y} r={2.6} fill="#fff" stroke={WHEEL_TEXT} strokeWidth={0.3} />
+            <text x={pos.x} y={pos.y + 1.1} fontSize={2.8} textAnchor="middle" fill={WHEEL_TEXT}>
               {PLANET_GLYPH[p.body] ?? p.body[0].toUpperCase()}
             </text>
             {p.retrograde && (
@@ -177,7 +186,7 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
       })}
 
       {/* Ascendant / MC markers */}
-      <text x={toXY(180, SIGN_RING_OUTER + 3).x} y={toXY(180, SIGN_RING_OUTER + 3).y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill="var(--astro-wheel-text)">
+      <text x={toXY(180, SIGN_RING_OUTER + 3).x} y={toXY(180, SIGN_RING_OUTER + 3).y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill={WHEEL_TEXT}>
         AC
       </text>
       <text
@@ -186,10 +195,11 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
         fontSize={2.6}
         fontWeight={700}
         textAnchor="middle"
-        fill="var(--astro-wheel-text)"
+        fill={WHEEL_TEXT}
       >
         MC
       </text>
-    </svg>
+      </svg>
+    </div>
   );
 }

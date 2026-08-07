@@ -55,10 +55,8 @@ export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
 
 export function HumanDesignSummary({
   profile,
-  accent,
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
-  accent?: string;
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -70,9 +68,9 @@ export function HumanDesignSummary({
     <div className="space-y-4">
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Bodygraph — Personality <span className="text-foreground">black</span>, Design <span className="text-rose-600">red</span>
+          Bodygraph — Personality <span style={{ color: "#18181b" }}>black</span>, Design <span className="text-rose-600">red</span>
         </p>
-        <HumanDesignChart profile={profile} accent={accent} className="mx-auto w-full max-w-[280px]" />
+        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[280px]" />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
