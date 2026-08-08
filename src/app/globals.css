@@ -37,7 +37,15 @@ body {
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  /* Was Geist Sans — the whole app's base font, everywhere, and the real
+     source of "this looks nothing like MomentumOS" (not just the
+     numbers). Confirmed via her own DevTools Computed panel on a real
+     MomentumOS element, 2026-08-08 — not assumed, not re-guessed from the
+     stale artifact: `ui-sans-serif, system-ui, sans-serif, "Apple Color
+     Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"`.
+     Plain native system font, no custom webfont at all. */
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
   /* Was Geist Mono — Vercel's own stylized monospace, and the exact font
      she called out ("I hate it") on every stat number in the app. Switched
      to the plain native system monospace (SF Mono on a Mac) instead, same
