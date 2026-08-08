@@ -173,6 +173,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
     label: "Growth",
     items: [
       { href: "/growth", label: "Growth", icon: TrendingUp, enabled: true },
+      { href: "/reflection", label: "Reflection", icon: BookOpen, enabled: true },
     ],
   },
   {

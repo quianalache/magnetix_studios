@@ -1,6 +1,32 @@
 {
   "indexes": [
     {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "completed", "order": "ASCENDING" },
+        { "fieldPath": "completedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "moneyEntries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "contentItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "stage", "order": "ASCENDING" },
+        { "fieldPath": "publishDate", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "submissions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
