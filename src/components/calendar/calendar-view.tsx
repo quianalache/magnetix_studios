@@ -410,7 +410,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
             {/* Weekday header */}
             <div
               className={cn(
-                "grid border-b bg-muted/20",
+                "grid border-b border-border/40 bg-muted/40",
                 cols === 7 ? "grid-cols-7" : "grid-cols-1",
               )}
             >
@@ -460,8 +460,8 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                         : view === "week"
                           ? "min-h-[220px]"
                           : "min-h-[100px]",
-                      colIndex < cols - 1 && "border-r",
-                      rowIndex < rows - 1 && "border-b",
+                      colIndex < cols - 1 && "border-r border-border/40",
+                      rowIndex < rows - 1 && "border-b border-border/40",
                       !isCurrentMonth && "bg-muted/10",
                       isWeekend && isCurrentMonth && "bg-muted/5",
                     )}

@@ -22,37 +22,32 @@ import { cn } from "@/lib/utils";
 import { goalProgressPct } from "@/types/growth";
 import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/growth";
 /**
- * Corrected 2026-08-08, for real this time — she sent an actual screenshot
- * of the real MomentumOS Growth Overview page, and — this time — the
- * actual real markup: she has a saved "complete webpage" export of the
- * real live app sitting on her own Desktop (GHL Tools Export folder),
- * whose bundled CSS filename (index-Datw-w0K.css) matches exactly what
- * showed up in her earlier DevTools screenshot, confirming it's the same
- * build. Read the real HTML directly instead of inferring from a
- * screenshot a third time:
+ * Corrected 2026-08-08, for real this time — she went and saved every real
+ * page of the live app (logged in, GHL Tools Export folder), including
+ * "Momentum OS Growth.html" specifically — the actual Growth page, not
+ * the Dashboard's small preview widget I'd mismatched it against before.
+ * This is the exact real markup for the stat row, read directly:
  *
  *   <div class="rounded-lg border text-card-foreground border-none
  *     shadow-sm bg-secondary">
- *     <div class="... flex flex-row items-center justify-between pb-2
- *       pt-4 px-4">
- *       <h3 class="tracking-tight text-xs font-medium text-muted-foreground">Label</h3>
- *       <svg class="... h-3.5 w-3.5 text-primary">
+ *     <div class="space-y-1.5 p-6 flex flex-row items-center justify-between pb-2">
+ *       <h3 class="tracking-tight text-sm font-medium text-foreground">Label</h3>
+ *       <svg class="... h-4 w-4 text-primary">
  *     </div>
- *     <div class="p-6 pt-0 px-4 pb-4">
+ *     <div class="p-6 pt-0">
  *       <div class="text-2xl font-bold text-foreground">Value</div>
- *       <p class="text-xs text-muted-foreground mt-0.5">Hint</p>
+ *       <p class="text-xs text-muted-foreground mt-1">Hint</p>
  *
- * Real, confirmed details that change the previous guess: the ICON is
- * always plain `text-primary`, never tinted to match the card — only the
- * card's own background rotates (bg-card / bg-accent/30 / bg-muted /
- * bg-secondary, several of them far lighter than assumed, not a uniform
- * full-strength wash). A negative change shows as red TEXT
- * (text-destructive) on the value/hint line, not a different icon or a
- * down arrow — confirmed from a real "-100% from last month" example.
- * Grid is `grid-cols-2 md:grid-cols-5` — 5 per row, not 3, which is
- * exactly why the cards were reading as too long/wrapping wrong.
+ * Corrects real details wrong in the last two passes: label is
+ * text-sm/text-foreground, not text-xs/text-muted-foreground. Padding is
+ * plain p-6 (pb-2 / pt-0 overrides), not a compact px-4 variant. Icon is
+ * h-4 (not h-3.5). Grid is `grid-cols-2 lg:grid-cols-6 gap-4` — SIX per
+ * row, not 5. And a negative value DOES turn its icon red too, on the
+ * real Growth page (confirmed on the real "Projected Cash Flow" card,
+ * icon + value both text-destructive) — the Dashboard widget's "icon
+ * never changes" rule doesn't hold here; that was the wrong page.
  */
-const GROWTH_BG = ["bg-card", "bg-accent/30", "bg-muted", "bg-secondary", "bg-card", "bg-accent/30"] as const;
+const GROWTH_BG = ["bg-card", "bg-secondary", "bg-accent/10", "bg-destructive/10", "bg-accent/30", "bg-muted"] as const;
 
 function GrowthStat({
   icon: Icon,
@@ -71,19 +66,15 @@ function GrowthStat({
 }) {
   return (
     <div className={cn("rounded-lg border-none shadow-sm", bg)}>
-      <div className="flex flex-row items-center justify-between gap-2 px-4 pb-2 pt-4">
-        <h3 className="text-xs font-medium tracking-tight text-muted-foreground">{label}</h3>
-        <Icon className="h-3.5 w-3.5 shrink-0 text-primary" />
+      <div className="flex flex-row items-center justify-between gap-2 p-6 pb-2">
+        <h3 className="text-sm font-medium tracking-tight text-foreground">{label}</h3>
+        <Icon className={cn("h-4 w-4 shrink-0", negative ? "text-destructive" : "text-primary")} />
       </div>
-      <div className="px-4 pb-4 pt-0">
+      <div className="p-6 pt-0">
         <div className={cn("text-2xl font-bold tabular-nums", negative ? "text-destructive" : "text-foreground")}>
           {value}
         </div>
-        {hint && (
-          <p className={cn("mt-0.5 text-xs", negative ? "font-medium text-destructive" : "text-muted-foreground")}>
-            {hint}
-          </p>
-        )}
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
       </div>
     </div>
   );
@@ -179,19 +170,26 @@ export default function GrowthPage() {
 
   return (
     <div className="momentum-scope mx-auto w-full max-w-6xl space-y-6 rounded-2xl">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
-          <TrendingUp className="h-4.5 w-4.5 text-primary" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Growth</h1>
-          <p className="text-sm text-muted-foreground">
-            Track platforms, revenue, goals, weekly progress, and what needs your attention.
-          </p>
+      <div className="space-y-8">
+      <div>
+        <div className="mb-1 flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary">
+            <TrendingUp className="h-5 w-5 text-primary" />
+          </span>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Growth</h1>
         </div>
+        <p className="ml-12 text-muted-foreground">
+          Track platforms, revenue, goals, weekly progress, and what needs your attention.
+        </p>
       </div>
 
-      <div className="flex w-fit flex-wrap gap-1 rounded-full bg-muted p-1">
+      {/* Real Radix Tabs markup, read directly from the saved page — was
+          a hand-rolled pill/underline control before, guessed at twice.
+          Container: rounded-md bg-muted (not rounded-full). Active
+          trigger: bg-card + shadow-sm + text-foreground (not bg-background,
+          not text-primary — icons carry no color of their own, they just
+          inherit whatever text color the button is in). */}
+      <div className="inline-flex flex-wrap items-center justify-center gap-1 rounded-md bg-muted p-1 text-muted-foreground">
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -200,19 +198,11 @@ export default function GrowthPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
-                // Container is bg-muted, so hover can't also be bg-muted
-                // (invisible) — bg-background/60 keeps the same "lighten
-                // toward the active pill's own color" feel without
-                // colliding with the confirmed hover:bg-muted convention
-                // used elsewhere (nav links, where the container isn't
-                // already muted).
-                isActive
-                  ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all",
+                isActive && "bg-card text-foreground shadow-sm",
               )}
             >
-              <Icon className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "opacity-60")} />
+              <Icon className="h-4 w-4" />
               {t.label}
             </button>
           );
@@ -243,6 +233,7 @@ export default function GrowthPage() {
           {tab === "review" && <WeeklyReviewPanel subAccountId={subAccountId} />}
         </>
       )}
+      </div>
     </div>
   );
 }
@@ -271,7 +262,7 @@ function OverviewPanel({
 }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
         <GrowthStat
           icon={DollarSign}
           bg="bg-card"
@@ -281,42 +272,44 @@ function OverviewPanel({
         />
         <GrowthStat
           icon={TrendingDown}
-          bg="bg-accent/30"
+          bg="bg-secondary"
           label="Expenses This Month"
           value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)}
           hint="All logged expenses"
         />
         <GrowthStat
           icon={TrendingUp}
-          bg="bg-muted"
+          bg="bg-accent/10"
           label="Current MRR"
           value={fmtMoney(moneyStats?.currentMrr ?? 0)}
           hint={`${moneyStats?.mrrRecordCount ?? 0} active records`}
         />
         <GrowthStat
-          icon={Wallet}
-          bg="bg-secondary"
+          icon={TrendingDown}
+          bg="bg-destructive/10"
           label="Projected Cash Flow"
           value={fmtMoney(moneyStats?.projectedCashFlow ?? 0)}
           hint="MRR − Recurring Exp."
           negative={(moneyStats?.projectedCashFlow ?? 0) < 0}
         />
         <GrowthStat
-          icon={DollarSign}
-          bg="bg-card"
+          icon={TrendingUp}
+          bg="bg-accent/30"
           label="Net Profit / Loss"
           value={fmtMoney(moneyStats?.netProfitLoss ?? 0)}
           hint="Profit this month"
         />
-        <div className="rounded-lg border-none bg-secondary shadow-sm">
-          <div className="flex flex-row items-center justify-between gap-2 px-4 pb-2 pt-4">
-            <h3 className="text-xs font-medium tracking-tight text-muted-foreground">Money Goal</h3>
-            <Target className="h-3.5 w-3.5 shrink-0 text-primary" />
+        <div className="rounded-lg border-none bg-muted shadow-sm">
+          <div className="flex flex-row items-center justify-between gap-2 p-6 pb-2">
+            <h3 className="text-sm font-medium tracking-tight text-foreground">Money Goal</h3>
+            <Target className="h-4 w-4 shrink-0 text-primary" />
           </div>
-          <div className="px-4 pb-4 pt-0">
-            <button onClick={() => onGoto("goals")} className="text-sm font-medium text-primary underline underline-offset-2">
-              Set a monthly goal
-            </button>
+          <div className="p-6 pt-0">
+            <p className="mt-1 text-sm text-muted-foreground">
+              <button onClick={() => onGoto("goals")} className="text-primary underline">
+                Set a monthly goal
+              </button>
+            </p>
           </div>
         </div>
       </div>
@@ -597,8 +590,8 @@ function MoneyPanel({
 
       <div className="grid grid-cols-3 gap-3">
         <GrowthStat icon={DollarSign} bg="bg-card" label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} hint="No data yet" />
-        <GrowthStat icon={TrendingUp} bg="bg-accent/30" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
-        <GrowthStat icon={Wallet} bg="bg-muted" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
+        <GrowthStat icon={TrendingUp} bg="bg-secondary" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
+        <GrowthStat icon={Wallet} bg="bg-accent/10" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -765,8 +758,8 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <GrowthStat icon={Activity} bg="bg-card" label="Total Impressions" value={String(totalImpressions)} />
-        <GrowthStat icon={TrendingUp} bg="bg-accent/30" label="Total Conversions" value={String(totalConversions)} />
-        <GrowthStat icon={Percent} bg="bg-secondary" label="Avg. Conversion Rate" value={`${avgRate}%`} />
+        <GrowthStat icon={TrendingUp} bg="bg-secondary" label="Total Conversions" value={String(totalConversions)} />
+        <GrowthStat icon={Percent} bg="bg-accent/10" label="Avg. Conversion Rate" value={`${avgRate}%`} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -917,8 +910,8 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
         <p className="text-sm font-semibold">This Week&apos;s Performance</p>
         <div className="grid grid-cols-3 gap-3">
           <GrowthStat icon={CheckCircle2} bg="bg-card" label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} />
-          <GrowthStat icon={Clock} bg="bg-accent/30" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
-          <GrowthStat icon={DollarSign} bg="bg-muted" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
+          <GrowthStat icon={Clock} bg="bg-secondary" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
+          <GrowthStat icon={DollarSign} bg="bg-accent/10" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
         </div>
       </section>
 
