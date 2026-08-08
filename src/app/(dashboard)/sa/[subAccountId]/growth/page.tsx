@@ -44,7 +44,7 @@ import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/
  *
  * Real, confirmed details that change the previous guess: the ICON is
  * always plain `text-primary`, never tinted to match the card — only the
- * card's own background rotates (bg-card / bg-accent/10 / bg-muted /
+ * card's own background rotates (bg-card / bg-accent/30 / bg-muted /
  * bg-secondary, several of them far lighter than assumed, not a uniform
  * full-strength wash). A negative change shows as red TEXT
  * (text-destructive) on the value/hint line, not a different icon or a
@@ -52,7 +52,7 @@ import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/
  * Grid is `grid-cols-2 md:grid-cols-5` — 5 per row, not 3, which is
  * exactly why the cards were reading as too long/wrapping wrong.
  */
-const GROWTH_BG = ["bg-card", "bg-accent/10", "bg-muted", "bg-secondary", "bg-card", "bg-accent/10"] as const;
+const GROWTH_BG = ["bg-card", "bg-accent/30", "bg-muted", "bg-secondary", "bg-card", "bg-accent/30"] as const;
 
 function GrowthStat({
   icon: Icon,
@@ -161,23 +161,24 @@ export default function GrowthPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subAccountId, money.length]);
 
-  // Colored icons per tab — matches the AI Agents channel nav pattern she
-  // pointed at as the standard to hit ("little colored icons next to
-  // them"), using her real palette tones instead of generic colors.
-  const TABS: { id: GrowthTab; label: string; icon: typeof Sparkles; tone: string }[] = [
-    { id: "overview", label: "Overview", icon: Sparkles, tone: "text-[#5E2574] dark:text-[#C892DE]" },
-    { id: "social", label: "Social", icon: Share2, tone: "text-teal-700 dark:text-[#9EDBDD]" },
-    { id: "money", label: "Money", icon: DollarSign, tone: "text-[#9C3A5C] dark:text-[#E8B7C8]" },
-    { id: "goals", label: "Goals", icon: Target, tone: "text-[#A8386B] dark:text-[#F3D9D7]" },
-    { id: "pulse", label: "Business Pulse", icon: Activity, tone: "text-[#6B3F84] dark:text-[#EDD9EC]" },
-    { id: "review", label: "Weekly Review", icon: NotebookPen, tone: "text-[#5E2574] dark:text-[#C892DE]" },
+  // Icon per tab, plain text-primary when active — matches the confirmed
+  // real convention (icons don't carry per-item hue, only card/pill
+  // backgrounds do), resolved through momentum-scope so it's MomentumOS's
+  // actual purple, not a hand-picked hex.
+  const TABS: { id: GrowthTab; label: string; icon: typeof Sparkles }[] = [
+    { id: "overview", label: "Overview", icon: Sparkles },
+    { id: "social", label: "Social", icon: Share2 },
+    { id: "money", label: "Money", icon: DollarSign },
+    { id: "goals", label: "Goals", icon: Target },
+    { id: "pulse", label: "Business Pulse", icon: Activity },
+    { id: "review", label: "Weekly Review", icon: NotebookPen },
   ];
 
   const activeGoals = useMemo(() => goals.filter((g) => g.status === "active"), [goals]);
   const recentTransactions = money.slice(0, 4);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-6 rounded-2xl">
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">
           <TrendingUp className="h-4.5 w-4.5 text-primary" />
@@ -205,7 +206,7 @@ export default function GrowthPage() {
                 isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className={cn("h-3.5 w-3.5", isActive ? t.tone : "opacity-60")} />
+              <Icon className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "opacity-60")} />
               {t.label}
             </button>
           );
@@ -274,7 +275,7 @@ function OverviewPanel({
         />
         <GrowthStat
           icon={TrendingDown}
-          bg="bg-accent/10"
+          bg="bg-accent/30"
           label="Expenses This Month"
           value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)}
           hint="All logged expenses"
@@ -590,7 +591,7 @@ function MoneyPanel({
 
       <div className="grid grid-cols-3 gap-3">
         <GrowthStat icon={DollarSign} bg="bg-card" label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} hint="No data yet" />
-        <GrowthStat icon={TrendingUp} bg="bg-accent/10" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
+        <GrowthStat icon={TrendingUp} bg="bg-accent/30" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
         <GrowthStat icon={Wallet} bg="bg-muted" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
       </div>
 
@@ -758,7 +759,7 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <GrowthStat icon={Activity} bg="bg-card" label="Total Impressions" value={String(totalImpressions)} />
-        <GrowthStat icon={TrendingUp} bg="bg-accent/10" label="Total Conversions" value={String(totalConversions)} />
+        <GrowthStat icon={TrendingUp} bg="bg-accent/30" label="Total Conversions" value={String(totalConversions)} />
         <GrowthStat icon={Percent} bg="bg-secondary" label="Avg. Conversion Rate" value={`${avgRate}%`} />
       </div>
 
@@ -910,7 +911,7 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
         <p className="text-sm font-semibold">This Week&apos;s Performance</p>
         <div className="grid grid-cols-3 gap-3">
           <GrowthStat icon={CheckCircle2} bg="bg-card" label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} />
-          <GrowthStat icon={Clock} bg="bg-accent/10" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
+          <GrowthStat icon={Clock} bg="bg-accent/30" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
           <GrowthStat icon={DollarSign} bg="bg-muted" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
         </div>
       </section>
