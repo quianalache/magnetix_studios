@@ -264,8 +264,11 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
   return (
     <>
       <div className="rounded-2xl border bg-card">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+        {/* Header — was showing the outer card's pink through unless
+            explicitly overridden; real page keeps this row on
+            bg-background, only the outer rounded card wrapper itself
+            carries the tint (and gets fully covered by its children). */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background p-4">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
@@ -296,7 +299,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
         </div>
 
         {/* Toolbar: search + view toggle + new event */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background p-4">
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -430,10 +433,14 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                   ))}
             </div>
 
-            {/* Grid */}
+            {/* Grid — real markup explicitly sets bg-background here
+                (divide-x divide-y divide-border/40 bg-background), which
+                is what was actually missing: without it every cell just
+                showed the outer card's pink straight through, instead of
+                a clean white grid with color reserved for real content. */}
             <div
               className={cn(
-                "grid",
+                "grid bg-background",
                 cols === 7 ? "grid-cols-7" : "grid-cols-1",
                 view === "month" && "grid-rows-6",
               )}
