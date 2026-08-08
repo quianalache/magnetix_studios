@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FolderKanban, Plus } from "lucide-react";
+import { FolderKanban, Plus, LayoutTemplate, Package, Archive } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
@@ -92,11 +92,14 @@ export default function ProjectsPage() {
     setTemplateDialogOpen(true);
   }
 
-  const TABS: { id: ProjectTab; label: string; count?: number }[] = [
-    { id: "active", label: "Active Projects", count: activeProjects.length },
-    { id: "templates", label: "Templates" },
-    { id: "assets", label: "Assets" },
-    { id: "archived", label: "Archived" },
+  // Colored icons per tab — same standard as AI Agents' channel nav
+  // (2026-08-08: "the parts that came prebuilt have colors... everything
+  // you're building just looks blah"), her real palette tones.
+  const TABS: { id: ProjectTab; label: string; count?: number; icon: typeof FolderKanban; tone: string }[] = [
+    { id: "active", label: "Active Projects", count: activeProjects.length, icon: FolderKanban, tone: "text-[#5E2574] dark:text-[#C892DE]" },
+    { id: "templates", label: "Templates", icon: LayoutTemplate, tone: "text-teal-700 dark:text-[#9EDBDD]" },
+    { id: "assets", label: "Assets", icon: Package, tone: "text-[#9C3A5C] dark:text-[#E8B7C8]" },
+    { id: "archived", label: "Archived", icon: Archive, tone: "text-muted-foreground" },
   ];
 
   return (
@@ -125,15 +128,17 @@ export default function ProjectsPage() {
       <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
         {TABS.map((t) => {
           const isActive = tab === t.id;
+          const Icon = t.icon;
           return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
                 isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
+              <Icon className={cn("h-3.5 w-3.5", isActive ? t.tone : "opacity-60")} />
               {t.label}
               {t.count !== undefined && (
                 <span

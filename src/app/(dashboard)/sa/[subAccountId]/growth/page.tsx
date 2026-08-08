@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, TrendingUp, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import {
+  Plus, TrendingUp, TrendingDown, ChevronLeft, ChevronRight, Trash2,
+  DollarSign, Wallet, Activity, Percent, CheckCircle2, Clock, Share2,
+  Target, Sparkles, NotebookPen,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
@@ -17,6 +21,24 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { goalProgressPct } from "@/types/growth";
 import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/growth";
+import { StatCard } from "@/components/ui/stat-card";
+
+/**
+ * Her real named palette, applied the exact way Dashboard's own StatCard
+ * calls already do it (2026-08-08 finding — "the parts that came
+ * prebuilt have colors... everything you're building just looks blah"):
+ * a plain white card with a small colored ICON CHIP, not a tinted card
+ * background. Growth had its own hand-rolled StatCard/tint system before
+ * this — replaced with the real shared component so it actually matches
+ * Dashboard instead of inventing a parallel pattern.
+ */
+const TONE = {
+  purple: { tone: "text-[#5E2574] dark:text-[#C892DE]", iconBg: "bg-[#5E2574]/10 dark:bg-[#C892DE]/15" },
+  rose: { tone: "text-[#A8386B] dark:text-[#F3D9D7]", iconBg: "bg-[#F3D9D7]/50 dark:bg-[#F3D9D7]/15" },
+  aqua: { tone: "text-teal-700 dark:text-[#9EDBDD]", iconBg: "bg-[#9EDBDD]/25 dark:bg-[#9EDBDD]/15" },
+  lavender: { tone: "text-[#6B3F84] dark:text-[#EDD9EC]", iconBg: "bg-[#EDD9EC]/50 dark:bg-[#EDD9EC]/15" },
+  quartz: { tone: "text-[#9C3A5C] dark:text-[#E8B7C8]", iconBg: "bg-[#E8B7C8]/50 dark:bg-[#E8B7C8]/15" },
+} as const;
 
 /**
  * Growth — full port of MomentumOS's Growth tab. See src/types/growth.ts
@@ -90,13 +112,16 @@ export default function GrowthPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subAccountId, money.length]);
 
-  const TABS: { id: GrowthTab; label: string }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "social", label: "Social" },
-    { id: "money", label: "Money" },
-    { id: "goals", label: "Goals" },
-    { id: "pulse", label: "Business Pulse" },
-    { id: "review", label: "Weekly Review" },
+  // Colored icons per tab — matches the AI Agents channel nav pattern she
+  // pointed at as the standard to hit ("little colored icons next to
+  // them"), using her real palette tones instead of generic colors.
+  const TABS: { id: GrowthTab; label: string; icon: typeof Sparkles; tone: string }[] = [
+    { id: "overview", label: "Overview", icon: Sparkles, tone: "text-[#5E2574] dark:text-[#C892DE]" },
+    { id: "social", label: "Social", icon: Share2, tone: "text-teal-700 dark:text-[#9EDBDD]" },
+    { id: "money", label: "Money", icon: DollarSign, tone: "text-[#9C3A5C] dark:text-[#E8B7C8]" },
+    { id: "goals", label: "Goals", icon: Target, tone: "text-[#A8386B] dark:text-[#F3D9D7]" },
+    { id: "pulse", label: "Business Pulse", icon: Activity, tone: "text-[#6B3F84] dark:text-[#EDD9EC]" },
+    { id: "review", label: "Weekly Review", icon: NotebookPen, tone: "text-[#5E2574] dark:text-[#C892DE]" },
   ];
 
   const activeGoals = useMemo(() => goals.filter((g) => g.status === "active"), [goals]);
@@ -117,18 +142,23 @@ export default function GrowthPage() {
       </div>
 
       <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
-              tab === t.id ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const isActive = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+                isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className={cn("h-3.5 w-3.5", isActive ? t.tone : "opacity-60")} />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -184,17 +214,42 @@ function OverviewPanel({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard tint="secondary" label="Income This Month" value={fmtMoney(moneyStats?.incomeThisMonth ?? 0)} sub="Paid entries only" />
-        <StatCard tint="negative" label="Expenses This Month" value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)} sub="All logged expenses" />
-        <StatCard tint="accent" label="Current MRR" value={fmtMoney(moneyStats?.currentMrr ?? 0)} sub={`${moneyStats?.mrrRecordCount ?? 0} active records`} />
         <StatCard
-          tint="muted"
+          icon={<DollarSign className="h-4 w-4" />}
+          {...TONE.purple}
+          label="Income This Month"
+          value={fmtMoney(moneyStats?.incomeThisMonth ?? 0)}
+          hint="Paid entries only"
+        />
+        <StatCard
+          icon={<TrendingDown className="h-4 w-4" />}
+          {...TONE.quartz}
+          label="Expenses This Month"
+          value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)}
+          hint="All logged expenses"
+        />
+        <StatCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          {...TONE.aqua}
+          label="Current MRR"
+          value={fmtMoney(moneyStats?.currentMrr ?? 0)}
+          hint={`${moneyStats?.mrrRecordCount ?? 0} active records`}
+        />
+        <StatCard
+          icon={<Wallet className="h-4 w-4" />}
+          {...TONE.lavender}
           label="Projected Cash Flow"
           value={fmtMoney(moneyStats?.projectedCashFlow ?? 0)}
-          sub="MRR − Recurring Exp."
-          negative={(moneyStats?.projectedCashFlow ?? 0) < 0}
+          hint="MRR − Recurring Exp."
+          tone={(moneyStats?.projectedCashFlow ?? 0) < 0 ? "text-destructive" : TONE.lavender.tone}
         />
-        <StatCard tint="secondary" label="Net Profit / Loss" value={fmtMoney(moneyStats?.netProfitLoss ?? 0)} sub="Profit this month" />
+        <StatCard
+          icon={<DollarSign className="h-4 w-4" />}
+          {...TONE.rose}
+          label="Net Profit / Loss"
+          value={fmtMoney(moneyStats?.netProfitLoss ?? 0)}
+          hint="Profit this month"
+        />
         <div className="rounded-xl border bg-muted/50 p-3.5">
           <p className="mb-2 text-[11px] font-semibold text-muted-foreground">Money Goal</p>
           <button onClick={() => onGoto("goals")} className="text-[13px] font-medium text-primary underline underline-offset-2">
@@ -262,45 +317,6 @@ function OverviewPanel({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-/**
- * Matches the real, live MomentumOS markup (confirmed via her own DevTools
- * inspection, 2026-08-07 — see Build Log): `rounded-lg border-none
- * shadow-sm`, a semantic color token per card (not one flat repeated
- * card color), plain body font on the number (no monospace at all),
- * label in normal case, not uppercase. The Claude Artifact CSS this was
- * previously built from was a stale/different build — don't reuse it
- * for anything else without re-verifying against the real app the same
- * way this was.
- */
-const STAT_TINTS = {
-  secondary: "bg-secondary text-secondary-foreground",
-  muted: "bg-muted text-foreground",
-  accent: "bg-accent/30 text-accent-foreground",
-  negative: "bg-destructive/10 text-foreground",
-} as const;
-
-function StatCard({
-  label,
-  value,
-  sub,
-  negative,
-  tint = "secondary",
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  negative?: boolean;
-  tint?: keyof typeof STAT_TINTS;
-}) {
-  return (
-    <div className={cn("rounded-lg p-3.5 shadow-sm", STAT_TINTS[tint])}>
-      <p className="mb-2 text-[11px] font-semibold text-muted-foreground">{label}</p>
-      <p className={cn("text-2xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -517,9 +533,9 @@ function MoneyPanel({
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard tint="secondary" label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} sub="No data yet" />
-        <StatCard tint="accent" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} sub="" />
-        <StatCard tint="muted" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} sub="" />
+        <StatCard icon={<DollarSign className="h-4 w-4" />} {...TONE.purple} label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} hint="No data yet" />
+        <StatCard icon={<TrendingUp className="h-4 w-4" />} {...TONE.aqua} label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
+        <StatCard icon={<Wallet className="h-4 w-4" />} {...TONE.lavender} label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -685,9 +701,9 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <StatCard tint="secondary" label="Total Impressions" value={String(totalImpressions)} sub="" />
-        <StatCard tint="accent" label="Total Conversions" value={String(totalConversions)} sub="" />
-        <StatCard tint="muted" label="Avg. Conversion Rate" value={`${avgRate}%`} sub="" />
+        <StatCard icon={<Activity className="h-4 w-4" />} {...TONE.purple} label="Total Impressions" value={String(totalImpressions)} />
+        <StatCard icon={<TrendingUp className="h-4 w-4" />} {...TONE.aqua} label="Total Conversions" value={String(totalConversions)} />
+        <StatCard icon={<Percent className="h-4 w-4" />} {...TONE.rose} label="Avg. Conversion Rate" value={`${avgRate}%`} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -837,9 +853,9 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
       <section className="space-y-3">
         <p className="text-sm font-semibold">This Week&apos;s Performance</p>
         <div className="grid grid-cols-3 gap-3">
-          <StatCard tint="secondary" label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} sub="" />
-          <StatCard tint="negative" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} sub="Manually logged below" />
-          <StatCard tint="accent" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} sub="" />
+          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} {...TONE.purple} label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} />
+          <StatCard icon={<Clock className="h-4 w-4" />} {...TONE.quartz} label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
+          <StatCard icon={<DollarSign className="h-4 w-4" />} {...TONE.aqua} label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
         </div>
       </section>
 
