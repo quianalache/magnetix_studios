@@ -463,15 +463,20 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                       colIndex < cols - 1 && "border-r border-border/40",
                       rowIndex < rows - 1 && "border-b border-border/40",
                       !isCurrentMonth && "bg-muted/10",
-                      isWeekend && isCurrentMonth && "bg-muted/5",
+                      isWeekend && isCurrentMonth && !isToday && "bg-muted/5",
+                      // Real MomentumOS tints today's whole cell bg-secondary/20,
+                      // not just the day-number badge.
+                      isToday && "bg-secondary/20",
                     )}
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span
                         className={cn(
                           "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
-                          isToday &&
-                            "bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white shadow-sm",
+                          // Was a hardcoded indigo/violet/pink gradient, totally
+                          // disconnected from the theme system — momentum-scope
+                          // could never touch it. Real markup: plain bg-primary.
+                          isToday && "bg-primary text-primary-foreground shadow-sm",
                           !isToday && isCurrentMonth && "text-foreground",
                           !isToday && !isCurrentMonth && "text-muted-foreground/50",
                         )}
@@ -504,9 +509,8 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                               key={`ev-${ev.id}`}
                               type="button"
                               onClick={(e) => openEdit(ev, e)}
-                              className="group/event flex w-full items-center gap-1 truncate rounded-md border border-transparent bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-pink-500/10 px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-colors hover:border-primary/30"
+                              className="group/event flex w-full items-center gap-1 truncate rounded border border-accent/30 bg-accent/20 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
                             >
-                              <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
                               {start && (
                                 <span className="shrink-0 text-muted-foreground">
                                   {formatTime(start)}
