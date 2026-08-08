@@ -5,9 +5,9 @@ import {
   Lightbulb,
   Zap,
   CalendarDays,
-  Smile,
+  CircleCheck,
   RefreshCw,
-  AlertCircle,
+  CircleAlert,
   Rocket,
   Search,
   LayoutGrid,
@@ -50,20 +50,51 @@ const TYPE_LABEL: Record<string, string> = Object.fromEntries(
 const SELECT_CLS =
   "h-9 rounded-full border border-input bg-card px-3 text-xs shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground";
 
+/**
+ * Real, exact spec — read directly from "Momentum OS Content.html", the
+ * page she saved while logged in (2026-08-08). Every value here (bg
+ * token, icon, icon color) is transcribed, not eyeballed from a
+ * screenshot: <button class="rounded-2xl p-3 text-left transition-all
+ * shadow-sm bg-X cursor-pointer hover:opacity-80">. Icons are plain
+ * text-primary across the board — Overdue is the one exception, its
+ * icon is text-destructive.
+ */
 const STAT_CARDS: {
   key: "ideas" | "inProgress" | "scheduled" | "published" | "repurposed" | "overdue" | "thisWeek";
   label: string;
   icon: typeof Lightbulb;
   bg: string;
+  iconClass: string;
 }[] = [
-  { key: "ideas", label: "Ideas", icon: Lightbulb, bg: "bg-secondary/50" },
-  { key: "inProgress", label: "In Progress", icon: Zap, bg: "bg-primary/10" },
-  { key: "scheduled", label: "Scheduled", icon: CalendarDays, bg: "bg-accent/25" },
-  { key: "published", label: "Published", icon: Smile, bg: "bg-accent/15" },
-  { key: "repurposed", label: "Repurposed", icon: RefreshCw, bg: "bg-primary/15" },
-  { key: "overdue", label: "Overdue", icon: AlertCircle, bg: "bg-destructive/10" },
-  { key: "thisWeek", label: "This Week", icon: Rocket, bg: "bg-secondary/40" },
+  { key: "ideas", label: "Ideas", icon: Lightbulb, bg: "bg-card", iconClass: "text-primary" },
+  { key: "inProgress", label: "In Progress", icon: Zap, bg: "bg-secondary", iconClass: "text-primary" },
+  { key: "scheduled", label: "Scheduled", icon: CalendarDays, bg: "bg-muted", iconClass: "text-primary" },
+  { key: "published", label: "Published", icon: CircleCheck, bg: "bg-accent/30", iconClass: "text-primary" },
+  { key: "repurposed", label: "Repurposed", icon: RefreshCw, bg: "bg-card", iconClass: "text-primary" },
+  { key: "overdue", label: "Overdue", icon: CircleAlert, bg: "bg-destructive/10", iconClass: "text-destructive" },
+  { key: "thisWeek", label: "This Week", icon: Rocket, bg: "bg-secondary", iconClass: "text-primary" },
 ];
+
+/**
+ * Column header backgrounds — real values for idea/research/outline/
+ * script/scheduled/published confirmed directly from the saved page
+ * (2026-08-08); she only captured up to the Script column before the
+ * board scrolled off-screen, so recording/editing/assets/repurposed
+ * extrapolate the same confirmed 4-token rotation (bg-card/bg-muted/
+ * bg-secondary/bg-accent-30) rather than guessing new colors.
+ */
+const STAGE_BG: Record<string, string> = {
+  idea: "bg-card",
+  research: "bg-muted",
+  outline: "bg-secondary",
+  script: "bg-muted",
+  recording: "bg-secondary",
+  editing: "bg-card",
+  assets: "bg-muted",
+  scheduled: "bg-accent/30",
+  published: "bg-accent/30",
+  repurposed: "bg-card",
+};
 
 function startOfWeek(d: Date): Date {
   const s = new Date(d);
@@ -153,12 +184,15 @@ export function PipelineTab({
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         {STAT_CARDS.map((s) => (
-          <div key={s.key} className={`rounded-xl p-3 ${s.bg}`}>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-[11px] font-medium text-foreground/70">{s.label}</span>
-              <s.icon className="h-3.5 w-3.5 text-foreground/60" />
+          <div
+            key={s.key}
+            className={`rounded-2xl p-3 text-left shadow-sm transition-all hover:opacity-80 ${s.bg}`}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">{s.label}</span>
+              <s.icon className={`h-3.5 w-3.5 ${s.iconClass}`} />
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats[s.key]}</p>
+            <div className="text-2xl font-bold text-foreground">{stats[s.key]}</div>
           </div>
         ))}
       </div>
@@ -245,11 +279,13 @@ export function PipelineTab({
             const stageItems = byStage.get(stage.value) ?? [];
             return (
               <div key={stage.value} className="min-w-[200px] space-y-2">
-                <div className="flex items-center justify-between rounded-lg bg-card px-2 py-1.5">
-                  <span className="text-xs font-semibold text-foreground">
-                    {stage.emoji} {stage.label}
+                <div
+                  className={`flex items-center justify-between rounded-xl px-3 py-2 transition-all ${STAGE_BG[stage.value] ?? "bg-card"}`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <span>{stage.emoji}</span> {stage.label}
                   </span>
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground">
+                  <span className="rounded-full bg-background/60 px-1.5 py-0.5 text-xs text-muted-foreground">
                     {stageItems.length}
                   </span>
                 </div>
