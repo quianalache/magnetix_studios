@@ -21,24 +21,49 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { goalProgressPct } from "@/types/growth";
 import type { Goal, MoneyEntry, PagePerformance, SocialPlatform } from "@/types/growth";
-import { StatCard } from "@/components/ui/stat-card";
-
 /**
- * Her real named palette, applied the exact way Dashboard's own StatCard
- * calls already do it (2026-08-08 finding — "the parts that came
- * prebuilt have colors... everything you're building just looks blah"):
- * a plain white card with a small colored ICON CHIP, not a tinted card
- * background. Growth had its own hand-rolled StatCard/tint system before
- * this — replaced with the real shared component so it actually matches
- * Dashboard instead of inventing a parallel pattern.
+ * Corrected 2026-08-08, for real this time — she sent an actual screenshot
+ * of the real MomentumOS Growth Overview page. Stat cards there ARE solid
+ * tinted backgrounds (a different one per card), no border, a small plain
+ * icon top-right (not a boxed chip). That was already sitting in the
+ * DevTools evidence from her earlier screenshot too (bg-secondary on the
+ * inspected card) — I had it and second-guessed it into Dashboard's
+ * different icon-chip-on-white pattern instead. Not doing that again:
+ * this matches the real screenshot, not another inference.
  */
-const TONE = {
-  purple: { tone: "text-[#5E2574] dark:text-[#C892DE]", iconBg: "bg-[#5E2574]/10 dark:bg-[#C892DE]/15" },
-  rose: { tone: "text-[#A8386B] dark:text-[#F3D9D7]", iconBg: "bg-[#F3D9D7]/50 dark:bg-[#F3D9D7]/15" },
-  aqua: { tone: "text-teal-700 dark:text-[#9EDBDD]", iconBg: "bg-[#9EDBDD]/25 dark:bg-[#9EDBDD]/15" },
-  lavender: { tone: "text-[#6B3F84] dark:text-[#EDD9EC]", iconBg: "bg-[#EDD9EC]/50 dark:bg-[#EDD9EC]/15" },
-  quartz: { tone: "text-[#9C3A5C] dark:text-[#E8B7C8]", iconBg: "bg-[#E8B7C8]/50 dark:bg-[#E8B7C8]/15" },
+const GROWTH_TINT = {
+  lavender: "bg-[#EDD9EC] dark:bg-[#EDD9EC]/15",
+  quartz: "bg-[#E8B7C8] dark:bg-[#E8B7C8]/15",
+  aqua: "bg-[#9EDBDD] dark:bg-[#9EDBDD]/15",
+  blush: "bg-[#F3D9D7] dark:bg-[#F3D9D7]/15",
 } as const;
+
+function GrowthStat({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  tint,
+  negative,
+}: {
+  icon: typeof TrendingUp;
+  label: string;
+  value: string;
+  hint?: string;
+  tint: keyof typeof GROWTH_TINT;
+  negative?: boolean;
+}) {
+  return (
+    <div className={cn("rounded-2xl p-4", GROWTH_TINT[tint])}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[13px] font-medium text-foreground/80">{label}</p>
+        <Icon className="h-4 w-4 shrink-0 text-foreground/45" />
+      </div>
+      <p className={cn("mt-2 text-2xl font-bold tabular-nums", negative && "text-destructive")}>{value}</p>
+      {hint && <p className="mt-1 text-xs text-foreground/55">{hint}</p>}
+    </div>
+  );
+}
 
 /**
  * Growth — full port of MomentumOS's Growth tab. See src/types/growth.ts
@@ -141,7 +166,7 @@ export default function GrowthPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
+      <div className={cn("flex w-fit flex-wrap gap-1 rounded-full p-1", GROWTH_TINT.blush)}>
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -150,8 +175,8 @@ export default function GrowthPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
-                isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
+                isActive ? "bg-background shadow-sm" : "text-foreground/60 hover:text-foreground",
               )}
             >
               <Icon className={cn("h-3.5 w-3.5", isActive ? t.tone : "opacity-60")} />
@@ -214,45 +239,48 @@ function OverviewPanel({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard
-          icon={<DollarSign className="h-4 w-4" />}
-          {...TONE.purple}
+        <GrowthStat
+          icon={DollarSign}
+          tint="lavender"
           label="Income This Month"
           value={fmtMoney(moneyStats?.incomeThisMonth ?? 0)}
           hint="Paid entries only"
         />
-        <StatCard
-          icon={<TrendingDown className="h-4 w-4" />}
-          {...TONE.quartz}
+        <GrowthStat
+          icon={TrendingDown}
+          tint="quartz"
           label="Expenses This Month"
           value={fmtMoney(moneyStats?.expensesThisMonth ?? 0)}
           hint="All logged expenses"
         />
-        <StatCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          {...TONE.aqua}
+        <GrowthStat
+          icon={TrendingUp}
+          tint="aqua"
           label="Current MRR"
           value={fmtMoney(moneyStats?.currentMrr ?? 0)}
           hint={`${moneyStats?.mrrRecordCount ?? 0} active records`}
         />
-        <StatCard
-          icon={<Wallet className="h-4 w-4" />}
-          {...TONE.lavender}
+        <GrowthStat
+          icon={Wallet}
+          tint="blush"
           label="Projected Cash Flow"
           value={fmtMoney(moneyStats?.projectedCashFlow ?? 0)}
           hint="MRR − Recurring Exp."
-          tone={(moneyStats?.projectedCashFlow ?? 0) < 0 ? "text-destructive" : TONE.lavender.tone}
+          negative={(moneyStats?.projectedCashFlow ?? 0) < 0}
         />
-        <StatCard
-          icon={<DollarSign className="h-4 w-4" />}
-          {...TONE.rose}
+        <GrowthStat
+          icon={DollarSign}
+          tint="aqua"
           label="Net Profit / Loss"
           value={fmtMoney(moneyStats?.netProfitLoss ?? 0)}
           hint="Profit this month"
         />
-        <div className="rounded-xl border bg-muted/50 p-3.5">
-          <p className="mb-2 text-[11px] font-semibold text-muted-foreground">Money Goal</p>
-          <button onClick={() => onGoto("goals")} className="text-[13px] font-medium text-primary underline underline-offset-2">
+        <div className={cn("rounded-2xl p-4", GROWTH_TINT.quartz)}>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <p className="text-[13px] font-medium text-foreground/80">Money Goal</p>
+            <Target className="h-4 w-4 shrink-0 text-foreground/45" />
+          </div>
+          <button onClick={() => onGoto("goals")} className="text-[13px] font-medium underline underline-offset-2 text-foreground/80">
             Set a monthly goal
           </button>
         </div>
@@ -533,9 +561,9 @@ function MoneyPanel({
       )}
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={<DollarSign className="h-4 w-4" />} {...TONE.purple} label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} hint="No data yet" />
-        <StatCard icon={<TrendingUp className="h-4 w-4" />} {...TONE.aqua} label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
-        <StatCard icon={<Wallet className="h-4 w-4" />} {...TONE.lavender} label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
+        <GrowthStat icon={DollarSign} tint="lavender" label="Net this month" value={fmtMoney((stats?.incomeThisMonth ?? 0))} hint="No data yet" />
+        <GrowthStat icon={TrendingUp} tint="aqua" label="Income This Month" value={fmtMoney(stats?.incomeThisMonth ?? 0)} />
+        <GrowthStat icon={Wallet} tint="quartz" label="Current MRR" value={fmtMoney(stats?.currentMrr ?? 0)} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -701,9 +729,9 @@ function PulsePanel({ subAccountId, pages }: { subAccountId: string; pages: Page
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
-        <StatCard icon={<Activity className="h-4 w-4" />} {...TONE.purple} label="Total Impressions" value={String(totalImpressions)} />
-        <StatCard icon={<TrendingUp className="h-4 w-4" />} {...TONE.aqua} label="Total Conversions" value={String(totalConversions)} />
-        <StatCard icon={<Percent className="h-4 w-4" />} {...TONE.rose} label="Avg. Conversion Rate" value={`${avgRate}%`} />
+        <GrowthStat icon={Activity} tint="lavender" label="Total Impressions" value={String(totalImpressions)} />
+        <GrowthStat icon={TrendingUp} tint="aqua" label="Total Conversions" value={String(totalConversions)} />
+        <GrowthStat icon={Percent} tint="blush" label="Avg. Conversion Rate" value={`${avgRate}%`} />
       </div>
 
       <div className="inline-flex rounded-lg bg-muted/30 p-1">
@@ -853,9 +881,9 @@ function WeeklyReviewPanel({ subAccountId }: { subAccountId: string }) {
       <section className="space-y-3">
         <p className="text-sm font-semibold">This Week&apos;s Performance</p>
         <div className="grid grid-cols-3 gap-3">
-          <StatCard icon={<CheckCircle2 className="h-4 w-4" />} {...TONE.purple} label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} />
-          <StatCard icon={<Clock className="h-4 w-4" />} {...TONE.quartz} label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
-          <StatCard icon={<DollarSign className="h-4 w-4" />} {...TONE.aqua} label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
+          <GrowthStat icon={CheckCircle2} tint="lavender" label="Tasks Completed" value={String(weekStats?.tasksCompleted ?? 0)} />
+          <GrowthStat icon={Clock} tint="quartz" label="Hours Tracked" value={`${Number(review.hoursTracked || 0).toFixed(1)}h`} hint="Manually logged below" />
+          <GrowthStat icon={DollarSign} tint="aqua" label="Income This Week" value={fmtMoney(weekStats?.incomeThisWeek ?? 0)} />
         </div>
       </section>
 
