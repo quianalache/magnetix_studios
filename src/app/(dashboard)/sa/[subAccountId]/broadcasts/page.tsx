@@ -54,7 +54,7 @@ export default function BroadcastsListPage() {
   }, [user, agencyId, subAccountId, authLoading]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Broadcasts</h1>

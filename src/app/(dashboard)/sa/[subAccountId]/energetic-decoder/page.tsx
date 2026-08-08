@@ -42,7 +42,7 @@ export default function EnergeticDecoderPage() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
       <div>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">

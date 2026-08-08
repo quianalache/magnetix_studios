@@ -66,7 +66,7 @@ export default function TemplatesListPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <div>
         <Link
           href={saPath("/broadcasts")}

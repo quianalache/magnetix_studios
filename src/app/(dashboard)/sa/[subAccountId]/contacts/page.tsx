@@ -123,7 +123,7 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <Suspense fallback={null}>
         <ImportQueryWatcher onOpen={openImport} />
       </Suspense>

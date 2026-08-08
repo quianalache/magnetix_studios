@@ -7,7 +7,7 @@ export default async function WorkflowsPage({
 }) {
   const { subAccountId } = await params;
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="momentum-scope mx-auto max-w-3xl rounded-2xl">
       <WorkflowsList saId={subAccountId} />
     </div>
   );

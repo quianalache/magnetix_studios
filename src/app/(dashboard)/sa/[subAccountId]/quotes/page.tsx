@@ -36,7 +36,7 @@ export default function QuotesPage() {
   }, [contacts]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Quotes &amp; invoices</h1>

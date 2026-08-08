@@ -83,7 +83,7 @@ export default function ClientPortalSettingsPage() {
   const portalDisplayName = branding.portalName || subAccount?.name || "Your Portal";
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Memberships &middot; Client Portal

@@ -23,7 +23,7 @@ export default function LabsPage() {
 
   if (!labsEnabled) {
     return (
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="momentum-scope mx-auto w-full max-w-3xl rounded-2xl">
         <section className="rounded-2xl border bg-card p-6">
           <div className="flex items-start gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">

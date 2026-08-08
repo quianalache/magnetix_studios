@@ -18,7 +18,7 @@ export default function SubAccountAiSuitePage() {
   const [chatActive, setChatActive] = useState(false);
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col gap-4">
+    <div className="momentum-scope mx-auto flex h-full max-w-3xl flex-col gap-4 rounded-2xl">
       {!chatActive && (
         <AiSuiteScopeBanner
           level="sub-account"

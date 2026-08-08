@@ -132,7 +132,7 @@ export default function QrCodesListPage() {
   const isEmpty = codes.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <PageHeader
         title="QR Codes"
         description="Generate a QR for any link, or a digital business card people can scan to save your contact info."

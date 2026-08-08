@@ -96,7 +96,7 @@ export default function WebsitePage() {
 
   if (subLoading || !hydrated) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+      <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
         <div className="h-7 w-48 animate-pulse rounded bg-muted" />
         <div className="h-40 animate-pulse rounded-2xl bg-muted/40" />
         <div className="h-40 animate-pulse rounded-2xl bg-muted/40" />
@@ -115,7 +115,7 @@ export default function WebsitePage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <header>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">

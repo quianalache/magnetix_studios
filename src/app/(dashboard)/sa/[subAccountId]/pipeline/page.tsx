@@ -178,7 +178,7 @@ export default function PipelinePage() {
   const currency = deals[0]?.currency ?? "USD";
 
   return (
-    <div className="space-y-6">
+    <div className="momentum-scope space-y-6 rounded-2xl">
       <PageHeader
         title="Pipeline"
         description="Drag deals across stages. Your team sees every move in real time."

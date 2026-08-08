@@ -12,7 +12,7 @@ import { GhlImportWizard } from "@/components/import/ghl-import-wizard";
 export default function ImportPage() {
   const { saPath } = useSubAccount();
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
       <Link
         href={saPath("/dashboard/settings")}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

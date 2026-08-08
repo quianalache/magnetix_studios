@@ -61,7 +61,7 @@ export default function CommunityPage() {
 
   if (!gateOn) {
     return (
-      <div className="mx-auto w-full max-w-5xl p-6">
+      <div className="momentum-scope mx-auto w-full max-w-5xl rounded-2xl p-6">
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <h1 className="text-lg font-semibold">Community is locked</h1>

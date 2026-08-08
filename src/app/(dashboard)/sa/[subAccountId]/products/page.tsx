@@ -56,7 +56,7 @@ export default function ProductsPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Products</h1>

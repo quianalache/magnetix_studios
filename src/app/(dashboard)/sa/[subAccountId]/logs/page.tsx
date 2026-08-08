@@ -7,7 +7,7 @@ import { LogsView } from "@/components/logs/logs-view";
  */
 export default function LogsPage() {
   return (
-    <div className="mx-auto w-full max-w-5xl">
+    <div className="momentum-scope mx-auto w-full max-w-5xl rounded-2xl">
       <LogsView />
     </div>
   );

@@ -237,7 +237,7 @@ export default function GetLeadsPage() {
 
   if (!gateOn) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+      <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
         <Header />
         <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -520,7 +520,7 @@ export default function GetLeadsPage() {
   const emailCount = businesses.filter((b) => !!b.email).length;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
+    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <Header />
         {isAdmin && (

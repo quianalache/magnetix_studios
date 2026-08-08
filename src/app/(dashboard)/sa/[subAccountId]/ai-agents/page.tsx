@@ -96,7 +96,7 @@ export default function AiAgentsOverviewPage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="momentum-scope mx-auto max-w-3xl space-y-6 rounded-2xl">
       <header className="flex items-start gap-4">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/15 via-violet-500/15 to-pink-500/15 text-primary">
           <Bot className="h-6 w-6" />
