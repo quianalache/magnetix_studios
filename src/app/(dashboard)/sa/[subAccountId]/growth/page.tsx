@@ -191,7 +191,7 @@ export default function GrowthPage() {
         </div>
       </div>
 
-      <div className="flex w-fit flex-wrap gap-1 rounded-full bg-secondary p-1">
+      <div className="flex w-fit flex-wrap gap-1 rounded-full bg-muted p-1">
         {TABS.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.id;
@@ -201,9 +201,15 @@ export default function GrowthPage() {
               onClick={() => setTab(t.id)}
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
-                // hover:bg-muted hover:text-foreground is the real, confirmed
-                // hover convention from the live app's own nav links.
-                isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                // Container is bg-muted, so hover can't also be bg-muted
+                // (invisible) — bg-background/60 keeps the same "lighten
+                // toward the active pill's own color" feel without
+                // colliding with the confirmed hover:bg-muted convention
+                // used elsewhere (nav links, where the container isn't
+                // already muted).
+                isActive
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
               )}
             >
               <Icon className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "opacity-60")} />

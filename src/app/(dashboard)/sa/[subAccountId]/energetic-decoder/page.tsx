@@ -27,16 +27,18 @@ export default function EnergeticDecoderPage() {
   const { subAccountId } = useSubAccount();
   const [tab, setTab] = useState<Tab>("reports");
 
-  // Colored icons per tab — same standard as AI Agents' channel nav and
-  // now Growth/Projects (2026-08-08), her real palette tones. Design's
-  // Palette and Share's Share2 match the icons those two tabs' own cards
-  // (theme-card.tsx, embed-share-card.tsx) already use internally.
-  const tabs: { key: Tab; label: string; icon: typeof Sparkles; tone: string }[] = [
-    { key: "reports", label: "Reports", icon: ClipboardList, tone: "text-[#5E2574] dark:text-[#C892DE]" },
-    { key: "content", label: "Content", icon: BookOpen, tone: "text-teal-700 dark:text-[#9EDBDD]" },
-    { key: "readings", label: "Readings", icon: ScrollText, tone: "text-[#9C3A5C] dark:text-[#E8B7C8]" },
-    { key: "design", label: "Design", icon: Palette, tone: "text-[#6B3F84] dark:text-[#EDD9EC]" },
-    { key: "share", label: "Share", icon: Share2, tone: "text-[#A8386B] dark:text-[#F3D9D7]" },
+  // Icon per tab, plain text-primary when active — same locked-in rule as
+  // Growth/Projects (2026-08-08): icons don't carry per-tab hue, only
+  // MomentumOS-modeled pages (Growth, Content Library) get momentum-scope;
+  // this isn't one of those, it stays on the app's own native theme.
+  // Design's Palette and Share's Share2 still match the icons those two
+  // tabs' own cards (theme-card.tsx, embed-share-card.tsx) use internally.
+  const tabs: { key: Tab; label: string; icon: typeof Sparkles }[] = [
+    { key: "reports", label: "Reports", icon: ClipboardList },
+    { key: "content", label: "Content", icon: BookOpen },
+    { key: "readings", label: "Readings", icon: ScrollText },
+    { key: "design", label: "Design", icon: Palette },
+    { key: "share", label: "Share", icon: Share2 },
   ];
 
   return (
@@ -69,7 +71,7 @@ export default function EnergeticDecoderPage() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Icon className={`h-3.5 w-3.5 ${isActive ? t.tone : "opacity-60"}`} />
+              <Icon className={`h-3.5 w-3.5 ${isActive ? "text-primary" : "opacity-60"}`} />
               {t.label}
             </button>
           );
