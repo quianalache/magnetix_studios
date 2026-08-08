@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ClipboardList, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { EnergeticDecoderReportsTab } from "@/components/energetic-decoder/reports-tab";
 import { EnergeticDecoderContentTab } from "@/components/energetic-decoder/content-tab";
@@ -27,12 +27,16 @@ export default function EnergeticDecoderPage() {
   const { subAccountId } = useSubAccount();
   const [tab, setTab] = useState<Tab>("reports");
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "reports", label: "Reports" },
-    { key: "content", label: "Content" },
-    { key: "readings", label: "Readings" },
-    { key: "design", label: "Design" },
-    { key: "share", label: "Share" },
+  // Colored icons per tab — same standard as AI Agents' channel nav and
+  // now Growth/Projects (2026-08-08), her real palette tones. Design's
+  // Palette and Share's Share2 match the icons those two tabs' own cards
+  // (theme-card.tsx, embed-share-card.tsx) already use internally.
+  const tabs: { key: Tab; label: string; icon: typeof Sparkles; tone: string }[] = [
+    { key: "reports", label: "Reports", icon: ClipboardList, tone: "text-[#5E2574] dark:text-[#C892DE]" },
+    { key: "content", label: "Content", icon: BookOpen, tone: "text-teal-700 dark:text-[#9EDBDD]" },
+    { key: "readings", label: "Readings", icon: ScrollText, tone: "text-[#9C3A5C] dark:text-[#E8B7C8]" },
+    { key: "design", label: "Design", icon: Palette, tone: "text-[#6B3F84] dark:text-[#EDD9EC]" },
+    { key: "share", label: "Share", icon: Share2, tone: "text-[#A8386B] dark:text-[#F3D9D7]" },
   ];
 
   return (
@@ -51,20 +55,25 @@ export default function EnergeticDecoderPage() {
       </div>
 
       <div className="flex gap-1 border-b">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`relative top-px border-b-2 px-1 pb-2.5 mr-5 text-sm font-semibold transition-colors ${
-              tab === t.key
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const isActive = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`relative top-px flex items-center gap-1.5 border-b-2 px-1 pb-2.5 mr-5 text-sm font-semibold transition-colors ${
+                isActive
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className={`h-3.5 w-3.5 ${isActive ? t.tone : "opacity-60"}`} />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "reports" && <EnergeticDecoderReportsTab />}
