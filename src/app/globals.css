@@ -226,7 +226,12 @@ body {
   --mx-purple: #5E2574;
   --mx-purple-deep: #3D1652;
   --mx-purple-deeper: #2A0F3A;
-  --background: #F7F0F6;
+  /* Was #F7F0F6 — measurably more pink-tinted (G channel 240) than the
+     real MomentumOS page background, confirmed by converting its actual
+     shipped token (hsl(4 30% 98%)) to hex: #FBF9F8, nearly white with
+     only a whisper of warmth. She asked for "the whitish background"
+     multiple times — this is the real, computed target, not eyeballed. */
+  --background: #FBF9F8;
   --foreground: #2B1830;
   --card: #FFFFFF;
   --card-foreground: #2B1830;
