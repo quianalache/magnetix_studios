@@ -83,15 +83,67 @@ export const PM_PROMPTS: ReflectionPrompt[] = [
 /**
  * "Operational Awareness" mini-stats — real where a source system exists,
  * honestly zero where it doesn't (same "honest substitute" rule as
- * Growth's Hours Tracked/Momentum Score). Rituals has no tracking system
- * in this app at all — it's literally one of the 7 un-built Reflection
- * sub-tabs — so it's a flagged placeholder, not a fake number.
+ * Growth's Hours Tracked/Momentum Score). ritualsCompleted now has a real
+ * source (RitualDoc.completedDates below, shipped 2026-08-08) — Hours
+ * Tracked is still manual/untracked, same as Growth's.
  */
 export interface DailyOperationalStats {
   tasksCompleted: number;
-  ritualsCompleted: number | null; // null = no source system yet, not "0 rituals done"
+  ritualsCompleted: number;
   income: number;
   netFlow: number;
   contentPublished: number;
   hoursTracked: number; // manual/no tracking source yet, same honesty as Growth's Hours Tracked
+}
+
+/**
+ * Rituals, Notes, Memories — ported 2026-08-08 straight from the real
+ * compiled app bundle (`index-i5livvRV.js`, saved alongside the Reflection
+ * HTML capture), not the DOM snapshot — the DOM only had Daily rendered,
+ * but the bundle ships every tab's real component code regardless of
+ * which one was ever clicked. Field names, labels, and placeholders below
+ * are verbatim from that bundle.
+ */
+
+export type RitualFrequency = "daily" | "weekly" | "custom";
+export type RitualTimeBlock = "AM" | "Midday" | "PM" | "Evening";
+
+export interface RitualDoc {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  name: string;
+  description: string;
+  frequency: RitualFrequency;
+  timeBlock: RitualTimeBlock;
+  /** YYYY-MM-DD dates this ritual was marked complete — a simple habit log, toggled per day. */
+  completedDates: string[];
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
+export interface NoteDoc {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  title: string;
+  content: string;
+  /** Free-form, e.g. "General" (Quick Note default) or "reflection" (auto-saved cycle-reflection copies). */
+  category: string;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
+export interface MemoryDoc {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  title: string;
+  /** YYYY-MM-DD */
+  date: string;
+  reflection: string;
+  /** Optional linked Project id — real field is "Link to Project (Optional)" in the capture modal. */
+  linkedProjectId: string | null;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
 }

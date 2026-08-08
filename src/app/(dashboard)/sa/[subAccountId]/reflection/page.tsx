@@ -13,14 +13,21 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AM_PROMPTS, PM_PROMPTS, emptyDailyReflectionFields } from "@/types/reflection";
 import type { DailyReflectionDoc, DailyOperationalStats } from "@/types/reflection";
+import { RitualsTab } from "@/components/reflection/rituals-tab";
+import { NotesTab } from "@/components/reflection/notes-tab";
+import { MemoriesTab } from "@/components/reflection/memories-tab";
 
 /**
- * Reflection — ported from MomentumOS's real "Reflection" tool
- * (2026-08-08), read directly from her saved logged-in capture. Real tool
+ * Reflection — ported from MomentumOS's real "Reflection" tool. Real tool
  * has 8 sub-tabs: Daily, Weekly, Monthly, Quarterly, Money, Rituals,
- * Notes, Memories — only Daily was expanded in her capture (the other 7
- * were empty), so only Daily is built. The rest need their own real
- * capture before being built the same way — flagged, not invented.
+ * Notes, Memories. Daily was built 2026-08-08 from the saved DOM capture;
+ * Rituals/Notes/Memories were built the same day, second wave, once the
+ * compiled app bundle (saved alongside that capture) turned out to
+ * contain every tab's real component code even though the DOM only
+ * rendered Daily — see rituals-tab.tsx / notes-tab.tsx / memories-tab.tsx
+ * for the exact real markup each came from. Weekly/Monthly/Quarterly/
+ * Money are real "cycle reflection" and "money mindset" components
+ * confirmed to exist in that same bundle but not yet built here — next.
  *
  * One simplification from the real interaction: the real page gates the
  * AM/PM cards behind a "Start Reflection" click on a fresh day. Every
@@ -33,9 +40,9 @@ const SUB_TABS = [
   { key: "monthly", label: "Monthly", icon: CalendarRange, built: false },
   { key: "quarterly", label: "Quarterly", icon: CalendarRange, built: false },
   { key: "money", label: "Money", icon: CircleDollarSign, built: false },
-  { key: "rituals", label: "Rituals", icon: Heart, built: false },
-  { key: "notes", label: "Notes", icon: ScrollText, built: false },
-  { key: "memories", label: "Memories", icon: Images, built: false },
+  { key: "rituals", label: "Rituals", icon: Heart, built: true },
+  { key: "notes", label: "Notes", icon: ScrollText, built: true },
+  { key: "memories", label: "Memories", icon: Images, built: true },
 ] as const;
 
 function todayStr(offsetDays = 0): string {
@@ -138,15 +145,19 @@ export default function ReflectionPage() {
         </div>
       </div>
 
-      {subTab !== "daily" ? (
+      {subTab === "rituals" ? (
+        <RitualsTab subAccountId={subAccountId} />
+      ) : subTab === "notes" ? (
+        <NotesTab subAccountId={subAccountId} />
+      ) : subTab === "memories" ? (
+        <MemoriesTab subAccountId={subAccountId} />
+      ) : subTab !== "daily" ? (
         <div className="rounded-3xl border border-dashed border-border/40 bg-muted/20 p-10 text-center">
           <p className="text-sm font-semibold">
             {SUB_TABS.find((t) => t.key === subTab)?.label} isn&apos;t built yet
           </p>
           <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-            The real MomentumOS Reflection tool has this tab, but it wasn&apos;t captured when the
-            reference pages were saved — needs its own real capture before it gets built the same
-            way Daily was, instead of guessing at something this personal.
+            Confirmed to be real in the app&apos;s source — just not wired up here yet. Coming next.
           </p>
         </div>
       ) : loading ? (
@@ -180,11 +191,7 @@ export default function ReflectionPage() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
                   <MiniStat icon={CircleCheck} label="Tasks" value={String(stats?.tasksCompleted ?? 0)} />
-                  <MiniStat
-                    icon={Heart}
-                    label="Rituals"
-                    value={stats?.ritualsCompleted != null ? String(stats.ritualsCompleted) : "—"}
-                  />
+                  <MiniStat icon={Heart} label="Rituals" value={String(stats?.ritualsCompleted ?? 0)} />
                   <MiniStat
                     icon={CircleDollarSign}
                     label="Income"
