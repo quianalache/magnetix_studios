@@ -32,6 +32,18 @@ const CATEGORY_GROUPS: Record<"hd" | "astro", { category: string; title: string 
     { category: "type", title: "Types" },
     { category: "authority", title: "Authorities" },
     { category: "center", title: "Centers" },
+    // Variables + Skills (2026-08-09) — real values, but only listed here
+    // once at least one of this sub-account's own readings has actually
+    // produced them (Bodygraph's API doesn't ship a full 42-value default
+    // catalogue, see energetic-decoder-chart-content-service.ts), so these
+    // groups may legitimately be empty/hidden until a reading generates.
+    { category: "digestion", title: "Digestion" },
+    { category: "sense", title: "Sense" },
+    { category: "designSense", title: "Design Sense" },
+    { category: "motivation", title: "Motivation" },
+    { category: "perspective", title: "Perspective" },
+    { category: "environment", title: "Environment" },
+    { category: "skill", title: "Skills & Attributes" },
   ],
   astro: [
     { category: "sign", title: "Signs" },

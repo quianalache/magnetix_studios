@@ -22,6 +22,51 @@ import type { ZodiacSign, AspectType } from "@/lib/energetics/astrology";
 
 export type ChartContentSystem = "hd" | "astro";
 
+/**
+ * The 6 Variables + Skills (2026-08-09) — unlike everything else in this
+ * file, there's no pre-written default text to ship: Bodygraph's own
+ * Chart Content tool ships these value NAMES (checked directly) but no
+ * default description for any of them, and their API only ever returns
+ * one specific value's description per real person, not the full 42-value
+ * catalogue. So instead of guessing at default wording (or spending ~42
+ * extra paid API calls just to seed a catalogue nobody asked for yet),
+ * defaults are learned for real: the first time any reading anywhere
+ * actually gets a given value (e.g. "Digestion: Direct"), Bodygraph's own
+ * real description for it is cached here, platform-wide (not per-sub-
+ * account — the same value has the same Bodygraph description no matter
+ * whose reading it came from). A sub-account only sees a value in their
+ * Content tab once at least one of their own readings has produced it —
+ * empty/unseen values simply aren't listed yet, never shown blank.
+ */
+export const VARIABLE_CATEGORIES = ["digestion", "sense", "designSense", "motivation", "perspective", "environment", "skill"] as const;
+export type VariableCategory = (typeof VARIABLE_CATEGORIES)[number];
+
+function variableDefaultId(category: VariableCategory, value: string): string {
+  return `${category}:${value}`;
+}
+
+/** Best-effort — a caching failure should never block reading generation, same contract as the Bodygraph API calls themselves. */
+export async function cacheVariableDefault(category: VariableCategory, value: string, description: string): Promise<void> {
+  if (!description) return;
+  try {
+    await getAdminDb()
+      .doc(`bodygraphVariableDefaults/${variableDefaultId(category, value)}`)
+      .set({ category, value, description, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  } catch {
+    // best-effort — never throw over a cache write
+  }
+}
+
+async function getVariableDefaults(): Promise<Map<string, { value: string; category: VariableCategory; description: string }>> {
+  const snap = await getAdminDb().collection("bodygraphVariableDefaults").get();
+  const map = new Map<string, { value: string; category: VariableCategory; description: string }>();
+  for (const doc of snap.docs) {
+    const data = doc.data() as { category: VariableCategory; value: string; description: string };
+    map.set(doc.id, data);
+  }
+  return map;
+}
+
 export interface ChartContentDefault {
   system: ChartContentSystem;
   category: string;
@@ -40,8 +85,18 @@ function contentId(system: ChartContentSystem, category: string, key: string): s
   return `${system}:${category}:${key}`;
 }
 
-function buildDefaults(): ChartContentDefault[] {
+function buildDefaults(variableDefaults: Map<string, { value: string; category: VariableCategory; description: string }>): ChartContentDefault[] {
   const defaults: ChartContentDefault[] = [];
+
+  for (const v of variableDefaults.values()) {
+    defaults.push({
+      system: "hd",
+      category: v.category,
+      key: v.value,
+      label: v.value,
+      fields: { description: v.description },
+    });
+  }
 
   for (const t of Object.values(TYPE_CONTENT)) {
     defaults.push({
@@ -103,7 +158,7 @@ function buildDefaults(): ChartContentDefault[] {
 
 /** Every editable item (both systems), resolved to its override or shipped default — powers the Content tab's Human Design / Astrology editors. */
 export async function listResolvedChartContent(subAccountId: string): Promise<ResolvedChartContent[]> {
-  const defaults = buildDefaults();
+  const defaults = buildDefaults(await getVariableDefaults());
   const snap = await getAdminDb()
     .collection(`subAccounts/${subAccountId}/energeticDecoderChartContent`)
     .get();
@@ -134,7 +189,7 @@ async function resolveOne(
   key: string,
 ): Promise<Record<string, string>> {
   const id = contentId(system, category, key);
-  const def = buildDefaults().find((d) => contentId(d.system, d.category, d.key) === id);
+  const def = buildDefaults(await getVariableDefaults()).find((d) => contentId(d.system, d.category, d.key) === id);
   if (!def) return {};
   const snap = await getAdminDb()
     .doc(`subAccounts/${subAccountId}/energeticDecoderChartContent/${id}`)
@@ -168,6 +223,10 @@ export function resolveHouseContent(subAccountId: string, house: number) {
 }
 export function resolveAspectContent(subAccountId: string, aspect: AspectType) {
   return resolveOne(subAccountId, "astro", "aspect", aspect) as Promise<{ description: string }>;
+}
+/** A sub-account's own rewritten wording for one specific Variable/Skill value (e.g. "Digestion: Direct"), falling back to Bodygraph's real cached default when they haven't rewritten it. */
+export function resolveVariableContent(subAccountId: string, category: VariableCategory, value: string) {
+  return resolveOne(subAccountId, "hd", category, value) as Promise<{ description: string }>;
 }
 
 /**

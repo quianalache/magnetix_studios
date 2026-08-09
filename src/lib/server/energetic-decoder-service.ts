@@ -11,7 +11,12 @@ import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { calculateAstrologyChart } from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
-import { resolveReadingContent } from "@/lib/server/energetic-decoder-chart-content-service";
+import {
+  resolveReadingContent,
+  cacheVariableDefault,
+  resolveVariableContent,
+  type VariableCategory,
+} from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { fetchBodygraphVariables, fetchBodygraphChiron } from "@/lib/energetics/bodygraph-api";
 import {
@@ -111,12 +116,42 @@ export async function createEnergeticDecoderReading(
   if (rawHumanDesign) {
     const variables = await fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
     if (variables) {
-      rawHumanDesign.variables = variables;
       // Real rendered chart from Bodygraph's own renderer, not this app's
       // hand-drawn HumanDesignChart — her direct ask (2026-08-09): "I don't
       // need to worry about you drawing something... not generating an
       // aesthetically pleasing bodygraph."
       if (variables.chartSvg) rawHumanDesign.bodygraphSvg = variables.chartSvg;
+
+      // Cache Bodygraph's real default description for each value the first
+      // time it's actually seen (platform-wide — the same value always has
+      // the same Bodygraph text), then let the sub-account's own Content-tab
+      // rewrite override it on THIS reading, same "own the wording, not
+      // just resell theirs" promise every other field already keeps.
+      const fieldEntries: { category: VariableCategory; field: keyof typeof variables }[] = [
+        { category: "digestion", field: "digestion" },
+        { category: "sense", field: "sense" },
+        { category: "designSense", field: "designSense" },
+        { category: "motivation", field: "motivation" },
+        { category: "perspective", field: "perspective" },
+        { category: "environment", field: "environment" },
+      ];
+      await Promise.all(
+        fieldEntries.map(async ({ category, field: key }) => {
+          const f = variables[key] as { value: string; description: string };
+          await cacheVariableDefault(category, f.value, f.description);
+          const override = await resolveVariableContent(input.subAccountId, category, f.value);
+          if (override.description) f.description = override.description;
+        }),
+      );
+      await Promise.all(
+        variables.skills.map(async (skill) => {
+          await cacheVariableDefault("skill", skill.name, skill.description);
+          const override = await resolveVariableContent(input.subAccountId, "skill", skill.name);
+          if (override.description) skill.description = override.description;
+        }),
+      );
+
+      rawHumanDesign.variables = variables;
     }
   }
 
