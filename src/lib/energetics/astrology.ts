@@ -257,7 +257,7 @@ function houseOfLongitude(lonDeg: number, cusps: HouseCusp[]): number {
 export type AstrologyBodyName =
   | "sun" | "moon" | "mercury" | "venus" | "mars"
   | "jupiter" | "saturn" | "uranus" | "neptune" | "pluto"
-  | "northNode" | "southNode" | "lilith";
+  | "northNode" | "southNode" | "lilith" | "chiron";
 
 /**
  * `northNode`/`southNode`/`lilith` added 2026-08-09 — a real, verified gap
@@ -312,9 +312,9 @@ export interface AstrologyPlacement {
   retrograde: boolean;
 }
 
-function computePlacements(date: Date, cusps: HouseCusp[]): AstrologyPlacement[] {
+function computePlacements(date: Date, cusps: HouseCusp[], chironLongitude?: number): AstrologyPlacement[] {
   const oneDayLater = new Date(date.getTime() + 24 * 3600 * 1000);
-  return ALL_ASTROLOGY_BODIES.map((body) => {
+  const placements = ALL_ASTROLOGY_BODIES.map((body) => {
     const lon = longitudeOf(body, date);
     const lonLater = longitudeOf(body, oneDayLater);
     let delta = lonLater - lon;
@@ -330,6 +330,27 @@ function computePlacements(date: Date, cusps: HouseCusp[]): AstrologyPlacement[]
       retrograde: delta < 0,
     };
   });
+
+  // Chiron — the one body this engine can't compute itself (no minor-planet
+  // ephemeris in astronomy-engine, see gate-wheel.ts). Only appended when
+  // the caller supplied a real longitude from Bodygraph's API; omitted
+  // entirely otherwise, same "real field or absent, never fabricated"
+  // rule as everything else in this file. Retrograde isn't determined for
+  // it — that would need a second API call for a day-later snapshot, not
+  // worth the extra cost for one body's motion indicator.
+  if (typeof chironLongitude === "number") {
+    const { sign, degInSign } = signOf(chironLongitude);
+    placements.push({
+      body: "chiron",
+      longitude: normalizeDeg(chironLongitude),
+      sign,
+      degInSign,
+      house: houseOfLongitude(chironLongitude, cusps),
+      retrograde: false,
+    });
+  }
+
+  return placements;
 }
 
 // ── aspects ──────────────────────────────────────────────────────────────
@@ -391,6 +412,8 @@ export interface AstrologyChartInput extends WallClockBirthInput {
   /** Degrees, EAST positive (west is negative) — same convention geocoding APIs use. */
   lng: number;
   houseSystem?: HouseSystem;
+  /** Chiron's absolute ecliptic longitude (degrees 0-360), from Bodygraph's API (bodygraph-api.ts) — this engine has no minor-planet ephemeris of its own. Omit to leave Chiron out of the chart entirely rather than fabricate a position. */
+  chironLongitude?: number;
 }
 
 export interface AstrologyChart {
@@ -404,7 +427,7 @@ export function calculateAstrologyChart(input: AstrologyChartInput): AstrologyCh
   const birthUtc = parseBirthToUtc(input);
   const houses = computeHouses(birthUtc, input.lat, input.lng, input.houseSystem ?? "placidus");
   const rawAngles = computeAngles(birthUtc, input.lat, input.lng);
-  const placements = computePlacements(birthUtc, houses.cusps);
+  const placements = computePlacements(birthUtc, houses.cusps, input.chironLongitude);
 
   return {
     placements,

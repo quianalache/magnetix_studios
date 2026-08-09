@@ -9,6 +9,7 @@ import {
   parseBirthToUtc,
   type WallClockBirthInput,
 } from "./gate-wheel";
+import type { HumanDesignVariables } from "./bodygraph-api";
 import { resolveIncarnationCross } from "./incarnation-cross-data";
 import {
   CENTERS,
@@ -243,6 +244,15 @@ export interface HumanDesignProfile {
   definedChannels: Channel[];
   personality: HdActivation[];
   design: HdActivation[];
+  /**
+   * The 6 Variables + Skills/Attributes — from Bodygraph's paid API
+   * (2026-08-09), not this free local engine (see bodygraph-api.ts for
+   * why). Populated by the caller (energetic-decoder-service.ts) after
+   * calculateHumanDesignProfile runs, since this function stays a pure,
+   * synchronous, free calculation — undefined when the API key is unset
+   * or the call fails, never a broken reading.
+   */
+  variables?: HumanDesignVariables;
 }
 
 export function calculateHumanDesignProfile(

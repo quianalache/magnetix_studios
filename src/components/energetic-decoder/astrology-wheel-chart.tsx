@@ -30,6 +30,8 @@ const PLANET_GLYPH: Record<string, string> = {
   jupiter: "♃", saturn: "♄", uranus: "♅", neptune: "♆", pluto: "♇",
   // North/South Node + Lilith — added 2026-08-09, real free calculations (see gate-wheel.ts).
   northNode: "☊", southNode: "☋", lilith: "⚸",
+  // Chiron — added 2026-08-09, from Bodygraph's API (see bodygraph-api.ts); only present when that call succeeded.
+  chiron: "⚷",
 };
 
 const ASPECT_STYLE: Record<AspectType, { stroke: string; dash?: string } | null> = {

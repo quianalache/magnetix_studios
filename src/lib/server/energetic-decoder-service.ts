@@ -13,6 +13,7 @@ import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
 import { resolveReadingContent } from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { fetchBodygraphVariables, fetchBodygraphChiron } from "@/lib/energetics/bodygraph-api";
 import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
@@ -102,12 +103,29 @@ export async function createEnergeticDecoderReading(
     ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
     : null;
 
+  // Bodygraph's paid API (2026-08-09) — the 6 Variables + Skills/Attributes,
+  // the one thing the free local engine genuinely can't compute (see
+  // bodygraph-api.ts for why). Best-effort: `variables` stays undefined
+  // and the reading still saves normally if the API key is unset, the
+  // call fails, or times out — never blocks a reading over this.
+  if (rawHumanDesign) {
+    const variables = await fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
+    if (variables) rawHumanDesign.variables = variables;
+  }
+
   // Which house system this sub-account's default Astrology chart design
   // uses (Chart Designs tab, 2026-08-09) — falls back to Placidus (the
   // calculator's own default) when no design is saved yet, so this never
   // blocks a reading from calculating.
   const defaultAstroDesign = reportConfig.includeAstrology
     ? await getDefaultChartDesign(input.subAccountId, "astrology")
+    : null;
+
+  // Chiron (2026-08-09) — also from Bodygraph's API, also best-effort; a
+  // failed/skipped call just means the chart has no Chiron placement, same
+  // "real field or absent" rule as the Variables above.
+  const chiron = reportConfig.includeAstrology
+    ? await fetchBodygraphChiron({ date: birthDate, time: birthTime, timeZone: place.timeZone, lat: place.lat, lng: place.lng })
     : null;
 
   const rawAstrology = reportConfig.includeAstrology
@@ -118,6 +136,7 @@ export async function createEnergeticDecoderReading(
         lat: place.lat,
         lng: place.lng,
         houseSystem: defaultAstroDesign?.houseSystem,
+        chironLongitude: chiron?.longitude,
       })
     : null;
 

@@ -52,6 +52,17 @@ const VARIABLES: { label: string; values: string[] }[] = [
   { label: "Environment", values: ["Caves", "Markets", "Kitchens", "Mountains", "Valleys", "Shores"] },
 ];
 
+/** Real, calculated per-reading — Bodygraph API connected 2026-08-09 (see bodygraph-api.ts). Falls back to the vocabulary-only list above when a reading has no `variables` (created before the API was connected, or the call failed for that one reading). */
+type VariableFieldKey = "digestion" | "sense" | "designSense" | "motivation" | "perspective" | "environment";
+const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
+  { label: "Digestion", key: "digestion" },
+  { label: "Sense", key: "sense" },
+  { label: "Design Sense", key: "designSense" },
+  { label: "Motivation", key: "motivation" },
+  { label: "Perspective", key: "perspective" },
+  { label: "Environment", key: "environment" },
+];
+
 function formatDesignDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -197,20 +208,56 @@ export function HumanDesignSummary({
         </div>
         <div className="mt-3 border-t pt-3">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</p>
-          <div className="grid grid-cols-1 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
-            {VARIABLES.map((v) => (
-              <span key={v.label}>
-                <span className="text-foreground">{v.label}:</span>{" "}
-                <span className="italic text-muted-foreground/70">{v.values.join(" / ")}</span>
-              </span>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
-            These are the real possible values (Bodygraph&apos;s own reference vocabulary) — which one applies to
-            this specific person isn&apos;t calculated yet. That determination isn&apos;t publicly documented
-            anywhere, Bodygraph included; genuinely unsolved as of 2026-08-09, not skipped.
-          </p>
+          {profile.variables ? (
+            <div className="space-y-2">
+              {VARIABLE_FIELDS.map(({ label, key }) => {
+                const v = profile.variables![key];
+                return (
+                  <div key={label}>
+                    <p className="text-xs">
+                      <span className="text-muted-foreground">{label}:</span>{" "}
+                      <span className="font-medium text-foreground">{v.value}</span>
+                    </p>
+                    {v.description && (
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{v.description}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+                {VARIABLES.map((v) => (
+                  <span key={v.label}>
+                    <span className="text-foreground">{v.label}:</span>{" "}
+                    <span className="italic text-muted-foreground/70">{v.values.join(" / ")}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
+                These are the real possible values — which one applies to this specific person isn&apos;t
+                calculated for this reading (generated before the Bodygraph API was connected, or the call failed).
+              </p>
+            </>
+          )}
         </div>
+
+        {profile.variables && profile.variables.skills.length > 0 && (
+          <div className="mt-3 border-t pt-3">
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Skills &amp; Attributes
+            </p>
+            <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+              {profile.variables.skills.map((s, i) => (
+                <span key={`${s.name}-${i}`}>
+                  <span className="font-medium text-foreground">{s.name}</span>
+                  {s.description && <span className="text-muted-foreground"> — {s.description}</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
