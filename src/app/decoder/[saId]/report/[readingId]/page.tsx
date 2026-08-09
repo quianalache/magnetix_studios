@@ -54,11 +54,20 @@ export default async function EnergeticDecoderReportPage({
           <span className="font-medium text-foreground">{businessName}</span>
         </div>
 
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">{reading.name}&apos;s Reading</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {reading.birthPlace} · {reading.birthDate} · {reading.birthTime}
-          </p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">{reading.name}&apos;s Reading</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {reading.birthPlace} · {reading.birthDate} · {reading.birthTime}
+            </p>
+          </div>
+          <a
+            href={`/api/decoder/${saId}/report/${readingId}/pdf`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-3.5 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            download
+          >
+            Download PDF
+          </a>
         </div>
 
         {hasAnySystem ? (

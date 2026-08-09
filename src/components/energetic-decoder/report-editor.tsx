@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
+import { CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import type {
   ReportDesign, ReportPage, ReportBlock, ReportBlockType, ChartPieceKind,
 } from "@/types/report-blocks";
@@ -242,7 +243,11 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
             value={activePage.title}
             onChange={(e) => updateActivePage((p) => ({ ...p, title: e.target.value }))}
             placeholder="Page title"
-            className="mb-6 border-none bg-transparent px-0 text-sm font-semibold text-muted-foreground shadow-none focus-visible:ring-0"
+            className="mb-3 border-none bg-transparent px-0 text-sm font-semibold text-muted-foreground shadow-none focus-visible:ring-0"
+          />
+          <PageVisibilityEditor
+            value={activePage.visibleIf}
+            onChange={(visibleIf) => updateActivePage((p) => ({ ...p, visibleIf }))}
           />
           {activePage.blocks.length === 0 ? (
             <div className="rounded-xl border border-dashed p-12 text-center text-sm text-muted-foreground">
@@ -261,6 +266,69 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Page-level visibility condition — the UI half of `ReportPage.visibleIf`,
+ * which had real data-model support (report-blocks.ts) and a real
+ * evaluation engine (chart-rules.ts) since Phase 1/2, but no way to
+ * actually turn it on until now (2026-08-09, her direct ask: "can we
+ * create one?"). Same attribute/operator/value shape as course-lesson
+ * chart-gating's ChartUnlockEditor — mirrors Bodygraph's own per-page
+ * "Visible for everyone" toggle.
+ */
+function PageVisibilityEditor({
+  value,
+  onChange,
+}: {
+  value: ChartRuleCondition | null;
+  onChange: (next: ChartRuleCondition | null) => void;
+}) {
+  const enabled = value !== null;
+
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+      <label className="flex shrink-0 items-center gap-1.5 font-medium text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) =>
+            onChange(e.target.checked ? { attribute: "type", operator: "equals", value: "" } : null)
+          }
+          className="h-3.5 w-3.5"
+        />
+        Only show this page when
+      </label>
+      {enabled && value && (
+        <>
+          <select
+            value={value.attribute}
+            onChange={(e) => onChange({ ...value, attribute: e.target.value as ChartRuleCondition["attribute"] })}
+            className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+          >
+            {CHART_RULE_ATTRIBUTES.map((a) => (
+              <option key={a.value} value={a.value}>{a.label}</option>
+            ))}
+          </select>
+          <select
+            value={value.operator}
+            onChange={(e) => onChange({ ...value, operator: e.target.value as ChartRuleCondition["operator"] })}
+            className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+          >
+            {CHART_RULE_OPERATORS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <Input
+            value={value.value}
+            onChange={(e) => onChange({ ...value, value: e.target.value })}
+            placeholder="e.g. Projector"
+            className="h-7 w-36 text-xs"
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -305,6 +305,14 @@ export function EnergeticDecoderReadingsTab() {
                     <Copy className="h-3 w-3" />
                     Share report
                   </button>
+                  <a
+                    href={`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${r.id}/pdf`}
+                    onClick={(e) => e.stopPropagation()}
+                    download
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Download PDF
+                  </a>
                   <Link
                     href={`/sa/${subAccountId}/contacts/${r.contactId}`}
                     onClick={(e) => e.stopPropagation()}
