@@ -13,9 +13,9 @@ const SEQUENCES: {
   name: string;
   spheres: string;
 }[] = [
-  { key: "includeActivation", name: "Activation Sequence", spheres: "Life's Work · Evolution · Radiance · Purpose" },
-  { key: "includeVenus", name: "Venus Sequence", spheres: "Attraction · IQ · EQ · SQ" },
-  { key: "includePearl", name: "Pearl Sequence", spheres: "Vocation · Brand · Culture · Pearl" },
+  { key: "includeActivation", name: "Incarnation Sequence", spheres: "Life's Work · Evolution · Radiance · Purpose" },
+  { key: "includeVenus", name: "Love Sequence", spheres: "Attraction · IQ · EQ · SQ" },
+  { key: "includePearl", name: "Prosperity Sequence", spheres: "Vocation · Brand · Culture · Pearl" },
 ];
 
 /**
@@ -26,6 +26,17 @@ const SEQUENCES: {
  * text directly either, it references a separate Chart Content library
  * via shortcodes at generation time. Same split here — this tab decides
  * WHAT'S INCLUDED, Content decides WHAT IT SAYS.
+ *
+ * Renamed 2026-08-09: "Gene Keys" is Richard Rudd's trademarked term.
+ * Bodygraph's own real product avoids it too — their "Frequency Report"
+ * is the exact same underlying system (verified: their own front-end code
+ * literally calls it `edit-gene-key`/`openEditGeneKey` internally, they
+ * just relabel it Incarnation/Love/Prosperity Sequences + Shadow/Gift/
+ * Mastery for the public-facing product). Same rename here: user-facing
+ * copy only — `includeActivation`/`includeVenus`/`includePearl` and the
+ * underlying `gene-keys.ts` engine/types stay as they are internally,
+ * since those aren't customer-visible and renaming them carries real
+ * regression risk for zero trademark benefit.
  */
 export function EnergeticDecoderReportsTab() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
@@ -58,7 +69,7 @@ export function EnergeticDecoderReportsTab() {
     <div className="space-y-5">
       <div className="rounded-2xl border bg-card p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold">Gene Keys Reading</h3>
+          <h3 className="text-base font-semibold">Frequency Reading</h3>
           <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
             Live
           </span>
@@ -97,7 +108,7 @@ export function EnergeticDecoderReportsTab() {
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
           Type, Strategy, Authority, Profile, Definition, and every defined Center and Channel — a
-          full bodygraph computed from the same birth data as the Gene Keys reading.
+          full bodygraph computed from the same birth data as the Frequency reading.
         </p>
         <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm">
           <input

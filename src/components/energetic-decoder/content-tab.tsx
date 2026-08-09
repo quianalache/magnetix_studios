@@ -43,7 +43,7 @@ export function EnergeticDecoderContentTab() {
       <div className="flex gap-1.5">
         {(
           [
-            { key: "geneKeys", label: "Gene Keys" },
+            { key: "geneKeys", label: "Frequency" },
             { key: "hd", label: "Human Design" },
             { key: "astro", label: "Astrology" },
           ] as const

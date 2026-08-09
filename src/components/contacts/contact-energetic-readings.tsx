@@ -42,7 +42,7 @@ export function ContactEnergeticReadings({ contact }: { contact: Contact }) {
           return (
             <div key={r.id} className="py-2 text-sm">
               <p className="font-medium">
-                {r.system === "geneKeys" ? "Gene Keys" : r.system}
+                {r.system === "geneKeys" ? "Frequency" : r.system}
                 {lifesWork && ` — ${lifesWork.sphere} ${lifesWork.gate}.${lifesWork.line}`}
               </p>
               <p className="text-xs text-muted-foreground">

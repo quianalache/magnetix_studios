@@ -48,7 +48,7 @@ export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
               <p className="text-sm font-semibold">
-                Gene Key {s.gate}.{s.line}
+                Gate {s.gate}.{s.line}
               </p>
             </div>
             <p className="text-right text-xs text-muted-foreground">

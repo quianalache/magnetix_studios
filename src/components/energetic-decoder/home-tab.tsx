@@ -106,7 +106,7 @@ function systemLabel(system: string): string {
   if (system === "mixed") return "Human Design + Astrology";
   if (system === "humanDesign") return "Human Design";
   if (system === "astrology") return "Astrology";
-  return "Gene Keys";
+  return "Frequency";
 }
 
 function HomeStat({

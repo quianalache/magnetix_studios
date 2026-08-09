@@ -239,7 +239,7 @@ export default function ClientPortalSettingsPage() {
           <ModuleRow
             icon={<Orbit className="h-4 w-4" />}
             title="Energetic Readings"
-            desc="Saved Gene Keys / Human Design charts"
+            desc="Saved Frequency / Human Design charts"
             checked={branding.modules.readings}
             onChange={(v) => save({ modules: { ...branding.modules, readings: v } })}
           />
