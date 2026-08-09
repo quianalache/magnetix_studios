@@ -39,7 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { cn } from "@/lib/utils";
-import { CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
+import { COURSE_GATE_CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import type { ResourceLink } from "@/types/community";
 import type {
   StandaloneCourse,
@@ -702,7 +702,7 @@ function ChartUnlockEditor({
             onChange={(e) => onChange({ ...value, attribute: e.target.value as ChartRuleCondition["attribute"] })}
             className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
           >
-            {CHART_RULE_ATTRIBUTES.map((a) => (
+            {COURSE_GATE_CHART_RULE_ATTRIBUTES.map((a) => (
               <option key={a.value} value={a.value}>{a.label}</option>
             ))}
           </select>

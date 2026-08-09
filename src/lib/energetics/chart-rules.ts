@@ -29,9 +29,16 @@ export type ChartRuleAttribute =
   | "definedCenters"
   | "openCenters"
   | "activatedGates"
+  | "digestion"
+  | "sense"
+  | "designSense"
+  | "motivation"
+  | "perspective"
+  | "environment"
   | "sunSign"
   | "moonSign"
-  | "risingSign";
+  | "risingSign"
+  | "chironSign";
 
 export const CHART_RULE_ATTRIBUTES: { value: ChartRuleAttribute; label: string; group: "Human Design" | "Astrology" }[] = [
   { value: "type", label: "Type", group: "Human Design" },
@@ -42,10 +49,40 @@ export const CHART_RULE_ATTRIBUTES: { value: ChartRuleAttribute; label: string; 
   { value: "definedCenters", label: "Defined Center", group: "Human Design" },
   { value: "openCenters", label: "Open Center", group: "Human Design" },
   { value: "activatedGates", label: "Activated Gate", group: "Human Design" },
+  // Variables — added 2026-08-09, same "caught the same gap twice" pass as
+  // the shortcode tokens. Only resolve when a reading actually has
+  // `variables` (Bodygraph API succeeded) — see resolveAttributeValue's
+  // null-never-matches rule below, same safety net as an Astrology-only
+  // rule evaluated against an HD-only reading.
+  { value: "digestion", label: "Digestion", group: "Human Design" },
+  { value: "sense", label: "Sense", group: "Human Design" },
+  { value: "designSense", label: "Design Sense", group: "Human Design" },
+  { value: "motivation", label: "Motivation", group: "Human Design" },
+  { value: "perspective", label: "Perspective", group: "Human Design" },
+  { value: "environment", label: "Environment", group: "Human Design" },
   { value: "sunSign", label: "Sun Sign", group: "Astrology" },
   { value: "moonSign", label: "Moon Sign", group: "Astrology" },
   { value: "risingSign", label: "Rising Sign", group: "Astrology" },
+  { value: "chironSign", label: "Chiron Sign", group: "Astrology" },
 ];
+
+/**
+ * Course-lesson chart-gating specifically (ChartUnlockEditor) evaluates
+ * against `computeBirthChart` in standalone-course-service.ts, which calls
+ * the free local calculators directly at enrollment time — NOT the
+ * Bodygraph API (deliberately: that path fires on every enrollment, a real
+ * cost-scaling concern, unlike a reading, which is one deliberate action).
+ * So Digestion/Sense/Design Sense/Motivation/Perspective/Environment/
+ * Chiron Sign would silently never resolve there — `evaluateChartRule`'s
+ * "null never matches" rule means a lesson gated on one of them would just
+ * never unlock for anyone, no error, easy to ship by accident. Excluded
+ * from this picker specifically; still valid for Report Builder's
+ * `ReportPage.visibleIf`, which evaluates against a real generated
+ * reading that does have them.
+ */
+export const COURSE_GATE_CHART_RULE_ATTRIBUTES = CHART_RULE_ATTRIBUTES.filter(
+  (a) => !["digestion", "sense", "designSense", "motivation", "perspective", "environment", "chironSign"].includes(a.value),
+);
 
 export type ChartRuleOperator = "equals" | "notEquals" | "contains" | "notContains";
 
@@ -93,6 +130,18 @@ function resolveAttributeValue(
       return (hd?.openCenters as CenterKey[] | undefined) ?? null;
     case "activatedGates":
       return hd?.activatedGates ?? null;
+    case "digestion":
+      return hd?.variables?.digestion.value ?? null;
+    case "sense":
+      return hd?.variables?.sense.value ?? null;
+    case "designSense":
+      return hd?.variables?.designSense.value ?? null;
+    case "motivation":
+      return hd?.variables?.motivation.value ?? null;
+    case "perspective":
+      return hd?.variables?.perspective.value ?? null;
+    case "environment":
+      return hd?.variables?.environment.value ?? null;
     case "sunSign":
       return signOf(astro, "sun");
     case "moonSign":
@@ -100,6 +149,8 @@ function resolveAttributeValue(
     case "risingSign":
       // Ascendant isn't a placement — it's a chart angle, sign lives on `angles.ascendant`.
       return astro?.angles.ascendant.sign ?? null;
+    case "chironSign":
+      return signOf(astro, "chiron");
     default:
       return null;
   }
