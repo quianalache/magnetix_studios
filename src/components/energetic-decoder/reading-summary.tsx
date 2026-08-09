@@ -27,14 +27,30 @@ import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wh
  * The 6 Variables (Ra Uru Hu's "Primary Health System") — real, named
  * fields she asked to see even while unsolved (2026-08-09): "let's add
  * the things anyways, even if they're blank... we can always find a way
- * on our end." Determining each one's actual value needs sub-line
- * color/tone/base resolution this app doesn't calculate yet, and no
- * public documentation of the exact rule has been found (checked both
- * her real HD books — neither covers it, it's Ra's separate PHS
- * teaching). Kept as a real, labeled, structurally-ready slot instead of
- * silently missing.
+ * on our end."
+ *
+ * The possible VALUES below are real — pulled directly from Bodygraph's
+ * own Chart Content tool (English language, HD Traditional chart tab,
+ * clicked into each field individually — the miss she caught 2026-08-09:
+ * these were sitting right there the whole time, just one click deeper
+ * than the flat field list this file's earlier audit stopped at).
+ *
+ * What's still genuinely unsolved: WHICH of each pair applies to a given
+ * person. That determination needs sub-line color/tone/base resolution
+ * this app doesn't calculate yet, and no public documentation of the
+ * exact rule has been found (checked both her real HD books — neither
+ * covers it, it's Ra's separate PHS teaching, not in Bodygraph's tool
+ * either — every "HD API Data" node in her own downloaded custom-property
+ * files pulls from the paid API, not a documented formula).
  */
-const VARIABLE_LABELS = ["Digestion", "Sense", "Design Sense", "Motivation", "Perspective", "Environment"] as const;
+const VARIABLES: { label: string; values: string[] }[] = [
+  { label: "Digestion", values: ["Consecutive", "Alternating", "Open", "Closed", "Hot", "Cold", "Calm", "Nervous", "High", "Low", "Direct", "InDirect"] },
+  { label: "Sense", values: ["Security", "Uncertainty", "Action", "Meditation", "Judgment", "Acceptance"] },
+  { label: "Design Sense", values: ["Smell", "Taste", "Outer Vision", "Inner Vision", "Feeling", "Touch"] },
+  { label: "Motivation", values: ["Fear", "Hope", "Desire", "Need", "Guilt", "Innocence"] },
+  { label: "Perspective", values: ["Survival", "Possibility", "Power", "Wanting", "Probability", "Personal"] },
+  { label: "Environment", values: ["Caves", "Markets", "Kitchens", "Mountains", "Valleys", "Shores"] },
+];
 
 function formatDesignDate(iso: string): string {
   try {
@@ -181,17 +197,18 @@ export function HumanDesignSummary({
         </div>
         <div className="mt-3 border-t pt-3">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</p>
-          <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-3">
-            {VARIABLE_LABELS.map((v) => (
-              <span key={v}>
-                {v}: <span className="italic text-muted-foreground/70">Not yet calculated</span>
+          <div className="grid grid-cols-1 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-2">
+            {VARIABLES.map((v) => (
+              <span key={v.label}>
+                <span className="text-foreground">{v.label}:</span>{" "}
+                <span className="italic text-muted-foreground/70">{v.values.join(" / ")}</span>
               </span>
             ))}
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
-            The real determination rule for these 6 (which specific gate/tone/color drives each one) isn&apos;t
-            publicly documented — genuinely unsolved as of 2026-08-09, not skipped. Real structure here now so it&apos;s
-            ready the moment the calculation exists.
+            These are the real possible values (Bodygraph&apos;s own reference vocabulary) — which one applies to
+            this specific person isn&apos;t calculated yet. That determination isn&apos;t publicly documented
+            anywhere, Bodygraph included; genuinely unsolved as of 2026-08-09, not skipped.
           </p>
         </div>
       </div>
