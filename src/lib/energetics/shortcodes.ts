@@ -41,10 +41,22 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "design_date", label: "Design Date", group: "Human Design" },
   { token: "incarnation_cross", label: "Incarnation Cross", group: "Human Design" },
 
+  // Variables — added 2026-08-09 alongside the Bodygraph API integration.
+  // Same granularity as every other Human Design token above (a short
+  // value, not the full paragraph description — that lives in the Content
+  // tab / reading display, not a shortcode).
+  { token: "digestion", label: "Digestion", group: "Human Design" },
+  { token: "sense", label: "Sense", group: "Human Design" },
+  { token: "design_sense", label: "Design Sense", group: "Human Design" },
+  { token: "motivation", label: "Motivation", group: "Human Design" },
+  { token: "perspective", label: "Perspective", group: "Human Design" },
+  { token: "environment", label: "Environment", group: "Human Design" },
+
   // Astrology.
   { token: "sun_sign", label: "Sun Sign", group: "Astrology" },
   { token: "moon_sign", label: "Moon Sign", group: "Astrology" },
   { token: "rising_sign", label: "Rising Sign", group: "Astrology" },
+  { token: "chiron_sign", label: "Chiron Sign", group: "Astrology" },
 ];
 
 export interface ShortcodeReadingInput {
@@ -89,12 +101,26 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
       return hd?.designDateUtc ? new Date(hd.designDateUtc).toLocaleDateString() : "";
     case "incarnation_cross":
       return hd?.incarnationCross ?? "";
+    case "digestion":
+      return hd?.variables?.digestion.value ?? "";
+    case "sense":
+      return hd?.variables?.sense.value ?? "";
+    case "design_sense":
+      return hd?.variables?.designSense.value ?? "";
+    case "motivation":
+      return hd?.variables?.motivation.value ?? "";
+    case "perspective":
+      return hd?.variables?.perspective.value ?? "";
+    case "environment":
+      return hd?.variables?.environment.value ?? "";
     case "sun_sign":
       return astro?.placements.find((p) => p.body === "sun")?.sign ?? "";
     case "moon_sign":
       return astro?.placements.find((p) => p.body === "moon")?.sign ?? "";
     case "rising_sign":
       return astro?.angles.ascendant.sign ?? "";
+    case "chiron_sign":
+      return astro?.placements.find((p) => p.body === "chiron")?.sign ?? "";
     default:
       return "";
   }
