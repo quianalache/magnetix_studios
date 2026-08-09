@@ -253,6 +253,8 @@ export interface HumanDesignProfile {
    * or the call fails, never a broken reading.
    */
   variables?: HumanDesignVariables;
+  /** Bodygraph's own rendered chart SVG — see bodygraph-api.ts. Same "populated by the caller after the fact" contract as `variables` above; undefined falls back to this app's own HumanDesignChart component. */
+  bodygraphSvg?: string;
 }
 
 export function calculateHumanDesignProfile(

@@ -63,6 +63,18 @@ const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
   { label: "Environment", key: "environment" },
 ];
 
+/**
+ * Renders Bodygraph's own returned SVG via an <img> data URI rather than
+ * `dangerouslySetInnerHTML` — an <img> treats SVG content as a raster-like
+ * image (any embedded <script> just doesn't run), so a raw string from a
+ * third-party API doesn't get inline DOM/script execution rights the way
+ * inlining the markup directly would. Safer default even though this
+ * particular source is our own trusted backend call, not user input.
+ */
+function svgToDataUri(svg: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 function formatDesignDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -130,7 +142,16 @@ export function HumanDesignSummary({
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Bodygraph — Personality <span style={{ color: "#18181b" }}>black</span>, Design <span className="text-rose-600">red</span>
         </p>
-        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" definedColor={definedColor} />
+        {profile.bodygraphSvg ? (
+          // eslint-disable-next-line @next/next/no-img-element -- data: URI, next/image's optimizer can't handle inline SVG data URIs
+          <img
+            src={svgToDataUri(profile.bodygraphSvg)}
+            alt="Human Design bodygraph"
+            className="mx-auto w-full max-w-[560px]"
+          />
+        ) : (
+          <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" definedColor={definedColor} />
+        )}
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
@@ -315,7 +336,16 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
     <div className="space-y-4">
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Natal Chart</p>
-        <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[520px]" />
+        {chart.bodygraphSvg ? (
+          // eslint-disable-next-line @next/next/no-img-element -- data: URI, next/image's optimizer can't handle inline SVG data URIs
+          <img
+            src={svgToDataUri(chart.bodygraphSvg)}
+            alt="Astrology natal wheel"
+            className="mx-auto w-full max-w-[520px]"
+          />
+        ) : (
+          <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[520px]" />
+        )}
       </div>
 
       <div className="rounded-2xl border bg-card p-4">

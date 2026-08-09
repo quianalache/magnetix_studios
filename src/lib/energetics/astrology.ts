@@ -421,6 +421,8 @@ export interface AstrologyChart {
   angles: { ascendant: ChartAngle; descendant: ChartAngle; mc: ChartAngle; ic: ChartAngle };
   houses: AstrologyHouses;
   aspects: AstrologyAspect[];
+  /** Bodygraph's own rendered natal wheel SVG — set by the caller after this function returns (energetic-decoder-service.ts), same "populated after the fact, real or absent" contract as HumanDesignProfile.bodygraphSvg. Undefined falls back to this app's own AstrologyWheelChart component. */
+  bodygraphSvg?: string;
 }
 
 export function calculateAstrologyChart(input: AstrologyChartInput): AstrologyChart {

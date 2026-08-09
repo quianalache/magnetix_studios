@@ -110,7 +110,14 @@ export async function createEnergeticDecoderReading(
   // call fails, or times out — never blocks a reading over this.
   if (rawHumanDesign) {
     const variables = await fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
-    if (variables) rawHumanDesign.variables = variables;
+    if (variables) {
+      rawHumanDesign.variables = variables;
+      // Real rendered chart from Bodygraph's own renderer, not this app's
+      // hand-drawn HumanDesignChart — her direct ask (2026-08-09): "I don't
+      // need to worry about you drawing something... not generating an
+      // aesthetically pleasing bodygraph."
+      if (variables.chartSvg) rawHumanDesign.bodygraphSvg = variables.chartSvg;
+    }
   }
 
   // Which house system this sub-account's default Astrology chart design
@@ -139,6 +146,8 @@ export async function createEnergeticDecoderReading(
         chironLongitude: chiron?.longitude,
       })
     : null;
+  // Real rendered natal wheel from Bodygraph's own renderer — same reasoning as the HD chart above.
+  if (rawAstrology && chiron?.chartSvg) rawAstrology.bodygraphSvg = chiron.chartSvg;
 
   // Same reasoning as spheresWithContent above — the calculators themselves
   // have no Firestore access, so the sub-account's own wording (or the

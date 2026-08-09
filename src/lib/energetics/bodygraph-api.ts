@@ -50,6 +50,16 @@ export interface HumanDesignVariables {
   environment: BodygraphVariableField;
   decisionMakingStrategyDescription: string;
   skills: BodygraphSkill[];
+  /**
+   * Bodygraph's own rendered chart image (raw SVG markup) — real, from
+   * their renderer, not this app's hand-drawn HumanDesignChart component.
+   * Requested via `&design=default` on the same call, so this costs
+   * nothing extra. Undefined if the API didn't return one (older
+   * account tiers, or the call otherwise succeeded without it) —
+   * callers fall back to the local component in that case, same as
+   * every other "real or absent, never fabricated" field here.
+   */
+  chartSvg?: string;
 }
 
 function field(props: Record<string, unknown> | undefined, key: string): BodygraphVariableField | null {
@@ -94,10 +104,15 @@ export async function fetchBodygraphVariables(
     url.searchParams.set("api_key", key);
     url.searchParams.set("date", `${input.date} ${input.time}`);
     url.searchParams.set("timezone", input.timeZone);
+    // Requests the real rendered chart SVG alongside the data — same call,
+    // no extra cost. "default" always resolves to a real design (verified
+    // 2026-08-09 by testing it directly against the live API), so this
+    // doesn't depend on any Chart Design being separately configured.
+    url.searchParams.set("design", "default");
 
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
-    const data = (await res.json()) as { Properties?: Record<string, unknown> };
+    const data = (await res.json()) as { Properties?: Record<string, unknown>; SVG?: string };
     const props = data.Properties;
     if (!props) return null;
 
@@ -121,6 +136,7 @@ export async function fetchBodygraphVariables(
       environment,
       decisionMakingStrategyDescription: decisionMaking?.description ?? "",
       skills: parseSkills(skillsRaw),
+      chartSvg: data.SVG || undefined,
     };
   } catch {
     return null;
@@ -130,6 +146,8 @@ export async function fetchBodygraphVariables(
 export interface BodygraphChiron {
   /** Absolute ecliptic longitude, degrees 0-360 — same convention every other body in this codebase uses, so it drops straight into the existing sign/house/aspect pipeline (astrology.ts) instead of needing its own display logic. */
   longitude: number;
+  /** Bodygraph's own rendered natal wheel SVG — same "real design=default, no extra cost" approach as the HD chart above. */
+  chartSvg?: string;
 }
 
 /**
@@ -155,13 +173,14 @@ export async function fetchBodygraphChiron(input: {
     url.searchParams.set("timezone", input.timeZone);
     url.searchParams.set("latitude", String(input.lat));
     url.searchParams.set("longitude", String(input.lng));
+    url.searchParams.set("design", "default");
 
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10_000) });
     if (!res.ok) return null;
-    const data = (await res.json()) as { Planets?: Record<string, { abs_pos?: number }> };
+    const data = (await res.json()) as { Planets?: Record<string, { abs_pos?: number }>; SVG?: string };
     const chiron = data.Planets?.Chiron;
     if (typeof chiron?.abs_pos !== "number") return null;
-    return { longitude: chiron.abs_pos };
+    return { longitude: chiron.abs_pos, chartSvg: data.SVG || undefined };
   } catch {
     return null;
   }
