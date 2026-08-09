@@ -1,6 +1,7 @@
+import { Fragment } from "react";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
+import { CENTERS, CENTER_LABELS, HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
@@ -93,6 +94,32 @@ export function HumanDesignSummary({
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Activations — every planet&apos;s real Gate.Line, both charts
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 text-xs">
+          <p className="mb-1 font-semibold text-rose-600">Design</p>
+          <p className="mb-1 font-semibold text-foreground">Personality</p>
+          {HD_BODY_LABELS.map(({ body, label, symbol }) => {
+            const d = profile.design.find((a) => a.body === body);
+            const p = profile.personality.find((a) => a.body === body);
+            return (
+              <Fragment key={body}>
+                <p className="flex items-center justify-between border-b border-dashed py-1 text-muted-foreground">
+                  <span>{symbol} {label}</span>
+                  <span className="font-medium text-foreground">{d ? `${d.gate}.${d.line}` : "—"}</span>
+                </p>
+                <p className="flex items-center justify-between border-b border-dashed py-1 text-muted-foreground">
+                  <span>{symbol} {label}</span>
+                  <span className="font-medium text-foreground">{p ? `${p.gate}.${p.line}` : "—"}</span>
+                </p>
+              </Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border bg-card p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
         <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
           <div>
@@ -126,9 +153,18 @@ export function HumanDesignSummary({
           <span>
             Design date: <span className="font-medium text-foreground">{formatDesignDate(profile.designDateUtc)}</span>
           </span>
-          <span>
+        </div>
+        <div className="mt-3 border-t pt-3">
+          <p className="mb-1.5 text-xs text-muted-foreground">
             Gates activated: <span className="font-medium text-foreground">{profile.activatedGates.length}</span>
-          </span>
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {profile.activatedGates.map((g) => (
+              <span key={g} className="rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-foreground">
+                {g}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -208,15 +244,47 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
             </p>
           </div>
           <div>
-            <p className="text-[11px] text-muted-foreground">Rising (Ascendant)</p>
+            <p className="text-[11px] text-muted-foreground">Ascendant (House 1)</p>
             <p className="text-sm font-semibold">
               {chart.angles.ascendant.sign} {chart.angles.ascendant.degInSign.toFixed(1)}°
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Descendant (House 7)</p>
+            <p className="text-sm font-semibold">
+              {chart.angles.descendant.sign} {chart.angles.descendant.degInSign.toFixed(1)}°
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Midheaven / MC (House 10)</p>
+            <p className="text-sm font-semibold">
+              {chart.angles.mc.sign} {chart.angles.mc.degInSign.toFixed(1)}°
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-muted-foreground">Imum Coeli / IC (House 4)</p>
+            <p className="text-sm font-semibold">
+              {chart.angles.ic.sign} {chart.angles.ic.degInSign.toFixed(1)}°
             </p>
           </div>
         </div>
         {chart.houses.fallbackReason && (
           <p className="mt-2 text-[11px] italic text-muted-foreground">{chart.houses.fallbackReason}</p>
         )}
+      </div>
+
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Houses</p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+          {chart.houses.cusps.map((c) => (
+            <p key={c.house} className="flex items-center justify-between border-b border-dashed py-1 text-muted-foreground">
+              <span>House {c.house}</span>
+              <span className="font-medium text-foreground">
+                {c.sign} {c.degInSign.toFixed(1)}°
+              </span>
+            </p>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border bg-card p-4">

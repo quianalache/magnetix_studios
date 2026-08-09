@@ -28,6 +28,31 @@ export type CenterKey =
   | "spleen"
   | "root";
 
+/**
+ * Display label + symbol per planetary body, in the same order her real
+ * Bodygraph chart's DESIGN/PERSONALITY sidebar lists them — real gap
+ * found 2026-08-09: the engine has always computed every body's exact
+ * gate.line for both Personality and Design, it just never had a clean
+ * table to render into. Order matches computeActivations() in
+ * human-design.ts exactly, so a caller can zip HdActivation[] with this
+ * directly.
+ */
+export const HD_BODY_LABELS: { body: string; label: string; symbol: string }[] = [
+  { body: "sun", label: "Sun", symbol: "☉" },
+  { body: "earth", label: "Earth", symbol: "⊕" },
+  { body: "northNode", label: "North Node", symbol: "☊" },
+  { body: "southNode", label: "South Node", symbol: "☋" },
+  { body: "moon", label: "Moon", symbol: "☽" },
+  { body: "mercury", label: "Mercury", symbol: "☿" },
+  { body: "venus", label: "Venus", symbol: "♀" },
+  { body: "mars", label: "Mars", symbol: "♂" },
+  { body: "jupiter", label: "Jupiter", symbol: "♃" },
+  { body: "saturn", label: "Saturn", symbol: "♄" },
+  { body: "uranus", label: "Uranus", symbol: "♅" },
+  { body: "neptune", label: "Neptune", symbol: "♆" },
+  { body: "pluto", label: "Pluto", symbol: "♇" },
+];
+
 export const CENTERS: readonly CenterKey[] = [
   "head",
   "ajna",
