@@ -12,6 +12,7 @@ import { calculateAstrologyChart } from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
 import { resolveReadingContent } from "@/lib/server/energetic-decoder-chart-content-service";
+import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
@@ -101,6 +102,14 @@ export async function createEnergeticDecoderReading(
     ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
     : null;
 
+  // Which house system this sub-account's default Astrology chart design
+  // uses (Chart Designs tab, 2026-08-09) — falls back to Placidus (the
+  // calculator's own default) when no design is saved yet, so this never
+  // blocks a reading from calculating.
+  const defaultAstroDesign = reportConfig.includeAstrology
+    ? await getDefaultChartDesign(input.subAccountId, "astrology")
+    : null;
+
   const rawAstrology = reportConfig.includeAstrology
     ? calculateAstrologyChart({
         date: birthDate,
@@ -108,6 +117,7 @@ export async function createEnergeticDecoderReading(
         timeZone: place.timeZone,
         lat: place.lat,
         lng: place.lng,
+        houseSystem: defaultAstroDesign?.houseSystem,
       })
     : null;
 
@@ -164,6 +174,62 @@ export async function createEnergeticDecoderReading(
   return {
     reading: { id: readingRef.id, ...doc, createdAt: null },
     contactId,
+  };
+}
+
+export interface EnergeticDecoderHomeStats {
+  totalReadings: number;
+  readingsToday: number;
+  reportDesignCount: number;
+  chartDesignCount: number;
+  embedCount: number;
+  recent: { id: string; name: string; system: "geneKeys" | "humanDesign" | "astrology" | "mixed"; createdAt: string | null }[];
+}
+
+/**
+ * Home tab (2026-08-09) — real counts, not placeholders. `readingsToday`
+ * compares against the server's own UTC midnight (same simple convention
+ * as the rest of the app; no per-sub-account timezone handling yet).
+ * View/purchase-of-report money stats aren't included — that requires
+ * Stripe purchase records this collection doesn't have yet, so the Home
+ * tab only shows what's genuinely countable today rather than a
+ * plausible-looking fake number.
+ */
+export async function getHomeStats(subAccountId: string): Promise<EnergeticDecoderHomeStats> {
+  const db = getAdminDb();
+  const readingsCol = db.collection("energeticDecoderReadings").where("subAccountId", "==", subAccountId);
+
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+
+  const [totalSnap, recentSnap, reportDesignsSnap, chartDesignsSnap, embedsSnap] = await Promise.all([
+    readingsCol.count().get(),
+    readingsCol.orderBy("createdAt", "desc").limit(5).get(),
+    db.collection("reportDesigns").where("subAccountId", "==", subAccountId).count().get(),
+    db.collection("chartDesigns").where("subAccountId", "==", subAccountId).count().get(),
+    db.collection("embedConfigs").where("subAccountId", "==", subAccountId).count().get(),
+  ]);
+
+  const recent = recentSnap.docs.map((d) => {
+    const data = d.data();
+    const createdAt = data.createdAt?.toDate ? (data.createdAt.toDate() as Date) : null;
+    const system: EnergeticDecoderHomeStats["recent"][number]["system"] =
+      data.humanDesign && data.astrology ? "mixed" : data.humanDesign ? "humanDesign" : data.astrology ? "astrology" : "geneKeys";
+    return { id: d.id, name: data.name ?? "Unknown", system, createdAt: createdAt ? createdAt.toISOString() : null };
+  });
+  // recentSnap only covers the 5 newest, not necessarily every reading from
+  // today — a dedicated count query on the same (subAccountId, createdAt)
+  // index gets the true figure instead.
+  const todaySnap = await readingsCol.where("createdAt", ">=", todayStart).count().get();
+  const readingsToday = todaySnap.data().count;
+
+  return {
+    totalReadings: totalSnap.data().count,
+    readingsToday,
+    reportDesignCount: reportDesignsSnap.data().count,
+    chartDesignCount: chartDesignsSnap.data().count,
+    embedCount: embedsSnap.data().count,
+    recent,
   };
 }
 
