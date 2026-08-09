@@ -10,6 +10,7 @@ import {
   parseBirthToUtc,
   type WallClockBirthInput,
 } from "./gate-wheel";
+import { resolveIncarnationCross } from "./incarnation-cross-data";
 import {
   CENTERS,
   CHANNELS,
@@ -249,6 +250,8 @@ export interface HumanDesignProfile {
   strategy: string;
   /** ISO instant of the Design calculation — real value existed internally since this engine shipped, never exposed on the returned profile until now (2026-08-09). */
   designDateUtc: string;
+  /** e.g. "Right Angle Cross of Rulership (47/22 | 45/26)" — real 192-entry lookup, see incarnation-cross-data.ts. Null only if Sun/Earth activations are somehow missing. */
+  incarnationCross: string | null;
   activatedGates: number[];
   definedCenters: CenterKey[];
   openCenters: CenterKey[];
@@ -281,8 +284,14 @@ export function calculateHumanDesignProfile(
   const openCenters = CENTERS.filter((c) => !definedCentersSet.has(c));
 
   const pSun = personality.find((a) => a.body === "sun");
+  const pEarth = personality.find((a) => a.body === "earth");
   const dSun = design.find((a) => a.body === "sun");
+  const dEarth = design.find((a) => a.body === "earth");
   const profile = pSun && dSun ? `${pSun.line}/${dSun.line}` : null;
+  const incarnationCross =
+    pSun && pEarth && dSun && dEarth
+      ? resolveIncarnationCross(profile, pSun.gate, pEarth.gate, dSun.gate, dEarth.gate)?.label ?? null
+      : null;
 
   const groups = countDefinitionGroups(definedCentersSet, definedChannels);
   const type = determineType(definedCentersSet, definedChannels);
@@ -297,6 +306,7 @@ export function calculateHumanDesignProfile(
     notSelfTheme,
     strategy,
     designDateUtc: designTime.toISOString(),
+    incarnationCross,
     activatedGates: [...gateSet].sort((a, b) => a - b),
     definedCenters,
     openCenters,

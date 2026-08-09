@@ -112,6 +112,11 @@ export function HumanDesignSummary({
           <span>
             Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
           </span>
+          {profile.incarnationCross && (
+            <span>
+              Incarnation Cross: <span className="font-medium text-foreground">{profile.incarnationCross}</span>
+            </span>
+          )}
           <span>
             Signature: <span className="font-medium text-foreground">{profile.signature}</span>
           </span>
