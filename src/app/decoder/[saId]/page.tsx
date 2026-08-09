@@ -23,7 +23,7 @@ export default async function PublicDecoderPage({
 
   const sub = snap.data() ?? {};
   const businessName = (sub.name as string) || "Energetic Decoder";
-  const theme = sub.energeticDecoderTheme ?? defaultEnergeticDecoderTheme();
+  const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
 
   return (
     <div
@@ -46,7 +46,7 @@ export default async function PublicDecoderPage({
             Enter your birth details to decode your energetic blueprint.
           </p>
           <div className="mt-6">
-            <PublicDecoderForm saId={saId} accent={theme.accent} />
+            <PublicDecoderForm saId={saId} accent={theme.accent} definedColor={theme.chartDefinedColor} />
           </div>
         </div>
       </div>

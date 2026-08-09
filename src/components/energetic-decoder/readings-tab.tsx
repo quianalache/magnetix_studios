@@ -322,7 +322,12 @@ export function EnergeticDecoderReadingsTab() {
               {expandedId === r.id && (
                 <div className="space-y-4 border-t bg-muted/20 px-5 py-3">
                   {r.spheres.length > 0 && <SphereList spheres={r.spheres} />}
-                  {r.humanDesign && <HumanDesignSummary profile={r.humanDesign} />}
+                  {r.humanDesign && (
+                    <HumanDesignSummary
+                      profile={r.humanDesign}
+                      definedColor={subAccount?.energeticDecoderTheme?.chartDefinedColor}
+                    />
+                  )}
                   {r.astrology && <AstrologySummary chart={r.astrology} />}
                 </div>
               )}

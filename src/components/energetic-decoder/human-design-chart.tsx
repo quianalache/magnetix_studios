@@ -8,9 +8,10 @@ import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "
  * undefined centers are traditionally white, defined centers a plain
  * light gray — NOT branded to the sub-account's accent color, since she
  * wants per-chart color choice to eventually be its own control, not
- * silently tied to the portal's brand accent. This ships the traditional
- * black/white/gray base now; a real color picker is a fast-follow if she
- * wants one.
+ * silently tied to the portal's brand accent. Shipped the traditional
+ * black/white/gray base first; the real color picker (`definedColor`
+ * below) is the fast-follow flagged that day, built as Phase 4 of the
+ * Report Builder initiative (2026-08-09).
  *
  * The chart itself always renders on a fixed white surface regardless of
  * the app's own light/dark theme — same as every real chart tool (a
@@ -20,16 +21,17 @@ import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "
  *
  * Personality activations render black, Design activations render red —
  * the one universally standard convention across every real Human Design
- * chart, unrelated to the center-fill color question above.
+ * chart, unrelated to the center-fill color question above. Only the
+ * DEFINED-center fill is customizable — undefined stays white and
+ * Personality/Design stay black/red no matter what a sub-account picks.
  */
 
-const DEFINED_FILL = "#d4d4d8"; // zinc-300 — light gray
+const DEFAULT_DEFINED_FILL = "#d4d4d8"; // zinc-300 — light gray
 const DEFINED_STROKE = "#52525b"; // zinc-600
 const UNDEFINED_FILL = "#ffffff";
 const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
 const PERSONALITY_TEXT = "#18181b";
 const DESIGN_TEXT = "#dc2626";
-const CHANNEL_EMPTY = "#d4d4d8";
 
 function shapePoints(shape: CenterShape, cx: number, cy: number, r: number): string {
   switch (shape) {
@@ -57,9 +59,17 @@ function shapePoints(shape: CenterShape, cx: number, cy: number, r: number): str
   }
 }
 
-function CenterShapeEl({ layout, defined }: { layout: CenterLayout; defined: boolean }) {
+function CenterShapeEl({
+  layout,
+  defined,
+  definedColor,
+}: {
+  layout: CenterLayout;
+  defined: boolean;
+  definedColor: string;
+}) {
   const commonProps = {
-    fill: defined ? DEFINED_FILL : UNDEFINED_FILL,
+    fill: defined ? definedColor : UNDEFINED_FILL,
     stroke: defined ? DEFINED_STROKE : UNDEFINED_STROKE,
     strokeWidth: 0.5,
   };
@@ -82,9 +92,12 @@ function CenterShapeEl({ layout, defined }: { layout: CenterLayout; defined: boo
 export function HumanDesignChart({
   profile,
   className,
+  definedColor = DEFAULT_DEFINED_FILL,
 }: {
   profile: HumanDesignProfile;
   className?: string;
+  /** Sub-account's chosen defined-center color (Chart design tab) — falls back to the traditional light gray when not set. */
+  definedColor?: string;
 }) {
   const definedSet = new Set(profile.definedCenters);
   const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
@@ -107,7 +120,7 @@ export function HumanDesignChart({
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke={isDefined ? DEFINED_STROKE : CHANNEL_EMPTY}
+              stroke={isDefined ? DEFINED_STROKE : DEFAULT_DEFINED_FILL}
               strokeWidth={isDefined ? 1.1 : 0.35}
               strokeOpacity={isDefined ? 0.9 : 0.7}
             />
@@ -116,7 +129,7 @@ export function HumanDesignChart({
 
         {/* 9 centers */}
         {CENTERS.map((c) => (
-          <CenterShapeEl key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} />
+          <CenterShapeEl key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} definedColor={definedColor} />
         ))}
 
         {/* Gate numbers — only the activated ones, to keep it readable. A soft

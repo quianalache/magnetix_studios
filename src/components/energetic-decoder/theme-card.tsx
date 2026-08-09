@@ -22,9 +22,10 @@ import {
  */
 export function EnergeticDecoderThemeCard() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
-  const saved = subAccount?.energeticDecoderTheme ?? defaultEnergeticDecoderTheme();
+  const saved = { ...defaultEnergeticDecoderTheme(), ...(subAccount?.energeticDecoderTheme ?? {}) };
   const [accent, setAccent] = useState(saved.accent);
   const [logoUrl, setLogoUrl] = useState(saved.logoUrl ?? "");
+  const [chartDefinedColor, setChartDefinedColor] = useState(saved.chartDefinedColor);
   const [saving, setSaving] = useState(false);
 
   if (!isAdmin) {
@@ -44,7 +45,7 @@ export function EnergeticDecoderThemeCard() {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/theme`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accent, logoUrl } satisfies EnergeticDecoderTheme),
+        body: JSON.stringify({ accent, logoUrl, chartDefinedColor } satisfies EnergeticDecoderTheme),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't save.");
@@ -97,6 +98,27 @@ export function EnergeticDecoderThemeCard() {
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://…"
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ed-theme-chart-color">Bodygraph — defined center color</Label>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={chartDefinedColor}
+              onChange={(e) => setChartDefinedColor(e.target.value)}
+              className="h-9 w-9 shrink-0 cursor-pointer rounded-md border"
+              aria-label="Defined center color"
+            />
+            <Input
+              id="ed-theme-chart-color"
+              value={chartDefinedColor}
+              onChange={(e) => setChartDefinedColor(e.target.value)}
+              placeholder="#d4d4d8"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Only defined centers change color. Undefined stays white, Personality/Design stay black/red — the standard convention on every real chart.
+          </p>
         </div>
       </div>
       <div className="mt-4 flex justify-end">

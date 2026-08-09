@@ -19,9 +19,11 @@ interface PlaceSuggestion {
 export function PublicDecoderForm({
   saId,
   accent,
+  definedColor,
 }: {
   saId: string;
   accent: string;
+  definedColor?: string;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -114,7 +116,7 @@ export function PublicDecoderForm({
           <span>Here&apos;s {reading.name}&apos;s reading.</span>
         </div>
         {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
-        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} />}
+        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} definedColor={definedColor} />}
         {reading.astrology && <AstrologySummary chart={reading.astrology} />}
         <Link
           href={`/decoder/${saId}/report/${reading.id}`}

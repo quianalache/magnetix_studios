@@ -55,8 +55,11 @@ export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
 
 export function HumanDesignSummary({
   profile,
+  definedColor,
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
+  /** Sub-account's Chart design color (Phase 4, 2026-08-09) — falls back to the traditional light gray when not passed. */
+  definedColor?: string;
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -70,7 +73,7 @@ export function HumanDesignSummary({
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Bodygraph — Personality <span style={{ color: "#18181b" }}>black</span>, Design <span className="text-rose-600">red</span>
         </p>
-        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" />
+        <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" definedColor={definedColor} />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">

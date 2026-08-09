@@ -101,19 +101,27 @@ export interface EnergeticDecoderReading {
 }
 
 /**
- * Chart/report design — accent color + logo for now, applied to the
- * public embeddable tool and (once built) the PDF. One per sub-account,
- * stored on the sub-account doc itself (`energeticDecoderTheme`) — same
- * shape convention as `FormAppearance`, just not per-instance since a
+ * Chart/report design — accent color + logo, applied to the public
+ * embeddable tool and the PDF report. One per sub-account, stored on the
+ * sub-account doc itself (`energeticDecoderTheme`) — same shape
+ * convention as `FormAppearance`, just not per-instance since a
  * practitioner has one brand, not one per reading.
+ *
+ * `chartDefinedColor` — Phase 4 (2026-08-09), the "fast-follow" flagged
+ * 2026-08-08 when the drawn bodygraph first shipped: which color a
+ * DEFINED center fills with. Deliberately the only customizable part of
+ * the chart — undefined stays white and Personality/Design stay
+ * black/red, both near-universal conventions across every real Human
+ * Design tool, not brand choices the way a defined-center color is.
  */
 export interface EnergeticDecoderTheme {
   accent: string;
   logoUrl: string | null;
+  chartDefinedColor: string;
 }
 
 export function defaultEnergeticDecoderTheme(): EnergeticDecoderTheme {
-  return { accent: "#7c3aed", logoUrl: null };
+  return { accent: "#7c3aed", logoUrl: null, chartDefinedColor: "#d4d4d8" };
 }
 
 /**

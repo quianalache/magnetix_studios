@@ -33,7 +33,10 @@ export default async function EnergeticDecoderReportPage({
   if (!subSnap.exists || subSnap.data()?.status === "archived") notFound();
   const sub = subSnap.data() ?? {};
   const businessName = (sub.name as string) || "Your reading";
-  const theme = sub.energeticDecoderTheme ?? defaultEnergeticDecoderTheme();
+  // Merged (not just a whole-object fallback) so a sub-account whose theme
+  // was saved before chartDefinedColor existed still gets the default
+  // value for it, instead of an undefined color reaching the chart.
+  const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
 
   const hasAnySystem = reading.spheres.length > 0 || !!reading.humanDesign || !!reading.astrology;
 
@@ -61,7 +64,9 @@ export default async function EnergeticDecoderReportPage({
         {hasAnySystem ? (
           <div className="space-y-4">
             {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
-            {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} />}
+            {reading.humanDesign && (
+              <HumanDesignSummary profile={reading.humanDesign} definedColor={theme.chartDefinedColor} />
+            )}
             {reading.astrology && <AstrologySummary chart={reading.astrology} />}
           </div>
         ) : (

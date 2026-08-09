@@ -28,10 +28,15 @@ export async function POST(
   if (!HEX_RE.test(accent)) {
     return NextResponse.json({ error: "Accent must be a hex color like #7c3aed." }, { status: 400 });
   }
+  const chartDefinedColor = body.chartDefinedColor ?? "#d4d4d8";
+  if (!HEX_RE.test(chartDefinedColor)) {
+    return NextResponse.json({ error: "Chart color must be a hex color like #d4d4d8." }, { status: 400 });
+  }
 
   const theme: EnergeticDecoderTheme = {
     accent,
     logoUrl: body.logoUrl?.trim() || null,
+    chartDefinedColor,
   };
 
   await getAdminDb()
