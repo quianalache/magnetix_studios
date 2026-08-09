@@ -1,6 +1,8 @@
 import "server-only";
 
-import { Body, Ecliptic, GeoVector } from "astronomy-engine";
+import { Body, Ecliptic, GeoVector, MakeTime } from "astronomy-engine";
+import { trueNode, perigee as meanLunarPerigee } from "astronomia/moonposition";
+import { nutation } from "astronomia/nutation";
 import { utcFromWallClock } from "@/lib/booking/availability";
 import { GATE_WHEEL_ORDER } from "./gate-data";
 
@@ -40,6 +42,45 @@ export function eclipticLongitude(body: Body, date: Date): number {
   const vector = GeoVector(body, date, true);
   const { elon } = Ecliptic(vector);
   return elon;
+}
+
+const R2D = 180 / Math.PI;
+const J2000_JD = 2451545.0;
+
+/**
+ * True ascending lunar Node longitude (degrees, 0-360), nutation-corrected
+ * to apparent position — same convention as `eclipticLongitude` above.
+ * Moved here from human-design.ts (2026-08-09) so Astrology's North/South
+ * Node fields can reuse the exact same proven calculation instead of a
+ * second, possibly-drifting copy. `astronomy-engine` has no direct
+ * node-longitude function (only node-CROSSING event search), so this comes
+ * from `astronomia` (MIT-licensed, Meeus-algorithm-based) instead — no new
+ * dependency, already installed for Human Design.
+ */
+export function northNodeLongitude(date: Date): number {
+  const tt = MakeTime(date).tt; // days since J2000, Terrestrial Time
+  const jde = J2000_JD + tt;
+  const [dpsi] = nutation(jde);
+  let deg = ((trueNode(jde) + dpsi) * R2D) % 360;
+  if (deg < 0) deg += 360;
+  return deg;
+}
+
+/**
+ * Mean Black Moon Lilith longitude (degrees, 0-360) — the standard
+ * "Mean Lilith" most astrology software shows, computed the same way real
+ * ephemeris tools do: the mean lunar-orbit perigee (`astronomia`'s
+ * `moonposition.perigee`, a direct Meeus mean-element formula, not an
+ * apogee-event search) plus 180°, since Lilith is the apogee direction of
+ * that same precessing ellipse. Real free calculation, no paid API —
+ * genuinely missing before 2026-08-09, verified against our own Astrology
+ * chart's Chiron/Node/Lilith audit.
+ */
+export function meanLilithLongitude(date: Date): number {
+  const jde = J2000_JD + MakeTime(date).tt;
+  const perigeeDeg = (meanLunarPerigee(jde) * R2D) % 360;
+  const deg = (perigeeDeg + 180) % 360;
+  return deg < 0 ? deg + 360 : deg;
 }
 
 export function longitudeToGateLine(rawLongitude: number): GateLine {

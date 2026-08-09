@@ -28,6 +28,8 @@ const SIGN_GLYPH: Record<ZodiacSign, string> = {
 const PLANET_GLYPH: Record<string, string> = {
   sun: "☉", moon: "☽", mercury: "☿", venus: "♀", mars: "♂",
   jupiter: "♃", saturn: "♄", uranus: "♅", neptune: "♆", pluto: "♇",
+  // North/South Node + Lilith — added 2026-08-09, real free calculations (see gate-wheel.ts).
+  northNode: "☊", southNode: "☋", lilith: "⚸",
 };
 
 const ASPECT_STYLE: Record<AspectType, { stroke: string; dash?: string } | null> = {

@@ -1,12 +1,11 @@
 import "server-only";
 
-import { Body, MakeTime } from "astronomy-engine";
-import { trueNode } from "astronomia/moonposition";
-import { nutation } from "astronomia/nutation";
+import { Body } from "astronomy-engine";
 import {
   eclipticLongitude,
   findDesignTime,
   longitudeToGateLine,
+  northNodeLongitude,
   parseBirthToUtc,
   type WallClockBirthInput,
 } from "./gate-wheel";
@@ -28,25 +27,11 @@ import {
  * pattern, using the standard Ra Uru Hu / Jovian Archive bodygraph rules
  * (see human-design-data.ts for provenance).
  *
- * The one genuinely new astronomical piece: the lunar Nodes. `astronomy-
- * engine` has no direct node-longitude function (only node-CROSSING event
- * search), so the true ascending Node comes from `astronomia`
- * (MIT-licensed, Meeus-algorithm-based) — apparent position (nutation-
- * corrected) to stay consistent with how `gate-wheel.ts` computes every
- * other body. South Node is always exactly 180° from North Node.
+ * The lunar Nodes' true longitude comes from `northNodeLongitude` in
+ * gate-wheel.ts (moved there 2026-08-09 so Astrology's Node fields can
+ * reuse the exact same calculation). South Node is always exactly 180°
+ * from North Node.
  */
-
-const R2D = 180 / Math.PI;
-const J2000_JD = 2451545.0;
-
-function northNodeLongitude(date: Date): number {
-  const tt = MakeTime(date).tt; // days since J2000, Terrestrial Time
-  const jde = J2000_JD + tt;
-  const [dpsi] = nutation(jde);
-  let deg = ((trueNode(jde) + dpsi) * R2D) % 360;
-  if (deg < 0) deg += 360;
-  return deg;
-}
 
 export type HdBodyName =
   | "sun"

@@ -3,7 +3,13 @@ import "server-only";
 import { Body, MakeTime } from "astronomy-engine";
 import { apparent as gastApparentSeconds } from "astronomia/sidereal";
 import { meanObliquity, nutation } from "astronomia/nutation";
-import { eclipticLongitude, parseBirthToUtc, type WallClockBirthInput } from "./gate-wheel";
+import {
+  eclipticLongitude,
+  meanLilithLongitude,
+  northNodeLongitude,
+  parseBirthToUtc,
+  type WallClockBirthInput,
+} from "./gate-wheel";
 
 /**
  * Western Tropical natal-chart calculator — Ascendant/MC/houses/aspects.
@@ -250,19 +256,50 @@ function houseOfLongitude(lonDeg: number, cusps: HouseCusp[]): number {
 
 export type AstrologyBodyName =
   | "sun" | "moon" | "mercury" | "venus" | "mars"
-  | "jupiter" | "saturn" | "uranus" | "neptune" | "pluto";
+  | "jupiter" | "saturn" | "uranus" | "neptune" | "pluto"
+  | "northNode" | "southNode" | "lilith";
 
-const ASTROLOGY_BODIES: { body: AstrologyBodyName; engineBody: Body }[] = [
-  { body: "sun", engineBody: Body.Sun },
-  { body: "moon", engineBody: Body.Moon },
-  { body: "mercury", engineBody: Body.Mercury },
-  { body: "venus", engineBody: Body.Venus },
-  { body: "mars", engineBody: Body.Mars },
-  { body: "jupiter", engineBody: Body.Jupiter },
-  { body: "saturn", engineBody: Body.Saturn },
-  { body: "uranus", engineBody: Body.Uranus },
-  { body: "neptune", engineBody: Body.Neptune },
-  { body: "pluto", engineBody: Body.Pluto },
+/**
+ * `northNode`/`southNode`/`lilith` added 2026-08-09 — a real, verified gap
+ * (her direct question: "did you do the Chiron, the North Nodes, the South
+ * Nodes, Lilith?"). North/South Node and Lilith are both free, already
+ * buildable from the same `astronomia` functions Human Design's Node
+ * already uses (see gate-wheel.ts) — no paid API, no new dependency.
+ * Chiron is NOT included: `astronomy-engine` has no minor-planet ephemeris
+ * at all, so it needs a genuinely different data source, not found yet.
+ */
+function longitudeOf(body: AstrologyBodyName, date: Date): number {
+  switch (body) {
+    case "northNode":
+      return northNodeLongitude(date);
+    case "southNode":
+      return (northNodeLongitude(date) + 180) % 360;
+    case "lilith":
+      return meanLilithLongitude(date);
+    default:
+      // Every AstrologyBodyName other than the 3 handled above is a key of
+      // this map by construction — see ALL_ASTROLOGY_BODIES below.
+      return eclipticLongitude(CLASSICAL_ENGINE_BODY[body]!, date);
+  }
+}
+
+const CLASSICAL_ENGINE_BODY: Partial<Record<AstrologyBodyName, Body>> = {
+  sun: Body.Sun,
+  moon: Body.Moon,
+  mercury: Body.Mercury,
+  venus: Body.Venus,
+  mars: Body.Mars,
+  jupiter: Body.Jupiter,
+  saturn: Body.Saturn,
+  uranus: Body.Uranus,
+  neptune: Body.Neptune,
+  pluto: Body.Pluto,
+};
+
+const ALL_ASTROLOGY_BODIES: readonly AstrologyBodyName[] = [
+  "sun", "moon", "mercury", "venus", "mars",
+  "jupiter", "saturn", "uranus", "neptune", "pluto",
+  "northNode", "southNode", "lilith",
 ];
 
 export interface AstrologyPlacement {
@@ -277,9 +314,9 @@ export interface AstrologyPlacement {
 
 function computePlacements(date: Date, cusps: HouseCusp[]): AstrologyPlacement[] {
   const oneDayLater = new Date(date.getTime() + 24 * 3600 * 1000);
-  return ASTROLOGY_BODIES.map(({ body, engineBody }) => {
-    const lon = eclipticLongitude(engineBody, date);
-    const lonLater = eclipticLongitude(engineBody, oneDayLater);
+  return ALL_ASTROLOGY_BODIES.map((body) => {
+    const lon = longitudeOf(body, date);
+    const lonLater = longitudeOf(body, oneDayLater);
     let delta = lonLater - lon;
     if (delta > 180) delta -= 360;
     if (delta < -180) delta += 360;

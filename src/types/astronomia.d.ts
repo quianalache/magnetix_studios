@@ -7,6 +7,8 @@
 declare module "astronomia/moonposition" {
   /** True ascending lunar node longitude, in radians. Takes Julian Ephemeris Day. */
   export function trueNode(jde: number): number;
+  /** Mean longitude of the lunar orbit's perigee, in radians. Takes Julian Ephemeris Day. Used for Mean Black Moon Lilith (perigee + 180°) — added 2026-08-09. */
+  export function perigee(jde: number): number;
 }
 
 declare module "astronomia/nutation" {
