@@ -1,6 +1,9 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { VideoProvider, ResourceLink } from "./community";
 import type { CourseTheme, LessonTheme } from "./course-theme";
+import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
+import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import type { AstrologyChart } from "@/lib/energetics/astrology";
 
 /**
  * Standalone Courses — a course/product sold on its own public sales page,
@@ -162,6 +165,14 @@ export interface StandaloneLesson {
   videoId: string | null;
   bodyHtml: string;
   resourceLinks: ResourceLink[];
+  /**
+   * Chart-gated content — 2026-08-09, her idea: a "teach the lines" course
+   * where a student with a 3/6 Profile only unlocks the Line 3 and Line 6
+   * lessons. Null = visible to every enrolled student, same as today.
+   * When set, the classroom guard checks it against the enrollment's
+   * `birthChart` snapshot below via `evaluateChartRule()`.
+   */
+  chartUnlockCondition: ChartRuleCondition | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -186,6 +197,22 @@ export interface StandaloneEnrollment {
    *  alongside the existing enrolled/paid checks. */
   accessBeginsAt?: Timestamp | FieldValue | null;
   accessExpiresAt?: Timestamp | FieldValue | null;
+  /**
+   * Birth details + computed chart, collected at checkout ONLY when the
+   * course has at least one lesson with a `chartUnlockCondition` — most
+   * courses never touch this. Snapshotted at enrollment time so a later
+   * chart-content edit doesn't retroactively change which lessons a
+   * student already unlocked, same snapshot principle as
+   * HumanDesignReadingContent on Energetic Decoder readings.
+   */
+  birthChart?: {
+    name: string;
+    birthDate: string;
+    birthTime: string;
+    birthPlace: string;
+    humanDesign: HumanDesignProfile | null;
+    astrology: AstrologyChart | null;
+  } | null;
 }
 
 /**

@@ -506,6 +506,7 @@ export async function createStandaloneLessonServerSide(opts: {
     videoId: null,
     bodyHtml: "",
     resourceLinks: [] as ResourceLink[],
+    chartUnlockCondition: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };

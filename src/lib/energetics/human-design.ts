@@ -224,12 +224,29 @@ function countDefinitionGroups(
   return groups;
 }
 
+/**
+ * Signature / Not-Self Theme — a straight 5-row lookup keyed by Type, the
+ * standard Ra Uru Hu / Jovian Archive pairing (confirmed against a real
+ * Bodygraph API response 2026-08-09: Reflector → Surprise/Disappointment,
+ * matching exactly). Trivial by design — no derivation needed, just Type.
+ */
+const SIGNATURE_BY_TYPE: Record<HdType, { signature: string; notSelfTheme: string; strategy: string }> = {
+  "Manifestor": { signature: "Peace", notSelfTheme: "Anger", strategy: "To Inform" },
+  "Generator": { signature: "Satisfaction", notSelfTheme: "Frustration", strategy: "To Respond" },
+  "Manifesting Generator": { signature: "Satisfaction", notSelfTheme: "Frustration", strategy: "To Respond" },
+  "Projector": { signature: "Success", notSelfTheme: "Bitterness", strategy: "Wait for the Invitation" },
+  "Reflector": { signature: "Surprise", notSelfTheme: "Disappointment", strategy: "Wait a Lunar Cycle" },
+};
+
 export interface HumanDesignProfile {
   type: HdType;
   authority: HdAuthority;
   /** Personality Sun line / Design Sun line, e.g. "1/3". Null only if the calculation somehow failed to find either Sun activation. */
   profile: string | null;
   definitionLabel: string;
+  signature: string;
+  notSelfTheme: string;
+  strategy: string;
   activatedGates: number[];
   definedCenters: CenterKey[];
   openCenters: CenterKey[];
@@ -266,12 +283,17 @@ export function calculateHumanDesignProfile(
   const profile = pSun && dSun ? `${pSun.line}/${dSun.line}` : null;
 
   const groups = countDefinitionGroups(definedCentersSet, definedChannels);
+  const type = determineType(definedCentersSet, definedChannels);
+  const { signature, notSelfTheme, strategy } = SIGNATURE_BY_TYPE[type];
 
   return {
-    type: determineType(definedCentersSet, definedChannels),
+    type,
     authority: determineAuthority(definedCentersSet, definedChannels),
     profile,
     definitionLabel: DEFINITION_LABELS[groups] ?? `${groups}-Way Split Definition`,
+    signature,
+    notSelfTheme,
+    strategy,
     activatedGates: [...gateSet].sort((a, b) => a - b),
     definedCenters,
     openCenters,
