@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, ClipboardList, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
+import { Sparkles, ClipboardList, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { EnergeticDecoderReportsTab } from "@/components/energetic-decoder/reports-tab";
+import { EnergeticDecoderReportBuilderTab } from "@/components/energetic-decoder/report-builder-tab";
 import { EnergeticDecoderContentTab } from "@/components/energetic-decoder/content-tab";
 import { EnergeticDecoderReadingsTab } from "@/components/energetic-decoder/readings-tab";
 import { EnergeticDecoderThemeCard } from "@/components/energetic-decoder/theme-card";
 import { EnergeticDecoderEmbedShareCard } from "@/components/energetic-decoder/embed-share-card";
 
-type Tab = "reports" | "content" | "readings" | "design" | "share";
+type Tab = "reports" | "builder" | "content" | "readings" | "design" | "share";
 
 /**
  * Structured after researching bodygraph.com (2026-08-05, then again more
@@ -35,6 +36,7 @@ export default function EnergeticDecoderPage() {
   // tabs' own cards (theme-card.tsx, embed-share-card.tsx) use internally.
   const tabs: { key: Tab; label: string; icon: typeof Sparkles }[] = [
     { key: "reports", label: "Reports", icon: ClipboardList },
+    { key: "builder", label: "Report Builder", icon: LayoutTemplate },
     { key: "content", label: "Content", icon: BookOpen },
     { key: "readings", label: "Readings", icon: ScrollText },
     { key: "design", label: "Design", icon: Palette },
@@ -79,6 +81,7 @@ export default function EnergeticDecoderPage() {
       </div>
 
       {tab === "reports" && <EnergeticDecoderReportsTab />}
+      {tab === "builder" && <EnergeticDecoderReportBuilderTab />}
       {tab === "content" && <EnergeticDecoderContentTab />}
       {tab === "readings" && <EnergeticDecoderReadingsTab />}
       {tab === "design" && <EnergeticDecoderThemeCard />}
