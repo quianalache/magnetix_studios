@@ -23,6 +23,19 @@ import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wh
  * snapshot existed.
  */
 
+/**
+ * The 6 Variables (Ra Uru Hu's "Primary Health System") — real, named
+ * fields she asked to see even while unsolved (2026-08-09): "let's add
+ * the things anyways, even if they're blank... we can always find a way
+ * on our end." Determining each one's actual value needs sub-line
+ * color/tone/base resolution this app doesn't calculate yet, and no
+ * public documentation of the exact rule has been found (checked both
+ * her real HD books — neither covers it, it's Ra's separate PHS
+ * teaching). Kept as a real, labeled, structurally-ready slot instead of
+ * silently missing.
+ */
+const VARIABLE_LABELS = ["Digestion", "Sense", "Design Sense", "Motivation", "Perspective", "Environment"] as const;
+
 function formatDesignDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -165,6 +178,21 @@ export function HumanDesignSummary({
               </span>
             ))}
           </div>
+        </div>
+        <div className="mt-3 border-t pt-3">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Variables</p>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 text-xs text-muted-foreground sm:grid-cols-3">
+            {VARIABLE_LABELS.map((v) => (
+              <span key={v}>
+                {v}: <span className="italic text-muted-foreground/70">Not yet calculated</span>
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
+            The real determination rule for these 6 (which specific gate/tone/color drives each one) isn&apos;t
+            publicly documented — genuinely unsolved as of 2026-08-09, not skipped. Real structure here now so it&apos;s
+            ready the moment the calculation exists.
+          </p>
         </div>
       </div>
 
