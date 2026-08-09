@@ -247,6 +247,8 @@ export interface HumanDesignProfile {
   signature: string;
   notSelfTheme: string;
   strategy: string;
+  /** ISO instant of the Design calculation — real value existed internally since this engine shipped, never exposed on the returned profile until now (2026-08-09). */
+  designDateUtc: string;
   activatedGates: number[];
   definedCenters: CenterKey[];
   openCenters: CenterKey[];
@@ -294,6 +296,7 @@ export function calculateHumanDesignProfile(
     signature,
     notSelfTheme,
     strategy,
+    designDateUtc: designTime.toISOString(),
     activatedGates: [...gateSet].sort((a, b) => a - b),
     definedCenters,
     openCenters,

@@ -22,6 +22,22 @@ import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wh
  * snapshot existed.
  */
 
+function formatDesignDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
   return (
     <div className="divide-y rounded-2xl border bg-card">
@@ -95,6 +111,15 @@ export function HumanDesignSummary({
           </span>
           <span>
             Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
+          </span>
+          <span>
+            Signature: <span className="font-medium text-foreground">{profile.signature}</span>
+          </span>
+          <span>
+            Not-Self Theme: <span className="font-medium text-foreground">{profile.notSelfTheme}</span>
+          </span>
+          <span>
+            Design date: <span className="font-medium text-foreground">{formatDesignDate(profile.designDateUtc)}</span>
           </span>
           <span>
             Gates activated: <span className="font-medium text-foreground">{profile.activatedGates.length}</span>

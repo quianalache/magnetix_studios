@@ -38,6 +38,7 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "signature", label: "Signature", group: "Human Design" },
   { token: "not_self_theme", label: "Not-Self Theme", group: "Human Design" },
   { token: "definition", label: "Definition", group: "Human Design" },
+  { token: "design_date", label: "Design Date", group: "Human Design" },
 
   // Astrology.
   { token: "sun_sign", label: "Sun Sign", group: "Astrology" },
@@ -83,6 +84,8 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
       return hd?.notSelfTheme ?? "";
     case "definition":
       return hd?.definitionLabel ?? "";
+    case "design_date":
+      return hd?.designDateUtc ? new Date(hd.designDateUtc).toLocaleDateString() : "";
     case "sun_sign":
       return astro?.placements.find((p) => p.body === "sun")?.sign ?? "";
     case "moon_sign":
