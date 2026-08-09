@@ -3,6 +3,7 @@ import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-ac
 import {
   getStandaloneCourseTree,
   getStandaloneEnrollment,
+  filterLessonsForEnrollment,
 } from "@/lib/server/standalone-course-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
@@ -45,6 +46,7 @@ export default async function StandaloneCourseHomePage({
   // instead; CourseHomeView already handles an empty lessons array.
 
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
+  const visibleLessons = filterLessonsForEnrollment(tree.lessons, enrollment);
 
   // Batch-resolve every Cross Sell block's target offer, same pattern as
   // the sales page.
@@ -78,7 +80,7 @@ export default async function StandaloneCourseHomePage({
       course={course}
       theme={theme}
       sections={tree.sections}
-      lessons={tree.lessons}
+      lessons={visibleLessons}
       member={member}
       completedLessonIds={enrollment?.completedLessonIds ?? []}
       crossSellTargets={crossSellTargets}

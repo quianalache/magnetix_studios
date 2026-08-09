@@ -46,6 +46,7 @@ export function CourseSalesPageView({
   completedCount,
   crossSellTargets,
   interactive,
+  needsBirthDetails,
 }: {
   saId: string;
   courseId: string;
@@ -60,6 +61,8 @@ export function CourseSalesPageView({
   completedCount: number;
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
   interactive: boolean;
+  /** True when this course has at least one chart-gated lesson — the enroll popup asks for birth details when set. */
+  needsBirthDetails: boolean;
 }) {
   const bodyBlocks = [...theme.body].sort((a, b) => a.order - b.order);
   const sidebarBlocks = [...theme.sidebar].sort((a, b) => a.order - b.order);
@@ -321,6 +324,7 @@ export function CourseSalesPageView({
                   priceLabel={priceLabel}
                   brand={theme.hero.buttonColor}
                   member={member}
+                  needsBirthDetails={needsBirthDetails}
                 />
               ) : (
                 <button

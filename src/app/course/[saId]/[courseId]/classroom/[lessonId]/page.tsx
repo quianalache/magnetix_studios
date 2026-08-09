@@ -3,6 +3,7 @@ import { requireCourseClassroomAccess } from "@/lib/standalone-courses/course-ac
 import {
   getStandaloneCourseTree,
   getStandaloneEnrollment,
+  filterLessonsForEnrollment,
 } from "@/lib/server/standalone-course-service";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
@@ -39,13 +40,14 @@ export default async function StandaloneLessonPlayerPage({
   });
   if (!tree || !tree.course.published) redirect(salesPage);
 
-  if (!tree.lessons.some((l) => l.id === lessonId)) {
-    const first = tree.lessons[0];
+  const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
+  const visibleLessons = filterLessonsForEnrollment(tree.lessons, enrollment);
+
+  if (!visibleLessons.some((l) => l.id === lessonId)) {
+    const first = visibleLessons[0];
     if (!first) redirect(salesPage);
     redirect(`${homeHref}/${first.id}`);
   }
-
-  const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
 
   // Batch-resolve every Cross Sell block's target offer, same pattern as
   // the sales page and course home. Lesson's Body has no block array (just 3
@@ -87,7 +89,7 @@ export default async function StandaloneLessonPlayerPage({
     id: s.id,
     title: s.title,
   }));
-  const lessons: PlayerLesson[] = tree.lessons.map((l) => ({
+  const lessons: PlayerLesson[] = visibleLessons.map((l) => ({
     id: l.id,
     title: l.title,
     sectionId: l.sectionId,

@@ -3,6 +3,7 @@ import { requireCoursePageAccess } from "@/lib/standalone-courses/course-access"
 import {
   getCurriculumOutline,
   getStandaloneEnrollment,
+  courseHasChartGatedLessons,
 } from "@/lib/server/standalone-course-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
@@ -88,6 +89,7 @@ export default async function CourseSalesPage({
       : "Free";
   const aboutHtml = sanitizeLessonHtml(course.aboutHtml);
   const totalLessons = outline.reduce((sum, s) => sum + s.lessonCount, 0);
+  const needsBirthDetails = await courseHasChartGatedLessons(saId, courseId);
 
   return (
     <CourseSalesPageView
@@ -106,6 +108,7 @@ export default async function CourseSalesPage({
       completedCount={0}
       crossSellTargets={crossSellTargets}
       interactive
+      needsBirthDetails={needsBirthDetails}
     />
   );
 }

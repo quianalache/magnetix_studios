@@ -14,6 +14,11 @@ import {
 } from "@/types/course-theme";
 import type { OfferType } from "@/types/course-offers";
 import type { ResourceLink } from "@/types/community";
+import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
+import { evaluateChartRule } from "@/lib/energetics/chart-rules";
+import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
+import { calculateAstrologyChart, type AstrologyChart } from "@/lib/energetics/astrology";
+import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import {
   DEFAULT_STANDALONE_COURSE_ADVANCED,
   DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
@@ -522,6 +527,7 @@ export interface StandaloneLessonPatch {
   videoUrl?: string | null;
   bodyHtml?: string;
   resourceLinks?: ResourceLink[];
+  chartUnlockCondition?: ChartRuleCondition | null;
 }
 
 export async function updateStandaloneLessonServerSide(opts: {
@@ -545,6 +551,7 @@ export async function updateStandaloneLessonServerSide(opts: {
       .map((r) => ({ label: r.label?.trim() || r.url.trim(), url: r.url.trim() }))
       .slice(0, 20);
   }
+  if (p.chartUnlockCondition !== undefined) updates.chartUnlockCondition = p.chartUnlockCondition;
   let videoError = false;
   if (p.videoUrl !== undefined) {
     if (!p.videoUrl) {
@@ -576,6 +583,30 @@ export async function deleteStandaloneLessonServerSide(opts: {
   await getAdminDb().recursiveDelete(
     lessonsCol(opts.subAccountId, opts.courseId).doc(opts.lessonId),
   );
+}
+
+/**
+ * Chart-gated content — Phase 3 (2026-08-09). A lesson with no
+ * `chartUnlockCondition` is visible to every enrolled student, same as
+ * before this feature existed. A lesson WITH one is visible only if the
+ * enrollment's `birthChart` snapshot matches — and an enrollment with no
+ * snapshot at all (the course has no gated lessons, so checkout never
+ * asked for birth details) never sees ANY gated lesson, rather than
+ * throwing or guessing. Call this on `tree.lessons` before handing them
+ * to a student-facing page; staff-side editing always sees every lesson.
+ */
+export function filterLessonsForEnrollment(
+  lessons: StandaloneLesson[],
+  enrollment: StandaloneEnrollment | null,
+): StandaloneLesson[] {
+  return lessons.filter((l) => {
+    if (!l.chartUnlockCondition) return true;
+    if (!enrollment?.birthChart) return false;
+    return evaluateChartRule(l.chartUnlockCondition, {
+      humanDesign: enrollment.birthChart.humanDesign,
+      astrology: enrollment.birthChart.astrology,
+    });
+  });
 }
 
 /* --------------------------- Read: full tree --------------------------- */
@@ -655,15 +686,81 @@ export async function getStandaloneEnrollment(
  * Idempotently enroll a member in a free ("open") course + bump the
  * denormalized enrollment count once. No-ops if already enrolled.
  */
+/**
+ * Birth details submitted at checkout, ONLY when `courseHasChartGatedLessons`
+ * says the course actually needs them — most enrollments never populate
+ * this. Deliberately not required in the general case; a course with zero
+ * gated lessons must keep working exactly like it did before this feature.
+ */
+export interface EnrollBirthDetails {
+  name: string;
+  birthDate: string;
+  birthTime: string;
+  birthPlace: string;
+  lat?: number;
+  lng?: number;
+  timeZone?: string;
+}
+
+/** Whether ANY published lesson in this course has a chart-unlock condition — the signal the checkout flow uses to decide whether to ask for birth details at all. */
+export async function courseHasChartGatedLessons(subAccountId: string, courseId: string): Promise<boolean> {
+  const snap = await lessonsCol(subAccountId, courseId).where("published", "==", true).get();
+  return snap.docs.some((d) => !!d.data().chartUnlockCondition);
+}
+
+async function computeBirthChart(
+  details: EnrollBirthDetails,
+): Promise<NonNullable<StandaloneEnrollment["birthChart"]>> {
+  const place =
+    typeof details.lat === "number" && typeof details.lng === "number" && details.timeZone
+      ? { lat: details.lat, lng: details.lng, timeZone: details.timeZone }
+      : await geocodeBirthPlace(details.birthPlace);
+
+  const timeZone = place?.timeZone ?? "UTC";
+  const humanDesign = calculateHumanDesignProfile({
+    date: details.birthDate,
+    time: details.birthTime,
+    timeZone,
+  });
+
+  let astrology: AstrologyChart | null = null;
+  if (place) {
+    try {
+      astrology = calculateAstrologyChart({
+        date: details.birthDate,
+        time: details.birthTime,
+        timeZone,
+        lat: place.lat,
+        lng: place.lng,
+      });
+    } catch {
+      // Astrology is a bonus on top of Human Design here — a chart-rule
+      // condition keyed on an HD attribute (the common case, e.g. Profile
+      // Line) still works fine even if Astrology couldn't be computed.
+    }
+  }
+
+  return {
+    name: details.name,
+    birthDate: details.birthDate,
+    birthTime: details.birthTime,
+    birthPlace: details.birthPlace,
+    humanDesign,
+    astrology,
+  };
+}
+
 export async function enrollInStandaloneCourseServerSide(opts: {
   subAccountId: string;
   agencyId: string;
   courseId: string;
   memberId: string;
+  birthDetails?: EnrollBirthDetails;
 }): Promise<void> {
   const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
   const snap = await ref.get();
   if (!snap.exists) {
+    const birthChart = opts.birthDetails ? await computeBirthChart(opts.birthDetails) : null;
     await ref.set({
       memberId: opts.memberId,
       courseId: opts.courseId,
@@ -672,6 +769,7 @@ export async function enrollInStandaloneCourseServerSide(opts: {
       progressPct: 0,
       enrolledAt: FieldValue.serverTimestamp(),
       completedAt: null,
+      birthChart,
     });
     await courseDoc(opts.subAccountId, opts.courseId).update({
       enrollmentCount: FieldValue.increment(1),

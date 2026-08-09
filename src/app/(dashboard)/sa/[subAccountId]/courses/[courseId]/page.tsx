@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { cn } from "@/lib/utils";
+import { CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import type { ResourceLink } from "@/types/community";
 import type {
   StandaloneCourse,
@@ -537,6 +538,9 @@ function LessonEditor({
   const [body, setBody] = useState(lesson.bodyHtml);
   const [published, setPublished] = useState(lesson.published);
   const [links, setLinks] = useState<ResourceLink[]>(lesson.resourceLinks ?? []);
+  const [unlockCondition, setUnlockCondition] = useState<ChartRuleCondition | null>(
+    lesson.chartUnlockCondition ?? null,
+  );
   const [saving, setSaving] = useState(false);
 
   const parsed = videoUrl.trim() ? parseVideoUrl(videoUrl) : null;
@@ -558,6 +562,7 @@ function LessonEditor({
           bodyHtml: body,
           published,
           resourceLinks: links.filter((l) => l.url.trim()),
+          chartUnlockCondition: unlockCondition,
         }),
       });
       if (!res.ok) {
@@ -635,6 +640,8 @@ function LessonEditor({
 
       <ResourceLinksEditor links={links} onChange={setLinks} />
 
+      <ChartUnlockEditor value={unlockCondition} onChange={setUnlockCondition} />
+
       <div className="flex items-center justify-between border-t pt-3">
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -650,6 +657,76 @@ function LessonEditor({
           Save lesson
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Chart-gated content — her idea, 2026-08-09: a "teach the lines" course
+ * where a 3/6 Profile only unlocks the Line 3 and Line 6 lessons. Reuses
+ * the same Chart Rule engine that gates Report Builder pages (Phase 1) —
+ * one attribute/operator/value condition per lesson, no restriction by
+ * default. When set, the classroom guard (Phase 3, standalone-course-
+ * service.ts) checks it against the enrollment's `birthChart` snapshot.
+ */
+function ChartUnlockEditor({
+  value,
+  onChange,
+}: {
+  value: ChartRuleCondition | null;
+  onChange: (v: ChartRuleCondition | null) => void;
+}) {
+  const enabled = value !== null;
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed p-3">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? { attribute: "profileLines", operator: "contains", value: "" }
+                : null,
+            )
+          }
+          className="h-4 w-4"
+        />
+        Only unlock this lesson for a matching chart
+      </label>
+      {enabled && value && (
+        <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-3">
+          <select
+            value={value.attribute}
+            onChange={(e) => onChange({ ...value, attribute: e.target.value as ChartRuleCondition["attribute"] })}
+            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
+          >
+            {CHART_RULE_ATTRIBUTES.map((a) => (
+              <option key={a.value} value={a.value}>{a.label}</option>
+            ))}
+          </select>
+          <select
+            value={value.operator}
+            onChange={(e) => onChange({ ...value, operator: e.target.value as ChartRuleCondition["operator"] })}
+            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
+          >
+            {CHART_RULE_OPERATORS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <Input
+            value={value.value}
+            onChange={(e) => onChange({ ...value, value: e.target.value })}
+            placeholder="e.g. 3, Reflector, Sacral…"
+          />
+        </div>
+      )}
+      {enabled && (
+        <p className="pl-6 text-xs text-muted-foreground">
+          Students see this lesson only if their own chart matches. A course with any gated lesson asks for birth details at checkout.
+        </p>
+      )}
     </div>
   );
 }

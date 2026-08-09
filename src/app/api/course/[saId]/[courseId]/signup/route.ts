@@ -6,6 +6,8 @@ import {
   getStandaloneCourse,
   getStandaloneEnrollment,
   enrollInStandaloneCourseServerSide,
+  courseHasChartGatedLessons,
+  type EnrollBirthDetails,
 } from "@/lib/server/standalone-course-service";
 import { startStandaloneCourseStripeCheckoutServerSide } from "@/lib/server/standalone-course-purchase-service";
 import { ensureMember } from "@/lib/community/member-account";
@@ -46,6 +48,12 @@ export async function POST(
     name?: string;
     email?: string;
     phone?: string;
+    birthDate?: string;
+    birthTime?: string;
+    birthPlace?: string;
+    lat?: number;
+    lng?: number;
+    timeZone?: string;
   } | null;
   const name = body?.name?.trim() ?? "";
   const email = body?.email?.trim().toLowerCase() ?? "";
@@ -55,6 +63,25 @@ export async function POST(
       { error: "Name, email, and phone are all required." },
       { status: 400 },
     );
+  }
+
+  // Chart-gated courses (2026-08-09) need birth details to know which
+  // lessons this student unlocks — required only when the course actually
+  // has at least one gated lesson, checked server-side rather than trusted
+  // from the client, same as every other gate in this route.
+  const needsBirthDetails = await courseHasChartGatedLessons(saId, courseId);
+  let birthDetails: EnrollBirthDetails | undefined;
+  if (needsBirthDetails) {
+    const birthDate = body?.birthDate?.trim() ?? "";
+    const birthTime = body?.birthTime?.trim() ?? "";
+    const birthPlace = body?.birthPlace?.trim() ?? "";
+    if (!birthDate || !birthTime || !birthPlace) {
+      return NextResponse.json(
+        { error: "This course personalizes lessons to your chart — birth date, time, and place are all required." },
+        { status: 400 },
+      );
+    }
+    birthDetails = { name, birthDate, birthTime, birthPlace, lat: body?.lat, lng: body?.lng, timeZone: body?.timeZone };
   }
 
   const member = await ensureMember({
@@ -84,6 +111,7 @@ export async function POST(
       agencyId: gate.agencyId,
       courseId,
       memberId: member.id,
+      birthDetails,
     });
     return NextResponse.json({ ok: true, mode: "free", redirectTo: classroomUrl });
   }

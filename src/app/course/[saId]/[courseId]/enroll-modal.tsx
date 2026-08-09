@@ -34,6 +34,7 @@ export function EnrollModal({
   priceLabel,
   brand,
   member,
+  needsBirthDetails,
 }: {
   saId: string;
   courseId: string;
@@ -41,6 +42,8 @@ export function EnrollModal({
   priceLabel: string;
   brand: string;
   member: Member | null;
+  /** True when this course has a chart-gated lesson — asks for birth details so the classroom can show only the lessons that match. */
+  needsBirthDetails: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,6 +51,9 @@ export function EnrollModal({
   const [name, setName] = useState(member?.displayName ?? "");
   const [email, setEmail] = useState(member?.email ?? "");
   const [phone, setPhone] = useState(member?.phone ?? "");
+  const [birthDate, setBirthDate] = useState("");
+  const [birthTime, setBirthTime] = useState("");
+  const [birthPlace, setBirthPlace] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -63,7 +69,12 @@ export function EnrollModal({
       const res = await fetch(`/api/course/${saId}/${courseId}/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          ...(needsBirthDetails ? { birthDate, birthTime, birthPlace } : {}),
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -152,6 +163,45 @@ export function EnrollModal({
                   required
                 />
               </div>
+              {needsBirthDetails && (
+                <>
+                  <p className="pt-1 text-xs text-[#909090]">
+                    This course personalizes lessons to your own chart — we&apos;ll need your birth details.
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="enroll-birth-date">Birth date</Label>
+                      <Input
+                        id="enroll-birth-date"
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="enroll-birth-time">Birth time</Label>
+                      <Input
+                        id="enroll-birth-time"
+                        type="time"
+                        value={birthTime}
+                        onChange={(e) => setBirthTime(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="enroll-birth-place">Birth place</Label>
+                    <Input
+                      id="enroll-birth-place"
+                      value={birthPlace}
+                      onChange={(e) => setBirthPlace(e.target.value)}
+                      placeholder="City, State/Country"
+                      required
+                    />
+                  </div>
+                </>
+              )}
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 type="submit"
