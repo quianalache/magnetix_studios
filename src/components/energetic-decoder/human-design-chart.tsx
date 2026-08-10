@@ -173,6 +173,77 @@ function HangingGateStub({
 }
 
 /**
+ * Two-tone Design/Personality rendering for a COMPLETE channel's line —
+ * confirmed 2026-08-10 against the live Bodygraph chart-design tool
+ * (Channels Colors section, real Design #e4b54b / Personality #654422
+ * fields) and by zooming into a real rendered chart's actual channel
+ * lines: a complete channel is NOT one uniform "defined" color end to
+ * end, it's two segments meeting at the midpoint, each colored by that
+ * end's own activation — brown for Personality, gold for Design, split
+ * further if that one gate is dual-activated (same mechanic as
+ * HangingGateStub's own dual split, just extended to the channel's true
+ * midpoint instead of a short capped stub).
+ *
+ * Deliberately a separate function, not a HangingGateStub refactor —
+ * her explicit instruction: "Hanging-gate stubs already use the correct
+ * P/D logic and should remain unchanged." Same real brown/gold values,
+ * same dual-split mechanic, just full-half-length instead of a short
+ * stub, and never called for the same channel HangingGateStub is called
+ * for (see the isDefined/twoTone branch below) — so the validated
+ * hanging-stub component and its behavior are untouched, not just
+ * "unmodified in source" but never even invoked differently at runtime.
+ *
+ * Only applies to complete, non-junction channels — junction channels
+ * (the "Community square", see JUNCTION_GATES below) keep their
+ * existing full-strength single-color line exactly as before, same
+ * conservative treatment already established for hanging-gate stubs on
+ * those 6 channels.
+ */
+function CompleteChannelHalf({
+  gate,
+  toward,
+  personalityActive,
+  designActive,
+}: {
+  gate: { x: number; y: number };
+  toward: { x: number; y: number };
+  personalityActive: boolean;
+  designActive: boolean;
+}) {
+  if (!personalityActive && !designActive) return null;
+  const dx = toward.x - gate.x;
+  const dy = toward.y - gate.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const half = dist / 2;
+  const endX = gate.x + ux * half;
+  const endY = gate.y + uy * half;
+
+  if (personalityActive && designActive) {
+    const midX = gate.x + ux * half * 0.5;
+    const midY = gate.y + uy * half * 0.5;
+    return (
+      <>
+        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.1} strokeLinecap="round" />
+        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.1} strokeLinecap="round" />
+      </>
+    );
+  }
+  return (
+    <line
+      x1={gate.x}
+      y1={gate.y}
+      x2={endX}
+      y2={endY}
+      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
+      strokeWidth={1.1}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/**
  * Real bug, found 2026-08-10 by her actually looking at a rendered chart:
  * "in the root center you have numbers overlapping." Root/Sacral/Throat
  * pack up to 11 gates into one small center, so two DIFFERENT activated
@@ -328,10 +399,14 @@ export function HumanDesignChart({
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
       <svg viewBox="-4 -3 108 102" role="img" aria-label="Human Design bodygraph">
         {/* All 36 possible channels, faint — the full network structure, real gate-to-gate geometry.
-            Hanging-gate stubs (added 2026-08-10, see HangingGateStub above) layer on top for any
-            activated endpoint, on both hanging (isDefined false) and complete (isDefined true)
-            channels alike — skipped entirely for the 4 "Community square" junction gates, see
-            JUNCTION_GATES above. */}
+            Complete, non-junction channels render as two-tone Design/Personality halves
+            (CompleteChannelHalf above) instead of one flat channelsColor line — real behavior
+            confirmed 2026-08-10 against the live Bodygraph chart-design tool. Hanging-gate stubs
+            (HangingGateStub above) layer on top only for hanging (isDefined false) channels now —
+            a complete channel's two-tone halves already fully represent both endpoints'
+            activation, so the stub would just be a redundant same-color overdraw of the segment's
+            first ~3 units. Junction channels ("Community square", see JUNCTION_GATES) keep the
+            original flat-color line and no stubs at all, exactly as before. */}
         {CHANNELS.map((ch) => {
           const [gateA, gateB] = ch.gates;
           const a = GATE_POINT[gateA];
@@ -339,18 +414,36 @@ export function HumanDesignChart({
           if (!a || !b) return null;
           const isDefined = definedChannelKeys.has(ch.key);
           const isJunctionChannel = JUNCTION_GATES.has(gateA) || JUNCTION_GATES.has(gateB);
+          const twoTone = isDefined && !isJunctionChannel;
           return (
             <g key={ch.key}>
-              <line
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
-                strokeWidth={isDefined ? 1.1 : 0.35}
-                strokeOpacity={isDefined ? 0.9 : 0.7}
-              />
-              {!isJunctionChannel && (
+              {twoTone ? (
+                <>
+                  <CompleteChannelHalf
+                    gate={a}
+                    toward={b}
+                    personalityActive={personalityGates.has(gateA)}
+                    designActive={designGates.has(gateA)}
+                  />
+                  <CompleteChannelHalf
+                    gate={b}
+                    toward={a}
+                    personalityActive={personalityGates.has(gateB)}
+                    designActive={designGates.has(gateB)}
+                  />
+                </>
+              ) : (
+                <line
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
+                  strokeWidth={isDefined ? 1.1 : 0.35}
+                  strokeOpacity={isDefined ? 0.9 : 0.7}
+                />
+              )}
+              {!isJunctionChannel && !twoTone && (
                 <>
                   <HangingGateStub
                     gate={a}
