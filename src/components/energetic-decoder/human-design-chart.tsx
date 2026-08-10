@@ -47,15 +47,25 @@ const DESIGN_TEXT = "#dc2626";
  * the LABEL position gets nudged apart, never the true point (channel
  * lines and the "which center is this gate in" fact both keep using the
  * real, un-nudged GATE_POINT).
+ *
+ * First pass at these constants (MIN_GAP 2.8 / DUAL_BONUS 0.9) still left
+ * real overlap — verified against her actual reading's real gate data
+ * (not a synthetic sample this time), which has 3 dual-activated gates
+ * packed into Root alone. Retuned larger (MIN_GAP 3.6 / DUAL_BONUS 1.6),
+ * plus SELF_OFFSET below increased from 0.9→1.5 (a single dual gate's own
+ * two labels were barely separated even before any cross-gate crowding)
+ * and font/circle sized down slightly to give every number more real
+ * breathing room. Re-verified visually against that same real data before
+ * shipping — not just re-reading the math.
  */
 function declutterGateLabels(
   gates: number[],
   dualSet: Set<number>,
 ): Map<number, { x: number; y: number }> {
   const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
-  const MIN_GAP = 2.8; // base clearance two single-label circles need at this font size
-  const DUAL_BONUS = 0.9; // a dual gate's own two offset labels need more room from its neighbors
-  for (let iter = 0; iter < 30; iter++) {
+  const MIN_GAP = 3.6; // base clearance two single-label circles need at this font size
+  const DUAL_BONUS = 1.6; // a dual gate's own two offset labels need more room from its neighbors
+  for (let iter = 0; iter < 40; iter++) {
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
         const gap = MIN_GAP + (pts[i].dual ? DUAL_BONUS : 0) + (pts[j].dual ? DUAL_BONUS : 0);
@@ -202,12 +212,12 @@ export function HumanDesignChart({
           const inDesign = designGates.has(gate);
           return (
             <g key={gate}>
-              <circle cx={point.x} cy={point.y} r={1.7} fill={backgroundColor} stroke={gatesColor} strokeWidth={0.3} />
+              <circle cx={point.x} cy={point.y} r={1.5} fill={backgroundColor} stroke={gatesColor} strokeWidth={0.3} />
               {inDesign && (
                 <text
-                  x={point.x + (inPersonality ? 0.9 : 0)}
-                  y={point.y + (inPersonality ? 0.9 : 0) + 1}
-                  fontSize="2.6"
+                  x={point.x + (inPersonality ? 1.5 : 0)}
+                  y={point.y + (inPersonality ? 1.5 : 0) + 0.8}
+                  fontSize="2.1"
                   fontWeight="700"
                   fill={DESIGN_TEXT}
                   textAnchor="middle"
@@ -217,9 +227,9 @@ export function HumanDesignChart({
               )}
               {inPersonality && (
                 <text
-                  x={point.x - (inDesign ? 0.9 : 0)}
-                  y={point.y - (inDesign ? 0.9 : 0) + 1}
-                  fontSize="2.6"
+                  x={point.x - (inDesign ? 1.5 : 0)}
+                  y={point.y - (inDesign ? 1.5 : 0) + 0.8}
+                  fontSize="2.1"
                   fontWeight="700"
                   fill={PERSONALITY_TEXT}
                   textAnchor="middle"
