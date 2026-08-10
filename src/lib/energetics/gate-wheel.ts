@@ -95,6 +95,43 @@ export function longitudeToGateLine(rawLongitude: number): GateLine {
   return { gate, line };
 }
 
+/** Each Line subdivides into 6 Colors, each Color into 6 Tones, each Tone into 5 Bases — the real Human Design substructure beneath Gate/Line (Ra Uru Hu's "Primary Health System"), same fixed subdivision the Variables (Digestion/Environment/Perspective/Motivation/Sense) read from. */
+const DEGREES_PER_COLOR = DEGREES_PER_LINE / 6;
+const DEGREES_PER_TONE = DEGREES_PER_COLOR / 6;
+const DEGREES_PER_BASE = DEGREES_PER_TONE / 5;
+
+export interface GateLineColorToneBase extends GateLine {
+  color: number;
+  tone: number;
+  base: number;
+}
+
+/**
+ * Superset of `longitudeToGateLine` — same wheel-offset/Gate/Line math
+ * verbatim (not reimplemented, not at risk of drifting from the already-
+ * validated version above), extended one level deeper for Variables. Added
+ * 2026-08-10 alongside the real Variables engine (human-design-
+ * variables.ts) — purely additive, `longitudeToGateLine` itself is
+ * untouched and every existing caller is unaffected.
+ */
+export function longitudeToFullActivation(rawLongitude: number): GateLineColorToneBase {
+  let wheelPos = (rawLongitude - WHEEL_OFFSET_DEG) % 360;
+  if (wheelPos < 0) wheelPos += 360;
+  wheelPos = Math.round(wheelPos * 1e6) / 1e6;
+
+  const gateIndex = Math.floor(wheelPos / DEGREES_PER_GATE);
+  const gate = GATE_WHEEL_ORDER[gateIndex % 64];
+  const posInGate = wheelPos - gateIndex * DEGREES_PER_GATE;
+  const line = Math.min(6, Math.max(1, Math.floor(posInGate / DEGREES_PER_LINE) + 1));
+  const posInLine = posInGate - (line - 1) * DEGREES_PER_LINE;
+  const color = Math.min(6, Math.max(1, Math.floor(posInLine / DEGREES_PER_COLOR) + 1));
+  const posInColor = posInLine - (color - 1) * DEGREES_PER_COLOR;
+  const tone = Math.min(6, Math.max(1, Math.floor(posInColor / DEGREES_PER_TONE) + 1));
+  const posInTone = posInColor - (tone - 1) * DEGREES_PER_TONE;
+  const base = Math.min(5, Math.max(1, Math.floor(posInTone / DEGREES_PER_BASE) + 1));
+  return { gate, line, color, tone, base };
+}
+
 /**
  * Finds the exact instant ~88 days before `birthUtc` at which the Sun's
  * ecliptic longitude was 88° earlier than at birth — the "Design" moment.

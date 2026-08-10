@@ -18,7 +18,8 @@ import {
   type VariableCategory,
 } from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
-import { fetchBodygraphVariables, fetchBodygraphChiron } from "@/lib/energetics/bodygraph-api";
+import { fetchBodygraphVariables, fetchBodygraphChiron, type HumanDesignVariables } from "@/lib/energetics/bodygraph-api";
+import { computeHumanDesignVariables } from "@/lib/energetics/human-design-variables";
 import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
@@ -108,51 +109,83 @@ export async function createEnergeticDecoderReading(
     ? calculateHumanDesignProfile({ date: birthDate, time: birthTime, timeZone: place.timeZone })
     : null;
 
-  // Bodygraph's paid API (2026-08-09) — the 6 Variables + Skills/Attributes,
-  // the one thing the free local engine genuinely can't compute (see
-  // bodygraph-api.ts for why). Best-effort: `variables` stays undefined
-  // and the reading still saves normally if the API key is unset, the
-  // call fails, or times out — never blocks a reading over this.
+  // The 6 Variables (Digestion/Sense/Design Sense/Motivation/Perspective/
+  // Environment) — free and local as of 2026-08-10, no paid API required.
+  // Was a genuine gap (2026-08-09: "aren't published anywhere free"), until
+  // she supplied the real Color/Tone→word mapping and a file-backed Swiss
+  // Ephemeris fix for the one part that needed higher precision (true lunar
+  // Node — see swiss-ephemeris.ts). Verified against 5 independent real
+  // Bodygraph charts before trusting it here — 30/30 field matches,
+  // including a deliberate Tone-boundary stress case (see
+  // human-design-variables.ts for the full provenance note).
+  //
+  // Bodygraph's paid API is still called below, but now ONLY for what's
+  // genuinely still exclusive to it: the real rendered chart image, Skills
+  // & Attributes, Decision-Making Strategy text, and (best-effort) a real
+  // description paragraph per Variable value — never for the value word
+  // itself anymore. Best-effort throughout: the reading still saves
+  // normally, with real Variable words, even if the API key is unset, the
+  // call fails, or times out.
   if (rawHumanDesign) {
-    const variables = await fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
-    if (variables) {
+    const [localVariables, apiVariables] = await Promise.all([
+      computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone }),
+      fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone }),
+    ]);
+
+    if (apiVariables) {
       // Real rendered chart from Bodygraph's own renderer, not this app's
       // hand-drawn HumanDesignChart — her direct ask (2026-08-09): "I don't
       // need to worry about you drawing something... not generating an
       // aesthetically pleasing bodygraph."
-      if (variables.chartSvg) rawHumanDesign.bodygraphSvg = variables.chartSvg;
+      if (apiVariables.chartSvg) rawHumanDesign.bodygraphSvg = apiVariables.chartSvg;
+    }
 
-      // Cache Bodygraph's real default description for each value the first
-      // time it's actually seen (platform-wide — the same value always has
-      // the same Bodygraph text), then let the sub-account's own Content-tab
-      // rewrite override it on THIS reading, same "own the wording, not
-      // just resell theirs" promise every other field already keeps.
-      const fieldEntries: { category: VariableCategory; field: keyof typeof variables }[] = [
-        { category: "digestion", field: "digestion" },
-        { category: "sense", field: "sense" },
-        { category: "designSense", field: "designSense" },
-        { category: "motivation", field: "motivation" },
-        { category: "perspective", field: "perspective" },
-        { category: "environment", field: "environment" },
-      ];
+    const fieldEntries: { category: VariableCategory; local: string; apiField: keyof HumanDesignVariables }[] = [
+      { category: "digestion", local: localVariables.digestion, apiField: "digestion" },
+      { category: "sense", local: localVariables.sense, apiField: "sense" },
+      { category: "designSense", local: localVariables.designSense, apiField: "designSense" },
+      { category: "motivation", local: localVariables.motivation, apiField: "motivation" },
+      { category: "perspective", local: localVariables.perspective, apiField: "perspective" },
+      { category: "environment", local: localVariables.environment, apiField: "environment" },
+    ];
+    const resolvedFields = await Promise.all(
+      fieldEntries.map(async ({ category, local, apiField }) => {
+        // Real description text is still only available from Bodygraph's
+        // API — cache it once platform-wide the first time this exact
+        // value is actually seen, same "own the wording" pattern every
+        // other field here already follows. If the API disagrees with our
+        // own computed value (hasn't happened once in 30/30 real-chart
+        // testing), trust the description that actually matches OUR word,
+        // never silently relabel our value to match theirs.
+        const apiValue = apiVariables?.[apiField] as { value: string; description: string } | undefined;
+        const description = apiValue && apiValue.value === local ? apiValue.description : "";
+        if (description) await cacheVariableDefault(category, local, description);
+        const override = await resolveVariableContent(input.subAccountId, category, local);
+        return [category, { value: local, description: override.description || description }] as const;
+      }),
+    );
+    const resolvedVariables = Object.fromEntries(resolvedFields) as unknown as Omit<
+      HumanDesignVariables,
+      "decisionMakingStrategyDescription" | "skills" | "chartSvg"
+    >;
+
+    let skills: HumanDesignVariables["skills"] = [];
+    if (apiVariables) {
+      skills = apiVariables.skills;
       await Promise.all(
-        fieldEntries.map(async ({ category, field: key }) => {
-          const f = variables[key] as { value: string; description: string };
-          await cacheVariableDefault(category, f.value, f.description);
-          const override = await resolveVariableContent(input.subAccountId, category, f.value);
-          if (override.description) f.description = override.description;
-        }),
-      );
-      await Promise.all(
-        variables.skills.map(async (skill) => {
+        skills.map(async (skill) => {
           await cacheVariableDefault("skill", skill.name, skill.description);
           const override = await resolveVariableContent(input.subAccountId, "skill", skill.name);
           if (override.description) skill.description = override.description;
         }),
       );
-
-      rawHumanDesign.variables = variables;
     }
+
+    rawHumanDesign.variables = {
+      ...resolvedVariables,
+      decisionMakingStrategyDescription: apiVariables?.decisionMakingStrategyDescription ?? "",
+      skills,
+    };
   }
 
   // Which house system this sub-account's default Astrology chart design

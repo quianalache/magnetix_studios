@@ -5,6 +5,7 @@
 # so Next.js image optimization gets its native binary.
 allowBuilds:
   '@firebase/util': true
+  esbuild: true
   msw: true
   protobufjs: true
   sharp: true
