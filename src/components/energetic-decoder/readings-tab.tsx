@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Copy, Loader2, MapPin, Plus, Search } from "lucide-react";
+import { Copy, Loader2, MapPin, Plus, Search, ExternalLink } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,20 @@ interface PlaceSuggestion {
   timeZone: string;
 }
 
-/** Saved client charts + the "New reading" flow, per her explicit ask — this is the practitioner's client history, not a one-off calculator. */
+type ReadingSystem = "frequency" | "hd" | "astro";
+
+/**
+ * Real rebuild, 2026-08-10 — the approved workbench mockup (list + a
+ * persistent detail pane) never actually got built; this shipped instead
+ * as a plain expand-in-place accordion. Found the same day she compared
+ * real screenshots against the mockup directly: "none of this shit looks
+ * like the way that it should be looking." Same real data/actions as
+ * before (search, New reading, Share report, Download PDF, report design
+ * link, View contact) — only the layout changed to match what she
+ * approved. System sub-tabs inside the detail pane are new: a reading
+ * that has more than one system (Frequency/HD/Astrology all at once) now
+ * switches between them instead of stacking all three at full length.
+ */
 export function EnergeticDecoderReadingsTab() {
   const { subAccountId, subAccount } = useSubAccount();
   const [open, setOpen] = useState(false);
@@ -49,7 +63,8 @@ export function EnergeticDecoderReadingsTab() {
 
   const [readings, setReadings] = useState<EnergeticDecoderReading[]>([]);
   const [readingsLoading, setReadingsLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeSystem, setActiveSystem] = useState<ReadingSystem | null>(null);
   const [search, setSearch] = useState("");
 
   async function loadReadings() {
@@ -60,7 +75,9 @@ export function EnergeticDecoderReadingsTab() {
         ok?: boolean;
         readings?: EnergeticDecoderReading[];
       };
-      setReadings(data.readings ?? []);
+      const list = data.readings ?? [];
+      setReadings(list);
+      setSelectedId((prev) => prev ?? list[0]?.id ?? null);
     } finally {
       setReadingsLoading(false);
     }
@@ -71,9 +88,6 @@ export function EnergeticDecoderReadingsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subAccountId]);
 
-  // Real Report Designs (Report Builder tab) — so a saved design's actual
-  // delivery link can be copied per reading, once one exists. Empty list
-  // just means no design has been built yet; the row below hides itself.
   useEffect(() => {
     if (!subAccountId) return;
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs`)
@@ -82,10 +96,6 @@ export function EnergeticDecoderReadingsTab() {
       .catch(() => setReportDesigns([]));
   }, [subAccountId]);
 
-  // Full Chart Designs (2026-08-09 rebuild) — same list every "Chart
-  // Designs" sub-tab reads, filtered to each system's default below so
-  // an expanded reading here renders with the same colors as the public
-  // report page, not the traditional base every time.
   useEffect(() => {
     if (!subAccountId) return;
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs`)
@@ -176,6 +186,7 @@ export function EnergeticDecoderReadingsTab() {
       toast.success(`${data.reading.name}'s reading saved.`);
       resetForm();
       setOpen(false);
+      setSelectedId(data.reading.id);
       await loadReadings();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -190,17 +201,32 @@ export function EnergeticDecoderReadingsTab() {
     return r.name.toLowerCase().includes(q) || r.birthPlace.toLowerCase().includes(q);
   });
 
+  const selected = readings.find((r) => r.id === selectedId) ?? filtered[0] ?? null;
+
+  const availableSystems: { key: ReadingSystem; label: string }[] = useMemo(() => {
+    if (!selected) return [];
+    const list: { key: ReadingSystem; label: string }[] = [];
+    if (selected.spheres.length > 0) list.push({ key: "frequency", label: "Frequency" });
+    if (selected.humanDesign) list.push({ key: "hd", label: "Human Design" });
+    if (selected.astrology) list.push({ key: "astro", label: "Astrology" });
+    return list;
+  }, [selected]);
+
+  const currentSystem = availableSystems.some((s) => s.key === activeSystem)
+    ? activeSystem
+    : (availableSystems[0]?.key ?? null);
+
+  function selectReading(id: string) {
+    setSelectedId(id);
+    setActiveSystem(null);
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or place…"
-            className="pl-8"
-          />
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Readings</h2>
+          <p className="text-sm text-muted-foreground">Your saved client charts.</p>
         </div>
         <Dialog
           open={open}
@@ -210,7 +236,7 @@ export function EnergeticDecoderReadingsTab() {
           }}
         >
           <DialogTrigger
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
             New reading
@@ -308,95 +334,157 @@ export function EnergeticDecoderReadingsTab() {
           No readings saved yet — click &ldquo;New reading&rdquo; to generate one.
         </p>
       ) : (
-        <div className="divide-y rounded-2xl border bg-card">
-          {filtered.map((r) => (
-            <div key={r.id}>
-              <button
-                type="button"
-                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-3 text-left hover:bg-muted/50"
-              >
-                <div>
-                  <p className="text-sm font-semibold">{r.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {r.birthPlace} · {r.birthDate}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const url = buildDecoderReportUrl({ subAccount, subAccountId, readingId: r.id });
-                      navigator.clipboard.writeText(url);
-                      toast.success("Report link copied — this is the actual deliverable, safe to send to the client.");
-                    }}
-                    className="flex items-center gap-1 text-xs text-primary hover:underline"
-                  >
-                    <Copy className="h-3 w-3" />
-                    Share report
-                  </button>
-                  <a
-                    href={`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${r.id}/pdf`}
-                    onClick={(e) => e.stopPropagation()}
-                    download
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Download PDF
-                  </a>
-                  {reportDesigns.length > 0 && (
-                    <select
-                      value=""
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        const reportId = e.target.value;
-                        if (!reportId) return;
-                        const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: r.id, reportId });
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(280px,340px)_1fr]">
+          {/* List pane */}
+          <div className="flex h-[640px] flex-col overflow-hidden rounded-2xl border bg-card">
+            <div className="border-b p-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name or place…"
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            <div className="flex-1 divide-y overflow-y-auto">
+              {filtered.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => selectReading(r.id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-accent/40",
+                    selected?.id === r.id && "bg-accent/60 shadow-[inset_3px_0_0_0_var(--primary)]",
+                  )}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-primary">
+                    {r.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{r.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {r.birthPlace} · {r.birthDate}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1">
+                    {r.spheres.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-primary" title="Frequency" />}
+                    {r.humanDesign && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" title="Human Design" />}
+                    {r.astrology && <span className="h-1.5 w-1.5 rounded-full bg-sky-500" title="Astrology" />}
+                  </span>
+                </button>
+              ))}
+              {filtered.length === 0 && (
+                <p className="py-8 text-center text-xs text-muted-foreground">No readings match.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Detail pane */}
+          <div className="h-[640px] overflow-y-auto rounded-2xl border bg-card">
+            {!selected ? (
+              <p className="p-6 text-center text-sm text-muted-foreground">Select a reading.</p>
+            ) : (
+              <>
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-card p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+                      {selected.name.slice(0, 1).toUpperCase()}
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold">{selected.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {selected.birthPlace} · {selected.birthDate}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = buildDecoderReportUrl({ subAccount, subAccountId, readingId: selected.id });
                         navigator.clipboard.writeText(url);
-                        toast.success("Report design link copied.");
-                        e.target.value = "";
+                        toast.success("Report link copied — this is the actual deliverable, safe to send to the client.");
                       }}
-                      className="rounded-md border bg-background px-1.5 py-0.5 text-xs text-primary"
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                     >
-                      <option value="">Copy report design link…</option>
-                      {reportDesigns.map((d) => (
-                        <option key={d.id} value={d.id}>{d.title}</option>
-                      ))}
-                    </select>
-                  )}
-                  <Link
-                    href={`/sa/${subAccountId}/contacts/${r.contactId}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    View contact
-                  </Link>
-                  {expandedId === r.id ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
+                      <Copy className="h-3 w-3" />
+                      Share report
+                    </button>
+                    <a
+                      href={`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${selected.id}/pdf`}
+                      download
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Download PDF
+                    </a>
+                    {reportDesigns.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const reportId = e.target.value;
+                          if (!reportId) return;
+                          const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: selected.id, reportId });
+                          navigator.clipboard.writeText(url);
+                          toast.success("Report design link copied.");
+                          e.target.value = "";
+                        }}
+                        className="rounded-md border bg-background px-1.5 py-0.5 text-xs text-primary"
+                      >
+                        <option value="">Copy report design link…</option>
+                        {reportDesigns.map((d) => (
+                          <option key={d.id} value={d.id}>{d.title}</option>
+                        ))}
+                      </select>
+                    )}
+                    <Link
+                      href={`/sa/${subAccountId}/contacts/${selected.contactId}`}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      View contact
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
                 </div>
-              </button>
-              {expandedId === r.id && (
-                <div className="space-y-4 border-t bg-muted/20 px-5 py-3">
-                  {r.spheres.length > 0 && <SphereList spheres={r.spheres} />}
-                  {r.humanDesign && (
+
+                <div className="p-4">
+                  {availableSystems.length > 1 && (
+                    <div className="mb-4 inline-flex rounded-lg bg-muted/30 p-1">
+                      {availableSystems.map((s) => (
+                        <button
+                          key={s.key}
+                          type="button"
+                          onClick={() => setActiveSystem(s.key)}
+                          className={cn(
+                            "rounded-md px-3 py-1.5 text-xs font-semibold",
+                            currentSystem === s.key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground",
+                          )}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {currentSystem === "frequency" && <SphereList spheres={selected.spheres} />}
+                  {currentSystem === "hd" && selected.humanDesign && (
                     <HumanDesignSummary
-                      profile={r.humanDesign}
+                      profile={selected.humanDesign}
                       hdDesign={defaultHdDesign}
                       mandalaDesign={defaultMandalaDesign}
                     />
                   )}
-                  {r.astrology && <AstrologySummary chart={r.astrology} astroDesign={defaultAstroDesign} />}
+                  {currentSystem === "astro" && selected.astrology && (
+                    <AstrologySummary chart={selected.astrology} astroDesign={defaultAstroDesign} />
+                  )}
+                  {availableSystems.length === 0 && (
+                    <p className="py-8 text-center text-xs text-muted-foreground">This reading has no systems yet.</p>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <p className="py-8 text-center text-xs text-muted-foreground">No readings match.</p>
-          )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
