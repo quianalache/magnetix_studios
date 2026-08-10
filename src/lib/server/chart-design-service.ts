@@ -54,10 +54,46 @@ export async function listChartDesigns(subAccountId: string, agencyId: string): 
   if (!existing.some((d) => d.system === "mandala")) {
     seeds.push(seedDefault(subAccountId, agencyId, "mandala"));
   }
-  if (seeds.length === 0) return existing;
 
-  const created = await Promise.all(seeds);
-  return [...existing, ...created];
+  // Backfill — real gap found 2026-08-10, the day after the field-set
+  // rebuild shipped: a design created before that rebuild has NO key at
+  // all in Firestore for channelsColor/gatesColor/backgroundColor/
+  // wheelAccentColor (not seeded, since seeding only ever ran for a
+  // missing SYSTEM, never for an existing system's missing FIELDS). That
+  // reaches the UI as `undefined`, not a real default — a broken/blank
+  // color swatch on exactly the pre-existing designs a real sub-account
+  // actually has, while a brand-new design looked fine. Every real
+  // sub-account created before today hits this on every existing design.
+  const backfills: Promise<ChartDesign>[] = [];
+  for (const d of existing) {
+    const patch = missingFieldsPatch(d);
+    if (Object.keys(patch).length > 0) backfills.push(applyBackfill(d.id, patch));
+  }
+
+  if (seeds.length === 0 && backfills.length === 0) return existing;
+
+  const [created, backfilled] = await Promise.all([Promise.all(seeds), Promise.all(backfills)]);
+  const backfilledIds = new Set(backfilled.map((d) => d.id));
+  const untouched = existing.filter((d) => !backfilledIds.has(d.id));
+  return [...untouched, ...backfilled, ...created];
+}
+
+/** Only fills keys genuinely absent from the stored doc — never overwrites a real value the sub-account (or the old single-field picker) already saved, chartDefinedColor and pre-existing houseSystem included. */
+function missingFieldsPatch(d: ChartDesign): Record<string, string> {
+  const fresh = freshDesignFields();
+  const patch: Record<string, string> = {};
+  if (d.channelsColor === undefined) patch.channelsColor = fresh.channelsColor;
+  if (d.gatesColor === undefined) patch.gatesColor = fresh.gatesColor;
+  if (d.backgroundColor === undefined) patch.backgroundColor = fresh.backgroundColor;
+  if (d.wheelAccentColor === undefined) patch.wheelAccentColor = fresh.wheelAccentColor;
+  if (d.houseSystem === undefined) patch.houseSystem = fresh.houseSystem;
+  return patch;
+}
+
+async function applyBackfill(id: string, patch: Record<string, string>): Promise<ChartDesign> {
+  await col().doc(id).update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
+  const snap = await col().doc(id).get();
+  return toDesign(snap.id, snap.data()!);
 }
 
 async function seedDefault(
