@@ -16,8 +16,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
-import { buildDecoderReportUrl } from "@/lib/domains/public-url";
+import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import type { ReportDesign } from "@/types/report-blocks";
 
 interface PlaceSuggestion {
   lat: number;
@@ -40,6 +41,7 @@ export function EnergeticDecoderReadingsTab() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [reportDesigns, setReportDesigns] = useState<ReportDesign[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +67,17 @@ export function EnergeticDecoderReadingsTab() {
   useEffect(() => {
     if (subAccountId) void loadReadings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subAccountId]);
+
+  // Real Report Designs (Report Builder tab) — so a saved design's actual
+  // delivery link can be copied per reading, once one exists. Empty list
+  // just means no design has been built yet; the row below hides itself.
+  useEffect(() => {
+    if (!subAccountId) return;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs`)
+      .then((r) => r.json())
+      .then((d) => setReportDesigns(d.designs ?? []))
+      .catch(() => setReportDesigns([]));
   }, [subAccountId]);
 
   function handlePlaceChange(value: string) {
@@ -313,6 +326,27 @@ export function EnergeticDecoderReadingsTab() {
                   >
                     Download PDF
                   </a>
+                  {reportDesigns.length > 0 && (
+                    <select
+                      value=""
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        const reportId = e.target.value;
+                        if (!reportId) return;
+                        const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: r.id, reportId });
+                        navigator.clipboard.writeText(url);
+                        toast.success("Report design link copied.");
+                        e.target.value = "";
+                      }}
+                      className="rounded-md border bg-background px-1.5 py-0.5 text-xs text-primary"
+                    >
+                      <option value="">Copy report design link…</option>
+                      {reportDesigns.map((d) => (
+                        <option key={d.id} value={d.id}>{d.title}</option>
+                      ))}
+                    </select>
+                  )}
                   <Link
                     href={`/sa/${subAccountId}/contacts/${r.contactId}`}
                     onClick={(e) => e.stopPropagation()}

@@ -65,6 +65,19 @@ export function buildDecoderReportUrl(opts: {
     : `${platformOrigin()}/decoder/${opts.subAccountId}/report/${opts.readingId}`;
 }
 
+/** Same as buildDecoderReportUrl, but for a specific saved Report Design instead of the default fixed layout — the actual delivery link once a practitioner has built a real design in the Report Builder. */
+export function buildDecoderReportDesignUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  subAccountId: string;
+  readingId: string;
+  reportId: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/decoder/report/${opts.readingId}/design/${opts.reportId}`
+    : `${platformOrigin()}/decoder/${opts.subAccountId}/report/${opts.readingId}/design/${opts.reportId}`;
+}
+
 /** `slug` is nullable so callers with a legacy (pre-slug) doc degrade gracefully to the opaque URL instead of building a broken link. */
 export function buildCourseUrl(opts: {
   subAccount: HasCustomDomain | null | undefined;
