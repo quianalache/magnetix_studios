@@ -33,6 +33,50 @@ const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
 const PERSONALITY_TEXT = "#18181b";
 const DESIGN_TEXT = "#dc2626";
 
+/**
+ * Real bug, found 2026-08-10 by her actually looking at a rendered chart:
+ * "in the root center you have numbers overlapping." Root/Sacral/Throat
+ * pack up to 11 gates into one small center, so two DIFFERENT activated
+ * gates can sit close enough that their number labels collide — worse
+ * when either gate is activated in both Personality AND Design, since
+ * that gate already renders two offset labels of its own. Not a duplicate-
+ * coordinate bug (verified — every gate has its own distinct point); the
+ * points are correct, they're just closer together than two number labels
+ * need. Same collision-avoidance technique already proven in
+ * astrology-wheel-chart.tsx for crowded planet labels, ported here: only
+ * the LABEL position gets nudged apart, never the true point (channel
+ * lines and the "which center is this gate in" fact both keep using the
+ * real, un-nudged GATE_POINT).
+ */
+function declutterGateLabels(
+  gates: number[],
+  dualSet: Set<number>,
+): Map<number, { x: number; y: number }> {
+  const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
+  const MIN_GAP = 2.8; // base clearance two single-label circles need at this font size
+  const DUAL_BONUS = 0.9; // a dual gate's own two offset labels need more room from its neighbors
+  for (let iter = 0; iter < 30; iter++) {
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const gap = MIN_GAP + (pts[i].dual ? DUAL_BONUS : 0) + (pts[j].dual ? DUAL_BONUS : 0);
+        const dx = pts[j].x - pts[i].x;
+        const dy = pts[j].y - pts[i].y;
+        const dist = Math.hypot(dx, dy) || 0.0001;
+        if (dist < gap) {
+          const push = (gap - dist) / 2;
+          const ux = dist ? dx / dist : 1;
+          const uy = dist ? dy / dist : 0;
+          pts[i].x -= ux * push;
+          pts[i].y -= uy * push;
+          pts[j].x += ux * push;
+          pts[j].y += uy * push;
+        }
+      }
+    }
+  }
+  return new Map(pts.map((p) => [p.gate, { x: p.x, y: p.y }]));
+}
+
 function shapePoints(shape: CenterShape, cx: number, cy: number, r: number): string {
   switch (shape) {
     case "triangle-up":
@@ -111,6 +155,11 @@ export function HumanDesignChart({
   const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
   const personalityGates = new Set(profile.personality.map((a) => a.gate));
   const designGates = new Set(profile.design.map((a) => a.gate));
+  const activatedGates = Object.keys(GATE_POINT)
+    .map(Number)
+    .filter((g) => personalityGates.has(g) || designGates.has(g));
+  const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
+  const labelPositions = declutterGateLabels(activatedGates, dualGates);
 
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
@@ -142,12 +191,15 @@ export function HumanDesignChart({
 
         {/* Gate numbers — only the activated ones, to keep it readable. A soft
             dot behind each marks it as "on" at a glance before you even read
-            the number; Personality black, Design red, offset slightly when both. */}
-        {Object.entries(GATE_POINT).map(([gateStr, point]) => {
-          const gate = Number(gateStr);
+            the number; Personality black, Design red, offset slightly when
+            both. Position is the decluttered label point (declutterGateLabels
+            above), not the true GATE_POINT — channel lines above still use
+            the true point, so the network geometry itself never shifts, only
+            the number labels nudge apart from each other when crowded. */}
+        {activatedGates.map((gate) => {
+          const point = labelPositions.get(gate)!;
           const inPersonality = personalityGates.has(gate);
           const inDesign = designGates.has(gate);
-          if (!inPersonality && !inDesign) return null;
           return (
             <g key={gate}>
               <circle cx={point.x} cy={point.y} r={1.7} fill={backgroundColor} stroke={gatesColor} strokeWidth={0.3} />
