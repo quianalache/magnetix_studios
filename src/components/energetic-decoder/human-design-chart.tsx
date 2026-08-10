@@ -32,6 +32,7 @@ const UNDEFINED_FILL = "#ffffff";
 const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
 const PERSONALITY_TEXT = "#18181b";
 const DESIGN_TEXT = "#dc2626";
+const INACTIVE_GATE_TEXT = "#a1a1aa"; // zinc-400 — subtle/recessive but still legible against white
 
 /**
  * Real bug, found 2026-08-10 by her actually looking at a rendered chart:
@@ -199,7 +200,38 @@ export function HumanDesignChart({
           <CenterShapeEl key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} definedColor={definedColor} />
         ))}
 
-        {/* Gate numbers — only the activated ones, to keep it readable. A soft
+        {/* All 64 gate numbers — real gap found 2026-08-10 comparing our
+            chart against Bodygraph's own rendered image: a real bodygraph
+            always shows every gate number, faint for inactive, bold/colored
+            for activated, so the full structure reads at a glance. Ours
+            previously drew nothing at all for an inactive gate. Drawn at
+            the TRUE GATE_POINT (not decluttered — that pass only exists to
+            spread apart ACTIVATED labels, which need to stand out; inactive
+            numbers are background reference info, and real bodygraphs
+            themselves show them packed exactly this tightly in busy centers
+            like Root/Throat, confirmed against a real Bodygraph screenshot).
+            Rendered BEFORE the activated layer below so an activated gate's
+            bold label always sits on top, never obscured by its own
+            inactive-number sibling. */}
+        {Object.entries(GATE_POINT).map(([gateStr, point]) => {
+          const gate = Number(gateStr);
+          if (personalityGates.has(gate) || designGates.has(gate)) return null;
+          return (
+            <text
+              key={gate}
+              x={point.x}
+              y={point.y + 0.8}
+              fontSize="1.9"
+              fill={INACTIVE_GATE_TEXT}
+              textAnchor="middle"
+            >
+              {gate}
+            </text>
+          );
+        })}
+
+        {/* Gate numbers — the activated ones, drawn bold/colored on top of
+            the faint inactive layer above. A soft
             dot behind each marks it as "on" at a glance before you even read
             the number; Personality black, Design red, offset slightly when
             both. Position is the decluttered label point (declutterGateLabels
