@@ -17,8 +17,11 @@ import {
 import type { HumanDesignProfile } from "./human-design";
 import { CENTERS, CENTER_LABELS, CHANNELS, type CenterKey } from "./human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "./human-design-chart-layout";
-import type { AstrologyChart, ZodiacSign } from "./astrology";
+import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
+import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
+import { ASPECT_TYPE_CONTENT } from "./astrology-content-data";
 import type { GeneKeysSphereResult } from "./gene-keys";
+import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
 
 /**
  * A downloadable PDF of a full reading — her direct ask (2026-08-09): "if
@@ -36,6 +39,31 @@ import type { GeneKeysSphereResult } from "./gene-keys";
  * this app's own on-screen HumanDesignChart/AstrologyWheelChart components
  * use (CENTER_LAYOUT/GATE_POINT/CHANNELS, the real astrology wheel math) —
  * same accurate chart, just re-expressed in react-pdf's shape components.
+ *
+ * Full rewrite 2026-08-10 — her real downloaded PDF showed 2 confirmed
+ * rendering bugs and a real content gap, not assumed, from the actual file:
+ *
+ *  1. Astrology wheel planet/sign glyphs (☉☽♈…) rendered as garbled
+ *     placeholder characters (H, I, =, ?, @…). Root cause: react-pdf's
+ *     only font here is the built-in Helvetica (a standard PDF base font,
+ *     WinAnsi-encoded) — it has no astrological Unicode glyphs at all, and
+ *     react-pdf doesn't fail safely on an unsupported codepoint, it
+ *     silently substitutes whatever WinAnsi character shares that glyph
+ *     index. Fixed by dropping Unicode glyph reliance entirely — reliable
+ *     ASCII abbreviations instead (same fix category as #2).
+ *  2. The Frequency section's "→" separator rendered as "'" for the same
+ *     reason — replaced with a plain "->".
+ *  3. The PDF only ever showed raw fact VALUES (Type: "Generator") with
+ *     none of the descriptive text every other real content editor in
+ *     this app (Content tab) exists specifically to let a sub-account
+ *     rewrite — Type/Authority descriptions, Center defined/undefined
+ *     text, Variable descriptions, Skills &amp; Attributes, Defined
+ *     Channels, Astrology sign/house/aspect descriptions. All of that data
+ *     was already being computed and saved on the reading (the web
+ *     Readings tab shows it) — the PDF just never read `reading.content`
+ *     at all. Now uses the exact same "reading's own snapshot, falling
+ *     back to the hardcoded default" resolution reading-summary.tsx uses,
+ *     so a sub-account's own rewritten wording shows up in the PDF too.
  */
 
 const styles = StyleSheet.create({
@@ -55,6 +83,13 @@ const styles = StyleSheet.create({
   centerLabel: { fontSize: 8, fontWeight: 700, marginTop: 10, marginBottom: 3 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginBottom: 8 },
   pill: { fontSize: 7.5, borderWidth: 1, borderColor: "#e8e8ec", borderRadius: 8, paddingVertical: 2, paddingHorizontal: 6 },
+  block: { borderWidth: 1, borderColor: "#e8e8ec", borderRadius: 6, padding: 7, marginBottom: 6, width: "48%" },
+  blockGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 8 },
+  blockTitle: { fontSize: 8.5, fontWeight: 700, marginBottom: 2 },
+  blockText: { fontSize: 8, lineHeight: 1.4, color: "#3a3a42" },
+  row: { flexDirection: "row", justifyContent: "space-between", borderBottomWidth: 0.5, borderBottomColor: "#eee", paddingVertical: 3 },
+  rowLabel: { fontSize: 8.5, color: "#3a3a42" },
+  rowValue: { fontSize: 8.5, fontWeight: 700 },
   footer: { position: "absolute", bottom: 24, left: 44, right: 44, fontSize: 7.5, color: "#9a9aa2", textAlign: "center" },
 });
 
@@ -144,18 +179,19 @@ function HumanDesignChartPdf({ profile, definedColor }: { profile: HumanDesignPr
   );
 }
 
-// ── Astrology wheel (react-pdf Svg) — same math as astrology-wheel-chart.tsx ──
+// ── Astrology wheel (react-pdf Svg) — same math as astrology-wheel-chart.tsx,
+// but with ASCII-safe labels instead of Unicode glyphs (see header note #1) ──
 
 const WHEEL_LINE = "#a1a1aa";
 const WHEEL_TEXT = "#3f3f46";
-const SIGN_GLYPH: Record<ZodiacSign, string> = {
-  Aries: "♈", Taurus: "♉", Gemini: "♊", Cancer: "♋", Leo: "♌", Virgo: "♍",
-  Libra: "♎", Scorpio: "♏", Sagittarius: "♐", Capricorn: "♑", Aquarius: "♒", Pisces: "♓",
+const SIGN_ABBR: Record<ZodiacSign, string> = {
+  Aries: "Ari", Taurus: "Tau", Gemini: "Gem", Cancer: "Can", Leo: "Leo", Virgo: "Vir",
+  Libra: "Lib", Scorpio: "Sco", Sagittarius: "Sag", Capricorn: "Cap", Aquarius: "Aqu", Pisces: "Pis",
 };
-const PLANET_GLYPH: Record<string, string> = {
-  sun: "☉", moon: "☽", mercury: "☿", venus: "♀", mars: "♂",
-  jupiter: "♃", saturn: "♄", uranus: "♅", neptune: "♆", pluto: "♇",
-  northNode: "☊", southNode: "☋", lilith: "⚸", chiron: "⚷",
+const PLANET_ABBR: Record<string, string> = {
+  sun: "Su", moon: "Mo", mercury: "Me", venus: "Ve", mars: "Ma",
+  jupiter: "Ju", saturn: "Sa", uranus: "Ur", neptune: "Ne", pluto: "Pl",
+  northNode: "NN", southNode: "SN", lilith: "Li", chiron: "Ch",
 };
 const CX = 50, CY = 50, SIGN_RING_OUTER = 47, SIGN_RING_INNER = 40, HOUSE_LINE_INNER = 10, PLANET_R_A = 33, PLANET_R_B = 29, MIN_SEPARATION_DEG = 7;
 
@@ -187,7 +223,7 @@ function AstrologyWheelPdf({ chart }: { chart: AstrologyChart }) {
       <Rect x={0} y={0} width={100} height={100} fill="#ffffff" />
       <Circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
       <Circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
-      {(Object.keys(SIGN_GLYPH) as ZodiacSign[]).map((sign, i) => {
+      {(Object.keys(SIGN_ABBR) as ZodiacSign[]).map((sign, i) => {
         const signStartLon = i * 30;
         const mid = screenAngle(signStartLon + 15, ascLon);
         const glyphPos = toXY(mid, (SIGN_RING_OUTER + SIGN_RING_INNER) / 2);
@@ -196,7 +232,7 @@ function AstrologyWheelPdf({ chart }: { chart: AstrologyChart }) {
         const p2o = toXY(a2, SIGN_RING_OUTER);
         return (
           <G key={sign}>
-            <Text x={glyphPos.x} y={glyphPos.y + 1.4} style={{ fontSize: 3.2, textAnchor: "middle", fill: WHEEL_TEXT }}>{SIGN_GLYPH[sign]}</Text>
+            <Text x={glyphPos.x} y={glyphPos.y + 1} style={{ fontSize: 2.4, textAnchor: "middle", fill: WHEEL_TEXT }}>{SIGN_ABBR[sign]}</Text>
             <Line x1={p2i.x} y1={p2i.y} x2={p2o.x} y2={p2o.y} stroke={WHEEL_LINE} strokeWidth={0.3} />
           </G>
         );
@@ -214,8 +250,8 @@ function AstrologyWheelPdf({ chart }: { chart: AstrologyChart }) {
         const pos = toXY(plot.angle, plot.r);
         return (
           <G key={p.body}>
-            <Circle cx={pos.x} cy={pos.y} r={2.6} fill="#fff" stroke={WHEEL_TEXT} strokeWidth={0.3} />
-            <Text x={pos.x} y={pos.y + 1.1} style={{ fontSize: 2.8, textAnchor: "middle", fill: WHEEL_TEXT }}>{PLANET_GLYPH[p.body] ?? p.body[0].toUpperCase()}</Text>
+            <Circle cx={pos.x} cy={pos.y} r={3.2} fill="#fff" stroke={WHEEL_TEXT} strokeWidth={0.3} />
+            <Text x={pos.x} y={pos.y + 1} style={{ fontSize: 2.2, textAnchor: "middle", fill: WHEEL_TEXT }}>{PLANET_ABBR[p.body] ?? p.body.slice(0, 2)}</Text>
           </G>
         );
       })}
@@ -241,11 +277,14 @@ export function ReadingPdfDocument({
   birthPlace: string;
   businessName: string;
   businessLogoUrl?: string | null;
-  humanDesign?: HumanDesignProfile | null;
-  astrology?: AstrologyChart | null;
+  humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
+  astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
   spheres?: GeneKeysSphereResult[];
   definedColor: string;
 }) {
+  const hdContent = humanDesign?.content;
+  const astroContent = astrology?.content;
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -267,7 +306,7 @@ export function ReadingPdfDocument({
             <Text style={styles.sectionTitle}>Human Design</Text>
             <View style={styles.factGrid}>
               <Fact label="Type" value={humanDesign.type} />
-              <Fact label="Strategy" value={humanDesign.strategy} />
+              <Fact label="Strategy" value={hdContent?.typeStrategy || TYPE_CONTENT[humanDesign.type].strategy} />
               <Fact label="Authority" value={humanDesign.authority} />
               <Fact label="Profile" value={humanDesign.profile ?? "—"} />
               <Fact label="Definition" value={humanDesign.definitionLabel} />
@@ -275,6 +314,12 @@ export function ReadingPdfDocument({
               <Fact label="Not-Self Theme" value={humanDesign.notSelfTheme} />
               {humanDesign.incarnationCross && <Fact label="Incarnation Cross" value={humanDesign.incarnationCross} />}
             </View>
+            <Text style={styles.para}>
+              {hdContent?.typeDescription || TYPE_CONTENT[humanDesign.type].description}
+            </Text>
+            <Text style={styles.para}>
+              {hdContent?.authorityDescription || AUTHORITY_CONTENT[humanDesign.authority].description}
+            </Text>
 
             <View style={styles.chartWrap}>
               <HumanDesignChartPdf profile={humanDesign} definedColor={definedColor} />
@@ -283,25 +328,60 @@ export function ReadingPdfDocument({
             {humanDesign.variables && (
               <View>
                 <Text style={styles.centerLabel}>Variables</Text>
-                <View style={styles.factGrid}>
-                  <Fact label="Digestion" value={humanDesign.variables.digestion.value} />
-                  <Fact label="Sense" value={humanDesign.variables.sense.value} />
-                  <Fact label="Design Sense" value={humanDesign.variables.designSense.value} />
-                  <Fact label="Motivation" value={humanDesign.variables.motivation.value} />
-                  <Fact label="Perspective" value={humanDesign.variables.perspective.value} />
-                  <Fact label="Environment" value={humanDesign.variables.environment.value} />
+                <View style={styles.blockGrid}>
+                  <VariableBlock label="Digestion" field={humanDesign.variables.digestion} />
+                  <VariableBlock label="Sense" field={humanDesign.variables.sense} />
+                  <VariableBlock label="Design Sense" field={humanDesign.variables.designSense} />
+                  <VariableBlock label="Motivation" field={humanDesign.variables.motivation} />
+                  <VariableBlock label="Perspective" field={humanDesign.variables.perspective} />
+                  <VariableBlock label="Environment" field={humanDesign.variables.environment} />
+                </View>
+              </View>
+            )}
+
+            {humanDesign.variables && humanDesign.variables.skills.length > 0 && (
+              <View>
+                <Text style={styles.centerLabel}>Skills &amp; Attributes</Text>
+                <View style={styles.blockGrid}>
+                  {humanDesign.variables.skills.map((s, i) => (
+                    <View key={`${s.name}-${i}`} style={styles.block}>
+                      <Text style={styles.blockTitle}>{s.name}</Text>
+                      {s.description && <Text style={styles.blockText}>{s.description}</Text>}
+                    </View>
+                  ))}
                 </View>
               </View>
             )}
 
             <Text style={styles.centerLabel}>Centers</Text>
-            <View style={styles.pillRow}>
-              {(CENTERS as readonly CenterKey[]).map((c) => (
-                <Text key={c} style={[styles.pill, humanDesign.definedCenters.includes(c) ? { backgroundColor: "#F3E4F0" } : {}]}>
-                  {CENTER_LABELS[c]}
-                </Text>
-              ))}
+            <View style={styles.blockGrid}>
+              {(CENTERS as readonly CenterKey[]).map((c) => {
+                const defined = humanDesign.definedCenters.includes(c);
+                const cc = hdContent?.centers[c];
+                const text = defined
+                  ? cc?.definedText || CENTER_CONTENT[c].definedText
+                  : cc?.undefinedText || CENTER_CONTENT[c].undefinedText;
+                return (
+                  <View key={c} style={[styles.block, defined ? { backgroundColor: "#F3E4F0", borderColor: "#dcc3d8" } : {}]}>
+                    <Text style={styles.blockTitle}>{CENTER_LABELS[c]} — {defined ? "Defined" : "Undefined"}</Text>
+                    <Text style={styles.blockText}>{text}</Text>
+                  </View>
+                );
+              })}
             </View>
+
+            {humanDesign.definedChannels.length > 0 && (
+              <View>
+                <Text style={styles.centerLabel}>Defined Channels</Text>
+                <View style={styles.pillRow}>
+                  {humanDesign.definedChannels.map((ch) => (
+                    <Text key={ch.key} style={styles.pill}>
+                      {ch.gates[0]}-{ch.gates[1]}{ch.name ? ` · ${ch.name}` : ""}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            )}
 
             <Text style={styles.centerLabel}>Activated Gates</Text>
             <View style={styles.pillRow}>
@@ -327,6 +407,45 @@ export function ReadingPdfDocument({
             <View style={styles.chartWrap}>
               <AstrologyWheelPdf chart={astrology} />
             </View>
+
+            <Text style={styles.centerLabel}>Placements</Text>
+            {astrology.placements.map((p) => {
+              const signText = astroContent?.signs[p.sign];
+              return (
+                <View key={p.body} style={{ marginBottom: 5 }}>
+                  <View style={styles.row}>
+                    <Text style={styles.rowLabel}>
+                      {p.body.charAt(0).toUpperCase() + p.body.slice(1)} — House {p.house}{p.retrograde ? " (retrograde)" : ""}
+                    </Text>
+                    <Text style={styles.rowValue}>{p.sign} {p.degInSign.toFixed(1)}°</Text>
+                  </View>
+                  {signText && <Text style={[styles.blockText, { marginTop: 1 }]}>{signText}</Text>}
+                </View>
+              );
+            })}
+
+            <Text style={styles.centerLabel}>Houses</Text>
+            <View style={styles.pillRow}>
+              {astrology.houses.cusps.map((c) => (
+                <Text key={c.house} style={styles.pill}>
+                  House {c.house}: {c.sign} {c.degInSign.toFixed(1)}°
+                </Text>
+              ))}
+            </View>
+
+            {astrology.aspects.length > 0 && (
+              <View>
+                <Text style={styles.centerLabel}>Aspects</Text>
+                {astrology.aspects.slice(0, 14).map((a, i) => (
+                  <View key={i} style={{ marginBottom: 4 }}>
+                    <Text style={styles.rowLabel}>
+                      {cap(a.bodyA)} {a.type} {cap(a.bodyB)} ({a.orb.toFixed(1)}° from exact)
+                    </Text>
+                    <Text style={styles.blockText}>{astroContent?.aspectTypes[a.type] || ASPECT_TYPE_CONTENT[a.type as AspectType]}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -336,7 +455,10 @@ export function ReadingPdfDocument({
             {spheres.map((s) => (
               <View key={s.sphere} style={{ marginBottom: 8 }}>
                 <Text style={styles.factLabel}>{s.sphere} — Gate {s.gate}.{s.line}</Text>
-                <Text style={styles.para}>{s.shadow} → {s.gift} → {s.siddhi}</Text>
+                <Text style={styles.para}>{s.shadow} -&gt; {s.gift} -&gt; {s.siddhi}</Text>
+                {(s.showsUp || s.giftText) && (
+                  <Text style={styles.blockText}>{s.showsUp} {s.giftText}</Text>
+                )}
               </View>
             ))}
           </View>
@@ -350,11 +472,24 @@ export function ReadingPdfDocument({
   );
 }
 
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.factCard}>
       <Text style={styles.factLabel}>{label}</Text>
       <Text style={styles.factValue}>{value}</Text>
+    </View>
+  );
+}
+
+function VariableBlock({ label, field }: { label: string; field: { value: string; description: string } }) {
+  return (
+    <View style={styles.block}>
+      <Text style={styles.blockTitle}>{label}: {field.value}</Text>
+      {field.description && <Text style={styles.blockText}>{field.description}</Text>}
     </View>
   );
 }

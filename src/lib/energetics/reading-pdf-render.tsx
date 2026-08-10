@@ -5,6 +5,7 @@ import { ReadingPdfDocument } from "./reading-pdf-document";
 import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
+import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
 
 /**
  * Streams a reading as a PDF — same pattern as quotes' pdf-render.tsx
@@ -17,8 +18,8 @@ export async function renderReadingPdfStream(opts: {
   birthPlace: string;
   businessName: string;
   businessLogoUrl?: string | null;
-  humanDesign?: HumanDesignProfile | null;
-  astrology?: AstrologyChart | null;
+  humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
+  astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
   spheres?: GeneKeysSphereResult[];
   definedColor: string;
 }): Promise<ReadableStream<Uint8Array>> {
