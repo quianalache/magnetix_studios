@@ -1,6 +1,6 @@
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { VariableArrowDirection, VariableArrowSource } from "@/lib/energetics/human-design-variables";
-import type { ChartDesign, VariableArrowStyle } from "@/types/chart-design";
+import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/chart-design";
 import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 
@@ -44,9 +44,28 @@ const FALLBACK = {
   designActivationColor: "#9a3412",
   arrowColor: "#3f3f46",
   arrowStyle: "solid" as VariableArrowStyle,
+  // Currently unread below — kept for a future consumer, see chart-design.ts's header comment on why planetBoxColor is inert in both real Planet Box modes.
   planetBoxColor: "#f4f4f5",
+  planetBoxMode: "fullBox" as PlanetBoxMode,
+  planetBoxBorderRadius: 6,
   backgroundColor: "#ffffff",
 };
+
+/**
+ * Planet Boxes — real behavior confirmed 2026-08-10 against the live
+ * Bodygraph chart-design tool ("Color Planets Only" / "Color Planets and
+ * Gates"). iconOnly: the row itself stays genuinely unfilled (no
+ * background at all, matching Bodygraph's own real rendering directly
+ * observed, not a placeholder standing in for "no color set") — only the
+ * small circular glyph chip gets the Personality/Design activation
+ * color, label/value text stays a plain neutral ink. fullBox: the whole
+ * row fills with the activation color itself (not planetBoxColor —
+ * Bodygraph's own real "Planets and Gates" mode fills with their Design/
+ * Personality colors too, not a separate arbitrary box color), text
+ * reverses to white, and `planetBoxBorderRadius` rounds the corners
+ * (no effect in iconOnly, which has no filled box to round).
+ */
+const PLAIN_TEXT = "#3f3f46"; // zinc-700 — same neutral ink already used for arrowColor's own default above
 
 function ArrowGlyph({
   direction,
@@ -110,22 +129,42 @@ function PlanetBox({
   symbol,
   label,
   value,
-  textColor,
-  boxColor,
+  activationColor,
+  mode,
+  borderRadius,
 }: {
   symbol: string;
   label: string;
   value: string;
-  textColor: string;
-  boxColor: string;
+  activationColor: string;
+  mode: PlanetBoxMode;
+  borderRadius: number;
 }) {
+  if (mode === "fullBox") {
+    return (
+      <div
+        className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-white"
+        style={{ backgroundColor: activationColor, borderRadius }}
+      >
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span aria-hidden="true">{symbol}</span>
+          <span className="truncate">{label}</span>
+        </span>
+        <span className="shrink-0 font-semibold tabular-nums">{value}</span>
+      </div>
+    );
+  }
+  // iconOnly — row stays genuinely unfilled; only the glyph gets a colored chip.
   return (
-    <div
-      className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[11px]"
-      style={{ backgroundColor: boxColor, color: textColor }}
-    >
+    <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px]" style={{ color: PLAIN_TEXT }}>
       <span className="flex min-w-0 items-center gap-1.5">
-        <span aria-hidden="true">{symbol}</span>
+        <span
+          aria-hidden="true"
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] leading-none text-white"
+          style={{ backgroundColor: activationColor }}
+        >
+          {symbol}
+        </span>
         <span className="truncate">{label}</span>
       </span>
       <span className="shrink-0 font-semibold tabular-nums">{value}</span>
@@ -137,13 +176,15 @@ function ActivationColumn({
   side,
   activations,
   color,
-  boxColor,
+  mode,
+  borderRadius,
   align,
 }: {
   side: "Design" | "Personality";
   activations: HumanDesignProfile["design"] | HumanDesignProfile["personality"];
   color: string;
-  boxColor: string;
+  mode: PlanetBoxMode;
+  borderRadius: number;
   align: "left" | "right";
 }) {
   return (
@@ -162,8 +203,9 @@ function ActivationColumn({
             symbol={symbol}
             label={label}
             value={a ? `${a.gate}.${a.line}` : "—"}
-            textColor={color}
-            boxColor={boxColor}
+            activationColor={color}
+            mode={mode}
+            borderRadius={borderRadius}
           />
         );
       })}
@@ -185,7 +227,9 @@ export function HumanDesignFullChart({
   const designActivationColor = design?.designActivationColor || FALLBACK.designActivationColor;
   const arrowColor = design?.arrowColor || FALLBACK.arrowColor;
   const arrowStyle = design?.arrowStyle || FALLBACK.arrowStyle;
-  const planetBoxColor = design?.planetBoxColor || FALLBACK.planetBoxColor;
+  const planetBoxMode = design?.planetBoxMode || FALLBACK.planetBoxMode;
+  // `??` not `||` — 0 is a real, legitimate "square corners" choice, not a missing value.
+  const planetBoxBorderRadius = design?.planetBoxBorderRadius ?? FALLBACK.planetBoxBorderRadius;
   const backgroundColor = design?.backgroundColor || FALLBACK.backgroundColor;
 
   // Undefined on readings saved before 2026-08-10's arrow plumbing —
@@ -204,7 +248,14 @@ export function HumanDesignFullChart({
       </div>
 
       <div className="grid grid-cols-1 gap-4 @5xl/hdfc:grid-cols-[minmax(180px,240px)_minmax(320px,480px)_minmax(180px,240px)] @5xl/hdfc:items-start">
-        <ActivationColumn side="Design" activations={profile.design} color={designActivationColor} boxColor={planetBoxColor} align="left" />
+        <ActivationColumn
+          side="Design"
+          activations={profile.design}
+          color={designActivationColor}
+          mode={planetBoxMode}
+          borderRadius={planetBoxBorderRadius}
+          align="left"
+        />
 
         <HumanDesignChart
           profile={profile}
@@ -215,7 +266,14 @@ export function HumanDesignFullChart({
           backgroundColor={backgroundColor}
         />
 
-        <ActivationColumn side="Personality" activations={profile.personality} color={personalityActivationColor} boxColor={planetBoxColor} align="right" />
+        <ActivationColumn
+          side="Personality"
+          activations={profile.personality}
+          color={personalityActivationColor}
+          mode={planetBoxMode}
+          borderRadius={planetBoxBorderRadius}
+          align="right"
+        />
       </div>
 
       <div className="hidden items-center justify-between gap-4 pt-2 @5xl/hdfc:flex">

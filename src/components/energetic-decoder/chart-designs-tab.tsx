@@ -247,7 +247,10 @@ interface EditableFields {
   designActivationColor: string;
   arrowColor: string;
   arrowStyle: ChartDesign["arrowStyle"];
+  /** Currently unused by human-design-full-chart.tsx — see chart-design.ts's header comment. Still saved/reloaded correctly, control kept here for backward compatibility. */
   planetBoxColor: string;
+  planetBoxMode: ChartDesign["planetBoxMode"];
+  planetBoxBorderRadius: number;
   backgroundColor: string;
   wheelAccentColor: string;
   houseSystem: ChartDesign["houseSystem"];
@@ -263,13 +266,15 @@ function fieldsFrom(design: ChartDesign): EditableFields {
     arrowColor: design.arrowColor,
     arrowStyle: design.arrowStyle,
     planetBoxColor: design.planetBoxColor,
+    planetBoxMode: design.planetBoxMode,
+    planetBoxBorderRadius: design.planetBoxBorderRadius,
     backgroundColor: design.backgroundColor,
     wheelAccentColor: design.wheelAccentColor,
     houseSystem: design.houseSystem,
   };
 }
 
-/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The 5 full-chart-layout fields (personalityActivationColor…planetBoxColor) are HD-only and show up here even though no renderer reads them yet — same "saved ahead of the component that will use it" reasoning as chart-design.ts. */
+/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The full-chart-layout fields (personalityActivationColor…planetBoxBorderRadius) are HD-only and show up here even though the BodyGraph itself doesn't read them — they drive human-design-full-chart.tsx. */
 const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
   humanDesign: [
     "chartDefinedColor",
@@ -280,6 +285,8 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     "arrowColor",
     "arrowStyle",
     "planetBoxColor",
+    "planetBoxMode",
+    "planetBoxBorderRadius",
     "backgroundColor",
   ],
   astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
@@ -294,7 +301,9 @@ const FIELD_LABEL: Record<keyof EditableFields, string> = {
   designActivationColor: "Design activation",
   arrowColor: "Variable arrows",
   arrowStyle: "Arrow style",
-  planetBoxColor: "Planet box background",
+  planetBoxColor: "Planet box background (unused)",
+  planetBoxMode: "Planet box style",
+  planetBoxBorderRadius: "Planet box corner radius",
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   houseSystem: "House system",
@@ -329,7 +338,7 @@ function ChartDesignCard({
   async function save() {
     setSaving(true);
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, string | number> = {};
       for (const k of relevant) body[k] = fields[k];
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs/${design.id}`, {
         method: "PATCH",
@@ -388,6 +397,32 @@ function ChartDesignCard({
               <option value="solid">Solid arrows</option>
               <option value="outline">Outline arrows</option>
             </select>
+          ) : key === "planetBoxMode" ? (
+            <select
+              key={key}
+              value={fields.planetBoxMode}
+              onChange={(e) => setFields((f) => ({ ...f, planetBoxMode: e.target.value as ChartDesign["planetBoxMode"] }))}
+              disabled={!isAdmin}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed"
+            >
+              <option value="iconOnly">Icon only — glyph colored, row plain</option>
+              <option value="fullBox">Full box — entire row colored</option>
+            </select>
+          ) : key === "planetBoxBorderRadius" ? (
+            <div key={key} className="flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                value={fields.planetBoxBorderRadius}
+                onChange={(e) => setFields((f) => ({ ...f, planetBoxBorderRadius: Number(e.target.value) || 0 }))}
+                disabled={!isAdmin || fields.planetBoxMode !== "fullBox"}
+                className="h-8 w-20 text-xs"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                {FIELD_LABEL[key]}
+                {fields.planetBoxMode !== "fullBox" && " (fullBox only)"}
+              </span>
+            </div>
           ) : (
             <div key={key} className="flex items-center gap-2">
               <input

@@ -35,7 +35,15 @@ function freshDesignFields() {
     designActivationColor: "#9a3412", // rust/brown — same as human-design-chart.tsx's DESIGN_FILL
     arrowColor: "#3f3f46", // zinc-700 — neutral ink, matches WHEEL_TEXT already used elsewhere (astrology wheel, PDF)
     arrowStyle: "solid" as const,
-    planetBoxColor: "#f4f4f5", // zinc-100 — subtle light box, not yet rendered anywhere
+    planetBoxColor: "#f4f4f5", // zinc-100 — currently unused by the renderer, see chart-design.ts's header comment
+    // "fullBox" as the default rather than "iconOnly": the full-chart
+    // component has always rendered a filled row (planetBoxColor, before
+    // this field existed) — fullBox is the closest continuity with that,
+    // even though the fill source changes to the activation color per
+    // side. Border radius default (6) matches the Tailwind `rounded-md`
+    // class the renderer already hardcoded before this field existed.
+    planetBoxMode: "fullBox" as const,
+    planetBoxBorderRadius: 6,
     backgroundColor: "#ffffff",
     houseSystem: "placidus" as const,
     wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
@@ -90,9 +98,9 @@ export async function listChartDesigns(subAccountId: string, agencyId: string): 
 }
 
 /** Only fills keys genuinely absent from the stored doc — never overwrites a real value the sub-account (or the old single-field picker) already saved, chartDefinedColor and pre-existing houseSystem included. */
-function missingFieldsPatch(d: ChartDesign): Record<string, string> {
+function missingFieldsPatch(d: ChartDesign): Record<string, string | number> {
   const fresh = freshDesignFields();
-  const patch: Record<string, string> = {};
+  const patch: Record<string, string | number> = {};
   if (d.channelsColor === undefined) patch.channelsColor = fresh.channelsColor;
   if (d.gatesColor === undefined) patch.gatesColor = fresh.gatesColor;
   if (d.backgroundColor === undefined) patch.backgroundColor = fresh.backgroundColor;
@@ -107,10 +115,13 @@ function missingFieldsPatch(d: ChartDesign): Record<string, string> {
   if (d.arrowColor === undefined) patch.arrowColor = fresh.arrowColor;
   if (d.arrowStyle === undefined) patch.arrowStyle = fresh.arrowStyle;
   if (d.planetBoxColor === undefined) patch.planetBoxColor = fresh.planetBoxColor;
+  // Planet Boxes mode — same day, same backfill reasoning.
+  if (d.planetBoxMode === undefined) patch.planetBoxMode = fresh.planetBoxMode;
+  if (d.planetBoxBorderRadius === undefined) patch.planetBoxBorderRadius = fresh.planetBoxBorderRadius;
   return patch;
 }
 
-async function applyBackfill(id: string, patch: Record<string, string>): Promise<ChartDesign> {
+async function applyBackfill(id: string, patch: Record<string, string | number>): Promise<ChartDesign> {
   await col().doc(id).update({ ...patch, updatedAt: FieldValue.serverTimestamp() });
   const snap = await col().doc(id).get();
   return toDesign(snap.id, snap.data()!);
@@ -197,6 +208,8 @@ export async function updateChartDesign(
       | "arrowColor"
       | "arrowStyle"
       | "planetBoxColor"
+      | "planetBoxMode"
+      | "planetBoxBorderRadius"
       | "backgroundColor"
       | "houseSystem"
       | "wheelAccentColor"

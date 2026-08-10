@@ -56,6 +56,10 @@ export async function PATCH(
     if (typeof body.arrowColor === "string") fields.arrowColor = body.arrowColor;
     if (body.arrowStyle === "solid" || body.arrowStyle === "outline") fields.arrowStyle = body.arrowStyle;
     if (typeof body.planetBoxColor === "string") fields.planetBoxColor = body.planetBoxColor;
+    if (body.planetBoxMode === "iconOnly" || body.planetBoxMode === "fullBox") fields.planetBoxMode = body.planetBoxMode;
+    if (typeof body.planetBoxBorderRadius === "number" && Number.isFinite(body.planetBoxBorderRadius)) {
+      fields.planetBoxBorderRadius = body.planetBoxBorderRadius;
+    }
     if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
     if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
     if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;

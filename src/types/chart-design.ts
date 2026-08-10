@@ -25,19 +25,35 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * arrow color/style, and Planet Box color: these 5 fields exist on the
  * model and in this tab ahead of the renderer that will use them (the
  * full Human Design chart layout — Design column + BodyGraph + Personality
- * column + Variable arrows — audited but not yet built). Saving early so
- * the full-chart component has real customization to read from the
- * moment it ships, rather than needing its own follow-up migration. Until
- * that component exists, these 5 fields are inert — saved and reloaded
- * correctly, but nothing on screen changes yet. `human-design-chart.tsx`
- * (the BodyGraph itself) keeps its current hardcoded Personality/Design
- * colors unchanged for now, same as every other "not wired yet" field
- * noted throughout this file.
+ * column + Variable arrows). `human-design-chart.tsx` (the BodyGraph
+ * itself) keeps its current hardcoded Personality/Design colors
+ * unchanged, same as every other "not wired to the BodyGraph" field
+ * noted throughout this file — these 5 drive `human-design-full-chart.tsx`
+ * only.
+ *
+ * 2026-08-10, same day — Planet Boxes: real behavior confirmed against
+ * the live Bodygraph chart-design tool (their actual "Color Planets
+ * Only" / "Color Planets and Gates" toggle). `planetBoxMode` picks
+ * between them; `planetBoxBorderRadius` only has an effect in fullBox
+ * mode (iconOnly has no filled box to round). Real consequence for
+ * `planetBoxColor` above: neither accurate mode uses it any more —
+ * iconOnly leaves the row genuinely unfilled (matching Bodygraph's own
+ * real rendering, confirmed by direct inspection, not a plain white
+ * placeholder standing in for "no color set"), and fullBox fills with
+ * `personalityActivationColor`/`designActivationColor` instead (also
+ * matching Bodygraph, whose "Planets and Gates" mode fills with their
+ * own Design/Personality colors, not a separate arbitrary box color).
+ * `planetBoxColor` is kept on the model/API/UI rather than deleted —
+ * her explicit instruction — but `human-design-full-chart.tsx` no
+ * longer reads it for anything. Flagging plainly rather than inventing
+ * a use for it just to avoid saying "currently inert."
  */
 
 export type ChartDesignSystem = "humanDesign" | "astrology" | "mandala";
 
 export type VariableArrowStyle = "solid" | "outline";
+
+export type PlanetBoxMode = "iconOnly" | "fullBox";
 
 export interface ChartDesign {
   id: string;
@@ -65,8 +81,12 @@ export interface ChartDesign {
   arrowColor: string;
   /** HD only — Variable arrow visual style, for the same not-yet-built arrows. */
   arrowStyle: VariableArrowStyle;
-  /** HD only — background color for each Design/Personality "planet box" row (glyph + Gate.Line) in the full chart layout (not built yet). */
+  /** HD only — currently unused by human-design-full-chart.tsx (see header comment) — kept for backward compatibility, not deleted. */
   planetBoxColor: string;
+  /** HD only — "iconOnly" colors just the planet glyph with that side's activation color, row stays unfilled. "fullBox" fills the entire Design/Personality row with the activation color, matching Bodygraph's own real "Color Planets and Gates" mode. */
+  planetBoxMode: PlanetBoxMode;
+  /** HD only — corner rounding (px) for a fullBox row. No effect in iconOnly mode, which has no filled box to round. */
+  planetBoxBorderRadius: number;
   /** All 3 systems — the chart's background color (every real Bodygraph chart type has this). */
   backgroundColor: string;
   /** Astrology only — which house system this design's readings use. Matches HouseSystem in astrology.ts exactly. */
