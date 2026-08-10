@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import type { ChartDesign } from "@/types/chart-design";
 
 interface PlaceSuggestion {
   lat: number;
@@ -19,11 +20,15 @@ interface PlaceSuggestion {
 export function PublicDecoderForm({
   saId,
   accent,
-  definedColor,
+  hdDesign,
+  mandalaDesign,
+  astroDesign,
 }: {
   saId: string;
   accent: string;
-  definedColor?: string;
+  hdDesign?: ChartDesign | null;
+  mandalaDesign?: ChartDesign | null;
+  astroDesign?: ChartDesign | null;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -116,8 +121,10 @@ export function PublicDecoderForm({
           <span>Here&apos;s {reading.name}&apos;s reading.</span>
         </div>
         {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
-        {reading.humanDesign && <HumanDesignSummary profile={reading.humanDesign} definedColor={definedColor} />}
-        {reading.astrology && <AstrologySummary chart={reading.astrology} />}
+        {reading.humanDesign && (
+          <HumanDesignSummary profile={reading.humanDesign} hdDesign={hdDesign} mandalaDesign={mandalaDesign} />
+        )}
+        {reading.astrology && <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} />}
         <Link
           href={`/decoder/${saId}/report/${reading.id}`}
           className="flex items-center justify-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-semibold hover:bg-muted/50"

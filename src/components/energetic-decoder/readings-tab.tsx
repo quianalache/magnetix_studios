@@ -19,6 +19,7 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 import type { ReportDesign } from "@/types/report-blocks";
+import type { ChartDesign } from "@/types/chart-design";
 
 interface PlaceSuggestion {
   lat: number;
@@ -42,6 +43,7 @@ export function EnergeticDecoderReadingsTab() {
   const [suggestLoading, setSuggestLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reportDesigns, setReportDesigns] = useState<ReportDesign[]>([]);
+  const [chartDesigns, setChartDesigns] = useState<ChartDesign[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,6 +81,22 @@ export function EnergeticDecoderReadingsTab() {
       .then((d) => setReportDesigns(d.designs ?? []))
       .catch(() => setReportDesigns([]));
   }, [subAccountId]);
+
+  // Full Chart Designs (2026-08-09 rebuild) — same list every "Chart
+  // Designs" sub-tab reads, filtered to each system's default below so
+  // an expanded reading here renders with the same colors as the public
+  // report page, not the traditional base every time.
+  useEffect(() => {
+    if (!subAccountId) return;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs`)
+      .then((r) => r.json())
+      .then((d) => setChartDesigns(d.designs ?? []))
+      .catch(() => setChartDesigns([]));
+  }, [subAccountId]);
+
+  const defaultHdDesign = chartDesigns.find((d) => d.system === "humanDesign" && d.isDefault) ?? null;
+  const defaultMandalaDesign = chartDesigns.find((d) => d.system === "mandala" && d.isDefault) ?? null;
+  const defaultAstroDesign = chartDesigns.find((d) => d.system === "astrology" && d.isDefault) ?? null;
 
   function handlePlaceChange(value: string) {
     setBirthPlace(value);
@@ -367,10 +385,11 @@ export function EnergeticDecoderReadingsTab() {
                   {r.humanDesign && (
                     <HumanDesignSummary
                       profile={r.humanDesign}
-                      definedColor={subAccount?.energeticDecoderTheme?.chartDefinedColor}
+                      hdDesign={defaultHdDesign}
+                      mandalaDesign={defaultMandalaDesign}
                     />
                   )}
-                  {r.astrology && <AstrologySummary chart={r.astrology} />}
+                  {r.astrology && <AstrologySummary chart={r.astrology} astroDesign={defaultAstroDesign} />}
                 </div>
               )}
             </div>

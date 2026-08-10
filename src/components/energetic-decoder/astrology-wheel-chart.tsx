@@ -62,7 +62,18 @@ function screenAngle(longitude: number, ascLongitude: number): number {
   return 180 + (longitude - ascLongitude);
 }
 
-export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChart; className?: string }) {
+export function AstrologyWheelChart({
+  chart,
+  className,
+  wheelAccentColor = WHEEL_TEXT,
+  backgroundColor = "#ffffff",
+}: {
+  chart: AstrologyChart;
+  className?: string;
+  /** Sub-account's chosen accent (Chart Designs tab) — planet markers, AC/MC labels. Sign ring + house lines stay neutral gray regardless, same "structure is fixed, accent is a brand choice" rule as the bodygraph. */
+  wheelAccentColor?: string;
+  backgroundColor?: string;
+}) {
   const ascLon = chart.angles.ascendant.longitude;
 
   // Declutter: sort by longitude, nudge anything within MIN_SEPARATION_DEG
@@ -84,7 +95,7 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
   });
 
   return (
-    <div className={className} style={{ background: "#fff", borderRadius: 12, padding: "5%" }}>
+    <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "5%" }}>
       <svg viewBox="0 0 100 100" role="img" aria-label="Astrology natal chart wheel">
       {/* Sign ring — 12 wedges + glyphs, boundaries at each sign's true 30° start relative to ASC */}
       <circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
@@ -176,8 +187,8 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
         const pos = toXY(plot.angle, plot.r);
         return (
           <g key={p.body}>
-            <circle cx={pos.x} cy={pos.y} r={2.6} fill="#fff" stroke={WHEEL_TEXT} strokeWidth={0.3} />
-            <text x={pos.x} y={pos.y + 1.1} fontSize={2.8} textAnchor="middle" fill={WHEEL_TEXT}>
+            <circle cx={pos.x} cy={pos.y} r={2.6} fill={backgroundColor} stroke={wheelAccentColor} strokeWidth={0.3} />
+            <text x={pos.x} y={pos.y + 1.1} fontSize={2.8} textAnchor="middle" fill={wheelAccentColor}>
               {PLANET_GLYPH[p.body] ?? p.body[0].toUpperCase()}
             </text>
             {p.retrograde && (
@@ -190,7 +201,7 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
       })}
 
       {/* Ascendant / MC markers */}
-      <text x={toXY(180, SIGN_RING_OUTER + 3).x} y={toXY(180, SIGN_RING_OUTER + 3).y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill={WHEEL_TEXT}>
+      <text x={toXY(180, SIGN_RING_OUTER + 3).x} y={toXY(180, SIGN_RING_OUTER + 3).y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill={wheelAccentColor}>
         AC
       </text>
       <text
@@ -199,7 +210,7 @@ export function AstrologyWheelChart({ chart, className }: { chart: AstrologyChar
         fontSize={2.6}
         fontWeight={700}
         textAnchor="middle"
-        fill={WHEEL_TEXT}
+        fill={wheelAccentColor}
       >
         MC
       </text>

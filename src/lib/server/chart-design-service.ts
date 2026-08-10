@@ -19,14 +19,26 @@ function toDesign(id: string, data: FirebaseFirestore.DocumentData): ChartDesign
   return { id, ...(data as Omit<ChartDesign, "id">) };
 }
 
+/** Real, working defaults for the fields with no legacy value to inherit — everything a fresh design needs to render correctly with zero configuration. */
+function freshDesignFields() {
+  return {
+    chartDefinedColor: defaultChartDesignColor(),
+    channelsColor: "#52525b", // zinc-600 — matches the traditional defined-channel line color already used
+    gatesColor: "#18181b", // zinc-900 — matches the traditional Personality gate-text color
+    backgroundColor: "#ffffff",
+    houseSystem: "placidus" as const,
+    wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
+  };
+}
+
 /**
- * Lists every saved design, seeding the two defaults (one Human Design, one
- * Astrology) on first call if a sub-account has none yet — so this always
- * returns at least one design per system instead of an empty list on a
- * brand-new or pre-existing sub-account. The Human Design seed reads the
- * sub-account's pre-existing `energeticDecoderTheme.chartDefinedColor` (not
- * the hardcoded default) so a practitioner who already customized their
- * color via the old single picker doesn't see it silently reset here.
+ * Lists every saved design, seeding one default per system (Human Design,
+ * Astrology, Mandala) on first call if a sub-account has none yet — so
+ * this always returns at least one design per system instead of an empty
+ * list on a brand-new or pre-existing sub-account. The Human Design seed
+ * reads the sub-account's pre-existing `energeticDecoderTheme.chartDefinedColor`
+ * (not the hardcoded default) so a practitioner who already customized
+ * their color via the old single picker doesn't see it silently reset here.
  */
 export async function listChartDesigns(subAccountId: string, agencyId: string): Promise<ChartDesign[]> {
   const snap = await col().where("subAccountId", "==", subAccountId).get();
@@ -39,6 +51,9 @@ export async function listChartDesigns(subAccountId: string, agencyId: string): 
   if (!existing.some((d) => d.system === "astrology")) {
     seeds.push(seedDefault(subAccountId, agencyId, "astrology"));
   }
+  if (!existing.some((d) => d.system === "mandala")) {
+    seeds.push(seedDefault(subAccountId, agencyId, "mandala"));
+  }
   if (seeds.length === 0) return existing;
 
   const created = await Promise.all(seeds);
@@ -50,11 +65,11 @@ async function seedDefault(
   agencyId: string,
   system: ChartDesignSystem,
 ): Promise<ChartDesign> {
-  let chartDefinedColor = defaultChartDesignColor();
+  const fresh = freshDesignFields();
   if (system === "humanDesign") {
     const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
     const existingColor = subSnap.data()?.energeticDecoderTheme?.chartDefinedColor;
-    if (typeof existingColor === "string" && existingColor) chartDefinedColor = existingColor;
+    if (typeof existingColor === "string" && existingColor) fresh.chartDefinedColor = existingColor;
   }
   const doc = {
     subAccountId,
@@ -62,8 +77,7 @@ async function seedDefault(
     system,
     name: "Default",
     isDefault: true,
-    chartDefinedColor,
-    houseSystem: "placidus" as const,
+    ...fresh,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -104,8 +118,7 @@ export async function createChartDesign(opts: {
     system: opts.system,
     name: opts.name.trim() || "Untitled design",
     isDefault: false,
-    chartDefinedColor: defaultChartDesignColor(),
-    houseSystem: "placidus" as const,
+    ...freshDesignFields(),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -116,7 +129,7 @@ export async function createChartDesign(opts: {
 export async function updateChartDesign(
   subAccountId: string,
   designId: string,
-  fields: Partial<Pick<ChartDesign, "name" | "chartDefinedColor" | "houseSystem">>,
+  fields: Partial<Pick<ChartDesign, "name" | "chartDefinedColor" | "channelsColor" | "gatesColor" | "backgroundColor" | "houseSystem" | "wheelAccentColor">>,
 ): Promise<ChartDesign> {
   const ref = col().doc(designId);
   const snap = await ref.get();

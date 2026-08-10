@@ -6,8 +6,10 @@ import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
+import type { ChartDesign } from "@/types/chart-design";
 
 /**
  * Renders a saved Report Design against one specific reading — the piece
@@ -21,12 +23,17 @@ export function ReportDesignViewer({
   design,
   readingInput,
   ruleInput,
-  definedColor,
+  hdDesign,
+  mandalaDesign,
+  astroDesign,
 }: {
   design: ReportDesign;
   readingInput: ShortcodeReadingInput;
   ruleInput: ChartRuleReadingInput;
-  definedColor: string;
+  /** Full Chart Design set (2026-08-09 rebuild) — each independently optional, same "falls back to traditional base" rule as reading-summary.tsx's consumers. */
+  hdDesign?: ChartDesign | null;
+  mandalaDesign?: ChartDesign | null;
+  astroDesign?: ChartDesign | null;
 }) {
   const visiblePages = design.pages.filter((p) => !p.visibleIf || evaluateChartRule(p.visibleIf, ruleInput));
   const [pageIndex, setPageIndex] = useState(0);
@@ -69,7 +76,9 @@ export function ReportDesignViewer({
               <ReportBlockView
                 block={block}
                 readingInput={readingInput}
-                definedColor={definedColor}
+                hdDesign={hdDesign}
+                mandalaDesign={mandalaDesign}
+                astroDesign={astroDesign}
                 onNextPage={() => setPageIndex((i) => Math.min(i + 1, visiblePages.length - 1))}
                 onOpenPopup={setPopupBlockId}
               />
@@ -84,7 +93,15 @@ export function ReportDesignViewer({
             <button type="button" onClick={() => setPopupBlockId(null)} className="float-right text-sm text-muted-foreground hover:text-foreground">
               Close
             </button>
-            <ReportBlockView block={popupBlock} readingInput={readingInput} definedColor={definedColor} onNextPage={() => {}} onOpenPopup={() => {}} />
+            <ReportBlockView
+              block={popupBlock}
+              readingInput={readingInput}
+              hdDesign={hdDesign}
+              mandalaDesign={mandalaDesign}
+              astroDesign={astroDesign}
+              onNextPage={() => {}}
+              onOpenPopup={() => {}}
+            />
           </div>
         </div>
       )}
@@ -95,13 +112,17 @@ export function ReportDesignViewer({
 function ReportBlockView({
   block,
   readingInput,
-  definedColor,
+  hdDesign,
+  mandalaDesign,
+  astroDesign,
   onNextPage,
   onOpenPopup,
 }: {
   block: ReportBlock;
   readingInput: ShortcodeReadingInput;
-  definedColor: string;
+  hdDesign?: ChartDesign | null;
+  mandalaDesign?: ChartDesign | null;
+  astroDesign?: ChartDesign | null;
   onNextPage: () => void;
   onOpenPopup: (blockId: string) => void;
 }) {
@@ -155,7 +176,15 @@ function ReportBlockView({
         </button>
       );
     case "chart":
-      return <ChartPieceView piece={block.piece} readingInput={readingInput} definedColor={definedColor} />;
+      return (
+        <ChartPieceView
+          piece={block.piece}
+          readingInput={readingInput}
+          hdDesign={hdDesign}
+          mandalaDesign={mandalaDesign}
+          astroDesign={astroDesign}
+        />
+      );
     case "divider":
       return <hr className="border-border" />;
     case "spacer":
@@ -168,18 +197,32 @@ function ReportBlockView({
 function ChartPieceView({
   piece,
   readingInput,
-  definedColor,
+  hdDesign,
+  mandalaDesign,
+  astroDesign,
 }: {
   piece: "human-design-full" | "human-design-mandala" | "human-design-gates" | "astrology-wheel";
   readingInput: ShortcodeReadingInput;
-  definedColor: string;
+  hdDesign?: ChartDesign | null;
+  mandalaDesign?: ChartDesign | null;
+  astroDesign?: ChartDesign | null;
 }) {
   const hd = readingInput.humanDesign as HumanDesignProfile | null | undefined;
   const astro = readingInput.astrology as AstrologyChart | null | undefined;
 
   switch (piece) {
     case "human-design-full":
-      return hd ? <HumanDesignChart profile={hd} definedColor={definedColor} /> : <MissingPiece label="Human Design chart" />;
+      return hd ? (
+        <HumanDesignChart
+          profile={hd}
+          definedColor={hdDesign?.chartDefinedColor}
+          channelsColor={hdDesign?.channelsColor}
+          gatesColor={hdDesign?.gatesColor}
+          backgroundColor={hdDesign?.backgroundColor}
+        />
+      ) : (
+        <MissingPiece label="Human Design chart" />
+      );
     case "human-design-gates":
       return hd ? (
         <div className="flex flex-wrap gap-1 rounded-xl border bg-card p-3">
@@ -191,12 +234,29 @@ function ChartPieceView({
         <MissingPiece label="Activated gates" />
       );
     case "astrology-wheel":
-      return astro ? <AstrologyWheelChart chart={astro} /> : <MissingPiece label="Astrology wheel" />;
+      return astro ? (
+        <AstrologyWheelChart
+          chart={astro}
+          wheelAccentColor={astroDesign?.wheelAccentColor}
+          backgroundColor={astroDesign?.backgroundColor}
+        />
+      ) : (
+        <MissingPiece label="Astrology wheel" />
+      );
     case "human-design-mandala":
-      return (
-        <div className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">
-          Mandala chart isn&apos;t built yet — real gap, not this reading&apos;s fault. See the Build Log.
-        </div>
+      // Real, built 2026-08-09 — was a genuine gap (Bodygraph's API doesn't
+      // expose Mandala data), now drawn locally from the same verified
+      // GATE_WHEEL_ORDER the gate-line calculation already depends on.
+      // Only renders once a Mandala Chart Design exists for this
+      // sub-account, same "real field or absent" rule as everywhere else.
+      return hd && mandalaDesign ? (
+        <MandalaChart
+          profile={hd}
+          gateColor={mandalaDesign.chartDefinedColor}
+          backgroundColor={mandalaDesign.backgroundColor}
+        />
+      ) : (
+        <MissingPiece label="Mandala chart" />
       );
     default:
       return null;

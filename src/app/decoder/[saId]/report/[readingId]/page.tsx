@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
+import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,17 @@ export default async function EnergeticDecoderReportPage({
 
   const hasAnySystem = reading.spheres.length > 0 || !!reading.humanDesign || !!reading.astrology;
 
+  // Full chart-design richness (2026-08-09 rebuild) — fetched in parallel,
+  // each independently optional (null when a sub-account never set one up),
+  // matching every component's own "falls back to traditional base" rule.
+  const [hdDesign, mandalaDesign, astroDesign] = reading.humanDesign || reading.astrology
+    ? await Promise.all([
+        reading.humanDesign ? getDefaultChartDesign(saId, "humanDesign") : Promise.resolve(null),
+        reading.humanDesign ? getDefaultChartDesign(saId, "mandala") : Promise.resolve(null),
+        reading.astrology ? getDefaultChartDesign(saId, "astrology") : Promise.resolve(null),
+      ])
+    : [null, null, null];
+
   return (
     <div
       className="min-h-screen bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 px-4 py-10 sm:px-6"
@@ -74,9 +86,9 @@ export default async function EnergeticDecoderReportPage({
           <div className="space-y-4">
             {reading.spheres.length > 0 && <SphereList spheres={reading.spheres} />}
             {reading.humanDesign && (
-              <HumanDesignSummary profile={reading.humanDesign} definedColor={theme.chartDefinedColor} />
+              <HumanDesignSummary profile={reading.humanDesign} hdDesign={hdDesign} mandalaDesign={mandalaDesign} />
             )}
-            {reading.astrology && <AstrologySummary chart={reading.astrology} />}
+            {reading.astrology && <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} />}
           </div>
         ) : (
           <p className="rounded-2xl border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">

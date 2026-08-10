@@ -8,6 +8,8 @@ import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
+import type { ChartDesign } from "@/types/chart-design";
 
 /**
  * A saved reading's full display, for BOTH the admin Readings tab
@@ -124,11 +126,14 @@ export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
 
 export function HumanDesignSummary({
   profile,
-  definedColor,
+  hdDesign,
+  mandalaDesign,
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
-  /** Sub-account's Chart design color (Phase 4, 2026-08-09) — falls back to the traditional light gray when not passed. */
-  definedColor?: string;
+  /** The sub-account's default Human Design Chart Design (2026-08-09 rebuild — full color set, not just one field) — falls back to the traditional black/white/gray base when not passed. */
+  hdDesign?: ChartDesign | null;
+  /** The sub-account's default Mandala Chart Design — the real Mandala chart only renders when this is passed; omitted entirely otherwise rather than showing a fake/empty chart. */
+  mandalaDesign?: ChartDesign | null;
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -150,9 +155,30 @@ export function HumanDesignSummary({
             className="mx-auto w-full max-w-[560px]"
           />
         ) : (
-          <HumanDesignChart profile={profile} className="mx-auto w-full max-w-[560px]" definedColor={definedColor} />
+          <HumanDesignChart
+            profile={profile}
+            className="mx-auto w-full max-w-[560px]"
+            definedColor={hdDesign?.chartDefinedColor}
+            channelsColor={hdDesign?.channelsColor}
+            gatesColor={hdDesign?.gatesColor}
+            backgroundColor={hdDesign?.backgroundColor}
+          />
         )}
       </div>
+
+      {mandalaDesign && (
+        <div className="rounded-2xl border bg-card p-4">
+          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Mandala — real, built 2026-08-09 (not available from Bodygraph&apos;s API, drawn locally)
+          </p>
+          <MandalaChart
+            profile={profile}
+            className="mx-auto w-full max-w-[420px]"
+            gateColor={mandalaDesign.chartDefinedColor}
+            backgroundColor={mandalaDesign.backgroundColor}
+          />
+        </div>
+      )}
 
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -327,7 +353,14 @@ export function HumanDesignSummary({
   );
 }
 
-export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?: AstrologyReadingContent } }) {
+export function AstrologySummary({
+  chart,
+  astroDesign,
+}: {
+  chart: AstrologyChart & { content?: AstrologyReadingContent };
+  /** The sub-account's default Astrology Chart Design (2026-08-09 rebuild) — falls back to the traditional neutral ink when not passed. */
+  astroDesign?: ChartDesign | null;
+}) {
   const content = chart.content;
   const sun = chart.placements.find((p) => p.body === "sun");
   const moon = chart.placements.find((p) => p.body === "moon");
@@ -344,7 +377,12 @@ export function AstrologySummary({ chart }: { chart: AstrologyChart & { content?
             className="mx-auto w-full max-w-[520px]"
           />
         ) : (
-          <AstrologyWheelChart chart={chart} className="mx-auto w-full max-w-[520px]" />
+          <AstrologyWheelChart
+            chart={chart}
+            className="mx-auto w-full max-w-[520px]"
+            wheelAccentColor={astroDesign?.wheelAccentColor}
+            backgroundColor={astroDesign?.backgroundColor}
+          />
         )}
       </div>
 

@@ -25,7 +25,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch {
     body = {};
   }
-  const system: ChartDesignSystem = body.system === "astrology" ? "astrology" : "humanDesign";
+  const system: ChartDesignSystem =
+    body.system === "astrology" ? "astrology" : body.system === "mandala" ? "mandala" : "humanDesign";
   const name = typeof body.name === "string" ? body.name : "Untitled design";
 
   const design = await createChartDesign({

@@ -49,6 +49,10 @@ export async function PATCH(
     const fields: Record<string, unknown> = {};
     if (typeof body.name === "string") fields.name = body.name;
     if (typeof body.chartDefinedColor === "string") fields.chartDefinedColor = body.chartDefinedColor;
+    if (typeof body.channelsColor === "string") fields.channelsColor = body.channelsColor;
+    if (typeof body.gatesColor === "string") fields.gatesColor = body.gatesColor;
+    if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
+    if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
     if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;
 
     const design = await updateChartDesign(subAccountId, designId, fields);

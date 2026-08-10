@@ -3,6 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { getReportDesign } from "@/lib/server/report-design-service";
+import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { ReportDesignViewer } from "@/components/energetic-decoder/report-design-viewer";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,14 @@ export default async function EnergeticDecoderReportDesignPage({
     astrology: reading.astrology,
   };
 
+  const [hdDesign, mandalaDesign, astroDesign] = reading.humanDesign || reading.astrology
+    ? await Promise.all([
+        reading.humanDesign ? getDefaultChartDesign(saId, "humanDesign") : Promise.resolve(null),
+        reading.humanDesign ? getDefaultChartDesign(saId, "mandala") : Promise.resolve(null),
+        reading.astrology ? getDefaultChartDesign(saId, "astrology") : Promise.resolve(null),
+      ])
+    : [null, null, null];
+
   return (
     <div
       className="min-h-screen bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 px-4 py-10 sm:px-6"
@@ -69,7 +78,9 @@ export default async function EnergeticDecoderReportDesignPage({
           design={design}
           readingInput={readingInput}
           ruleInput={{ humanDesign: reading.humanDesign, astrology: reading.astrology }}
-          definedColor={theme.chartDefinedColor}
+          hdDesign={hdDesign}
+          mandalaDesign={mandalaDesign}
+          astroDesign={astroDesign}
         />
       </div>
     </div>

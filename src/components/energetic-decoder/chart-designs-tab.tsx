@@ -16,26 +16,44 @@ import {
   type EnergeticDecoderTheme,
 } from "@/types/energetic-decoder";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
+import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import type { AstrologyChart } from "@/lib/energetics/astrology";
+import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
+import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 
 /**
- * Chart Designs — list-first (2026-08-09), replacing the old single global
- * color picker (theme-card.tsx). Modeled on bodygraph.com's Chart Design
- * list per her direct instruction: "you have your chart design page, which
- * then gives you a list of the different chart designs, and you can create
- * a new one." See src/types/chart-design.ts for the write-through/scope
- * notes — only the DEFAULT design per system is actually applied anywhere
- * today; additional saved presets are real and listed but not yet
- * selectable per-reading (no plumbing for that exists yet).
+ * Chart Designs — full rebuild 2026-08-09, per her explicit "I'm not
+ * worried about how long it takes. Do the entire build please." Real
+ * parity with the actual richness her Bodygraph account has, honestly
+ * scoped to what this app's own chart renderers actually support (see
+ * chart-design.ts's header comment for exactly what was and wasn't
+ * cloned, and why).
+ *
+ * Two things this version adds that the v1 shipped without:
+ *  1. Mandala as a real 3rd system (was a placeholder "not built yet"
+ *     banner in v1 — the Mandala chart itself shipped the same day,
+ *     mandala-chart.tsx, so it belongs here now).
+ *  2. A live color preview per card, rendered against one fixed real
+ *     sample chart (see the /chart-designs/preview route) using the
+ *     exact same chart components every real report uses — not a static
+ *     swatch. Reacts to unsaved edits before Save is even clicked, so
+ *     "you say design, but design what" (her repeated feedback pattern
+ *     this session) has an actual answer on screen.
  *
  * Card backgrounds rotate through the same MomentumOS-scoped tokens Growth
  * uses (bg-card/bg-secondary/bg-accent/bg-muted) instead of one uniform
  * card color — her direct ask (2026-08-09): "the growth tab... we had the
  * different colors for the different cards... more visually appealing."
- * This page already renders inside `.momentum-scope` (see page.tsx), so
- * these are real, already-established tokens, not new ones.
  */
 
 const CARD_BG = ["bg-card", "bg-secondary", "bg-accent/20", "bg-muted"] as const;
+
+const SYSTEM_LABEL: Record<ChartDesignSystem, string> = {
+  humanDesign: "Human Design",
+  astrology: "Astrology",
+  mandala: "Mandala",
+};
 
 export function EnergeticDecoderChartDesignsTab() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
@@ -46,6 +64,9 @@ export function EnergeticDecoderChartDesignsTab() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const [sampleHd, setSampleHd] = useState<HumanDesignProfile | null>(null);
+  const [sampleAstro, setSampleAstro] = useState<AstrologyChart | null>(null);
+
   function load() {
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs`)
       .then((r) => r.json())
@@ -53,6 +74,23 @@ export function EnergeticDecoderChartDesignsTab() {
       .catch(() => toast.error("Couldn't load chart designs."));
   }
   useEffect(load, [subAccountId]);
+
+  // One fixed real sample chart, shared by every card's live preview — see
+  // the preview route's own header comment for why it's one shared demo
+  // rather than a per-reading calculation.
+  useEffect(() => {
+    if (!subAccountId) return;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs/preview`)
+      .then((r) => r.json())
+      .then((d) => {
+        setSampleHd(d.humanDesign ?? null);
+        setSampleAstro(d.astrology ?? null);
+      })
+      .catch(() => {
+        setSampleHd(null);
+        setSampleAstro(null);
+      });
+  }, [subAccountId]);
 
   async function create() {
     setCreating(true);
@@ -133,20 +171,16 @@ export function EnergeticDecoderChartDesignsTab() {
                 <div className="space-y-2">
                   <Label>System</Label>
                   <div className="inline-flex rounded-lg bg-muted/30 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setNewSystem("humanDesign")}
-                      className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newSystem === "humanDesign" ? "bg-background shadow-sm" : "text-muted-foreground")}
-                    >
-                      Human Design
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSystem("astrology")}
-                      className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newSystem === "astrology" ? "bg-background shadow-sm" : "text-muted-foreground")}
-                    >
-                      Astrology
-                    </button>
+                    {(["humanDesign", "astrology", "mandala"] as const).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setNewSystem(s)}
+                        className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newSystem === s ? "bg-background shadow-sm" : "text-muted-foreground")}
+                      >
+                        {SYSTEM_LABEL[s]}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -162,14 +196,14 @@ export function EnergeticDecoderChartDesignsTab() {
         </div>
 
         <div className="mb-4 inline-flex rounded-lg bg-muted/30 p-1">
-          {(["all", "humanDesign", "astrology"] as const).map((f) => (
+          {(["all", "humanDesign", "astrology", "mandala"] as const).map((f) => (
             <button
               key={f}
               type="button"
               onClick={() => setFilter(f)}
               className={cn("rounded-md px-3 py-1.5 text-sm font-medium", filter === f ? "bg-background shadow-sm" : "text-muted-foreground")}
             >
-              {f === "all" ? "All" : f === "humanDesign" ? "Human Design" : "Astrology"}
+              {f === "all" ? "All" : SYSTEM_LABEL[f]}
             </button>
           ))}
         </div>
@@ -190,6 +224,8 @@ export function EnergeticDecoderChartDesignsTab() {
                 bg={CARD_BG[i % CARD_BG.length]}
                 subAccountId={subAccountId}
                 isAdmin={isAdmin}
+                sampleHd={sampleHd}
+                sampleAstro={sampleAstro}
                 onSetDefault={() => setDefault(d.id)}
                 onDelete={() => remove(d.id)}
                 onSaved={load}
@@ -197,24 +233,54 @@ export function EnergeticDecoderChartDesignsTab() {
             ))}
           </div>
         )}
-
-        <div className="mt-5 flex items-start gap-2 rounded-xl border border-dashed p-3.5 text-xs text-muted-foreground">
-          <span className="mt-0.5 rounded-full bg-muted px-1.5 py-0.5 font-semibold uppercase tracking-wide">Not built yet</span>
-          <span>
-            Mandala Chart — Bodygraph&apos;s decorative 64-gate wheel overlay. That&apos;s genuinely new chart geometry, not a missing
-            color option here, so it isn&apos;t a 3rd system in this list yet.
-          </span>
-        </div>
       </div>
     </div>
   );
 }
+
+interface EditableFields {
+  chartDefinedColor: string;
+  channelsColor: string;
+  gatesColor: string;
+  backgroundColor: string;
+  wheelAccentColor: string;
+  houseSystem: ChartDesign["houseSystem"];
+}
+
+function fieldsFrom(design: ChartDesign): EditableFields {
+  return {
+    chartDefinedColor: design.chartDefinedColor,
+    channelsColor: design.channelsColor,
+    gatesColor: design.gatesColor,
+    backgroundColor: design.backgroundColor,
+    wheelAccentColor: design.wheelAccentColor,
+    houseSystem: design.houseSystem,
+  };
+}
+
+/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. */
+const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
+  humanDesign: ["chartDefinedColor", "channelsColor", "gatesColor", "backgroundColor"],
+  astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
+  mandala: ["chartDefinedColor", "backgroundColor"],
+};
+
+const FIELD_LABEL: Record<keyof EditableFields, string> = {
+  chartDefinedColor: "Defined centers",
+  channelsColor: "Defined channels",
+  gatesColor: "Gate accent",
+  backgroundColor: "Background",
+  wheelAccentColor: "Wheel / planets",
+  houseSystem: "House system",
+};
 
 function ChartDesignCard({
   design,
   bg,
   subAccountId,
   isAdmin,
+  sampleHd,
+  sampleAstro,
   onSetDefault,
   onDelete,
   onSaved,
@@ -223,24 +289,26 @@ function ChartDesignCard({
   bg: (typeof CARD_BG)[number];
   subAccountId: string;
   isAdmin: boolean;
+  sampleHd: HumanDesignProfile | null;
+  sampleAstro: AstrologyChart | null;
   onSetDefault: () => void;
   onDelete: () => void;
   onSaved: () => void;
 }) {
-  const [color, setColor] = useState(design.chartDefinedColor);
-  const [houseSystem, setHouseSystem] = useState(design.houseSystem);
+  const [fields, setFields] = useState<EditableFields>(() => fieldsFrom(design));
   const [saving, setSaving] = useState(false);
-  const dirty = design.system === "humanDesign" ? color !== design.chartDefinedColor : houseSystem !== design.houseSystem;
+  const relevant = SYSTEM_FIELDS[design.system];
+  const dirty = relevant.some((k) => fields[k] !== fieldsFrom(design)[k]);
 
   async function save() {
     setSaving(true);
     try {
+      const body: Record<string, string> = {};
+      for (const k of relevant) body[k] = fields[k];
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-designs/${design.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          design.system === "humanDesign" ? { chartDefinedColor: color } : { houseSystem },
-        ),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
       toast.success("Saved.");
@@ -257,7 +325,7 @@ function ChartDesignCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{design.name}</p>
-          <p className="text-[11px] text-muted-foreground">{design.system === "humanDesign" ? "Human Design" : "Astrology"}</p>
+          <p className="text-[11px] text-muted-foreground">{SYSTEM_LABEL[design.system]}</p>
         </div>
         {design.isDefault ? (
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
@@ -267,30 +335,43 @@ function ChartDesignCard({
         ) : null}
       </div>
 
-      {design.system === "humanDesign" ? (
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            disabled={!isAdmin}
-            className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
-            aria-label="Defined-center color"
-          />
-          <Input value={color} onChange={(e) => setColor(e.target.value)} disabled={!isAdmin} className="h-8 text-xs" />
-        </div>
-      ) : (
-        <select
-          value={houseSystem}
-          onChange={(e) => setHouseSystem(e.target.value as ChartDesign["houseSystem"])}
-          disabled={!isAdmin}
-          className="h-8 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed"
-        >
-          <option value="placidus">Placidus houses</option>
-          <option value="whole">Whole Sign houses</option>
-          <option value="equal">Equal houses</option>
-        </select>
-      )}
+      <CardPreview design={design} fields={fields} sampleHd={sampleHd} sampleAstro={sampleAstro} />
+
+      <div className="space-y-2">
+        {relevant.map((key) =>
+          key === "houseSystem" ? (
+            <select
+              key={key}
+              value={fields.houseSystem}
+              onChange={(e) => setFields((f) => ({ ...f, houseSystem: e.target.value as ChartDesign["houseSystem"] }))}
+              disabled={!isAdmin}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed"
+            >
+              <option value="placidus">Placidus houses</option>
+              <option value="whole">Whole Sign houses</option>
+              <option value="equal">Equal houses</option>
+            </select>
+          ) : (
+            <div key={key} className="flex items-center gap-2">
+              <input
+                type="color"
+                value={fields[key]}
+                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                disabled={!isAdmin}
+                className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
+                aria-label={FIELD_LABEL[key]}
+              />
+              <Input
+                value={fields[key]}
+                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                disabled={!isAdmin}
+                className="h-8 text-xs"
+              />
+              <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{FIELD_LABEL[key]}</span>
+            </div>
+          ),
+        )}
+      </div>
 
       {isAdmin && (
         <div className="flex items-center justify-between gap-2 pt-1">
@@ -314,6 +395,53 @@ function ChartDesignCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** Live preview against the fixed real sample chart, reflecting unsaved edits. Same chart components every real report uses — not a mock swatch. */
+function CardPreview({
+  design,
+  fields,
+  sampleHd,
+  sampleAstro,
+}: {
+  design: ChartDesign;
+  fields: EditableFields;
+  sampleHd: HumanDesignProfile | null;
+  sampleAstro: AstrologyChart | null;
+}) {
+  if (design.system === "humanDesign") {
+    if (!sampleHd) return <div className="h-32 animate-pulse rounded-lg bg-muted/40" />;
+    return (
+      <HumanDesignChart
+        profile={sampleHd}
+        className="mx-auto w-full max-w-[220px]"
+        definedColor={fields.chartDefinedColor}
+        channelsColor={fields.channelsColor}
+        gatesColor={fields.gatesColor}
+        backgroundColor={fields.backgroundColor}
+      />
+    );
+  }
+  if (design.system === "mandala") {
+    if (!sampleHd) return <div className="h-32 animate-pulse rounded-lg bg-muted/40" />;
+    return (
+      <MandalaChart
+        profile={sampleHd}
+        className="mx-auto w-full max-w-[220px]"
+        gateColor={fields.chartDefinedColor}
+        backgroundColor={fields.backgroundColor}
+      />
+    );
+  }
+  if (!sampleAstro) return <div className="h-32 animate-pulse rounded-lg bg-muted/40" />;
+  return (
+    <AstrologyWheelChart
+      chart={sampleAstro}
+      className="mx-auto w-full max-w-[220px]"
+      wheelAccentColor={fields.wheelAccentColor}
+      backgroundColor={fields.backgroundColor}
+    />
   );
 }
 

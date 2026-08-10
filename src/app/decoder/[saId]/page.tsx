@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
+import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { PublicDecoderForm } from "./public-decoder-form";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,15 @@ export default async function PublicDecoderPage({
   const businessName = (sub.name as string) || "Energetic Decoder";
   const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
 
+  // Full Chart Designs (2026-08-09 rebuild) — fetched unconditionally since
+  // this is the pre-submit form; which systems the resulting reading
+  // includes isn't known until the visitor actually submits.
+  const [hdDesign, mandalaDesign, astroDesign] = await Promise.all([
+    getDefaultChartDesign(saId, "humanDesign"),
+    getDefaultChartDesign(saId, "mandala"),
+    getDefaultChartDesign(saId, "astrology"),
+  ]);
+
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-4 sm:p-6"
@@ -46,7 +56,13 @@ export default async function PublicDecoderPage({
             Enter your birth details to decode your energetic blueprint.
           </p>
           <div className="mt-6">
-            <PublicDecoderForm saId={saId} accent={theme.accent} definedColor={theme.chartDefinedColor} />
+            <PublicDecoderForm
+              saId={saId}
+              accent={theme.accent}
+              hdDesign={hdDesign}
+              mandalaDesign={mandalaDesign}
+              astroDesign={astroDesign}
+            />
           </div>
         </div>
       </div>

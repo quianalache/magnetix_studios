@@ -1,5 +1,5 @@
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { CENTERS, CHANNELS, type CenterKey } from "@/lib/energetics/human-design-data";
+import { CENTERS, CHANNELS } from "@/lib/energetics/human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "@/lib/energetics/human-design-chart-layout";
 
 /**
@@ -93,11 +93,19 @@ export function HumanDesignChart({
   profile,
   className,
   definedColor = DEFAULT_DEFINED_FILL,
+  channelsColor = DEFINED_STROKE,
+  gatesColor = "#e4e4e7",
+  backgroundColor = "#ffffff",
 }: {
   profile: HumanDesignProfile;
   className?: string;
-  /** Sub-account's chosen defined-center color (Chart design tab) — falls back to the traditional light gray when not set. */
+  /** Sub-account's chosen defined-center color (Chart Designs tab) — falls back to the traditional light gray when not set. */
   definedColor?: string;
+  /** Defined-channel line color. Undefined channels always stay the same faint gray regardless — only DEFINED lines are a brand choice, same rule as centers. */
+  channelsColor?: string;
+  /** Accent ring color behind each activated gate number. Personality (black) / Design (red) text itself stays fixed — universal convention, not a brand choice. */
+  gatesColor?: string;
+  backgroundColor?: string;
 }) {
   const definedSet = new Set(profile.definedCenters);
   const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
@@ -105,7 +113,7 @@ export function HumanDesignChart({
   const designGates = new Set(profile.design.map((a) => a.gate));
 
   return (
-    <div className={className} style={{ background: "#fff", borderRadius: 12, padding: "6% 4%" }}>
+    <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
       <svg viewBox="-4 -3 108 102" role="img" aria-label="Human Design bodygraph">
         {/* All 36 possible channels, faint — the full network structure, real gate-to-gate geometry. */}
         {CHANNELS.map((ch) => {
@@ -120,7 +128,7 @@ export function HumanDesignChart({
               y1={a.y}
               x2={b.x}
               y2={b.y}
-              stroke={isDefined ? DEFINED_STROKE : DEFAULT_DEFINED_FILL}
+              stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
               strokeWidth={isDefined ? 1.1 : 0.35}
               strokeOpacity={isDefined ? 0.9 : 0.7}
             />
@@ -142,7 +150,7 @@ export function HumanDesignChart({
           if (!inPersonality && !inDesign) return null;
           return (
             <g key={gate}>
-              <circle cx={point.x} cy={point.y} r={1.7} fill="#fff" stroke="#e4e4e7" strokeWidth={0.2} />
+              <circle cx={point.x} cy={point.y} r={1.7} fill={backgroundColor} stroke={gatesColor} strokeWidth={0.3} />
               {inDesign && (
                 <text
                   x={point.x + (inPersonality ? 0.9 : 0)}
