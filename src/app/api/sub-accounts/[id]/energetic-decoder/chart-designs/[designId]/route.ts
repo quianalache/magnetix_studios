@@ -51,6 +51,11 @@ export async function PATCH(
     if (typeof body.chartDefinedColor === "string") fields.chartDefinedColor = body.chartDefinedColor;
     if (typeof body.channelsColor === "string") fields.channelsColor = body.channelsColor;
     if (typeof body.gatesColor === "string") fields.gatesColor = body.gatesColor;
+    if (typeof body.personalityActivationColor === "string") fields.personalityActivationColor = body.personalityActivationColor;
+    if (typeof body.designActivationColor === "string") fields.designActivationColor = body.designActivationColor;
+    if (typeof body.arrowColor === "string") fields.arrowColor = body.arrowColor;
+    if (body.arrowStyle === "solid" || body.arrowStyle === "outline") fields.arrowStyle = body.arrowStyle;
+    if (typeof body.planetBoxColor === "string") fields.planetBoxColor = body.planetBoxColor;
     if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
     if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
     if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;

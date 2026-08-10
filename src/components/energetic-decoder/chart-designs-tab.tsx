@@ -242,6 +242,12 @@ interface EditableFields {
   chartDefinedColor: string;
   channelsColor: string;
   gatesColor: string;
+  /** Not wired into human-design-chart.tsx yet — see chart-design.ts's header comment. Saved/reloaded correctly; the BodyGraph itself keeps its current hardcoded colors until the full chart layout exists. */
+  personalityActivationColor: string;
+  designActivationColor: string;
+  arrowColor: string;
+  arrowStyle: ChartDesign["arrowStyle"];
+  planetBoxColor: string;
   backgroundColor: string;
   wheelAccentColor: string;
   houseSystem: ChartDesign["houseSystem"];
@@ -252,15 +258,30 @@ function fieldsFrom(design: ChartDesign): EditableFields {
     chartDefinedColor: design.chartDefinedColor,
     channelsColor: design.channelsColor,
     gatesColor: design.gatesColor,
+    personalityActivationColor: design.personalityActivationColor,
+    designActivationColor: design.designActivationColor,
+    arrowColor: design.arrowColor,
+    arrowStyle: design.arrowStyle,
+    planetBoxColor: design.planetBoxColor,
     backgroundColor: design.backgroundColor,
     wheelAccentColor: design.wheelAccentColor,
     houseSystem: design.houseSystem,
   };
 }
 
-/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. */
+/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The 5 full-chart-layout fields (personalityActivationColor…planetBoxColor) are HD-only and show up here even though no renderer reads them yet — same "saved ahead of the component that will use it" reasoning as chart-design.ts. */
 const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
-  humanDesign: ["chartDefinedColor", "channelsColor", "gatesColor", "backgroundColor"],
+  humanDesign: [
+    "chartDefinedColor",
+    "channelsColor",
+    "gatesColor",
+    "personalityActivationColor",
+    "designActivationColor",
+    "arrowColor",
+    "arrowStyle",
+    "planetBoxColor",
+    "backgroundColor",
+  ],
   astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
   mandala: ["chartDefinedColor", "backgroundColor"],
 };
@@ -269,6 +290,11 @@ const FIELD_LABEL: Record<keyof EditableFields, string> = {
   chartDefinedColor: "Defined centers",
   channelsColor: "Defined channels",
   gatesColor: "Gate accent",
+  personalityActivationColor: "Personality activation",
+  designActivationColor: "Design activation",
+  arrowColor: "Variable arrows",
+  arrowStyle: "Arrow style",
+  planetBoxColor: "Planet box background",
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   houseSystem: "House system",
@@ -350,6 +376,17 @@ function ChartDesignCard({
               <option value="placidus">Placidus houses</option>
               <option value="whole">Whole Sign houses</option>
               <option value="equal">Equal houses</option>
+            </select>
+          ) : key === "arrowStyle" ? (
+            <select
+              key={key}
+              value={fields.arrowStyle}
+              onChange={(e) => setFields((f) => ({ ...f, arrowStyle: e.target.value as ChartDesign["arrowStyle"] }))}
+              disabled={!isAdmin}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed"
+            >
+              <option value="solid">Solid arrows</option>
+              <option value="outline">Outline arrows</option>
             </select>
           ) : (
             <div key={key} className="flex items-center gap-2">

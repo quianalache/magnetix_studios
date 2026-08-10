@@ -25,6 +25,17 @@ function freshDesignFields() {
     chartDefinedColor: defaultChartDesignColor(),
     channelsColor: "#52525b", // zinc-600 — matches the traditional defined-channel line color already used
     gatesColor: "#18181b", // zinc-900 — matches the traditional Personality gate-text color
+    // 2026-08-10 — full-chart-layout fields, see chart-design.ts's header
+    // comment. Defaults match human-design-chart.tsx's current hardcoded
+    // PERSONALITY_FILL/DESIGN_FILL exactly, so the moment the full-chart
+    // component reads these, a design nobody has touched yet renders
+    // identically to what the BodyGraph already shows today — no visual
+    // jump on first load.
+    personalityActivationColor: "#18181b", // zinc-900 — same as gatesColor/PERSONALITY_FILL
+    designActivationColor: "#9a3412", // rust/brown — same as human-design-chart.tsx's DESIGN_FILL
+    arrowColor: "#3f3f46", // zinc-700 — neutral ink, matches WHEEL_TEXT already used elsewhere (astrology wheel, PDF)
+    arrowStyle: "solid" as const,
+    planetBoxColor: "#f4f4f5", // zinc-100 — subtle light box, not yet rendered anywhere
     backgroundColor: "#ffffff",
     houseSystem: "placidus" as const,
     wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
@@ -87,6 +98,15 @@ function missingFieldsPatch(d: ChartDesign): Record<string, string> {
   if (d.backgroundColor === undefined) patch.backgroundColor = fresh.backgroundColor;
   if (d.wheelAccentColor === undefined) patch.wheelAccentColor = fresh.wheelAccentColor;
   if (d.houseSystem === undefined) patch.houseSystem = fresh.houseSystem;
+  // 2026-08-10 — same backfill treatment for the new full-chart-layout
+  // fields, so a design saved before today doesn't reach the UI with
+  // these keys simply missing (the exact bug this whole function exists
+  // to prevent, see the real gap noted above).
+  if (d.personalityActivationColor === undefined) patch.personalityActivationColor = fresh.personalityActivationColor;
+  if (d.designActivationColor === undefined) patch.designActivationColor = fresh.designActivationColor;
+  if (d.arrowColor === undefined) patch.arrowColor = fresh.arrowColor;
+  if (d.arrowStyle === undefined) patch.arrowStyle = fresh.arrowStyle;
+  if (d.planetBoxColor === undefined) patch.planetBoxColor = fresh.planetBoxColor;
   return patch;
 }
 
@@ -165,7 +185,23 @@ export async function createChartDesign(opts: {
 export async function updateChartDesign(
   subAccountId: string,
   designId: string,
-  fields: Partial<Pick<ChartDesign, "name" | "chartDefinedColor" | "channelsColor" | "gatesColor" | "backgroundColor" | "houseSystem" | "wheelAccentColor">>,
+  fields: Partial<
+    Pick<
+      ChartDesign,
+      | "name"
+      | "chartDefinedColor"
+      | "channelsColor"
+      | "gatesColor"
+      | "personalityActivationColor"
+      | "designActivationColor"
+      | "arrowColor"
+      | "arrowStyle"
+      | "planetBoxColor"
+      | "backgroundColor"
+      | "houseSystem"
+      | "wheelAccentColor"
+    >
+  >,
 ): Promise<ChartDesign> {
   const ref = col().doc(designId);
   const snap = await ref.get();
