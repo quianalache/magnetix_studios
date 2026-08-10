@@ -66,6 +66,39 @@ const DIGESTION: Record<number, { left: string; right: string }> = {
   6: { left: "Direct", right: "InDirect" },
 };
 
+export type VariableArrowDirection = "Left" | "Right";
+
+/** One of the 4 Variable "arrow" source points — the Color/Tone that activation landed on, plus the arrow direction that Tone implies. */
+export interface VariableArrowSource {
+  color: number;
+  tone: number;
+  arrow: VariableArrowDirection;
+}
+
+/**
+ * The 4 Variable arrow directions, verified 2026-08-10 against the same 5
+ * real Bodygraph reference charts (+ boundary case) used for the word
+ * fields below: Color/Tone at all 4 source points matched Bodygraph's own
+ * raw per-body data exactly (20/20), and the Tone→direction rule itself
+ * (1-3 Left / 4-6 Right) is independently corroborated by NatalEngine's
+ * own source code, which documents the same 4-point mapping citing real
+ * external PHS/Rave Psychology sources — not assumed by analogy to
+ * Digestion alone. One honest gap: Bodygraph's own literal rendered arrow
+ * icon was never directly observable (neither their API response nor the
+ * chart SVG exposes it), so this is verified at the Color/Tone/rule level,
+ * not by a pixel-for-pixel match against their drawn arrow.
+ */
+export interface ComputedVariableArrows {
+  /** Design Sun. */
+  digestion: VariableArrowSource;
+  /** Design Node. */
+  environment: VariableArrowSource;
+  /** Personality Node. */
+  perspective: VariableArrowSource;
+  /** Personality Sun. */
+  motivation: VariableArrowSource;
+}
+
 export interface ComputedHumanDesignVariables {
   digestion: string;
   environment: string;
@@ -73,13 +106,8 @@ export interface ComputedHumanDesignVariables {
   motivation: string;
   sense: string;
   designSense: string;
-  /** Raw Color/Tone at each of the 4 source activations — kept on the result for verification/debugging, not for display. */
-  debug: {
-    personalitySun: { color: number; tone: number };
-    designSun: { color: number; tone: number };
-    personalityNode: { color: number; tone: number };
-    designNode: { color: number; tone: number };
-  };
+  /** Real fields, not debug-only — Color/Tone/arrow-direction for all 4 Variable source points. See ComputedVariableArrows above for the verification note. */
+  arrows: ComputedVariableArrows;
 }
 
 export async function computeHumanDesignVariables(
@@ -111,6 +139,11 @@ export async function computeHumanDesignVariables(
   const digestionFamily = DIGESTION[dSun.color];
   const digestion = dSun.tone <= 3 ? digestionFamily.left : digestionFamily.right;
 
+  // Verified 2026-08-10 — see ComputedVariableArrows above. Same Tone
+  // value already computed for each point above; arrowOf just applies the
+  // one shared rule (1-3 Left / 4-6 Right) rather than re-deriving it.
+  const arrowOf = (tone: number): VariableArrowDirection => (tone <= 3 ? "Left" : "Right");
+
   return {
     digestion,
     environment: ENVIRONMENT[dNode.color - 1],
@@ -118,11 +151,11 @@ export async function computeHumanDesignVariables(
     motivation: MOTIVATION[pSun.color - 1],
     sense: SENSE[pSun.tone - 1],
     designSense: DESIGN_SENSE[dSun.tone - 1],
-    debug: {
-      personalitySun: { color: pSun.color, tone: pSun.tone },
-      designSun: { color: dSun.color, tone: dSun.tone },
-      personalityNode: { color: pNode.color, tone: pNode.tone },
-      designNode: { color: dNode.color, tone: dNode.tone },
+    arrows: {
+      digestion: { color: dSun.color, tone: dSun.tone, arrow: arrowOf(dSun.tone) },
+      environment: { color: dNode.color, tone: dNode.tone, arrow: arrowOf(dNode.tone) },
+      perspective: { color: pNode.color, tone: pNode.tone, arrow: arrowOf(pNode.tone) },
+      motivation: { color: pSun.color, tone: pSun.tone, arrow: arrowOf(pSun.tone) },
     },
   };
 }

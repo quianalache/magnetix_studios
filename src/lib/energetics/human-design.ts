@@ -10,6 +10,7 @@ import {
   type WallClockBirthInput,
 } from "./gate-wheel";
 import type { HumanDesignVariables } from "./bodygraph-api";
+import type { ComputedVariableArrows } from "./human-design-variables";
 import { resolveIncarnationCross } from "./incarnation-cross-data";
 import {
   CENTERS,
@@ -253,6 +254,16 @@ export interface HumanDesignProfile {
    * or the call fails, never a broken reading.
    */
   variables?: HumanDesignVariables;
+  /**
+   * The 4 Variable arrow directions (Digestion/Environment/Perspective/
+   * Motivation) + their underlying Color/Tone — see human-design-
+   * variables.ts's ComputedVariableArrows for the verification note.
+   * Same "populated by the caller after the fact" contract as `variables`
+   * above: set from the local computeHumanDesignVariables() result in
+   * energetic-decoder-service.ts, undefined only if that whole block is
+   * skipped (Human Design not included in the report).
+   */
+  variableArrows?: ComputedVariableArrows;
   /** Bodygraph's own rendered chart SVG — see bodygraph-api.ts. Same "populated by the caller after the fact" contract as `variables` above; undefined falls back to this app's own HumanDesignChart component. */
   bodygraphSvg?: string;
 }

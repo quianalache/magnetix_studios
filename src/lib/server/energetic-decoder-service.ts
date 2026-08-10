@@ -186,6 +186,13 @@ export async function createEnergeticDecoderReading(
       decisionMakingStrategyDescription: apiVariables?.decisionMakingStrategyDescription ?? "",
       skills,
     };
+
+    // The 4 Variable arrow directions (+ their underlying Color/Tone) —
+    // verified 2026-08-10 against the same 5 real reference charts used
+    // for the word fields above (see human-design-variables.ts). Purely
+    // additive: doesn't touch any existing field, just exposes data the
+    // local calculation was already producing.
+    rawHumanDesign.variableArrows = localVariables.arrows;
   }
 
   // Which house system this sub-account's default Astrology chart design
