@@ -25,6 +25,7 @@ const FIELD_LABELS: Record<string, string> = {
   definedText: "When defined",
   undefinedText: "When undefined",
   theme: "Theme",
+  name: "Name",
 };
 
 const CATEGORY_GROUPS: Record<"hd" | "astro", { category: string; title: string }[]> = {
@@ -32,6 +33,7 @@ const CATEGORY_GROUPS: Record<"hd" | "astro", { category: string; title: string 
     { category: "type", title: "Types" },
     { category: "authority", title: "Authorities" },
     { category: "center", title: "Centers" },
+    { category: "line", title: "Profile Lines" },
     // Variables + Skills (2026-08-09) — real values, but only listed here
     // once at least one of this sub-account's own readings has actually
     // produced them (Bodygraph's API doesn't ship a full 42-value default

@@ -2,7 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
+import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT, LINE_CONTENT } from "@/lib/energetics/human-design-content-data";
 import { CENTER_LABELS } from "@/lib/energetics/human-design-data";
 import { SIGN_CONTENT, HOUSE_CONTENT, ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import type { HdType, HdAuthority } from "@/lib/energetics/human-design";
@@ -123,6 +123,15 @@ function buildDefaults(variableDefaults: Map<string, { value: string; category: 
       key: c.center,
       label: `${CENTER_LABELS[c.center]} Center`,
       fields: { definedText: c.definedText, undefinedText: c.undefinedText },
+    });
+  }
+  for (const l of Object.values(LINE_CONTENT)) {
+    defaults.push({
+      system: "hd",
+      category: "line",
+      key: String(l.line),
+      label: `Line ${l.line}`,
+      fields: { name: l.name },
     });
   }
   for (const s of Object.values(SIGN_CONTENT)) {

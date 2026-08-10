@@ -16,6 +16,31 @@ import type { CenterKey } from "./human-design-data";
  * Flagged rather than filled with thin one-liners; a real fast-follow.
  */
 
+/**
+ * The 6 Profile Lines — real gap caught 2026-08-09: "Human Design still
+ * doesn't have lines" was a fair hit, this never existed here at all.
+ * Names sourced from her own real Human Design reference database (Notion,
+ * confirmed complete for this table when pulled 2026-08-09) — not invented.
+ * No description field: she hasn't written one and there's no other
+ * honest source for it, so this ships with only the one real, verified
+ * field rather than padding it with a guessed paragraph. She (or any
+ * sub-account) can add their own via the Content tab, same as everywhere
+ * else — this just isn't pre-filled with something nobody actually wrote.
+ */
+export interface LineContent {
+  line: number;
+  name: string;
+}
+
+export const LINE_CONTENT: Record<number, LineContent> = {
+  1: { line: 1, name: "The Investigator" },
+  2: { line: 2, name: "The Hermit" },
+  3: { line: 3, name: "The Martyr" },
+  4: { line: 4, name: "The Opportunist" },
+  5: { line: 5, name: "The Heretic" },
+  6: { line: 6, name: "The Role Model" },
+};
+
 export interface TypeContent {
   type: HdType;
   strategy: string;
