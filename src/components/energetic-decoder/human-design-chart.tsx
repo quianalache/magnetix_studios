@@ -19,20 +19,39 @@ import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "
  * "white means undefined" mean anything: a white center against a white
  * page reads as blank, exactly the traditional convention.
  *
- * Personality activations render black, Design activations render red —
- * the one universally standard convention across every real Human Design
- * chart, unrelated to the center-fill color question above. Only the
- * DEFINED-center fill is customizable — undefined stays white and
- * Personality/Design stay black/red no matter what a sub-account picks.
+ * Personality activations render solid black, Design activations render
+ * solid rust/brown — the standard convention across every real Human
+ * Design chart, unrelated to the center-fill color question above. Only
+ * the DEFINED-center fill is customizable — undefined stays white and
+ * Personality/Design stay black/rust no matter what a sub-account picks.
+ * (Activated-gate markers switched from outlined-ring + colored text to
+ * solid-filled circle + reversed white text 2026-08-10 — see
+ * PERSONALITY_FILL/DESIGN_FILL below — after comparing against real
+ * Bodygraph renders, every one of which fills the circle solid.)
  */
 
 const DEFAULT_DEFINED_FILL = "#d4d4d8"; // zinc-300 — light gray
 const DEFINED_STROKE = "#52525b"; // zinc-600
 const UNDEFINED_FILL = "#ffffff";
 const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
-const PERSONALITY_TEXT = "#18181b";
-const DESIGN_TEXT = "#dc2626";
 const INACTIVE_GATE_TEXT = "#a1a1aa"; // zinc-400 — subtle/recessive but still legible against white
+
+/**
+ * Activated-gate markers — real gap found 2026-08-10 comparing our chart
+ * against real Bodygraph renders: every activated gate there is a solid-
+ * filled circle with a reversed white number punched out of it, not a
+ * thin outline ring behind colored text (the previous version here) —
+ * ours read noticeably fainter and harder to scan at a glance side by
+ * side. Personality stays the universal solid black; Design moves from a
+ * bright red to a rust/brown, keeping it in the same warm family as the
+ * design-side hanging-gate stub color above (HANGING_DESIGN) without
+ * literally reusing it — this is a different visual element (a fully
+ * activated gate marker, not a partial hanging stub), so it gets its own
+ * shade rather than borrowing theirs outright.
+ */
+const PERSONALITY_FILL = "#18181b"; // zinc-900 — solid black
+const DESIGN_FILL = "#9a3412"; // rust/brown
+const ACTIVATED_TEXT = "#ffffff"; // reversed white, both sides
 
 /**
  * Hanging-gate channel stubs — the "third visual state" investigated
@@ -207,7 +226,7 @@ function declutterGateLabels(
   return new Map(pts.map((p) => [p.gate, { x: p.x, y: p.y }]));
 }
 
-function shapePoints(shape: CenterShape, cx: number, cy: number, r: number): string {
+function shapePoints(shape: CenterShape | "diamond", cx: number, cy: number, r: number): string {
   switch (shape) {
     case "triangle-up":
       return `${cx},${cy - 0.9 * r} ${cx - r},${cy + r} ${cx + r},${cy + r}`;
@@ -219,7 +238,17 @@ function shapePoints(shape: CenterShape, cx: number, cy: number, r: number): str
       return `${cx + 0.9 * r},${cy} ${cx - r},${cy - r} ${cx - r},${cy + r}`;
     case "triangle-heart":
       return `${cx},${cy - 0.9 * r} ${cx - r},${cy + 0.9 * r} ${cx + 1.1 * r},${cy + r}`;
+    // Standard 4-point diamond — the G / Identity center's real shape,
+    // confirmed 2026-08-10 against every real Bodygraph chart compared so
+    // far. Rendered via the effectiveShape override in CenterShapeEl below
+    // rather than by changing CENTER_LAYOUT.g.shape itself, since this
+    // pass is scoped to this file only.
+    case "diamond":
+      return `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`;
     case "octagram": {
+      // No longer reachable for the G center (see effectiveShape override
+      // below) — kept for CenterShape type completeness, in case
+      // CENTER_LAYOUT data changes later.
       const pts: string[] = [];
       for (let s = 0; s < 16; s++) {
         const angle = -Math.PI / 2 + (s * Math.PI) / 8;
@@ -260,7 +289,11 @@ function CenterShapeEl({
       />
     );
   }
-  return <polygon points={shapePoints(layout.shape, layout.x, layout.y, layout.size)} {...commonProps} />;
+  // G / Identity center renders as a standard diamond, not the 8-point
+  // star CENTER_LAYOUT still declares (see shapePoints' "diamond" case
+  // above for why the override lives here instead of in the layout data).
+  const effectiveShape: CenterShape | "diamond" = layout.center === "g" ? "diamond" : layout.shape;
+  return <polygon points={shapePoints(effectiveShape, layout.x, layout.y, layout.size)} {...commonProps} />;
 }
 
 export function HumanDesignChart({
@@ -277,7 +310,7 @@ export function HumanDesignChart({
   definedColor?: string;
   /** Defined-channel line color. Undefined channels always stay the same faint gray regardless — only DEFINED lines are a brand choice, same rule as centers. */
   channelsColor?: string;
-  /** Accent ring color behind each activated gate number. Personality (black) / Design (red) text itself stays fixed — universal convention, not a brand choice. */
+  /** Accent ring color around each activated gate's solid marker circle. The circle fill itself (Personality black / Design rust) and its reversed white number stay fixed — universal convention, not a brand choice. */
   gatesColor?: string;
   backgroundColor?: string;
 }) {
@@ -372,45 +405,55 @@ export function HumanDesignChart({
           );
         })}
 
-        {/* Gate numbers — the activated ones, drawn bold/colored on top of
-            the faint inactive layer above. A soft
-            dot behind each marks it as "on" at a glance before you even read
-            the number; Personality black, Design red, offset slightly when
-            both. Position is the decluttered label point (declutterGateLabels
+        {/* Gate numbers — the activated ones, drawn as solid-filled circles
+            with reversed white text on top of the faint inactive layer
+            above (see PERSONALITY_FILL/DESIGN_FILL above for why solid
+            fill replaced the old outline-ring + colored-text version).
+            Personality solid black, Design solid rust/brown, each ringed
+            in the sub-account's own `gatesColor` accent (the "Gate accent"
+            Chart Designs field — preserved here, just moved from being the
+            ring's only visible color to an accent outline around the new
+            solid fill). Dual activation renders as two separate offset
+            circles (never one blended color) rather than collapsing to a
+            single fill — same offset direction/magnitude the previous
+            text-only version already used, now applied to a full filled
+            circle + its own white number instead of bare colored text.
+            Position is the decluttered label point (declutterGateLabels
             above), not the true GATE_POINT — channel lines above still use
-            the true point, so the network geometry itself never shifts, only
-            the number labels nudge apart from each other when crowded. */}
+            the true point, so the network geometry itself never shifts,
+            only the number labels/circles nudge apart from each other
+            when crowded. */}
         {activatedGates.map((gate) => {
           const point = labelPositions.get(gate)!;
           const inPersonality = personalityGates.has(gate);
           const inDesign = designGates.has(gate);
+          const dual = inPersonality && inDesign;
+
+          if (dual) {
+            const OFFSET = 1.5;
+            const R = 1.55;
+            return (
+              <g key={gate}>
+                <circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={0.35} />
+                <text x={point.x + OFFSET} y={point.y + OFFSET + 0.6} fontSize="1.6" fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
+                  {gate}
+                </text>
+                <circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={0.35} />
+                <text x={point.x - OFFSET} y={point.y - OFFSET + 0.6} fontSize="1.6" fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
+                  {gate}
+                </text>
+              </g>
+            );
+          }
+
+          const R = 1.9;
+          const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
           return (
             <g key={gate}>
-              <circle cx={point.x} cy={point.y} r={1.5} fill={backgroundColor} stroke={gatesColor} strokeWidth={0.3} />
-              {inDesign && (
-                <text
-                  x={point.x + (inPersonality ? 1.5 : 0)}
-                  y={point.y + (inPersonality ? 1.5 : 0) + 0.8}
-                  fontSize="2.1"
-                  fontWeight="700"
-                  fill={DESIGN_TEXT}
-                  textAnchor="middle"
-                >
-                  {gate}
-                </text>
-              )}
-              {inPersonality && (
-                <text
-                  x={point.x - (inDesign ? 1.5 : 0)}
-                  y={point.y - (inDesign ? 1.5 : 0) + 0.8}
-                  fontSize="2.1"
-                  fontWeight="700"
-                  fill={PERSONALITY_TEXT}
-                  textAnchor="middle"
-                >
-                  {gate}
-                </text>
-              )}
+              <circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={0.35} />
+              <text x={point.x} y={point.y + 0.7} fontSize="2" fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
+                {gate}
+              </text>
             </g>
           );
         })}
