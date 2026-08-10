@@ -44,6 +44,23 @@ function freshDesignFields() {
     // class the renderer already hardcoded before this field existed.
     planetBoxMode: "fullBox" as const,
     planetBoxBorderRadius: 6,
+    // "uniform" preserves current behavior exactly — every existing
+    // design keeps rendering every defined center in chartDefinedColor
+    // until someone explicitly switches to traditional. The 9 colors
+    // below are still given real defaults (not blank) so switching to
+    // traditional works correctly with zero further configuration —
+    // real values read directly off Bodygraph's own traditional-mode
+    // fields, 2026-08-10.
+    centersMode: "uniform" as const,
+    headCenterColor: "#e49e4b",
+    ajnaCenterColor: "#a19a5c",
+    throatCenterColor: "#bf5a0f",
+    gCenterColor: "#e49e4b",
+    heartCenterColor: "#a23423",
+    spleenCenterColor: "#bf5a0f",
+    sacralCenterColor: "#a23423",
+    solarPlexusCenterColor: "#bf5a0f",
+    rootCenterColor: "#bf5a0f",
     backgroundColor: "#ffffff",
     houseSystem: "placidus" as const,
     wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
@@ -118,6 +135,20 @@ function missingFieldsPatch(d: ChartDesign): Record<string, string | number> {
   // Planet Boxes mode — same day, same backfill reasoning.
   if (d.planetBoxMode === undefined) patch.planetBoxMode = fresh.planetBoxMode;
   if (d.planetBoxBorderRadius === undefined) patch.planetBoxBorderRadius = fresh.planetBoxBorderRadius;
+  // Traditional Centers Colors — same day, same backfill reasoning. Every
+  // pre-existing design gets "uniform" (its real current behavior,
+  // unchanged) plus real traditional-color defaults ready to go the
+  // moment someone switches the mode.
+  if (d.centersMode === undefined) patch.centersMode = fresh.centersMode;
+  if (d.headCenterColor === undefined) patch.headCenterColor = fresh.headCenterColor;
+  if (d.ajnaCenterColor === undefined) patch.ajnaCenterColor = fresh.ajnaCenterColor;
+  if (d.throatCenterColor === undefined) patch.throatCenterColor = fresh.throatCenterColor;
+  if (d.gCenterColor === undefined) patch.gCenterColor = fresh.gCenterColor;
+  if (d.heartCenterColor === undefined) patch.heartCenterColor = fresh.heartCenterColor;
+  if (d.spleenCenterColor === undefined) patch.spleenCenterColor = fresh.spleenCenterColor;
+  if (d.sacralCenterColor === undefined) patch.sacralCenterColor = fresh.sacralCenterColor;
+  if (d.solarPlexusCenterColor === undefined) patch.solarPlexusCenterColor = fresh.solarPlexusCenterColor;
+  if (d.rootCenterColor === undefined) patch.rootCenterColor = fresh.rootCenterColor;
   return patch;
 }
 
@@ -210,6 +241,16 @@ export async function updateChartDesign(
       | "planetBoxColor"
       | "planetBoxMode"
       | "planetBoxBorderRadius"
+      | "centersMode"
+      | "headCenterColor"
+      | "ajnaCenterColor"
+      | "throatCenterColor"
+      | "gCenterColor"
+      | "heartCenterColor"
+      | "spleenCenterColor"
+      | "sacralCenterColor"
+      | "solarPlexusCenterColor"
+      | "rootCenterColor"
       | "backgroundColor"
       | "houseSystem"
       | "wheelAccentColor"

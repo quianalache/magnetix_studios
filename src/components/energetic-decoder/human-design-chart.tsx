@@ -1,5 +1,5 @@
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { CENTERS, CHANNELS } from "@/lib/energetics/human-design-data";
+import { CENTERS, CHANNELS, type CenterKey } from "@/lib/energetics/human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "@/lib/energetics/human-design-chart-layout";
 
 /**
@@ -35,6 +35,28 @@ const DEFINED_STROKE = "#52525b"; // zinc-600
 const UNDEFINED_FILL = "#ffffff";
 const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
 const INACTIVE_GATE_TEXT = "#a1a1aa"; // zinc-400 — subtle/recessive but still legible against white
+
+/**
+ * Traditional per-center colors — real defaults confirmed 2026-08-10
+ * against the live Bodygraph chart-design tool's own "Enable Traditional
+ * Centers Colors" toggle, not invented. Used whenever `centersMode`
+ * below is "traditional" and a caller either doesn't pass `centerColors`
+ * at all, or passes one missing a specific center's key — same
+ * self-sufficiency `DEFAULT_DEFINED_FILL` above already gives uniform
+ * mode, so traditional mode renders correctly even with zero extra
+ * configuration.
+ */
+const TRADITIONAL_CENTER_COLORS: Record<CenterKey, string> = {
+  head: "#e49e4b",
+  ajna: "#a19a5c",
+  throat: "#bf5a0f",
+  g: "#e49e4b",
+  heart: "#a23423",
+  spleen: "#bf5a0f",
+  sacral: "#a23423",
+  solarplexus: "#bf5a0f",
+  root: "#bf5a0f",
+};
 
 /**
  * Activated-gate markers — real gap found 2026-08-10 comparing our chart
@@ -374,16 +396,22 @@ export function HumanDesignChart({
   channelsColor = DEFINED_STROKE,
   gatesColor = "#e4e4e7",
   backgroundColor = "#ffffff",
+  centersMode = "uniform",
+  centerColors,
 }: {
   profile: HumanDesignProfile;
   className?: string;
-  /** Sub-account's chosen defined-center color (Chart Designs tab) — falls back to the traditional light gray when not set. */
+  /** Sub-account's chosen defined-center color (Chart Designs tab) — falls back to the traditional light gray when not set. Used for every defined center in "uniform" mode (the default); ignored per-center in "traditional" mode except as a fallback for a missing centerColors entry. */
   definedColor?: string;
   /** Defined-channel line color. Undefined channels always stay the same faint gray regardless — only DEFINED lines are a brand choice, same rule as centers. */
   channelsColor?: string;
   /** Accent ring color around each activated gate's solid marker circle. The circle fill itself (Personality black / Design rust) and its reversed white number stay fixed — universal convention, not a brand choice. */
   gatesColor?: string;
   backgroundColor?: string;
+  /** "uniform" (default, existing behavior) — every defined center fills with `definedColor`. "traditional" — each defined center uses its own real color, see TRADITIONAL_CENTER_COLORS above / `centerColors` below. */
+  centersMode?: "uniform" | "traditional";
+  /** Per-center colors for traditional mode. Falls back to TRADITIONAL_CENTER_COLORS (then definedColor) for any center not supplied, so traditional mode always renders correctly even with a partial or absent map. Ignored entirely in uniform mode. */
+  centerColors?: Partial<Record<CenterKey, string>>;
 }) {
   const definedSet = new Set(profile.definedCenters);
   const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
@@ -394,6 +422,13 @@ export function HumanDesignChart({
     .filter((g) => personalityGates.has(g) || designGates.has(g));
   const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
   const labelPositions = declutterGateLabels(activatedGates, dualGates);
+
+  // Per-center resolved color — the only new logic this feature adds.
+  // CenterShapeEl itself (shape/definition rendering) is completely
+  // untouched below; it still just receives one resolved color string
+  // per call, same as before this feature existed.
+  const resolveCenterColor = (c: CenterKey): string =>
+    centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? definedColor) : definedColor;
 
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
@@ -465,7 +500,7 @@ export function HumanDesignChart({
 
         {/* 9 centers */}
         {CENTERS.map((c) => (
-          <CenterShapeEl key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} definedColor={definedColor} />
+          <CenterShapeEl key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} definedColor={resolveCenterColor(c)} />
         ))}
 
         {/* All 64 gate numbers — real gap found 2026-08-10 comparing our

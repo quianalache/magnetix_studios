@@ -47,6 +47,18 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * her explicit instruction — but `human-design-full-chart.tsx` no
  * longer reads it for anything. Flagging plainly rather than inventing
  * a use for it just to avoid saying "currently inert."
+ *
+ * 2026-08-10, same day — Traditional Centers Colors: real behavior
+ * confirmed against the live Bodygraph chart-design tool's own "Enable
+ * Traditional Centers Colors" toggle. `centersMode: "uniform"` (default)
+ * is exactly today's existing behavior, unchanged — every defined center
+ * uses `chartDefinedColor`. `"traditional"` gives each of the 9 centers
+ * its own real color instead, from the 9 fields below — unlike the
+ * Personality/Design/Arrow/Planet-Box fields added earlier today, this
+ * one DOES wire into `human-design-chart.tsx` (the actual BodyGraph)
+ * directly, not just the not-yet-wired full-chart layout. The 9 default
+ * values are the real defaults read directly off Bodygraph's own
+ * traditional-mode fields, not invented.
  */
 
 export type ChartDesignSystem = "humanDesign" | "astrology" | "mandala";
@@ -54,6 +66,8 @@ export type ChartDesignSystem = "humanDesign" | "astrology" | "mandala";
 export type VariableArrowStyle = "solid" | "outline";
 
 export type PlanetBoxMode = "iconOnly" | "fullBox";
+
+export type CentersMode = "uniform" | "traditional";
 
 export interface ChartDesign {
   id: string;
@@ -87,6 +101,18 @@ export interface ChartDesign {
   planetBoxMode: PlanetBoxMode;
   /** HD only — corner rounding (px) for a fullBox row. No effect in iconOnly mode, which has no filled box to round. */
   planetBoxBorderRadius: number;
+  /** HD only — "uniform" (existing behavior) uses chartDefinedColor for every defined center. "traditional" uses each center's own color below. */
+  centersMode: CentersMode;
+  /** HD only, traditional mode — real default confirmed against the live Bodygraph chart-design tool. */
+  headCenterColor: string;
+  ajnaCenterColor: string;
+  throatCenterColor: string;
+  gCenterColor: string;
+  heartCenterColor: string;
+  spleenCenterColor: string;
+  sacralCenterColor: string;
+  solarPlexusCenterColor: string;
+  rootCenterColor: string;
   /** All 3 systems — the chart's background color (every real Bodygraph chart type has this). */
   backgroundColor: string;
   /** Astrology only — which house system this design's readings use. Matches HouseSystem in astrology.ts exactly. */

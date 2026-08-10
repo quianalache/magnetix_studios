@@ -17,6 +17,7 @@ import {
 } from "@/types/energetic-decoder";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
@@ -251,6 +252,16 @@ interface EditableFields {
   planetBoxColor: string;
   planetBoxMode: ChartDesign["planetBoxMode"];
   planetBoxBorderRadius: number;
+  centersMode: ChartDesign["centersMode"];
+  headCenterColor: string;
+  ajnaCenterColor: string;
+  throatCenterColor: string;
+  gCenterColor: string;
+  heartCenterColor: string;
+  spleenCenterColor: string;
+  sacralCenterColor: string;
+  solarPlexusCenterColor: string;
+  rootCenterColor: string;
   backgroundColor: string;
   wheelAccentColor: string;
   houseSystem: ChartDesign["houseSystem"];
@@ -268,13 +279,50 @@ function fieldsFrom(design: ChartDesign): EditableFields {
     planetBoxColor: design.planetBoxColor,
     planetBoxMode: design.planetBoxMode,
     planetBoxBorderRadius: design.planetBoxBorderRadius,
+    centersMode: design.centersMode,
+    headCenterColor: design.headCenterColor,
+    ajnaCenterColor: design.ajnaCenterColor,
+    throatCenterColor: design.throatCenterColor,
+    gCenterColor: design.gCenterColor,
+    heartCenterColor: design.heartCenterColor,
+    spleenCenterColor: design.spleenCenterColor,
+    sacralCenterColor: design.sacralCenterColor,
+    solarPlexusCenterColor: design.solarPlexusCenterColor,
+    rootCenterColor: design.rootCenterColor,
     backgroundColor: design.backgroundColor,
     wheelAccentColor: design.wheelAccentColor,
     houseSystem: design.houseSystem,
   };
 }
 
-/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The full-chart-layout fields (personalityActivationColor…planetBoxBorderRadius) are HD-only and show up here even though the BodyGraph itself doesn't read them — they drive human-design-full-chart.tsx. */
+/** The 9 per-center color keys — rendered as their own conditional block (only when centersMode is "traditional"), not through the generic per-key loop below, matching Bodygraph's own real behavior of hiding these 9 fields until its "Enable Traditional Centers Colors" toggle is on. Still included in SYSTEM_FIELDS.humanDesign so save()'s body-building loop and the dirty check naturally cover them. */
+const CENTER_COLOR_KEYS = [
+  "headCenterColor",
+  "ajnaCenterColor",
+  "throatCenterColor",
+  "gCenterColor",
+  "heartCenterColor",
+  "spleenCenterColor",
+  "sacralCenterColor",
+  "solarPlexusCenterColor",
+  "rootCenterColor",
+] as const satisfies readonly (keyof EditableFields)[];
+
+const CENTER_COLOR_KEY_SET: ReadonlySet<string> = new Set(CENTER_COLOR_KEYS);
+
+const CENTER_COLOR_FIELD_TO_KEY: Record<(typeof CENTER_COLOR_KEYS)[number], CenterKey> = {
+  headCenterColor: "head",
+  ajnaCenterColor: "ajna",
+  throatCenterColor: "throat",
+  gCenterColor: "g",
+  heartCenterColor: "heart",
+  spleenCenterColor: "spleen",
+  sacralCenterColor: "sacral",
+  solarPlexusCenterColor: "solarplexus",
+  rootCenterColor: "root",
+};
+
+/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The full-chart-layout fields (personalityActivationColor…planetBoxBorderRadius) are HD-only and show up here even though the BodyGraph itself doesn't read them — they drive human-design-full-chart.tsx. centersMode and the 9 per-center colors DO drive the BodyGraph directly (human-design-chart.tsx). */
 const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
   humanDesign: [
     "chartDefinedColor",
@@ -287,6 +335,8 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     "planetBoxColor",
     "planetBoxMode",
     "planetBoxBorderRadius",
+    "centersMode",
+    ...CENTER_COLOR_KEYS,
     "backgroundColor",
   ],
   astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
@@ -304,6 +354,16 @@ const FIELD_LABEL: Record<keyof EditableFields, string> = {
   planetBoxColor: "Planet box background (unused)",
   planetBoxMode: "Planet box style",
   planetBoxBorderRadius: "Planet box corner radius",
+  centersMode: "Centers color mode",
+  headCenterColor: "Head",
+  ajnaCenterColor: "Ajna",
+  throatCenterColor: "Throat",
+  gCenterColor: "G / Identity",
+  heartCenterColor: "Heart / Ego",
+  spleenCenterColor: "Spleen",
+  sacralCenterColor: "Sacral",
+  solarPlexusCenterColor: "Solar Plexus",
+  rootCenterColor: "Root",
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   houseSystem: "House system",
@@ -374,7 +434,9 @@ function ChartDesignCard({
 
       <div className="space-y-2">
         {relevant.map((key) =>
-          key === "houseSystem" ? (
+          // The 9 per-center colors render as their own block below, only
+          // when traditional mode is on — not through this generic loop.
+          CENTER_COLOR_KEY_SET.has(key) ? null : key === "houseSystem" ? (
             <select
               key={key}
               value={fields.houseSystem}
@@ -423,6 +485,17 @@ function ChartDesignCard({
                 {fields.planetBoxMode !== "fullBox" && " (fullBox only)"}
               </span>
             </div>
+          ) : key === "centersMode" ? (
+            <select
+              key={key}
+              value={fields.centersMode}
+              onChange={(e) => setFields((f) => ({ ...f, centersMode: e.target.value as ChartDesign["centersMode"] }))}
+              disabled={!isAdmin}
+              className="h-8 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed"
+            >
+              <option value="uniform">Uniform — one color, every defined center</option>
+              <option value="traditional">Traditional — each center its own color</option>
+            </select>
           ) : (
             <div key={key} className="flex items-center gap-2">
               <input
@@ -444,6 +517,32 @@ function ChartDesignCard({
           ),
         )}
       </div>
+
+      {/* Only shown when traditional mode is on — matches Bodygraph's own real "Enable Traditional Centers Colors" toggle, confirmed via the live audit, which hides these 9 fields until then rather than always showing them. */}
+      {design.system === "humanDesign" && fields.centersMode === "traditional" && (
+        <div className="space-y-2 border-t pt-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Per-center colors</p>
+          {CENTER_COLOR_KEYS.map((key) => (
+            <div key={key} className="flex items-center gap-2">
+              <input
+                type="color"
+                value={fields[key]}
+                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                disabled={!isAdmin}
+                className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
+                aria-label={FIELD_LABEL[key]}
+              />
+              <Input
+                value={fields[key]}
+                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                disabled={!isAdmin}
+                className="h-8 text-xs"
+              />
+              <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{FIELD_LABEL[key]}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {isAdmin && (
         <div className="flex items-center justify-between gap-2 pt-1">
@@ -484,6 +583,8 @@ function CardPreview({
 }) {
   if (design.system === "humanDesign") {
     if (!sampleHd) return <div className="h-32 animate-pulse rounded-lg bg-muted/40" />;
+    const centerColors: Partial<Record<CenterKey, string>> = {};
+    for (const key of CENTER_COLOR_KEYS) centerColors[CENTER_COLOR_FIELD_TO_KEY[key]] = fields[key];
     return (
       <HumanDesignChart
         profile={sampleHd}
@@ -492,6 +593,8 @@ function CardPreview({
         channelsColor={fields.channelsColor}
         gatesColor={fields.gatesColor}
         backgroundColor={fields.backgroundColor}
+        centersMode={fields.centersMode}
+        centerColors={centerColors}
       />
     );
   }

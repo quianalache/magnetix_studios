@@ -60,6 +60,16 @@ export async function PATCH(
     if (typeof body.planetBoxBorderRadius === "number" && Number.isFinite(body.planetBoxBorderRadius)) {
       fields.planetBoxBorderRadius = body.planetBoxBorderRadius;
     }
+    if (body.centersMode === "uniform" || body.centersMode === "traditional") fields.centersMode = body.centersMode;
+    if (typeof body.headCenterColor === "string") fields.headCenterColor = body.headCenterColor;
+    if (typeof body.ajnaCenterColor === "string") fields.ajnaCenterColor = body.ajnaCenterColor;
+    if (typeof body.throatCenterColor === "string") fields.throatCenterColor = body.throatCenterColor;
+    if (typeof body.gCenterColor === "string") fields.gCenterColor = body.gCenterColor;
+    if (typeof body.heartCenterColor === "string") fields.heartCenterColor = body.heartCenterColor;
+    if (typeof body.spleenCenterColor === "string") fields.spleenCenterColor = body.spleenCenterColor;
+    if (typeof body.sacralCenterColor === "string") fields.sacralCenterColor = body.sacralCenterColor;
+    if (typeof body.solarPlexusCenterColor === "string") fields.solarPlexusCenterColor = body.solarPlexusCenterColor;
+    if (typeof body.rootCenterColor === "string") fields.rootCenterColor = body.rootCenterColor;
     if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
     if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
     if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;
