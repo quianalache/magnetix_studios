@@ -336,6 +336,43 @@ export async function getHomeStats(subAccountId: string): Promise<EnergeticDecod
   };
 }
 
+/**
+ * Read-time fallback for readings saved before 2026-08-10's Variable-
+ * arrow plumbing — her direct ask: "I want old readings to display the
+ * correct 4 Variable arrows without manually recreating each reading."
+ * Derives them from the reading's own already-saved birth data using the
+ * same free, local, already-verified computeHumanDesignVariables()
+ * engine — never Bodygraph, per her explicit instruction. Never writes
+ * anything back to Firestore: the recompute is cheap (no network call,
+ * no API cost) and this is a read path, so there's no real cost to just
+ * deriving it fresh on every read instead of migrating stored docs —
+ * "do not overwrite or mutate old readings unless necessary," and
+ * recomputing on read means it's never necessary. Returns the reading
+ * completely unchanged (zero-cost no-op) when variableArrows is already
+ * saved — every reading created after 2026-08-10 — or when the reading
+ * has no Human Design system at all, so this can't touch any
+ * already-saved value, only fill in what's genuinely absent.
+ *
+ * Best-effort like every other derived field in this file: a failed
+ * recompute (malformed legacy birth data, etc.) just leaves the reading
+ * exactly as it renders today — arrows absent, never a broken page.
+ */
+async function withDerivedVariableArrows(
+  reading: EnergeticDecoderReading,
+): Promise<EnergeticDecoderReading> {
+  if (!reading.humanDesign || reading.humanDesign.variableArrows) return reading;
+  try {
+    const { arrows } = await computeHumanDesignVariables({
+      date: reading.birthDate,
+      time: reading.birthTime,
+      timeZone: reading.timeZone,
+    });
+    return { ...reading, humanDesign: { ...reading.humanDesign, variableArrows: arrows } };
+  } catch {
+    return reading;
+  }
+}
+
 export async function listReadingsForSubAccount(
   subAccountId: string,
   limit = 50,
@@ -347,9 +384,10 @@ export async function listReadingsForSubAccount(
     .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
-  return snap.docs.map(
+  const readings = snap.docs.map(
     (d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading,
   );
+  return Promise.all(readings.map(withDerivedVariableArrows));
 }
 
 /**
@@ -368,5 +406,6 @@ export async function getReadingById(
   const snap = await getAdminDb().doc(`energeticDecoderReadings/${readingId}`).get();
   if (!snap.exists) return null;
   const reading = { id: snap.id, ...snap.data() } as EnergeticDecoderReading;
-  return reading.subAccountId === subAccountId ? reading : null;
+  if (reading.subAccountId !== subAccountId) return null;
+  return withDerivedVariableArrows(reading);
 }
