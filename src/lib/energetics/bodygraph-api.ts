@@ -31,6 +31,29 @@ function apiKey(): string | null {
   return process.env.BODYGRAPH_API_KEY?.trim() || null;
 }
 
+/**
+ * Real bug, found 2026-08-10: Bodygraph's own returned SVG ships a
+ * lowercase `viewbox="0 0 400 693"` attribute instead of the SVG-spec-
+ * required camelCase `viewBox`, and no explicit width/height either. SVG
+ * attribute names are case-sensitive, so an <img> embedding it has zero
+ * intrinsic sizing info and renders squashed/cropped to a sliver of the
+ * real chart. Their bug, not ours — normalized once here at the source so
+ * every newly-saved reading stores the corrected markup, not just at
+ * render time (which also has its own copy of this fix, for readings
+ * saved before this existed).
+ */
+function normalizeSvg(svg: string): string {
+  return svg.replace(/<svg([^>]*)>/i, (match, attrs: string) => {
+    const viewBoxMatch = /viewbox="([^"]+)"/i.exec(attrs);
+    let fixedAttrs = attrs.replace(/viewbox="([^"]+)"/i, 'viewBox="$1"');
+    if (viewBoxMatch && !/\bwidth="/i.test(attrs) && !/\bheight="/i.test(attrs)) {
+      const [, , w, h] = viewBoxMatch[1].split(/\s+/);
+      if (w && h) fixedAttrs += ` width="${w}" height="${h}"`;
+    }
+    return `<svg${fixedAttrs}>`;
+  });
+}
+
 export interface BodygraphVariableField {
   value: string;
   description: string;
@@ -136,7 +159,7 @@ export async function fetchBodygraphVariables(
       environment,
       decisionMakingStrategyDescription: decisionMaking?.description ?? "",
       skills: parseSkills(skillsRaw),
-      chartSvg: data.SVG || undefined,
+      chartSvg: data.SVG ? normalizeSvg(data.SVG) : undefined,
     };
   } catch {
     return null;
@@ -180,7 +203,7 @@ export async function fetchBodygraphChiron(input: {
     const data = (await res.json()) as { Planets?: Record<string, { abs_pos?: number }>; SVG?: string };
     const chiron = data.Planets?.Chiron;
     if (typeof chiron?.abs_pos !== "number") return null;
-    return { longitude: chiron.abs_pos, chartSvg: data.SVG || undefined };
+    return { longitude: chiron.abs_pos, chartSvg: data.SVG ? normalizeSvg(data.SVG) : undefined };
   } catch {
     return null;
   }

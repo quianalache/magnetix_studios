@@ -66,6 +66,31 @@ const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
 ];
 
 /**
+ * Real bug, found 2026-08-10 from her actual screenshot: the chart looked
+ * cropped to just the Head center. Root cause confirmed by pulling
+ * Bodygraph's raw SVG directly — their <svg> tag ships a lowercase
+ * `viewbox="0 0 400 693"` instead of the SVG-spec-required camelCase
+ * `viewBox`, and no width/height attributes either. SVG attribute names
+ * are case-sensitive; browsers silently ignore the invalid casing, so an
+ * <img> embedding it has zero intrinsic sizing info and falls back to a
+ * tiny default box — squashing/cropping a real 400×693 portrait chart to
+ * whatever sliver fits. Their bug, not ours, but fixable on our end:
+ * normalize the casing (and add explicit width/height as a second safety
+ * net) before ever building the data URI.
+ */
+function normalizeBodygraphSvg(svg: string): string {
+  return svg.replace(/<svg([^>]*)>/i, (match, attrs: string) => {
+    const viewBoxMatch = /viewbox="([^"]+)"/i.exec(attrs);
+    let fixedAttrs = attrs.replace(/viewbox="([^"]+)"/i, 'viewBox="$1"');
+    if (viewBoxMatch && !/\bwidth="/i.test(attrs) && !/\bheight="/i.test(attrs)) {
+      const [, , w, h] = viewBoxMatch[1].split(/\s+/);
+      if (w && h) fixedAttrs += ` width="${w}" height="${h}"`;
+    }
+    return `<svg${fixedAttrs}>`;
+  });
+}
+
+/**
  * Renders Bodygraph's own returned SVG via an <img> data URI rather than
  * `dangerouslySetInnerHTML` — an <img> treats SVG content as a raster-like
  * image (any embedded <script> just doesn't run), so a raw string from a
@@ -74,7 +99,7 @@ const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
  * particular source is our own trusted backend call, not user input.
  */
 function svgToDataUri(svg: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(normalizeBodygraphSvg(svg))}`;
 }
 
 function formatDesignDate(iso: string): string {
