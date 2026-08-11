@@ -1,4 +1,23 @@
-import type { AstrologyChart, AspectType, ZodiacSign } from "@/lib/energetics/astrology";
+import type { AstrologyChart, ZodiacSign } from "@/lib/energetics/astrology";
+import {
+  WHEEL_LINE,
+  WHEEL_TEXT,
+  RETRO_COLOR,
+  HOUSE_RING_FILL,
+  SIGN_COLORS,
+  ASPECT_STYLE,
+  CX,
+  CY,
+  SIGN_RING_OUTER,
+  SIGN_RING_INNER,
+  HOUSE_LINE_INNER,
+  HOUSE_LABEL_R,
+  ANGLE_LABEL_R,
+  toXY,
+  screenAngle,
+  wedgePath,
+  plotPlacements,
+} from "@/lib/energetics/astrology-wheel-constants";
 
 /**
  * The actual drawn natal wheel — same "that's not a chart" gap as Human
@@ -15,10 +34,17 @@ import type { AstrologyChart, AspectType, ZodiacSign } from "@/lib/energetics/as
  * (2026-08-08): renders on a fixed white background regardless of the
  * app's own theme, like every real chart tool, with fixed dark-ink line/
  * text colors rather than colors that flip with dark mode.
+ *
+ * 2026-08-10 visual-polish pass — all layout/color constants and the
+ * declutter logic now live in astrology-wheel-constants.ts, shared with
+ * reading-pdf-document.tsx's AstrologyWheelPdf so the two can't drift.
+ * Real gaps found auditing against a live Bodygraph astrology-chart
+ * reference and fixed here: filled zodiac sign wedges (was outline-only),
+ * a shaded house ring so it visually separates from the center aspect
+ * zone (was one flat field with no boundary), and Descendant/IC angle
+ * labels alongside the existing AC/MC (all 4 angles were already
+ * calculated in astrology.ts, just not all rendered).
  */
-
-const WHEEL_LINE = "#a1a1aa"; // zinc-400
-const WHEEL_TEXT = "#3f3f46"; // zinc-700
 
 const SIGN_GLYPH: Record<ZodiacSign, string> = {
   Aries: "♈", Taurus: "♉", Gemini: "♊", Cancer: "♋", Leo: "♌", Virgo: "♍",
@@ -34,32 +60,13 @@ const PLANET_GLYPH: Record<string, string> = {
   chiron: "⚷",
 };
 
-const ASPECT_STYLE: Record<AspectType, { stroke: string; dash?: string } | null> = {
-  Conjunction: null, // bodies already sit right next to each other on the ring — a line adds nothing
-  Sextile: { stroke: "#0d9488" },
-  Square: { stroke: "#dc2626" },
-  Trine: { stroke: "#2563eb" },
-  Opposition: { stroke: "#dc2626", dash: "1.5,1.2" },
-};
-
-const CX = 50;
-const CY = 50;
-const SIGN_RING_OUTER = 47;
-const SIGN_RING_INNER = 40;
-const HOUSE_LINE_INNER = 10;
-const HOUSE_LABEL_R = 15;
-const PLANET_R_A = 33;
-const PLANET_R_B = 29;
-const MIN_SEPARATION_DEG = 7;
-
-function toXY(screenAngleDeg: number, r: number): { x: number; y: number } {
-  const rad = (screenAngleDeg * Math.PI) / 180;
-  return { x: CX + r * Math.cos(rad), y: CY - r * Math.sin(rad) };
-}
-
-/** Ascendant fixed at 9 o'clock (180°); every other longitude plotted at its true offset from it. */
-function screenAngle(longitude: number, ascLongitude: number): number {
-  return 180 + (longitude - ascLongitude);
+function AngleLabel({ longitude, ascLon, accent, text }: { longitude: number; ascLon: number; accent: string; text: string }) {
+  const pos = toXY(screenAngle(longitude, ascLon), ANGLE_LABEL_R);
+  return (
+    <text x={pos.x} y={pos.y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill={accent}>
+      {text}
+    </text>
+  );
 }
 
 export function AstrologyWheelChart({
@@ -70,150 +77,112 @@ export function AstrologyWheelChart({
 }: {
   chart: AstrologyChart;
   className?: string;
-  /** Sub-account's chosen accent (Chart Designs tab) — planet markers, AC/MC labels. Sign ring + house lines stay neutral gray regardless, same "structure is fixed, accent is a brand choice" rule as the bodygraph. */
+  /** Sub-account's chosen accent (Chart Designs tab) — planet markers, angle labels. Sign ring + house lines stay fixed regardless, same "structure is fixed, accent is a brand choice" rule as the bodygraph. */
   wheelAccentColor?: string;
   backgroundColor?: string;
 }) {
   const ascLon = chart.angles.ascendant.longitude;
-
-  // Declutter: sort by longitude, nudge anything within MIN_SEPARATION_DEG
-  // of the previous body forward so labels don't collide. Alternates the
-  // plotted radius too, so even a nudged pair stays visually distinct.
-  const sorted = [...chart.placements].sort((a, b) => a.longitude - b.longitude);
-  const plotted = new Map<string, { angle: number; r: number }>();
-  let lastAngle: number | null = null;
-  sorted.forEach((p, i) => {
-    let angle = screenAngle(p.longitude, ascLon);
-    if (lastAngle !== null) {
-      const gap = ((angle - lastAngle + 540) % 360) - 180; // signed shortest gap, handles wraparound
-      if (Math.abs(gap) < MIN_SEPARATION_DEG && gap >= 0) {
-        angle = lastAngle + MIN_SEPARATION_DEG;
-      }
-    }
-    lastAngle = angle;
-    plotted.set(p.body, { angle, r: i % 2 === 0 ? PLANET_R_A : PLANET_R_B });
-  });
+  const plotted = plotPlacements(chart.placements, ascLon);
 
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "5%" }}>
-      <svg viewBox="0 0 100 100" role="img" aria-label="Astrology natal chart wheel">
-      {/* Sign ring — 12 wedges + glyphs, boundaries at each sign's true 30° start relative to ASC */}
-      <circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
-      <circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
-      {(Object.keys(SIGN_GLYPH) as ZodiacSign[]).map((sign, i) => {
-        const signStartLon = i * 30;
-        const a1 = screenAngle(signStartLon, ascLon);
-        const a2 = screenAngle(signStartLon + 30, ascLon);
-        const mid = screenAngle(signStartLon + 15, ascLon);
-        const p1 = toXY(a1, SIGN_RING_OUTER);
-        const glyphPos = toXY(mid, (SIGN_RING_OUTER + SIGN_RING_INNER) / 2);
-        return (
-          <g key={sign}>
-            <line
-              x1={toXY(a1, SIGN_RING_INNER).x}
-              y1={toXY(a1, SIGN_RING_INNER).y}
-              x2={p1.x}
-              y2={p1.y}
-              stroke={WHEEL_LINE}
-              strokeWidth={0.3}
-            />
-            <text x={glyphPos.x} y={glyphPos.y + 1.4} fontSize={3.2} textAnchor="middle" fill={WHEEL_TEXT}>
-              {SIGN_GLYPH[sign]}
-            </text>
-            <line
-              x1={toXY(a2, SIGN_RING_INNER).x}
-              y1={toXY(a2, SIGN_RING_INNER).y}
-              x2={toXY(a2, SIGN_RING_OUTER).x}
-              y2={toXY(a2, SIGN_RING_OUTER).y}
-              stroke={WHEEL_LINE}
-              strokeWidth={0.3}
-            />
-          </g>
-        );
-      })}
+      {/* viewBox has a 6-unit margin on all sides (not "0 0 100 100") — real bug found rendering this pass: the AC/DC labels sit exactly at ANGLE_LABEL_R's left/right extremes (x=0 and x=100 in the old tight viewBox), so center-anchored text got half-clipped ("AC" -> "C", "DC" -> "D"). Same margin technique the HD BodyGraph's own viewBox already uses. */}
+      <svg viewBox="-6 -6 112 112" role="img" aria-label="Astrology natal chart wheel">
+        {/* House ring fill, then a white punch-out for the center aspect zone — gives the wheel real 3-ring hierarchy (colored sign ring / shaded house ring / white aspect zone) instead of one flat field. */}
+        <circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill={HOUSE_RING_FILL} />
+        <circle cx={CX} cy={CY} r={HOUSE_LINE_INNER} fill={backgroundColor} />
 
-      {/* House cusps — real longitude-based angles, uneven under Placidus exactly like a real chart */}
-      {chart.houses.cusps.map((cusp) => {
-        const angle = screenAngle(cusp.longitude, ascLon);
-        const outer = toXY(angle, SIGN_RING_INNER);
-        const inner = toXY(angle, HOUSE_LINE_INNER);
-        const label = toXY(angle + 4, HOUSE_LABEL_R);
-        const isAngle = cusp.house === 1 || cusp.house === 10;
-        return (
-          <g key={cusp.house}>
-            <line
-              x1={inner.x}
-              y1={inner.y}
-              x2={outer.x}
-              y2={outer.y}
-              stroke={WHEEL_LINE}
-              strokeWidth={isAngle ? 0.9 : 0.4}
-            />
-            <text x={label.x} y={label.y + 1} fontSize={2.4} textAnchor="middle" fill={WHEEL_TEXT}>
-              {cusp.house}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* Aspect lines — chords between planet positions */}
-      {chart.aspects.map((asp, i) => {
-        const style = ASPECT_STYLE[asp.type];
-        if (!style) return null;
-        const a = plotted.get(asp.bodyA);
-        const b = plotted.get(asp.bodyB);
-        if (!a || !b) return null;
-        const p1 = toXY(a.angle, a.r);
-        const p2 = toXY(b.angle, b.r);
-        return (
-          <line
-            key={i}
-            x1={p1.x}
-            y1={p1.y}
-            x2={p2.x}
-            y2={p2.y}
-            stroke={style.stroke}
-            strokeWidth={0.35}
-            strokeDasharray={style.dash}
-            strokeOpacity={0.55}
-          />
-        );
-      })}
-
-      {/* Planets */}
-      {chart.placements.map((p) => {
-        const plot = plotted.get(p.body);
-        if (!plot) return null;
-        const pos = toXY(plot.angle, plot.r);
-        return (
-          <g key={p.body}>
-            <circle cx={pos.x} cy={pos.y} r={2.6} fill={backgroundColor} stroke={wheelAccentColor} strokeWidth={0.3} />
-            <text x={pos.x} y={pos.y + 1.1} fontSize={2.8} textAnchor="middle" fill={wheelAccentColor}>
-              {PLANET_GLYPH[p.body] ?? p.body[0].toUpperCase()}
-            </text>
-            {p.retrograde && (
-              <text x={pos.x + 3} y={pos.y - 1.5} fontSize={1.8} fill="#dc2626">
-                ℞
+        {/* Sign ring — 12 filled wedges + glyphs, boundaries at each sign's true 30° start relative to ASC */}
+        {(Object.keys(SIGN_GLYPH) as ZodiacSign[]).map((sign, i) => {
+          const signStartLon = i * 30;
+          const a1 = screenAngle(signStartLon, ascLon);
+          const a2 = screenAngle(signStartLon + 30, ascLon);
+          const mid = screenAngle(signStartLon + 15, ascLon);
+          const glyphPos = toXY(mid, (SIGN_RING_OUTER + SIGN_RING_INNER) / 2);
+          const p1o = toXY(a1, SIGN_RING_OUTER);
+          const p1i = toXY(a1, SIGN_RING_INNER);
+          return (
+            <g key={sign}>
+              <path d={wedgePath(a1, a2, SIGN_RING_OUTER, SIGN_RING_INNER)} fill={SIGN_COLORS[sign]} fillOpacity={0.55} />
+              <line x1={p1i.x} y1={p1i.y} x2={p1o.x} y2={p1o.y} stroke={WHEEL_LINE} strokeWidth={0.3} />
+              <text x={glyphPos.x} y={glyphPos.y + 1.5} fontSize={3.6} textAnchor="middle" fill={WHEEL_TEXT}>
+                {SIGN_GLYPH[sign]}
               </text>
-            )}
-          </g>
-        );
-      })}
+            </g>
+          );
+        })}
+        <circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+        <circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
 
-      {/* Ascendant / MC markers */}
-      <text x={toXY(180, SIGN_RING_OUTER + 3).x} y={toXY(180, SIGN_RING_OUTER + 3).y + 1} fontSize={2.6} fontWeight={700} textAnchor="middle" fill={wheelAccentColor}>
-        AC
-      </text>
-      <text
-        x={toXY(screenAngle(chart.angles.mc.longitude, ascLon), SIGN_RING_OUTER + 3).x}
-        y={toXY(screenAngle(chart.angles.mc.longitude, ascLon), SIGN_RING_OUTER + 3).y + 1}
-        fontSize={2.6}
-        fontWeight={700}
-        textAnchor="middle"
-        fill={wheelAccentColor}
-      >
-        MC
-      </text>
+        {/* House cusps — real longitude-based angles, uneven under Placidus exactly like a real chart */}
+        {chart.houses.cusps.map((cusp) => {
+          const angle = screenAngle(cusp.longitude, ascLon);
+          const outer = toXY(angle, SIGN_RING_INNER);
+          const inner = toXY(angle, HOUSE_LINE_INNER);
+          const label = toXY(angle + 4, HOUSE_LABEL_R);
+          const isAngle = cusp.house === 1 || cusp.house === 10;
+          return (
+            <g key={cusp.house}>
+              <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={WHEEL_LINE} strokeWidth={isAngle ? 0.9 : 0.4} />
+              <text x={label.x} y={label.y + 1} fontSize={2.6} textAnchor="middle" fill={WHEEL_TEXT}>
+                {cusp.house}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Aspect-zone boundary — closes the 3rd ring, drawn after the house cusps so it reads as a clean edge on top of them. */}
+        <circle cx={CX} cy={CY} r={HOUSE_LINE_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+
+        {/* Aspect lines — chords between planet positions */}
+        {chart.aspects.map((asp, i) => {
+          const style = ASPECT_STYLE[asp.type];
+          if (!style) return null;
+          const a = plotted.get(asp.bodyA);
+          const b = plotted.get(asp.bodyB);
+          if (!a || !b) return null;
+          const p1 = toXY(a.angle, a.r);
+          const p2 = toXY(b.angle, b.r);
+          return (
+            <line
+              key={i}
+              x1={p1.x}
+              y1={p1.y}
+              x2={p2.x}
+              y2={p2.y}
+              stroke={style.stroke}
+              strokeWidth={0.4}
+              strokeDasharray={style.dash}
+              strokeOpacity={0.6}
+            />
+          );
+        })}
+
+        {/* Planets */}
+        {chart.placements.map((p) => {
+          const plot = plotted.get(p.body);
+          if (!plot) return null;
+          const pos = toXY(plot.angle, plot.r);
+          return (
+            <g key={p.body}>
+              <circle cx={pos.x} cy={pos.y} r={2.8} fill={backgroundColor} stroke={wheelAccentColor} strokeWidth={0.35} />
+              <text x={pos.x} y={pos.y + 1.15} fontSize={3} textAnchor="middle" fill={wheelAccentColor}>
+                {PLANET_GLYPH[p.body] ?? p.body[0].toUpperCase()}
+              </text>
+              {p.retrograde && (
+                <text x={pos.x + 3.2} y={pos.y - 1.8} fontSize={1.9} fill={RETRO_COLOR}>
+                  ℞
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* All 4 angles — was AC/MC only; Descendant and IC were already calculated (astrology.ts's chart.angles), just not rendered. */}
+        <AngleLabel longitude={chart.angles.ascendant.longitude} ascLon={ascLon} accent={wheelAccentColor} text="AC" />
+        <AngleLabel longitude={chart.angles.descendant.longitude} ascLon={ascLon} accent={wheelAccentColor} text="DC" />
+        <AngleLabel longitude={chart.angles.mc.longitude} ascLon={ascLon} accent={wheelAccentColor} text="MC" />
+        <AngleLabel longitude={chart.angles.ic.longitude} ascLon={ascLon} accent={wheelAccentColor} text="IC" />
       </svg>
     </div>
   );

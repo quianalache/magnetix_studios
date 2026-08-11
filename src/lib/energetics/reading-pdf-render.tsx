@@ -26,6 +26,8 @@ export async function renderReadingPdfStream(opts: {
   hdDesign?: ChartDesign | null;
   /** The sub-account's default Mandala Chart Design (system: "mandala") — see reading-pdf-document.tsx for the fallback contract. */
   mandalaDesign?: ChartDesign | null;
+  /** The sub-account's default Astrology Chart Design (system: "astrology") — see reading-pdf-document.tsx for the fallback contract. */
+  astroDesign?: ChartDesign | null;
 }): Promise<ReadableStream<Uint8Array>> {
   const nodeStream = await renderToStream(<ReadingPdfDocument {...opts} />);
   const { Readable } = await import("node:stream");

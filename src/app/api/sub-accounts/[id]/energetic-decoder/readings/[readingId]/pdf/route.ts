@@ -41,6 +41,10 @@ export async function GET(
   // hdDesign) reading-summary.tsx reads, so the PDF's Mandala matches the
   // web Mandala's own colors, not the BodyGraph's.
   const mandalaDesign = reading.humanDesign ? await getDefaultChartDesign(subAccountId, "mandala") : null;
+  // Same real Astrology Chart Design record reading-summary.tsx's
+  // AstrologySummary reads, so the PDF wheel's accent matches the web
+  // wheel's.
+  const astroDesign = reading.astrology ? await getDefaultChartDesign(subAccountId, "astrology") : null;
 
   const stream = await renderReadingPdfStream({
     readerName: reading.name,
@@ -53,6 +57,7 @@ export async function GET(
     spheres: reading.spheres,
     hdDesign,
     mandalaDesign,
+    astroDesign,
   });
   return new NextResponse(stream, {
     headers: {

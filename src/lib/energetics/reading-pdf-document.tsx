@@ -41,6 +41,25 @@ import {
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { ASPECT_TYPE_CONTENT } from "./astrology-content-data";
+import {
+  WHEEL_LINE,
+  WHEEL_TEXT,
+  RETRO_COLOR,
+  HOUSE_RING_FILL,
+  SIGN_COLORS,
+  ASPECT_STYLE,
+  CX,
+  CY,
+  SIGN_RING_OUTER,
+  SIGN_RING_INNER,
+  HOUSE_LINE_INNER,
+  HOUSE_LABEL_R,
+  ANGLE_LABEL_R,
+  toXY,
+  screenAngle,
+  wedgePath,
+  plotPlacements,
+} from "./astrology-wheel-constants";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
 import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/chart-design";
@@ -707,77 +726,135 @@ function MandalaPdf({
   );
 }
 
-// ── Astrology wheel (react-pdf Svg) — same math as astrology-wheel-chart.tsx,
-// but with ASCII-safe labels instead of Unicode glyphs (see header note #1) ──
+// ── Astrology wheel (react-pdf Svg) — 2026-08-10 parity + visual-polish
+// pass. Ports astrology-wheel-chart.tsx's now-current design (filled sign
+// wedges, shaded house ring, all 4 angle labels) into react-pdf's own
+// primitives, and brings this PDF up from a real, substantial gap it had
+// before: it was missing house numbers, ALL aspect lines, retrograde
+// markers, and 3 of the 4 angle labels entirely (only AC/MC existed).
+// Same layout/color constants and declutter logic as the web chart via
+// astrology-wheel-constants.ts — the two can't drift apart. ASCII-safe
+// sign abbreviations instead of Unicode glyphs stay local to this file
+// (see header note #1 for why: react-pdf's Helvetica has no astrological
+// Unicode glyphs at all).
 
-const WHEEL_LINE = "#a1a1aa";
-const WHEEL_TEXT = "#3f3f46";
 const SIGN_ABBR: Record<ZodiacSign, string> = {
   Aries: "Ari", Taurus: "Tau", Gemini: "Gem", Cancer: "Can", Leo: "Leo", Virgo: "Vir",
   Libra: "Lib", Scorpio: "Sco", Sagittarius: "Sag", Capricorn: "Cap", Aquarius: "Aqu", Pisces: "Pis",
 };
-const CX = 50, CY = 50, SIGN_RING_OUTER = 47, SIGN_RING_INNER = 40, HOUSE_LINE_INNER = 10, PLANET_R_A = 33, PLANET_R_B = 29, MIN_SEPARATION_DEG = 7;
 
-function toXY(screenAngleDeg: number, r: number): { x: number; y: number } {
-  const rad = (screenAngleDeg * Math.PI) / 180;
-  return { x: CX + r * Math.cos(rad), y: CY - r * Math.sin(rad) };
-}
-function screenAngle(longitude: number, ascLongitude: number): number {
-  return 180 + (longitude - ascLongitude);
+function AngleLabelPdf({ longitude, ascLon, accent, text }: { longitude: number; ascLon: number; accent: string; text: string }) {
+  const pos = toXY(screenAngle(longitude, ascLon), ANGLE_LABEL_R);
+  return (
+    <Text x={pos.x} y={pos.y + 1} style={{ fontSize: 2.6, fontWeight: 700, textAnchor: "middle", fill: accent }}>
+      {text}
+    </Text>
+  );
 }
 
-function AstrologyWheelPdf({ chart }: { chart: AstrologyChart }) {
+function AstrologyWheelPdf({ chart, wheelAccentColor }: { chart: AstrologyChart; wheelAccentColor: string }) {
   const ascLon = chart.angles.ascendant.longitude;
-  const sorted = [...chart.placements].sort((a, b) => a.longitude - b.longitude);
-  const plotted = new Map<string, { angle: number; r: number }>();
-  let lastAngle: number | null = null;
-  sorted.forEach((p, i) => {
-    let angle = screenAngle(p.longitude, ascLon);
-    if (lastAngle !== null) {
-      const gap = ((angle - lastAngle + 540) % 360) - 180;
-      if (Math.abs(gap) < MIN_SEPARATION_DEG && gap >= 0) angle = lastAngle + MIN_SEPARATION_DEG;
-    }
-    lastAngle = angle;
-    plotted.set(p.body, { angle, r: i % 2 === 0 ? PLANET_R_A : PLANET_R_B });
-  });
+  const plotted = plotPlacements(chart.placements, ascLon);
 
   return (
-    <Svg viewBox="0 0 100 100" style={{ width: 240, height: 240 }}>
-      <Rect x={0} y={0} width={100} height={100} fill="#ffffff" />
-      <Circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
-      <Circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+    // -6/-6/112/112, not 0/0/100/100 — same real clipping bug found and
+    // fixed on the web chart: AC/DC's label anchor points sit exactly at
+    // ANGLE_LABEL_R's left/right extremes (the old tight viewBox's own
+    // edge), so center-anchored text lost its first character. Fixed the
+    // same way here before it ever shipped, not discovered separately.
+    <Svg viewBox="-6 -6 112 112" style={{ width: 300, height: 300 }}>
+      <Rect x={-6} y={-6} width={112} height={112} fill="#ffffff" />
+
+      {/* House ring fill, then a white punch-out for the center aspect zone — same 3-ring hierarchy as the web chart. */}
+      <Circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill={HOUSE_RING_FILL} />
+      <Circle cx={CX} cy={CY} r={HOUSE_LINE_INNER} fill="#ffffff" />
+
+      {/* Sign ring — 12 filled wedges + abbreviations */}
       {(Object.keys(SIGN_ABBR) as ZodiacSign[]).map((sign, i) => {
         const signStartLon = i * 30;
+        const a1 = screenAngle(signStartLon, ascLon);
+        const a2 = screenAngle(signStartLon + 30, ascLon);
         const mid = screenAngle(signStartLon + 15, ascLon);
         const glyphPos = toXY(mid, (SIGN_RING_OUTER + SIGN_RING_INNER) / 2);
-        const a2 = screenAngle(signStartLon + 30, ascLon);
-        const p2i = toXY(a2, SIGN_RING_INNER);
-        const p2o = toXY(a2, SIGN_RING_OUTER);
+        const p1i = toXY(a1, SIGN_RING_INNER);
+        const p1o = toXY(a1, SIGN_RING_OUTER);
         return (
           <G key={sign}>
+            <Path d={wedgePath(a1, a2, SIGN_RING_OUTER, SIGN_RING_INNER)} fill={SIGN_COLORS[sign]} fillOpacity={0.55} />
+            <Line x1={p1i.x} y1={p1i.y} x2={p1o.x} y2={p1o.y} stroke={WHEEL_LINE} strokeWidth={0.3} />
             <Text x={glyphPos.x} y={glyphPos.y + 1} style={{ fontSize: 2.4, textAnchor: "middle", fill: WHEEL_TEXT }}>{SIGN_ABBR[sign]}</Text>
-            <Line x1={p2i.x} y1={p2i.y} x2={p2o.x} y2={p2o.y} stroke={WHEEL_LINE} strokeWidth={0.3} />
           </G>
         );
       })}
+      <Circle cx={CX} cy={CY} r={SIGN_RING_OUTER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+      <Circle cx={CX} cy={CY} r={SIGN_RING_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+
+      {/* House cusps + house numbers — the numbers were missing entirely before this pass */}
       {chart.houses.cusps.map((cusp) => {
         const angle = screenAngle(cusp.longitude, ascLon);
         const outer = toXY(angle, SIGN_RING_INNER);
         const inner = toXY(angle, HOUSE_LINE_INNER);
+        const label = toXY(angle + 4, HOUSE_LABEL_R);
         const isAngle = cusp.house === 1 || cusp.house === 10;
-        return <Line key={cusp.house} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={WHEEL_LINE} strokeWidth={isAngle ? 0.9 : 0.4} />;
+        return (
+          <G key={cusp.house}>
+            <Line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={WHEEL_LINE} strokeWidth={isAngle ? 0.9 : 0.4} />
+            <Text x={label.x} y={label.y + 1} style={{ fontSize: 2.6, textAnchor: "middle", fill: WHEEL_TEXT }}>
+              {cusp.house}
+            </Text>
+          </G>
+        );
       })}
+
+      <Circle cx={CX} cy={CY} r={HOUSE_LINE_INNER} fill="none" stroke={WHEEL_LINE} strokeWidth={0.4} />
+
+      {/* Aspect lines — entirely missing before this pass */}
+      {chart.aspects.map((asp, i) => {
+        const style = ASPECT_STYLE[asp.type];
+        if (!style) return null;
+        const a = plotted.get(asp.bodyA);
+        const b = plotted.get(asp.bodyB);
+        if (!a || !b) return null;
+        const p1 = toXY(a.angle, a.r);
+        const p2 = toXY(b.angle, b.r);
+        return (
+          <Line
+            key={i}
+            x1={p1.x}
+            y1={p1.y}
+            x2={p2.x}
+            y2={p2.y}
+            stroke={style.stroke}
+            strokeWidth={0.4}
+            strokeDasharray={style.dash}
+            strokeOpacity={0.6}
+          />
+        );
+      })}
+
+      {/* Planets, with retrograde markers — the ℞ marker was missing before this pass */}
       {chart.placements.map((p) => {
         const plot = plotted.get(p.body);
         if (!plot) return null;
         const pos = toXY(plot.angle, plot.r);
         return (
           <G key={p.body}>
-            <Circle cx={pos.x} cy={pos.y} r={3.2} fill="#fff" stroke={WHEEL_TEXT} strokeWidth={0.3} />
-            <Text x={pos.x} y={pos.y + 1} style={{ fontSize: 2.2, textAnchor: "middle", fill: WHEEL_TEXT }}>{PLANET_ABBR[p.body] ?? p.body.slice(0, 2)}</Text>
+            <Circle cx={pos.x} cy={pos.y} r={3.2} fill="#fff" stroke={wheelAccentColor} strokeWidth={0.35} />
+            <Text x={pos.x} y={pos.y + 1} style={{ fontSize: 2.4, textAnchor: "middle", fill: wheelAccentColor }}>{PLANET_ABBR[p.body] ?? p.body.slice(0, 2)}</Text>
+            {p.retrograde && (
+              <Text x={pos.x + 3.4} y={pos.y - 1.8} style={{ fontSize: 1.9, fill: RETRO_COLOR }}>
+                R
+              </Text>
+            )}
           </G>
         );
       })}
+
+      {/* All 4 angles — was AC/MC only before this pass */}
+      <AngleLabelPdf longitude={chart.angles.ascendant.longitude} ascLon={ascLon} accent={wheelAccentColor} text="AC" />
+      <AngleLabelPdf longitude={chart.angles.descendant.longitude} ascLon={ascLon} accent={wheelAccentColor} text="DC" />
+      <AngleLabelPdf longitude={chart.angles.mc.longitude} ascLon={ascLon} accent={wheelAccentColor} text="MC" />
+      <AngleLabelPdf longitude={chart.angles.ic.longitude} ascLon={ascLon} accent={wheelAccentColor} text="IC" />
     </Svg>
   );
 }
@@ -895,6 +972,7 @@ export function ReadingPdfDocument({
   spheres,
   hdDesign,
   mandalaDesign,
+  astroDesign,
 }: {
   readerName: string;
   birthDate: string;
@@ -908,6 +986,8 @@ export function ReadingPdfDocument({
   hdDesign?: ChartDesign | null;
   /** The sub-account's default Mandala Chart Design (system: "mandala", a separate record from hdDesign) — same source reading-summary.tsx reads. Mandala section only renders when this is present, mirroring the web's own `{mandalaDesign && (...)}` guard. */
   mandalaDesign?: ChartDesign | null;
+  /** The sub-account's default Astrology Chart Design (system: "astrology") — same source reading-summary.tsx's AstrologySummary reads. Only wheelAccentColor is used today (planet markers, angle labels), same as the web wheel; undefined/null falls back to the fixed WHEEL_TEXT ink color. */
+  astroDesign?: ChartDesign | null;
 }) {
   const hdContent = humanDesign?.content;
   const astroContent = astrology?.content;
@@ -1043,7 +1123,7 @@ export function ReadingPdfDocument({
               )}
             </View>
             <View style={styles.chartWrap}>
-              <AstrologyWheelPdf chart={astrology} />
+              <AstrologyWheelPdf chart={astrology} wheelAccentColor={astroDesign?.wheelAccentColor || WHEEL_TEXT} />
             </View>
 
             <Text style={styles.centerLabel}>Placements</Text>
