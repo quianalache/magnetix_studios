@@ -8,6 +8,7 @@ import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
+import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import type { ChartDesign } from "@/types/chart-design";
 
 /**
@@ -119,31 +120,43 @@ function formatDesignDate(iso: string): string {
 
 export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
   return (
-    <div className="divide-y rounded-2xl border bg-card">
-      {spheres.map((s) => (
-        <div key={s.sphere} className="px-5 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
-              <p className="text-sm font-semibold">
-                Gate {s.gate}.{s.line}
+    <div className="space-y-4">
+      {/*
+        Visual chart added alongside the existing text list 2026-08-10, not
+        in place of it — her explicit instruction was to keep both so the
+        two can be compared before anything is replaced. Same underlying
+        `spheres` array both ways, so they can't show different values.
+      */}
+      <div className="rounded-2xl border bg-card p-4">
+        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Frequency — Hologenetic Profile</p>
+        <GeneKeysChart spheres={spheres} className="mx-auto w-full max-w-[560px]" />
+      </div>
+      <div className="divide-y rounded-2xl border bg-card">
+        {spheres.map((s) => (
+          <div key={s.sphere} className="px-5 py-3">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
+                <p className="text-sm font-semibold">
+                  Gate {s.gate}.{s.line}
+                </p>
+              </div>
+              <p className="text-right text-xs text-muted-foreground">
+                <span className="text-rose-500">{s.shadow}</span>
+                {" → "}
+                <span className="text-emerald-500">{s.gift}</span>
+                {" → "}
+                <span>☆ {s.siddhi}</span>
               </p>
             </div>
-            <p className="text-right text-xs text-muted-foreground">
-              <span className="text-rose-500">{s.shadow}</span>
-              {" → "}
-              <span className="text-emerald-500">{s.gift}</span>
-              {" → "}
-              <span>☆ {s.siddhi}</span>
-            </p>
+            {(s.showsUp || s.giftText) && (
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                {s.showsUp} {s.giftText}
+              </p>
+            )}
           </div>
-          {(s.showsUp || s.giftText) && (
-            <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              {s.showsUp} {s.giftText}
-            </p>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
