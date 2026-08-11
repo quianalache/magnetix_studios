@@ -40,7 +40,7 @@ export default function CommunityGroupSettingsPage({
   params: Promise<{ subAccountId: string; groupId: string }>;
 }) {
   const { groupId } = use(params);
-  const { subAccountId, isAdmin } = useSubAccount();
+  const { subAccountId, isAdmin, loading: subAccountLoading } = useSubAccount();
   const router = useRouter();
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
@@ -156,7 +156,7 @@ export default function CommunityGroupSettingsPage({
     }
   }
 
-  if (!loaded) {
+  if (!loaded || subAccountLoading) {
     return (
       <div className="flex justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -211,6 +211,15 @@ export default function CommunityGroupSettingsPage({
           </Link>
         </div>
       </div>
+
+      {!isAdmin && (
+        <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+          These settings are read-only for you right now — either you&apos;re
+          not an admin on this sub-account, or your access couldn&apos;t be
+          verified. Try refreshing the page; if this persists, sign out and
+          back in.
+        </p>
+      )}
 
       <fieldset disabled={!isAdmin || saving} className="space-y-5">
         <div className="space-y-1.5">
