@@ -1,12 +1,11 @@
-import { Fragment } from "react";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
-import { CENTERS, CENTER_LABELS, HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
+import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
-import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
+import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import type { ChartDesign } from "@/types/chart-design";
@@ -168,27 +167,37 @@ export function HumanDesignSummary({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border bg-card p-4">
+      {/*
+        Unified full chart — replaces the old separate Bodygraph-image-or-
+        local-chart card plus the redundant "Activations" table below it
+        (2026-08-10). Design/Personality columns + the BodyGraph + all 4
+        Variable arrows are all one component now; profile.design/
+        profile.personality's Gate.Line data (previously duplicated into a
+        standalone table) already renders inside HumanDesignFullChart's own
+        columns, so that table would just be showing the same numbers
+        twice.
+
+        Deliberately does NOT fall back to profile.bodygraphSvg (Bodygraph's
+        own rendered image) the way the old card did — her explicit ask:
+        "make our local full chart the primary presentation... stop using
+        the external rendered image as the main Human Design chart in this
+        view." The API call and profile.bodygraphSvg itself are untouched
+        everywhere else (energetic-decoder-service.ts, bodygraph-api.ts) —
+        this is a display choice in this one file, not a removal of the
+        integration.
+
+        No outer "rounded-2xl border bg-card p-4" wrapper the way every
+        other section here has — HumanDesignFullChart already supplies its
+        own rounded corners + background (needed for its own light/dark-
+        independent white chart surface), so wrapping it in a second card
+        would double the padding and nest two round-cornered boxes for no
+        reason.
+      */}
+      <div>
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Bodygraph — Personality <span style={{ color: "#18181b" }}>black</span>, Design <span className="text-rose-600">red</span>
+          Human Design — Design (left) · BodyGraph · Personality (right)
         </p>
-        {profile.bodygraphSvg ? (
-          // eslint-disable-next-line @next/next/no-img-element -- data: URI, next/image's optimizer can't handle inline SVG data URIs
-          <img
-            src={svgToDataUri(profile.bodygraphSvg)}
-            alt="Human Design bodygraph"
-            className="mx-auto w-full max-w-[560px]"
-          />
-        ) : (
-          <HumanDesignChart
-            profile={profile}
-            className="mx-auto w-full max-w-[560px]"
-            definedColor={hdDesign?.chartDefinedColor}
-            channelsColor={hdDesign?.channelsColor}
-            gatesColor={hdDesign?.gatesColor}
-            backgroundColor={hdDesign?.backgroundColor}
-          />
-        )}
+        <HumanDesignFullChart profile={profile} design={hdDesign} />
       </div>
 
       {mandalaDesign && (
@@ -204,32 +213,6 @@ export function HumanDesignSummary({
           />
         </div>
       )}
-
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Activations — every planet&apos;s real Gate.Line, both charts
-        </p>
-        <div className="grid grid-cols-2 gap-x-4 text-xs">
-          <p className="mb-1 font-semibold text-rose-600">Design</p>
-          <p className="mb-1 font-semibold text-foreground">Personality</p>
-          {HD_BODY_LABELS.map(({ body, label, symbol }) => {
-            const d = profile.design.find((a) => a.body === body);
-            const p = profile.personality.find((a) => a.body === body);
-            return (
-              <Fragment key={body}>
-                <p className="flex items-center justify-between border-b border-dashed py-1 text-muted-foreground">
-                  <span>{symbol} {label}</span>
-                  <span className="font-medium text-foreground">{d ? `${d.gate}.${d.line}` : "—"}</span>
-                </p>
-                <p className="flex items-center justify-between border-b border-dashed py-1 text-muted-foreground">
-                  <span>{symbol} {label}</span>
-                  <span className="font-medium text-foreground">{p ? `${p.gate}.${p.line}` : "—"}</span>
-                </p>
-              </Fragment>
-            );
-          })}
-        </div>
-      </div>
 
       <div className="rounded-2xl border bg-card p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
