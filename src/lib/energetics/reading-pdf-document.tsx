@@ -12,11 +12,13 @@ import {
   Rect,
   Circle,
   Line,
+  Path,
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { HumanDesignProfile } from "./human-design";
 import { CENTERS, CENTER_LABELS, CHANNELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "./human-design-chart-layout";
+import { GATE_WHEEL_ORDER } from "./gate-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
 import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
 import {
@@ -570,6 +572,141 @@ function HumanDesignFullChartPdf({ profile, hdDesign }: { profile: HumanDesignPr
   );
 }
 
+// ── Mandala (react-pdf Svg) — 2026-08-10, ports mandala-chart.tsx's already-
+// verified dual-activation split-dot fix into react-pdf's own primitives.
+// No PDF counterpart existed before this (confirmed by grep, zero prior
+// matches for "mandala" anywhere in this file). Same GATE_WHEEL_ORDER, same
+// quadrant divider/number geometry, same activation math (straight off
+// profile.personality/profile.design), and the same PERSONALITY_FILL/
+// DESIGN_FILL/INACTIVE_GATE_TEXT constants the BodyGraph above and the web
+// Mandala both already use — only the shape components differ (react-pdf's
+// Path/Circle/Line/Text instead of DOM svg path/circle/line/text), so this
+// can't drift from the already-verified web version the way a hand-copied
+// reimplementation could. `MANDALA_` prefix on the local constants/helpers
+// below is just to avoid colliding with the Astrology wheel's own CX/CY/
+// toXY declared further down in this same file — not a sign of different
+// geometry semantics.
+
+const MANDALA_CX = 50;
+const MANDALA_CY = 50;
+const MANDALA_RING_R = 44;
+const MANDALA_TICK_OUTER = 44;
+const MANDALA_TICK_INNER = 38;
+const MANDALA_LABEL_R = 33;
+const MANDALA_DOT_R = 26;
+const MANDALA_GATE_ARC_DEG = 360 / 64;
+const MANDALA_DOT_SIZE = 1.7;
+const MANDALA_SIZE = 300; // bigger than the 180pt BodyGraph/240pt Astrology wheel — 64 tightly-packed gate numbers need more room to stay legible than either of those.
+
+function mandalaAngleForGateIndex(i: number): number {
+  // 12 o'clock = -90°, clockwise = increasing angle — same convention mandala-chart.tsx documents.
+  return -90 + i * MANDALA_GATE_ARC_DEG;
+}
+function mandalaToXY(angleDeg: number, r: number): { x: number; y: number } {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: MANDALA_CX + r * Math.cos(rad), y: MANDALA_CY + r * Math.sin(rad) };
+}
+
+/** Mirrors ActivationDot in mandala-chart.tsx — same split-dot treatment for dual-activated gates (Personality half left, Design half right), react-pdf's Path/Circle instead of DOM svg path/circle. */
+function MandalaActivationDotPdf({
+  cx,
+  cy,
+  inPersonality,
+  inDesign,
+  stroke,
+}: {
+  cx: number;
+  cy: number;
+  inPersonality: boolean;
+  inDesign: boolean;
+  stroke: string;
+}) {
+  if (inPersonality && inDesign) {
+    return (
+      <>
+        <Path d={`M ${cx} ${cy - MANDALA_DOT_SIZE} A ${MANDALA_DOT_SIZE} ${MANDALA_DOT_SIZE} 0 0 0 ${cx} ${cy + MANDALA_DOT_SIZE} Z`} fill={PERSONALITY_FILL} stroke={stroke} strokeWidth={0.3} />
+        <Path d={`M ${cx} ${cy - MANDALA_DOT_SIZE} A ${MANDALA_DOT_SIZE} ${MANDALA_DOT_SIZE} 0 0 1 ${cx} ${cy + MANDALA_DOT_SIZE} Z`} fill={DESIGN_FILL} stroke={stroke} strokeWidth={0.3} />
+      </>
+    );
+  }
+  return <Circle cx={cx} cy={cy} r={MANDALA_DOT_SIZE} fill={inPersonality ? PERSONALITY_FILL : DESIGN_FILL} stroke={stroke} strokeWidth={0.3} />;
+}
+
+/**
+ * Mirrors MandalaChart in mandala-chart.tsx. `gateColor` carries the same
+ * meaning the web caller gives it (reading-summary.tsx passes
+ * `mandalaDesign.chartDefinedColor` — the accent stroke ring around each
+ * activated dot, not the Personality/Design fill itself, mirroring
+ * gatesColor's role around BodyGraph gate markers). Background is applied
+ * to the wrapping View with padding, same as the web version's wrapping
+ * div (`background`, `padding: "5%"`, `borderRadius: 12`) rather than an
+ * in-SVG Rect — kept as a real View so the padding/rounding reads as a
+ * genuine card, matching the web Mandala's own card treatment.
+ */
+function MandalaPdf({
+  profile,
+  gateColor,
+  backgroundColor,
+}: {
+  profile: HumanDesignProfile;
+  gateColor: string;
+  backgroundColor: string;
+}) {
+  const personalityGates = new Set(profile.personality.map((a) => a.gate));
+  const designGates = new Set(profile.design.map((a) => a.gate));
+
+  return (
+    <View style={{ backgroundColor, borderRadius: 12, padding: MANDALA_SIZE * 0.05 }}>
+      <Svg viewBox="0 0 100 100" style={{ width: MANDALA_SIZE, height: MANDALA_SIZE }}>
+        <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={MANDALA_RING_R} fill="none" stroke="#a1a1aa" strokeWidth={0.4} />
+        <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={MANDALA_TICK_INNER} fill="none" stroke="#e4e4e7" strokeWidth={0.3} />
+
+        {/* 4 quadrant dividers/numbers — same geometry as mandala-chart.tsx, untouched */}
+        {[0, 1, 2, 3].map((q) => {
+          const angle = mandalaAngleForGateIndex(q * 16);
+          const outer = mandalaToXY(angle, MANDALA_RING_R + 2);
+          const inner = mandalaToXY(angle, MANDALA_TICK_INNER - 6);
+          return <Line key={q} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke="#71717a" strokeWidth={0.6} />;
+        })}
+        {[0, 1, 2, 3].map((q) => {
+          const midAngle = mandalaAngleForGateIndex(q * 16 + 8);
+          const pos = mandalaToXY(midAngle, MANDALA_RING_R + 5);
+          return (
+            <Text key={q} x={pos.x} y={pos.y + 1} style={{ fontSize: 2.6, fontWeight: 700, textAnchor: "middle", fill: "#71717a" }}>
+              {q + 1}
+            </Text>
+          );
+        })}
+
+        {GATE_WHEEL_ORDER.map((gate, i) => {
+          const angle = mandalaAngleForGateIndex(i);
+          const tickA = mandalaToXY(angle, MANDALA_TICK_OUTER);
+          const tickB = mandalaToXY(angle, MANDALA_TICK_INNER);
+          const labelPos = mandalaToXY(angle + MANDALA_GATE_ARC_DEG / 2, MANDALA_LABEL_R);
+          const inPersonality = personalityGates.has(gate);
+          const inDesign = designGates.has(gate);
+          const activated = inPersonality || inDesign;
+          const dotPos = mandalaToXY(angle + MANDALA_GATE_ARC_DEG / 2, MANDALA_DOT_R);
+          const labelColor = activated ? (inDesign && !inPersonality ? DESIGN_FILL : PERSONALITY_FILL) : INACTIVE_GATE_TEXT;
+          return (
+            <G key={gate}>
+              <Line x1={tickA.x} y1={tickA.y} x2={tickB.x} y2={tickB.y} stroke="#d4d4d8" strokeWidth={0.25} />
+              <Text
+                x={labelPos.x}
+                y={labelPos.y + 0.8}
+                style={{ fontSize: activated ? 2.2 : 2, fontWeight: activated ? 700 : 400, textAnchor: "middle", fill: labelColor }}
+              >
+                {gate}
+              </Text>
+              {activated && <MandalaActivationDotPdf cx={dotPos.x} cy={dotPos.y} inPersonality={inPersonality} inDesign={inDesign} stroke={gateColor} />}
+            </G>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
 // ── Astrology wheel (react-pdf Svg) — same math as astrology-wheel-chart.tsx,
 // but with ASCII-safe labels instead of Unicode glyphs (see header note #1) ──
 
@@ -657,6 +794,7 @@ export function ReadingPdfDocument({
   astrology,
   spheres,
   hdDesign,
+  mandalaDesign,
 }: {
   readerName: string;
   birthDate: string;
@@ -668,6 +806,8 @@ export function ReadingPdfDocument({
   spheres?: GeneKeysSphereResult[];
   /** The sub-account's default Human Design Chart Design — same shape/fallback contract as the web renderers (human-design-chart.tsx / human-design-full-chart.tsx); undefined/null renders correctly with the same traditional defaults. */
   hdDesign?: ChartDesign | null;
+  /** The sub-account's default Mandala Chart Design (system: "mandala", a separate record from hdDesign) — same source reading-summary.tsx reads. Mandala section only renders when this is present, mirroring the web's own `{mandalaDesign && (...)}` guard. */
+  mandalaDesign?: ChartDesign | null;
 }) {
   const hdContent = humanDesign?.content;
   const astroContent = astrology?.content;
@@ -711,6 +851,17 @@ export function ReadingPdfDocument({
             <View style={styles.chartWrap}>
               <HumanDesignFullChartPdf profile={humanDesign} hdDesign={hdDesign} />
             </View>
+
+            {mandalaDesign && (
+              <View style={styles.chartWrap}>
+                <Text style={styles.centerLabel}>Mandala</Text>
+                <MandalaPdf
+                  profile={humanDesign}
+                  gateColor={mandalaDesign.chartDefinedColor || DEFAULT_DEFINED_FILL}
+                  backgroundColor={mandalaDesign.backgroundColor || "#ffffff"}
+                />
+              </View>
+            )}
 
             {humanDesign.variables && (
               <View>

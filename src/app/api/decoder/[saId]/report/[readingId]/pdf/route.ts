@@ -35,6 +35,10 @@ export async function GET(
   // the web report page (reading-summary.tsx) reads, so the PDF's Human
   // Design section matches what's actually shown on screen.
   const hdDesign = reading.humanDesign ? await getDefaultChartDesign(saId, "humanDesign") : null;
+  // Same real Mandala Chart Design record (system: "mandala", separate from
+  // hdDesign) reading-summary.tsx reads, so the PDF's Mandala matches the
+  // web Mandala's own colors, not the BodyGraph's.
+  const mandalaDesign = reading.humanDesign ? await getDefaultChartDesign(saId, "mandala") : null;
 
   const stream = await renderReadingPdfStream({
     readerName: reading.name,
@@ -46,6 +50,7 @@ export async function GET(
     astrology: reading.astrology,
     spheres: reading.spheres,
     hdDesign,
+    mandalaDesign,
   });
   return new NextResponse(stream, {
     headers: {

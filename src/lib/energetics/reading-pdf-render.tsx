@@ -24,6 +24,8 @@ export async function renderReadingPdfStream(opts: {
   spheres?: GeneKeysSphereResult[];
   /** The sub-account's default Human Design Chart Design — see reading-pdf-document.tsx for the fallback contract. */
   hdDesign?: ChartDesign | null;
+  /** The sub-account's default Mandala Chart Design (system: "mandala") — see reading-pdf-document.tsx for the fallback contract. */
+  mandalaDesign?: ChartDesign | null;
 }): Promise<ReadableStream<Uint8Array>> {
   const nodeStream = await renderToStream(<ReadingPdfDocument {...opts} />);
   const { Readable } = await import("node:stream");
