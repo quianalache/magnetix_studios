@@ -23,6 +23,12 @@ import type { WallClockBirthInput } from "./gate-wheel";
  * untouched and still fully functional, just no longer called from
  * energetic-decoder-service.ts — kept as a fallback path, not deleted.
  *
+ * Decision-Making Strategy description (fetchBodygraphVariables, below)
+ * dropped the same day, for a different reason: an audit found it was
+ * never rendered anywhere, and Bodygraph's own field for it is empty in
+ * every real response anyway — see that function's own doc for the detail.
+ * fetchBodygraphVariables now returns the 6 Variables + Skills only.
+ *
  * Deliberately scoped to ONLY the fields nothing else in this codebase can
  * compute — Type/Authority/Profile/Centers/Gates/Channels/Incarnation
  * Cross/Signature/Not-Self Theme/Node/Lilith/Chiron/every other Astrology
@@ -78,7 +84,6 @@ export interface HumanDesignVariables {
   motivation: BodygraphVariableField;
   perspective: BodygraphVariableField;
   environment: BodygraphVariableField;
-  decisionMakingStrategyDescription: string;
   skills: BodygraphSkill[];
   /**
    * Bodygraph's own rendered chart image (raw SVG markup) — real, from
@@ -117,11 +122,22 @@ function parseSkills(raw: string | undefined): BodygraphSkill[] {
 }
 
 /**
- * Fetches the 6 Variables + Decision-Making Strategy description + Skills
- * & Attributes for one person. Best-effort: returns null on any failure
- * (missing key, network error, bad response) rather than throwing, so a
- * reading still saves successfully with everything the free engine already
- * computes even if this call fails or the key is removed later.
+ * Fetches the 6 Variables + Skills & Attributes for one person. Best-effort:
+ * returns null on any failure (missing key, network error, bad response)
+ * rather than throwing, so a reading still saves successfully with
+ * everything the free engine already computes even if this call fails or
+ * the key is removed later.
+ *
+ * Used to also return Decision-Making Strategy description — dropped
+ * 2026-08-11 after an audit found it was never rendered anywhere (not web,
+ * not PDF) AND, checked directly against 3 real live responses, Bodygraph's
+ * own `.description` field for it is always an empty string in practice
+ * (the real text lives in `.option`/`.id` instead, which nothing here ever
+ * read). Even if it had been wired up, the actual content — Type's
+ * Strategy + Authority's "how to decide" — is already covered by real,
+ * locally-authored text already displayed on every reading: see
+ * TYPE_CONTENT[type].strategy and AUTHORITY_CONTENT[authority].description
+ * in human-design-content-data.ts.
  */
 export async function fetchBodygraphVariables(
   input: WallClockBirthInput,
@@ -154,7 +170,6 @@ export async function fetchBodygraphVariables(
     const environment = field(props, "Environment");
     if (!digestion || !sense || !designSense || !motivation || !perspective || !environment) return null;
 
-    const decisionMaking = props.DecisionMakingStrategy as { description?: string } | undefined;
     const skillsRaw = (props.BusinessCompetencesAndQualities as { option?: string } | undefined)?.option;
 
     return {
@@ -164,7 +179,6 @@ export async function fetchBodygraphVariables(
       motivation,
       perspective,
       environment,
-      decisionMakingStrategyDescription: decisionMaking?.description ?? "",
       skills: parseSkills(skillsRaw),
       chartSvg: data.SVG ? normalizeSvg(data.SVG) : undefined,
     };

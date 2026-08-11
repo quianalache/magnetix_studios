@@ -124,11 +124,17 @@ export async function createEnergeticDecoderReading(
   //
   // Bodygraph's paid API is still called below, but now ONLY for what's
   // genuinely still exclusive to it: the real rendered chart image, Skills
-  // & Attributes, Decision-Making Strategy text, and (best-effort) a real
-  // description paragraph per Variable value — never for the value word
-  // itself anymore. Best-effort throughout: the reading still saves
-  // normally, with real Variable words, even if the API key is unset, the
-  // call fails, or times out.
+  // & Attributes, and (best-effort) a real description paragraph per
+  // Variable value — never for the value word itself anymore, and (as of
+  // 2026-08-11) no longer for Decision-Making Strategy text either: an
+  // audit found it was never rendered anywhere, and Bodygraph's own field
+  // for it is empty in every real response anyway (see bodygraph-api.ts's
+  // fetchBodygraphVariables doc). The actual decision-making guidance
+  // this app displays already comes from real local content —
+  // TYPE_CONTENT[type].strategy + AUTHORITY_CONTENT[authority].description
+  // (human-design-content-data.ts), unaffected by any of this. Best-effort
+  // throughout: the reading still saves normally, with real Variable
+  // words, even if the API key is unset, the call fails, or times out.
   if (rawHumanDesign) {
     const [localVariables, apiVariables] = await Promise.all([
       computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone }),
@@ -169,7 +175,7 @@ export async function createEnergeticDecoderReading(
     );
     const resolvedVariables = Object.fromEntries(resolvedFields) as unknown as Omit<
       HumanDesignVariables,
-      "decisionMakingStrategyDescription" | "skills" | "chartSvg"
+      "skills" | "chartSvg"
     >;
 
     let skills: HumanDesignVariables["skills"] = [];
@@ -186,7 +192,6 @@ export async function createEnergeticDecoderReading(
 
     rawHumanDesign.variables = {
       ...resolvedVariables,
-      decisionMakingStrategyDescription: apiVariables?.decisionMakingStrategyDescription ?? "",
       skills,
     };
 
