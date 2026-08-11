@@ -782,6 +782,106 @@ function AstrologyWheelPdf({ chart }: { chart: AstrologyChart }) {
   );
 }
 
+// ── Frequency / Gene Keys Golden Path chart (react-pdf Svg) — 2026-08-10,
+// ports gene-keys-chart.tsx's already-verified canonical structure into
+// react-pdf's own primitives (G/Line/Circle/Text/Path instead of DOM svg
+// g/line/circle/text/path). No PDF counterpart existed before this. Same
+// SEQUENCES grouping, same canonical Pearl order (Vocation -> Culture ->
+// Brand -> Pearl, verified against genekeys.com — see gene-keys-chart.tsx's
+// own header for the source-by-source breakdown), same 2 real Golden Path
+// bridges (Purpose -> Attraction, SQ -> Vocation), same original colors —
+// only the shape components differ, so this can't drift from the
+// already-verified web chart. All layout constants below are copied
+// verbatim from gene-keys-chart.tsx, not re-derived. ──
+
+const GK_SEQUENCES: { key: "activation" | "venus" | "pearl"; label: string; color: string; start: number }[] = [
+  { key: "activation", label: "Activation Sequence", color: "#b45309", start: 0 },
+  { key: "venus", label: "Venus Sequence", color: "#9d3a63", start: 4 },
+  { key: "pearl", label: "Pearl Sequence", color: "#5E2574", start: 8 },
+];
+
+const GK_VIEW_W = 200;
+const GK_ROW_H = 38;
+const GK_ROW_GAP = 22;
+const GK_ROW_TOP_PAD = 2;
+const GK_NODE_XS = [30, 80, 130, 180];
+const GK_NODE_R = 8;
+const GK_LINE_COLOR = "#d4d4d8";
+const GK_BRIDGE_COLOR = "#a1a1aa";
+const GK_NAME_COLOR = "#71717a";
+const GK_GATE_TEXT_COLOR = "#ffffff";
+
+function gkRowTop(i: number): number {
+  return GK_ROW_TOP_PAD + i * (GK_ROW_H + GK_ROW_GAP);
+}
+function gkRowCenterY(i: number): number {
+  return gkRowTop(i) + 20;
+}
+
+function GeneKeysRowPdf({ label, color, spheres, top }: { label: string; color: string; spheres: GeneKeysSphereResult[]; top: number }) {
+  const centerY = top + 20;
+  return (
+    <G>
+      <Text x={10} y={top + 7} style={{ fontSize: 6, fontWeight: 700, fill: color }}>
+        {label.toUpperCase()}
+      </Text>
+
+      {spheres.slice(1).map((s, i) => (
+        <Line key={`${s.sphere}-line`} x1={GK_NODE_XS[i]} y1={centerY} x2={GK_NODE_XS[i + 1]} y2={centerY} stroke={GK_LINE_COLOR} strokeWidth={1} />
+      ))}
+
+      {spheres.map((s, i) => (
+        <G key={s.sphere}>
+          <Circle cx={GK_NODE_XS[i]} cy={centerY} r={GK_NODE_R} fill={color} />
+          {/* Single template-literal child, not `{s.gate}.{s.line}` as 3 separate JSX children — react-pdf's Svg Text (unlike its regular document-flow Text, and unlike a browser's DOM svg <text>) doesn't reliably concatenate multiple text-node children into one run; real bug caught 2026-08-10 by exporting an actual PDF: most nodes silently dropped the ".line" half, one showed both halves overlapping/garbled. */}
+          <Text x={GK_NODE_XS[i]} y={centerY + 2.2} style={{ fontSize: 6, fontWeight: 700, textAnchor: "middle", fill: GK_GATE_TEXT_COLOR }}>
+            {`${s.gate}.${s.line}`}
+          </Text>
+          <Text x={GK_NODE_XS[i]} y={centerY + GK_NODE_R + 8} style={{ fontSize: 5.5, textAnchor: "middle", fill: GK_NAME_COLOR }}>
+            {s.sphere}
+          </Text>
+        </G>
+      ))}
+    </G>
+  );
+}
+
+/** Mirrors GoldenPathBridge in gene-keys-chart.tsx — the real Purpose->Attraction / SQ->Vocation bridges, dashed to stay visually distinct from the solid within-sequence pathway lines above. */
+function GoldenPathBridgePdf({ fromRow, toRow }: { fromRow: number; toRow: number }) {
+  const x1 = GK_NODE_XS[GK_NODE_XS.length - 1];
+  const y1 = gkRowCenterY(fromRow);
+  const x2 = GK_NODE_XS[0];
+  const y2 = gkRowCenterY(toRow);
+  const midY = (y1 + y2) / 2;
+  return (
+    <Path d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`} fill="none" stroke={GK_BRIDGE_COLOR} strokeWidth={1} strokeDasharray="3 2.5" />
+  );
+}
+
+/** Mirrors GeneKeysChart in gene-keys-chart.tsx. No responsive/container-query layout needed — a PDF page is a fixed known size, same reasoning HumanDesignFullChartPdf already documents. */
+function GeneKeysChartPdf({ spheres }: { spheres: GeneKeysSphereResult[] }) {
+  const rowsAll = GK_SEQUENCES.map((seq, i) => ({ ...seq, index: i, spheres: spheres.slice(seq.start, seq.start + 4) }));
+  const rows = rowsAll.filter((r) => r.spheres.length > 0);
+  if (rows.length === 0) return null;
+
+  const height = gkRowTop(rows[rows.length - 1].index) + GK_ROW_H + GK_ROW_TOP_PAD;
+  const activationRow = rows.find((r) => r.key === "activation");
+  const venusRow = rows.find((r) => r.key === "venus");
+  const pearlRow = rows.find((r) => r.key === "pearl");
+
+  return (
+    <Svg viewBox={`0 0 ${GK_VIEW_W} ${height}`} style={{ width: 300, height: (300 * height) / GK_VIEW_W }}>
+      {activationRow && venusRow && activationRow.spheres.length === 4 && (
+        <GoldenPathBridgePdf fromRow={activationRow.index} toRow={venusRow.index} />
+      )}
+      {venusRow && pearlRow && venusRow.spheres.length === 4 && <GoldenPathBridgePdf fromRow={venusRow.index} toRow={pearlRow.index} />}
+      {rows.map((r) => (
+        <GeneKeysRowPdf key={r.key} label={r.label} color={r.color} spheres={r.spheres} top={gkRowTop(r.index)} />
+      ))}
+    </Svg>
+  );
+}
+
 // ── document ──
 
 export function ReadingPdfDocument({
@@ -990,6 +1090,9 @@ export function ReadingPdfDocument({
         {spheres && spheres.length > 0 && (
           <View break={!!(humanDesign || astrology)}>
             <Text style={styles.sectionTitle}>Frequency</Text>
+            <View style={styles.chartWrap}>
+              <GeneKeysChartPdf spheres={spheres} />
+            </View>
             {spheres.map((s) => (
               <View key={s.sphere} style={{ marginBottom: 8 }}>
                 <Text style={styles.factLabel}>{s.sphere} — Gate {s.gate}.{s.line}</Text>
