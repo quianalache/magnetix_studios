@@ -113,6 +113,14 @@ export default function NewSubAccountPage() {
         error?: string;
         subAccountId?: string;
         accountNumber?: number;
+        invite?: {
+          attempted: boolean;
+          email: string | null;
+          mailed: boolean;
+          mailError: string | null;
+          added: boolean;
+          error: string | null;
+        };
       };
       if (!res.ok || !payload.subAccountId) {
         throw new Error(payload.error ?? "Could not create sub-account.");
@@ -158,10 +166,33 @@ export default function NewSubAccountPage() {
         }
       }
 
+      // Report the account-contact invite outcome. Same "don't block
+      // navigation, surface as a warning" pattern as the snapshot above —
+      // the sub-account is already created either way.
+      let inviteNote = "";
+      const invite = payload.invite;
+      if (invite?.attempted) {
+        if (invite.error) {
+          toast.warning(
+            `Account created, but the invite to ${invite.email} couldn't be sent: ${invite.error}. Invite them manually from Settings → Members.`,
+          );
+        } else if (!invite.mailed) {
+          toast.warning(
+            invite.mailError
+              ? `Account created, but the invite email to ${invite.email} failed to send: ${invite.mailError}. Copy the invite link from Settings → Members instead.`
+              : `Account created. Email delivery isn't configured, so no invite went out to ${invite.email} — copy the invite link from Settings → Members.`,
+          );
+        } else {
+          inviteNote = invite.added
+            ? ` ${invite.email} already had an account and was added directly.`
+            : ` Invite sent to ${invite.email}.`;
+        }
+      }
+
       toast.success(
         (payload.accountNumber !== undefined
           ? `Created "${name.trim()}" (#${payload.accountNumber}).`
-          : `Created "${name.trim()}".`) + snapshotNote,
+          : `Created "${name.trim()}".`) + snapshotNote + inviteNote,
       );
       router.push(`/sa/${payload.subAccountId}/dashboard`);
       router.refresh();

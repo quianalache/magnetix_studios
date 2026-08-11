@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { seedDefaultTemplates } from "@/lib/automations/seed-templates";
+import { createInviteServerSide } from "@/lib/server/members-service";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 /**
@@ -42,6 +43,38 @@ export interface CreateSubAccountResult {
   accountNumber: number;
   name: string;
   agencyId: string;
+  /**
+   * Outcome of auto-inviting `accountContact.email` as this sub-account's
+   * admin — see {@link inviteAccountContactIfProvided}. Sub-account creation
+   * always succeeds regardless of what happened here; the caller surfaces
+   * this so a failed/undelivered invite doesn't go unnoticed.
+   */
+  invite: InviteOutcome;
+}
+
+/**
+ * Result of the best-effort "invite the account contact" step run right
+ * after a sub-account is created. `attempted: false` means no email was
+ * given (the normal case for internal/personal sub-accounts) — nothing
+ * failed, there was just nothing to do.
+ */
+export interface InviteOutcome {
+  attempted: boolean;
+  email: string | null;
+  /** True once a real email actually went out (new pending invite OR an
+   *  existing-user "added" notice) — mirrors `CreateInviteResult.mailed`. */
+  mailed: boolean;
+  /** Non-fatal delivery failure from inside the invite system itself
+   *  (e.g. Resend send failed) — the invite/membership was still written. */
+  mailError: string | null;
+  /** True when the email already had a Firebase Auth account and was added
+   *  to this sub-account directly, rather than getting a pending invite. */
+  added: boolean;
+  /** Set when the invite step failed outright (e.g. the contact's email
+   *  belongs to a removed/disabled account, or an unexpected error) — the
+   *  sub-account itself was still created; this just means onboarding for
+   *  that email needs manual attention (Settings → Members). */
+  error: string | null;
 }
 
 /**
@@ -197,15 +230,25 @@ export async function createSubAccountForAgency(
       inboundVoiceEnabledByAgency: true,
       metaInboxEnabledByAgency: false,
       metaAgentEnabledByAgency: false,
-      websiteEnabledByAgency: false,
-      communityEnabledByAgency: false,
-      standaloneCoursesEnabledByAgency: false,
+      // Default ON — normal product features with no per-use shared cost
+      // (2026-08-11 defaults change). Community/Courses/Website/Broadcasts/
+      // Social Planner are ordinary CRM surfaces, not credit-metered AI
+      // channels; there's no cost reason to make a brand-new sub-account
+      // hunt for them behind an agency-owner toggle at this stage (pre
+      // plan-based gating). See the sub-account feature-defaults audit.
+      websiteEnabledByAgency: true,
+      communityEnabledByAgency: true,
+      standaloneCoursesEnabledByAgency: true,
+      broadcastsEnabledByAgency: true,
+      socialPlannerEnabledByAgency: true,
       getLeadsEnabledByAgency: false,
       missedCallTextBackEnabledByAgency: false,
       // Labs (pre-release features) ships OFF — explicit opt-in per client.
       labsEnabledByAgency: false,
-      // Workspace Assistant ships OFF like every other gate (opt-in) — the
-      // agency owner enables it per sub-account from the Manage dialog.
+      // Workspace Assistant ships OFF like every other credit-metered gate
+      // (opt-in) — the agency owner enables it per sub-account from the
+      // Manage dialog. Unlike Community/Courses/etc above, every reply here
+      // spends real shared OpenRouter credits, so this one stays closed.
       aiSuiteEnabledByAgency: false,
       metaConfig: null,
       bookingConfig: null,
@@ -251,5 +294,69 @@ export async function createSubAccountForAgency(
     return current;
   });
 
-  return { subAccountId, accountNumber, name, agencyId };
+  // Best-effort: invite the account contact (if one was given) into the new
+  // sub-account as its admin. Deliberately OUTSIDE the transaction above —
+  // it needs to call Firebase Auth (auth.getUserByEmail) and send a real
+  // email, neither of which belongs inside a Firestore transaction. Reuses
+  // the exact same invite system Settings → Members already uses (see
+  // members-service.ts) — no second onboarding/auth path. Never throws:
+  // the sub-account is already created and committed by this point, so a
+  // failed invite is reported back to the caller, not treated as a failed
+  // create.
+  const invite = await inviteAccountContactIfProvided({
+    subAccountId,
+    invitedByUid: uid,
+    email: accountContact?.email ?? null,
+  });
+
+  return { subAccountId, accountNumber, name, agencyId, invite };
+}
+
+/**
+ * Invite `email` into `subAccountId` as admin via the shared invite system,
+ * normalizing every outcome (including failures) into an {@link InviteOutcome}
+ * so the caller can always report something sensible instead of an unhandled
+ * rejection. `email` blank/absent → `attempted: false`, nothing happens —
+ * the normal case for internal/personal sub-accounts with no named contact.
+ */
+async function inviteAccountContactIfProvided(params: {
+  subAccountId: string;
+  invitedByUid: string;
+  email: string | null;
+}): Promise<InviteOutcome> {
+  const email = params.email?.trim().toLowerCase() || null;
+  if (!email) {
+    return { attempted: false, email: null, mailed: false, mailError: null, added: false, error: null };
+  }
+  try {
+    const res = await createInviteServerSide({
+      subAccountId: params.subAccountId,
+      invitedByUid: params.invitedByUid,
+      email,
+      // The account contact becomes this sub-account's admin, not a
+      // collaborator — they're the customer this workspace belongs to.
+      role: "admin",
+    });
+    return {
+      attempted: true,
+      email,
+      mailed: res.mailed,
+      mailError: res.mailError,
+      added: res.added,
+      error: null,
+    };
+  } catch (err) {
+    // Covers MemberAddBlockedError (e.g. the email belongs to a removed/
+    // disabled account or a different agency) and any unexpected failure.
+    // The sub-account itself still exists — surface this so the agency
+    // owner knows onboarding needs manual attention (Settings → Members)
+    // instead of silently having no idea the invite never went out.
+    console.error(
+      `[sub-accounts] auto-invite failed for ${params.subAccountId} (${email})`,
+      err,
+    );
+    const message =
+      err instanceof Error ? err.message : "Could not invite the account contact.";
+    return { attempted: true, email, mailed: false, mailError: null, added: false, error: message };
+  }
 }

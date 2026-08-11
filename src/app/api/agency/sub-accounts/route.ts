@@ -138,7 +138,7 @@ export async function POST(request: Request) {
   const accountContact = contactCheck.value;
   const { agencyId, uid } = access;
 
-  const { subAccountId, accountNumber } = await createSubAccountForAgency({
+  const { subAccountId, accountNumber, invite } = await createSubAccountForAgency({
     agencyId,
     uid,
     email: access.email,
@@ -154,5 +154,6 @@ export async function POST(request: Request) {
     accountNumber,
     name,
     agencyId,
+    invite,
   });
 }

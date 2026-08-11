@@ -238,8 +238,14 @@ export async function POST(request: Request) {
         inboundVoiceEnabledByAgency: true,
         metaInboxEnabledByAgency: false,
         metaAgentEnabledByAgency: false,
-        websiteEnabledByAgency: false,
-        communityEnabledByAgency: false,
+        // Same defaults-on-creation change as sub-accounts-service.ts
+        // (2026-08-11) — kept in lockstep even though this branch only ever
+        // runs once per deployment (claiming appConfig/main).
+        websiteEnabledByAgency: true,
+        communityEnabledByAgency: true,
+        standaloneCoursesEnabledByAgency: true,
+        broadcastsEnabledByAgency: true,
+        socialPlannerEnabledByAgency: true,
         getLeadsEnabledByAgency: false,
         missedCallTextBackEnabledByAgency: false,
         labsEnabledByAgency: false,
