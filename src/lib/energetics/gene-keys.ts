@@ -95,11 +95,22 @@ export function calculateGeneKeysProfile(
     { sphere: "IQ", longitude: personalityVenus },
     { sphere: "EQ", longitude: personalityMars },
     { sphere: "SQ", longitude: designVenus },
+    // Pearl Sequence order fixed 2026-08-10: was Vocation/Brand/Culture/
+    // Pearl (an arbitrary array order from this file's original port, not
+    // a deliberate sequence choice). Verified against genekeys.com's own
+    // Pearl Sequence page, which explicitly names the four stages in this
+    // order: "the Vocation, Culture, Brand and Pearl." Reordering only —
+    // every longitude/value below is unchanged, so no Gate.Line, Shadow,
+    // Gift, or Siddhi is affected, just which position each sphere sits in
+    // this array (and therefore the text list and chart that read it).
     { sphere: "Vocation", longitude: designMars },
-    // Brand deliberately reuses the Personality Sun position, matching
-    // the reference tool exactly (not a separate planetary point).
-    { sphere: "Brand", longitude: personalitySun },
     { sphere: "Culture", longitude: designJupiter },
+    // Brand deliberately reuses the Personality Sun position, matching
+    // the reference tool exactly (not a separate planetary point) — also
+    // independently confirmed canonical: genekeys.com's own planetary-
+    // correlation docs list "Life's Work / Brand" as a single row, both
+    // mapped to Natal Sun.
+    { sphere: "Brand", longitude: personalitySun },
     { sphere: "Pearl", longitude: personalityJupiter },
   ];
 
