@@ -17,8 +17,28 @@ function col() {
   return getAdminDb().collection("reportDesigns");
 }
 
+/**
+ * Same fix, same reasoning as chart-design-service.ts's `toIsoString` —
+ * ReportDesign crosses into ReportDesignViewer (a Client Component) at
+ * /decoder/[saId]/report/[readingId]/design/[reportId], and a raw
+ * Firestore Timestamp/FieldValue isn't plain-serializable across that
+ * boundary. Fixed 2026-08-11 alongside the public decoder form's
+ * identical, already-confirmed 500.
+ */
+function toIsoString(value: unknown): string | null {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
+    return (value as FirebaseFirestore.Timestamp).toDate().toISOString();
+  }
+  return null;
+}
+
 function toDesign(id: string, data: FirebaseFirestore.DocumentData): ReportDesign {
-  return { id, ...(data as Omit<ReportDesign, "id">) };
+  return {
+    id,
+    ...(data as Omit<ReportDesign, "id">),
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
+  };
 }
 
 export async function listReportDesigns(subAccountId: string): Promise<ReportDesign[]> {

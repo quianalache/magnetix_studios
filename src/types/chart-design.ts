@@ -1,5 +1,3 @@
-import type { Timestamp, FieldValue } from "firebase/firestore";
-
 /**
  * Chart Designs — list-first replacement for the old single "Design" tab
  * (2026-08-09). Expanded to real parity after actually opening one of her
@@ -119,8 +117,20 @@ export interface ChartDesign {
   houseSystem: "placidus" | "whole" | "equal";
   /** Astrology only — ring/planet-marker accent color. */
   wheelAccentColor: string;
-  createdAt: Timestamp | FieldValue | null;
-  updatedAt: Timestamp | FieldValue | null;
+  /**
+   * ISO string, not a raw Firestore Timestamp — resolved server-side
+   * (chart-design-service.ts's `toDesign`) before this ever reaches a
+   * caller. Unused by every current consumer's render output, but real
+   * Timestamp/FieldValue instances aren't plain-serializable, and this
+   * type crosses into Client Components (the public decoder form, the
+   * report design viewer) where a non-plain-object prop throws — see
+   * 2026-08-11 fix. Null while the write is still in flight (a
+   * just-created design hasn't been re-read yet, so the real value isn't
+   * known — same "don't fabricate a client-side date" convention as
+   * energetic-decoder-service.ts's createEnergeticDecoderReading).
+   */
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export function defaultChartDesignColor(): string {

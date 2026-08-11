@@ -15,8 +15,29 @@ function col() {
   return getAdminDb().collection("chartDesigns");
 }
 
+/**
+ * Firestore Timestamps aren't plain-serializable — passed as-is, they
+ * throw the moment a ChartDesign crosses a Server → Client Component
+ * boundary (the public decoder form, the report design viewer both do).
+ * Real Timestamp → ISO string; a still-in-flight FieldValue sentinel (the
+ * immediate return of a create, before any re-read) → null, same "don't
+ * fabricate a client-side date" convention already used for reading
+ * createdAt in energetic-decoder-service.ts. Fixed 2026-08-11.
+ */
+function toIsoString(value: unknown): string | null {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
+    return (value as FirebaseFirestore.Timestamp).toDate().toISOString();
+  }
+  return null;
+}
+
 function toDesign(id: string, data: FirebaseFirestore.DocumentData): ChartDesign {
-  return { id, ...(data as Omit<ChartDesign, "id">) };
+  return {
+    id,
+    ...(data as Omit<ChartDesign, "id">),
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
+  };
 }
 
 /** Real, working defaults for the fields with no legacy value to inherit — everything a fresh design needs to render correctly with zero configuration. */

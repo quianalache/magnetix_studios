@@ -1,4 +1,3 @@
-import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
 
 /**
@@ -112,8 +111,18 @@ export interface ReportDesign {
   agencyId: string;
   title: string;
   pages: ReportPage[];
-  createdAt: Timestamp | FieldValue | null;
-  updatedAt: Timestamp | FieldValue | null;
+  /**
+   * ISO string, not a raw Firestore Timestamp — resolved server-side
+   * (report-design-service.ts's `toDesign`) before this ever reaches a
+   * caller. Same reasoning as ChartDesign's createdAt/updatedAt
+   * (chart-design.ts) — this type also crosses into a Client Component
+   * (ReportDesignViewer, at /decoder/[saId]/report/[readingId]/design/
+   * [reportId]) where a raw Timestamp/FieldValue throws. Fixed alongside
+   * that bug, 2026-08-11, since it's the identical latent failure on the
+   * same public-decoder boundary, just not yet hit in practice.
+   */
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export function emptyReportDesign(): Pick<ReportDesign, "pages"> {

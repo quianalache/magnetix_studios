@@ -125,6 +125,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "subAccountId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "energeticDecoderReadings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "contactId",
           "order": "ASCENDING"
         },
