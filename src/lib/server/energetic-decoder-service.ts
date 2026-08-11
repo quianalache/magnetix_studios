@@ -18,8 +18,10 @@ import {
   type VariableCategory,
 } from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
-import { fetchBodygraphVariables, fetchBodygraphChiron, type HumanDesignVariables } from "@/lib/energetics/bodygraph-api";
+import { fetchBodygraphVariables, type HumanDesignVariables } from "@/lib/energetics/bodygraph-api";
 import { computeHumanDesignVariables } from "@/lib/energetics/human-design-variables";
+import { chironPlacement } from "@/lib/energetics/swiss-ephemeris";
+import { parseBirthToUtc } from "@/lib/energetics/gate-wheel";
 import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
@@ -204,11 +206,16 @@ export async function createEnergeticDecoderReading(
     ? await getDefaultChartDesign(input.subAccountId, "astrology")
     : null;
 
-  // Chiron (2026-08-09) — also from Bodygraph's API, also best-effort; a
-  // failed/skipped call just means the chart has no Chiron placement, same
-  // "real field or absent" rule as the Variables above.
+  // Chiron (2026-08-09, local since 2026-08-11) — was Bodygraph's API,
+  // now the free local Swiss Ephemeris calc (swiss-ephemeris.ts's
+  // chironPlacement, verified against Bodygraph's live values first —
+  // see that function's doc). Same best-effort contract as before: any
+  // failure here (WASM init, etc.) just means the chart has no Chiron
+  // placement, not a broken reading, same "real field or absent" rule as
+  // the Variables above. fetchBodygraphChiron itself is untouched in
+  // bodygraph-api.ts but no longer called from this pipeline.
   const chiron = reportConfig.includeAstrology
-    ? await fetchBodygraphChiron({ date: birthDate, time: birthTime, timeZone: place.timeZone, lat: place.lat, lng: place.lng })
+    ? await chironPlacement(parseBirthToUtc({ date: birthDate, time: birthTime, timeZone: place.timeZone })).catch(() => null)
     : null;
 
   const rawAstrology = reportConfig.includeAstrology
@@ -220,10 +227,9 @@ export async function createEnergeticDecoderReading(
         lng: place.lng,
         houseSystem: defaultAstroDesign?.houseSystem,
         chironLongitude: chiron?.longitude,
+        chironRetrograde: chiron?.retrograde,
       })
     : null;
-  // Real rendered natal wheel from Bodygraph's own renderer — same reasoning as the HD chart above.
-  if (rawAstrology && chiron?.chartSvg) rawAstrology.bodygraphSvg = chiron.chartSvg;
 
   // Same reasoning as spheresWithContent above — the calculators themselves
   // have no Firestore access, so the sub-account's own wording (or the

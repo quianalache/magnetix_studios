@@ -265,8 +265,13 @@ export type AstrologyBodyName =
  * Nodes, Lilith?"). North/South Node and Lilith are both free, already
  * buildable from the same `astronomia` functions Human Design's Node
  * already uses (see gate-wheel.ts) — no paid API, no new dependency.
- * Chiron is NOT included: `astronomy-engine` has no minor-planet ephemeris
- * at all, so it needs a genuinely different data source, not found yet.
+ * Chiron is still NOT included here: `astronomy-engine` has no minor-planet
+ * ephemeris, so it isn't one of this synchronous switch's cases. It's now
+ * computed separately, upstream, via the file-backed Swiss Ephemeris WASM
+ * integration (swiss-ephemeris.ts's chironPlacement — async WASM init,
+ * doesn't fit this sync function) and passed into computePlacements below
+ * as `chironLongitude`/`chironRetrograde`, same shape as when it came from
+ * Bodygraph's API, just a different, free source.
  */
 function longitudeOf(body: AstrologyBodyName, date: Date): number {
   switch (body) {
@@ -312,7 +317,12 @@ export interface AstrologyPlacement {
   retrograde: boolean;
 }
 
-function computePlacements(date: Date, cusps: HouseCusp[], chironLongitude?: number): AstrologyPlacement[] {
+function computePlacements(
+  date: Date,
+  cusps: HouseCusp[],
+  chironLongitude?: number,
+  chironRetrograde?: boolean,
+): AstrologyPlacement[] {
   const oneDayLater = new Date(date.getTime() + 24 * 3600 * 1000);
   const placements = ALL_ASTROLOGY_BODIES.map((body) => {
     const lon = longitudeOf(body, date);
@@ -331,13 +341,16 @@ function computePlacements(date: Date, cusps: HouseCusp[], chironLongitude?: num
     };
   });
 
-  // Chiron — the one body this engine can't compute itself (no minor-planet
-  // ephemeris in astronomy-engine, see gate-wheel.ts). Only appended when
-  // the caller supplied a real longitude from Bodygraph's API; omitted
-  // entirely otherwise, same "real field or absent, never fabricated"
-  // rule as everything else in this file. Retrograde isn't determined for
-  // it — that would need a second API call for a day-later snapshot, not
-  // worth the extra cost for one body's motion indicator.
+  // Chiron — the one body this engine can't compute itself inline (no
+  // minor-planet ephemeris in astronomy-engine, see gate-wheel.ts/
+  // longitudeOf's doc above). Only appended when the caller supplied a real
+  // longitude (now from local Swiss Ephemeris — swiss-ephemeris.ts's
+  // chironPlacement, see energetic-decoder-service.ts); omitted entirely
+  // otherwise, same "real field or absent, never fabricated" rule as
+  // everything else in this file. Retrograde now comes from that same
+  // local calc's own day-later finite-difference check (free, since it's
+  // no longer a paid API call) — defaults to false only if a caller
+  // supplies a longitude without a retrograde flag at all.
   if (typeof chironLongitude === "number") {
     const { sign, degInSign } = signOf(chironLongitude);
     placements.push({
@@ -346,7 +359,7 @@ function computePlacements(date: Date, cusps: HouseCusp[], chironLongitude?: num
       sign,
       degInSign,
       house: houseOfLongitude(chironLongitude, cusps),
-      retrograde: false,
+      retrograde: chironRetrograde ?? false,
     });
   }
 
@@ -412,8 +425,10 @@ export interface AstrologyChartInput extends WallClockBirthInput {
   /** Degrees, EAST positive (west is negative) — same convention geocoding APIs use. */
   lng: number;
   houseSystem?: HouseSystem;
-  /** Chiron's absolute ecliptic longitude (degrees 0-360), from Bodygraph's API (bodygraph-api.ts) — this engine has no minor-planet ephemeris of its own. Omit to leave Chiron out of the chart entirely rather than fabricate a position. */
+  /** Chiron's absolute ecliptic longitude (degrees 0-360) — from local Swiss Ephemeris (swiss-ephemeris.ts's chironPlacement), computed by the caller since it's async (WASM) and this function is sync. Omit to leave Chiron out of the chart entirely rather than fabricate a position. */
   chironLongitude?: number;
+  /** Chiron's retrograde status, from the same local calc as chironLongitude above. Ignored if chironLongitude is omitted. */
+  chironRetrograde?: boolean;
 }
 
 export interface AstrologyChart {
@@ -421,7 +436,7 @@ export interface AstrologyChart {
   angles: { ascendant: ChartAngle; descendant: ChartAngle; mc: ChartAngle; ic: ChartAngle };
   houses: AstrologyHouses;
   aspects: AstrologyAspect[];
-  /** Bodygraph's own rendered natal wheel SVG — set by the caller after this function returns (energetic-decoder-service.ts), same "populated after the fact, real or absent" contract as HumanDesignProfile.bodygraphSvg. Undefined falls back to this app's own AstrologyWheelChart component. */
+  /** Bodygraph's own rendered natal wheel SVG. As of 2026-08-11 this is no longer populated for new readings (Chiron — the only reason it was ever fetched — now comes from a local calc, see chironLongitude's doc above), so this field only ever holds real data on readings saved before that date. The web display no longer prefers it over this app's own AstrologyWheelChart component either way (reading-summary.tsx) — kept only so old readings' stored value isn't orphaned/lost. */
   bodygraphSvg?: string;
 }
 
@@ -429,7 +444,7 @@ export function calculateAstrologyChart(input: AstrologyChartInput): AstrologyCh
   const birthUtc = parseBirthToUtc(input);
   const houses = computeHouses(birthUtc, input.lat, input.lng, input.houseSystem ?? "placidus");
   const rawAngles = computeAngles(birthUtc, input.lat, input.lng);
-  const placements = computePlacements(birthUtc, houses.cusps, input.chironLongitude);
+  const placements = computePlacements(birthUtc, houses.cusps, input.chironLongitude, input.chironRetrograde);
 
   return {
     placements,

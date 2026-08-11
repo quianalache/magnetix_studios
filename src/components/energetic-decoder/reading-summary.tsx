@@ -65,43 +65,6 @@ const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
   { label: "Environment", key: "environment" },
 ];
 
-/**
- * Real bug, found 2026-08-10 from her actual screenshot: the chart looked
- * cropped to just the Head center. Root cause confirmed by pulling
- * Bodygraph's raw SVG directly — their <svg> tag ships a lowercase
- * `viewbox="0 0 400 693"` instead of the SVG-spec-required camelCase
- * `viewBox`, and no width/height attributes either. SVG attribute names
- * are case-sensitive; browsers silently ignore the invalid casing, so an
- * <img> embedding it has zero intrinsic sizing info and falls back to a
- * tiny default box — squashing/cropping a real 400×693 portrait chart to
- * whatever sliver fits. Their bug, not ours, but fixable on our end:
- * normalize the casing (and add explicit width/height as a second safety
- * net) before ever building the data URI.
- */
-function normalizeBodygraphSvg(svg: string): string {
-  return svg.replace(/<svg([^>]*)>/i, (match, attrs: string) => {
-    const viewBoxMatch = /viewbox="([^"]+)"/i.exec(attrs);
-    let fixedAttrs = attrs.replace(/viewbox="([^"]+)"/i, 'viewBox="$1"');
-    if (viewBoxMatch && !/\bwidth="/i.test(attrs) && !/\bheight="/i.test(attrs)) {
-      const [, , w, h] = viewBoxMatch[1].split(/\s+/);
-      if (w && h) fixedAttrs += ` width="${w}" height="${h}"`;
-    }
-    return `<svg${fixedAttrs}>`;
-  });
-}
-
-/**
- * Renders Bodygraph's own returned SVG via an <img> data URI rather than
- * `dangerouslySetInnerHTML` — an <img> treats SVG content as a raster-like
- * image (any embedded <script> just doesn't run), so a raw string from a
- * third-party API doesn't get inline DOM/script execution rights the way
- * inlining the markup directly would. Safer default even though this
- * particular source is our own trusted backend call, not user input.
- */
-function svgToDataUri(svg: string): string {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(normalizeBodygraphSvg(svg))}`;
-}
-
 function formatDesignDate(iso: string): string {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -390,21 +353,27 @@ export function AstrologySummary({
     <div className="space-y-4">
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Natal Chart</p>
-        {chart.bodygraphSvg ? (
-          // eslint-disable-next-line @next/next/no-img-element -- data: URI, next/image's optimizer can't handle inline SVG data URIs
-          <img
-            src={svgToDataUri(chart.bodygraphSvg)}
-            alt="Astrology natal wheel"
-            className="mx-auto w-full max-w-[520px]"
-          />
-        ) : (
-          <AstrologyWheelChart
-            chart={chart}
-            className="mx-auto w-full max-w-[520px]"
-            wheelAccentColor={astroDesign?.wheelAccentColor}
-            backgroundColor={astroDesign?.backgroundColor}
-          />
-        )}
+        {/*
+          Local AstrologyWheelChart is the primary presentation now
+          (2026-08-11) — same move already made for Human Design's
+          BodyGraph above: "make our local chart the primary presentation,
+          stop using the external rendered image as the main chart in this
+          view." Deliberately does NOT fall back to chart.bodygraphSvg
+          (Bodygraph's own rendered image) the way this used to. That field
+          is basically never populated for new readings anyway — Chiron,
+          the only reason it was ever fetched, now comes from a local calc
+          (swiss-ephemeris.ts), not a Bodygraph API call — but even on an
+          old reading that still has a stored value, this view now always
+          renders the local wheel. bodygraphSvg itself is untouched
+          elsewhere (astrology.ts, energetic-decoder-service.ts) — this is
+          a display choice in this one file, not a removal of the field.
+        */}
+        <AstrologyWheelChart
+          chart={chart}
+          className="mx-auto w-full max-w-[520px]"
+          wheelAccentColor={astroDesign?.wheelAccentColor}
+          backgroundColor={astroDesign?.backgroundColor}
+        />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">

@@ -3,26 +3,33 @@ import "server-only";
 import type { WallClockBirthInput } from "./gate-wheel";
 
 /**
- * Bodygraph.com's real paid API — the one thing this whole free local
- * engine genuinely can't replace. Added 2026-08-09 after a full day of
+ * Bodygraph.com's real paid API. Added 2026-08-09 after a full day of
  * exhausting every free alternative (her real HD books, the open-source
  * `free-human-design` library's actual source including its unpublished
  * demo-site JS, Bodygraph's own help center and downloaded custom-property
  * exports): the 6 Variables' calculation rule (which specific value a
- * given person gets, not just the menu of possible values) and Chiron's
- * ephemeris position aren't published anywhere free. Their own API terms
- * explicitly forbid trying to reverse-engineer it from responses either
- * ("Reverse engineer, reconstruct, or attempt to discover underlying
- * algorithms") — checked directly, not assumed — so this calls their API
- * as intended instead: pay for the answer, don't try to back into it.
+ * given person gets, not just the menu of possible values) isn't published
+ * anywhere free. Their own API terms explicitly forbid trying to
+ * reverse-engineer it from responses either ("Reverse engineer, reconstruct,
+ * or attempt to discover underlying algorithms") — checked directly, not
+ * assumed — so this calls their API as intended instead: pay for the
+ * answer, don't try to back into it.
+ *
+ * Chiron's ephemeris position (fetchBodygraphChiron, below) was also
+ * sourced here originally, same reasoning — until 2026-08-11, when it was
+ * replaced in the reading pipeline by a local, free calc (swiss-
+ * ephemeris.ts's chironPlacement, verified against this very API's own
+ * live values first). fetchBodygraphChiron itself is left in place,
+ * untouched and still fully functional, just no longer called from
+ * energetic-decoder-service.ts — kept as a fallback path, not deleted.
  *
  * Deliberately scoped to ONLY the fields nothing else in this codebase can
  * compute — Type/Authority/Profile/Centers/Gates/Channels/Incarnation
- * Cross/Signature/Not-Self Theme/Node/Lilith/every Astrology placement
- * stay on the free local engine, verified independently already. If this
- * API key is ever removed or the account lapses, every reading still
- * generates correctly — it just goes back to not having Variables/Skills/
- * Chiron, exactly like before today, not a broken reading.
+ * Cross/Signature/Not-Self Theme/Node/Lilith/Chiron/every other Astrology
+ * placement stay on the free local engine, verified independently already.
+ * If this API key is ever removed or the account lapses, every reading
+ * still generates correctly — it just goes back to not having
+ * Variables/Skills, exactly like before today, not a broken reading.
  */
 
 const BASE_URL = "https://api.bodygraphchart.com";
@@ -174,10 +181,15 @@ export interface BodygraphChiron {
 }
 
 /**
- * Fetches only Chiron's position — `astronomy-engine` has no minor-planet
- * ephemeris at all (checked directly, see gate-wheel.ts), so this is the
- * one Astrology body without a free local calculation. Same best-effort
- * null-on-failure contract as fetchBodygraphVariables above.
+ * Fetches Chiron's position from Bodygraph. NOT called from the reading
+ * pipeline as of 2026-08-11 — superseded by swiss-ephemeris.ts's
+ * chironPlacement (local, free, verified against this exact endpoint's own
+ * live values). `astronomy-engine` still has no minor-planet ephemeris of
+ * its own (checked directly, see gate-wheel.ts), which is why Chiron ever
+ * needed a separate source in the first place — Swiss Ephemeris's bundled
+ * asteroid file fills that gap now instead of this API. Left defined,
+ * untouched, and fully working as a fallback path, not deleted. Same
+ * best-effort null-on-failure contract as fetchBodygraphVariables above.
  */
 export async function fetchBodygraphChiron(input: {
   date: string;
