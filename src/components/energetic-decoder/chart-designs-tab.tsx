@@ -322,7 +322,28 @@ const CENTER_COLOR_FIELD_TO_KEY: Record<(typeof CENTER_COLOR_KEYS)[number], Cent
   rootCenterColor: "root",
 };
 
-/** Which of EditableFields actually apply to a given system — same real-vs-not distinction as chart-design.ts's field comments. The full-chart-layout fields (personalityActivationColor…planetBoxBorderRadius) are HD-only and show up here even though the BodyGraph itself doesn't read them — they drive human-design-full-chart.tsx. centersMode and the 9 per-center colors DO drive the BodyGraph directly (human-design-chart.tsx). */
+/**
+ * Which of EditableFields actually apply to a given system — same
+ * real-vs-not distinction as chart-design.ts's field comments.
+ *
+ * 2026-08-10 field audit — arrowColor and planetBoxColor deliberately
+ * excluded from the humanDesign list below: confirmed neither is read
+ * by any renderer any more (arrows use designActivationColor/
+ * personalityActivationColor per side; Planet Boxes use the same two
+ * fields or render unfilled) — an editable control that visibly does
+ * nothing is worse than no control, so they're hidden from this UI. The
+ * fields themselves stay on the model/service/API/EditableFields/
+ * FIELD_LABEL below completely untouched — still saved, still backfilled,
+ * still returned by the API — this is a display-only omission, not a
+ * removal, per her explicit "keep both fields in the underlying model/
+ * API for backward compatibility."
+ *
+ * The full-chart-layout fields still shown (personalityActivationColor,
+ * designActivationColor, arrowStyle, planetBoxMode, planetBoxBorderRadius)
+ * are HD-only and drive human-design-full-chart.tsx, not the BodyGraph
+ * directly. centersMode and the 9 per-center colors DO drive the
+ * BodyGraph directly (human-design-chart.tsx).
+ */
 const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
   humanDesign: [
     "chartDefinedColor",
@@ -330,9 +351,7 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     "gatesColor",
     "personalityActivationColor",
     "designActivationColor",
-    "arrowColor",
     "arrowStyle",
-    "planetBoxColor",
     "planetBoxMode",
     "planetBoxBorderRadius",
     "centersMode",
@@ -345,7 +364,13 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
 
 const FIELD_LABEL: Record<keyof EditableFields, string> = {
   chartDefinedColor: "Defined centers",
-  channelsColor: "Defined channels",
+  // Real scope, confirmed 2026-08-10 field audit: only the 6 "Community
+  // square" junction channels (10-20/10-34/10-57/20-34/20-57/34-57) ever
+  // read this — every other complete channel now renders in the Design/
+  // Personality two-tone split instead. Renamed from "Defined channels"
+  // so the label doesn't overpromise; not repurposed yet, per her
+  // explicit instruction.
+  channelsColor: "Junction Channel Color",
   gatesColor: "Gate accent",
   personalityActivationColor: "Personality activation",
   designActivationColor: "Design activation",
@@ -497,22 +522,29 @@ function ChartDesignCard({
               <option value="traditional">Traditional — each center its own color</option>
             </select>
           ) : (
-            <div key={key} className="flex items-center gap-2">
-              <input
-                type="color"
-                value={fields[key]}
-                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
-                disabled={!isAdmin}
-                className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
-                aria-label={FIELD_LABEL[key]}
-              />
-              <Input
-                value={fields[key]}
-                onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
-                disabled={!isAdmin}
-                className="h-8 text-xs"
-              />
-              <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{FIELD_LABEL[key]}</span>
+            <div key={key} className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={fields[key]}
+                  onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                  disabled={!isAdmin}
+                  className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
+                  aria-label={FIELD_LABEL[key]}
+                />
+                <Input
+                  value={fields[key]}
+                  onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
+                  disabled={!isAdmin}
+                  className="h-8 text-xs"
+                />
+                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{FIELD_LABEL[key]}</span>
+              </div>
+              {key === "channelsColor" && (
+                <p className="pl-10 text-[10px] leading-snug text-muted-foreground/70">
+                  Applies only to special junction channels that do not use the Design/Personality split.
+                </p>
+              )}
             </div>
           ),
         )}
