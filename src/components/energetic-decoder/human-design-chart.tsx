@@ -1,6 +1,24 @@
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { CENTERS, CHANNELS, type CenterKey } from "@/lib/energetics/human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "@/lib/energetics/human-design-chart-layout";
+import {
+  DEFAULT_DEFINED_FILL,
+  DEFINED_STROKE,
+  UNDEFINED_FILL,
+  UNDEFINED_STROKE,
+  INACTIVE_GATE_TEXT,
+  TRADITIONAL_CENTER_COLORS,
+  PERSONALITY_FILL,
+  DESIGN_FILL,
+  ACTIVATED_TEXT,
+  HANGING_PERSONALITY,
+  HANGING_DESIGN,
+  STUB_LENGTH,
+  STUB_LENGTH_CAP_FRACTION,
+  JUNCTION_GATES,
+  declutterGateLabels,
+  shapePoints,
+} from "@/lib/energetics/human-design-chart-constants";
 
 /**
  * The actual drawn bodygraph — "that's not a chart" (2026-08-08), then
@@ -30,116 +48,16 @@ import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "
  * Bodygraph renders, every one of which fills the circle solid.)
  */
 
-const DEFAULT_DEFINED_FILL = "#d4d4d8"; // zinc-300 — light gray
-const DEFINED_STROKE = "#52525b"; // zinc-600
-const UNDEFINED_FILL = "#ffffff";
-const UNDEFINED_STROKE = "#a1a1aa"; // zinc-400
-const INACTIVE_GATE_TEXT = "#a1a1aa"; // zinc-400 — subtle/recessive but still legible against white
-
 /**
- * Traditional per-center colors — real defaults confirmed 2026-08-10
- * against the live Bodygraph chart-design tool's own "Enable Traditional
- * Centers Colors" toggle, not invented. Used whenever `centersMode`
- * below is "traditional" and a caller either doesn't pass `centerColors`
- * at all, or passes one missing a specific center's key — same
- * self-sufficiency `DEFAULT_DEFINED_FILL` above already gives uniform
- * mode, so traditional mode renders correctly even with zero extra
- * configuration.
+ * All the color constants, STUB_LENGTH*, JUNCTION_GATES, and the pure
+ * declutterGateLabels/shapePoints math used below now live in
+ * human-design-chart-constants.ts (extracted 2026-08-10, see that file's
+ * own header) — reused as-is here via the import above, so the PDF
+ * renderer (reading-pdf-document.tsx) can share the exact same values/
+ * logic instead of a second hand-copy that could drift. Nothing about
+ * their values or behavior changed; this file just imports them now
+ * instead of declaring them locally.
  */
-const TRADITIONAL_CENTER_COLORS: Record<CenterKey, string> = {
-  head: "#e49e4b",
-  ajna: "#a19a5c",
-  throat: "#bf5a0f",
-  g: "#e49e4b",
-  heart: "#a23423",
-  spleen: "#bf5a0f",
-  sacral: "#a23423",
-  solarplexus: "#bf5a0f",
-  root: "#bf5a0f",
-};
-
-/**
- * Activated-gate markers — real gap found 2026-08-10 comparing our chart
- * against real Bodygraph renders: every activated gate there is a solid-
- * filled circle with a reversed white number punched out of it, not a
- * thin outline ring behind colored text (the previous version here) —
- * ours read noticeably fainter and harder to scan at a glance side by
- * side. Personality stays the universal solid black; Design moves from a
- * bright red to a rust/brown, keeping it in the same warm family as the
- * design-side hanging-gate stub color above (HANGING_DESIGN) without
- * literally reusing it — this is a different visual element (a fully
- * activated gate marker, not a partial hanging stub), so it gets its own
- * shade rather than borrowing theirs outright.
- */
-const PERSONALITY_FILL = "#18181b"; // zinc-900 — solid black
-const DESIGN_FILL = "#9a3412"; // rust/brown
-const ACTIVATED_TEXT = "#ffffff"; // reversed white, both sides
-
-/**
- * Hanging-gate channel stubs — the "third visual state" investigated
- * 2026-08-10 by comparing 4 real Bodygraph charts (72 gate-level data
- * points) against our own activation data. A gate that's activated but
- * whose channel partner isn't still gets a short colored stub drawn
- * toward that partner, even though the channel itself never completes —
- * that's what was showing up as gold/brown segments on a Reflector chart
- * with zero defined channels. Verified rule, 70/72 direct matches:
- * Personality-only activation → stub is solid brown. Design-only → solid
- * gold. Dual (both P and D activate the same gate) → split, personality
- * half brown, design half gold. Complete channels get this same per-
- * endpoint coloring layered on top of the existing full defined-channel
- * line, not instead of it — confirmed against 2 real charts with
- * complete channels, not just the hanging-only Reflector case.
- *
- * Colors matched directly against Bodygraph's own real SVG fill values
- * for personality-N/design-N elements — not invented, not copied
- * artwork, just the two solid hex colors reverse-derived from comparing
- * our calculated activation data against their rendered output.
- */
-const HANGING_PERSONALITY = "#654422"; // brown
-const HANGING_DESIGN = "#e4b54b"; // gold
-/**
- * Fixed absolute stub length (SVG viewBox units), not a fraction of the
- * gate-to-partner distance — real gap caught 2026-08-10 comparing the
- * first version against 4 real Bodygraph charts: a fraction-based stub
- * varies ~7x in visible length purely based on how far apart the two
- * centers happen to sit (a barely-visible nub between adjacent Head-
- * triangle gates 6 units apart, a long spike between distant Throat/
- * Solar Plexus gates 42 units apart). She asked for a "short" stub, which
- * means a consistent short mark regardless of channel span, not one that
- * scales with it. Capped at 40% of the real distance so it still stays
- * visually "partial" even on the closest gate pairs (e.g. the Head
- * triangle) rather than nearly reaching the partner.
- */
-const STUB_LENGTH = 3.2;
-const STUB_LENGTH_CAP_FRACTION = 0.4;
-
-/**
- * The "Community square" — gates 10/20/34/57, each paired with the other
- * three (6 of the 36 channels: 10-20, 10-34, 10-57, 20-34, 20-57, 34-57).
- * Every other gate belongs to exactly one channel; these four belong to
- * three each. Real investigation 2026-08-10: when two of a junction
- * gate's channels are both complete at once, Bodygraph's own renderer
- * suppresses the hanging-gate stub entirely rather than picking one
- * channel to point it at (confirmed on a real chart with gates 10 and 57
- * each satisfying two complete channels simultaneously) — an ambiguous
- * case with no documented resolution, not something to guess at. Rather
- * than invent a rule Bodygraph itself doesn't expose, hanging-gate stubs
- * are skipped for all 6 of these channels; they keep only the existing,
- * already-correct full-channel line rendering, untouched.
- */
-function computeJunctionGates(): Set<number> {
-  const channelCount = new Map<number, number>();
-  for (const ch of CHANNELS) {
-    channelCount.set(ch.gates[0], (channelCount.get(ch.gates[0]) ?? 0) + 1);
-    channelCount.set(ch.gates[1], (channelCount.get(ch.gates[1]) ?? 0) + 1);
-  }
-  const junctions = new Set<number>();
-  for (const [gate, count] of channelCount) {
-    if (count > 1) junctions.add(gate);
-  }
-  return junctions;
-}
-const JUNCTION_GATES = computeJunctionGates();
 
 /**
  * One end of a hanging-gate stub — renders nothing if this gate isn't
@@ -263,96 +181,6 @@ function CompleteChannelHalf({
       strokeLinecap="round"
     />
   );
-}
-
-/**
- * Real bug, found 2026-08-10 by her actually looking at a rendered chart:
- * "in the root center you have numbers overlapping." Root/Sacral/Throat
- * pack up to 11 gates into one small center, so two DIFFERENT activated
- * gates can sit close enough that their number labels collide — worse
- * when either gate is activated in both Personality AND Design, since
- * that gate already renders two offset labels of its own. Not a duplicate-
- * coordinate bug (verified — every gate has its own distinct point); the
- * points are correct, they're just closer together than two number labels
- * need. Same collision-avoidance technique already proven in
- * astrology-wheel-chart.tsx for crowded planet labels, ported here: only
- * the LABEL position gets nudged apart, never the true point (channel
- * lines and the "which center is this gate in" fact both keep using the
- * real, un-nudged GATE_POINT).
- *
- * First pass at these constants (MIN_GAP 2.8 / DUAL_BONUS 0.9) still left
- * real overlap — verified against her actual reading's real gate data
- * (not a synthetic sample this time), which has 3 dual-activated gates
- * packed into Root alone. Retuned larger (MIN_GAP 3.6 / DUAL_BONUS 1.6),
- * plus SELF_OFFSET below increased from 0.9→1.5 (a single dual gate's own
- * two labels were barely separated even before any cross-gate crowding)
- * and font/circle sized down slightly to give every number more real
- * breathing room. Re-verified visually against that same real data before
- * shipping — not just re-reading the math.
- */
-function declutterGateLabels(
-  gates: number[],
-  dualSet: Set<number>,
-): Map<number, { x: number; y: number }> {
-  const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
-  const MIN_GAP = 3.6; // base clearance two single-label circles need at this font size
-  const DUAL_BONUS = 1.6; // a dual gate's own two offset labels need more room from its neighbors
-  for (let iter = 0; iter < 40; iter++) {
-    for (let i = 0; i < pts.length; i++) {
-      for (let j = i + 1; j < pts.length; j++) {
-        const gap = MIN_GAP + (pts[i].dual ? DUAL_BONUS : 0) + (pts[j].dual ? DUAL_BONUS : 0);
-        const dx = pts[j].x - pts[i].x;
-        const dy = pts[j].y - pts[i].y;
-        const dist = Math.hypot(dx, dy) || 0.0001;
-        if (dist < gap) {
-          const push = (gap - dist) / 2;
-          const ux = dist ? dx / dist : 1;
-          const uy = dist ? dy / dist : 0;
-          pts[i].x -= ux * push;
-          pts[i].y -= uy * push;
-          pts[j].x += ux * push;
-          pts[j].y += uy * push;
-        }
-      }
-    }
-  }
-  return new Map(pts.map((p) => [p.gate, { x: p.x, y: p.y }]));
-}
-
-function shapePoints(shape: CenterShape | "diamond", cx: number, cy: number, r: number): string {
-  switch (shape) {
-    case "triangle-up":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + r} ${cx + r},${cy + r}`;
-    case "triangle-down":
-      return `${cx},${cy + 0.9 * r} ${cx - r},${cy - r} ${cx + r},${cy - r}`;
-    case "triangle-left":
-      return `${cx - 0.9 * r},${cy} ${cx + r},${cy - r} ${cx + r},${cy + r}`;
-    case "triangle-right":
-      return `${cx + 0.9 * r},${cy} ${cx - r},${cy - r} ${cx - r},${cy + r}`;
-    case "triangle-heart":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + 0.9 * r} ${cx + 1.1 * r},${cy + r}`;
-    // Standard 4-point diamond — the G / Identity center's real shape,
-    // confirmed 2026-08-10 against every real Bodygraph chart compared so
-    // far. Rendered via the effectiveShape override in CenterShapeEl below
-    // rather than by changing CENTER_LAYOUT.g.shape itself, since this
-    // pass is scoped to this file only.
-    case "diamond":
-      return `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`;
-    case "octagram": {
-      // No longer reachable for the G center (see effectiveShape override
-      // below) — kept for CenterShape type completeness, in case
-      // CENTER_LAYOUT data changes later.
-      const pts: string[] = [];
-      for (let s = 0; s < 16; s++) {
-        const angle = -Math.PI / 2 + (s * Math.PI) / 8;
-        const radius = s % 2 === 0 ? r : 0.72 * r;
-        pts.push(`${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`);
-      }
-      return pts.join(" ");
-    }
-    default:
-      return "";
-  }
 }
 
 function CenterShapeEl({

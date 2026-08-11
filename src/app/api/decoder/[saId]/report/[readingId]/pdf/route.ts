@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
+import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { renderReadingPdfStream, readingPdfFilename } from "@/lib/energetics/reading-pdf-render";
 
 export const runtime = "nodejs";
@@ -31,7 +31,10 @@ export async function GET(
   const sub = subSnap.data() ?? {};
   const businessName = (sub.name as string) || "Your reading";
   const businessLogoUrl = typeof sub.logoUrl === "string" ? (sub.logoUrl as string) : null;
-  const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
+  // Real Chart Design, not the legacy single-field theme — same source
+  // the web report page (reading-summary.tsx) reads, so the PDF's Human
+  // Design section matches what's actually shown on screen.
+  const hdDesign = reading.humanDesign ? await getDefaultChartDesign(saId, "humanDesign") : null;
 
   const stream = await renderReadingPdfStream({
     readerName: reading.name,
@@ -42,7 +45,7 @@ export async function GET(
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
     spheres: reading.spheres,
-    definedColor: theme.chartDefinedColor,
+    hdDesign,
   });
   return new NextResponse(stream, {
     headers: {

@@ -15,13 +15,33 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { HumanDesignProfile } from "./human-design";
-import { CENTERS, CENTER_LABELS, CHANNELS, type CenterKey } from "./human-design-data";
+import { CENTERS, CENTER_LABELS, CHANNELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "./human-design-chart-layout";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
+import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
+import {
+  DEFAULT_DEFINED_FILL,
+  DEFINED_STROKE,
+  UNDEFINED_FILL,
+  UNDEFINED_STROKE,
+  INACTIVE_GATE_TEXT,
+  TRADITIONAL_CENTER_COLORS,
+  PERSONALITY_FILL,
+  DESIGN_FILL,
+  ACTIVATED_TEXT,
+  HANGING_PERSONALITY,
+  HANGING_DESIGN,
+  STUB_LENGTH,
+  STUB_LENGTH_CAP_FRACTION,
+  JUNCTION_GATES,
+  declutterGateLabels,
+  shapePoints,
+} from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { ASPECT_TYPE_CONTENT } from "./astrology-content-data";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
+import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/chart-design";
 
 /**
  * A downloadable PDF of a full reading — her direct ask (2026-08-09): "if
@@ -93,89 +113,460 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 24, left: 44, right: 44, fontSize: 7.5, color: "#9a9aa2", textAlign: "center" },
 });
 
-// ── Human Design chart (react-pdf Svg) — same math as human-design-chart.tsx ──
+/**
+ * ASCII-safe planet abbreviations — real bug caught 2026-08-10 exporting
+ * a real PDF and looking at it directly, same root cause already fixed
+ * once for the Astrology wheel below: react-pdf's only font here is the
+ * built-in Helvetica (WinAnsi-encoded), which has no astrological Unicode
+ * glyphs (☉☽♃…) at all — it doesn't fail safely, it silently overlaps/
+ * garbles the glyph into whatever WinAnsi character shares that glyph
+ * index, visibly mangling the following label text ("Qupiter",
+ * "DSaturn"). HD_BODY_LABELS' own `symbol` field is correct and used
+ * as-is on the web (browsers have real Unicode font fallback) — this
+ * map exists only for react-pdf's PDF output, used by both the Human
+ * Design planet boxes below and the Astrology wheel further down (which
+ * already had this fix; "earth" added here since only Human Design uses
+ * it, Astrology placements never include it).
+ */
+const PLANET_ABBR: Record<string, string> = {
+  sun: "Su", earth: "Ea", moon: "Mo", mercury: "Me", venus: "Ve", mars: "Ma",
+  jupiter: "Ju", saturn: "Sa", uranus: "Ur", neptune: "Ne", pluto: "Pl",
+  northNode: "NN", southNode: "SN", lilith: "Li", chiron: "Ch",
+};
 
-const HD_DEFAULT_FILL = "#d4d4d8";
-const HD_DEFINED_STROKE = "#52525b";
-const HD_UNDEFINED_FILL = "#ffffff";
-const HD_UNDEFINED_STROKE = "#a1a1aa";
-const HD_PERSONALITY_TEXT = "#18181b";
-const HD_DESIGN_TEXT = "#dc2626";
+// ── Human Design full chart (react-pdf) — 2026-08-10 parity port ──
+//
+// Ports human-design-chart.tsx (the BodyGraph itself: two-tone Design/
+// Personality channels, hanging-gate stubs, the G-diamond, solid
+// activated-gate markers, traditional/uniform center colors) and
+// human-design-full-chart.tsx (Design column + BodyGraph + Personality
+// column + the 4 Variable arrows) into react-pdf's own primitives, since
+// react-pdf can't render real DOM/SVG React components directly. Reuses
+// the EXACT same colors and pure geometry math as both web renderers via
+// human-design-chart-constants.ts, rather than re-deriving or hand-
+// copying values that could drift — the only genuinely new code below is
+// the react-pdf-primitive JSX itself (Polygon/Line/Circle/Text/View
+// instead of DOM polygon/line/circle/text/div), not new logic.
+//
+// No responsive/container-query layout needed the way the web full-chart
+// has (@container, since it can end up embedded at any width) — a PDF
+// page is a fixed, known size, so this always renders the full 3-column
+// layout directly.
 
-function hdShapePoints(shape: CenterShape, cx: number, cy: number, r: number): string {
-  switch (shape) {
-    case "triangle-up":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + r} ${cx + r},${cy + r}`;
-    case "triangle-down":
-      return `${cx},${cy + 0.9 * r} ${cx - r},${cy - r} ${cx + r},${cy - r}`;
-    case "triangle-left":
-      return `${cx - 0.9 * r},${cy} ${cx + r},${cy - r} ${cx + r},${cy + r}`;
-    case "triangle-right":
-      return `${cx + 0.9 * r},${cy} ${cx - r},${cy - r} ${cx - r},${cy + r}`;
-    case "triangle-heart":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + 0.9 * r} ${cx + 1.1 * r},${cy + r}`;
-    case "octagram": {
-      const pts: string[] = [];
-      for (let s = 0; s < 16; s++) {
-        const angle = -Math.PI / 2 + (s * Math.PI) / 8;
-        const radius = s % 2 === 0 ? r : 0.72 * r;
-        pts.push(`${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`);
-      }
-      return pts.join(" ");
-    }
-    default:
-      return "";
-  }
-}
-
-function HdCenterShape({ layout, defined, definedColor }: { layout: CenterLayout; defined: boolean; definedColor: string }) {
-  const fill = defined ? definedColor : HD_UNDEFINED_FILL;
-  const stroke = defined ? HD_DEFINED_STROKE : HD_UNDEFINED_STROKE;
+function CenterShapePdf({ layout, defined, color }: { layout: CenterLayout; defined: boolean; color: string }) {
+  const fill = defined ? color : UNDEFINED_FILL;
+  const stroke = defined ? DEFINED_STROKE : UNDEFINED_STROKE;
   if (layout.shape === "square") {
     const r = layout.size;
     return <Rect x={layout.x - r} y={layout.y - r} width={r * 2} height={r * 2} rx={r * 0.25} fill={fill} stroke={stroke} strokeWidth={0.5} />;
   }
-  return <Polygon points={hdShapePoints(layout.shape, layout.x, layout.y, layout.size)} fill={fill} stroke={stroke} strokeWidth={0.5} />;
+  // G / Identity center renders as a standard diamond, not the 8-point
+  // star CENTER_LAYOUT still declares — same override human-design-
+  // chart.tsx's own CenterShapeEl applies, mirrored here.
+  const effectiveShape: CenterShape | "diamond" = layout.center === "g" ? "diamond" : layout.shape;
+  return <Polygon points={shapePoints(effectiveShape, layout.x, layout.y, layout.size)} fill={fill} stroke={stroke} strokeWidth={0.5} />;
 }
 
-function HumanDesignChartPdf({ profile, definedColor }: { profile: HumanDesignProfile; definedColor: string }) {
+/** Mirrors HangingGateStub in human-design-chart.tsx — same geometry, react-pdf's Line instead of DOM line. */
+function HangingGateStubPdf({
+  gate,
+  toward,
+  personalityActive,
+  designActive,
+}: {
+  gate: { x: number; y: number };
+  toward: { x: number; y: number };
+  personalityActive: boolean;
+  designActive: boolean;
+}) {
+  if (!personalityActive && !designActive) return null;
+  const dx = toward.x - gate.x;
+  const dy = toward.y - gate.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const length = Math.min(STUB_LENGTH, dist * STUB_LENGTH_CAP_FRACTION);
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const endX = gate.x + ux * length;
+  const endY = gate.y + uy * length;
+
+  if (personalityActive && designActive) {
+    const midX = gate.x + ux * length * 0.5;
+    const midY = gate.y + uy * length * 0.5;
+    return (
+      <>
+        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.3} strokeLinecap="round" />
+        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.3} strokeLinecap="round" />
+      </>
+    );
+  }
+  return (
+    <Line
+      x1={gate.x}
+      y1={gate.y}
+      x2={endX}
+      y2={endY}
+      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
+      strokeWidth={1.3}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/** Mirrors CompleteChannelHalf in human-design-chart.tsx — same geometry, react-pdf's Line instead of DOM line. */
+function CompleteChannelHalfPdf({
+  gate,
+  toward,
+  personalityActive,
+  designActive,
+}: {
+  gate: { x: number; y: number };
+  toward: { x: number; y: number };
+  personalityActive: boolean;
+  designActive: boolean;
+}) {
+  if (!personalityActive && !designActive) return null;
+  const dx = toward.x - gate.x;
+  const dy = toward.y - gate.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const half = dist / 2;
+  const endX = gate.x + ux * half;
+  const endY = gate.y + uy * half;
+
+  if (personalityActive && designActive) {
+    const midX = gate.x + ux * half * 0.5;
+    const midY = gate.y + uy * half * 0.5;
+    return (
+      <>
+        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.1} strokeLinecap="round" />
+        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.1} strokeLinecap="round" />
+      </>
+    );
+  }
+  return (
+    <Line
+      x1={gate.x}
+      y1={gate.y}
+      x2={endX}
+      y2={endY}
+      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
+      strokeWidth={1.1}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/** Mirrors HumanDesignChart in human-design-chart.tsx — the BodyGraph itself, react-pdf primitives instead of DOM/SVG. */
+function HumanDesignBodygraphPdf({
+  profile,
+  centersColor,
+  centersMode,
+  centerColors,
+  channelsColor,
+  gatesColor,
+  backgroundColor,
+  size,
+}: {
+  profile: HumanDesignProfile;
+  centersColor: string;
+  centersMode: "uniform" | "traditional";
+  centerColors: Partial<Record<CenterKey, string>> | undefined;
+  channelsColor: string;
+  gatesColor: string;
+  backgroundColor: string;
+  size: number;
+}) {
   const definedSet = new Set(profile.definedCenters);
   const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
   const personalityGates = new Set(profile.personality.map((a) => a.gate));
   const designGates = new Set(profile.design.map((a) => a.gate));
+  const activatedGates = Object.keys(GATE_POINT)
+    .map(Number)
+    .filter((g) => personalityGates.has(g) || designGates.has(g));
+  const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
+  const labelPositions = declutterGateLabels(activatedGates, dualGates);
+  const resolveCenterColor = (c: CenterKey): string =>
+    centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? centersColor) : centersColor;
+
+  const height = size * (102 / 108); // matches the real viewBox aspect ratio, "-4 -3 108 102"
 
   return (
-    <Svg viewBox="-4 -3 108 102" style={{ width: 260, height: 246 }}>
-      <Rect x={-4} y={-3} width={108} height={102} fill="#ffffff" />
+    <Svg viewBox="-4 -3 108 102" style={{ width: size, height }}>
+      <Rect x={-4} y={-3} width={108} height={102} fill={backgroundColor} />
+
+      {/* Channels — complete, non-junction channels render two-tone (CompleteChannelHalfPdf);
+          hanging-gate stubs layer on only for hanging channels; junction channels keep a flat line. */}
       {CHANNELS.map((ch) => {
-        const a = GATE_POINT[ch.gates[0]];
-        const b = GATE_POINT[ch.gates[1]];
+        const [gateA, gateB] = ch.gates;
+        const a = GATE_POINT[gateA];
+        const b = GATE_POINT[gateB];
         if (!a || !b) return null;
         const isDefined = definedChannelKeys.has(ch.key);
+        const isJunctionChannel = JUNCTION_GATES.has(gateA) || JUNCTION_GATES.has(gateB);
+        const twoTone = isDefined && !isJunctionChannel;
         return (
-          <Line key={ch.key} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={isDefined ? HD_DEFINED_STROKE : HD_DEFAULT_FILL} strokeWidth={isDefined ? 1.1 : 0.35} strokeOpacity={isDefined ? 0.9 : 0.7} />
+          <G key={ch.key}>
+            {twoTone ? (
+              <>
+                <CompleteChannelHalfPdf gate={a} toward={b} personalityActive={personalityGates.has(gateA)} designActive={designGates.has(gateA)} />
+                <CompleteChannelHalfPdf gate={b} toward={a} personalityActive={personalityGates.has(gateB)} designActive={designGates.has(gateB)} />
+              </>
+            ) : (
+              <Line
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
+                strokeWidth={isDefined ? 1.1 : 0.35}
+                strokeOpacity={isDefined ? 0.9 : 0.7}
+              />
+            )}
+            {!isJunctionChannel && !twoTone && (
+              <>
+                <HangingGateStubPdf gate={a} toward={b} personalityActive={personalityGates.has(gateA)} designActive={designGates.has(gateA)} />
+                <HangingGateStubPdf gate={b} toward={a} personalityActive={personalityGates.has(gateB)} designActive={designGates.has(gateB)} />
+              </>
+            )}
+          </G>
         );
       })}
+
+      {/* 9 centers — traditional or uniform per resolveCenterColor above */}
       {CENTERS.map((c) => (
-        <HdCenterShape key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} definedColor={definedColor} />
+        <CenterShapePdf key={c} layout={CENTER_LAYOUT[c]} defined={definedSet.has(c)} color={resolveCenterColor(c)} />
       ))}
+
+      {/* All 64 gate numbers, inactive ones faint, drawn before the activated layer */}
       {Object.entries(GATE_POINT).map(([gateStr, point]) => {
         const gate = Number(gateStr);
-        const inPersonality = personalityGates.has(gate);
-        const inDesign = designGates.has(gate);
-        if (!inPersonality && !inDesign) return null;
+        if (personalityGates.has(gate) || designGates.has(gate)) return null;
         return (
-          <Text
-            key={gate}
-            x={point.x}
-            y={point.y + 1}
-            style={{ fontSize: 2.6, fontWeight: 700, fill: inDesign ? HD_DESIGN_TEXT : HD_PERSONALITY_TEXT, textAnchor: "middle" }}
-          >
+          <Text key={gate} x={point.x} y={point.y + 0.8} style={{ fontSize: 1.9, fill: INACTIVE_GATE_TEXT, textAnchor: "middle" }}>
             {gate}
           </Text>
         );
       })}
+
+      {/* Activated gates — solid-filled circle + reversed white number. Dual activation splits into 2 offset circles. */}
+      {activatedGates.map((gate) => {
+        const point = labelPositions.get(gate)!;
+        const inPersonality = personalityGates.has(gate);
+        const inDesign = designGates.has(gate);
+        const dual = inPersonality && inDesign;
+
+        if (dual) {
+          const OFFSET = 1.5;
+          const R = 1.55;
+          return (
+            <G key={gate}>
+              <Circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={0.35} />
+              <Text x={point.x + OFFSET} y={point.y + OFFSET + 0.6} style={{ fontSize: 1.6, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+                {gate}
+              </Text>
+              <Circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={0.35} />
+              <Text x={point.x - OFFSET} y={point.y - OFFSET + 0.6} style={{ fontSize: 1.6, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+                {gate}
+              </Text>
+            </G>
+          );
+        }
+
+        const R = 1.9;
+        const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
+        return (
+          <G key={gate}>
+            <Circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={0.35} />
+            <Text x={point.x} y={point.y + 0.7} style={{ fontSize: 2, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+              {gate}
+            </Text>
+          </G>
+        );
+      })}
     </Svg>
+  );
+}
+
+// ── Planet boxes + Variable arrows (react-pdf View/Text) — mirrors human-design-full-chart.tsx ──
+
+const PDF_PLAIN_TEXT = "#3f3f46"; // zinc-700 — same neutral ink human-design-full-chart.tsx uses for iconOnly mode's label/value text
+
+function PlanetBoxPdf({
+  symbol,
+  label,
+  value,
+  activationColor,
+  mode,
+  borderRadius,
+}: {
+  symbol: string;
+  label: string;
+  value: string;
+  activationColor: string;
+  mode: PlanetBoxMode;
+  borderRadius: number;
+}) {
+  if (mode === "fullBox") {
+    return (
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: activationColor, borderRadius, paddingVertical: 2, paddingHorizontal: 4, marginBottom: 1.5 }}>
+        <Text style={{ fontSize: 6, color: "#ffffff" }}>{symbol} {label}</Text>
+        <Text style={{ fontSize: 6, color: "#ffffff", fontWeight: 700 }}>{value}</Text>
+      </View>
+    );
+  }
+  // iconOnly — row stays genuinely unfilled; only the glyph chip is colored.
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 2, paddingHorizontal: 4, marginBottom: 1.5 }}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: activationColor, alignItems: "center", justifyContent: "center", marginRight: 3 }}>
+          <Text style={{ fontSize: 5, color: "#ffffff" }}>{symbol}</Text>
+        </View>
+        <Text style={{ fontSize: 6, color: PDF_PLAIN_TEXT }}>{label}</Text>
+      </View>
+      <Text style={{ fontSize: 6, color: PDF_PLAIN_TEXT, fontWeight: 700 }}>{value}</Text>
+    </View>
+  );
+}
+
+function ActivationColumnPdf({
+  side,
+  activations,
+  color,
+  mode,
+  borderRadius,
+}: {
+  side: "Design" | "Personality";
+  activations: HumanDesignProfile["design"] | HumanDesignProfile["personality"];
+  color: string;
+  mode: PlanetBoxMode;
+  borderRadius: number;
+}) {
+  return (
+    <View style={{ width: 140 }}>
+      <Text style={{ fontSize: 7, fontWeight: 700, color, marginBottom: 3, textTransform: "uppercase" }}>{side}</Text>
+      {HD_BODY_LABELS.map(({ body, label }) => {
+        const a = activations.find((x) => x.body === body);
+        return (
+          <PlanetBoxPdf
+            key={body}
+            symbol={PLANET_ABBR[body] ?? label.slice(0, 2)}
+            label={label}
+            value={a ? `${a.gate}.${a.line}` : "—"}
+            activationColor={color}
+            mode={mode}
+            borderRadius={borderRadius}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+function ArrowGlyphPdf({ direction, color, style }: { direction: VariableArrowDirection; color: string; style: VariableArrowStyle }) {
+  const points = direction === "Left" ? "9,1.5 9,10.5 1.5,6" : "1.5,1.5 1.5,10.5 9,6";
+  return (
+    <Svg viewBox="0 0 12 12" style={{ width: 8, height: 8 }}>
+      <Polygon points={points} fill={style === "solid" ? color : "none"} stroke={color} strokeWidth={style === "outline" ? 1.1 : 0} />
+    </Svg>
+  );
+}
+
+/** Mirrors ArrowBadge in human-design-full-chart.tsx. Reordering children (instead of flexDirection: row-reverse) for "right" alignment — same visual result, avoids an unverified react-pdf flex value. */
+function ArrowBadgePdf({
+  label,
+  source,
+  value,
+  color,
+  style,
+  align,
+}: {
+  label: string;
+  source: string;
+  value: VariableArrowSource | undefined;
+  color: string;
+  style: VariableArrowStyle;
+  align: "left" | "right";
+}) {
+  const glyph = value ? <ArrowGlyphPdf direction={value.arrow} color={color} style={style} /> : <View style={{ width: 8, height: 8 }} />;
+  const text = (
+    <View style={{ marginLeft: align === "left" ? 3 : 0, marginRight: align === "right" ? 3 : 0 }}>
+      <Text style={{ fontSize: 6.5, fontWeight: 700, color, textAlign: align }}>{label}</Text>
+      <Text style={{ fontSize: 5.5, color: "#8a8a92", textAlign: align }}>
+        {source}
+        {value ? ` · ${value.arrow}` : " · —"}
+      </Text>
+    </View>
+  );
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      {align === "left" ? (
+        <>
+          {glyph}
+          {text}
+        </>
+      ) : (
+        <>
+          {text}
+          {glyph}
+        </>
+      )}
+    </View>
+  );
+}
+
+/** Mirrors HumanDesignFullChart in human-design-full-chart.tsx: Design column + BodyGraph + Personality column + all 4 Variable arrows. No container-query responsiveness needed — a PDF page is a fixed known width. */
+function HumanDesignFullChartPdf({ profile, hdDesign }: { profile: HumanDesignProfile; hdDesign?: ChartDesign | null }) {
+  const personalityActivationColor = hdDesign?.personalityActivationColor || PERSONALITY_FILL;
+  const designActivationColor = hdDesign?.designActivationColor || DESIGN_FILL;
+  const arrowStyle: VariableArrowStyle = hdDesign?.arrowStyle || "solid";
+  const planetBoxMode: PlanetBoxMode = hdDesign?.planetBoxMode || "fullBox";
+  const planetBoxBorderRadius = hdDesign?.planetBoxBorderRadius ?? 6;
+  const centersColor = hdDesign?.chartDefinedColor || DEFAULT_DEFINED_FILL;
+  const centersMode = hdDesign?.centersMode || "uniform";
+  const channelsColor = hdDesign?.channelsColor || DEFINED_STROKE;
+  const gatesColor = hdDesign?.gatesColor || "#e4e4e7";
+  const backgroundColor = hdDesign?.backgroundColor || "#ffffff";
+  const centerColors: Partial<Record<CenterKey, string>> | undefined = hdDesign
+    ? {
+        head: hdDesign.headCenterColor,
+        ajna: hdDesign.ajnaCenterColor,
+        throat: hdDesign.throatCenterColor,
+        g: hdDesign.gCenterColor,
+        heart: hdDesign.heartCenterColor,
+        spleen: hdDesign.spleenCenterColor,
+        sacral: hdDesign.sacralCenterColor,
+        solarplexus: hdDesign.solarPlexusCenterColor,
+        root: hdDesign.rootCenterColor,
+      }
+    : undefined;
+  const arrows = profile.variableArrows;
+
+  return (
+    <View style={{ alignItems: "center", marginVertical: 10 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", width: 460, marginBottom: 4 }}>
+        <ArrowBadgePdf label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadgePdf label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", width: 460 }}>
+        <ActivationColumnPdf side="Design" activations={profile.design} color={designActivationColor} mode={planetBoxMode} borderRadius={planetBoxBorderRadius} />
+        <HumanDesignBodygraphPdf
+          profile={profile}
+          centersColor={centersColor}
+          centersMode={centersMode}
+          centerColors={centerColors}
+          channelsColor={channelsColor}
+          gatesColor={gatesColor}
+          backgroundColor={backgroundColor}
+          size={180}
+        />
+        <ActivationColumnPdf side="Personality" activations={profile.personality} color={personalityActivationColor} mode={planetBoxMode} borderRadius={planetBoxBorderRadius} />
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", width: 460, marginTop: 4 }}>
+        <ArrowBadgePdf label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadgePdf label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
+      </View>
+    </View>
   );
 }
 
@@ -187,11 +578,6 @@ const WHEEL_TEXT = "#3f3f46";
 const SIGN_ABBR: Record<ZodiacSign, string> = {
   Aries: "Ari", Taurus: "Tau", Gemini: "Gem", Cancer: "Can", Leo: "Leo", Virgo: "Vir",
   Libra: "Lib", Scorpio: "Sco", Sagittarius: "Sag", Capricorn: "Cap", Aquarius: "Aqu", Pisces: "Pis",
-};
-const PLANET_ABBR: Record<string, string> = {
-  sun: "Su", moon: "Mo", mercury: "Me", venus: "Ve", mars: "Ma",
-  jupiter: "Ju", saturn: "Sa", uranus: "Ur", neptune: "Ne", pluto: "Pl",
-  northNode: "NN", southNode: "SN", lilith: "Li", chiron: "Ch",
 };
 const CX = 50, CY = 50, SIGN_RING_OUTER = 47, SIGN_RING_INNER = 40, HOUSE_LINE_INNER = 10, PLANET_R_A = 33, PLANET_R_B = 29, MIN_SEPARATION_DEG = 7;
 
@@ -270,7 +656,7 @@ export function ReadingPdfDocument({
   humanDesign,
   astrology,
   spheres,
-  definedColor,
+  hdDesign,
 }: {
   readerName: string;
   birthDate: string;
@@ -280,7 +666,8 @@ export function ReadingPdfDocument({
   humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
   astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
   spheres?: GeneKeysSphereResult[];
-  definedColor: string;
+  /** The sub-account's default Human Design Chart Design — same shape/fallback contract as the web renderers (human-design-chart.tsx / human-design-full-chart.tsx); undefined/null renders correctly with the same traditional defaults. */
+  hdDesign?: ChartDesign | null;
 }) {
   const hdContent = humanDesign?.content;
   const astroContent = astrology?.content;
@@ -322,7 +709,7 @@ export function ReadingPdfDocument({
             </Text>
 
             <View style={styles.chartWrap}>
-              <HumanDesignChartPdf profile={humanDesign} definedColor={definedColor} />
+              <HumanDesignFullChartPdf profile={humanDesign} hdDesign={hdDesign} />
             </View>
 
             {humanDesign.variables && (

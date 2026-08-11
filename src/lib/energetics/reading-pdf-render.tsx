@@ -6,6 +6,7 @@ import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
+import type { ChartDesign } from "@/types/chart-design";
 
 /**
  * Streams a reading as a PDF — same pattern as quotes' pdf-render.tsx
@@ -21,7 +22,8 @@ export async function renderReadingPdfStream(opts: {
   humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
   astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
   spheres?: GeneKeysSphereResult[];
-  definedColor: string;
+  /** The sub-account's default Human Design Chart Design — see reading-pdf-document.tsx for the fallback contract. */
+  hdDesign?: ChartDesign | null;
 }): Promise<ReadableStream<Uint8Array>> {
   const nodeStream = await renderToStream(<ReadingPdfDocument {...opts} />);
   const { Readable } = await import("node:stream");
