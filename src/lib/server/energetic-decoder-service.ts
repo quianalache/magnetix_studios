@@ -24,6 +24,7 @@ import {
   ACTIVATION_SEQUENCE_SPHERES,
   PEARL_SEQUENCE_SPHERES,
   VENUS_SEQUENCE_SPHERES,
+  GENE_KEYS_CANONICAL_SPHERE_ORDER,
   defaultEnergeticDecoderReportConfig,
   type EnergeticDecoderReading,
   type EnergeticDecoderRequest,
@@ -373,6 +374,42 @@ async function withDerivedVariableArrows(
   }
 }
 
+/**
+ * Read-time fallback for readings saved before 2026-08-10's Pearl
+ * Sequence reorder (gene-keys.ts's `raw` array, and the
+ * PEARL_SEQUENCE_SPHERES constant it's built from, both used to produce
+ * Vocation/Brand/Culture/Pearl — an arbitrary order, not a deliberate
+ * one — fixed to the real canonical Vocation/Culture/Brand/Pearl,
+ * verified against genekeys.com). Same pattern and same reasoning as
+ * withDerivedVariableArrows just above: a pure, cheap, local
+ * presentation-layer fix, not a recompute — this only reorders the
+ * array positions of the sub-account's own already-saved sphere
+ * objects (unchanged object references, so every Gate.Line, Shadow,
+ * Gift, Siddhi, showsUp, and giftText stays byte-identical), it never
+ * touches Firestore, and it's a complete no-op (same object returned)
+ * for every reading already in canonical order — every reading created
+ * after 2026-08-10.
+ *
+ * Any sphere name not found in GENE_KEYS_CANONICAL_SPHERE_ORDER (should
+ * never happen — the 12 names are fixed) is appended at the end
+ * unchanged rather than silently dropped, so a genuinely malformed
+ * reading still renders everything it has instead of losing data.
+ */
+function withCanonicalSphereOrder(
+  reading: EnergeticDecoderReading,
+): EnergeticDecoderReading {
+  if (!reading.spheres || reading.spheres.length === 0) return reading;
+  const bySphere = new Map(reading.spheres.map((s) => [s.sphere, s]));
+  const known = GENE_KEYS_CANONICAL_SPHERE_ORDER.map((name) => bySphere.get(name)).filter(
+    (s): s is GeneKeysSphereResult => s !== undefined,
+  );
+  const extras = reading.spheres.filter((s) => !(GENE_KEYS_CANONICAL_SPHERE_ORDER as readonly string[]).includes(s.sphere));
+  const sorted = [...known, ...extras];
+  const alreadyCanonical = reading.spheres.length === sorted.length && reading.spheres.every((s, i) => s.sphere === sorted[i].sphere);
+  if (alreadyCanonical) return reading;
+  return { ...reading, spheres: sorted };
+}
+
 export async function listReadingsForSubAccount(
   subAccountId: string,
   limit = 50,
@@ -387,7 +424,7 @@ export async function listReadingsForSubAccount(
   const readings = snap.docs.map(
     (d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading,
   );
-  return Promise.all(readings.map(withDerivedVariableArrows));
+  return Promise.all(readings.map((r) => withDerivedVariableArrows(r).then(withCanonicalSphereOrder)));
 }
 
 /**
@@ -407,5 +444,5 @@ export async function getReadingById(
   if (!snap.exists) return null;
   const reading = { id: snap.id, ...snap.data() } as EnergeticDecoderReading;
   if (reading.subAccountId !== subAccountId) return null;
-  return withDerivedVariableArrows(reading);
+  return withCanonicalSphereOrder(await withDerivedVariableArrows(reading));
 }

@@ -150,7 +150,33 @@ export function defaultEnergeticDecoderReportConfig(): EnergeticDecoderReportCon
   };
 }
 
-/** Sphere → sequence membership, used to filter a reading's spheres by the report config above. */
+/**
+ * Sphere → sequence membership, used to filter a reading's spheres by the
+ * report config above (Set-membership only today, so this constant's own
+ * order was never functionally load-bearing), and as the per-sequence
+ * building blocks of the real canonical sphere order (see
+ * GENE_KEYS_CANONICAL_SPHERE_ORDER below).
+ *
+ * PEARL_SEQUENCE_SPHERES order fixed 2026-08-10 — was
+ * Vocation/Brand/Culture/Pearl (this file's own original, arbitrary
+ * order), found stale while auditing every place sphere order is
+ * declared after fixing the same issue in gene-keys.ts's own `raw`
+ * array. Verified against genekeys.com's own Pearl Sequence page:
+ * "the Vocation, Culture, Brand and Pearl."
+ */
 export const ACTIVATION_SEQUENCE_SPHERES = ["Life's Work", "Evolution", "Radiance", "Purpose"] as const;
 export const VENUS_SEQUENCE_SPHERES = ["Attraction", "IQ", "EQ", "SQ"] as const;
-export const PEARL_SEQUENCE_SPHERES = ["Vocation", "Brand", "Culture", "Pearl"] as const;
+export const PEARL_SEQUENCE_SPHERES = ["Vocation", "Culture", "Brand", "Pearl"] as const;
+
+/**
+ * The full 12-sphere canonical Golden Path order — single source of truth
+ * for the read-time normalization fallback in energetic-decoder-service.ts
+ * (readings saved before the 2026-08-10 Pearl Sequence reorder). Built
+ * from the 3 sequence constants above rather than duplicated, so fixing
+ * order in one place can't leave the other silently stale again.
+ */
+export const GENE_KEYS_CANONICAL_SPHERE_ORDER = [
+  ...ACTIVATION_SEQUENCE_SPHERES,
+  ...VENUS_SEQUENCE_SPHERES,
+  ...PEARL_SEQUENCE_SPHERES,
+] as const;
