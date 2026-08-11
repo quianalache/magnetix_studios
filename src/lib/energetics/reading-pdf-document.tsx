@@ -15,7 +15,7 @@ import {
   Path,
   StyleSheet,
 } from "@react-pdf/renderer";
-import type { HumanDesignProfile } from "./human-design";
+import type { HumanDesignProfile, LocalSkillEntry } from "./human-design";
 import { CENTERS, CENTER_LABELS, CHANNELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "./human-design-chart-layout";
 import { GATE_WHEEL_ORDER } from "./gate-data";
@@ -1057,17 +1057,15 @@ export function ReadingPdfDocument({
               </View>
             )}
 
-            {humanDesign.variables && humanDesign.variables.skills.length > 0 && (
+            {humanDesign.skills && (
               <View>
                 <Text style={styles.centerLabel}>Skills &amp; Attributes</Text>
-                <View style={styles.blockGrid}>
-                  {humanDesign.variables.skills.map((s, i) => (
-                    <View key={`${s.name}-${i}`} style={styles.block}>
-                      <Text style={styles.blockTitle}>{s.name}</Text>
-                      {s.description && <Text style={styles.blockText}>{s.description}</Text>}
-                    </View>
-                  ))}
-                </View>
+                {humanDesign.skills.framingLine && (
+                  <Text style={[styles.para, { fontSize: 8, fontStyle: "italic" }]}>{humanDesign.skills.framingLine}</Text>
+                )}
+                <SkillLayerBlock title="Core Strengths" entries={humanDesign.skills.coreStrengths} />
+                <SkillLayerBlock title="Signature Talents" entries={humanDesign.skills.signatureTalents} />
+                <SkillLayerBlock title="Natural Gifts" entries={humanDesign.skills.naturalGifts} />
               </View>
             )}
 
@@ -1211,6 +1209,33 @@ function VariableBlock({ label, field }: { label: string; field: { value: string
     <View style={styles.block}>
       <Text style={styles.blockTitle}>{label}: {field.value}</Text>
       {field.description && <Text style={styles.blockText}>{field.description}</Text>}
+    </View>
+  );
+}
+
+/**
+ * One layer of the local Skills & Attributes section (Core Strengths /
+ * Signature Talents / Natural Gifts) — mirrors reading-summary.tsx's
+ * SkillLayerList for web. See human-design-skills-service.ts for how each
+ * layer's entries are chosen and composed. Renders nothing when a person
+ * has no entries for a layer.
+ */
+function SkillLayerBlock({ title, entries }: { title: string; entries: LocalSkillEntry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <View>
+      <Text style={[styles.centerLabel, { fontSize: 7, color: "#6b6b76", marginTop: 4, marginBottom: 2 }]}>{title}</Text>
+      <View style={styles.blockGrid}>
+        {entries.map((entry, i) => (
+          <View key={`${entry.headline}-${i}`} style={styles.block}>
+            <Text style={styles.blockTitle}>
+              {entry.headline}
+              {entry.meta ? ` (${entry.meta})` : ""}
+            </Text>
+            {entry.description && <Text style={styles.blockText}>{entry.description}</Text>}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }

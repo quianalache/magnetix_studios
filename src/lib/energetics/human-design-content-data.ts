@@ -14,6 +14,13 @@ import type { CenterKey } from "./human-design-data";
  * (36 of them) — the channel NAME, gate pair, and connected centers are
  * all real/correct (human-design-data.ts), just no prose write-up yet.
  * Flagged rather than filled with thin one-liners; a real fast-follow.
+ *
+ * CenterContent.strengthHeadline (2026-08-11) — original, written fresh
+ * for this file — feeds the local "Core Strengths" layer of the Magnetix
+ * Skills & Attributes replacement (human-design-skills-service.ts), which
+ * replaced Bodygraph's paid BusinessCompetencesAndQualities field. Not a
+ * reproduction of their wording or algorithm — a new interpretation built
+ * on this file's own already-existing CENTER_CONTENT.definedText.
  */
 
 /**
@@ -127,6 +134,14 @@ export interface CenterContent {
   center: CenterKey;
   definedText: string;
   undefinedText: string;
+  /**
+   * Short (2-4 word) strength label for this Center when defined — added
+   * 2026-08-11 as the headline for the local "Core Strengths" layer of the
+   * Magnetix Skills & Attributes replacement (see human-design-skills-
+   * service.ts). Only meaningful for defined Centers; not used when a
+   * Center is open, so there's no "undefined" counterpart to author.
+   */
+  strengthHeadline: string;
 }
 
 export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
@@ -136,6 +151,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A consistent source of inspiration and mental pressure — questions and ideas that press outward reliably, on their own rhythm.",
     undefinedText:
       "Takes in and amplifies the mental pressure and questions of others — can feel like constant inspiration, or like never-ending borrowed anxiety, depending on the company kept.",
+    strengthHeadline: "Ideation & Inspiration",
   },
   ajna: {
     center: "ajna",
@@ -143,6 +159,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A fixed, consistent way of processing and forming certainty — opinions and conclusions that hold steady over time, for better or worse.",
     undefinedText:
       "Flexible, adaptable thinking that can see many sides — but certainty borrowed from whoever's nearby, so opinions can feel fixed in the moment and shift entirely later.",
+    strengthHeadline: "Analysis & Conviction",
   },
   throat: {
     center: "throat",
@@ -150,6 +167,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A reliable channel for turning energy into expression, action, or manifestation — consistent access to speaking and doing.",
     undefinedText:
       "Expression that amplifies whatever energy is currently running through the rest of the chart — can be the loudest voice in the room or go completely silent, depending on what's defined nearby and who's around.",
+    strengthHeadline: "Communication & Execution",
   },
   g: {
     center: "g",
@@ -157,6 +175,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A fixed sense of identity and direction — a consistent sense of self and where life is headed, not easily shaken by circumstance.",
     undefinedText:
       "Identity and direction that shift with environment and relationships — not a flaw, but a real invitation to let life's direction unfold rather than forcing a fixed self-image.",
+    strengthHeadline: "Direction & Identity",
   },
   heart: {
     center: "heart",
@@ -164,6 +183,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "Reliable willpower and self-worth — consistent capacity to commit, compete, and follow through on material promises.",
     undefinedText:
       "No consistent willpower to prove anything — the trap is over-proving self-worth to others; the gift, once seen, is not needing to.",
+    strengthHeadline: "Willpower & Commitment",
   },
   sacral: {
     center: "sacral",
@@ -171,6 +191,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "Sustainable, renewable life-force energy — the body's own engine for work and generative energy, day after day.",
     undefinedText:
       "No sustainable life-force engine of its own — takes in and amplifies the Sacral energy of whoever's around, which is exactly why knowing when to stop matters here more than anywhere else.",
+    strengthHeadline: "Stamina & Follow-Through",
   },
   solarplexus: {
     center: "solarplexus",
@@ -178,6 +199,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A built-in emotional wave — clarity is never immediate here, it arrives over time as the wave moves through highs and lows.",
     undefinedText:
       "Takes in and amplifies the emotional atmosphere of others — real emotional sensitivity, easily mistaken for having emotional authority when the wave actually belongs to someone else.",
+    strengthHeadline: "Emotional Depth & Patience",
   },
   spleen: {
     center: "spleen",
@@ -185,6 +207,7 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A consistent, well-tuned instinct for what's safe and healthy in the moment — quiet, in-the-now intuition that doesn't repeat itself.",
     undefinedText:
       "Instinct and body-awareness borrowed from the environment — can pick up on fear or health cues that aren't actually theirs, so real self-care needs more deliberate attention than it might for others.",
+    strengthHeadline: "Instinct & Risk-Sense",
   },
   root: {
     center: "root",
@@ -192,5 +215,6 @@ export const CENTER_CONTENT: Record<CenterKey, CenterContent> = {
       "A consistent, well-managed source of drive and pressure to get things done and move forward.",
     undefinedText:
       "Amplifies the pressure and urgency of whoever's nearby — can feel like a constant rush to finish or act that isn't actually coming from within.",
+    strengthHeadline: "Drive Under Pressure",
   },
 };

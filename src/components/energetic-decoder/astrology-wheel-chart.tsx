@@ -56,7 +56,9 @@ const PLANET_GLYPH: Record<string, string> = {
   jupiter: "♃", saturn: "♄", uranus: "♅", neptune: "♆", pluto: "♇",
   // North/South Node + Lilith — added 2026-08-09, real free calculations (see gate-wheel.ts).
   northNode: "☊", southNode: "☋", lilith: "⚸",
-  // Chiron — added 2026-08-09, from Bodygraph's API (see bodygraph-api.ts); only present when that call succeeded.
+  // Chiron — added 2026-08-09 from Bodygraph's API, moved 2026-08-11 to a
+  // free local Swiss Ephemeris calc (swiss-ephemeris.ts's chironPlacement);
+  // only present when that calc succeeded (WASM init, etc.).
   chiron: "⚷",
 };
 

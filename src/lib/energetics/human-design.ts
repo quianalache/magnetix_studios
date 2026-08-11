@@ -9,9 +9,8 @@ import {
   parseBirthToUtc,
   type WallClockBirthInput,
 } from "./gate-wheel";
-import type { HumanDesignVariables } from "./bodygraph-api";
-import type { ComputedVariableArrows } from "./human-design-variables";
-import { resolveIncarnationCross } from "./incarnation-cross-data";
+import type { HumanDesignVariables, ComputedVariableArrows } from "./human-design-variables";
+import { resolveIncarnationCross, type IncarnationCrossAngle } from "./incarnation-cross-data";
 import {
   CENTERS,
   CHANNELS,
@@ -226,6 +225,40 @@ const SIGNATURE_BY_TYPE: Record<HdType, { signature: string; notSelfTheme: strin
   "Reflector": { signature: "Surprise", notSelfTheme: "Disappointment", strategy: "Wait a Lunar Cycle" },
 };
 
+/**
+ * One entry in any layer of the local Skills & Attributes replacement —
+ * see human-design-skills-service.ts. `meta` is optional supplementary
+ * context (which Center/gate pair/sphere this came from) the UI can show
+ * as a small caption; `headline`/`description` are the two fields every
+ * layer renders.
+ */
+export interface LocalSkillEntry {
+  headline: string;
+  description: string;
+  meta?: string;
+}
+
+/**
+ * The Magnetix-native Skills & Attributes replacement (2026-08-11) —
+ * deterministic, entirely chart-derived, built from Centers/Channels/
+ * Gates this engine already computes and content this codebase already
+ * owns (CENTER_CONTENT, CHANNEL_NAMES, DEFAULT_GATE_CONTENT, GENE_KEYS).
+ * Replaces Bodygraph's paid, proprietary BusinessCompetencesAndQualities
+ * field — not a reproduction of their algorithm or wording, a new,
+ * original interpretation. See human-design-skills-service.ts for the
+ * actual composition logic.
+ */
+export interface LocalSkillsSection {
+  /** One per defined Center (human-design-content-data.ts's strengthHeadline + definedText). */
+  coreStrengths: LocalSkillEntry[];
+  /** One per defined Channel (CHANNEL_NAMES headline, description composed from its 2 gates' giftText). */
+  signatureTalents: LocalSkillEntry[];
+  /** The 4 Activation Sequence gates — Life's Work/Evolution/Radiance/Purpose (GENE_KEYS gift word + DEFAULT_GATE_CONTENT giftText). */
+  naturalGifts: LocalSkillEntry[];
+  /** Incarnation Cross name + its angle's framing blurb (incarnation-cross-data.ts's CROSS_ANGLE_CONTENT) — null only if incarnationCross itself is null. */
+  framingLine: string | null;
+}
+
 export interface HumanDesignProfile {
   type: HdType;
   authority: HdAuthority;
@@ -239,6 +272,10 @@ export interface HumanDesignProfile {
   designDateUtc: string;
   /** e.g. "Right Angle Cross of Rulership (47/22 | 45/26)" — real 192-entry lookup, see incarnation-cross-data.ts. Null only if Sun/Earth activations are somehow missing. */
   incarnationCross: string | null;
+  /** Just the cross name, e.g. "Rulership" (no angle/gate-numbers prefix) — same lookup as incarnationCross above, the plain-name half of it, exposed 2026-08-11 for the Skills section's framing line. */
+  incarnationCrossName: string | null;
+  /** Right Angle / Left Angle / Juxtaposition — same lookup as incarnationCross above, exposed 2026-08-11 alongside incarnationCrossName for the same reason. */
+  incarnationCrossAngle: IncarnationCrossAngle | null;
   activatedGates: number[];
   definedCenters: CenterKey[];
   openCenters: CenterKey[];
@@ -246,12 +283,11 @@ export interface HumanDesignProfile {
   personality: HdActivation[];
   design: HdActivation[];
   /**
-   * The 6 Variables + Skills/Attributes — from Bodygraph's paid API
-   * (2026-08-09), not this free local engine (see bodygraph-api.ts for
-   * why). Populated by the caller (energetic-decoder-service.ts) after
-   * calculateHumanDesignProfile runs, since this function stays a pure,
-   * synchronous, free calculation — undefined when the API key is unset
-   * or the call fails, never a broken reading.
+   * The 6 Variables (value + description) — fully local since 2026-08-11
+   * (values since 2026-08-10). Populated by the caller
+   * (energetic-decoder-service.ts) after calculateHumanDesignProfile runs,
+   * since this function stays a pure, synchronous, free calculation —
+   * undefined only if Human Design was skipped in the report config.
    */
   variables?: HumanDesignVariables;
   /**
@@ -264,8 +300,15 @@ export interface HumanDesignProfile {
    * skipped (Human Design not included in the report).
    */
   variableArrows?: ComputedVariableArrows;
-  /** Bodygraph's own rendered chart SVG — see bodygraph-api.ts. Same "populated by the caller after the fact" contract as `variables` above; undefined falls back to this app's own HumanDesignChart component. */
-  bodygraphSvg?: string;
+  /**
+   * Skills & Attributes, Magnetix-native and fully local since 2026-08-11
+   * — see LocalSkillsSection above. Same "populated by the caller after
+   * the fact" contract as `variables`: set by energetic-decoder-service.ts
+   * via human-design-skills-service.ts's computeLocalSkills(), undefined
+   * only if Human Design was skipped in the report config (never because
+   * of a failed external call — there isn't one anymore).
+   */
+  skills?: LocalSkillsSection;
 }
 
 export function calculateHumanDesignProfile(
@@ -296,10 +339,11 @@ export function calculateHumanDesignProfile(
   const dSun = design.find((a) => a.body === "sun");
   const dEarth = design.find((a) => a.body === "earth");
   const profile = pSun && dSun ? `${pSun.line}/${dSun.line}` : null;
-  const incarnationCross =
+  const crossResult =
     pSun && pEarth && dSun && dEarth
-      ? resolveIncarnationCross(profile, pSun.gate, pEarth.gate, dSun.gate, dEarth.gate)?.label ?? null
+      ? resolveIncarnationCross(profile, pSun.gate, pEarth.gate, dSun.gate, dEarth.gate)
       : null;
+  const incarnationCross = crossResult?.label ?? null;
 
   const groups = countDefinitionGroups(definedCentersSet, definedChannels);
   const type = determineType(definedCentersSet, definedChannels);
@@ -315,6 +359,8 @@ export function calculateHumanDesignProfile(
     strategy,
     designDateUtc: designTime.toISOString(),
     incarnationCross,
+    incarnationCrossName: crossResult?.name ?? null,
+    incarnationCrossAngle: crossResult?.angle ?? null,
     activatedGates: [...gateSet].sort((a, b) => a - b),
     definedCenters,
     openCenters,

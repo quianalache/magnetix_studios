@@ -1,5 +1,5 @@
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
-import type { HumanDesignProfile } from "@/lib/energetics/human-design";
+import type { HumanDesignProfile, LocalSkillEntry } from "@/lib/energetics/human-design";
 import { CENTERS, CENTER_LABELS } from "@/lib/energetics/human-design-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "@/lib/energetics/human-design-content-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
@@ -37,13 +37,11 @@ import type { ChartDesign } from "@/types/chart-design";
  * these were sitting right there the whole time, just one click deeper
  * than the flat field list this file's earlier audit stopped at).
  *
- * What's still genuinely unsolved: WHICH of each pair applies to a given
- * person. That determination needs sub-line color/tone/base resolution
- * this app doesn't calculate yet, and no public documentation of the
- * exact rule has been found (checked both her real HD books — neither
- * covers it, it's Ra's separate PHS teaching, not in Bodygraph's tool
- * either — every "HD API Data" node in her own downloaded custom-property
- * files pulls from the paid API, not a documented formula).
+ * WHICH of each pair applies to a given person is fully solved now, as of
+ * 2026-08-10 — real, free, local (human-design-variables.ts), no paid API
+ * involved. This vocabulary-only list is only ever shown as a fallback for
+ * genuinely ancient readings created before that shipped (see
+ * VARIABLE_FIELDS below for the real per-person resolution).
  */
 const VARIABLES: { label: string; values: string[] }[] = [
   { label: "Digestion", values: ["Consecutive", "Alternating", "Open", "Closed", "Hot", "Cold", "Calm", "Nervous", "High", "Low", "Direct", "InDirect"] },
@@ -54,7 +52,7 @@ const VARIABLES: { label: string; values: string[] }[] = [
   { label: "Environment", values: ["Caves", "Markets", "Kitchens", "Mountains", "Valleys", "Shores"] },
 ];
 
-/** Real, calculated per-reading — Bodygraph API connected 2026-08-09 (see bodygraph-api.ts). Falls back to the vocabulary-only list above when a reading has no `variables` (created before the API was connected, or the call failed for that one reading). */
+/** Real, calculated per-reading — fully local since 2026-08-10 (values) / 2026-08-11 (descriptions), no paid API. Falls back to the vocabulary-only list above only for readings created before local Variable calculation shipped. */
 type VariableFieldKey = "digestion" | "sense" | "designSense" | "motivation" | "perspective" | "environment";
 const VARIABLE_FIELDS: { label: string; key: VariableFieldKey }[] = [
   { label: "Digestion", key: "digestion" },
@@ -79,6 +77,31 @@ function formatDesignDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * One layer of the local Skills & Attributes section (Core Strengths /
+ * Signature Talents / Natural Gifts) — see human-design-skills-service.ts
+ * for how each layer's entries are chosen and composed. Renders nothing
+ * when a person has no entries for a layer (a chart with zero defined
+ * Channels, for instance, would have no Signature Talents).
+ */
+function SkillLayerList({ title, entries }: { title: string; entries: LocalSkillEntry[] }) {
+  if (entries.length === 0) return null;
+  return (
+    <div className="mb-2 last:mb-0">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{title}</p>
+      <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
+        {entries.map((entry, i) => (
+          <span key={`${entry.headline}-${i}`}>
+            <span className="font-medium text-foreground">{entry.headline}</span>
+            {entry.meta && <span className="text-muted-foreground/60"> ({entry.meta})</span>}
+            {entry.description && <span className="text-muted-foreground"> — {entry.description}</span>}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
@@ -153,14 +176,14 @@ export function HumanDesignSummary({
         columns, so that table would just be showing the same numbers
         twice.
 
-        Deliberately does NOT fall back to profile.bodygraphSvg (Bodygraph's
-        own rendered image) the way the old card did — her explicit ask:
-        "make our local full chart the primary presentation... stop using
-        the external rendered image as the main Human Design chart in this
-        view." The API call and profile.bodygraphSvg itself are untouched
-        everywhere else (energetic-decoder-service.ts, bodygraph-api.ts) —
-        this is a display choice in this one file, not a removal of the
-        integration.
+        Originally just deliberately didn't fall back to Bodygraph's own
+        rendered image (profile.bodygraphSvg) the way the old card did —
+        her explicit ask: "make our local full chart the primary
+        presentation... stop using the external rendered image as the main
+        Human Design chart in this view." As of 2026-08-11 there's no
+        integration left to fall back to either way: bodygraph-api.ts is
+        deleted, the field itself is gone from HumanDesignProfile, this
+        card was always local-only in practice, just now also in the type.
 
         No outer "rounded-2xl border bg-card p-4" wrapper the way every
         other section here has — HumanDesignFullChart already supplies its
@@ -268,25 +291,23 @@ export function HumanDesignSummary({
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground/80">
                 These are the real possible values — which one applies to this specific person isn&apos;t
-                calculated for this reading (generated before the Bodygraph API was connected, or the call failed).
+                calculated for this reading (generated before local Variable calculation shipped, 2026-08-10).
               </p>
             </>
           )}
         </div>
 
-        {profile.variables && profile.variables.skills.length > 0 && (
+        {profile.skills && (
           <div className="mt-3 border-t pt-3">
             <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Skills &amp; Attributes
             </p>
-            <div className="grid grid-cols-1 gap-1.5 text-xs sm:grid-cols-2">
-              {profile.variables.skills.map((s, i) => (
-                <span key={`${s.name}-${i}`}>
-                  <span className="font-medium text-foreground">{s.name}</span>
-                  {s.description && <span className="text-muted-foreground"> — {s.description}</span>}
-                </span>
-              ))}
-            </div>
+            {profile.skills.framingLine && (
+              <p className="mb-2 text-[11px] italic leading-relaxed text-muted-foreground">{profile.skills.framingLine}</p>
+            )}
+            <SkillLayerList title="Core Strengths" entries={profile.skills.coreStrengths} />
+            <SkillLayerList title="Signature Talents" entries={profile.skills.signatureTalents} />
+            <SkillLayerList title="Natural Gifts" entries={profile.skills.naturalGifts} />
           </div>
         )}
       </div>

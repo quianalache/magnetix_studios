@@ -78,16 +78,18 @@ export async function trueNodeLongitudeHighPrecision(date: Date): Promise<number
 
 /**
  * Chiron's longitude + retrograde status, degrees 0-360 — added 2026-08-11
- * to replace the paid Bodygraph API call for this one body (see
- * bodygraph-api.ts's fetchBodygraphChiron, left in place but no longer
- * called from the reading pipeline). SE_CHIRON draws on the same bundled
- * `seas_18.se1` asteroid ephemeris file already shipped in this package's
- * wasm data for the Node calc above — no new dependency, no new data file.
+ * to replace the paid Bodygraph API call for this one body (bodygraph-
+ * api.ts's fetchBodygraphChiron — dormant that same day, then deleted
+ * entirely alongside the rest of the Bodygraph integration, also
+ * 2026-08-11). SE_CHIRON draws on the same bundled `seas_18.se1` asteroid
+ * ephemeris file already shipped in this package's wasm data for the Node
+ * calc above — no new dependency, no new data file.
  *
- * Verified directly against Bodygraph's own live astro-data API across 5
- * real instants spanning 1975-2010 (including Q's real chart): max
- * disagreement 21.6 arcseconds (0.006°), an order of magnitude tighter than
- * anything the renderer or a human reading it would notice.
+ * Verified directly against Bodygraph's own live astro-data API — before
+ * that integration was removed — across 5 real instants spanning
+ * 1975-2010 (including Q's real chart): max disagreement 21.6 arcseconds
+ * (0.006°), an order of magnitude tighter than anything the renderer or a
+ * human reading it would notice.
  *
  * Retrograde uses the same same-day finite-difference approach
  * astrology.ts's computePlacements already uses for every other body — one

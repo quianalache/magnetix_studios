@@ -13,13 +13,12 @@ import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { resolveGateContent } from "@/lib/server/energetic-decoder-gate-content-service";
 import {
   resolveReadingContent,
-  cacheVariableDefault,
   resolveVariableContent,
   type VariableCategory,
 } from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
-import { fetchBodygraphVariables, type HumanDesignVariables } from "@/lib/energetics/bodygraph-api";
-import { computeHumanDesignVariables } from "@/lib/energetics/human-design-variables";
+import { computeHumanDesignVariables, type HumanDesignVariables } from "@/lib/energetics/human-design-variables";
+import { computeLocalSkills } from "@/lib/server/human-design-skills-service";
 import { chironPlacement } from "@/lib/energetics/swiss-ephemeris";
 import { parseBirthToUtc } from "@/lib/energetics/gate-wheel";
 import {
@@ -113,87 +112,43 @@ export async function createEnergeticDecoderReading(
     : null;
 
   // The 6 Variables (Digestion/Sense/Design Sense/Motivation/Perspective/
-  // Environment) — free and local as of 2026-08-10, no paid API required.
-  // Was a genuine gap (2026-08-09: "aren't published anywhere free"), until
-  // she supplied the real Color/Tone→word mapping and a file-backed Swiss
-  // Ephemeris fix for the one part that needed higher precision (true lunar
-  // Node — see swiss-ephemeris.ts). Verified against 5 independent real
-  // Bodygraph charts before trusting it here — 30/30 field matches,
-  // including a deliberate Tone-boundary stress case (see
-  // human-design-variables.ts for the full provenance note).
+  // Environment) — free and local, values since 2026-08-10, descriptions
+  // since 2026-08-11 (all 42 real value/description pairs backfilled from
+  // Bodygraph's own API into the local content cache before that live
+  // call was ever removed — see energetic-decoder-chart-content-service.ts
+  // and human-design-content-data.ts). No paid API involved in generating
+  // a reading anymore for any of this.
   //
-  // Bodygraph's paid API is still called below, but now ONLY for what's
-  // genuinely still exclusive to it: the real rendered chart image, Skills
-  // & Attributes, and (best-effort) a real description paragraph per
-  // Variable value — never for the value word itself anymore, and (as of
-  // 2026-08-11) no longer for Decision-Making Strategy text either: an
-  // audit found it was never rendered anywhere, and Bodygraph's own field
-  // for it is empty in every real response anyway (see bodygraph-api.ts's
-  // fetchBodygraphVariables doc). The actual decision-making guidance
-  // this app displays already comes from real local content —
-  // TYPE_CONTENT[type].strategy + AUTHORITY_CONTENT[authority].description
-  // (human-design-content-data.ts), unaffected by any of this. Best-effort
-  // throughout: the reading still saves normally, with real Variable
-  // words, even if the API key is unset, the call fails, or times out.
+  // Skills & Attributes is local too as of 2026-08-11 — Magnetix's own
+  // interpretation (human-design-skills-service.ts), replacing Bodygraph's
+  // paid, proprietary BusinessCompetencesAndQualities field entirely, not
+  // reproducing its algorithm or wording. Decision-Making Strategy text
+  // was dropped a day earlier, once found unused — that guidance already
+  // comes from real local content, TYPE_CONTENT[type].strategy +
+  // AUTHORITY_CONTENT[authority].description (human-design-content-data.ts).
+  //
+  // fetchBodygraphVariables() and the rest of bodygraph-api.ts are gone
+  // (2026-08-11) — nothing in this pipeline calls Bodygraph anymore.
   if (rawHumanDesign) {
-    const [localVariables, apiVariables] = await Promise.all([
-      computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone }),
-      fetchBodygraphVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone }),
-    ]);
+    const localVariables = await computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
 
-    if (apiVariables) {
-      // Real rendered chart from Bodygraph's own renderer, not this app's
-      // hand-drawn HumanDesignChart — her direct ask (2026-08-09): "I don't
-      // need to worry about you drawing something... not generating an
-      // aesthetically pleasing bodygraph."
-      if (apiVariables.chartSvg) rawHumanDesign.bodygraphSvg = apiVariables.chartSvg;
-    }
-
-    const fieldEntries: { category: VariableCategory; local: string; apiField: keyof HumanDesignVariables }[] = [
-      { category: "digestion", local: localVariables.digestion, apiField: "digestion" },
-      { category: "sense", local: localVariables.sense, apiField: "sense" },
-      { category: "designSense", local: localVariables.designSense, apiField: "designSense" },
-      { category: "motivation", local: localVariables.motivation, apiField: "motivation" },
-      { category: "perspective", local: localVariables.perspective, apiField: "perspective" },
-      { category: "environment", local: localVariables.environment, apiField: "environment" },
+    const fieldEntries: { category: VariableCategory; local: string }[] = [
+      { category: "digestion", local: localVariables.digestion },
+      { category: "sense", local: localVariables.sense },
+      { category: "designSense", local: localVariables.designSense },
+      { category: "motivation", local: localVariables.motivation },
+      { category: "perspective", local: localVariables.perspective },
+      { category: "environment", local: localVariables.environment },
     ];
     const resolvedFields = await Promise.all(
-      fieldEntries.map(async ({ category, local, apiField }) => {
-        // Real description text is still only available from Bodygraph's
-        // API — cache it once platform-wide the first time this exact
-        // value is actually seen, same "own the wording" pattern every
-        // other field here already follows. If the API disagrees with our
-        // own computed value (hasn't happened once in 30/30 real-chart
-        // testing), trust the description that actually matches OUR word,
-        // never silently relabel our value to match theirs.
-        const apiValue = apiVariables?.[apiField] as { value: string; description: string } | undefined;
-        const description = apiValue && apiValue.value === local ? apiValue.description : "";
-        if (description) await cacheVariableDefault(category, local, description);
+      fieldEntries.map(async ({ category, local }) => {
         const override = await resolveVariableContent(input.subAccountId, category, local);
-        return [category, { value: local, description: override.description || description }] as const;
+        return [category, { value: local, description: override.description }] as const;
       }),
     );
-    const resolvedVariables = Object.fromEntries(resolvedFields) as unknown as Omit<
-      HumanDesignVariables,
-      "skills" | "chartSvg"
-    >;
+    rawHumanDesign.variables = Object.fromEntries(resolvedFields) as unknown as HumanDesignVariables;
 
-    let skills: HumanDesignVariables["skills"] = [];
-    if (apiVariables) {
-      skills = apiVariables.skills;
-      await Promise.all(
-        skills.map(async (skill) => {
-          await cacheVariableDefault("skill", skill.name, skill.description);
-          const override = await resolveVariableContent(input.subAccountId, "skill", skill.name);
-          if (override.description) skill.description = override.description;
-        }),
-      );
-    }
-
-    rawHumanDesign.variables = {
-      ...resolvedVariables,
-      skills,
-    };
+    rawHumanDesign.skills = await computeLocalSkills(input.subAccountId, rawHumanDesign);
 
     // The 4 Variable arrow directions (+ their underlying Color/Tone) —
     // verified 2026-08-10 against the same 5 real reference charts used
@@ -213,12 +168,12 @@ export async function createEnergeticDecoderReading(
 
   // Chiron (2026-08-09, local since 2026-08-11) — was Bodygraph's API,
   // now the free local Swiss Ephemeris calc (swiss-ephemeris.ts's
-  // chironPlacement, verified against Bodygraph's live values first —
-  // see that function's doc). Same best-effort contract as before: any
+  // chironPlacement, verified against Bodygraph's live values first, back
+  // when there still was a Bodygraph integration to verify against — see
+  // that function's doc). Same best-effort contract as before: any
   // failure here (WASM init, etc.) just means the chart has no Chiron
   // placement, not a broken reading, same "real field or absent" rule as
-  // the Variables above. fetchBodygraphChiron itself is untouched in
-  // bodygraph-api.ts but no longer called from this pipeline.
+  // the Variables above.
   const chiron = reportConfig.includeAstrology
     ? await chironPlacement(parseBirthToUtc({ date: birthDate, time: birthTime, timeZone: place.timeZone })).catch(() => null)
     : null;

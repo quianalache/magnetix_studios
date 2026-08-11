@@ -46,6 +46,8 @@ const FIELD_LABELS: Record<string, string> = {
   undefinedText: "When undefined",
   theme: "Theme",
   name: "Name",
+  strengthHeadline: "Strength headline (Skills & Attributes)",
+  framing: "Framing line (Skills & Attributes)",
 };
 
 const GROUP_ORDER = [
@@ -60,7 +62,8 @@ const GROUP_ORDER = [
   "Human Design — Motivation",
   "Human Design — Perspective",
   "Human Design — Environment",
-  "Human Design — Skills & Attributes",
+  "Human Design — Cross Angles",
+  "Human Design — Skills & Attributes (legacy, unused)",
   "Astrology — Signs",
   "Astrology — Houses",
   "Astrology — Aspect Types",
@@ -69,6 +72,10 @@ const GROUP_ORDER = [
 const CATEGORY_GROUP_LABEL: Record<string, string> = {
   type: "Human Design — Types",
   authority: "Human Design — Authorities",
+  // Centers' strengthHeadline field (2026-08-11) feeds the local Skills &
+  // Attributes section's "Core Strengths" layer — see
+  // human-design-skills-service.ts. Same item as before, one more
+  // editable field, no new group needed.
   center: "Human Design — Centers",
   line: "Human Design — Profile Lines",
   digestion: "Human Design — Digestion",
@@ -77,7 +84,18 @@ const CATEGORY_GROUP_LABEL: Record<string, string> = {
   motivation: "Human Design — Motivation",
   perspective: "Human Design — Perspective",
   environment: "Human Design — Environment",
-  skill: "Human Design — Skills & Attributes",
+  // Right Angle / Left Angle / Juxtaposition — added 2026-08-11, feeds the
+  // Skills section's optional framing line. Only 3 possible keys.
+  crossAngle: "Human Design — Cross Angles",
+  // Bodygraph-sourced Skills & Attributes entries, cached here while that
+  // integration was still live — orphaned as of 2026-08-11: Skills &
+  // Attributes is now the Magnetix-native, chart-derived section built
+  // from Centers/Channels/Gates (human-design-skills-service.ts), which
+  // doesn't read this category at all. Left in place (not deleted, per
+  // her explicit instruction not to delete bodygraphVariableDefaults) so
+  // nothing breaks for anyone who already customized one of these, but
+  // editing an item here no longer changes any reading.
+  skill: "Human Design — Skills & Attributes (legacy, unused)",
   sign: "Astrology — Signs",
   house: "Astrology — Houses",
   aspect: "Astrology — Aspect Types",

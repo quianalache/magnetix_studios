@@ -279,3 +279,34 @@ export function resolveIncarnationCross(
     label: `${ANGLE_LABEL[angle]} of ${entry.name} (${pSun}/${pEarth} | ${dSun}/${dEarth})`,
   };
 }
+
+export interface CrossAngleContent {
+  angle: IncarnationCrossAngle;
+  /** One short framing sentence, standard Human Design teaching on what each Cross angle means about the direction a life's fulfillment tends to run in. Added 2026-08-11 for the local Skills & Attributes replacement's optional framing line (human-design-skills-service.ts) — only 3 possible values, so this stays 3 entries, not a per-Cross-name essay. */
+  framing: string;
+}
+
+/**
+ * Right Angle / Left Angle / Juxtaposition — standard Human Design
+ * teaching on what the Cross *angle* itself means (distinct from the 192
+ * individual Cross names above, which are gate-pair-specific). Right Angle
+ * crosses run personal-first (fulfillment through living one's own
+ * process); Left Angle crosses run transpersonal (fulfillment through
+ * role and contribution to others); Juxtaposition is the rare single
+ * profile (4/1) that fuses both at once. Original wording, written fresh
+ * for this file, not sourced from Bodygraph.
+ */
+export const CROSS_ANGLE_CONTENT: Record<IncarnationCrossAngle, CrossAngleContent> = {
+  rightAngle: {
+    angle: "rightAngle",
+    framing: "A personal life theme — fulfillment comes from living out your own process first; the impact on others follows from that, not the other way around.",
+  },
+  leftAngle: {
+    angle: "leftAngle",
+    framing: "A transpersonal life theme — your path is genuinely interwoven with others' needs; fulfillment comes through role and contribution more than solo agenda.",
+  },
+  juxtaposition: {
+    angle: "juxtaposition",
+    framing: "A rare, singular life theme — the only profile that fuses personal and transpersonal direction into one, rather than running toward either.",
+  },
+};

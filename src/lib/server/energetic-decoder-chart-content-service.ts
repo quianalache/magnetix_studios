@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT, LINE_CONTENT } from "@/lib/energetics/human-design-content-data";
 import { CENTER_LABELS } from "@/lib/energetics/human-design-data";
 import { SIGN_CONTENT, HOUSE_CONTENT, ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
+import { CROSS_ANGLE_CONTENT, type IncarnationCrossAngle } from "@/lib/energetics/incarnation-cross-data";
 import type { HdType, HdAuthority } from "@/lib/energetics/human-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { ZodiacSign, AspectType } from "@/lib/energetics/astrology";
@@ -80,8 +81,8 @@ export interface ResolvedChartContent extends ChartContentDefault {
   isCustom: boolean;
 }
 
-/** Doc ID for one content item — colons are valid in Firestore doc IDs, and none of our keys contain one. */
-function contentId(system: ChartContentSystem, category: string, key: string): string {
+/** Doc ID for one content item — colons are valid in Firestore doc IDs, and none of our keys contain one. Exported so callers that already have a full listResolvedChartContent() result (e.g. human-design-skills-service.ts) can index into it directly instead of re-fetching via resolveOne. */
+export function contentId(system: ChartContentSystem, category: string, key: string): string {
   return `${system}:${category}:${key}`;
 }
 
@@ -122,7 +123,19 @@ function buildDefaults(variableDefaults: Map<string, { value: string; category: 
       category: "center",
       key: c.center,
       label: `${CENTER_LABELS[c.center]} Center`,
-      fields: { definedText: c.definedText, undefinedText: c.undefinedText },
+      fields: { definedText: c.definedText, undefinedText: c.undefinedText, strengthHeadline: c.strengthHeadline },
+    });
+  }
+  // Right Angle / Left Angle / Juxtaposition — added 2026-08-11 for the
+  // local Skills & Attributes replacement's optional framing line (see
+  // human-design-skills-service.ts). Only 3 possible keys.
+  for (const a of Object.values(CROSS_ANGLE_CONTENT)) {
+    defaults.push({
+      system: "hd",
+      category: "crossAngle",
+      key: a.angle,
+      label: a.angle === "rightAngle" ? "Right Angle Cross" : a.angle === "leftAngle" ? "Left Angle Cross" : "Juxtaposition Cross",
+      fields: { framing: a.framing },
     });
   }
   for (const l of Object.values(LINE_CONTENT)) {
@@ -219,7 +232,12 @@ export function resolveCenterContent(subAccountId: string, center: CenterKey) {
   return resolveOne(subAccountId, "hd", "center", center) as Promise<{
     definedText: string;
     undefinedText: string;
+    strengthHeadline: string;
   }>;
+}
+/** Right Angle / Left Angle / Juxtaposition framing text for the local Skills section's optional banner line — see human-design-skills-service.ts. */
+export function resolveCrossAngleContent(subAccountId: string, angle: IncarnationCrossAngle) {
+  return resolveOne(subAccountId, "hd", "crossAngle", angle) as Promise<{ framing: string }>;
 }
 export function resolveSignContent(subAccountId: string, sign: ZodiacSign) {
   return resolveOne(subAccountId, "astro", "sign", sign) as Promise<{ description: string }>;

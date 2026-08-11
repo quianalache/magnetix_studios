@@ -12,10 +12,12 @@ import { trueNodeLongitudeHighPrecision } from "./swiss-ephemeris";
 
 /**
  * The real, free, local Variables engine — replaces the paid Bodygraph API
- * call for 6 of the fields it was the only source for (see
- * bodygraph-api.ts's own header for why the API was added in the first
- * place). Not guessed, not reverse-engineered from Bodygraph's outputs
- * (their terms explicitly forbid that, checked directly 2026-08-09) — this
+ * call for 6 of the fields it was the only source for (added 2026-08-09
+ * because the calculation rule wasn't published anywhere free; the whole
+ * integration, including that original API, is gone as of 2026-08-11 —
+ * this file has stood on its own since 2026-08-10). Not guessed, not
+ * reverse-engineered from Bodygraph's outputs (their terms explicitly
+ * forbid that, checked directly 2026-08-09) — this
  * is the real, published Human Design "Primary Health System" substructure
  * (Gate → Line → Color → Tone → Base), verified independently against 2
  * real Bodygraph reference charts before being trusted:
@@ -40,6 +42,30 @@ import { trueNodeLongitudeHighPrecision } from "./swiss-ephemeris";
  * why Environment/Perspective didn't reproduce Bodygraph's real values
  * until this was fixed.
  */
+
+/** One resolved Variable field: the computed word + its (locally-sourced, since 2026-08-11) description text. */
+export interface HdVariableField {
+  value: string;
+  description: string;
+}
+
+/**
+ * The 6 Variables, fully resolved (value + description) — this shape used
+ * to also carry `skills`/`chartSvg` back when it lived in bodygraph-api.ts
+ * (deleted 2026-08-11 along with the rest of that integration). Skills
+ * moved to its own `HumanDesignProfile.skills` field (see
+ * human-design-skills-service.ts, the local replacement); chartSvg is
+ * gone entirely — it was never rendered anywhere, same as Astrology's
+ * copy before it.
+ */
+export interface HumanDesignVariables {
+  digestion: HdVariableField;
+  sense: HdVariableField;
+  designSense: HdVariableField;
+  motivation: HdVariableField;
+  perspective: HdVariableField;
+  environment: HdVariableField;
+}
 
 const ENVIRONMENT = ["Caves", "Markets", "Kitchens", "Mountains", "Valleys", "Shores"] as const;
 const MOTIVATION = ["Fear", "Hope", "Desire", "Need", "Guilt", "Innocence"] as const;
