@@ -25,6 +25,15 @@ import { HumanDesignChart } from "@/components/energetic-decoder/human-design-ch
  * documented convention found in NatalEngine's own source comments during
  * the arrow-rule verification turn — not invented here.
  *
+ * Arrow colors, 2026-08-10: the 2 Design-side arrows (Digestion, Environment
+ * — Design Sun/Node) use `designActivationColor`; the 2 Personality-side
+ * arrows (Motivation, Perspective — Personality Sun/Node) use
+ * `personalityActivationColor` — matching the same column each one's
+ * source activation actually lives in, rather than one shared `arrowColor`
+ * for all 4. `arrowColor` itself is now unread by this file (see its own
+ * note below) but stays on the model/service/API/UI, per her explicit
+ * "don't delete it yet."
+ *
  * Responsive via a container query (`@container`, native in this app's
  * Tailwind v4 — same pattern already used in ui/card.tsx), not a viewport
  * breakpoint: the 3-column layout only activates once THIS component
@@ -42,6 +51,9 @@ import { HumanDesignChart } from "@/components/energetic-decoder/human-design-ch
 const FALLBACK = {
   personalityActivationColor: "#18181b",
   designActivationColor: "#9a3412",
+  // Currently unread below — arrows use designActivationColor/
+  // personalityActivationColor per side instead, see header comment.
+  // Kept for backward compatibility, not deleted.
   arrowColor: "#3f3f46",
   arrowStyle: "solid" as VariableArrowStyle,
   // Currently unread below — kept for a future consumer, see chart-design.ts's header comment on why planetBoxColor is inert in both real Planet Box modes.
@@ -225,7 +237,6 @@ export function HumanDesignFullChart({
 }) {
   const personalityActivationColor = design?.personalityActivationColor || FALLBACK.personalityActivationColor;
   const designActivationColor = design?.designActivationColor || FALLBACK.designActivationColor;
-  const arrowColor = design?.arrowColor || FALLBACK.arrowColor;
   const arrowStyle = design?.arrowStyle || FALLBACK.arrowStyle;
   const planetBoxMode = design?.planetBoxMode || FALLBACK.planetBoxMode;
   // `??` not `||` — 0 is a real, legitimate "square corners" choice, not a missing value.
@@ -243,8 +254,8 @@ export function HumanDesignFullChart({
       style={{ backgroundColor }}
     >
       <div className="hidden items-center justify-between gap-4 pb-2 @5xl/hdfc:flex">
-        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
+        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 @5xl/hdfc:grid-cols-[minmax(180px,240px)_minmax(320px,480px)_minmax(180px,240px)] @5xl/hdfc:items-start">
@@ -277,16 +288,16 @@ export function HumanDesignFullChart({
       </div>
 
       <div className="hidden items-center justify-between gap-4 pt-2 @5xl/hdfc:flex">
-        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
+        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
       </div>
 
       {/* Below the 1024px container-query threshold, all 4 arrows collapse into one compact 2x2 grid under the stacked columns/chart, instead of the 2 split top/bottom rows above — same data, no crushing. */}
       <div className="grid grid-cols-2 gap-3 pt-3 @5xl/hdfc:hidden">
-        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
-        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
+        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
       </div>
     </div>
   );
