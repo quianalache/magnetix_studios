@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLearningLessonHref } from "@/lib/community/routes";
 import { listCoursesForMember } from "@/lib/server/community-classroom-service";
 import {
   CommunityShell,
@@ -23,6 +25,7 @@ export default async function ClassroomCatalogPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = {
@@ -41,7 +44,7 @@ export default async function ClassroomCatalogPage({
   });
 
   return (
-    <CommunityShell saId={saId} group={group} active="classroom" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer}>
       {courses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
           No courses yet.
@@ -107,7 +110,7 @@ export default async function ClassroomCatalogPage({
             ) : (
               <Link
                 key={c.id}
-                href={`/c/${saId}/${groupSlug}/classroom/${c.id}/${c.firstLessonId}`}
+                href={communityLearningLessonHref({ saId, pretty }, groupSlug, c.id, c.firstLessonId!)}
               >
                 {card}
               </Link>

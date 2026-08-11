@@ -130,3 +130,23 @@ export function resolvePortalOrigin(subAccount: HasCustomDomain | null | undefin
   const domain = verifiedDomain(subAccount);
   return domain ? `https://${domain}` : platformOrigin();
 }
+
+/**
+ * The Community group's public "View public page" link — same
+ * verified-domain-or-opaque-fallback choice as every other builder here.
+ * On a verified custom domain this is the clean `/communities/{slug}/about`
+ * mirror route; otherwise it's today's opaque `/c/{saId}/{slug}` route.
+ * See `src/lib/community/routes.ts` for the full set of Community link
+ * builders used once inside the app itself (this one is specifically for
+ * "what do I put on the admin's View public page button").
+ */
+export function buildCommunityGroupUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  subAccountId: string;
+  groupSlug: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/communities/${opts.groupSlug}/about`
+    : `${platformOrigin()}/c/${opts.subAccountId}/${opts.groupSlug}`;
+}

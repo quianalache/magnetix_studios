@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireMemberApi } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLoginHref, communityRootHref } from "@/lib/community/routes";
 import { listInboxServerSide } from "@/lib/server/community-dm-service";
 import {
   COMMUNITY_BG,
@@ -17,9 +19,11 @@ export default async function MessagesInboxPage({
   params: Promise<{ saId: string }>;
 }) {
   const { saId } = await params;
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
   const access = await requireMemberApi(saId);
   if (access.kind === "error") {
-    if (access.status === 401) redirect(`/c/${saId}/login`);
+    if (access.status === 401) redirect(communityLoginHref(linkBase));
     notFound();
   }
 
@@ -34,7 +38,7 @@ export default async function MessagesInboxPage({
       <header className="border-b border-[#E4E4E4] bg-white">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-3 px-4">
           <Link
-            href={`/c/${saId}`}
+            href={communityRootHref(linkBase)}
             className="flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-4 w-4" /> Community
@@ -43,7 +47,7 @@ export default async function MessagesInboxPage({
         </div>
       </header>
       <main className="mx-auto max-w-2xl px-4 py-6">
-        <DmInbox saId={saId} brand={brand} initialItems={items} />
+        <DmInbox saId={saId} pretty={pretty} brand={brand} initialItems={items} />
       </main>
     </div>
   );

@@ -8,6 +8,7 @@ import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
+import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
 export interface ClientPost {
@@ -47,6 +48,7 @@ function timeAgo(ms: number | null): string {
 
 export function FeedView({
   saId,
+  pretty = false,
   groupId,
   groupSlug,
   brand,
@@ -55,6 +57,8 @@ export function FeedView({
   initialPosts,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -172,7 +176,7 @@ export function FeedView({
               const canModerate = viewer.role === "moderator";
               const canDelete =
                 canModerate || p.authorMemberId === viewer.memberId;
-              const detail = `/c/${saId}/${groupSlug}/community/${p.id}`;
+              const detail = communityPostHref({ saId, pretty }, groupSlug, p.id);
               return (
                 <article
                   key={p.id}
@@ -189,6 +193,7 @@ export function FeedView({
                       <div className="flex items-center gap-2 text-sm">
                         <AuthorLink
                           saId={saId}
+                          pretty={pretty}
                           viewerMemberId={viewer.memberId}
                           author={p.author}
                           brand={brand}

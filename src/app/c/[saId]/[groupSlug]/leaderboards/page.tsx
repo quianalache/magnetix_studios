@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLeaderboardHref } from "@/lib/community/routes";
 import {
   getLeaderboard,
   type LeaderboardWindow,
@@ -33,6 +35,9 @@ export default async function LeaderboardsPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
+
   const sp = await searchParams;
   const win: LeaderboardWindow =
     sp.window === "30d" || sp.window === "all" ? sp.window : "7d";
@@ -54,12 +59,12 @@ export default async function LeaderboardsPage({
   });
 
   return (
-    <CommunityShell saId={saId} group={group} active="leaderboards" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="leaderboards" viewer={viewer}>
       <div className="mb-4 flex gap-1.5">
         {WINDOWS.map((w) => (
           <Link
             key={w.key}
-            href={`/c/${saId}/${groupSlug}/leaderboards?window=${w.key}`}
+            href={`${communityLeaderboardHref(linkBase, groupSlug)}?window=${w.key}`}
             className={cn(
               "rounded-full border px-3 py-1 text-xs font-medium",
               win === w.key

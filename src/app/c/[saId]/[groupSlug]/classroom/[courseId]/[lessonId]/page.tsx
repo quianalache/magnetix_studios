@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLearningCourseHref, communityLearningHref } from "@/lib/community/routes";
 import {
   getCourseTree,
   getEnrollment,
@@ -37,8 +39,10 @@ export default async function LessonPlayerPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
   const { group, member, membership } = access;
-  const catalog = `/c/${saId}/${groupSlug}/classroom`;
+  const catalog = communityLearningHref(linkBase, groupSlug);
 
   const tree = await getCourseTree({
     subAccountId: saId,
@@ -88,7 +92,7 @@ export default async function LessonPlayerPage({
   }));
 
   return (
-    <CommunityShell saId={saId} group={group} active="classroom" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer}>
       <Link
         href={catalog}
         className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
@@ -97,7 +101,7 @@ export default async function LessonPlayerPage({
       </Link>
       <LessonPlayer
         completeEndpoint={`/api/community/${saId}/${group.id}/courses/${courseId}/lessons/${lessonId}/complete`}
-        lessonHrefBase={`/c/${saId}/${groupSlug}/classroom/${courseId}`}
+        lessonHrefBase={communityLearningCourseHref(linkBase, groupSlug, courseId)}
         brand={brand}
         sections={sections}
         lessons={lessons}

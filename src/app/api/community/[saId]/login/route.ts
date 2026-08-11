@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getCommunityGate } from "@/lib/community/gate";
 import { signMemberMagicLinkToken } from "@/lib/community/member-auth";
+import { resolveCommunityRequestOrigin } from "@/lib/community/domain";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import type { SubAccountDoc } from "@/types";
 
@@ -41,12 +42,15 @@ export async function POST(
   const joinGroupId =
     typeof body.join === "string" && body.join.trim() ? body.join.trim() : undefined;
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const { origin } = await resolveCommunityRequestOrigin(
+    saId,
+    request.headers.get("host"),
+  );
 
   try {
     if (emailIsConfigured()) {
       const token = signMemberMagicLinkToken(saId, email, joinGroupId);
-      const link = `${appUrl}/api/community/${saId}/login/verify?token=${encodeURIComponent(token)}`;
+      const link = `${origin}/api/community/${saId}/login/verify?token=${encodeURIComponent(token)}`;
       const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
       const sub = subSnap.data() as SubAccountDoc | undefined;
 

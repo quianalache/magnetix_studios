@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { PurchaseButton } from "@/components/community/purchase-button";
+import { communityHomeHref, communityLoginHref } from "@/lib/community/routes";
 
 type MemberState = "guest" | "member" | "joined" | "pending";
 
@@ -16,6 +17,7 @@ type MemberState = "guest" | "member" | "joined" | "pending";
  */
 export function JoinButton({
   saId,
+  pretty = false,
   groupSlug,
   groupId,
   state,
@@ -24,6 +26,8 @@ export function JoinButton({
   brandColor,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   groupSlug: string;
   groupId: string;
   state: MemberState;
@@ -34,6 +38,7 @@ export function JoinButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const linkBase = { saId, pretty };
 
   const style = { backgroundColor: brandColor, color: "#fff" } as const;
   const base =
@@ -41,7 +46,7 @@ export function JoinButton({
 
   if (state === "joined") {
     return (
-      <a href={`/c/${saId}/${groupSlug}/community`} className={base} style={style}>
+      <a href={communityHomeHref(linkBase, groupSlug)} className={base} style={style}>
         Enter group
       </a>
     );
@@ -58,7 +63,7 @@ export function JoinButton({
   if (state === "guest") {
     return (
       <a
-        href={`/c/${saId}/login?join=${encodeURIComponent(groupId)}`}
+        href={communityLoginHref(linkBase, { join: groupId })}
         className={base}
         style={style}
       >
@@ -95,7 +100,7 @@ export function JoinButton({
       };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't join");
       if (data.status === "active") {
-        router.push(`/c/${saId}/${groupSlug}/community`);
+        router.push(communityHomeHref(linkBase, groupSlug));
         router.refresh();
       } else if (data.status === "payment_required") {
         setError("This group requires payment — coming soon.");

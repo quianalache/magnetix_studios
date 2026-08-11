@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireMemberApi } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLoginHref } from "@/lib/community/routes";
 import {
   getThreadOther,
   hasBlocked,
@@ -17,9 +19,10 @@ export default async function DmThreadPage({
   params: Promise<{ saId: string; threadId: string }>;
 }) {
   const { saId, threadId } = await params;
+  const pretty = await isCommunityPrettyRequest(saId);
   const access = await requireMemberApi(saId);
   if (access.kind === "error") {
-    if (access.status === 401) redirect(`/c/${saId}/login`);
+    if (access.status === 401) redirect(communityLoginHref({ saId, pretty }));
     notFound();
   }
   const viewerId = access.member.id;
@@ -42,6 +45,7 @@ export default async function DmThreadPage({
   return (
     <DmThread
       saId={saId}
+      pretty={pretty}
       threadId={threadId}
       viewerId={viewerId}
       other={other}

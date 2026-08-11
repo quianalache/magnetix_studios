@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { Users } from "lucide-react";
 import { getCommunityGate } from "@/lib/community/gate";
 import { getCurrentMember } from "@/lib/community/member-session";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLoginHref } from "@/lib/community/routes";
 import { getGroupBySlug, getMembership } from "@/lib/server/community-service";
 import { JoinButton } from "./join-button";
 
@@ -40,6 +42,8 @@ export default async function GroupAboutPage({
   const group = await getGroupBySlug(saId, groupSlug);
   if (!group || group.status !== "published") notFound();
 
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
   const member = await getCurrentMember(saId);
   let state: "guest" | "member" | "joined" | "pending" = member
     ? "member"
@@ -90,7 +94,7 @@ export default async function GroupAboutPage({
             </div>
           ) : (
             <a
-              href={`/c/${saId}/login`}
+              href={communityLoginHref(linkBase)}
               className="rounded-md border border-[#E4E4E4] px-4 py-1.5 text-sm font-medium text-[#202124] hover:bg-[#F8F7F5]"
             >
               Log in
@@ -155,7 +159,7 @@ export default async function GroupAboutPage({
           )}
           <h2 className="text-lg font-semibold text-[#202124]">{group.name}</h2>
           <p className="mt-0.5 text-xs text-[#909090]">
-            /c/{saId}/{group.slug}
+            {pretty ? `communities/${group.slug}` : `/c/${saId}/${group.slug}`}
           </p>
           {(group.tagline?.trim() || group.about) && (
             <p className="mt-2 line-clamp-3 text-sm text-[#3a3a44]">
@@ -184,6 +188,7 @@ export default async function GroupAboutPage({
 
           <JoinButton
             saId={saId}
+            pretty={pretty}
             groupSlug={group.slug}
             groupId={group.id}
             state={state}

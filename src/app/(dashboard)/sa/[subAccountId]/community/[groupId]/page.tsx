@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { useSubAccount } from "@/context/sub-account-context";
+import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunityImage } from "@/lib/community/upload-image";
@@ -40,7 +41,7 @@ export default function CommunityGroupSettingsPage({
   params: Promise<{ subAccountId: string; groupId: string }>;
 }) {
   const { groupId } = use(params);
-  const { subAccountId, isAdmin, loading: subAccountLoading } = useSubAccount();
+  const { subAccountId, subAccount, isAdmin, loading: subAccountLoading } = useSubAccount();
   const router = useRouter();
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
@@ -175,6 +176,12 @@ export default function CommunityGroupSettingsPage({
     );
   }
 
+  const publicUrl = buildCommunityGroupUrl({
+    subAccount,
+    subAccountId,
+    groupSlug: group.slug,
+  });
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between gap-4">
@@ -185,7 +192,7 @@ export default function CommunityGroupSettingsPage({
           <ArrowLeft className="h-4 w-4" /> Community
         </Link>
         <a
-          href={`/c/${subAccountId}/${group.slug}`}
+          href={publicUrl}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -226,7 +233,7 @@ export default function CommunityGroupSettingsPage({
           <Label htmlFor="name">Group name</Label>
           <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
           <p className="text-xs text-muted-foreground">
-            Public URL: <code>/c/{subAccountId}/{group.slug}</code>
+            Public URL: <code>{publicUrl}</code>
           </p>
         </div>
 

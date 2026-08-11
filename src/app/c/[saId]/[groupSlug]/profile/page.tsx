@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { COMMUNITY_BG, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { ProfileEditor } from "@/components/community/profile-editor";
 
@@ -15,6 +16,7 @@ export default async function ProfilePage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
 
@@ -22,6 +24,7 @@ export default async function ProfilePage({
     <div className="min-h-screen" style={{ backgroundColor: COMMUNITY_BG }}>
       <ProfileEditor
         saId={saId}
+        pretty={pretty}
         groupSlug={group.slug}
         brand={brand}
         initial={{

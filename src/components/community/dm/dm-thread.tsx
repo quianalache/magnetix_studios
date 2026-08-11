@@ -7,11 +7,13 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThreadMessages } from "@/lib/community/dm-hooks";
 import { ActionsMenu } from "@/components/community/actions-menu";
+import { communityMessagesHref } from "@/lib/community/routes";
 import { DmAvatar } from "./dm-avatar";
 import type { DmMemberView, DmMessageView } from "@/types/community";
 
 export function DmThread({
   saId,
+  pretty = false,
   threadId,
   viewerId,
   other,
@@ -20,6 +22,8 @@ export function DmThread({
   blockedByMe: initialBlocked,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   threadId: string;
   viewerId: string;
   other: DmMemberView;
@@ -100,7 +104,7 @@ export function DmThread({
       <header className="border-b border-[#E4E4E4] bg-white">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-3 px-4">
           <Link
-            href={`/c/${saId}/messages`}
+            href={communityMessagesHref({ saId, pretty })}
             className="text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-4 w-4" />

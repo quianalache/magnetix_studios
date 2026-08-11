@@ -2,6 +2,8 @@ import "server-only";
 
 import { getCommunityGate, type CommunityGate } from "@/lib/community/gate";
 import { getCurrentMember } from "@/lib/community/member-session";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityAboutHref, communityLoginHref } from "@/lib/community/routes";
 import {
   getGroupById,
   getGroupBySlug,
@@ -44,11 +46,19 @@ export async function requireGroupPageAccess(
   const group = await getGroupBySlug(saId, groupSlug);
   if (!group || group.status !== "published") return { kind: "notFound" };
 
+  // Self-detected from the CURRENT request's Host — a visitor who arrived
+  // via the custom domain gets redirect targets on that same domain; one
+  // who arrived via the shared platform domain (even if a custom domain is
+  // ALSO configured) keeps today's opaque URLs. No caller of this function
+  // needs to know or pass anything for this — see domain.ts.
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
+
   const member = await getCurrentMember(saId);
   if (!member) {
     return {
       kind: "redirect",
-      to: `/c/${saId}/login?next=${encodeURIComponent(`/c/${saId}/${groupSlug}`)}`,
+      to: communityLoginHref(linkBase, { next: communityAboutHref(linkBase, groupSlug) }),
     };
   }
 
@@ -56,7 +66,7 @@ export async function requireGroupPageAccess(
   if (!membership || membership.status !== "active") {
     // Signed in but hasn't joined (or pending/removed) — send to the About
     // page where the Join CTA lives.
-    return { kind: "redirect", to: `/c/${saId}/${groupSlug}` };
+    return { kind: "redirect", to: communityAboutHref(linkBase, groupSlug) };
   }
 
   return { kind: "ok", gate, member, group, membership };

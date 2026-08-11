@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import { ABOUT_MAX_CHARS } from "@/config/community";
 import { subscribeToCommunityGroups } from "@/lib/firestore/community-groups";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { CommunityGroup } from "@/types/community";
+import type { SubAccountDoc } from "@/types";
 
 /**
  * Community groups — staff list + create. Gated by `communityEnabledByAgency`;
@@ -111,7 +113,12 @@ export default function CommunityPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {groups.map((g) => (
-            <GroupCard key={g.id} group={g} subAccountId={subAccountId} />
+            <GroupCard
+              key={g.id}
+              group={g}
+              subAccountId={subAccountId}
+              subAccount={subAccount}
+            />
           ))}
         </div>
       )}
@@ -130,9 +137,11 @@ export default function CommunityPage() {
 function GroupCard({
   group: g,
   subAccountId,
+  subAccount,
 }: {
   group: CommunityGroup;
   subAccountId: string;
+  subAccount: SubAccountDoc | null;
 }) {
   const image = g.cardImageUrl ?? g.coverUrl;
   const brand = g.brandColor || "#6b7280";
@@ -196,7 +205,11 @@ function GroupCard({
           </span>
           <span>{price}</span>
           <a
-            href={`/c/${subAccountId}/${g.slug}`}
+            href={buildCommunityGroupUrl({
+              subAccount,
+              subAccountId,
+              groupSlug: g.slug,
+            })}
             target="_blank"
             rel="noreferrer"
             className="ml-auto flex items-center gap-1 hover:text-foreground"

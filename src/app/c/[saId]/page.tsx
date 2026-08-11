@@ -3,6 +3,12 @@ import { getCommunityGate } from "@/lib/community/gate";
 import { getCurrentMember } from "@/lib/community/member-session";
 import { getMembership } from "@/lib/server/community-service";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import {
+  communityAboutHref,
+  communityHomeHref,
+  communityLoginHref,
+} from "@/lib/community/routes";
 import { Button } from "@/components/ui/button";
 import type { CommunityGroup } from "@/types/community";
 
@@ -22,8 +28,11 @@ export default async function CommunityHomePage({ params }: PageProps) {
   const gate = await getCommunityGate(saId);
   if (!gate || !gate.enabled) notFound();
 
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
+
   const member = await getCurrentMember(saId);
-  if (!member) redirect(`/c/${saId}/login`);
+  if (!member) redirect(communityLoginHref(linkBase));
 
   const snap = await getAdminDb()
     .collection(`subAccounts/${saId}/communityGroups`)
@@ -38,11 +47,11 @@ export default async function CommunityHomePage({ params }: PageProps) {
     for (const g of groups) {
       const membership = await getMembership(saId, g.id, member.id);
       if (membership?.status === "active") {
-        redirect(`/c/${saId}/${g.slug}/community`);
+        redirect(communityHomeHref(linkBase, g.slug));
       }
     }
     // Otherwise send them to the first group's About to join.
-    redirect(`/c/${saId}/${groups[0].slug}`);
+    redirect(communityAboutHref(linkBase, groups[0].slug));
   }
 
   return (

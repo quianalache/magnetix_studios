@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useInbox } from "@/lib/community/dm-hooks";
+import { communityMessageThreadHref } from "@/lib/community/routes";
 import { DmAvatar } from "./dm-avatar";
 import type { DmInboxItem } from "@/types/community";
 
@@ -19,10 +20,13 @@ function timeAgo(ms: number | null): string {
 
 export function DmInbox({
   saId,
+  pretty = false,
   brand,
   initialItems,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   brand: string;
   initialItems: DmInboxItem[];
 }) {
@@ -41,7 +45,7 @@ export function DmInbox({
       {items.map((t) => (
         <Link
           key={t.threadId}
-          href={`/c/${saId}/messages/${t.threadId}`}
+          href={communityMessageThreadHref({ saId, pretty }, t.threadId)}
           className="flex items-center gap-3 px-4 py-3 hover:bg-[#F8F7F5]"
         >
           <DmAvatar

@@ -171,6 +171,12 @@ const PUBLIC_PATHS = [
   // /courses/[slug], only ever resolves on a verified custom domain. See
   // src/app/courses/[slug]/page.tsx.
   "/courses",
+  // Human-readable custom-domain mirror of "/c" — /communities/[groupSlug]/...,
+  // only ever resolves on a verified custom domain (opaque saId+slug still
+  // required on the shared platform domain). Same session model as "/c"
+  // above; the actual data reads/writes go through /api/community either
+  // way. See src/lib/community/domain.ts + src/lib/community/routes.ts.
+  "/communities",
   // Energetic Decoder's embeddable public tool — a visitor enters birth
   // details, gets their reading, and (via the create route) becomes a
   // Contact. No session of any kind; tenancy checked inside the route by

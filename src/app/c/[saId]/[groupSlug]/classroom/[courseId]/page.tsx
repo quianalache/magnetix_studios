@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLearningHref, communityLearningLessonHref } from "@/lib/community/routes";
 import { getCourseTree } from "@/lib/server/community-classroom-service";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,9 @@ export default async function CourseIndexPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
+  const linkBase = { saId, pretty };
+
   const tree = await getCourseTree({
     subAccountId: saId,
     groupId: access.group.id,
@@ -24,7 +29,7 @@ export default async function CourseIndexPage({
   });
   const first = tree?.lessons[0];
   if (!tree || !tree.course.published || !first) {
-    redirect(`/c/${saId}/${groupSlug}/classroom`);
+    redirect(communityLearningHref(linkBase, groupSlug));
   }
-  redirect(`/c/${saId}/${groupSlug}/classroom/${courseId}/${first.id}`);
+  redirect(communityLearningLessonHref(linkBase, groupSlug, courseId, first.id));
 }

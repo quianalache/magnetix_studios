@@ -6,6 +6,13 @@ import {
 } from "@/lib/community/member-auth";
 import { ensureMember } from "@/lib/community/member-account";
 import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { resolveCommunityRequestOrigin } from "@/lib/community/domain";
+import {
+  communityAboutHref,
+  communityHomeHref,
+  communityLoginHref,
+  communityRootHref,
+} from "@/lib/community/routes";
 import {
   getGroupById,
   joinGroupServerSide,
@@ -25,8 +32,15 @@ export async function GET(
 ) {
   const { saId } = await params;
   const url = new URL(request.url);
+  const { pretty } = await resolveCommunityRequestOrigin(
+    saId,
+    request.headers.get("host"),
+  );
+  const linkBase = { saId, pretty };
   const loginUrl = (error: string) =>
-    NextResponse.redirect(new URL(`/c/${saId}/login?error=${error}`, url));
+    NextResponse.redirect(
+      new URL(`${communityLoginHref(linkBase)}?error=${error}`, url),
+    );
 
   const gate = await getCommunityGate(saId);
   if (!gate || !gate.enabled) {
@@ -69,16 +83,18 @@ export async function GET(
         });
         if (outcome.status === "active" || outcome.status === "already") {
           return NextResponse.redirect(
-            new URL(`/c/${saId}/${group.slug}/community`, url),
+            new URL(communityHomeHref(linkBase, group.slug), url),
           );
         }
       } catch (err) {
         console.error("[community/login/verify] auto-join failed", err);
       }
       // Approval / paid / error → land on the group's About to finish there.
-      return NextResponse.redirect(new URL(`/c/${saId}/${group.slug}`, url));
+      return NextResponse.redirect(
+        new URL(communityAboutHref(linkBase, group.slug), url),
+      );
     }
   }
 
-  return NextResponse.redirect(new URL(`/c/${saId}`, url));
+  return NextResponse.redirect(new URL(communityRootHref(linkBase), url));
 }

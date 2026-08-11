@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { listMemberDirectory } from "@/lib/server/community-leaderboard-service";
 import {
   CommunityShell,
@@ -23,6 +24,7 @@ export default async function MembersPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = {
@@ -41,7 +43,7 @@ export default async function MembersPage({
   const accessLabel = group.access === "paid" ? "Lifetime access" : "Free";
 
   return (
-    <CommunityShell saId={saId} group={group} active="members" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="members" viewer={viewer}>
       <MembersDirectory
         saId={saId}
         groupId={group.id}

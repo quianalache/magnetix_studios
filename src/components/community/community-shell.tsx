@@ -2,6 +2,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup } from "@/types/community";
+import {
+  communityAboutHref,
+  communityHomeHref,
+  communityLeaderboardHref,
+  communityLearningHref,
+  communityMembersHref,
+  communityProfileHref,
+} from "@/lib/community/routes";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
 
@@ -23,6 +31,7 @@ export type CommunityTab =
  */
 export function CommunityShell({
   saId,
+  pretty = false,
   group,
   active,
   viewer,
@@ -30,6 +39,8 @@ export function CommunityShell({
   rightRail,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. Defaults to false so every pre-existing opaque call site keeps working unchanged. */
+  pretty?: boolean;
   group: CommunityGroup;
   active: CommunityTab;
   viewer: AuthorView;
@@ -37,13 +48,14 @@ export function CommunityShell({
   rightRail?: ReactNode;
 }) {
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
-  const base = `/c/${saId}/${group.slug}`;
+  const linkBase = { saId, pretty };
+  const about = communityAboutHref(linkBase, group.slug);
   const tabs: { key: CommunityTab; label: string; href: string }[] = [
-    { key: "community", label: "Community", href: `${base}/community` },
-    { key: "classroom", label: "Classroom", href: `${base}/classroom` },
-    { key: "members", label: "Members", href: `${base}/members` },
-    { key: "leaderboards", label: "Leaderboards", href: `${base}/leaderboards` },
-    { key: "about", label: "About", href: base },
+    { key: "community", label: "Community", href: communityHomeHref(linkBase, group.slug) },
+    { key: "classroom", label: "Classroom", href: communityLearningHref(linkBase, group.slug) },
+    { key: "members", label: "Members", href: communityMembersHref(linkBase, group.slug) },
+    { key: "leaderboards", label: "Leaderboards", href: communityLeaderboardHref(linkBase, group.slug) },
+    { key: "about", label: "About", href: about },
   ];
 
   return (
@@ -51,7 +63,7 @@ export function CommunityShell({
       <header className="border-b border-[#E4E4E4] bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
           <Link
-            href={base}
+            href={about}
             className="truncate text-sm font-semibold text-[#202124]"
           >
             {group.name}
@@ -77,7 +89,7 @@ export function CommunityShell({
           </nav>
           <div className="flex items-center gap-2">
             <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
-            <Link href={`${base}/profile`} title="Your profile">
+            <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile">
               <MemberAvatar author={viewer} size={28} brand={brand} />
             </Link>
             <form action={`/api/community/${saId}/logout`} method="post">

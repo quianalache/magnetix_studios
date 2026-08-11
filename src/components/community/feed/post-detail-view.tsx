@@ -8,6 +8,7 @@ import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu, type MenuItem } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
+import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
 
@@ -42,6 +43,7 @@ function timeAgo(ms: number | null): string {
 
 export function PostDetailView({
   saId,
+  pretty = false,
   groupId,
   groupSlug,
   brand,
@@ -50,6 +52,8 @@ export function PostDetailView({
   viewer,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -103,7 +107,7 @@ export function PostDetailView({
     const res = await fetch(`${base}/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Post deleted");
-      router.push(`/c/${saId}/${groupSlug}/community`);
+      router.push(communityHomeHref({ saId, pretty }, groupSlug));
     } else {
       toast.error("Couldn't delete");
     }
@@ -228,6 +232,7 @@ export function PostDetailView({
             <div className="flex items-center gap-2 text-sm">
               <AuthorLink
                 saId={saId}
+                pretty={pretty}
                 viewerMemberId={viewer.memberId}
                 author={post.author}
                 brand={brand}
@@ -281,6 +286,7 @@ export function PostDetailView({
           <div key={c.id} className="space-y-2">
             <CommentBubble
               saId={saId}
+              pretty={pretty}
               comment={c}
               viewer={viewer}
               brand={brand}
@@ -295,6 +301,7 @@ export function PostDetailView({
               <CommentBubble
                 key={r.id}
                 saId={saId}
+                pretty={pretty}
                 comment={r}
                 viewer={viewer}
                 brand={brand}
@@ -359,6 +366,7 @@ export function PostDetailView({
 
 function CommentBubble({
   saId,
+  pretty = false,
   comment,
   viewer,
   brand,
@@ -368,6 +376,8 @@ function CommentBubble({
   onDelete,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   comment: ClientComment;
   viewer: Viewer;
   brand: string;
@@ -390,6 +400,7 @@ function CommentBubble({
         <div className="flex items-center gap-2 text-sm">
           <AuthorLink
             saId={saId}
+            pretty={pretty}
             viewerMemberId={viewer.memberId}
             author={comment.author}
             brand={brand}

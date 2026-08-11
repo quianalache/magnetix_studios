@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
+import { communityMessageThreadHref } from "@/lib/community/routes";
 
 /**
  * Clickable author name that opens a Skool-style profile popover (avatar, name,
@@ -14,12 +15,15 @@ import { MemberAvatar } from "@/components/community/member-avatar";
  */
 export function AuthorLink({
   saId,
+  pretty = false,
   viewerMemberId,
   author,
   brand,
   className,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   viewerMemberId: string;
   author: AuthorView;
   brand: string;
@@ -80,7 +84,7 @@ export function AuthorLink({
             ) : null}
             {!isSelf && (
               <Link
-                href={`/c/${saId}/messages/${threadId}`}
+                href={communityMessageThreadHref({ saId, pretty }, threadId)}
                 className="mt-3 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
                 style={{ backgroundColor: brand }}
               >

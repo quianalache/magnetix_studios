@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityHomeHref } from "@/lib/community/routes";
 import {
   getFeedPost,
   listComments,
@@ -44,6 +46,7 @@ export default async function PostDetailPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
 
@@ -95,15 +98,16 @@ export default async function PostDetailPage({
   }));
 
   return (
-    <CommunityShell saId={saId} group={group} active="community" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="community" viewer={viewer}>
       <Link
-        href={`/c/${saId}/${group.slug}/community`}
+        href={communityHomeHref({ saId, pretty }, group.slug)}
         className="mb-3 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
       >
         <ArrowLeft className="h-4 w-4" /> Back to feed
       </Link>
       <PostDetailView
         saId={saId}
+        pretty={pretty}
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}

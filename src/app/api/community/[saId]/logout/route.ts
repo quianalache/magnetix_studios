@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { clearMemberSessionCookie } from "@/lib/community/member-session";
+import { resolveCommunityRequestOrigin } from "@/lib/community/domain";
+import { communityLoginHref } from "@/lib/community/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -9,5 +11,11 @@ export async function POST(
 ) {
   const { saId } = await params;
   await clearMemberSessionCookie();
-  return NextResponse.redirect(new URL(`/c/${saId}/login`, request.url));
+  const { pretty } = await resolveCommunityRequestOrigin(
+    saId,
+    request.headers.get("host"),
+  );
+  return NextResponse.redirect(
+    new URL(communityLoginHref({ saId, pretty }), request.url),
+  );
 }

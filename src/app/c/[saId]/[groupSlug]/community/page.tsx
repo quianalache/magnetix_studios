@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
+import { communityLeaderboardHref } from "@/lib/community/routes";
 import { listFeed } from "@/lib/server/community-feed-service";
 import {
   getLeaderboard,
@@ -44,6 +46,7 @@ export default async function CommunityFeedPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership, gate } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
 
@@ -110,6 +113,7 @@ export default async function CommunityFeedPage({
   return (
     <CommunityShell
       saId={saId}
+      pretty={pretty}
       group={group}
       active="community"
       viewer={viewer}
@@ -130,7 +134,7 @@ export default async function CommunityFeedPage({
                   Leaderboard
                 </h2>
                 <Link
-                  href={`/c/${saId}/${group.slug}/leaderboards`}
+                  href={communityLeaderboardHref({ saId, pretty }, group.slug)}
                   className="text-xs text-[#909090] hover:text-[#202124]"
                 >
                   See all
@@ -168,6 +172,7 @@ export default async function CommunityFeedPage({
     >
       <FeedView
         saId={saId}
+        pretty={pretty}
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}

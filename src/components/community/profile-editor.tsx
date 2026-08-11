@@ -5,16 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Camera, Loader2 } from "lucide-react";
+import { communityHomeHref } from "@/lib/community/routes";
 
 const BIO_MAX = 300;
 
 export function ProfileEditor({
   saId,
+  pretty = false,
   groupSlug,
   initial,
   brand,
 }: {
   saId: string;
+  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
+  pretty?: boolean;
   groupSlug: string;
   initial: {
     displayName: string;
@@ -80,7 +84,7 @@ export function ProfileEditor({
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <Link
-        href={`/c/${saId}/${groupSlug}/community`}
+        href={communityHomeHref({ saId, pretty }, groupSlug)}
         className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
       >
         <ArrowLeft className="h-4 w-4" /> Back to community
