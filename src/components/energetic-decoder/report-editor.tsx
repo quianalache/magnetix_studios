@@ -200,7 +200,7 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
       {/* Left: pages */}
       <div className="w-56 shrink-0 space-y-4">
         <button
-          onClick={() => router.push(`/sa/${subAccountId}/energetic-decoder`)}
+          onClick={() => router.push(`/sa/${subAccountId}/energetic-decoder?tab=builder`)}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back

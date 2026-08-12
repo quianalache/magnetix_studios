@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sparkles, Home, ClipboardList, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { EnergeticDecoderHomeTab, type EnergeticDecoderHomeTarget } from "@/components/energetic-decoder/home-tab";
 import { EnergeticDecoderReportsTab } from "@/components/energetic-decoder/reports-tab";
@@ -11,6 +12,8 @@ import { EnergeticDecoderChartDesignsTab } from "@/components/energetic-decoder/
 import { EnergeticDecoderEmbedsTab } from "@/components/energetic-decoder/embeds-tab";
 
 type Tab = "home" | "reports" | "builder" | "content" | "readings" | "chartDesigns" | "embeds";
+
+const VALID_TABS: Tab[] = ["home", "reports", "builder", "content", "readings", "chartDesigns", "embeds"];
 
 /**
  * Structured after researching bodygraph.com (2026-08-05, then again more
@@ -33,7 +36,15 @@ type Tab = "home" | "reports" | "builder" | "content" | "readings" | "chartDesig
  * intended effect until this pass.
  */
 export default function EnergeticDecoderPage() {
-  const [tab, setTab] = useState<Tab>("home");
+  // `?tab=builder` (etc.) picks the initial tab — added 2026-08-12 so the
+  // Report Editor's Back button can return to Report Builder specifically
+  // instead of always landing on Home, the previous hardcoded default.
+  // Read once on mount; the tab strip itself stays plain client state
+  // after that, same as before.
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const initialTab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   // Icon per tab, plain text-primary when active — same locked-in rule as
   // Growth/Projects (2026-08-08): icons don't carry per-tab hue, only
