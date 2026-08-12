@@ -537,7 +537,8 @@ function ArrowBadgePdf({
 }
 
 /** Mirrors HumanDesignFullChart in human-design-full-chart.tsx: Design column + BodyGraph + Personality column + all 4 Variable arrows. No container-query responsiveness needed — a PDF page is a fixed known width. */
-function HumanDesignFullChartPdf({ profile, hdDesign }: { profile: HumanDesignProfile; hdDesign?: ChartDesign | null }) {
+/** Exported 2026-08-12 so report-design-pdf-document.tsx (custom ReportDesign PDF export) can reuse the exact same react-pdf chart rendering this reading PDF already proved out — no second chart-in-PDF implementation. */
+export function HumanDesignFullChartPdf({ profile, hdDesign }: { profile: HumanDesignProfile; hdDesign?: ChartDesign | null }) {
   const personalityActivationColor = hdDesign?.personalityActivationColor || PERSONALITY_FILL;
   const designActivationColor = hdDesign?.designActivationColor || DESIGN_FILL;
   const arrowStyle: VariableArrowStyle = hdDesign?.arrowStyle || "solid";
@@ -662,7 +663,8 @@ function MandalaActivationDotPdf({
  * in-SVG Rect — kept as a real View so the padding/rounding reads as a
  * genuine card, matching the web Mandala's own card treatment.
  */
-function MandalaPdf({
+/** Exported 2026-08-12 — see HumanDesignFullChartPdf's export note above. */
+export function MandalaPdf({
   profile,
   gateColor,
   backgroundColor,
@@ -752,7 +754,8 @@ function AngleLabelPdf({ longitude, ascLon, accent, text }: { longitude: number;
   );
 }
 
-function AstrologyWheelPdf({ chart, wheelAccentColor }: { chart: AstrologyChart; wheelAccentColor: string }) {
+/** Exported 2026-08-12 — see HumanDesignFullChartPdf's export note above. */
+export function AstrologyWheelPdf({ chart, wheelAccentColor }: { chart: AstrologyChart; wheelAccentColor: string }) {
   const ascLon = chart.angles.ascendant.longitude;
   const plotted = plotPlacements(chart.placements, ascLon);
 
