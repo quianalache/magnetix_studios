@@ -12,17 +12,26 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Type, Image as ImageIcon, Video,
-  MousePointerClick, LayoutGrid, Minus, MoveVertical, Copy,
+  MousePointerClick, LayoutGrid, Minus, MoveVertical, Copy, Eye, Sparkles, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
 import { CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import type {
   ReportDesign, ReportPage, ReportBlock, ReportBlockType, ChartPieceKind,
 } from "@/types/report-blocks";
+
+interface ReadingOption {
+  id: string;
+  name: string;
+  birthDate: string;
+}
 
 /**
  * Report Builder editor — Phase 2 (2026-08-09). Real drag-and-drop block
@@ -82,6 +91,9 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
   const [pages, setPages] = useState<ReportPage[]>(initial.pages);
   const [activePageId, setActivePageId] = useState(initial.pages[0]?.id ?? "");
   const [saving, setSaving] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSaving, setPreviewSaving] = useState(false);
+  const [readings, setReadings] = useState<ReadingOption[] | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
@@ -132,7 +144,8 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
     });
   }
 
-  async function save() {
+  /** Returns whether the save actually succeeded — Preview relies on this to refuse to open against stale state. */
+  async function save(): Promise<boolean> {
     setSaving(true);
     try {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${initial.id}`, {
@@ -142,8 +155,10 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
       });
       if (!res.ok) throw new Error();
       toast.success("Report saved.");
+      return true;
     } catch {
       toast.error("Couldn't save. Try again.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -151,6 +166,33 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
 
   function copyShortcode(token: string) {
     navigator.clipboard.writeText(`{{${token}}}`).then(() => toast.success(`Copied {{${token}}}`));
+  }
+
+  /**
+   * Preview (2026-08-12) — saves the current draft first (never previews
+   * stale unsaved state; if the save fails, this stops here and the
+   * existing `save()` error toast is the only feedback needed), then opens
+   * the source chooser. Readings are fetched lazily, once, the first time
+   * Preview is actually used.
+   */
+  async function openPreview() {
+    setPreviewSaving(true);
+    const ok = await save();
+    setPreviewSaving(false);
+    if (!ok) return;
+
+    setPreviewOpen(true);
+    if (readings === null) {
+      fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/readings`)
+        .then((r) => r.json())
+        .then((d) => setReadings(((d.readings ?? []) as ReadingOption[]).map((r) => ({ id: r.id, name: r.name, birthDate: r.birthDate }))))
+        .catch(() => setReadings([]));
+    }
+  }
+
+  function launchPreview(params: URLSearchParams) {
+    window.open(`/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?${params}`, "_blank");
+    setPreviewOpen(false);
   }
 
   return (
@@ -233,9 +275,15 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
             onChange={(e) => setTitle(e.target.value)}
             className="max-w-md border-none bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
           />
-          <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={openPreview} disabled={saving || previewSaving}>
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
+              {previewSaving ? "Saving…" : "Preview"}
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
 
         <div className="min-h-[600px] rounded-2xl border bg-background p-8 shadow-sm">
@@ -266,6 +314,53 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
           )}
         </div>
       </div>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Preview against…</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <button
+              type="button"
+              onClick={() => launchPreview(new URLSearchParams({ source: "sample" }))}
+              className="flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-left text-sm font-medium hover:border-primary hover:text-primary"
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              Sample Data
+              <span className="ml-auto text-xs font-normal text-muted-foreground">no real reading needed</span>
+            </button>
+
+            <div>
+              <p className="mb-1.5 px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Existing readings
+              </p>
+              {readings === null ? (
+                <div className="h-16 animate-pulse rounded-lg bg-muted/30" />
+              ) : readings.length === 0 ? (
+                <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
+                  No readings yet in this sub-account — use Sample Data above.
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto">
+                  {readings.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => launchPreview(new URLSearchParams({ source: "reading", readingId: r.id }))}
+                      className="flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-2 text-left text-sm hover:border-primary hover:text-primary"
+                    >
+                      <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{r.birthDate}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
