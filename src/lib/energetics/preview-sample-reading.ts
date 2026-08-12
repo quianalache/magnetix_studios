@@ -67,16 +67,31 @@ export function getPreviewSampleReading(): Promise<PreviewSampleReading> {
 async function buildPreviewSampleReading(): Promise<PreviewSampleReading> {
   const humanDesign = calculateHumanDesignProfile(SAMPLE_BIRTH_INPUT);
 
-  const localVariables = await computeHumanDesignVariables(SAMPLE_BIRTH_INPUT);
-  humanDesign.variables = {
-    digestion: { value: localVariables.digestion, description: "" },
-    sense: { value: localVariables.sense, description: "" },
-    designSense: { value: localVariables.designSense, description: "" },
-    motivation: { value: localVariables.motivation, description: "" },
-    perspective: { value: localVariables.perspective, description: "" },
-    environment: { value: localVariables.environment, description: "" },
-  } satisfies HumanDesignVariables;
-  humanDesign.variableArrows = localVariables.arrows;
+  // Same try/catch contract as energetic-decoder-service.ts's
+  // withDerivedVariableArrows — this calc shares its swiss-ephemeris WASM
+  // dependency with chironPlacement below, and that dependency has been
+  // observed failing to initialize in this Vercel deployment (a
+  // pre-existing gap, not introduced here — the exact same failure shows
+  // up in that function's own try/catch). A missing Variables field on the
+  // sample is a real "field or absent" degrade, same as everywhere else in
+  // this codebase; it must never take the whole Preview request down.
+  try {
+    const localVariables = await computeHumanDesignVariables(SAMPLE_BIRTH_INPUT);
+    humanDesign.variables = {
+      digestion: { value: localVariables.digestion, description: "" },
+      sense: { value: localVariables.sense, description: "" },
+      designSense: { value: localVariables.designSense, description: "" },
+      motivation: { value: localVariables.motivation, description: "" },
+      perspective: { value: localVariables.perspective, description: "" },
+      environment: { value: localVariables.environment, description: "" },
+    } satisfies HumanDesignVariables;
+    humanDesign.variableArrows = localVariables.arrows;
+  } catch {
+    // Leave humanDesign.variables/variableArrows undefined — the 6
+    // Variables shortcodes ({{digestion}}, etc.) resolve to "" per
+    // shortcodes.ts's existing unresolved-token contract, same as any
+    // real reading saved without them.
+  }
 
   const chiron = await chironPlacement(parseBirthToUtc(SAMPLE_BIRTH_INPUT)).catch(() => null);
   const astrology = calculateAstrologyChart({
