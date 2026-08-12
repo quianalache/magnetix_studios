@@ -6,7 +6,37 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getValidAccessToken, connectionId } from "@/lib/google-calendar/connection";
 import { fetchCalendarList } from "@/lib/google-calendar/client";
 import { DEFAULT_SELECTED_CALENDAR_IDS } from "@/lib/google-calendar/sync";
-import type { GoogleCalendarConnection } from "@/types/google-calendar";
+import type { GoogleCalendarConnection, GoogleCalendarListEntry } from "@/types/google-calendar";
+
+/**
+ * Google's two calendar APIs disagree on what a connected account's own
+ * calendar is called: `events.list` accepts (and this app has always
+ * used) the literal alias `"primary"`, but `calendarList.list` never
+ * returns that string — it returns the calendar's real id (the account's
+ * own email address), flagged with `primary: true`. Internally this app
+ * keeps using the literal `"primary"` token everywhere else (storage,
+ * `DEFAULT_SELECTED_CALENDAR_IDS`, the sync-token migration fallback in
+ * lib/google-calendar/sync.ts) — these two helpers translate at the one
+ * boundary that actually talks to `calendarList`, so callers on both
+ * sides of this route never have to think about the mismatch.
+ */
+function realPrimaryId(calendars: GoogleCalendarListEntry[]): string | null {
+  return calendars.find((c) => c.primary)?.id ?? null;
+}
+
+/** For display: swap the stored literal "primary" for the account's real primary id, so it matches an actual entry in `calendars` and a checkbox can find it. */
+function toDisplayIds(ids: string[], calendars: GoogleCalendarListEntry[]): string[] {
+  const primaryId = realPrimaryId(calendars);
+  if (!primaryId) return ids;
+  return ids.map((cid) => (cid === "primary" ? primaryId : cid));
+}
+
+/** For storage: swap the account's real primary id back to the literal "primary" token, so everything downstream (sync, defaults, migration) keeps working unchanged. */
+function toStorageIds(ids: string[], calendars: GoogleCalendarListEntry[]): string[] {
+  const primaryId = realPrimaryId(calendars);
+  if (!primaryId) return ids;
+  return ids.map((cid) => (cid === primaryId ? "primary" : cid));
+}
 
 /**
  * The CALLER's own Google Calendar list + which one(s) are currently
@@ -42,10 +72,11 @@ export async function GET(
 
   try {
     const calendars = await fetchCalendarList(accessToken);
+    const stored = conn.selectedCalendarIds?.length ? conn.selectedCalendarIds : DEFAULT_SELECTED_CALENDAR_IDS;
     return NextResponse.json({
       ok: true,
       calendars,
-      selectedCalendarIds: conn.selectedCalendarIds?.length ? conn.selectedCalendarIds : DEFAULT_SELECTED_CALENDAR_IDS,
+      selectedCalendarIds: toDisplayIds(stored, calendars),
     });
   } catch (err) {
     console.warn(`[google-calendar/calendars] list failed sa=${id} uid=${access.uid}`, err);
@@ -104,10 +135,14 @@ export async function PUT(
     return NextResponse.json({ error: `Unknown calendar id(s): ${invalid.join(", ")}` }, { status: 400 });
   }
 
+  // Normalize to storage space ("primary" token, not the real email-id)
+  // before diffing/persisting — see the doc comment on toStorageIds above.
+  const storageIds = [...new Set(toStorageIds(selectedCalendarIds, realCalendars))];
+
   const previouslySelected = new Set(
     conn.selectedCalendarIds?.length ? conn.selectedCalendarIds : DEFAULT_SELECTED_CALENDAR_IDS,
   );
-  const nowSelected = new Set(selectedCalendarIds);
+  const nowSelected = new Set(storageIds);
   const removed = [...previouslySelected].filter((cid) => !nowSelected.has(cid));
 
   // Deliberate: a deselected calendar's previously-imported events are
@@ -133,9 +168,13 @@ export async function PUT(
   for (const cid of removed) delete nextSyncTokens[cid];
 
   await connRef.update({
-    selectedCalendarIds,
+    selectedCalendarIds: storageIds,
     syncTokens: nextSyncTokens,
   });
 
-  return NextResponse.json({ ok: true, selectedCalendarIds, removedEventsFor: removed });
+  return NextResponse.json({
+    ok: true,
+    selectedCalendarIds: toDisplayIds(storageIds, realCalendars),
+    removedEventsFor: removed,
+  });
 }
