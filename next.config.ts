@@ -13,14 +13,37 @@ const nextConfig: NextConfig = {
     // binary) — Next's tracer can't see that as a real dependency, so
     // every route below deployed with the .wasm/.data files missing:
     // computeHumanDesignVariables/chironPlacement threw ENOENT in every
-    // affected serverless function, confirmed via `vercel logs`. Scoped to
-    // the Energetic Decoder feature's own routes (not a blanket "/**") so
-    // this doesn't bloat every unrelated function's bundle — any future
-    // route added under these same paths is covered automatically by the
-    // wildcard, matching the CLAUDE.md-guide precedent just above.
-    "/api/decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
-    "/api/sub-accounts/[id]/energetic-decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
-    "/decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
+    // affected serverless function, confirmed via `vercel logs`.
+    //
+    // First attempt at this fix (same day) used only the pnpm SYMLINK
+    // path (`./node_modules/swisseph-wasm/wasm/*`) — that traced and
+    // deployed fine, but the actual runtime error path is the REAL pnpm
+    // store location the symlink points at
+    // (`/var/task/node_modules/.pnpm/swisseph-wasm@0.1.0/node_modules/
+    // swisseph-wasm/wasm/swisseph.wasm`), confirmed via `vercel logs`
+    // AFTER that first attempt was live — Vercel's packaging materializes
+    // whatever literal path the trace manifest lists, and doesn't also
+    // duplicate that content at the symlink's real target. Both globs are
+    // included below so this survives either pnpm's real store layout or
+    // a future non-pnpm/hoisted install (npm/yarn) without a `.pnpm`
+    // directory at all.
+    //
+    // Scoped to the Energetic Decoder feature's own routes (not a blanket
+    // "/**") so this doesn't bloat every unrelated function's bundle; any
+    // future route added under these same paths is covered automatically
+    // by the wildcard, matching the CLAUDE.md-guide precedent above.
+    "/api/decoder/**": [
+      "./node_modules/swisseph-wasm/wasm/*",
+      "./node_modules/.pnpm/swisseph-wasm@*/node_modules/swisseph-wasm/wasm/*",
+    ],
+    "/api/sub-accounts/[id]/energetic-decoder/**": [
+      "./node_modules/swisseph-wasm/wasm/*",
+      "./node_modules/.pnpm/swisseph-wasm@*/node_modules/swisseph-wasm/wasm/*",
+    ],
+    "/decoder/**": [
+      "./node_modules/swisseph-wasm/wasm/*",
+      "./node_modules/.pnpm/swisseph-wasm@*/node_modules/swisseph-wasm/wasm/*",
+    ],
   },
   async headers() {
     return [
