@@ -23,13 +23,38 @@ export interface GoogleCalendarConnection {
   expiresAt: Timestamp | FieldValue | null;
   scope: string;
   /**
-   * Google Calendar incremental sync token from the last successful
-   * `events.list` call. Null until the first sync completes, or after a 410
-   * GONE response forces a full re-fetch.
+   * @deprecated Legacy single-calendar sync token, from before multi-
+   * calendar selection (2026-08-12) — kept only so an already-connected
+   * member's existing "primary" progress carries forward instead of
+   * triggering a wasteful full re-fetch. New code reads/writes
+   * `syncTokens.primary` instead; this is treated as that field's
+   * fallback the first time a connection is synced under the new scheme.
    */
   syncToken: string | null;
+  /**
+   * Per-calendar incremental sync token, keyed by Google calendar id —
+   * added 2026-08-12 alongside multi-calendar selection. Each selected
+   * calendar has its own token because Google scopes `syncToken` to one
+   * calendar; reusing one calendar's token for another is invalid.
+   */
+  syncTokens?: Record<string, string | null>;
+  /**
+   * Which of this member's Google calendars pull-in sync reads from —
+   * added 2026-08-12. Defaults to `["primary"]` when absent (every
+   * connection made before this shipped), matching the sync's original,
+   * only-ever behavior.
+   */
+  selectedCalendarIds?: string[];
   connectedAt: Timestamp | FieldValue | null;
   lastSyncedAt: Timestamp | FieldValue | null;
+}
+
+/** One calendar on the connected Google account, as offered by the calendar-selection picker. */
+export interface GoogleCalendarListEntry {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  backgroundColor?: string;
 }
 
 /**
@@ -46,6 +71,8 @@ export interface ExternalCalendarEvent {
   agencyId: string;
   /** Whose connection this came from — only that member sees it on the calendar. */
   uid: string;
+  /** Which of the member's selected Google calendars this came from — added 2026-08-12 (multi-calendar selection). Absent on events synced before this shipped (all from "primary"; backfilled — see the Build Log). */
+  calendarId?: string;
   googleEventId: string;
   title: string;
   startAt: Timestamp | FieldValue | null;

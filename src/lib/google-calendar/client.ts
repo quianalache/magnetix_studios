@@ -19,8 +19,12 @@ const OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const OAUTH_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
-const CALENDAR_EVENTS_URL =
-  "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const CALENDAR_LIST_URL = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+
+/** Base events URL for one specific calendar. `calendarId` is Google's own id (e.g. "primary", or a real address like "abc@group.calendar.google.com") — always used raw, never assumed to be "primary". */
+function calendarEventsUrl(calendarId: string): string {
+  return `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+}
 
 /**
  * Matches MomentumOS's scope set exactly — full calendar + events
@@ -220,6 +224,53 @@ export async function fetchGoogleAccountEmail(
 }
 
 // ---------------------------------------------------------------------------
+// Calendar list — which calendars this Google account actually has, so a
+// member can pick which one(s) pull-in sync should read from (2026-08-12,
+// multi-calendar selection). Same `calendar` scope already granted at
+// connect time covers this endpoint too — no re-consent needed for
+// existing connections.
+// ---------------------------------------------------------------------------
+
+export interface GoogleCalendarListEntry {
+  id: string;
+  summary: string;
+  primary?: boolean;
+  /** Google's own display color for this calendar, if set — handy for the picker UI. */
+  backgroundColor?: string;
+}
+
+/** The connected account's own list of calendars (owned, shared-with-them, subscribed). */
+export async function fetchCalendarList(accessToken: string): Promise<GoogleCalendarListEntry[]> {
+  const entries: GoogleCalendarListEntry[] = [];
+  let pageToken: string | undefined;
+  for (;;) {
+    const params = new URLSearchParams({ maxResults: "250" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await fetch(`${CALENDAR_LIST_URL}?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      throw new Error(`Google Calendar list fetch failed (${res.status})`);
+    }
+    const data = (await res.json()) as {
+      items?: { id: string; summary?: string; primary?: boolean; backgroundColor?: string }[];
+      nextPageToken?: string;
+    };
+    for (const item of data.items ?? []) {
+      entries.push({
+        id: item.id,
+        summary: item.summary || item.id,
+        primary: item.primary,
+        backgroundColor: item.backgroundColor,
+      });
+    }
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return entries;
+}
+
+// ---------------------------------------------------------------------------
 // Calendar events
 // ---------------------------------------------------------------------------
 
@@ -248,15 +299,18 @@ export class SyncTokenExpiredError extends Error {
 }
 
 /**
- * Fetch events from the connected calendar's primary calendar. With a
- * `syncToken`, Google returns only what changed since the last sync
- * (including deletions, surfaced as `status: "cancelled"`) — cheap,
- * incremental. Without one, fetches everything in `[timeMin, timeMax]`
- * (used for the first sync, or after a 410 forces a fresh start). Paginates
- * via `nextPageToken` until exhausted.
+ * Fetch events from ONE specific calendar (`calendarId` — "primary", or any
+ * other calendar id from `fetchCalendarList()`). With a `syncToken`, Google
+ * returns only what changed since that calendar's last sync (including
+ * deletions, surfaced as `status: "cancelled"`) — cheap, incremental.
+ * Without one, fetches everything in `[timeMin, timeMax]` (used for that
+ * calendar's first sync, or after a 410 forces a fresh start). Paginates via
+ * `nextPageToken` until exhausted. Sync tokens are scoped per-calendar by
+ * Google's own API — never reuse one calendar's token for another.
  */
 export async function fetchCalendarEvents(
   accessToken: string,
+  calendarId: string,
   opts: { syncToken?: string | null; timeMin?: string; timeMax?: string },
 ): Promise<FetchEventsResult> {
   const events: GoogleCalendarEventDto[] = [];
@@ -274,7 +328,7 @@ export async function fetchCalendarEvents(
     }
     if (pageToken) params.set("pageToken", pageToken);
 
-    const res = await fetch(`${CALENDAR_EVENTS_URL}?${params.toString()}`, {
+    const res = await fetch(`${calendarEventsUrl(calendarId)}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (res.status === 410) {
@@ -326,7 +380,7 @@ export async function createCalendarEvent(
   accessToken: string,
   input: CalendarEventInput,
 ): Promise<GoogleCalendarEventDto> {
-  const res = await fetch(CALENDAR_EVENTS_URL, {
+  const res = await fetch(calendarEventsUrl("primary"), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -347,7 +401,7 @@ export async function updateCalendarEvent(
   input: CalendarEventInput,
 ): Promise<GoogleCalendarEventDto> {
   const res = await fetch(
-    `${CALENDAR_EVENTS_URL}/${encodeURIComponent(googleEventId)}`,
+    `${calendarEventsUrl("primary")}/${encodeURIComponent(googleEventId)}`,
     {
       method: "PATCH",
       headers: {
@@ -369,7 +423,7 @@ export async function deleteCalendarEvent(
   googleEventId: string,
 ): Promise<void> {
   const res = await fetch(
-    `${CALENDAR_EVENTS_URL}/${encodeURIComponent(googleEventId)}`,
+    `${calendarEventsUrl("primary")}/${encodeURIComponent(googleEventId)}`,
     {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
