@@ -89,4 +89,52 @@ export async function deleteReportDesign(subAccountId: string, designId: string)
   await ref.delete();
 }
 
+/**
+ * Fresh page/block ids throughout — the duplicate must never share an id
+ * with the source (each design's ids are only ever referenced from
+ * within its own `pages` array — a popup button's `action.blockId` is
+ * the one real cross-reference, remapped below — so this is purely
+ * hygiene/collision-avoidance, not a correctness requirement for
+ * `visibleIf` or anything else).
+ */
+function clonePages(pages: ReportPage[]): ReportPage[] {
+  return pages.map((page) => {
+    const blockIdMap = new Map<string, string>();
+    const blocks = page.blocks.map((block) => {
+      const id = crypto.randomUUID();
+      blockIdMap.set(block.id, id);
+      return { ...block, id };
+    });
+    const remapped = blocks.map((block) =>
+      block.type === "button" && block.action.kind === "popup"
+        ? { ...block, action: { ...block.action, blockId: blockIdMap.get(block.action.blockId) ?? block.action.blockId } }
+        : block,
+    );
+    return { ...page, id: crypto.randomUUID(), blocks: remapped };
+  });
+}
+
+/**
+ * Duplicate — Phase 2 Build Plan Task 3 (2026-08-12). Same sub-account
+ * only (source and duplicate always share `subAccountId`/`agencyId` —
+ * there's no cross-tenant path here at all, not just a guard against
+ * one). A genuinely new, independent design: no field on the duplicate
+ * points back at the source, so editing either one afterward never
+ * touches the other.
+ */
+export async function duplicateReportDesign(subAccountId: string, designId: string): Promise<ReportDesign | null> {
+  const source = await getReportDesign(subAccountId, designId);
+  if (!source) return null;
+  const doc = {
+    subAccountId: source.subAccountId,
+    agencyId: source.agencyId,
+    title: `Copy of ${source.title}`,
+    pages: clonePages(source.pages),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  const ref = await col().add(doc);
+  return toDesign(ref.id, doc);
+}
+
 export type { ReportPage };

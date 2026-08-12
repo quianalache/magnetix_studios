@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, FileText, Trash2 } from "lucide-react";
+import { Plus, FileText, Trash2, Pencil, Copy } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import { formatRelativeTime } from "@/lib/format";
 import type { ReportDesign } from "@/types/report-blocks";
 
 /**
@@ -19,6 +20,12 @@ import type { ReportDesign } from "@/types/report-blocks";
  * Clicking a design opens the actual editor at its own dedicated route
  * (not embedded in this tab — same reasoning as Bodygraph opening its
  * editor as a separate full-screen app, not inline in the dashboard).
+ *
+ * Rename + Duplicate added 2026-08-12 (Build Plan Task 3) — deliberately
+ * NOT Bodygraph's Total Sales/Total Downloads/Selling Price/status-dot
+ * marketplace layer per the Build Plan's own recommendation: Magnetix has
+ * no pricing fields anywhere yet, and that's a real future feature
+ * decision, not a Report Builder polish item.
  */
 export function EnergeticDecoderReportBuilderTab() {
   const { subAccountId } = useSubAccount();
@@ -26,6 +33,10 @@ export function EnergeticDecoderReportBuilderTab() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<ReportDesign | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   function load() {
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs`)
@@ -59,6 +70,50 @@ export function EnergeticDecoderReportBuilderTab() {
     } catch {
       toast.error("Couldn't delete report.");
       load();
+    }
+  }
+
+  function openRename(design: ReportDesign) {
+    setRenaming(design);
+    setRenameValue(design.title);
+  }
+
+  /** Reuses the existing updateReportDesign(title) PATCH — no new rename logic, same endpoint the editor's own Save already uses for title. */
+  async function saveRename() {
+    if (!renaming) return;
+    setSavingRename(true);
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${renaming.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: renameValue.trim() || renaming.title }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDesigns((prev) => prev?.map((d) => (d.id === renaming.id ? data.design : d)) ?? null);
+      setRenaming(null);
+      toast.success("Renamed.");
+    } catch {
+      toast.error("Couldn't rename. Try again.");
+    } finally {
+      setSavingRename(false);
+    }
+  }
+
+  async function duplicate(id: string) {
+    setDuplicatingId(id);
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${id}/duplicate`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDesigns((prev) => (prev ? [data.design, ...prev] : [data.design]));
+      toast.success("Duplicated.");
+    } catch {
+      toast.error("Couldn't duplicate. Try again.");
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
@@ -111,8 +166,28 @@ export function EnergeticDecoderReportBuilderTab() {
                 >
                   {d.title}
                 </Link>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  Updated {formatRelativeTime(d.updatedAt ? new Date(d.updatedAt) : null)}
+                </span>
                 <span className="shrink-0 text-xs text-muted-foreground">{d.pages.length} page{d.pages.length === 1 ? "" : "s"}</span>
-                <button type="button" onClick={() => remove(d.id)} className="shrink-0 text-muted-foreground hover:text-destructive">
+                <button
+                  type="button"
+                  onClick={() => openRename(d)}
+                  title="Rename"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => duplicate(d.id)}
+                  disabled={duplicatingId === d.id}
+                  title="Duplicate"
+                  className="shrink-0 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={() => remove(d.id)} title="Delete" className="shrink-0 text-muted-foreground hover:text-destructive">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -120,6 +195,25 @@ export function EnergeticDecoderReportBuilderTab() {
           </div>
         )}
       </div>
+
+      <Dialog open={renaming !== null} onOpenChange={(v) => !v && setRenaming(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Report Design</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Report title"
+              onKeyDown={(e) => e.key === "Enter" && saveRename()}
+            />
+            <Button onClick={saveRename} disabled={savingRename} className="w-full">
+              {savingRename ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
