@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, Loader2, MapPin, Plus, Search, ExternalLink } from "lucide-react";
+import { Copy, Loader2, MapPin, Plus, Search, ExternalLink, FileOutput, Eye, Download } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domain
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 import type { ReportDesign } from "@/types/report-blocks";
 import type { ChartDesign } from "@/types/chart-design";
+import type { GeneratedReport } from "@/types/generated-report";
 
 interface PlaceSuggestion {
   lat: number;
@@ -66,6 +67,15 @@ export function EnergeticDecoderReadingsTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSystem, setActiveSystem] = useState<ReadingSystem | null>(null);
   const [search, setSearch] = useState("");
+
+  // Generate Report (Phase 2 Build Plan, 2026-08-12) — Reading is today's
+  // real source context; the Profile architecture isn't built yet, so this
+  // hangs off the reading directly. Deliberately not on the Contact page,
+  // per the owner's decision.
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generateDesignId, setGenerateDesignId] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [generatedResult, setGeneratedResult] = useState<GeneratedReport | null>(null);
 
   async function loadReadings() {
     setReadingsLoading(true);
@@ -219,6 +229,33 @@ export function EnergeticDecoderReadingsTab() {
   function selectReading(id: string) {
     setSelectedId(id);
     setActiveSystem(null);
+  }
+
+  function openGenerateDialog() {
+    setGenerateDesignId("");
+    setGeneratedResult(null);
+    setGenerateOpen(true);
+  }
+
+  /** Reuses the existing GeneratedReport service (list/get/create, Task 2) — no second generation/resolution path. */
+  async function generateReport() {
+    if (!selected || !generateDesignId) return;
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportDesignId: generateDesignId, readingId: selected.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; generatedReport?: GeneratedReport; error?: string };
+      if (!res.ok || !data.ok || !data.generatedReport) throw new Error(data.error ?? "Couldn't generate that report.");
+      setGeneratedResult(data.generatedReport);
+      toast.success("Report generated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't generate that report.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   return (
@@ -419,6 +456,14 @@ export function EnergeticDecoderReadingsTab() {
                     >
                       Download PDF
                     </a>
+                    <button
+                      type="button"
+                      onClick={openGenerateDialog}
+                      className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      <FileOutput className="h-3 w-3" />
+                      Generate Report
+                    </button>
                     {reportDesigns.length > 0 && (
                       <select
                         value=""
@@ -487,6 +532,87 @@ export function EnergeticDecoderReadingsTab() {
           </div>
         </div>
       )}
+
+      <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Generate Report</DialogTitle>
+          </DialogHeader>
+          {!generatedResult ? (
+            <div className="space-y-4 py-2">
+              <p className="text-xs text-muted-foreground">
+                Choose a Report Template to generate for {selected?.name}. This creates a real generated-report
+                record — a snapshot of this reading&apos;s resolved content, frozen at the moment you generate it.
+              </p>
+              {reportDesigns.length === 0 ? (
+                <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
+                  No Report Templates yet — build one in Report Builder first.
+                </p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto">
+                  {reportDesigns.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setGenerateDesignId(d.id)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-lg border px-3.5 py-2 text-left text-sm",
+                        generateDesignId === d.id ? "border-primary bg-primary/5 text-primary" : "hover:border-primary",
+                      )}
+                    >
+                      <span className="truncate">{d.title}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{d.pages.length} page{d.pages.length === 1 ? "" : "s"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Button onClick={generateReport} disabled={!generateDesignId || generating} className="w-full">
+                {generating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                {generating ? "Generating…" : "Generate"}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-sm">
+                <span className="font-semibold">{generatedResult.reportDesignTitleAtGeneration}</span> generated for{" "}
+                {selected?.name}.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() =>
+                    window.open(
+                      `/sa/${subAccountId}/energetic-decoder/generated-reports/${generatedResult.id}/preview`,
+                      "_blank",
+                    )
+                  }
+                >
+                  <Eye className="mr-1.5 h-3.5 w-3.5" /> Preview
+                </Button>
+                <Button
+                  render={
+                    <a
+                      href={`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports/${generatedResult.id}/pdf`}
+                      download
+                    />
+                  }
+                  className="flex-1"
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" /> Download PDF
+                </Button>
+              </div>
+              <button
+                type="button"
+                onClick={openGenerateDialog}
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+              >
+                Generate another
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
