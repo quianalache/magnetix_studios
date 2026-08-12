@@ -38,7 +38,7 @@ export async function GET(
   const url = new URL(request.url);
   const source = url.searchParams.get("source");
 
-  let reading: { name: string; birthDate: string; birthPlace: string; humanDesign: unknown; astrology: unknown };
+  let reading: { name: string; birthDate: string; birthPlace: string; humanDesign: unknown; astrology: unknown; spheres?: unknown };
   let sourceLabel: string;
 
   if (source === "sample") {
@@ -56,6 +56,7 @@ export async function GET(
       birthPlace: real.birthPlace,
       humanDesign: real.humanDesign,
       astrology: real.astrology,
+      spheres: real.spheres,
     };
     sourceLabel = real.name;
   } else {

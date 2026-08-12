@@ -61,6 +61,8 @@ export interface HumanDesignReadingContent {
   authorityDescription: string;
   /** Keyed by CenterKey. All 9 resolved regardless of definition status, so the reading always has both texts available to display. */
   centers: Record<string, { definedText: string; undefinedText: string }>;
+  /** Line 1-6 name (e.g. "The Investigator"), keyed by line number as a string — added 2026-08-12 for the Profile interpretation-text shortcode ({{profile_description}}). Optional: readings saved before this shipped have no `lines` map. */
+  lines?: Record<string, string>;
 }
 
 export interface AstrologyReadingContent {

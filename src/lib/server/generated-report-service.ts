@@ -90,6 +90,7 @@ export async function createGeneratedReport(opts: {
     birthPlace: reading.birthPlace,
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
+    spheres: reading.spheres,
   };
 
   const doc = {

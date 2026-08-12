@@ -1,5 +1,8 @@
 import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
+import type { CenterKey } from "./human-design-data";
+import { CENTER_LABELS, CENTERS } from "./human-design-data";
+import type { GeneKeysSphereName, GeneKeysSphereResult } from "./gene-keys";
 
 /**
  * Shortcodes — merge tags a report/page block's text can contain, resolved
@@ -12,9 +15,29 @@ import type { AstrologyChart } from "./astrology";
  * deliberately flat (no nested/loop syntax) — every real token here
  * resolves to one plain string, matching what a person actually drags
  * into a text block.
+ *
+ * Interpretation-text + Frequency tokens (2026-08-12, Phase 2 Task 9) —
+ * the original 24 tokens above resolve to short discrete values
+ * ("Generator," "Projector"); these resolve to the long-form paragraphs
+ * the Content tab actually manages (Type/Authority/Center/Sign/House/
+ * Aspect descriptions, per-Line names, per-gate Frequency showsUp/gift
+ * text). Deliberately NOT a second content-resolution pathway: every one
+ * of these reads from `reading.humanDesign.content` / `.astrology.content`
+ * / `.spheres[].showsUp`/`.giftText` — fields already resolved (sub-account
+ * override merged over the shipped default) and snapshotted onto the
+ * reading at creation time by energetic-decoder-chart-content-service.ts's
+ * `resolveReadingContent()` and energetic-decoder-gate-content-service.ts's
+ * per-sphere resolution in energetic-decoder-service.ts. Nothing here does
+ * a live Firestore lookup — same reason a `GeneratedReport`'s frozen
+ * snapshot can never drift from what a client actually received: the
+ * content was already resolved once, at reading-generation time, same as
+ * every other field on the reading. Missing on readings saved before this
+ * shipped (2026-08-08 for chart content, longer for gate content) — same
+ * "real field or absent" degrade-to-empty-string contract as everywhere
+ * else in this file, not a broken token.
  */
 
-export type ShortcodeGroup = "Birth Details" | "Human Design" | "Astrology";
+export type ShortcodeGroup = "Birth Details" | "Human Design" | "Astrology" | "Interpretation" | "Frequency";
 
 export interface ShortcodeDef {
   token: string;
@@ -57,14 +80,106 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "moon_sign", label: "Moon Sign", group: "Astrology" },
   { token: "rising_sign", label: "Rising Sign", group: "Astrology" },
   { token: "chiron_sign", label: "Chiron Sign", group: "Astrology" },
+
+  // Interpretation-text — Human Design (2026-08-12).
+  { token: "type_description", label: "Type — Interpretation", group: "Interpretation" },
+  { token: "authority_description", label: "Authority — Interpretation", group: "Interpretation" },
+  { token: "profile_description", label: "Profile — Interpretation", group: "Interpretation" },
+  ...CENTERS.map((key) => ({
+    token: `${key}_center_text`,
+    label: `${CENTER_LABELS[key]} Center — Interpretation`,
+    group: "Interpretation" as const,
+  })),
+
+  // Interpretation-text — Astrology (2026-08-12).
+  { token: "sun_sign_description", label: "Sun Sign — Interpretation", group: "Interpretation" },
+  { token: "moon_sign_description", label: "Moon Sign — Interpretation", group: "Interpretation" },
+  { token: "rising_sign_description", label: "Rising Sign — Interpretation", group: "Interpretation" },
+  { token: "chiron_sign_description", label: "Chiron Sign — Interpretation", group: "Interpretation" },
+  { token: "sun_house_theme", label: "Sun's House — Theme", group: "Interpretation" },
+  { token: "sun_house_description", label: "Sun's House — Interpretation", group: "Interpretation" },
+  { token: "tightest_aspect_description", label: "Tightest Aspect — Interpretation", group: "Interpretation" },
+
+  // Frequency / Gene Keys — the 4 Activation Sequence gates (2026-08-12).
+  // Content already manages this copy (energetic-decoder-gate-content-
+  // service.ts's showsUp/giftText, editable per sub-account) — this is the
+  // first shortcode path into a report for it.
+  { token: "life_work_gate", label: "Life's Work — Gate", group: "Frequency" },
+  { token: "life_work_shows_up", label: "Life's Work — Shows Up As", group: "Frequency" },
+  { token: "life_work_gift_text", label: "Life's Work — Gift", group: "Frequency" },
+  { token: "evolution_gate", label: "Evolution — Gate", group: "Frequency" },
+  { token: "evolution_shows_up", label: "Evolution — Shows Up As", group: "Frequency" },
+  { token: "evolution_gift_text", label: "Evolution — Gift", group: "Frequency" },
+  { token: "radiance_gate", label: "Radiance — Gate", group: "Frequency" },
+  { token: "radiance_shows_up", label: "Radiance — Shows Up As", group: "Frequency" },
+  { token: "radiance_gift_text", label: "Radiance — Gift", group: "Frequency" },
+  { token: "purpose_gate", label: "Purpose — Gate", group: "Frequency" },
+  { token: "purpose_shows_up", label: "Purpose — Shows Up As", group: "Frequency" },
+  { token: "purpose_gift_text", label: "Purpose — Gift", group: "Frequency" },
 ];
+
+/** One resolved chart-content item as it's snapshotted onto a reading — same shape energetic-decoder-chart-content-service.ts's resolveReadingContent() returns. */
+interface HumanDesignReadingContentShape {
+  typeStrategy: string;
+  typeDescription: string;
+  authorityDescription: string;
+  centers: Record<string, { definedText: string; undefinedText: string }>;
+  /** Line 1-6 name (e.g. "The Investigator"), keyed by line number as a string. */
+  lines?: Record<string, string>;
+}
+
+interface AstrologyReadingContentShape {
+  signs: Record<string, string>;
+  houses: Record<string, { theme: string; description: string }>;
+  aspectTypes: Record<string, string>;
+}
 
 export interface ShortcodeReadingInput {
   name?: string;
   birthDate?: string;
   birthPlace?: string;
-  humanDesign?: HumanDesignProfile | null;
-  astrology?: AstrologyChart | null;
+  humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContentShape }) | null;
+  astrology?: (AstrologyChart & { content?: AstrologyReadingContentShape }) | null;
+  /** Gene Keys / Frequency spheres, each already resolved with showsUp/giftText at reading-generation time (energetic-decoder-service.ts). Optional — omitted by sources that don't compute Gene Keys (e.g. the Report Builder Preview's Sample Data). */
+  spheres?: GeneKeysSphereResult[];
+}
+
+const ASTRO_BODY_LABELS: Record<string, string> = {
+  sun: "Sun",
+  moon: "Moon",
+  mercury: "Mercury",
+  venus: "Venus",
+  mars: "Mars",
+  jupiter: "Jupiter",
+  saturn: "Saturn",
+  uranus: "Uranus",
+  neptune: "Neptune",
+  pluto: "Pluto",
+  northNode: "North Node",
+  southNode: "South Node",
+  lilith: "Lilith",
+  chiron: "Chiron",
+};
+
+function centerText(hd: ShortcodeReadingInput["humanDesign"], key: CenterKey): string {
+  const content = hd?.content?.centers?.[key];
+  if (!content) return "";
+  const isDefined = hd?.definedCenters?.includes(key) ?? false;
+  return isDefined ? content.definedText : content.undefinedText;
+}
+
+function profileDescription(hd: ShortcodeReadingInput["humanDesign"]): string {
+  const profile = hd?.profile;
+  if (!profile) return "";
+  const [a, b] = profile.split("/");
+  const nameA = hd?.content?.lines?.[a];
+  const nameB = hd?.content?.lines?.[b];
+  if (!nameA || !nameB) return "";
+  return `${profile} — ${nameA} / ${nameB}`;
+}
+
+function findSphere(spheres: GeneKeysSphereResult[] | undefined, name: GeneKeysSphereName): GeneKeysSphereResult | undefined {
+  return spheres?.find((s) => s.sphere === name);
 }
 
 function resolveToken(token: string, reading: ShortcodeReadingInput): string {
@@ -121,6 +236,86 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
       return astro?.angles.ascendant.sign ?? "";
     case "chiron_sign":
       return astro?.placements.find((p) => p.body === "chiron")?.sign ?? "";
+
+    // Interpretation-text — Human Design.
+    case "type_description":
+      return hd?.content?.typeDescription ?? "";
+    case "authority_description":
+      return hd?.content?.authorityDescription ?? "";
+    case "profile_description":
+      return profileDescription(hd);
+    case "head_center_text":
+    case "ajna_center_text":
+    case "throat_center_text":
+    case "g_center_text":
+    case "heart_center_text":
+    case "sacral_center_text":
+    case "solarplexus_center_text":
+    case "spleen_center_text":
+    case "root_center_text":
+      return centerText(hd, token.replace(/_center_text$/, "") as CenterKey);
+
+    // Interpretation-text — Astrology.
+    case "sun_sign_description": {
+      const sign = astro?.placements.find((p) => p.body === "sun")?.sign;
+      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+    }
+    case "moon_sign_description": {
+      const sign = astro?.placements.find((p) => p.body === "moon")?.sign;
+      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+    }
+    case "rising_sign_description": {
+      const sign = astro?.angles.ascendant.sign;
+      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+    }
+    case "chiron_sign_description": {
+      const sign = astro?.placements.find((p) => p.body === "chiron")?.sign;
+      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+    }
+    case "sun_house_theme": {
+      const house = astro?.placements.find((p) => p.body === "sun")?.house;
+      return house ? (astro?.content?.houses?.[String(house)]?.theme ?? "") : "";
+    }
+    case "sun_house_description": {
+      const house = astro?.placements.find((p) => p.body === "sun")?.house;
+      return house ? (astro?.content?.houses?.[String(house)]?.description ?? "") : "";
+    }
+    case "tightest_aspect_description": {
+      const aspect = astro?.aspects?.[0];
+      if (!aspect) return "";
+      const desc = astro?.content?.aspectTypes?.[aspect.type];
+      if (!desc) return "";
+      const labelA = ASTRO_BODY_LABELS[aspect.bodyA] ?? aspect.bodyA;
+      const labelB = ASTRO_BODY_LABELS[aspect.bodyB] ?? aspect.bodyB;
+      return `${labelA} ${aspect.type} ${labelB} — ${desc}`;
+    }
+
+    // Frequency / Gene Keys — Activation Sequence.
+    case "life_work_gate":
+      return findSphere(reading.spheres, "Life's Work")?.gate?.toString() ?? "";
+    case "life_work_shows_up":
+      return findSphere(reading.spheres, "Life's Work")?.showsUp ?? "";
+    case "life_work_gift_text":
+      return findSphere(reading.spheres, "Life's Work")?.giftText ?? "";
+    case "evolution_gate":
+      return findSphere(reading.spheres, "Evolution")?.gate?.toString() ?? "";
+    case "evolution_shows_up":
+      return findSphere(reading.spheres, "Evolution")?.showsUp ?? "";
+    case "evolution_gift_text":
+      return findSphere(reading.spheres, "Evolution")?.giftText ?? "";
+    case "radiance_gate":
+      return findSphere(reading.spheres, "Radiance")?.gate?.toString() ?? "";
+    case "radiance_shows_up":
+      return findSphere(reading.spheres, "Radiance")?.showsUp ?? "";
+    case "radiance_gift_text":
+      return findSphere(reading.spheres, "Radiance")?.giftText ?? "";
+    case "purpose_gate":
+      return findSphere(reading.spheres, "Purpose")?.gate?.toString() ?? "";
+    case "purpose_shows_up":
+      return findSphere(reading.spheres, "Purpose")?.showsUp ?? "";
+    case "purpose_gift_text":
+      return findSphere(reading.spheres, "Purpose")?.giftText ?? "";
+
     default:
       return "";
   }

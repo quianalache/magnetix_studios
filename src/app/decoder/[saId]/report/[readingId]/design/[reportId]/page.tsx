@@ -45,6 +45,7 @@ export default async function EnergeticDecoderReportDesignPage({
     birthPlace: reading.birthPlace,
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
+    spheres: reading.spheres,
   };
 
   const [hdDesign, mandalaDesign, astroDesign] = reading.humanDesign || reading.astrology

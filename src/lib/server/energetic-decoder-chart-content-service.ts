@@ -272,6 +272,8 @@ export async function resolveReadingContent(
     typeDescription: string;
     authorityDescription: string;
     centers: Record<string, { definedText: string; undefinedText: string }>;
+    /** Line 1-6 name (e.g. "The Investigator"), keyed by line number as a string — added 2026-08-12 for the Profile interpretation-text shortcode ({{profile_description}}). */
+    lines: Record<string, string>;
   };
   astrology: {
     signs: Record<string, string>;
@@ -297,12 +299,14 @@ export async function resolveReadingContent(
   const signs: Record<string, string> = {};
   const houses: Record<string, { theme: string; description: string }> = {};
   const aspectTypes: Record<string, string> = {};
+  const lines: Record<string, string> = {};
   for (const item of items) {
     if (item.system === "astro" && item.category === "sign") signs[item.key] = item.fields.description ?? "";
     if (item.system === "astro" && item.category === "house") {
       houses[item.key] = { theme: item.fields.theme ?? "", description: item.fields.description ?? "" };
     }
     if (item.system === "astro" && item.category === "aspect") aspectTypes[item.key] = item.fields.description ?? "";
+    if (item.system === "hd" && item.category === "line") lines[item.key] = item.fields.name ?? "";
   }
 
   return {
@@ -311,6 +315,7 @@ export async function resolveReadingContent(
       typeDescription: typeItem?.fields.description ?? "",
       authorityDescription: authorityItem?.fields.description ?? "",
       centers,
+      lines,
     },
     astrology: { signs, houses, aspectTypes },
   };
