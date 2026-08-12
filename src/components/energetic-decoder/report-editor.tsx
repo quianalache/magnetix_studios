@@ -12,7 +12,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft, Plus, Trash2, GripVertical, Type, Image as ImageIcon, Video,
-  MousePointerClick, LayoutGrid, Minus, MoveVertical, Copy, Eye, Sparkles, User,
+  MousePointerClick, LayoutGrid, Minus, MoveVertical, Copy, Eye, Sparkles, User, Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,13 @@ const CHART_PIECES: { value: ChartPieceKind; label: string }[] = [
 
 function newBlockId(): string {
   return crypto.randomUUID();
+}
+
+/** Human-readable summary of a page's visibleIf, for the sidebar badge tooltip. */
+function describeVisibleIf(condition: ChartRuleCondition): string {
+  const attr = CHART_RULE_ATTRIBUTES.find((a) => a.value === condition.attribute)?.label ?? condition.attribute;
+  const op = CHART_RULE_OPERATORS.find((o) => o.value === condition.operator)?.label ?? condition.operator;
+  return `Only shown when ${attr} ${op} "${condition.value}"`;
 }
 
 function defaultBlockFor(type: ReportBlockType): ReportBlock {
@@ -213,11 +220,16 @@ export function ReportEditor({ subAccountId, initial }: { subAccountId: string; 
                 <button
                   onClick={() => setActivePageId(p.id)}
                   className={cn(
-                    "flex-1 truncate rounded-lg px-2.5 py-1.5 text-left text-sm",
+                    "flex flex-1 items-center gap-1.5 truncate rounded-lg px-2.5 py-1.5 text-left text-sm",
                     p.id === activePageId ? "bg-primary/10 font-medium text-primary" : "text-foreground hover:bg-muted",
                   )}
                 >
-                  {i + 1}. {p.title}
+                  <span className="truncate">{i + 1}. {p.title}</span>
+                  {p.visibleIf && (
+                    <span title={describeVisibleIf(p.visibleIf)} className="shrink-0">
+                      <Filter className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => removePage(p.id)}
