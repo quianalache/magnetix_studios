@@ -6,6 +6,21 @@ const nextConfig: NextConfig = {
   // bundle explicitly — otherwise readFileSync 404s on Vercel.
   outputFileTracingIncludes: {
     "/api/agency/setup/guide": ["./CLAUDE.md", "./SETUP.md", "./.env.example"],
+    // swisseph-wasm's binary ephemeris files (2026-08-12 root-cause fix).
+    // swiss-ephemeris.ts's getSwissEph() loads these at runtime via the
+    // package's own `locateFile` (a `new URL(...)`/`__dirname` join
+    // computed at call time, not a static `import`/`require` of the
+    // binary) — Next's tracer can't see that as a real dependency, so
+    // every route below deployed with the .wasm/.data files missing:
+    // computeHumanDesignVariables/chironPlacement threw ENOENT in every
+    // affected serverless function, confirmed via `vercel logs`. Scoped to
+    // the Energetic Decoder feature's own routes (not a blanket "/**") so
+    // this doesn't bloat every unrelated function's bundle — any future
+    // route added under these same paths is covered automatically by the
+    // wildcard, matching the CLAUDE.md-guide precedent just above.
+    "/api/decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
+    "/api/sub-accounts/[id]/energetic-decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
+    "/decoder/**": ["./node_modules/swisseph-wasm/wasm/*"],
   },
   async headers() {
     return [

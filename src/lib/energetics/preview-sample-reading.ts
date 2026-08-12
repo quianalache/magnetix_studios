@@ -67,14 +67,11 @@ export function getPreviewSampleReading(): Promise<PreviewSampleReading> {
 async function buildPreviewSampleReading(): Promise<PreviewSampleReading> {
   const humanDesign = calculateHumanDesignProfile(SAMPLE_BIRTH_INPUT);
 
-  // Same try/catch contract as energetic-decoder-service.ts's
-  // withDerivedVariableArrows — this calc shares its swiss-ephemeris WASM
-  // dependency with chironPlacement below, and that dependency has been
-  // observed failing to initialize in this Vercel deployment (a
-  // pre-existing gap, not introduced here — the exact same failure shows
-  // up in that function's own try/catch). A missing Variables field on the
-  // sample is a real "field or absent" degrade, same as everywhere else in
-  // this codebase; it must never take the whole Preview request down.
+  // Root cause of the swiss-ephemeris WASM failure this try/catch was
+  // originally added for is now fixed at the source (next.config.ts's
+  // outputFileTracingIncludes, 2026-08-12) — this stays as genuine
+  // defense-in-depth, not a mask, and now logs instead of swallowing
+  // silently, so a real recurrence is diagnosable.
   try {
     const localVariables = await computeHumanDesignVariables(SAMPLE_BIRTH_INPUT);
     humanDesign.variables = {
@@ -86,14 +83,18 @@ async function buildPreviewSampleReading(): Promise<PreviewSampleReading> {
       environment: { value: localVariables.environment, description: "" },
     } satisfies HumanDesignVariables;
     humanDesign.variableArrows = localVariables.arrows;
-  } catch {
+  } catch (err) {
     // Leave humanDesign.variables/variableArrows undefined — the 6
     // Variables shortcodes ({{digestion}}, etc.) resolve to "" per
     // shortcodes.ts's existing unresolved-token contract, same as any
     // real reading saved without them.
+    console.error("[preview-sample-reading] computeHumanDesignVariables failed — sample will have no Variables/arrows.", err);
   }
 
-  const chiron = await chironPlacement(parseBirthToUtc(SAMPLE_BIRTH_INPUT)).catch(() => null);
+  const chiron = await chironPlacement(parseBirthToUtc(SAMPLE_BIRTH_INPUT)).catch((err) => {
+    console.error("[preview-sample-reading] chironPlacement failed — sample will have no Chiron placement.", err);
+    return null;
+  });
   const astrology = calculateAstrologyChart({
     ...SAMPLE_BIRTH_INPUT,
     lat: SAMPLE_LAT,

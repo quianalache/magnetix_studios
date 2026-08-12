@@ -130,32 +130,59 @@ export async function createEnergeticDecoderReading(
   // fetchBodygraphVariables() and the rest of bodygraph-api.ts are gone
   // (2026-08-11) — nothing in this pipeline calls Bodygraph anymore.
   if (rawHumanDesign) {
-    const localVariables = await computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
+    // computeHumanDesignVariables depends on swiss-ephemeris.ts's WASM
+    // module (via trueNodeLongitudeHighPrecision) for 2 of its 6 fields
+    // (Environment/Perspective) and their arrows — root-caused 2026-08-12:
+    // that WASM module failed to load in this deployment's serverless
+    // functions because its binary assets are loaded via a runtime-
+    // constructed path (the package's own `locateFile`), which Next's
+    // output file tracer can't see as a static dependency and so never
+    // included in the deployed bundle — fixed at the source in
+    // next.config.ts's outputFileTracingIncludes, not here. This try/catch
+    // stays as defense-in-depth for that dependency regardless: Variables
+    // are a real but secondary layer on top of the Type/Authority/Profile/
+    // Gates/Channels this reading already has by this point, so a failure
+    // here should degrade this one reading's Variables rather than fail
+    // the entire reading (blocking Astrology/Gene Keys too) or silently
+    // pretend nothing happened. Unlike the pre-2026-08-12 version of this
+    // code, a failure is now loudly logged, not swallowed — this exact
+    // path is what let the WASM tracing gap above go undetected for days.
+    try {
+      const localVariables = await computeHumanDesignVariables({ date: birthDate, time: birthTime, timeZone: place.timeZone });
 
-    const fieldEntries: { category: VariableCategory; local: string }[] = [
-      { category: "digestion", local: localVariables.digestion },
-      { category: "sense", local: localVariables.sense },
-      { category: "designSense", local: localVariables.designSense },
-      { category: "motivation", local: localVariables.motivation },
-      { category: "perspective", local: localVariables.perspective },
-      { category: "environment", local: localVariables.environment },
-    ];
-    const resolvedFields = await Promise.all(
-      fieldEntries.map(async ({ category, local }) => {
-        const override = await resolveVariableContent(input.subAccountId, category, local);
-        return [category, { value: local, description: override.description }] as const;
-      }),
-    );
-    rawHumanDesign.variables = Object.fromEntries(resolvedFields) as unknown as HumanDesignVariables;
+      const fieldEntries: { category: VariableCategory; local: string }[] = [
+        { category: "digestion", local: localVariables.digestion },
+        { category: "sense", local: localVariables.sense },
+        { category: "designSense", local: localVariables.designSense },
+        { category: "motivation", local: localVariables.motivation },
+        { category: "perspective", local: localVariables.perspective },
+        { category: "environment", local: localVariables.environment },
+      ];
+      const resolvedFields = await Promise.all(
+        fieldEntries.map(async ({ category, local }) => {
+          const override = await resolveVariableContent(input.subAccountId, category, local);
+          return [category, { value: local, description: override.description }] as const;
+        }),
+      );
+      rawHumanDesign.variables = Object.fromEntries(resolvedFields) as unknown as HumanDesignVariables;
 
+      // The 4 Variable arrow directions (+ their underlying Color/Tone) —
+      // verified 2026-08-10 against the same 5 real reference charts used
+      // for the word fields above (see human-design-variables.ts). Purely
+      // additive: doesn't touch any existing field, just exposes data the
+      // local calculation was already producing.
+      rawHumanDesign.variableArrows = localVariables.arrows;
+    } catch (err) {
+      console.error(
+        `[energetic-decoder] computeHumanDesignVariables failed for subAccount ${input.subAccountId} — reading will be created without the 6 Variables/arrows fields.`,
+        err,
+      );
+    }
+
+    // Independent of the Variables calc above (reads type/authority/gates/
+    // centers already on rawHumanDesign, no swiss-ephemeris involved) —
+    // must not get skipped just because Variables failed.
     rawHumanDesign.skills = await computeLocalSkills(input.subAccountId, rawHumanDesign);
-
-    // The 4 Variable arrow directions (+ their underlying Color/Tone) —
-    // verified 2026-08-10 against the same 5 real reference charts used
-    // for the word fields above (see human-design-variables.ts). Purely
-    // additive: doesn't touch any existing field, just exposes data the
-    // local calculation was already producing.
-    rawHumanDesign.variableArrows = localVariables.arrows;
   }
 
   // Which house system this sub-account's default Astrology chart design
@@ -171,11 +198,16 @@ export async function createEnergeticDecoderReading(
   // chironPlacement, verified against Bodygraph's live values first, back
   // when there still was a Bodygraph integration to verify against — see
   // that function's doc). Same best-effort contract as before: any
-  // failure here (WASM init, etc.) just means the chart has no Chiron
-  // placement, not a broken reading, same "real field or absent" rule as
-  // the Variables above.
+  // failure here (root cause fixed 2026-08-12, see the Variables try/catch
+  // above) just means the chart has no Chiron placement, not a broken
+  // reading, same "real field or absent" rule as the Variables above — but
+  // logged now instead of silently swallowed, so a real recurrence is
+  // diagnosable rather than invisible.
   const chiron = reportConfig.includeAstrology
-    ? await chironPlacement(parseBirthToUtc({ date: birthDate, time: birthTime, timeZone: place.timeZone })).catch(() => null)
+    ? await chironPlacement(parseBirthToUtc({ date: birthDate, time: birthTime, timeZone: place.timeZone })).catch((err) => {
+        console.error(`[energetic-decoder] chironPlacement failed for subAccount ${input.subAccountId} — reading will be created without a Chiron placement.`, err);
+        return null;
+      })
     : null;
 
   const rawAstrology = reportConfig.includeAstrology
@@ -335,7 +367,16 @@ async function withDerivedVariableArrows(
       timeZone: reading.timeZone,
     });
     return { ...reading, humanDesign: { ...reading.humanDesign, variableArrows: arrows } };
-  } catch {
+  } catch (err) {
+    // Logged, not silently swallowed (2026-08-12) — this exact catch is
+    // what let the swiss-ephemeris WASM tracing gap (see the fix in
+    // next.config.ts / createEnergeticDecoderReading above) go unnoticed
+    // for days: every read of an older reading was quietly failing this
+    // recompute and returning it unchanged, with no visible sign anything
+    // was wrong. Root cause is fixed at the source now; this stays as
+    // genuine best-effort resilience for a real recompute of old data, but
+    // a recurrence is diagnosable instead of invisible.
+    console.error(`[energetic-decoder] withDerivedVariableArrows recompute failed for reading ${reading.id} — returning it without variableArrows.`, err);
     return reading;
   }
 }
