@@ -423,17 +423,17 @@ export async function listCommunityTiers(opts: {
   groupId: string;
   activeOnly?: boolean;
 }): Promise<CommunityTier[]> {
-  let q = getAdminDb()
+  const snap = await getAdminDb()
     .collection(
       `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/tiers`,
     )
-    .orderBy("displayOrder", "asc");
-  if (opts.activeOnly) q = q.where("active", "==", true);
-  const snap = await q.get();
-  return snap.docs.map((doc) => ({
+    .orderBy("displayOrder", "asc")
+    .get();
+  const tiers = snap.docs.map((doc) => ({
     id: doc.id,
     ...(doc.data() as Omit<CommunityTier, "id">),
   }));
+  return opts.activeOnly ? tiers.filter((tier) => tier.active) : tiers;
 }
 
 export async function replaceCommunityTiersServerSide(opts: {
