@@ -190,6 +190,11 @@ const PUBLIC_PATHS = [
   // sub-account gets a Portal. Auth checks happen inside each route/page.
   "/portal",
   "/api/portal",
+  // Member password setup/reset — public reachability only. The request
+  // endpoint avoids account enumeration, reset is token-gated, and set still
+  // requires the existing member HMAC session inside the route handlers.
+  "/member-password",
+  "/api/member-password",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid
