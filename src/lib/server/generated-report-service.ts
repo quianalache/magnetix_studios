@@ -115,6 +115,9 @@ export async function createGeneratedReport(opts: {
     reportDesignTitleAtGeneration: design.title,
     readingId: opts.readingId,
     contactId: reading.contactId ?? null,
+    // Phase 3 Task 7 (2026-08-13) — the Reading already carries the
+    // correct profileId (Task 2/3/4/5); just copy it, no second lookup.
+    profileId: reading.profileId ?? null,
     generatedBy: opts.generatedByUid,
     snapshot: { pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput) },
     generatedAt: FieldValue.serverTimestamp(),

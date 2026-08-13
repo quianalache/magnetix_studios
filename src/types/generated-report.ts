@@ -32,6 +32,17 @@ export interface GeneratedReport {
   readingId: string;
   /** Null only if the reading somehow has no linked contact — shouldn't happen in practice (EnergeticDecoderReading.contactId is required), kept nullable defensively rather than assumed. */
   contactId: string | null;
+  /**
+   * Phase 3 Task 7 (2026-08-13) — copied from the source Reading's own
+   * `profileId` at generation time, same "resolve once, snapshot the
+   * relationship" convention as `contactId` above. Optional/nullable for
+   * backward compatibility: every GeneratedReport created before this
+   * task predates `profileId` entirely (Reading itself didn't have one
+   * until Task 2) — `undefined`/`null` both mean "not yet known," never
+   * "no profile." Relationship metadata only — never read by snapshot
+   * resolution, PDF rendering, or any Phase 2 behavior.
+   */
+  profileId?: string | null;
   generatedAt: string | null;
   generatedBy: string;
   snapshot: { pages: ReportPage[] };
