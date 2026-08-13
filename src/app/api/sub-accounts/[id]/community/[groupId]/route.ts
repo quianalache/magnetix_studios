@@ -5,6 +5,7 @@ import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { updateGroupServerSide } from "@/lib/server/community-service";
 import type {
+  CommunityAboutMediaItem,
   GroupAccess,
   GroupJoinPolicy,
   GroupStatus,
@@ -38,9 +39,11 @@ export async function PATCH(
   let body: {
     name?: string;
     about?: string;
+    aboutHtml?: string;
     tagline?: string;
     coverUrl?: string | null;
     cardImageUrl?: string | null;
+    aboutMedia?: CommunityAboutMediaItem[];
     logoUrl?: string | null;
     brandColor?: string | null;
     access?: GroupAccess;

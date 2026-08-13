@@ -4,7 +4,11 @@ import { NextResponse } from "next/server";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createGroupServerSide } from "@/lib/server/community-service";
-import type { GroupAccess, GroupJoinPolicy } from "@/types/community";
+import type {
+  CommunityAboutMediaItem,
+  GroupAccess,
+  GroupJoinPolicy,
+} from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +39,8 @@ export async function POST(
   let body: {
     name?: string;
     about?: string;
+    aboutHtml?: string;
+    aboutMedia?: CommunityAboutMediaItem[];
     coverUrl?: string | null;
     brandColor?: string | null;
     access?: GroupAccess;
@@ -60,6 +66,8 @@ export async function POST(
     createdByUid: access.uid,
     name: body.name,
     about: body.about,
+    aboutHtml: body.aboutHtml,
+    aboutMedia: body.aboutMedia,
     coverUrl: body.coverUrl ?? null,
     brandColor: body.brandColor ?? null,
     access: body.access,

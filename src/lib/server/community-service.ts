@@ -4,8 +4,19 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
+import {
+  aboutHtmlToPlainText,
+  aboutPlainTextLength,
+  normalizeAboutHtml,
+} from "@/lib/community/about-html";
+import { parseVideoUrl } from "@/lib/community/video-embed";
 import type {
+  CommunityAboutMediaItem,
+  CommunityAboutMediaType,
   CommunityGroup,
+  CommunityReview,
+  CommunityReviewView,
+  CommunityTier,
   GroupAccess,
   GroupJoinPolicy,
   GroupMembership,
@@ -19,6 +30,51 @@ function cleanLinks(links: ResourceLink[]): ResourceLink[] {
     .filter((l) => l && l.url?.trim())
     .map((l) => ({ label: l.label?.trim() || l.url.trim(), url: l.url.trim() }))
     .slice(0, 10);
+}
+
+function cleanAboutMedia(items: CommunityAboutMediaItem[] | undefined): CommunityAboutMediaItem[] {
+  return (items ?? [])
+    .filter((item) => item && item.url?.trim())
+    .map((item, index) => {
+      const type: CommunityAboutMediaType = item.type === "video" ? "video" : "image";
+      const parsed = type === "video" ? parseVideoUrl(item.url) : null;
+      return {
+        id: item.id?.trim() || `media-${Date.now()}-${index}`,
+        type,
+        url: item.url.trim(),
+        title: (item.title ?? "").trim().slice(0, 80),
+        thumbnailUrl: item.thumbnailUrl?.trim() || null,
+        provider: item.provider ?? parsed?.provider ?? null,
+        videoId: item.videoId ?? parsed?.id ?? null,
+        order: Number.isFinite(item.order) ? item.order : index,
+      };
+    })
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 8)
+    .map((item, index) => ({ ...item, order: index }));
+}
+
+function cleanAboutHtml(input: { about?: string; aboutHtml?: string }): string {
+  const candidate = input.aboutHtml ?? input.about ?? "";
+  const normalized = normalizeAboutHtml(candidate);
+  return aboutPlainTextLength(normalized) <= ABOUT_MAX_CHARS
+    ? normalized
+    : normalizeAboutHtml(aboutHtmlToPlainText(normalized).slice(0, ABOUT_MAX_CHARS));
+}
+
+function toMillis(v: unknown): number | null {
+  if (!v) return null;
+  const m = v as {
+    toMillis?: () => number;
+    toDate?: () => Date;
+    seconds?: number;
+    _seconds?: number;
+  };
+  if (typeof m.toMillis === "function") return m.toMillis();
+  if (typeof m.toDate === "function") return m.toDate().getTime();
+  if (typeof m.seconds === "number") return m.seconds * 1000;
+  if (typeof m._seconds === "number") return m._seconds * 1000;
+  return null;
 }
 
 /**
@@ -66,9 +122,11 @@ export interface CreateGroupInput {
   createdByUid: string;
   name: string;
   about?: string;
+  aboutHtml?: string;
   tagline?: string;
   coverUrl?: string | null;
   cardImageUrl?: string | null;
+  aboutMedia?: CommunityAboutMediaItem[];
   logoUrl?: string | null;
   brandColor?: string | null;
   access?: GroupAccess;
@@ -91,10 +149,12 @@ export async function createGroupServerSide(
     createdByUid: input.createdByUid,
     name: input.name.trim(),
     slug,
-    about: (input.about?.trim() ?? "").slice(0, ABOUT_MAX_CHARS),
+    about: aboutHtmlToPlainText(input.about ?? input.aboutHtml ?? "").slice(0, ABOUT_MAX_CHARS),
+    aboutHtml: cleanAboutHtml(input),
     tagline: (input.tagline?.trim() ?? "").slice(0, TAGLINE_MAX_CHARS),
     coverUrl: input.coverUrl ?? null,
     cardImageUrl: input.cardImageUrl ?? null,
+    aboutMedia: cleanAboutMedia(input.aboutMedia),
     logoUrl: input.logoUrl ?? null,
     brandColor: input.brandColor ?? null,
     access,
@@ -106,6 +166,8 @@ export async function createGroupServerSide(
     links: [],
     status: input.status ?? "draft",
     memberCount: 0,
+    reviewCount: 0,
+    averageRating: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -119,9 +181,11 @@ export async function createGroupServerSide(
 export interface UpdateGroupPatch {
   name?: string;
   about?: string;
+  aboutHtml?: string;
   tagline?: string;
   coverUrl?: string | null;
   cardImageUrl?: string | null;
+  aboutMedia?: CommunityAboutMediaItem[];
   logoUrl?: string | null;
   brandColor?: string | null;
   access?: GroupAccess;
@@ -158,12 +222,16 @@ export async function updateGroupServerSide(opts: {
       opts.groupId,
     );
   }
-  if (typeof p.about === "string")
-    updates.about = p.about.trim().slice(0, ABOUT_MAX_CHARS);
+  if (typeof p.about === "string" || typeof p.aboutHtml === "string") {
+    const aboutHtml = cleanAboutHtml(p);
+    updates.aboutHtml = aboutHtml;
+    updates.about = aboutHtmlToPlainText(aboutHtml).slice(0, ABOUT_MAX_CHARS);
+  }
   if (typeof p.tagline === "string")
     updates.tagline = p.tagline.trim().slice(0, TAGLINE_MAX_CHARS);
   if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
   if (p.cardImageUrl !== undefined) updates.cardImageUrl = p.cardImageUrl;
+  if (Array.isArray(p.aboutMedia)) updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
   if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
   if (p.brandColor !== undefined) updates.brandColor = p.brandColor;
   if (p.joinPolicy) updates.joinPolicy = p.joinPolicy;
@@ -333,6 +401,7 @@ export async function joinGroupServerSide(opts: {
     points: 0,
     level: 1,
     joinedAt: FieldValue.serverTimestamp(),
+    tierId: null,
   });
 
   if (becomesActive) {
@@ -347,6 +416,188 @@ export async function joinGroupServerSide(opts: {
   }
 
   return becomesActive ? { status: "active" } : { status: "pending" };
+}
+
+export async function listCommunityTiers(opts: {
+  subAccountId: string;
+  groupId: string;
+  activeOnly?: boolean;
+}): Promise<CommunityTier[]> {
+  let q = getAdminDb()
+    .collection(
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/tiers`,
+    )
+    .orderBy("displayOrder", "asc");
+  if (opts.activeOnly) q = q.where("active", "==", true);
+  const snap = await q.get();
+  return snap.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as Omit<CommunityTier, "id">),
+  }));
+}
+
+export async function replaceCommunityTiersServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  tiers: Partial<CommunityTier>[];
+}): Promise<CommunityTier[]> {
+  const db = getAdminDb();
+  const groupRef = db.doc(
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+  );
+  const groupSnap = await groupRef.get();
+  if (!groupSnap.exists) return [];
+  const group = groupSnap.data() as Omit<CommunityGroup, "id">;
+  const col = groupRef.collection("tiers");
+  const existing = await col.get();
+  const batch = db.batch();
+  const seen = new Set<string>();
+  opts.tiers
+    .filter((tier) => tier.name?.trim())
+    .forEach((tier, index) => {
+      const ref = tier.id ? col.doc(tier.id) : col.doc();
+      seen.add(ref.id);
+      batch.set(
+        ref,
+        {
+          subAccountId: opts.subAccountId,
+          agencyId: group.agencyId,
+          groupId: opts.groupId,
+          name: tier.name!.trim().slice(0, 80),
+          description: (tier.description ?? "").trim().slice(0, 300),
+          priceCents:
+            typeof tier.priceCents === "number" && tier.priceCents >= 0
+              ? Math.round(tier.priceCents)
+              : null,
+          currency: tier.currency?.trim() || "USD",
+          billingInterval: tier.billingInterval ?? null,
+          displayOrder: Number.isFinite(tier.displayOrder)
+            ? tier.displayOrder
+            : index,
+          active: tier.active !== false,
+          entitlementMetadata: tier.entitlementMetadata ?? {},
+          checkoutUrl: tier.checkoutUrl?.trim() || null,
+          createdAt: tier.createdAt ?? FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+  existing.docs.forEach((doc) => {
+    if (!seen.has(doc.id)) batch.delete(doc.ref);
+  });
+  await batch.commit();
+  return listCommunityTiers({ subAccountId: opts.subAccountId, groupId: opts.groupId });
+}
+
+export async function listCommunityReviews(opts: {
+  subAccountId: string;
+  groupId: string;
+  includeRemoved?: boolean;
+  limit?: number;
+}): Promise<CommunityReviewView[]> {
+  const snap = await getAdminDb()
+    .collection(
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews`,
+    )
+    .orderBy("updatedAt", "desc")
+    .limit(opts.limit ?? 20)
+    .get();
+  const reviews = snap.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<CommunityReview, "id">) }))
+    .filter((review) => opts.includeRemoved || review.status === "active");
+  const memberSnaps = await Promise.all(
+    reviews.map((review) =>
+      getAdminDb().doc(`subAccounts/${opts.subAccountId}/members/${review.memberId}`).get(),
+    ),
+  );
+  return reviews.map((review, index) => {
+    const member = memberSnaps[index].data();
+    return {
+      ...review,
+      reviewerName:
+        (member?.displayName as string | undefined)?.trim() ||
+        (member?.email as string | undefined)?.split("@")[0] ||
+        "Member",
+      reviewerAvatarUrl: (member?.avatarUrl as string | null | undefined) ?? null,
+      createdAtMs: toMillis(review.createdAt),
+      updatedAtMs: toMillis(review.updatedAt),
+    };
+  });
+}
+
+async function recomputeReviewAggregate(subAccountId: string, groupId: string) {
+  const groupRef = getAdminDb().doc(
+    `subAccounts/${subAccountId}/communityGroups/${groupId}`,
+  );
+  const snap = await groupRef.collection("reviews").where("status", "==", "active").get();
+  const ratings = snap.docs
+    .map((doc) => Number(doc.data().rating))
+    .filter((rating) => rating >= 1 && rating <= 5);
+  const average =
+    ratings.length > 0
+      ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
+      : null;
+  await groupRef.update({ reviewCount: ratings.length, averageRating: average });
+}
+
+export async function upsertCommunityReviewServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  memberId: string;
+  rating: number;
+  body: string;
+}): Promise<CommunityReview> {
+  const membership = await getMembership(opts.subAccountId, opts.groupId, opts.memberId);
+  if (!membership || membership.status !== "active") {
+    throw new Error("Only active members can review this community.");
+  }
+  const group = await getGroupById(opts.subAccountId, opts.groupId);
+  if (!group) throw new Error("Group not found");
+  const rating = Math.max(1, Math.min(5, Math.round(opts.rating)));
+  const ref = getAdminDb().doc(
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.memberId}`,
+  );
+  const snap = await ref.get();
+  await ref.set(
+    {
+      subAccountId: opts.subAccountId,
+      agencyId: group.agencyId,
+      groupId: opts.groupId,
+      memberId: opts.memberId,
+      rating,
+      body: opts.body.trim().slice(0, 600),
+      status: "active",
+      createdAt: snap.exists ? snap.data()?.createdAt : FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      removedAt: null,
+      removedByUid: null,
+    },
+    { merge: true },
+  );
+  await recomputeReviewAggregate(opts.subAccountId, opts.groupId);
+  const fresh = await ref.get();
+  return { id: fresh.id, ...(fresh.data() as Omit<CommunityReview, "id">) };
+}
+
+export async function removeCommunityReviewServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  reviewId: string;
+  removedByUid: string | null;
+}): Promise<void> {
+  const ref = getAdminDb().doc(
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.reviewId}`,
+  );
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  await ref.update({
+    status: "removed",
+    removedAt: FieldValue.serverTimestamp(),
+    removedByUid: opts.removedByUid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await recomputeReviewAggregate(opts.subAccountId, opts.groupId);
 }
 
 /** Staff: approve a pending join request → active membership. */

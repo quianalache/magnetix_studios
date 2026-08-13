@@ -61,6 +61,19 @@ export interface Member {
 export type GroupAccess = "free" | "paid";
 export type GroupJoinPolicy = "open" | "approval";
 export type GroupStatus = "draft" | "published";
+export type CommunityAboutMediaType = "image" | "video";
+export type CommunityBillingInterval = "one_time" | "month" | "year";
+
+export interface CommunityAboutMediaItem {
+  id: string;
+  type: CommunityAboutMediaType;
+  url: string;
+  title: string;
+  thumbnailUrl: string | null;
+  provider: VideoProvider | null;
+  videoId: string | null;
+  order: number;
+}
 
 export interface CommunityGroup {
   id: string;
@@ -78,6 +91,10 @@ export interface CommunityGroup {
   coverUrl: string | null;
   /** Image at the top of the right-hand join card (falls back to cover). */
   cardImageUrl: string | null;
+  /** Purpose-built About media gallery. First/featured item renders large. */
+  aboutMedia: CommunityAboutMediaItem[];
+  /** Rich-text About body. Kept to the same 1,000-character text budget. */
+  aboutHtml: string;
   /** Small brand mark shown in the page header (falls back to cover). */
   logoUrl: string | null;
   /**
@@ -100,6 +117,34 @@ export interface CommunityGroup {
   status: GroupStatus;
   /** Denormalized count of active memberships; bumped on join/leave. */
   memberCount: number;
+  /** Denormalized active review count for the About page. */
+  reviewCount: number;
+  /** Denormalized average rating, 1–5. Null until the first active review. */
+  averageRating: number | null;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
+/**
+ * Tier / plan foundation for a Community group. Lives at
+ * `subAccounts/{saId}/communityGroups/{groupId}/tiers/{tierId}`.
+ * This is deliberately separate from one-time group access so Community does
+ * not get locked into a yes/no membership architecture.
+ */
+export interface CommunityTier {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  groupId: string;
+  name: string;
+  description: string;
+  priceCents: number | null;
+  currency: string | null;
+  billingInterval: CommunityBillingInterval | null;
+  displayOrder: number;
+  active: boolean;
+  entitlementMetadata: Record<string, unknown>;
+  checkoutUrl: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -128,7 +173,35 @@ export interface GroupMembership {
   points: number;
   /** Derived 1–9 level from {@link points}; stored for cheap leaderboard reads. */
   level: number;
+  /** Current tier/plan for tier-aware CTAs. Null for legacy/free members. */
+  tierId?: string | null;
   joinedAt: Timestamp | FieldValue | null;
+}
+
+/**
+ * One active review per member per Community group. Doc id = memberId, at
+ * `subAccounts/{saId}/communityGroups/{groupId}/reviews/{memberId}`.
+ */
+export interface CommunityReview {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  groupId: string;
+  memberId: string;
+  rating: number;
+  body: string;
+  status: "active" | "removed";
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+  removedAt?: Timestamp | FieldValue | null;
+  removedByUid?: string | null;
+}
+
+export interface CommunityReviewView extends CommunityReview {
+  reviewerName: string;
+  reviewerAvatarUrl: string | null;
+  createdAtMs: number | null;
+  updatedAtMs: number | null;
 }
 
 /**

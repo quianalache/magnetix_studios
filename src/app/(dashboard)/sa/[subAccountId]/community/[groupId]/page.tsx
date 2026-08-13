@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query } from "firebase/firestore";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Loader2,
   Plus,
+  Star,
   Trash2,
   Users,
 } from "lucide-react";
@@ -18,14 +19,17 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
+import { AboutRichTextEditor } from "@/components/community/about-rich-text-editor";
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import type {
+  CommunityAboutMediaItem,
   CommunityGroup,
+  CommunityReview,
+  CommunityTier,
   GroupAccess,
   GroupJoinPolicy,
   GroupStatus,
@@ -34,6 +38,15 @@ import type {
 
 const SELECT_CLASS =
   "h-9 w-full rounded-md border border-input bg-background text-foreground px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground";
+
+function clientPlainTextLength(html: string): number {
+  if (typeof window === "undefined") {
+    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().length;
+  }
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent ?? "").replace(/\s+/g, " ").trim().length;
+}
 
 export default function CommunityGroupSettingsPage({
   params,
@@ -50,6 +63,7 @@ export default function CommunityGroupSettingsPage({
   // Form state
   const [name, setName] = useState("");
   const [about, setAbout] = useState("");
+  const [aboutMedia, setAboutMedia] = useState<CommunityAboutMediaItem[]>([]);
   const [tagline, setTagline] = useState("");
   const [brandColor, setBrandColor] = useState("");
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -61,6 +75,8 @@ export default function CommunityGroupSettingsPage({
   const [price, setPrice] = useState("");
   const [categories, setCategories] = useState("");
   const [links, setLinks] = useState<ResourceLink[]>([]);
+  const [tiers, setTiers] = useState<Partial<CommunityTier>[]>([]);
+  const [reviews, setReviews] = useState<CommunityReview[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
@@ -77,7 +93,8 @@ export default function CommunityGroupSettingsPage({
         const g = { id: snap.id, ...(snap.data() as Omit<CommunityGroup, "id">) };
         setGroup(g);
         setName(g.name);
-        setAbout(g.about);
+        setAbout(g.aboutHtml || g.about || "");
+        setAboutMedia(g.aboutMedia ?? []);
         setTagline(g.tagline ?? "");
         setBrandColor(g.brandColor ?? "");
         setCoverUrl(g.coverUrl ?? null);
@@ -95,7 +112,35 @@ export default function CommunityGroupSettingsPage({
     );
   }, [subAccountId, groupId]);
 
+  useEffect(() => {
+    const tiersQuery = query(
+      collection(getFirebaseDb(), `subAccounts/${subAccountId}/communityGroups/${groupId}/tiers`),
+      orderBy("displayOrder", "asc"),
+    );
+    return onSnapshot(tiersQuery, (snap) => {
+      setTiers(
+        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CommunityTier, "id">) })),
+      );
+    });
+  }, [subAccountId, groupId]);
+
+  useEffect(() => {
+    const reviewsQuery = query(
+      collection(getFirebaseDb(), `subAccounts/${subAccountId}/communityGroups/${groupId}/reviews`),
+      orderBy("updatedAt", "desc"),
+    );
+    return onSnapshot(reviewsQuery, (snap) => {
+      setReviews(
+        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CommunityReview, "id">) })),
+      );
+    });
+  }, [subAccountId, groupId]);
+
   async function handleSave() {
+    if (clientPlainTextLength(about) > ABOUT_MAX_CHARS) {
+      toast.error(`About must be ${ABOUT_MAX_CHARS} characters or less.`);
+      return;
+    }
     setSaving(true);
     try {
       const priceCents =
@@ -109,7 +154,8 @@ export default function CommunityGroupSettingsPage({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name,
-            about,
+            aboutHtml: about,
+            aboutMedia,
             tagline,
             brandColor: brandColor.trim() || null,
             coverUrl,
@@ -132,6 +178,21 @@ export default function CommunityGroupSettingsPage({
         error?: string;
       };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed to save");
+      const tiersRes = await fetch(
+        `/api/sub-accounts/${subAccountId}/community/${groupId}/tiers`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tiers }),
+        },
+      );
+      const tiersData = (await tiersRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!tiersRes.ok || !tiersData.ok) {
+        throw new Error(tiersData.error ?? "Group saved, but tiers failed");
+      }
       toast.success("Group saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
@@ -181,6 +242,53 @@ export default function CommunityGroupSettingsPage({
     subAccountId,
     groupSlug: group.slug,
   });
+  const aboutTextCount = clientPlainTextLength(about);
+  const activeReviews = reviews.filter((review) => review.status === "active");
+
+  function updateMedia(
+    index: number,
+    patch: Partial<CommunityAboutMediaItem>,
+  ) {
+    setAboutMedia((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addMedia(type: "image" | "video") {
+    setAboutMedia((prev) => [
+      ...prev,
+      {
+        id: `media-${Date.now()}`,
+        type,
+        url: "",
+        title: "",
+        thumbnailUrl: null,
+        provider: null,
+        videoId: null,
+        order: prev.length,
+      },
+    ]);
+  }
+
+  function updateTier(index: number, patch: Partial<CommunityTier>) {
+    setTiers((prev) =>
+      prev.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)),
+    );
+  }
+
+  async function removeReview(reviewId: string) {
+    if (!confirm("Remove this review from the About page?")) return;
+    try {
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/community/${groupId}/reviews/${reviewId}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error("Couldn't remove review");
+      toast.success("Review removed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove review");
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-6">
@@ -239,17 +347,99 @@ export default function CommunityGroupSettingsPage({
 
         <div className="space-y-1.5">
           <Label htmlFor="about">About</Label>
-          <Textarea
-            id="about"
+          <AboutRichTextEditor
             value={about}
-            onChange={(e) => setAbout(e.target.value.slice(0, ABOUT_MAX_CHARS))}
-            maxLength={ABOUT_MAX_CHARS}
-            rows={5}
-            placeholder="Sell the group — what members get, who it's for."
+            onChange={setAbout}
+            disabled={!isAdmin || saving}
           />
-          <p className="text-right text-xs text-muted-foreground">
-            {about.length}/{ABOUT_MAX_CHARS}
+          <p
+            className={`text-right text-xs ${
+              aboutTextCount > ABOUT_MAX_CHARS
+                ? "text-destructive"
+                : "text-muted-foreground"
+            }`}
+          >
+            {aboutTextCount}/{ABOUT_MAX_CHARS}
           </p>
+          <p className="text-xs text-muted-foreground">
+            Supports bold, italic, underline, links, lists, line breaks, and
+            lightweight headings. The member-facing page renders a sanitized
+            preview of this same content.
+          </p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label>About media gallery</Label>
+              <p className="text-xs text-muted-foreground">
+                First item is featured large; up to 8 items render in the gallery.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => addMedia("image")}>
+                <Plus className="h-4 w-4" /> Image
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => addMedia("video")}>
+                <Plus className="h-4 w-4" /> Video
+              </Button>
+            </div>
+          </div>
+          {aboutMedia.length === 0 ? (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Add media for the About page, or keep using the cover image fallback.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {aboutMedia.map((item, i) => (
+                <div key={item.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-[120px_1fr_auto]">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    {i === 0 ? "Featured" : `Gallery ${i}`}
+                  </div>
+                  <div className="grid gap-2">
+                    <select
+                      className={SELECT_CLASS}
+                      value={item.type}
+                      onChange={(e) => updateMedia(i, { type: e.target.value as "image" | "video" })}
+                    >
+                      <option value="image">Image</option>
+                      <option value="video">Video</option>
+                    </select>
+                    {item.type === "image" ? (
+                      <ImageUpload
+                        label="Image"
+                        value={item.url || null}
+                        onChange={(url) => updateMedia(i, { url: url ?? "" })}
+                        onUploadingChange={setImgUploading}
+                        onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "about")}
+                        aspect="video"
+                        disabled={!isAdmin}
+                      />
+                    ) : (
+                      <Input
+                        value={item.url}
+                        onChange={(e) => updateMedia(i, { url: e.target.value })}
+                        placeholder="YouTube, Vimeo, Loom, or Descript URL"
+                      />
+                    )}
+                    <Input
+                      value={item.title}
+                      onChange={(e) => updateMedia(i, { title: e.target.value })}
+                      placeholder="Media title (optional)"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAboutMedia(aboutMedia.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
@@ -430,6 +620,153 @@ export default function CommunityGroupSettingsPage({
             </p>
           </div>
         )}
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label>Tiers / plans</Label>
+              <p className="text-xs text-muted-foreground">
+                Used for About-page Upgrade CTAs and future entitlements.
+                Checkout URLs are optional until billing is fully connected.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setTiers([
+                  ...tiers,
+                  {
+                    name: "",
+                    description: "",
+                    priceCents: null,
+                    currency: "USD",
+                    billingInterval: "month",
+                    displayOrder: tiers.length,
+                    active: true,
+                    entitlementMetadata: {},
+                    checkoutUrl: null,
+                  },
+                ])
+              }
+            >
+              <Plus className="h-4 w-4" /> Add tier
+            </Button>
+          </div>
+          {tiers.length === 0 ? (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No tiers configured. Members will not see Upgrade CTAs.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {tiers.map((tier, i) => (
+                <div key={tier.id ?? i} className="grid gap-3 rounded-md border p-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={tier.name ?? ""}
+                      onChange={(e) => updateTier(i, { name: e.target.value })}
+                      placeholder="Tier name"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={tier.priceCents != null ? tier.priceCents / 100 : ""}
+                      onChange={(e) =>
+                        updateTier(i, {
+                          priceCents: e.target.value
+                            ? Math.round(parseFloat(e.target.value) * 100)
+                            : null,
+                        })
+                      }
+                      placeholder="Price"
+                    />
+                  </div>
+                  <Input
+                    value={tier.description ?? ""}
+                    onChange={(e) => updateTier(i, { description: e.target.value })}
+                    placeholder="Short tier description"
+                  />
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <select
+                      className={SELECT_CLASS}
+                      value={tier.billingInterval ?? "month"}
+                      onChange={(e) =>
+                        updateTier(i, {
+                          billingInterval: e.target.value as CommunityTier["billingInterval"],
+                        })
+                      }
+                    >
+                      <option value="one_time">One-time</option>
+                      <option value="month">Monthly</option>
+                      <option value="year">Yearly</option>
+                    </select>
+                    <Input
+                      value={tier.checkoutUrl ?? ""}
+                      onChange={(e) =>
+                        updateTier(i, { checkoutUrl: e.target.value || null })
+                      }
+                      placeholder="Checkout URL (optional)"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTiers(tiers.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <Label>Reviews</Label>
+            <p className="text-xs text-muted-foreground">
+              Active member reviews appear on the About page. Removed reviews
+              stay hidden.
+            </p>
+          </div>
+          {activeReviews.length === 0 ? (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No active reviews yet.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activeReviews.map((review) => (
+                <div key={review.id} className="flex items-start gap-3 rounded-md border p-3">
+                  <div className="flex min-w-20 items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={`h-3.5 w-3.5 ${n <= review.rating ? "fill-current" : ""}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {review.memberId}
+                    </p>
+                    <p className="whitespace-pre-wrap text-sm">{review.body || "No written review."}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeReview(review.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </fieldset>
 
       {isAdmin && (
