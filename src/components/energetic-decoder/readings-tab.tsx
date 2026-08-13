@@ -66,6 +66,11 @@ export function EnergeticDecoderReadingsTab() {
   const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>([]);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
 
+  // Delete Reading (Phase 3 Task 6, 2026-08-13) — blocked server-side
+  // while any GeneratedReport references it; the block message already
+  // comes back in plain language, no raw IDs to add here.
+  const [deletingReadingId, setDeletingReadingId] = useState<string | null>(null);
+
   async function loadReadings() {
     setReadingsLoading(true);
     try {
@@ -190,6 +195,37 @@ export function EnergeticDecoderReadingsTab() {
       toast.error("Couldn't delete that generated report.");
     } finally {
       setDeletingReportId(null);
+    }
+  }
+
+  /**
+   * Phase 3 Task 6 (2026-08-13) — delete this Reading. Server blocks
+   * (409) while any GeneratedReport still references it, and the block
+   * response is already plain practitioner language ("delete those
+   * reports first") — passed straight through, no raw IDs added here.
+   * On success the reading drops out of the list and, if it was the
+   * selected one, `selected` falls back to the next available reading on
+   * its own re-derivation (readings.find(...) ?? filtered[0] ?? null) —
+   * clearing selectedId explicitly here just makes that deterministic
+   * instead of relying on the stale id simply no longer matching.
+   */
+  async function deleteReading(reading: EnergeticDecoderReading) {
+    if (!window.confirm(`Delete ${reading.name}'s reading? This can't be undone.`)) return;
+    setDeletingReadingId(reading.id);
+    try {
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${reading.id}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't delete this reading.");
+      setReadings((prev) => prev.filter((r) => r.id !== reading.id));
+      setSelectedId((prev) => (prev === reading.id ? null : prev));
+      toast.success("Reading deleted.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete this reading.");
+    } finally {
+      setDeletingReadingId(null);
     }
   }
 
@@ -368,6 +404,20 @@ export function EnergeticDecoderReadingsTab() {
                       View contact
                       <ExternalLink className="h-3 w-3" />
                     </Link>
+                    <button
+                      type="button"
+                      title="Delete this reading"
+                      disabled={deletingReadingId === selected.id}
+                      onClick={() => void deleteReading(selected)}
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive disabled:opacity-50"
+                    >
+                      {deletingReadingId === selected.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      Delete
+                    </button>
                   </div>
                 </div>
 

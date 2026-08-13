@@ -567,3 +567,50 @@ export async function getReadingById(
   if (reading.subAccountId !== subAccountId) return null;
   return withCanonicalSphereOrder(await withDerivedVariableArrows(reading));
 }
+
+export type DeleteReadingResult =
+  | { ok: true }
+  | { error: string; generatedReportCount: number };
+
+/**
+ * Phase 3 Task 6 (2026-08-13) — the missing safe Reading deletion. Owner-
+ * approved lifecycle rule: a Reading with zero GeneratedReports may be
+ * deleted; a Reading with any GeneratedReports must not be (no cascade —
+ * those reports were built from this Reading's specific snapshot and
+ * Phase 2's frozen-snapshot guarantee would break if the source silently
+ * disappeared out from under them). Deletes ONLY the Reading document —
+ * its Profile and Contact are never touched, same "leaves upward" cleanup
+ * order as deleteEnergeticProfile's own doc comment describes
+ * (GeneratedReport → Reading → Profile → Contact).
+ */
+export async function deleteEnergeticDecoderReading(
+  subAccountId: string,
+  readingId: string,
+): Promise<DeleteReadingResult> {
+  const db = getAdminDb();
+  const ref = db.doc(`energeticDecoderReadings/${readingId}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.subAccountId !== subAccountId) {
+    return { error: "Reading not found", generatedReportCount: 0 };
+  }
+
+  const genCountSnap = await db
+    .collection("generatedReports")
+    .where("subAccountId", "==", subAccountId)
+    .where("readingId", "==", readingId)
+    .count()
+    .get();
+  const generatedReportCount = genCountSnap.data().count;
+  if (generatedReportCount > 0) {
+    return {
+      error:
+        generatedReportCount === 1
+          ? "This reading has a generated report attached to it. Delete that report first before deleting this reading."
+          : `This reading has ${generatedReportCount} generated reports attached to it. Delete those reports first before deleting this reading.`,
+      generatedReportCount,
+    };
+  }
+
+  await ref.delete();
+  return { ok: true };
+}

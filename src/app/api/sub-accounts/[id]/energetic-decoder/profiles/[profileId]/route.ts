@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { updateEnergeticProfile } from "@/lib/server/energetic-profile-service";
+import { updateEnergeticProfile, deleteEnergeticProfile } from "@/lib/server/energetic-profile-service";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 
 /**
@@ -87,5 +87,35 @@ export async function PATCH(
     return NextResponse.json({ ok: true, profile });
   } catch {
     return NextResponse.json({ error: "That profile could not be found." }, { status: 404 });
+  }
+}
+
+/**
+ * Phase 3 Task 6 (2026-08-13) — safe Profile deletion. Reuses Task 1's
+ * `deleteEnergeticProfile` unchanged — its guard (blocks while any
+ * Reading references this profileId) was written before Readings carried
+ * `profileId` at all, and this task's job was to verify it still holds
+ * now that every production Reading does. It does: the guard queries
+ * `energeticDecoderReadings` by `profileId`, which Task 2 started writing
+ * on every new Reading and Task 3's migration backfilled onto every
+ * historical one, so the count this guard reads is now always accurate,
+ * not a hardcoded 0 that happened to always pass before. No new guard
+ * logic was needed here, only this route to expose it.
+ */
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string; profileId: string }> },
+) {
+  const { id: subAccountId, profileId } = await params;
+  const access = await requireSubAccountMember(request, subAccountId);
+  if (access instanceof NextResponse) return access;
+
+  try {
+    await deleteEnergeticProfile(subAccountId, profileId);
+    return NextResponse.json({ ok: true, profileId });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not delete this profile.";
+    const blocked = message.toLowerCase().includes("readings");
+    return NextResponse.json({ error: message }, { status: blocked ? 409 : 404 });
   }
 }

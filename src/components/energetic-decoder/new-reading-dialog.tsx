@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Loader2, MapPin, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MapPin, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { Button } from "@/components/ui/button";
@@ -116,6 +116,11 @@ export function NewReadingDialog({
   const [editError, setEditError] = useState<string | null>(null);
   const [justEdited, setJustEdited] = useState(false);
   const [justEditedCalcRelevant, setJustEditedCalcRelevant] = useState(false);
+
+  // Delete Profile (Phase 3 Task 6, 2026-08-13) — server blocks (409, no
+  // cascade) while any Reading still references this Profile; that block
+  // message is already plain practitioner language.
+  const [deletingProfile, setDeletingProfile] = useState(false);
 
   useEffect(() => {
     if (!open || !agencyId || !subAccountId) return;
@@ -262,6 +267,48 @@ export function NewReadingDialog({
       setEditError(err instanceof Error ? err.message : "Couldn't update this profile.");
     } finally {
       setEditSaving(false);
+    }
+  }
+
+  /**
+   * Phase 3 Task 6 — delete the selected Profile. Blocked server-side
+   * while it still has any Reading (409, plain-language message passed
+   * straight through). On success, land somewhere sensible: the one
+   * remaining Profile if exactly one is left, the picker if more than
+   * one, or straight into "add a first profile for this contact" if none
+   * are left — mirrors pickContact's own 0/1/many branching so deleting
+   * doesn't dead-end the dialog.
+   */
+  async function deleteProfile() {
+    if (!selectedProfile) return;
+    if (!window.confirm(`Delete the profile "${selectedProfile.name}"? This can't be undone.`)) return;
+    setDeletingProfile(true);
+    try {
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/energetic-decoder/profiles/${selectedProfile.id}`,
+        { method: "DELETE" },
+      );
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't delete this profile.");
+      toast.success("Profile deleted.");
+      const remaining = profiles.filter((p) => p.id !== selectedProfile.id);
+      setProfiles(remaining);
+      setJustEdited(false);
+      setJustEditedCalcRelevant(false);
+      if (remaining.length === 0) {
+        setSelectedProfile(null);
+        startNewProfileForm();
+      } else if (remaining.length === 1) {
+        setSelectedProfile(remaining[0]);
+        setStep("confirm-profile");
+      } else {
+        setSelectedProfile(null);
+        setStep("profile-list");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete this profile.");
+    } finally {
+      setDeletingProfile(false);
     }
   }
 
@@ -624,6 +671,16 @@ export function NewReadingDialog({
                 >
                   <Pencil className="h-3 w-3" />
                   Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteProfile()}
+                  disabled={deletingProfile}
+                  title="Delete this profile"
+                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-destructive hover:text-destructive disabled:opacity-50"
+                >
+                  {deletingProfile ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                  Delete
                 </button>
               </div>
             </div>
