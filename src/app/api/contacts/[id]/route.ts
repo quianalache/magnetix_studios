@@ -21,7 +21,8 @@ import type { MemberStatus, Role } from "@/types";
  *
  * Reference guard (no cascade): the delete is refused with 409 when the
  * contact is still linked to a deal, task, calendar event / booking, quote
- * / invoice, form submission, web-chat conversation, or voice call. The
+ * / invoice, energetic profile, form submission, web-chat conversation, or
+ * voice call. The
  * 409 body carries a `blockers` list (type + count) so the UI can explain
  * what to clear first. A GET on this route runs the same check as a
  * read-only dry-run (200 with `deletable` + `blockers`, no writes) for the
@@ -248,12 +249,19 @@ async function findContactBlockers(
       .count()
       .get();
 
-  const [deals, tasks, events, quotes, submissions, webChats, voiceCalls] =
+  const [deals, tasks, events, quotes, energeticProfiles, submissions, webChats, voiceCalls] =
     await Promise.all([
       inSub("deals"),
       inSub("tasks"),
       inSub("events"),
       inSub("quotes"),
+      // Phase 3 Task 2 (2026-08-13) — a Contact with any Energetic Profile
+      // must not be deletable, same reference-guard shape as everything
+      // else here, no cascade. Profiles themselves already refuse to
+      // delete while they have Readings (energetic-profile-service.ts), so
+      // this one count is sufficient — it's never possible for a Reading
+      // or GeneratedReport to survive an orphaned Profile.
+      inSub("energeticProfiles"),
       // Form submissions live in forms/{id}/submissions — a collection-group
       // query finds them across every form. contactId is a globally unique
       // doc id, so no sub-account filter is needed.
@@ -286,6 +294,7 @@ async function findContactBlockers(
   add(tasks.data().count, "tasks", "task");
   add(events.data().count, "events", "calendar event / booking");
   add(quotes.data().count, "quotes", "quote / invoice");
+  add(energeticProfiles.data().count, "energetic_profiles", "energetic profile");
   add(submissions.data().count, "form_submissions", "form submission");
   add(webChats.data().count, "web_chat_sessions", "web-chat conversation");
   add(voiceCalls.data().count, "voice_calls", "voice call");

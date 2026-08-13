@@ -86,6 +86,8 @@ export interface EnergeticDecoderReading {
   subAccountId: string;
   agencyId: string;
   contactId: string;
+  /** Phase 3 Task 2 (2026-08-13) — the EnergeticProfile this reading was generated against. Optional/nullable: every reading created before this shipped has no profileId and remains fully valid; nothing may assume it's present until the (not-yet-run) migration backfills it. Purely a link — the birth-data fields below stay the reading's own frozen snapshot regardless, so a later edit to the Profile never changes what an existing reading says it was calculated from. */
+  profileId?: string | null;
   /** Legacy discriminator — kept for existing docs; a reading can now hold both systems at once (see `spheres`/`humanDesign` below), so this is no longer exhaustive. */
   system: "geneKeys";
   name: string;

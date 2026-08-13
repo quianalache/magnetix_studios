@@ -5,16 +5,17 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import type { EnergeticProfile } from "@/types/energetic-profile";
 
 /**
- * Energetic Profiles — Phase 3 Task 1 (2026-08-13), data layer only.
- * Flat top-level collection, same convention as `generatedReports`/
- * `reportDesigns`/`energeticDecoderReadings` (subAccountId/agencyId
- * fields rather than nested under the sub-account doc).
+ * Energetic Profiles — Phase 3 Task 1 (2026-08-13), data layer only, then
+ * wired into reading creation by Task 2 (same day). Flat top-level
+ * collection, same convention as `generatedReports`/`reportDesigns`/
+ * `energeticDecoderReadings` (subAccountId/agencyId fields rather than
+ * nested under the sub-account doc).
  *
- * Additive and inert by design: no UI calls any of this yet, and no
- * other service (Reading creation, Contact page) references it yet.
- * That wiring, and giving Reading a `profileId`, is later work — kept
- * separate so this task can ship without changing any existing
- * behavior or touching production Readings.
+ * Task 2's only caller is `createEnergeticDecoderReading` — Contact UI
+ * and the Readings tab still don't reference Profiles directly yet; a
+ * later task handles the person-centered UI, which only makes sense once
+ * the (not-yet-run) migration has backfilled `profileId` onto existing
+ * Readings.
  */
 
 function col() {
@@ -86,6 +87,41 @@ export async function listEnergeticProfilesForContact(
     .where("contactId", "==", contactId)
     .get();
   return snap.docs.map((d) => toEnergeticProfile(d.id, d.data()));
+}
+
+function normalize(place: string): string {
+  return place.trim().toLowerCase();
+}
+
+/**
+ * Conservative birth-identity match against one Contact's existing
+ * Profiles — used by `createEnergeticDecoderReading` (Task 2) and
+ * intended to be reused unchanged by the eventual migration script, so
+ * "should these two readings share a Profile" is answered identically in
+ * both places. Exact equality only, on birthDate, birthTime, normalized
+ * birthPlace text, and timeZone — deliberately NOT name or email, so two
+ * children under one Contact are never merged just because they share a
+ * surname, and a nickname/typo difference in the submitted name never
+ * blocks a real match. Coordinates are intentionally not part of the
+ * signature: two geocodes of the same place text are expected to already
+ * agree via the matching birthPlace/timeZone fields, and requiring exact
+ * lat/lng equality too would make an otherwise-identical resubmission
+ * fail to match on a harmless geocoding rounding difference.
+ */
+export function findMatchingProfile(
+  profiles: EnergeticProfile[],
+  candidate: { birthDate: string; birthTime: string; birthPlace: string; timeZone: string },
+): EnergeticProfile | null {
+  const wantPlace = normalize(candidate.birthPlace);
+  return (
+    profiles.find(
+      (p) =>
+        p.birthDate === candidate.birthDate &&
+        p.birthTime === candidate.birthTime &&
+        normalize(p.birthPlace) === wantPlace &&
+        p.timeZone === candidate.timeZone,
+    ) ?? null
+  );
 }
 
 export async function updateEnergeticProfile(

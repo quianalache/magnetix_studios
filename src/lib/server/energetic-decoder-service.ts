@@ -17,6 +17,11 @@ import {
   type VariableCategory,
 } from "@/lib/server/energetic-decoder-chart-content-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import {
+  createEnergeticProfile,
+  listEnergeticProfilesForContact,
+  findMatchingProfile,
+} from "@/lib/server/energetic-profile-service";
 import { computeHumanDesignVariables, type HumanDesignVariables } from "@/lib/energetics/human-design-variables";
 import { computeLocalSkills } from "@/lib/server/human-design-skills-service";
 import { chironPlacement } from "@/lib/energetics/swiss-ephemeris";
@@ -251,13 +256,53 @@ export async function createEnergeticDecoderReading(
     });
     contactId = id;
   }
+  // Contact.name is never touched past this point, whether the contact was
+  // just created or already existed — the chart-subject name below belongs
+  // to the Profile/Reading, not the Contact. A parent Contact ("Sarah")
+  // generating a reading for "Emma" must never rename Sarah's own record.
+
+  // Phase 3 Task 2 (2026-08-13) — resolve/create the EnergeticProfile this
+  // reading belongs to. Reuses an existing Profile under this Contact when
+  // the submitted birth identity matches one exactly (findMatchingProfile);
+  // otherwise creates a new Profile, which is the correct behavior for a
+  // genuinely different chart subject under the same Contact (e.g. a second
+  // child) — never silently overwrites an existing Profile's birth data.
+  const existingProfiles = await listEnergeticProfilesForContact(input.subAccountId, contactId);
+  const matchedProfile = findMatchingProfile(existingProfiles, {
+    birthDate,
+    birthTime,
+    birthPlace: place.displayName,
+    timeZone: place.timeZone,
+  });
+  const profileId = matchedProfile
+    ? matchedProfile.id
+    : (
+        await createEnergeticProfile({
+          agencyId: input.agencyId,
+          subAccountId: input.subAccountId,
+          contactId,
+          name: name.trim(),
+          birthDate,
+          birthTime,
+          birthPlace: place.displayName,
+          timeZone: place.timeZone,
+          lat: place.lat,
+          lng: place.lng,
+        })
+      ).id;
 
   const readingRef = db.collection("energeticDecoderReadings").doc();
   const doc = {
     subAccountId: input.subAccountId,
     agencyId: input.agencyId,
     contactId,
+    profileId,
     system: "geneKeys" as const,
+    // Frozen snapshot at generation time — intentionally still stored here
+    // in full even though a Profile now also holds this data, so this
+    // reading never silently changes if the Profile is corrected later
+    // (Edit Profile is additive-only against future readings, never a
+    // retroactive rewrite of past ones).
     name: name.trim(),
     birthDate,
     birthTime,
