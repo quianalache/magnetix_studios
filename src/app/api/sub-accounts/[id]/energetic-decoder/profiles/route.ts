@@ -2,14 +2,19 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { listEnergeticProfilesForContact } from "@/lib/server/energetic-profile-service";
+import {
+  listEnergeticProfilesForContact,
+  listEnergeticProfilesForSubAccount,
+} from "@/lib/server/energetic-profile-service";
 
 /**
  * Phase 3 Task 4 (2026-08-13) — the New Reading workflow's "which Profile
  * belongs to this Contact" step. Thin read wrapper around Task 1's
- * `listEnergeticProfilesForContact`; no new service logic, just the first
- * route that exposes it to the browser (Contact UI / Readings tab still
- * don't call this yet — out of scope for this task).
+ * `listEnergeticProfilesForContact`.
+ *
+ * Phase 3 Task 8 (2026-08-13) — `?contactId=` is now optional: omitting it
+ * lists every Profile in the sub-account, for the new Profile-centered
+ * Readings tab (which needs to show Profiles with zero Readings too).
  */
 export async function GET(
   request: Request,
@@ -21,10 +26,8 @@ export async function GET(
 
   const { searchParams } = new URL(request.url);
   const contactId = searchParams.get("contactId");
-  if (!contactId) {
-    return NextResponse.json({ error: "contactId is required" }, { status: 400 });
-  }
-
-  const profiles = await listEnergeticProfilesForContact(subAccountId, contactId);
+  const profiles = contactId
+    ? await listEnergeticProfilesForContact(subAccountId, contactId)
+    : await listEnergeticProfilesForSubAccount(subAccountId);
   return NextResponse.json({ ok: true, profiles });
 }

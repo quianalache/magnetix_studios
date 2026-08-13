@@ -531,6 +531,24 @@ function withCanonicalSphereOrder(
   return { ...reading, spheres: sorted };
 }
 
+/**
+ * Phase 3 Task 8 (2026-08-13) — same conversion getHomeStats' `recent`
+ * list already does (data.createdAt?.toDate ? ... : null), applied here
+ * too now that the Readings tab actually displays/sorts by a Reading's
+ * own createdAt (it never did before this task). Read-time only, exactly
+ * like withDerivedVariableArrows/withCanonicalSphereOrder above — no
+ * Firestore write, no data migration, just correcting what crosses the
+ * JSON boundary to match what EnergeticDecoderReading.createdAt's type
+ * has always promised (a client-safe value, not a raw Timestamp).
+ */
+function withIsoCreatedAt(reading: EnergeticDecoderReading): EnergeticDecoderReading {
+  const raw = reading.createdAt as unknown;
+  if (typeof raw === "string" || raw === null || raw === undefined) return reading;
+  const toDate = (raw as { toDate?: () => Date }).toDate;
+  const asDate = typeof toDate === "function" ? toDate.call(raw) : null;
+  return { ...reading, createdAt: asDate ? asDate.toISOString() : null };
+}
+
 export async function listReadingsForSubAccount(
   subAccountId: string,
   limit = 50,
@@ -545,7 +563,9 @@ export async function listReadingsForSubAccount(
   const readings = snap.docs.map(
     (d) => ({ id: d.id, ...d.data() }) as EnergeticDecoderReading,
   );
-  return Promise.all(readings.map((r) => withDerivedVariableArrows(r).then(withCanonicalSphereOrder)));
+  return Promise.all(
+    readings.map((r) => withDerivedVariableArrows(r).then(withCanonicalSphereOrder).then(withIsoCreatedAt)),
+  );
 }
 
 /**
@@ -565,7 +585,7 @@ export async function getReadingById(
   if (!snap.exists) return null;
   const reading = { id: snap.id, ...snap.data() } as EnergeticDecoderReading;
   if (reading.subAccountId !== subAccountId) return null;
-  return withCanonicalSphereOrder(await withDerivedVariableArrows(reading));
+  return withIsoCreatedAt(withCanonicalSphereOrder(await withDerivedVariableArrows(reading)));
 }
 
 export type DeleteReadingResult =

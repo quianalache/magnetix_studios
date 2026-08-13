@@ -89,6 +89,18 @@ export async function listEnergeticProfilesForContact(
   return snap.docs.map((d) => toEnergeticProfile(d.id, d.data()));
 }
 
+/**
+ * Phase 3 Task 8 (2026-08-13) — every Profile in a sub-account, for the
+ * new Profile-centered Readings tab (which needs to show a Profile even
+ * when it currently has zero Readings, per the approved architecture).
+ * Same collection, no contactId filter — used instead of, not alongside,
+ * listEnergeticProfilesForContact for that one new list view.
+ */
+export async function listEnergeticProfilesForSubAccount(subAccountId: string): Promise<EnergeticProfile[]> {
+  const snap = await col().where("subAccountId", "==", subAccountId).get();
+  return snap.docs.map((d) => toEnergeticProfile(d.id, d.data()));
+}
+
 function normalize(place: string): string {
   return place.trim().toLowerCase();
 }

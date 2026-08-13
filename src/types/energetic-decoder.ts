@@ -1,4 +1,3 @@
-import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
@@ -121,7 +120,14 @@ export interface EnergeticDecoderReading {
   humanDesign?: (HumanDesignProfile & { content?: HumanDesignReadingContent }) | null;
   /** Same as `humanDesign` above. */
   astrology?: (AstrologyChart & { content?: AstrologyReadingContent }) | null;
-  createdAt: Timestamp | FieldValue | null;
+  /**
+   * ISO string once real (converted server-side from the underlying
+   * Firestore Timestamp before crossing the JSON boundary — same
+   * pattern getHomeStats' `recent` list already uses); null only for the
+   * brief serverTimestamp-sentinel window right after creation, before
+   * the doc has been re-read.
+   */
+  createdAt: string | null;
 }
 
 /**

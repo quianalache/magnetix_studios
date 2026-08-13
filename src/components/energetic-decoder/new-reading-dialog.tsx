@@ -68,10 +68,33 @@ function contactSubtitle(c: Contact): string {
   return "";
 }
 
+export interface NewReadingDialogOpenRequest {
+  contact: Contact;
+  profile: EnergeticProfile;
+  /** Defaults to "confirm-profile". */
+  step?: "confirm-profile" | "edit-profile";
+}
+
 export function NewReadingDialog({
   onCreated,
+  openRequest,
+  onOpenRequestHandled,
+  onProfileUpdated,
+  onProfileDeleted,
 }: {
   onCreated: (reading: EnergeticDecoderReading) => void;
+  /**
+   * Phase 3 Task 8 (2026-08-13) — lets the new Profile-centered Readings
+   * list open THIS SAME dialog already scoped to a specific Profile (its
+   * "Edit" action, or "Generate Reading" on a zero-Reading Profile),
+   * instead of building a second Edit-Profile form or a second reading-
+   * creation call. One dialog instance, multiple entry points.
+   */
+  openRequest?: NewReadingDialogOpenRequest | null;
+  onOpenRequestHandled?: () => void;
+  /** Task 8 — lets an external Profile-grouped list stay in sync without a full refetch. */
+  onProfileUpdated?: (profile: EnergeticProfile) => void;
+  onProfileDeleted?: (profileId: string) => void;
 }) {
   const { subAccountId, agencyId } = useSubAccount();
   const [open, setOpen] = useState(false);
@@ -131,6 +154,46 @@ export function NewReadingDialog({
     );
     return () => unsub();
   }, [open, agencyId, subAccountId]);
+
+  // Task 8 — an external "Edit"/"Generate Reading" trigger from the
+  // Profile-centered Readings list opens this same dialog pre-scoped to a
+  // specific Profile, skipping the "who" search entirely. Still fetches
+  // that Contact's full Profile list so "Not them? Choose a different
+  // profile" and the Back button behave exactly as if the practitioner
+  // had navigated here normally.
+  useEffect(() => {
+    if (!openRequest || !subAccountId) return;
+    let cancelled = false;
+    (async () => {
+      setSelectedContact(openRequest.contact);
+      let profileList = [openRequest.profile];
+      try {
+        const res = await fetch(
+          `/api/sub-accounts/${subAccountId}/energetic-decoder/profiles?contactId=${openRequest.contact.id}`,
+        );
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; profiles?: EnergeticProfile[] };
+        if (data.profiles?.length) profileList = data.profiles;
+      } catch {
+        // keep the single-profile fallback
+      }
+      if (cancelled) return;
+      setProfiles(profileList);
+      setSelectedProfile(openRequest.profile);
+      setJustEdited(false);
+      setJustEditedCalcRelevant(false);
+      if (openRequest.step === "edit-profile") {
+        startEditProfile(openRequest.profile);
+      } else {
+        setStep("confirm-profile");
+      }
+      setOpen(true);
+      onOpenRequestHandled?.();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest, subAccountId]);
 
   function resetAll() {
     setStep("who");
@@ -194,20 +257,20 @@ export function NewReadingDialog({
     setStep("confirm-profile");
   }
 
-  function startEditProfile() {
-    if (!selectedProfile) return;
-    setName(selectedProfile.name);
-    setRelationshipLabel(selectedProfile.relationshipLabel ?? "");
-    setBirthDate(selectedProfile.birthDate);
-    setBirthTime(selectedProfile.birthTime);
-    setBirthPlace(selectedProfile.birthPlace);
+  function startEditProfile(profile: EnergeticProfile | null = selectedProfile) {
+    if (!profile) return;
+    setName(profile.name);
+    setRelationshipLabel(profile.relationshipLabel ?? "");
+    setBirthDate(profile.birthDate);
+    setBirthTime(profile.birthTime);
+    setBirthPlace(profile.birthPlace);
     setSelectedPlace(
-      selectedProfile.lat != null && selectedProfile.lng != null
+      profile.lat != null && profile.lng != null
         ? {
-            lat: selectedProfile.lat,
-            lng: selectedProfile.lng,
-            displayName: selectedProfile.birthPlace,
-            timeZone: selectedProfile.timeZone,
+            lat: profile.lat,
+            lng: profile.lng,
+            displayName: profile.birthPlace,
+            timeZone: profile.timeZone,
           }
         : null,
     );
@@ -249,6 +312,7 @@ export function NewReadingDialog({
       const updated = data.profile;
       setProfiles((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       setSelectedProfile(updated);
+      onProfileUpdated?.(updated);
       // Calculation-relevant means it would change what a NEW reading
       // calculates — not whether it differs textually. Place is compared
       // normalized (same rule findMatchingProfile already uses) so a
@@ -291,6 +355,7 @@ export function NewReadingDialog({
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't delete this profile.");
       toast.success("Profile deleted.");
+      onProfileDeleted?.(selectedProfile.id);
       const remaining = profiles.filter((p) => p.id !== selectedProfile.id);
       setProfiles(remaining);
       setJustEdited(false);
@@ -665,7 +730,7 @@ export function NewReadingDialog({
                 <Check className="h-4 w-4 shrink-0 text-primary" />
                 <button
                   type="button"
-                  onClick={startEditProfile}
+                  onClick={() => startEditProfile()}
                   title="Edit this profile's information"
                   className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary"
                 >
