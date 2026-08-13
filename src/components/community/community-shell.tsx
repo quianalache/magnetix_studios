@@ -19,6 +19,7 @@ export const COMMUNITY_DEFAULT_BRAND = "#202124";
 export type CommunityTab =
   | "community"
   | "classroom"
+  | "events"
   | "members"
   | "leaderboards"
   | "about";
@@ -50,18 +51,19 @@ export function CommunityShell({
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const linkBase = { saId, pretty };
   const about = communityAboutHref(linkBase, group.slug);
-  const tabs: { key: CommunityTab; label: string; href: string }[] = [
+  const tabs: { key: CommunityTab; label: string; href?: string; disabled?: boolean }[] = [
     { key: "community", label: "Community", href: communityHomeHref(linkBase, group.slug) },
     { key: "classroom", label: "Classroom", href: communityLearningHref(linkBase, group.slug) },
+    { key: "events", label: "Events", disabled: true },
     { key: "members", label: "Members", href: communityMembersHref(linkBase, group.slug) },
-    { key: "leaderboards", label: "Leaderboards", href: communityLeaderboardHref(linkBase, group.slug) },
+    { key: "leaderboards", label: "Leaderboard", href: communityLeaderboardHref(linkBase, group.slug) },
     { key: "about", label: "About", href: about },
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: COMMUNITY_BG }}>
-      <header className="border-b border-[#E4E4E4] bg-white">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
+    <div className="min-h-screen bg-background text-foreground" style={{ backgroundColor: COMMUNITY_BG }}>
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 md:px-6">
           <Link
             href={about}
             className="truncate text-sm font-semibold text-[#202124]"
@@ -72,18 +74,28 @@ export function CommunityShell({
             {tabs.map((t) => {
               const isActive = t.key === active;
               return (
-                <Link
-                  key={t.key}
-                  href={t.href}
-                  className="border-b-2 px-3 py-2 text-sm font-medium transition-colors"
-                  style={
-                    isActive
-                      ? { borderColor: brand, color: "#202124" }
-                      : { borderColor: "transparent", color: "#909090" }
-                  }
-                >
-                  {t.label}
-                </Link>
+                t.disabled ? (
+                  <span
+                    key={t.key}
+                    aria-disabled="true"
+                    className="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
+                  >
+                    {t.label}
+                  </span>
+                ) : (
+                  <Link
+                    key={t.key}
+                    href={t.href!}
+                    className="border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+                    style={
+                      isActive
+                        ? { borderColor: brand, color: "var(--foreground)" }
+                        : { borderColor: "transparent", color: "var(--muted-foreground)" }
+                    }
+                  >
+                    {t.label}
+                  </Link>
+                )
               );
             })}
           </nav>
@@ -93,10 +105,7 @@ export function CommunityShell({
               <MemberAvatar author={viewer} size={28} brand={brand} />
             </Link>
             <form action={`/api/community/${saId}/logout`} method="post">
-              <button
-                type="submit"
-                className="text-xs text-[#909090] hover:text-[#202124]"
-              >
+              <button type="submit" className="text-xs text-muted-foreground hover:text-foreground">
                 Sign out
               </button>
             </form>
@@ -106,7 +115,7 @@ export function CommunityShell({
 
       <main
         className={cn(
-          "mx-auto max-w-5xl gap-6 px-4 py-6",
+          "mx-auto max-w-7xl gap-6 px-4 py-6 md:px-6",
           rightRail !== undefined && "grid md:grid-cols-[1fr_320px]",
         )}
       >

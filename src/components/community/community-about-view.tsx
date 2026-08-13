@@ -1,11 +1,21 @@
 import Link from "next/link";
-import { Lock, Star, Users } from "lucide-react";
+import type { CSSProperties } from "react";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Lock,
+  Play,
+  Star,
+  Users,
+} from "lucide-react";
 import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
 import { CommunityReviewForm } from "@/components/community/review-form";
 import { communityHomeHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
-import { cn } from "@/lib/utils";
 import type {
+  CommunityAboutMediaItem,
   CommunityGroup,
   CommunityReviewView,
   CommunityTier,
@@ -36,10 +46,6 @@ function tierPrice(tier: CommunityTier): string {
   return price;
 }
 
-function mediaUrl(group: CommunityGroup): string | null {
-  return group.aboutMedia?.[0]?.url ?? group.coverUrl ?? null;
-}
-
 function isVideo(url: string | null | undefined): boolean {
   return !!url && /youtube|youtu\.be|vimeo|loom|descript/i.test(url);
 }
@@ -49,15 +55,275 @@ function formatDate(ms: number | null): string {
 }
 
 function canUpgrade(membership: GroupMembership | null, tiers: CommunityTier[]) {
-  if (!membership || membership.status !== "active") return null;
+  if (!membership || membership.status !== "active") return false;
   const active = tiers.filter((tier) => tier.active);
-  if (active.length === 0) return null;
+  if (active.length === 0) return false;
   const currentIndex = active.findIndex((tier) => tier.id === membership.tierId);
-  const next =
-    currentIndex >= 0
-      ? active[currentIndex + 1]
-      : active.find((tier) => tier.priceCents != null || tier.checkoutUrl);
-  return next ?? null;
+  if (currentIndex >= 0) return currentIndex < active.length - 1;
+  return active.some((tier) => tier.priceCents != null || tier.checkoutUrl);
+}
+
+function ratingLabel(group: CommunityGroup): string {
+  if (!group.reviewCount || !group.averageRating) return "No reviews yet";
+  return `${group.averageRating.toFixed(1)} average · ${group.reviewCount} review${
+    group.reviewCount === 1 ? "" : "s"
+  }`;
+}
+
+function galleryForGroup(group: CommunityGroup): CommunityAboutMediaItem[] {
+  if (group.aboutMedia?.length) return group.aboutMedia;
+  if (!group.coverUrl) return [];
+  return [
+    {
+      id: "cover",
+      type: isVideo(group.coverUrl) ? "video" : "image",
+      url: group.coverUrl,
+      label: "",
+      title: group.name,
+      linkUrl: null,
+      featured: true,
+      thumbnailUrl: null,
+      provider: null,
+      videoId: null,
+      order: 0,
+    },
+  ];
+}
+
+function CommunityAboutStyles() {
+  return (
+    <style
+      dangerouslySetInnerHTML={{
+        __html: `
+.community-about, .community-about * { box-sizing: border-box; }
+.community-about {
+  --ca-bg: var(--background, #f8f7f5);
+  --ca-card: var(--card, #fff);
+  --ca-text: var(--foreground, #202124);
+  --ca-muted: var(--muted-foreground, #686872);
+  --ca-border: var(--border, #e4e4e4);
+  --ca-soft: var(--muted, #f8f7f5);
+  --ca-primary-text: #fff;
+  color: var(--ca-text);
+}
+.community-about a { color: inherit; }
+.community-about-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.community-about-main { min-width: 0; display: grid; gap: 24px; }
+.community-about-gallery { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .9fr); gap: 12px; }
+.community-about-supporting { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.community-about-media { position: relative; min-height: 156px; overflow: hidden; border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-text); box-shadow: 0 10px 34px rgba(32,33,36,.08); }
+.community-about-media-featured { min-height: 460px; }
+.community-about-media-image { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform .45s ease; }
+.community-about-media:hover .community-about-media-image { transform: scale(1.03); }
+.community-about-media-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,.16), rgba(0,0,0,.06)); }
+.community-about-media-empty { background: linear-gradient(135deg, color-mix(in srgb, var(--ca-primary) 22%, var(--ca-card)), var(--ca-soft)); }
+.community-about-media-empty .community-about-media-image { display: none; }
+.community-about-play { position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; background: rgba(255,255,255,.94); color: #202124; z-index: 2; }
+.community-about-media-copy { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px; color: #fff; z-index: 2; }
+.community-about-media-copy p { margin: 0 0 4px; color: rgba(255,255,255,.78); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.community-about-media-copy h3 { margin: 0; font-size: 16px; line-height: 1.2; font-weight: 750; letter-spacing: 0; }
+.community-about-media-featured .community-about-media-copy h3 { font-size: 28px; }
+.community-about-card { border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-card); box-shadow: 0 1px 2px rgba(32,33,36,.04), 0 18px 46px rgba(94,37,116,.08); }
+.community-about-copy-card { padding: 28px; }
+.community-about-copy-top { display: flex; gap: 28px; align-items: flex-start; justify-content: space-between; }
+.community-about-copy { max-width: 760px; }
+.community-about-pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ca-primary) 12%, var(--ca-card)); color: var(--ca-primary); padding: 6px 12px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.community-about-title { margin: 16px 0 0; color: var(--ca-text); font-size: clamp(32px, 5vw, 52px); line-height: 1.04; font-weight: 760; letter-spacing: 0; max-width: 820px; }
+.community-about-description { margin: 16px 0 0; max-width: 700px; color: var(--ca-muted); font-size: 16px; line-height: 1.75; }
+.community-about-info-pair { min-width: 230px; display: grid; gap: 10px; }
+.community-about-info-chip { border: 1px solid var(--ca-border); border-radius: 8px; background: color-mix(in srgb, var(--ca-card) 92%, var(--ca-soft)); padding: 12px; }
+.community-about-info-chip p { margin: 0; color: var(--ca-muted); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; }
+.community-about-info-chip strong { display: block; margin-top: 4px; color: var(--ca-text); font-size: 14px; line-height: 1.35; }
+.community-about-rich { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--ca-border); max-width: 760px; }
+.community-about-rich :where(h1,h2,h3) { color: var(--ca-text); }
+.community-about-rich :where(p,li) { color: var(--ca-muted); line-height: 1.7; }
+.community-about-rail { position: sticky; top: 92px; display: grid; gap: 16px; }
+.community-about-rail-card { border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-card); padding: 16px; box-shadow: 0 1px 2px rgba(32,33,36,.04), 0 10px 30px rgba(32,33,36,.06); }
+.community-about-identity { display: flex; gap: 12px; align-items: flex-start; }
+.community-about-logo { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; background: var(--ca-primary); color: var(--ca-primary-text); display: grid; place-items: center; font-size: 18px; font-weight: 750; }
+.community-about-identity h2 { margin: 2px 0 0; color: var(--ca-text); font-size: 19px; line-height: 1.2; font-weight: 760; }
+.community-about-identity p { margin: 6px 0 0; color: var(--ca-muted); font-size: 13px; line-height: 1.5; }
+.community-about-stats { margin-top: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; text-align: center; }
+.community-about-stat { border-radius: 8px; background: var(--ca-soft); padding: 10px 4px; }
+.community-about-stat strong { display: block; color: var(--ca-text); font-size: 19px; line-height: 1.1; }
+.community-about-stat span { display: block; margin-top: 4px; color: var(--ca-muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.community-about-cta { margin-top: 18px; display: grid; gap: 9px; }
+.community-about-button { min-height: 44px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--ca-border); background: var(--ca-card); color: var(--ca-text); font-size: 14px; font-weight: 760; text-decoration: none; }
+.community-about-button-primary { border-color: var(--ca-primary); background: var(--ca-primary); color: var(--ca-primary-text); box-shadow: 0 10px 22px rgba(32,33,36,.16); }
+.community-about-rail-title { margin: 0 0 12px; color: var(--ca-text); font-size: 14px; font-weight: 760; }
+.community-about-tier { border: 1px solid var(--ca-border); border-radius: 8px; padding: 12px; margin-top: 10px; }
+.community-about-tier-current { border-color: var(--ca-primary); }
+.community-about-tier-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.community-about-tier strong { color: var(--ca-text); font-size: 14px; }
+.community-about-tier-price { color: var(--ca-muted); font-size: 12px; font-weight: 760; }
+.community-about-tier p { margin: 6px 0 0; color: var(--ca-muted); font-size: 12px; line-height: 1.55; }
+.community-about-current { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--ca-primary); font-size: 12px; font-weight: 760; }
+.community-about-facts { display: grid; gap: 12px; }
+.community-about-fact { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ca-text); font-size: 14px; font-weight: 650; }
+.community-about-fact span { display: inline-flex; align-items: center; gap: 8px; color: var(--ca-muted); font-weight: 500; }
+.community-about-reviews { display: grid; gap: 16px; }
+.community-about-section-head { display: flex; justify-content: space-between; align-items: end; gap: 14px; }
+.community-about-section-head h2 { margin: 0; color: var(--ca-text); font-size: 26px; line-height: 1.2; }
+.community-about-review-summary { margin-top: 7px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ca-muted); font-size: 14px; font-weight: 650; }
+.community-about-review-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.community-about-review { border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-card); padding: 16px; box-shadow: 0 1px 2px rgba(32,33,36,.04); }
+.community-about-review-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.community-about-review-person { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.community-about-review-avatar { width: 36px; height: 36px; border-radius: 999px; object-fit: cover; background: var(--ca-primary); color: var(--ca-primary-text); display: grid; place-items: center; font-size: 13px; font-weight: 750; flex: 0 0 auto; }
+.community-about-review h3 { margin: 0; color: var(--ca-text); font-size: 14px; }
+.community-about-review-date { margin: 2px 0 0; color: var(--ca-muted); font-size: 12px; }
+.community-about-review-body { margin: 14px 0 0; white-space: pre-wrap; color: var(--ca-muted); font-size: 14px; line-height: 1.65; }
+.community-about-stars { display: inline-flex; align-items: center; gap: 2px; color: var(--ca-primary); flex: 0 0 auto; }
+.community-about-stars svg { width: 16px; height: 16px; fill: currentColor; }
+.community-about-see-more { justify-self: start; cursor: pointer; }
+.community-about-details { display: grid; gap: 12px; }
+.community-about-details summary { list-style: none; }
+.community-about-details summary::-webkit-details-marker { display: none; }
+.community-about-empty { border: 1px dashed var(--ca-border); border-radius: 8px; background: var(--ca-card); padding: 32px; text-align: center; color: var(--ca-muted); font-size: 14px; }
+.community-about-mobile-cta { display: none; position: sticky; bottom: 0; z-index: 20; border-top: 1px solid var(--ca-border); background: color-mix(in srgb, var(--ca-card) 94%, transparent); backdrop-filter: blur(12px); padding: 12px 16px; }
+@media (max-width: 1080px) {
+  .community-about-layout { grid-template-columns: 1fr; }
+  .community-about-rail { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .community-about-rail-card:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 840px) {
+  .community-about-layout { gap: 18px; }
+  .community-about-gallery { grid-template-columns: 1fr; }
+  .community-about-supporting { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
+  .community-about-supporting .community-about-media { min-height: 180px; scroll-snap-align: start; }
+  .community-about-media-featured { min-height: 340px; }
+  .community-about-copy-card { padding: 20px; }
+  .community-about-copy-top { display: grid; grid-template-columns: 1fr; }
+  .community-about-info-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .community-about-rail { grid-template-columns: 1fr; }
+  .community-about-review-grid { grid-template-columns: 1fr; }
+  .community-about-section-head { align-items: flex-start; flex-direction: column; }
+  .community-about-mobile-cta { display: block; }
+}
+@media (max-width: 520px) {
+  .community-about-supporting { grid-template-columns: repeat(4, minmax(72vw, 1fr)); }
+  .community-about-media-featured { min-height: 300px; }
+  .community-about-title { font-size: 31px; }
+  .community-about-info-pair { grid-template-columns: 1fr; }
+  .community-about-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+        `,
+      }}
+    />
+  );
+}
+
+function RatingStars({ rating, muted = false }: { rating: number; muted?: boolean }) {
+  return (
+    <span className="community-about-stars" aria-label={`${rating} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star key={star} style={{ opacity: star <= rating && !muted ? 1 : 0.28 }} />
+      ))}
+    </span>
+  );
+}
+
+function MediaCard({
+  item,
+  featured = false,
+  fallbackTitle,
+}: {
+  item: CommunityAboutMediaItem;
+  featured?: boolean;
+  fallbackTitle: string;
+}) {
+  const title = item.title?.trim() || fallbackTitle;
+  const label = item.label?.trim();
+  const mediaImage =
+    item.type === "image" ? item.url : item.thumbnailUrl || null;
+  const isEmpty = !mediaImage;
+  const card = (
+    <article
+      className={`community-about-media ${
+        featured ? "community-about-media-featured" : ""
+      } ${isEmpty ? "community-about-media-empty" : ""}`}
+    >
+      {mediaImage && (
+        <div
+          className="community-about-media-image"
+          style={{ backgroundImage: `url(${mediaImage})` }}
+        />
+      )}
+      <div className="community-about-media-shade" />
+      {item.type === "video" && (
+        <div className="community-about-play">
+          <Play size={16} fill="currentColor" />
+        </div>
+      )}
+      <div className="community-about-media-copy">
+        {label && <p>{label}</p>}
+        <h3>{title}</h3>
+      </div>
+    </article>
+  );
+
+  return item.linkUrl ? (
+    <a href={item.linkUrl} target="_blank" rel="noreferrer">
+      {card}
+    </a>
+  ) : (
+    card
+  );
+}
+
+function SummaryAction({
+  saId,
+  pretty,
+  group,
+  state,
+  priceLabel,
+  canShowUpgrade,
+  brand,
+}: {
+  saId: string;
+  pretty: boolean;
+  group: CommunityGroup;
+  state: ViewerState;
+  priceLabel: string;
+  canShowUpgrade: boolean;
+  brand: string;
+}) {
+  if (state === "joined" && canShowUpgrade) {
+    return (
+      <a
+        href="#membership-options"
+        className="community-about-button community-about-button-primary"
+      >
+        Upgrade
+        <ChevronRight size={16} />
+      </a>
+    );
+  }
+
+  if (state === "joined") {
+    return (
+      <Link
+        href={communityHomeHref({ saId, pretty }, group.slug)}
+        className="community-about-button community-about-button-primary"
+      >
+        Enter community
+        <ChevronRight size={16} />
+      </Link>
+    );
+  }
+
+  return (
+    <JoinButton
+      saId={saId}
+      pretty={pretty}
+      groupSlug={group.slug}
+      groupId={group.id}
+      state={state}
+      access={group.access}
+      priceLabel={priceLabel}
+      brandColor={brand}
+    />
+  );
 }
 
 export function CommunityAboutView({
@@ -81,334 +347,325 @@ export function CommunityAboutView({
   tiers: CommunityTier[];
   reviews: CommunityReviewView[];
 }) {
-  const featuredUrl = mediaUrl(group);
-  const gallery = group.aboutMedia?.length
-    ? group.aboutMedia
-    : group.coverUrl
-      ? [
-          {
-            id: "cover",
-            type: "image" as const,
-            url: group.coverUrl,
-            title: group.name,
-            thumbnailUrl: null,
-            provider: null,
-            videoId: null,
-            order: 0,
-          },
-        ]
-      : [];
+  const gallery = galleryForGroup(group);
+  const featured = gallery.find((item) => item.featured) ?? gallery[0] ?? null;
+  const supporting = featured
+    ? gallery.filter((item) => item.id !== featured.id).slice(0, 4)
+    : [];
+  const activeTiers = tiers.filter((tier) => tier.active);
+  const upgradeEligible = canUpgrade(membership, activeTiers);
   const priceLabel =
     group.access === "paid"
       ? formatPrice(group.priceCents, group.currency)
       : "Free";
-  const activeTiers = tiers.filter((tier) => tier.active);
-  const upgradeTier = canUpgrade(membership, activeTiers);
   const currentReview =
     member && reviews.find((review) => review.memberId === member.id)
       ? reviews.find((review) => review.memberId === member.id)!
       : null;
+  const visibleReviews = reviews.slice(0, 6);
+  const remainingReviews = reviews.slice(6);
+  const logoUrl = group.logoUrl ?? group.cardImageUrl ?? group.coverUrl;
 
   return (
-    <div className="space-y-7">
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0 space-y-4">
-          <div className="overflow-hidden rounded-lg border border-[#E4E4E4] bg-white">
-            {featuredUrl ? (
-              isVideo(featuredUrl) ? (
-                <div className="flex aspect-video items-center justify-center bg-[#202124] px-6 text-center text-sm font-medium text-white">
-                  Video media configured: {gallery[0]?.title || featuredUrl}
-                </div>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={featuredUrl}
-                  alt={gallery[0]?.title || group.name}
-                  className="aspect-video w-full object-cover"
-                />
-              )
-            ) : (
-              <div
-                className="flex aspect-video items-center justify-center px-6 text-center text-2xl font-semibold text-white"
-                style={{ backgroundColor: brand }}
-              >
-                {group.name}
-              </div>
-            )}
-          </div>
-
-          {gallery.length > 1 && (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {gallery.slice(1, 8).map((item) => (
-                <div
-                  key={item.id}
-                  className="overflow-hidden rounded-lg border border-[#E4E4E4] bg-white"
-                >
-                  {item.type === "video" ? (
-                    <div className="flex aspect-video items-center justify-center bg-[#202124] px-2 text-center text-[11px] font-medium text-white">
-                      Video
-                    </div>
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={item.thumbnailUrl ?? item.url}
-                      alt={item.title || ""}
-                      className="aspect-video w-full object-cover"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#202124]">
-              {group.name}
-            </h1>
-            {group.tagline?.trim() && (
-              <p className="mt-2 text-base leading-relaxed text-[#3a3a44]">
-                {group.tagline}
-              </p>
-            )}
-          </div>
-
-          {(group.aboutHtml || group.about) && (
-            <div
-              className="prose prose-sm max-w-none text-[#3a3a44] prose-a:font-medium prose-a:text-[#202124]"
-              dangerouslySetInnerHTML={{
-                __html: renderLessonBodyHtml(group.aboutHtml || group.about),
-              }}
-            />
-          )}
-        </section>
-
-        <aside className="space-y-4">
-          <div className="rounded-lg border border-[#E4E4E4] bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-3">
-              {group.logoUrl || group.coverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={group.logoUrl ?? group.coverUrl ?? ""}
-                  alt=""
-                  className="h-12 w-12 rounded-lg object-cover"
-                />
-              ) : (
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-lg text-lg font-semibold text-white"
-                  style={{ backgroundColor: brand }}
-                >
-                  {group.name.charAt(0)}
+    <div
+      className="community-about"
+      style={{ "--ca-primary": brand } as CSSProperties}
+    >
+      <CommunityAboutStyles />
+      <div className="community-about-layout">
+        <div className="community-about-main">
+          {featured && (
+            <section className="community-about-gallery" aria-label="Community media">
+              <MediaCard item={featured} featured fallbackTitle={group.name} />
+              {supporting.length > 0 && (
+                <div className="community-about-supporting">
+                  {supporting.map((item) => (
+                    <MediaCard key={item.id} item={item} fallbackTitle="Community media" />
+                  ))}
                 </div>
               )}
-              <div className="min-w-0">
-                <h2 className="truncate text-base font-semibold text-[#202124]">
-                  {group.name}
-                </h2>
-                <p className="text-xs text-[#909090]">
-                  {group.joinPolicy === "approval" ? "Approval required" : "Open access"}
+            </section>
+          )}
+
+          <section className="community-about-card community-about-copy-card">
+            <div className="community-about-copy-top">
+              <div className="community-about-copy">
+                {group.tagline?.trim() && (
+                  <p className="community-about-pill">{group.tagline}</p>
+                )}
+                <h1 className="community-about-title">{group.name}</h1>
+                {(group.aboutHtml || group.about) && (
+                  <p className="community-about-description">
+                    {group.about}
+                  </p>
+                )}
+              </div>
+              <div className="community-about-info-pair">
+                <div className="community-about-info-chip">
+                  <p>Access</p>
+                  <strong>
+                    {group.joinPolicy === "approval" ? "Approval required" : "Open access"}
+                  </strong>
+                </div>
+                <div className="community-about-info-chip">
+                  <p>Membership</p>
+                  <strong>
+                    {state === "joined"
+                      ? "Active member"
+                      : state === "pending"
+                        ? "Pending approval"
+                        : group.access === "paid"
+                          ? priceLabel
+                          : "Free to join"}
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            {(group.aboutHtml || group.about) && (
+              <div
+                className="community-about-rich prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{
+                  __html: renderLessonBodyHtml(group.aboutHtml || group.about),
+                }}
+              />
+            )}
+          </section>
+
+          <section className="community-about-reviews">
+            <div className="community-about-section-head">
+              <div>
+                <h2>Member Reviews</h2>
+                <div className="community-about-review-summary">
+                  {group.reviewCount > 0 ? (
+                    <>
+                      <RatingStars rating={Math.round(group.averageRating ?? 0)} />
+                      <span>{ratingLabel(group)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <RatingStars rating={0} muted />
+                      <span>No reviews yet</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              {state === "joined" && (
+                <Link
+                  href={communityHomeHref({ saId, pretty }, group.slug)}
+                  className="community-about-button"
+                >
+                  Enter community
+                  <ArrowUpRight size={16} />
+                </Link>
+              )}
+            </div>
+
+            {state === "joined" && (
+              <CommunityReviewForm
+                saId={saId}
+                groupId={group.id}
+                brand={brand}
+                currentReview={currentReview}
+              />
+            )}
+
+            {reviews.length === 0 ? (
+              <div className="community-about-empty">
+                Reviews from members will appear here.
+              </div>
+            ) : (
+              <>
+                <div className="community-about-review-grid">
+                  {visibleReviews.map((review) => (
+                    <ReviewCard key={review.id} review={review} brand={brand} />
+                  ))}
+                </div>
+                {remainingReviews.length > 0 && (
+                  <details className="community-about-details">
+                    <summary className="community-about-button community-about-see-more">
+                      See more reviews
+                    </summary>
+                    <div className="community-about-review-grid">
+                      {remainingReviews.map((review) => (
+                        <ReviewCard key={review.id} review={review} brand={brand} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+
+        <aside className="community-about-rail">
+          <section className="community-about-rail-card">
+            <div className="community-about-identity">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="" className="community-about-logo" />
+              ) : (
+                <div className="community-about-logo">{group.name.charAt(0)}</div>
+              )}
+              <div>
+                <p className="community-about-review-date">
+                  {state === "joined"
+                    ? "Member view"
+                    : state === "pending"
+                      ? "Pending member"
+                      : "Community"}
+                </p>
+                <h2>{group.name}</h2>
+                <p>
+                  {group.joinPolicy === "approval"
+                    ? "Approval required"
+                    : "Open access"}
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-              <div className="rounded-md bg-[#F8F7F5] py-2">
-                <div className="text-base font-semibold text-[#202124]">
-                  {group.memberCount}
-                </div>
-                <div className="text-[11px] uppercase text-[#909090]">Members</div>
+            <div className="community-about-stats">
+              <div className="community-about-stat">
+                <strong>{group.memberCount}</strong>
+                <span>Members</span>
               </div>
-              <div className="rounded-md bg-[#F8F7F5] py-2">
-                <div className="text-base font-semibold text-[#202124]">
-                  {group.averageRating ? group.averageRating.toFixed(1) : "New"}
-                </div>
-                <div className="text-[11px] uppercase text-[#909090]">Rating</div>
+              <div className="community-about-stat">
+                <strong>{group.averageRating ? group.averageRating.toFixed(1) : "New"}</strong>
+                <span>Rating</span>
+              </div>
+              <div className="community-about-stat">
+                <strong>{group.reviewCount}</strong>
+                <span>Reviews</span>
               </div>
             </div>
 
-            <div className="mt-4">
-              {upgradeTier && state === "joined" ? (
-                upgradeTier.checkoutUrl ? (
-                  <a
-                    href={upgradeTier.checkoutUrl}
-                    className="inline-flex w-full items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold text-white"
-                    style={{ backgroundColor: brand }}
-                  >
-                    Upgrade to {upgradeTier.name}
-                  </a>
-                ) : (
-                  <div className="rounded-md border border-[#E4E4E4] bg-[#F8F7F5] px-3 py-2 text-sm text-[#3a3a44]">
-                    Upgrade available: {upgradeTier.name}. Checkout is not connected yet.
-                  </div>
-                )
-              ) : (
-                <JoinButton
-                  saId={saId}
-                  pretty={pretty}
-                  groupSlug={group.slug}
-                  groupId={group.id}
-                  state={state}
-                  access={group.access}
-                  priceLabel={priceLabel}
-                  brandColor={brand}
-                />
-              )}
+            <div className="community-about-cta">
+              <SummaryAction
+                saId={saId}
+                pretty={pretty}
+                group={group}
+                state={state}
+                priceLabel={priceLabel}
+                canShowUpgrade={upgradeEligible}
+                brand={brand}
+              />
             </div>
-          </div>
+          </section>
 
           {activeTiers.length > 0 && (
-            <div className="rounded-lg border border-[#E4E4E4] bg-white p-4">
-              <h2 className="mb-3 text-sm font-semibold text-[#202124]">
-                Membership options
-              </h2>
-              <div className="space-y-2">
-                {activeTiers.map((tier) => {
-                  const isCurrent = membership?.tierId === tier.id;
-                  return (
-                    <div
-                      key={tier.id}
-                      className={cn(
-                        "rounded-md border p-3",
-                        isCurrent ? "border-[#202124]" : "border-[#E4E4E4]",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold text-[#202124]">
-                          {tier.name}
-                        </span>
-                        {isCurrent && (
-                          <span className="text-[11px] font-medium text-[#909090]">
-                            Current
-                          </span>
-                        )}
-                      </div>
-                      {tier.description && (
-                        <p className="mt-1 text-xs leading-relaxed text-[#686872]">
-                          {tier.description}
-                        </p>
-                      )}
+            <section id="membership-options" className="community-about-rail-card">
+              <h2 className="community-about-rail-title">Membership options</h2>
+              {activeTiers.map((tier) => {
+                const isCurrent = membership?.tierId === tier.id;
+                return (
+                  <div
+                    key={tier.id}
+                    className={`community-about-tier ${
+                      isCurrent ? "community-about-tier-current" : ""
+                    }`}
+                  >
+                    <div className="community-about-tier-top">
+                      <strong>{tier.name}</strong>
                       {tierPrice(tier) && (
-                        <p className="mt-2 text-xs font-semibold text-[#202124]">
+                        <span className="community-about-tier-price">
                           {tierPrice(tier)}
-                        </p>
+                        </span>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                    {tier.description && <p>{tier.description}</p>}
+                    {isCurrent && (
+                      <span className="community-about-current">
+                        <Check size={14} />
+                        Current tier
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </section>
           )}
 
-          <div className="rounded-lg border border-[#E4E4E4] bg-white p-4">
-            <h2 className="mb-3 text-sm font-semibold text-[#202124]">
-              Community info
-            </h2>
-            <div className="space-y-2 text-sm text-[#3a3a44]">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[#686872]">
-                  <Users className="h-4 w-4" /> Members
+          <section className="community-about-rail-card">
+            <h2 className="community-about-rail-title">Community info</h2>
+            <div className="community-about-facts">
+              <div className="community-about-fact">
+                <span>
+                  <Users size={16} />
+                  Members
                 </span>
-                <span>{group.memberCount}</span>
+                {group.memberCount}
               </div>
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[#686872]">
-                  <Lock className="h-4 w-4" /> Access
+              <div className="community-about-fact">
+                <span>
+                  <Lock size={16} />
+                  Access
                 </span>
-                <span>{group.access === "paid" ? priceLabel : "Free"}</span>
+                {group.access === "paid" ? priceLabel : "Free"}
+              </div>
+              <div className="community-about-fact">
+                <span>
+                  <CalendarDays size={16} />
+                  Events
+                </span>
+                Deferred
               </div>
             </div>
-          </div>
+          </section>
         </aside>
       </div>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-[#202124]">
-              Reviews
-            </h2>
-            <div className="mt-1 flex items-center gap-2 text-sm text-[#909090]">
-              <Star className="h-4 w-4 fill-current" style={{ color: brand }} />
-              {group.reviewCount > 0
-                ? `${group.averageRating?.toFixed(1)} average from ${group.reviewCount} review${group.reviewCount === 1 ? "" : "s"}`
-                : "No reviews yet"}
-            </div>
-          </div>
-          {state === "joined" && (
-            <Link
-              href={communityHomeHref({ saId, pretty }, group.slug)}
-              className="hidden text-sm font-medium text-[#686872] hover:text-[#202124] sm:block"
-            >
-              Enter community
-            </Link>
-          )}
+      {state === "joined" && upgradeEligible && (
+        <div className="community-about-mobile-cta">
+          <a
+            href="#membership-options"
+            className="community-about-button community-about-button-primary"
+            style={{ width: "100%" }}
+          >
+            Upgrade
+            <ChevronRight size={16} />
+          </a>
         </div>
-
-        {state === "joined" && (
-          <CommunityReviewForm
-            saId={saId}
-            groupId={group.id}
-            brand={brand}
-            currentReview={currentReview}
-          />
-        )}
-
-        {reviews.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[#E4E4E4] bg-white p-8 text-center text-sm text-[#909090]">
-            Reviews from members will appear here.
-          </div>
-        ) : (
-          <div className="grid gap-3 md:grid-cols-2">
-            {reviews.map((review) => (
-              <article
-                key={review.id}
-                className="rounded-lg border border-[#E4E4E4] bg-white p-4"
-              >
-                <div className="flex items-start gap-3">
-                  {review.reviewerAvatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={review.reviewerAvatarUrl}
-                      alt=""
-                      className="h-9 w-9 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
-                      style={{ backgroundColor: brand }}
-                    >
-                      {review.reviewerName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-semibold text-[#202124]">
-                        {review.reviewerName}
-                      </h3>
-                      <span className="text-xs text-[#909090]">
-                        {formatDate(review.updatedAtMs ?? review.createdAtMs)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <Star
-                          key={n}
-                          className={cn("h-3.5 w-3.5", n <= review.rating && "fill-current")}
-                          style={{ color: n <= review.rating ? brand : "#c7c7c7" }}
-                        />
-                      ))}
-                    </div>
-                    {review.body && (
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[#3a3a44]">
-                        {review.body}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      )}
     </div>
+  );
+}
+
+function ReviewCard({
+  review,
+  brand,
+}: {
+  review: CommunityReviewView;
+  brand: string;
+}) {
+  return (
+    <article className="community-about-review">
+      <div className="community-about-review-top">
+        <div className="community-about-review-person">
+          {review.reviewerAvatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={review.reviewerAvatarUrl}
+              alt=""
+              className="community-about-review-avatar"
+            />
+          ) : (
+            <div
+              className="community-about-review-avatar"
+              style={{ backgroundColor: brand }}
+            >
+              {review.reviewerName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h3>{review.reviewerName}</h3>
+            <p className="community-about-review-date">
+              {formatDate(review.updatedAtMs ?? review.createdAtMs)}
+            </p>
+          </div>
+        </div>
+        <RatingStars rating={review.rating} />
+      </div>
+      {review.body && <p className="community-about-review-body">{review.body}</p>}
+    </article>
   );
 }

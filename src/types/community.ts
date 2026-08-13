@@ -68,7 +68,13 @@ export interface CommunityAboutMediaItem {
   id: string;
   type: CommunityAboutMediaType;
   url: string;
+  /** Optional display eyebrow/label for the About gallery card. */
+  label?: string;
   title: string;
+  /** Optional click-through URL for a media card. */
+  linkUrl?: string | null;
+  /** Optional explicit featured marker; legacy data uses the first item. */
+  featured?: boolean;
   thumbnailUrl: string | null;
   provider: VideoProvider | null;
   videoId: string | null;

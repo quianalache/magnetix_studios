@@ -14,6 +14,8 @@ export const metadata: Metadata = {
     "We are a small software development company based in Melbourne, Australia, building practical web apps.",
 };
 
+export const dynamic = "force-dynamic";
+
 /**
  * High-level About page. LeadStack-branded — only served on the
  * "leadstack" landing variant; under the white-label "custom" variant it

@@ -92,7 +92,7 @@ export default async function GroupAboutPage({
   return (
     <div className="min-h-screen bg-[#F8F7F5]">
       <header className="border-b border-[#E4E4E4] bg-white">
-        <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2">
             {group.logoUrl || group.coverUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -132,7 +132,7 @@ export default async function GroupAboutPage({
         </div>
       </header>
       <div className="px-4 py-10">
-        <div className="mx-auto max-w-5xl">{about}</div>
+        <div className="mx-auto max-w-7xl">{about}</div>
         </div>
     </div>
   );
