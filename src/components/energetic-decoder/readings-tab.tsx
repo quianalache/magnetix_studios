@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, Loader2, MapPin, Plus, Search, ExternalLink, FileOutput, Eye, Download, SlidersHorizontal } from "lucide-react";
+import { Copy, Loader2, MapPin, Plus, Search, ExternalLink, FileOutput, Eye, Download, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +78,13 @@ export function EnergeticDecoderReadingsTab() {
   const [generateDesignId, setGenerateDesignId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<GeneratedReport | null>(null);
+
+  // Generated Reports lifecycle (2026-08-12) — find/reopen/delete past
+  // generations for the selected reading. Reuses the list endpoint that
+  // already existed (Task 2's `listGeneratedReports`) but was never called
+  // from any UI; delete is new (service + route added this pass).
+  const [generatedReports, setGeneratedReports] = useState<GeneratedReport[]>([]);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
 
   async function loadReadings() {
     setReadingsLoading(true);
@@ -239,6 +246,52 @@ export function EnergeticDecoderReadingsTab() {
     setGenerateOpen(true);
   }
 
+  async function loadGeneratedReports(readingId: string) {
+    try {
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports?readingId=${readingId}`,
+      );
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; reports?: GeneratedReport[] };
+      const list = data.reports ?? [];
+      // Newest first — no orderBy in the underlying query (avoids requiring
+      // a new Firestore composite index for a two-`where()` list query).
+      list.sort((a, b) => (b.generatedAt ?? "").localeCompare(a.generatedAt ?? ""));
+      setGeneratedReports(list);
+    } catch {
+      setGeneratedReports([]);
+    }
+  }
+
+  useEffect(() => {
+    if (selected?.id) void loadGeneratedReports(selected.id);
+    else setGeneratedReports([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  async function deleteGeneratedReport(report: GeneratedReport) {
+    if (
+      !window.confirm(
+        `Delete this generated "${report.reportDesignTitleAtGeneration}" report? This only removes the generated document — the reading, contact, and template are unaffected.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingReportId(report.id);
+    try {
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports/${report.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error();
+      setGeneratedReports((prev) => prev.filter((r) => r.id !== report.id));
+      toast.success("Generated report deleted.");
+    } catch {
+      toast.error("Couldn't delete that generated report.");
+    } finally {
+      setDeletingReportId(null);
+    }
+  }
+
   /** Reuses the existing GeneratedReport service (list/get/create, Task 2) — no second generation/resolution path. */
   async function generateReport() {
     if (!selected || !generateDesignId) return;
@@ -253,6 +306,7 @@ export function EnergeticDecoderReadingsTab() {
       if (!res.ok || !data.ok || !data.generatedReport) throw new Error(data.error ?? "Couldn't generate that report.");
       setGeneratedResult(data.generatedReport);
       toast.success("Report generated.");
+      void loadGeneratedReports(selected.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't generate that report.");
     } finally {
@@ -511,6 +565,65 @@ export function EnergeticDecoderReadingsTab() {
                     </Link>
                   </div>
                 </div>
+
+                {generatedReports.length > 0 && (
+                  <div className="border-b p-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Generated Reports
+                    </p>
+                    <div className="space-y-1.5">
+                      {generatedReports.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{r.reportDesignTitleAtGeneration}</p>
+                            <p className="text-muted-foreground">
+                              {r.generatedAt ? new Date(r.generatedAt).toLocaleString() : "—"}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <button
+                              type="button"
+                              title="Preview"
+                              onClick={() =>
+                                window.open(
+                                  `/sa/${subAccountId}/energetic-decoder/generated-reports/${r.id}/preview`,
+                                  "_blank",
+                                )
+                              }
+                              className="text-muted-foreground hover:text-primary"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <a
+                              href={`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports/${r.id}/pdf`}
+                              download
+                              title="Download PDF"
+                              className="text-muted-foreground hover:text-primary"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              title="Delete"
+                              disabled={deletingReportId === r.id}
+                              onClick={() => deleteGeneratedReport(r)}
+                              className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                            >
+                              {deletingReportId === r.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="p-4">
                   {availableSystems.length > 1 && (
