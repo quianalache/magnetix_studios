@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Copy, Loader2, MapPin, Plus, Search, ExternalLink, FileOutput, Eye, Download } from "lucide-react";
+import { Copy, Loader2, MapPin, Plus, Search, ExternalLink, FileOutput, Eye, Download, SlidersHorizontal } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import {
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import { EnergeticDecoderReadingConfiguration } from "@/components/energetic-decoder/reading-configuration";
 import type { ReportDesign } from "@/types/report-blocks";
 import type { ChartDesign } from "@/types/chart-design";
 import type { GeneratedReport } from "@/types/generated-report";
@@ -47,6 +48,7 @@ type ReadingSystem = "frequency" | "hd" | "astro";
 export function EnergeticDecoderReadingsTab() {
   const { subAccountId, subAccount } = useSubAccount();
   const [open, setOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -265,19 +267,35 @@ export function EnergeticDecoderReadingsTab() {
           <h2 className="text-base font-semibold">Readings</h2>
           <p className="text-sm text-muted-foreground">Your saved client charts.</p>
         </div>
-        <Dialog
-          open={open}
-          onOpenChange={(next) => {
-            setOpen(next);
-            if (!next) resetForm();
-          }}
-        >
-          <DialogTrigger
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground"
+        <div className="flex shrink-0 items-center gap-2">
+          <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+            <DialogTrigger
+              title="Reading configuration"
+              aria-label="Reading configuration"
+              className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Reading configuration</DialogTitle>
+              </DialogHeader>
+              <EnergeticDecoderReadingConfiguration />
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={open}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) resetForm();
+            }}
           >
-            <Plus className="h-3.5 w-3.5" />
-            New reading
-          </DialogTrigger>
+            <DialogTrigger
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New reading
+            </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>New reading</DialogTitle>
@@ -362,6 +380,7 @@ export function EnergeticDecoderReadingsTab() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {readingsLoading ? (

@@ -2,18 +2,17 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Sparkles, Home, ClipboardList, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
+import { Sparkles, Home, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { EnergeticDecoderHomeTab, type EnergeticDecoderHomeTarget } from "@/components/energetic-decoder/home-tab";
-import { EnergeticDecoderReportsTab } from "@/components/energetic-decoder/reports-tab";
 import { EnergeticDecoderReportBuilderTab } from "@/components/energetic-decoder/report-builder-tab";
 import { EnergeticDecoderContentTab } from "@/components/energetic-decoder/content-tab";
 import { EnergeticDecoderReadingsTab } from "@/components/energetic-decoder/readings-tab";
 import { EnergeticDecoderChartDesignsTab } from "@/components/energetic-decoder/chart-designs-tab";
 import { EnergeticDecoderEmbedsTab } from "@/components/energetic-decoder/embeds-tab";
 
-type Tab = "home" | "reports" | "builder" | "content" | "readings" | "chartDesigns" | "embeds";
+type Tab = "home" | "builder" | "content" | "readings" | "chartDesigns" | "embeds";
 
-const VALID_TABS: Tab[] = ["home", "reports", "builder", "content", "readings", "chartDesigns", "embeds"];
+const VALID_TABS: Tab[] = ["home", "builder", "content", "readings", "chartDesigns", "embeds"];
 
 /**
  * Structured after researching bodygraph.com (2026-08-05, then again more
@@ -52,7 +51,6 @@ export default function EnergeticDecoderPage() {
   const tabs: { key: Tab; label: string; icon: typeof Sparkles }[] = [
     { key: "home", label: "Home", icon: Home },
     { key: "readings", label: "Readings", icon: ScrollText },
-    { key: "reports", label: "Reports", icon: ClipboardList },
     { key: "builder", label: "Report Builder", icon: LayoutTemplate },
     { key: "content", label: "Content", icon: BookOpen },
     { key: "chartDesigns", label: "Chart Designs", icon: Palette },
@@ -101,7 +99,6 @@ export default function EnergeticDecoderPage() {
       </div>
 
       {tab === "home" && <EnergeticDecoderHomeTab onGoto={goto} />}
-      {tab === "reports" && <EnergeticDecoderReportsTab />}
       {tab === "builder" && <EnergeticDecoderReportBuilderTab />}
       {tab === "content" && <EnergeticDecoderContentTab />}
       {tab === "readings" && <EnergeticDecoderReadingsTab />}

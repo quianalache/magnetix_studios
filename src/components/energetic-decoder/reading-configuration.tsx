@@ -19,13 +19,25 @@ const SEQUENCES: {
 ];
 
 /**
- * Reports tab — assembly and delivery only: which sequences a reading
- * includes. The per-gate interpretive text used to live here too, moved
- * out to its own Content tab (2026-08-08) after auditing bodygraph.com's
- * real structure at her request: their Reports tool never stores gate
- * text directly either, it references a separate Chart Content library
- * via shortcodes at generation time. Same split here — this tab decides
- * WHAT'S INCLUDED, Content decides WHAT IT SAYS.
+ * Reading Configuration — formerly the standalone "Reports" tab, relocated
+ * 2026-08-12 (Phase 2 Build Plan §6 / Decision Brief). It never showed or
+ * generated a report; it's which systems get computed into a NEW reading —
+ * a settings panel that collided in name with the real report-generation
+ * system (Report Builder / Generated Reports). Now surfaced as a small
+ * panel from the Readings tab, right where a practitioner is already
+ * deciding what to compute for a client, instead of a misleading top-level
+ * peer to Report Builder. Same component logic, same Firestore field
+ * (`energeticDecoderReportConfig`), same API route — only the label,
+ * location, and framing changed, per the approved plan's "relocate, don't
+ * rebuild" recommendation.
+ *
+ * Assembly and delivery only: which sequences a reading includes. The
+ * per-gate interpretive text used to live here too, moved out to its own
+ * Content tab (2026-08-08) after auditing bodygraph.com's real structure at
+ * her request: their Reports tool never stores gate text directly either,
+ * it references a separate Chart Content library via shortcodes at
+ * generation time. Same split here — this panel decides WHAT'S INCLUDED,
+ * Content decides WHAT IT SAYS.
  *
  * Renamed 2026-08-09: "Gene Keys" is Richard Rudd's trademarked term.
  * Bodygraph's own real product avoids it too — their "Frequency Report"
@@ -38,7 +50,7 @@ const SEQUENCES: {
  * since those aren't customer-visible and renaming them carries real
  * regression risk for zero trademark benefit.
  */
-export function EnergeticDecoderReportsTab() {
+export function EnergeticDecoderReadingConfiguration() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
   const [config, setConfig] = useState<EnergeticDecoderReportConfig>({
     ...defaultEnergeticDecoderReportConfig(),
@@ -67,6 +79,12 @@ export function EnergeticDecoderReportsTab() {
 
   return (
     <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">
+        Which systems get computed and saved every time you create a new reading for this
+        sub-account. This doesn&apos;t affect existing readings or how any report is designed —
+        for that, see Report Builder.
+      </p>
+
       <div className="rounded-2xl border bg-card p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h3 className="text-base font-semibold">Frequency Reading</h3>

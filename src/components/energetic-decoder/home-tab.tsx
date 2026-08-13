@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import {
-  ScrollText, Wand2, LayoutTemplate, Palette, BookOpen, Share2, ClipboardList,
+  ScrollText, Wand2, LayoutTemplate, Palette, BookOpen, Share2,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { cn } from "@/lib/utils";
 
 /** Must match the Tab union in page.tsx — kept here as a subset so this file doesn't need to import the page component. */
-export type EnergeticDecoderHomeTarget = "readings" | "builder" | "content" | "chartDesigns" | "embeds" | "reports";
+export type EnergeticDecoderHomeTarget = "readings" | "builder" | "content" | "chartDesigns" | "embeds";
 
 interface HomeStats {
   totalReadings: number;
@@ -44,7 +44,6 @@ export function EnergeticDecoderHomeTab({ onGoto }: { onGoto: (t: EnergeticDecod
     { target: "chartDesigns", label: "Chart Designs", desc: "Manage saved chart color presets", icon: Palette },
     { target: "content", label: "Content", desc: "Rewrite what a gate or type says", icon: BookOpen },
     { target: "embeds", label: "Embeds", desc: "Manage embed codes for your site", icon: Share2 },
-    { target: "reports", label: "Reports", desc: "Pricing + what each system includes", icon: ClipboardList },
   ];
 
   return (
