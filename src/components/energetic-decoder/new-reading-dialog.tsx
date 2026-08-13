@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Loader2, MapPin, Plus, Search, UserPlus, Users } from "lucide-react";
+import { ArrowLeft, Check, Loader2, MapPin, Pencil, Plus, Search, UserPlus, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { Button } from "@/components/ui/button";
@@ -37,12 +37,24 @@ interface PlaceSuggestion {
  *   3. Brand-new person             → POST { name, email, birth data }
  *      (identical shape/behavior to the pre-Task-4 form — the public
  *      decoder embed's own submission is untouched, separate code path)
+ *
+ * Phase 3 Task 5 (2026-08-13) — Edit Profile + Generate Updated Reading,
+ * added to the "confirm-profile" screen (the one existing surface that
+ * already shows a Profile's data). Editing PATCHes the Profile only —
+ * never a Reading, never a GeneratedReport, both of which stay exactly
+ * what they were calculated from. "Generate Updated Reading" is the same
+ * `submitReading({ profileId })` call path 1 above already uses (it
+ * always creates a brand-new Reading from the Profile's CURRENT data,
+ * never overwrites the old one) — editing doesn't need its own reading-
+ * creation logic, just a clearer label once the practitioner has just
+ * corrected something.
  */
 
 type Step =
   | "who"
   | "profile-list"
   | "confirm-profile"
+  | "edit-profile"
   | "new-profile-form"
   | "new-person-form";
 
@@ -74,9 +86,15 @@ export function NewReadingDialog({
   const [selectedProfile, setSelectedProfile] = useState<EnergeticProfile | null>(null);
 
   // Birth-data form fields — shared by "new profile under existing
-  // contact" and "brand new person"; email only applies to the latter.
+  // contact", "brand new person", AND "edit profile" (Task 5): only one
+  // of those steps is ever active at a time, so reusing the same fields
+  // keeps there from being a second birth-data form implementation.
+  // relationshipLabel only applies to the edit-profile step (Profiles
+  // have one; the brand-new/new-profile forms don't collect it — it's
+  // optional and can be added later via Edit Profile).
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [relationshipLabel, setRelationshipLabel] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [birthPlace, setBirthPlace] = useState("");
@@ -88,6 +106,16 @@ export function NewReadingDialog({
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Task 5 — whether the current selectedProfile was just edited in this
+  // dialog session, and whether that edit touched a calculation-relevant
+  // field (birthDate/birthTime/birthPlace/timeZone). Drives the "Generate
+  // Updated Reading" label and the not-recalculated notice on the confirm
+  // screen. Reset whenever a different Profile/Contact is picked.
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [justEdited, setJustEdited] = useState(false);
+  const [justEditedCalcRelevant, setJustEditedCalcRelevant] = useState(false);
 
   useEffect(() => {
     if (!open || !agencyId || !subAccountId) return;
@@ -107,12 +135,16 @@ export function NewReadingDialog({
     setSelectedProfile(null);
     setName("");
     setEmail("");
+    setRelationshipLabel("");
     setBirthDate("");
     setBirthTime("");
     setBirthPlace("");
     setSelectedPlace(null);
     setSuggestions([]);
     setError(null);
+    setEditError(null);
+    setJustEdited(false);
+    setJustEditedCalcRelevant(false);
   }
 
   async function pickContact(contact: Contact) {
@@ -125,6 +157,8 @@ export function NewReadingDialog({
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; profiles?: EnergeticProfile[] };
       const list = data.profiles ?? [];
       setProfiles(list);
+      setJustEdited(false);
+      setJustEditedCalcRelevant(false);
       if (list.length === 0) {
         // No chart subject under this Contact yet — go straight to the
         // birth-data form for their first Profile. Pre-fill name from the
@@ -150,7 +184,85 @@ export function NewReadingDialog({
 
   function chooseProfile(profile: EnergeticProfile) {
     setSelectedProfile(profile);
+    setJustEdited(false);
+    setJustEditedCalcRelevant(false);
     setStep("confirm-profile");
+  }
+
+  function startEditProfile() {
+    if (!selectedProfile) return;
+    setName(selectedProfile.name);
+    setRelationshipLabel(selectedProfile.relationshipLabel ?? "");
+    setBirthDate(selectedProfile.birthDate);
+    setBirthTime(selectedProfile.birthTime);
+    setBirthPlace(selectedProfile.birthPlace);
+    setSelectedPlace(
+      selectedProfile.lat != null && selectedProfile.lng != null
+        ? {
+            lat: selectedProfile.lat,
+            lng: selectedProfile.lng,
+            displayName: selectedProfile.birthPlace,
+            timeZone: selectedProfile.timeZone,
+          }
+        : null,
+    );
+    setSuggestions([]);
+    setEditError(null);
+    setStep("edit-profile");
+  }
+
+  async function submitProfileEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedProfile) return;
+    const before = selectedProfile;
+    setEditError(null);
+    setEditSaving(true);
+    try {
+      const placeFields =
+        selectedPlace && selectedPlace.displayName === birthPlace
+          ? { lat: selectedPlace.lat, lng: selectedPlace.lng, timeZone: selectedPlace.timeZone }
+          : {};
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/energetic-decoder/profiles/${before.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            relationshipLabel: relationshipLabel.trim() || null,
+            birthDate,
+            birthTime,
+            birthPlace,
+            ...placeFields,
+          }),
+        },
+      );
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; profile?: EnergeticProfile; error?: string };
+      if (!res.ok || !data.ok || !data.profile) {
+        throw new Error(data.error ?? "Couldn't update this profile.");
+      }
+      const updated = data.profile;
+      setProfiles((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      setSelectedProfile(updated);
+      // Calculation-relevant means it would change what a NEW reading
+      // calculates — not whether it differs textually. Place is compared
+      // normalized (same rule findMatchingProfile already uses) so a
+      // display-text-only edit that resolves to the same coordinates
+      // doesn't falsely trigger the "not recalculated" notice.
+      const calcRelevantChanged =
+        updated.birthDate !== before.birthDate ||
+        updated.birthTime !== before.birthTime ||
+        updated.timeZone !== before.timeZone ||
+        updated.birthPlace.trim().toLowerCase() !== before.birthPlace.trim().toLowerCase();
+      setJustEdited(true);
+      setJustEditedCalcRelevant(calcRelevantChanged);
+      toast.success("Profile updated.");
+      setStep("confirm-profile");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Couldn't update this profile.");
+    } finally {
+      setEditSaving(false);
+    }
   }
 
   function startNewProfileForm() {
@@ -280,13 +392,24 @@ export function NewReadingDialog({
     });
   }, [contacts, contactSearch]);
 
-  function birthDataFields(withEmail: boolean) {
+  function birthDataFields(withEmail: boolean, withRelationshipLabel = false) {
     return (
       <>
         <div className="space-y-1.5">
           <Label htmlFor="nr-name">Name</Label>
           <Input id="nr-name" value={name} onChange={(e) => setName(e.target.value)} required />
         </div>
+        {withRelationshipLabel && (
+          <div className="space-y-1.5">
+            <Label htmlFor="nr-relationship">Relationship (optional)</Label>
+            <Input
+              id="nr-relationship"
+              value={relationshipLabel}
+              onChange={(e) => setRelationshipLabel(e.target.value)}
+              placeholder="Self, Child, Partner, Client…"
+            />
+          </div>
+        )}
         {withEmail && (
           <div className="space-y-1.5">
             <Label htmlFor="nr-email">Email</Label>
@@ -363,6 +486,7 @@ export function NewReadingDialog({
             {step === "who" && "New reading — who is this for?"}
             {step === "profile-list" && `${selectedContact ? displayName(selectedContact) : "Contact"}'s profiles`}
             {step === "confirm-profile" && "Confirm"}
+            {step === "edit-profile" && `Edit ${selectedProfile ? selectedProfile.name : "profile"}`}
             {step === "new-profile-form" && `New profile for ${selectedContact ? displayName(selectedContact) : "this contact"}`}
             {step === "new-person-form" && "New person"}
           </DialogTitle>
@@ -480,7 +604,7 @@ export function NewReadingDialog({
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
                   {selectedProfile.name.slice(0, 1).toUpperCase()}
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">
                     {selectedProfile.name}
                     {selectedProfile.relationshipLabel && (
@@ -491,16 +615,32 @@ export function NewReadingDialog({
                     {selectedProfile.birthPlace} · {selectedProfile.birthDate} · {selectedProfile.birthTime}
                   </p>
                 </div>
-                <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
+                <Check className="h-4 w-4 shrink-0 text-primary" />
+                <button
+                  type="button"
+                  onClick={startEditProfile}
+                  title="Edit this profile's information"
+                  className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-primary hover:text-primary"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Edit
+                </button>
               </div>
             </div>
+            {justEdited && (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                {justEditedCalcRelevant
+                  ? `This profile now has the corrected information. Any readings already generated for ${selectedProfile.name} still show what they were created with — they don't change on their own. Use "Generate Updated Reading" below for a new reading with the corrected details.`
+                  : `This profile now has the corrected information.`}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               Uses this profile&apos;s saved birth data — nothing to re-enter. Contact: {displayName(selectedContact)}.
             </p>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button onClick={submitExistingProfile} className="w-full" disabled={saving}>
               {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Generate &amp; save
+              {justEdited ? "Generate Updated Reading" : "Generate & save"}
             </Button>
             {profiles.length > 1 && (
               <button
@@ -512,6 +652,29 @@ export function NewReadingDialog({
               </button>
             )}
           </div>
+        )}
+
+        {step === "edit-profile" && selectedContact && selectedProfile && (
+          <form onSubmit={submitProfileEdit} className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setStep("confirm-profile")}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              Back
+            </button>
+            <p className="-mt-1 text-xs text-muted-foreground">
+              Corrects this profile&apos;s own saved information. It never changes any reading already generated from
+              it — those stay exactly as they were.
+            </p>
+            {birthDataFields(false, true)}
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <Button type="submit" className="w-full" disabled={editSaving}>
+              {editSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Save changes
+            </Button>
+          </form>
         )}
 
         {(step === "new-profile-form" || step === "new-person-form") && (
