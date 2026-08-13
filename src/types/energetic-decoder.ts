@@ -21,7 +21,9 @@ import type { AstrologyChart } from "@/lib/energetics/astrology";
 
 export interface EnergeticDecoderRequest {
   name: string;
-  /** Required — this is what links the reading to a Contact record. */
+  /** Required on the default path (matches/creates a Contact by email).
+   *  Not required when `contactId` or `profileId` below is already
+   *  provided — the Contact is already known on both of those paths. */
   email: string;
   /** YYYY-MM-DD. */
   birthDate: string;
@@ -38,6 +40,24 @@ export interface EnergeticDecoderRequest {
   lat?: number;
   lng?: number;
   timeZone?: string;
+
+  /**
+   * Phase 3 Task 4 (2026-08-13) — practitioner "New Reading" workflow
+   * only. Never sent by the public decoder embed (it doesn't have a
+   * Contact/Profile picker and never will on its own). The name/email/
+   * birth-data fields above are ignored when this is set — the selected
+   * Profile's own canonical birth data is used instead, verbatim.
+   */
+  profileId?: string;
+  /**
+   * Phase 3 Task 4 — an existing Contact was picked for a brand-new
+   * Profile under it (e.g. a second child on the same parent Contact).
+   * When set (and `profileId` above is not), the name/birth-data fields
+   * above are still required and used to create a new Profile, but the
+   * email-based Contact lookup/creation is skipped — this Contact is
+   * already known.
+   */
+  contactId?: string;
 }
 
 export interface EnergeticDecoderResult {

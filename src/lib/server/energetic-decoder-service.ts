@@ -21,6 +21,7 @@ import {
   createEnergeticProfile,
   listEnergeticProfilesForContact,
   findMatchingProfile,
+  getEnergeticProfile,
 } from "@/lib/server/energetic-profile-service";
 import { computeHumanDesignVariables, type HumanDesignVariables } from "@/lib/energetics/human-design-variables";
 import { computeLocalSkills } from "@/lib/server/human-design-skills-service";
@@ -60,17 +61,139 @@ export interface CreateReadingResult {
 export async function createEnergeticDecoderReading(
   input: CreateReadingInput,
 ): Promise<CreateReadingResult | { error: string }> {
-  const { name, email, birthDate, birthTime, birthPlace, lat, lng, timeZone } = input;
-  if (!name.trim() || !email.trim() || !birthDate.trim() || !birthTime.trim() || !birthPlace.trim()) {
-    return { error: "Name, email, birth date, birth time, and birth place are all required." };
-  }
+  const db = getAdminDb();
 
-  const place =
-    typeof lat === "number" && typeof lng === "number" && timeZone
-      ? { lat, lng, displayName: birthPlace, timeZone }
-      : await geocodeBirthPlace(birthPlace);
-  if (!place) {
-    return { error: `Couldn't find "${birthPlace}" — try a more specific place (city, state/country).` };
+  // -------------------------------------------------------------------
+  // Phase 3 Task 4 (2026-08-13) — resolve WHO this reading is for before
+  // any chart calculation happens. Three paths:
+  //
+  //   1. input.profileId set → an existing Energetic Profile was picked
+  //      directly in the New Reading workflow. Its own canonical birth
+  //      data IS the input — no re-entry, no re-geocoding (unless it's a
+  //      pre-migration Profile that never got lat/lng), no birth-identity
+  //      re-matching. Contact and Profile are both already known.
+  //   2. input.contactId set (no profileId) → an existing Contact was
+  //      picked in the workflow for a brand-new Profile under it (e.g. a
+  //      second child on the same parent Contact). Contact is already
+  //      known; Profile resolution below still runs, same rule Task 2
+  //      wired in — not a second implementation of it.
+  //   3. Neither set → the original default: match-or-create a Contact by
+  //      email, then match-or-create a Profile under it. This remains the
+  //      only path the public decoder embed can reach — it has no
+  //      Contact/Profile picker and never sends either field.
+  // -------------------------------------------------------------------
+  let contactId: string;
+  let profileId: string;
+  let name: string;
+  let birthDate: string;
+  let birthTime: string;
+  let place: { lat: number; lng: number; displayName: string; timeZone: string };
+
+  if (input.profileId) {
+    const existingProfile = await getEnergeticProfile(input.subAccountId, input.profileId);
+    if (!existingProfile) return { error: "That profile could not be found." };
+    const resolvedPlace =
+      existingProfile.lat != null && existingProfile.lng != null
+        ? {
+            lat: existingProfile.lat,
+            lng: existingProfile.lng,
+            displayName: existingProfile.birthPlace,
+            timeZone: existingProfile.timeZone,
+          }
+        : await geocodeBirthPlace(existingProfile.birthPlace);
+    if (!resolvedPlace) {
+      return { error: `Couldn't find "${existingProfile.birthPlace}" — edit this profile's birth place first.` };
+    }
+    contactId = existingProfile.contactId;
+    profileId = existingProfile.id;
+    name = existingProfile.name;
+    birthDate = existingProfile.birthDate;
+    birthTime = existingProfile.birthTime;
+    place = resolvedPlace;
+  } else {
+    const { name: reqName, email, birthDate: reqBirthDate, birthTime: reqBirthTime, birthPlace, lat, lng, timeZone } = input;
+    if (!reqName.trim() || !reqBirthDate.trim() || !reqBirthTime.trim() || !birthPlace.trim()) {
+      return { error: "Name, birth date, birth time, and birth place are all required." };
+    }
+    // Email is only required on the paths that still need to find-or-
+    // create a Contact by it (a brand-new person, or the public decoder
+    // embed). An explicit contactId already knows who the Contact is.
+    if (!input.contactId && !email.trim()) {
+      return { error: "Email is required to match or create a contact." };
+    }
+    const resolvedPlace =
+      typeof lat === "number" && typeof lng === "number" && timeZone
+        ? { lat, lng, displayName: birthPlace, timeZone }
+        : await geocodeBirthPlace(birthPlace);
+    if (!resolvedPlace) {
+      return { error: `Couldn't find "${birthPlace}" — try a more specific place (city, state/country).` };
+    }
+    name = reqName;
+    birthDate = reqBirthDate;
+    birthTime = reqBirthTime;
+    place = resolvedPlace;
+
+    if (input.contactId) {
+      // Trust, but verify tenancy — a picked Contact must actually belong
+      // to this sub-account, same check getEnergeticProfile already does
+      // for profileId above. The route only ever sends a contactId that
+      // came from this sub-account's own contact list, but this function
+      // doesn't assume that of its caller.
+      const contactSnap = await db.doc(`contacts/${input.contactId}`).get();
+      if (!contactSnap.exists || contactSnap.data()?.subAccountId !== input.subAccountId) {
+        return { error: "That contact could not be found." };
+      }
+      contactId = input.contactId;
+    } else {
+      const found = await findExistingContactId(db, input.subAccountId, { email });
+      if (found) {
+        contactId = found;
+      } else {
+        const { id } = await createContactServerSide({
+          subAccountId: input.subAccountId,
+          agencyId: input.agencyId,
+          createdByUid: input.createdByUid,
+          mode: "live",
+          name: name.trim(),
+          email: email.trim(),
+          phone: "",
+          company: "",
+          address: "",
+          source: "Energetic Decoder",
+          tags: ["energetic-decoder"],
+        });
+        contactId = id;
+      }
+    }
+    // Contact.name is never touched past this point, whether the contact
+    // was just created or already existed — the chart-subject name
+    // belongs to the Profile/Reading, not the Contact. A parent Contact
+    // ("Sarah") generating a reading for "Emma" must never rename Sarah's
+    // own record.
+
+    const existingProfiles = await listEnergeticProfilesForContact(input.subAccountId, contactId);
+    const matchedProfile = findMatchingProfile(existingProfiles, {
+      birthDate,
+      birthTime,
+      birthPlace: place.displayName,
+      timeZone: place.timeZone,
+    });
+    profileId = matchedProfile
+      ? matchedProfile.id
+      : (
+          await createEnergeticProfile({
+            agencyId: input.agencyId,
+            subAccountId: input.subAccountId,
+            contactId,
+            name: name.trim(),
+            birthDate,
+            birthTime,
+            birthPlace: place.displayName,
+            timeZone: place.timeZone,
+            lat: place.lat,
+            lng: place.lng,
+          })
+        ).id;
   }
 
   const profile = calculateGeneKeysProfile({
@@ -89,8 +212,6 @@ export async function createEnergeticDecoderReading(
       return { ...sphere, ...content };
     }),
   );
-
-  const db = getAdminDb();
 
   // Filter to only the sequences this sub-account has chosen to include
   // (Reports tab checkboxes) — merged over the defaults (not just a
@@ -238,58 +359,6 @@ export async function createEnergeticDecoderReading(
   );
   const humanDesign = rawHumanDesign ? { ...rawHumanDesign, content: hdContent } : null;
   const astrology = rawAstrology ? { ...rawAstrology, content: astroContent } : null;
-
-  let contactId = await findExistingContactId(db, input.subAccountId, { email });
-  if (!contactId) {
-    const { id } = await createContactServerSide({
-      subAccountId: input.subAccountId,
-      agencyId: input.agencyId,
-      createdByUid: input.createdByUid,
-      mode: "live",
-      name: name.trim(),
-      email: email.trim(),
-      phone: "",
-      company: "",
-      address: "",
-      source: "Energetic Decoder",
-      tags: ["energetic-decoder"],
-    });
-    contactId = id;
-  }
-  // Contact.name is never touched past this point, whether the contact was
-  // just created or already existed — the chart-subject name below belongs
-  // to the Profile/Reading, not the Contact. A parent Contact ("Sarah")
-  // generating a reading for "Emma" must never rename Sarah's own record.
-
-  // Phase 3 Task 2 (2026-08-13) — resolve/create the EnergeticProfile this
-  // reading belongs to. Reuses an existing Profile under this Contact when
-  // the submitted birth identity matches one exactly (findMatchingProfile);
-  // otherwise creates a new Profile, which is the correct behavior for a
-  // genuinely different chart subject under the same Contact (e.g. a second
-  // child) — never silently overwrites an existing Profile's birth data.
-  const existingProfiles = await listEnergeticProfilesForContact(input.subAccountId, contactId);
-  const matchedProfile = findMatchingProfile(existingProfiles, {
-    birthDate,
-    birthTime,
-    birthPlace: place.displayName,
-    timeZone: place.timeZone,
-  });
-  const profileId = matchedProfile
-    ? matchedProfile.id
-    : (
-        await createEnergeticProfile({
-          agencyId: input.agencyId,
-          subAccountId: input.subAccountId,
-          contactId,
-          name: name.trim(),
-          birthDate,
-          birthTime,
-          birthPlace: place.displayName,
-          timeZone: place.timeZone,
-          lat: place.lat,
-          lng: place.lng,
-        })
-      ).id;
 
   const readingRef = db.collection("energeticDecoderReadings").doc();
   const doc = {
