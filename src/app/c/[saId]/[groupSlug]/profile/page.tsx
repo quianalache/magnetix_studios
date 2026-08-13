@@ -1,7 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { COMMUNITY_BG, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
+import {
+  COMMUNITY_BG,
+  COMMUNITY_DEFAULT_BRAND,
+} from "@/components/community/community-shell";
 import { ProfileEditor } from "@/components/community/profile-editor";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +36,7 @@ export default async function ProfilePage({
           avatarUrl: member.avatarUrl,
           bio: member.bio ?? "",
           email: member.email,
+          hasPassword: Boolean(member.passwordHash),
         }}
       />
     </div>

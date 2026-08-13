@@ -2,8 +2,20 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getCommunityGate } from "@/lib/community/gate";
 import { signMemberMagicLinkToken } from "@/lib/community/member-auth";
+import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { authenticateMemberWithPassword } from "@/lib/community/member-password";
+import { checkMemberAuthRateLimit } from "@/lib/community/member-rate-limit";
 import { resolveCommunityRequestOrigin } from "@/lib/community/domain";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
+import {
+  communityAboutHref,
+  communityHomeHref,
+  communityRootHref,
+} from "@/lib/community/routes";
+import {
+  getGroupById,
+  joinGroupServerSide,
+} from "@/lib/server/community-service";
 import type { SubAccountDoc } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +31,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string }> },
+  { params }: { params: Promise<{ saId: string }> }
 ) {
   const { saId } = await params;
 
@@ -28,9 +40,14 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let body: { email?: string; join?: string };
+  let body: { email?: string; password?: string; join?: string; mode?: string };
   try {
-    body = (await request.json()) as { email?: string; join?: string };
+    body = (await request.json()) as {
+      email?: string;
+      password?: string;
+      join?: string;
+      mode?: string;
+    };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -40,12 +57,76 @@ export async function POST(
     return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
   }
   const joinGroupId =
-    typeof body.join === "string" && body.join.trim() ? body.join.trim() : undefined;
+    typeof body.join === "string" && body.join.trim()
+      ? body.join.trim()
+      : undefined;
 
-  const { origin } = await resolveCommunityRequestOrigin(
+  const { origin, pretty } = await resolveCommunityRequestOrigin(
     saId,
-    request.headers.get("host"),
+    request.headers.get("host")
   );
+
+  if (body.mode === "password") {
+    const allowed = checkMemberAuthRateLimit({
+      key: `member-password-login:${saId}:${email}`,
+      limit: 10,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        { status: 429 }
+      );
+    }
+    const password = typeof body.password === "string" ? body.password : "";
+    const result = await authenticateMemberWithPassword({
+      subAccountId: saId,
+      email,
+      password,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          error:
+            "Email or password is incorrect. If you have not set a password yet, use the email sign-in link.",
+        },
+        { status: 401 }
+      );
+    }
+    await setMemberSessionCookie(result.sessionToken);
+
+    const linkBase = { saId, pretty };
+    if (joinGroupId) {
+      const group = await getGroupById(saId, joinGroupId);
+      if (group && group.status === "published") {
+        try {
+          const outcome = await joinGroupServerSide({
+            subAccountId: saId,
+            agencyId: gate.agencyId,
+            groupId: group.id,
+            memberId: result.member.id,
+          });
+          if (outcome.status === "active" || outcome.status === "already") {
+            return NextResponse.json({
+              ok: true,
+              redirectTo: communityHomeHref(linkBase, group.slug),
+            });
+          }
+        } catch (err) {
+          console.error("[community/login] password auto-join failed", err);
+        }
+        return NextResponse.json({
+          ok: true,
+          redirectTo: communityAboutHref(linkBase, group.slug),
+        });
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      redirectTo: communityRootHref(linkBase),
+    });
+  }
 
   try {
     if (emailIsConfigured()) {

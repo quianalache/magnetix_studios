@@ -17,9 +17,11 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  *    — a member sees no group content until they join one.
  *
  * Members are NOT Firebase Auth users. They authenticate with the same
- * magic-link → HMAC session-cookie model the affiliate portal uses (see
- * `src/lib/community/member-auth.ts`). This keeps the member surface fully
- * separate from staff RBAC — a member session can never reach `/sa/*`.
+ * HMAC session-cookie model the affiliate portal uses (see
+ * `src/lib/community/member-auth.ts`). Password login is stored directly on
+ * this tenant-scoped member identity; magic links remain as an alternative.
+ * This keeps the member surface fully separate from staff RBAC — a member
+ * session can never reach `/sa/*`.
  */
 
 export type MemberStatus = "active" | "removed";
@@ -46,6 +48,9 @@ export interface Member {
    * the community doubles as lead capture. Null only if reconciliation failed.
    */
   contactId: string | null;
+  /** Scrypt hash for member password auth. Null/absent for legacy passwordless members. */
+  passwordHash?: string | null;
+  passwordUpdatedAt?: Timestamp | FieldValue | null;
   status: MemberStatus;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
@@ -161,11 +166,7 @@ export interface CommunityTier {
  * `subAccounts/{saId}/communityGroups/{groupId}/memberships/{memberId}`.
  */
 export type GroupMembershipRole = "member" | "moderator";
-export type GroupMembershipStatus =
-  | "active"
-  | "pending"
-  | "removed"
-  | "banned";
+export type GroupMembershipStatus = "active" | "pending" | "removed" | "banned";
 
 export interface GroupMembership {
   id: string;

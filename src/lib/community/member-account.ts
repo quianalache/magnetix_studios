@@ -16,7 +16,7 @@ import type { ContactAttribution } from "@/types/contacts";
  */
 export async function findMemberByEmail(
   subAccountId: string,
-  email: string,
+  email: string
 ): Promise<Member | null> {
   const snap = await getAdminDb()
     .collection(`subAccounts/${subAccountId}/members`)
@@ -113,7 +113,10 @@ export async function ensureMember({
           contactId: existing.contactId,
           patch: { attribution },
         }).catch((err) =>
-          console.warn("[community/member-account] attribution backfill failed", err),
+          console.warn(
+            "[community/member-account] attribution backfill failed",
+            err
+          )
         );
       }
     }
@@ -122,7 +125,10 @@ export async function ensureMember({
 
     await db
       .doc(`subAccounts/${subAccountId}/members/${existing.id}`)
-      .set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      .set(
+        { ...patch, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
 
     if (existing.contactId) {
       await updateContactServerSide({
@@ -133,7 +139,7 @@ export async function ensureMember({
           ...(patch.address ? { address: patch.address as string } : {}),
         },
       }).catch((err) =>
-        console.warn("[community/member-account] contact sync failed", err),
+        console.warn("[community/member-account] contact sync failed", err)
       );
     }
 
@@ -195,6 +201,8 @@ export async function ensureMember({
       phone: phone?.trim() || null,
       address: address?.trim() || null,
       contactId,
+      passwordHash: null,
+      passwordUpdatedAt: null,
       status: "active",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

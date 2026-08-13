@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Camera, Loader2 } from "lucide-react";
 import { communityHomeHref } from "@/lib/community/routes";
+import { MemberPasswordManager } from "@/components/member-auth/member-password-manager";
 
 const BIO_MAX = 300;
 
@@ -25,6 +26,7 @@ export function ProfileEditor({
     avatarUrl: string | null;
     bio: string;
     email: string;
+    hasPassword: boolean;
   };
   brand: string;
 }) {
@@ -50,7 +52,8 @@ export function ProfileEditor({
         url?: string;
         error?: string;
       };
-      if (!res.ok || !d.ok || !d.url) throw new Error(d.error ?? "Upload failed");
+      if (!res.ok || !d.ok || !d.url)
+        throw new Error(d.error ?? "Upload failed");
       setAvatarUrl(d.url);
       toast.success("Photo updated");
     } catch (err) {
@@ -103,7 +106,11 @@ export function ProfileEditor({
           >
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              <img
+                src={avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
             ) : (
               <span
                 className="flex h-full w-full items-center justify-center text-2xl font-semibold text-white"
@@ -129,7 +136,9 @@ export function ProfileEditor({
             >
               {uploading ? "Uploading…" : "Change photo"}
             </button>
-            <p className="text-xs text-[#909090]">JPG, PNG or GIF, under 5 MB.</p>
+            <p className="text-xs text-[#909090]">
+              JPG, PNG or GIF, under 5 MB.
+            </p>
           </div>
           <input
             ref={fileRef}
@@ -183,6 +192,8 @@ export function ProfileEditor({
           </button>
         </div>
       </div>
+
+      <MemberPasswordManager saId={saId} hasPassword={initial.hasPassword} />
     </div>
   );
 }

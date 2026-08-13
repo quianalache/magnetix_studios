@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import { signMemberMagicLinkToken } from "@/lib/community/member-auth";
+import { setMemberSessionCookie } from "@/lib/community/member-session";
+import { authenticateMemberWithPassword } from "@/lib/community/member-password";
+import { checkMemberAuthRateLimit } from "@/lib/community/member-rate-limit";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import type { SubAccountDoc } from "@/types";
 
@@ -16,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string }> },
+  { params }: { params: Promise<{ saId: string }> }
 ) {
   const { saId } = await params;
 
@@ -25,9 +28,19 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let body: { email?: string; course?: string };
+  let body: {
+    email?: string;
+    password?: string;
+    course?: string;
+    mode?: string;
+  };
   try {
-    body = (await request.json()) as { email?: string; course?: string };
+    body = (await request.json()) as {
+      email?: string;
+      password?: string;
+      course?: string;
+      mode?: string;
+    };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -40,6 +53,41 @@ export async function POST(
     typeof body.course === "string" && body.course.trim()
       ? body.course.trim()
       : undefined;
+
+  if (body.mode === "password") {
+    const allowed = checkMemberAuthRateLimit({
+      key: `member-password-login:${saId}:${email}`,
+      limit: 10,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many attempts. Try again in a few minutes." },
+        { status: 429 }
+      );
+    }
+    const result = await authenticateMemberWithPassword({
+      subAccountId: saId,
+      email,
+      password: typeof body.password === "string" ? body.password : "",
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        {
+          error:
+            "Email or password is incorrect. If you have not set a password yet, use the email sign-in link.",
+        },
+        { status: 401 }
+      );
+    }
+    await setMemberSessionCookie(result.sessionToken);
+    return NextResponse.json({
+      ok: true,
+      redirectTo: courseId
+        ? `/course/${saId}/${courseId}`
+        : `/course/${saId}/login`,
+    });
+  }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 

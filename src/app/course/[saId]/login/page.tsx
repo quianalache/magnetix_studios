@@ -27,7 +27,7 @@ export default async function CourseLoginPage({
   if (!gate || !gate.enabled) notFound();
 
   const sp = await searchParams;
-  const errorMessage = sp.error ? ERROR_MESSAGES[sp.error] ?? null : null;
+  const errorMessage = sp.error ? (ERROR_MESSAGES[sp.error] ?? null) : null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4 py-16">
@@ -36,8 +36,7 @@ export default async function CourseLoginPage({
           Sign in
         </h1>
         <p className="mt-2 text-sm text-[#909090]">
-          Enter your email and we&apos;ll send you a one-tap sign-in link. No
-          password needed.
+          Sign in with your email and password, or use an email sign-in link.
         </p>
         {errorMessage && (
           <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-600">
