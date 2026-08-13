@@ -103,9 +103,15 @@ function CommunityAboutStyles() {
   color: var(--ca-text);
 }
 .community-about a { color: inherit; }
-.community-about-layout { display: grid; gap: 24px; }
-.community-about-main { min-width: 0; display: grid; gap: 24px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.community-about-layout { display: grid; gap: 38px; }
+.community-about-main { min-width: 0; display: grid; gap: 42px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.community-about-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); grid-template-areas: "media identity" "media conversion"; gap: 22px 28px; align-items: start; }
+.community-about-hero-no-media { grid-template-columns: minmax(0, 680px); grid-template-areas: "identity" "conversion"; }
+.community-about-identity { grid-area: identity; min-width: 0; padding-top: 4px; }
+.community-about-conversion { grid-area: conversion; min-width: 0; display: grid; gap: 18px; }
+.community-about-heading { min-width: 0; display: flex; gap: 14px; align-items: flex-start; }
 .community-about-gallery { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .9fr); gap: 12px; }
+.community-about-hero > .community-about-gallery { grid-area: media; }
 .community-about-supporting { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .community-about-media { position: relative; min-height: 156px; overflow: hidden; border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-text); box-shadow: 0 10px 34px rgba(32,33,36,.08); }
 .community-about-media-featured { min-height: 460px; }
@@ -119,10 +125,7 @@ function CommunityAboutStyles() {
 .community-about-media-copy p { margin: 0 0 4px; color: rgba(255,255,255,.78); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .community-about-media-copy h3 { margin: 0; font-size: 16px; line-height: 1.2; font-weight: 750; letter-spacing: 0; }
 .community-about-media-featured .community-about-media-copy h3 { font-size: 28px; }
-.community-about-card { border: 1px solid var(--ca-border); border-radius: 8px; background: var(--ca-card); box-shadow: 0 1px 2px rgba(32,33,36,.04), 0 18px 46px rgba(94,37,116,.08); }
-.community-about-hero { padding: 22px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: end; }
-.community-about-heading { min-width: 0; display: flex; gap: 14px; align-items: flex-start; }
-.community-about-copy-card { padding: 28px; max-width: 860px; }
+.community-about-copy-section { max-width: 820px; }
 .community-about-copy { max-width: 780px; }
 .community-about-pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ca-primary) 12%, var(--ca-card)); color: var(--ca-primary); padding: 6px 12px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .community-about-title { margin: 8px 0 0; color: var(--ca-text); font-size: clamp(32px, 5vw, 52px); line-height: 1.04; font-weight: 760; letter-spacing: 0; max-width: 820px; }
@@ -131,19 +134,17 @@ function CommunityAboutStyles() {
 .community-about-rich :where(h1,h2,h3) { color: var(--ca-text); }
 .community-about-rich :where(p,li) { color: var(--ca-muted); line-height: 1.7; }
 .community-about-logo { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 8px; object-fit: cover; background: var(--ca-primary); color: var(--ca-primary-text); display: grid; place-items: center; font-size: 18px; font-weight: 750; }
-.community-about-stats { display: grid; grid-template-columns: repeat(3, minmax(92px, 1fr)); gap: 8px; text-align: center; }
-.community-about-stat { border-radius: 8px; background: var(--ca-soft); padding: 10px 4px; }
-.community-about-stat strong { display: block; color: var(--ca-text); font-size: 19px; line-height: 1.1; }
-.community-about-stat span { display: block; margin-top: 4px; color: var(--ca-muted); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
-.community-about-action-card { padding: 18px; display: grid; gap: 14px; }
-.community-about-action-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 320px); gap: 18px; align-items: center; }
-.community-about-action-copy h2, .community-about-copy h2 { margin: 0; color: var(--ca-text); font-size: 22px; line-height: 1.2; }
-.community-about-action-copy p { margin: 8px 0 0; color: var(--ca-muted); font-size: 14px; line-height: 1.6; }
+.community-about-meta { display: grid; gap: 10px; padding: 4px 0; }
+.community-about-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--ca-border) 72%, transparent); padding: 10px 0; color: var(--ca-text); font-size: 14px; font-weight: 700; }
+.community-about-meta-row span { color: var(--ca-muted); font-weight: 560; }
+.community-about-action { display: grid; gap: 10px; }
+.community-about-copy h2, .community-about-reviews h2 { margin: 0; color: var(--ca-text); font-size: 26px; line-height: 1.2; }
+.community-about-powered { margin: 2px 0 0; color: var(--ca-muted); font-size: 12px; font-weight: 650; letter-spacing: .02em; text-align: center; }
 .community-about-cta { display: grid; gap: 9px; }
 .community-about-button { min-height: 44px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--ca-border); background: var(--ca-card); color: var(--ca-text); font-size: 14px; font-weight: 760; text-decoration: none; }
 .community-about-button-primary { border-color: var(--ca-primary); background: var(--ca-primary); color: var(--ca-primary-text); box-shadow: 0 10px 22px rgba(32,33,36,.16); }
-.community-about-tier-list { border-top: 1px solid var(--ca-border); padding-top: 4px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px; }
-.community-about-tier { border: 1px solid var(--ca-border); border-radius: 8px; padding: 12px; }
+.community-about-tier-list { border-top: 1px solid var(--ca-border); padding-top: 12px; display: grid; gap: 10px; }
+.community-about-tier { border-left: 3px solid var(--ca-border); padding: 2px 0 2px 12px; }
 .community-about-tier-current { border-color: var(--ca-primary); }
 .community-about-tier-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .community-about-tier strong { color: var(--ca-text); font-size: 14px; }
@@ -168,10 +169,10 @@ function CommunityAboutStyles() {
 .community-about-details { display: grid; gap: 12px; }
 .community-about-details summary { list-style: none; }
 .community-about-details summary::-webkit-details-marker { display: none; }
-.community-about-empty { border: 1px dashed var(--ca-border); border-radius: 8px; background: var(--ca-card); padding: 32px; text-align: center; color: var(--ca-muted); font-size: 14px; }
+.community-about-empty { border-top: 1px solid var(--ca-border); padding: 18px 0 0; color: var(--ca-muted); font-size: 14px; }
 @media (max-width: 1080px) {
-  .community-about-hero { grid-template-columns: 1fr; }
-  .community-about-stats { max-width: 560px; }
+  .community-about-hero { grid-template-columns: 1fr; grid-template-areas: "identity" "media" "conversion"; }
+  .community-about-hero-no-media { grid-template-areas: "identity" "conversion"; }
 }
 @media (max-width: 840px) {
   .community-about-layout { gap: 18px; }
@@ -180,9 +181,7 @@ function CommunityAboutStyles() {
   .community-about-supporting { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
   .community-about-supporting .community-about-media { min-height: 180px; scroll-snap-align: start; }
   .community-about-media-featured { min-height: 340px; }
-  .community-about-hero { padding: 18px; }
-  .community-about-copy-card { padding: 20px; }
-  .community-about-action-top { grid-template-columns: 1fr; }
+  .community-about-meta-row { align-items: flex-start; }
   .community-about-review-grid { grid-template-columns: 1fr; }
   .community-about-section-head { align-items: flex-start; flex-direction: column; }
 }
@@ -190,7 +189,6 @@ function CommunityAboutStyles() {
   .community-about-supporting { grid-template-columns: repeat(4, minmax(72vw, 1fr)); }
   .community-about-media-featured { min-height: 300px; }
   .community-about-title { font-size: 31px; }
-  .community-about-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .community-about-heading { gap: 10px; }
   .community-about-logo { width: 42px; height: 42px; }
 }
@@ -374,119 +372,115 @@ export function CommunityAboutView({
       <CommunityAboutStyles />
       <div className="community-about-layout">
         <div className="community-about-main">
-          <section className="community-about-card community-about-hero">
-            <div className="community-about-heading">
-              {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt="" className="community-about-logo" />
-              ) : (
-                <div className="community-about-logo">{group.name.charAt(0)}</div>
-              )}
-              <div className="community-about-copy">
-                {group.tagline?.trim() && (
-                  <p className="community-about-pill">{group.tagline}</p>
+          <section
+            className={`community-about-hero ${
+              featured ? "" : "community-about-hero-no-media"
+            }`}
+          >
+            {featured && (
+              <div className="community-about-gallery" aria-label="Community media">
+                <MediaCard item={featured} featured fallbackTitle={group.name} />
+                {supporting.length > 0 && (
+                  <div className="community-about-supporting">
+                    {supporting.map((item) => (
+                      <MediaCard key={item.id} item={item} fallbackTitle="Community media" />
+                    ))}
+                  </div>
                 )}
-                <h1 className="community-about-title">{group.name}</h1>
-                <div className="community-about-review-summary">
-                  {group.reviewCount > 0 ? (
-                    <>
+              </div>
+            )}
+
+            <div className="community-about-identity">
+              <div className="community-about-heading">
+                {logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="community-about-logo" />
+                ) : (
+                  <div className="community-about-logo">{group.name.charAt(0)}</div>
+                )}
+                <div className="community-about-copy">
+                  {group.tagline?.trim() && (
+                    <p className="community-about-pill">{group.tagline}</p>
+                  )}
+                  <h1 className="community-about-title">{group.name}</h1>
+                  {group.reviewCount > 0 && (
+                    <div className="community-about-review-summary">
                       <RatingStars rating={Math.round(group.averageRating ?? 0)} />
                       <span>{ratingLabel(group)}</span>
-                    </>
-                  ) : (
-                    <>
-                      <RatingStars rating={0} muted />
-                      <span>No reviews yet</span>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="community-about-stats">
-              <div className="community-about-stat">
-                <strong>{group.memberCount}</strong>
-                <span>Members</span>
-              </div>
-              <div className="community-about-stat">
-                <strong>{group.averageRating ? group.averageRating.toFixed(1) : "New"}</strong>
-                <span>Rating</span>
-              </div>
-              <div className="community-about-stat">
-                <strong>{group.reviewCount ?? 0}</strong>
-                <span>Reviews</span>
-              </div>
-            </div>
-          </section>
-
-          {featured && (
-            <section className="community-about-gallery" aria-label="Community media">
-              <MediaCard item={featured} featured fallbackTitle={group.name} />
-              {supporting.length > 0 && (
-                <div className="community-about-supporting">
-                  {supporting.map((item) => (
-                    <MediaCard key={item.id} item={item} fallbackTitle="Community media" />
-                  ))}
+            <div className="community-about-conversion">
+              <div className="community-about-meta">
+                <div className="community-about-meta-row">
+                  <span>Access</span>
+                  {accessLabel}
                 </div>
-              )}
-            </section>
-          )}
+                <div className="community-about-meta-row">
+                  <span>Members</span>
+                  {group.memberCount}
+                </div>
+                <div className="community-about-meta-row">
+                  <span>Membership</span>
+                  {membershipLabel}
+                </div>
+              </div>
 
-          <section id="membership-options" className="community-about-card community-about-action-card">
-            <div className="community-about-action-top">
-              <div className="community-about-action-copy">
-                <h2>Membership</h2>
-                <p>
-                  {accessLabel} · {membershipLabel}
+              <div id="membership-options" className="community-about-action">
+                <div className="community-about-cta">
+                  <SummaryAction
+                    saId={saId}
+                    pretty={pretty}
+                    group={group}
+                    state={state}
+                    priceLabel={priceLabel}
+                    canShowUpgrade={upgradeEligible}
+                    brand={brand}
+                  />
+                </div>
+                <p className="community-about-powered">
+                  Powered by Magnetix Studios
                 </p>
               </div>
-              <div className="community-about-cta">
-                <SummaryAction
-                  saId={saId}
-                  pretty={pretty}
-                  group={group}
-                  state={state}
-                  priceLabel={priceLabel}
-                  canShowUpgrade={upgradeEligible}
-                  brand={brand}
-                />
-              </div>
-            </div>
 
-            {activeTiers.length > 0 && (
-              <div className="community-about-tier-list">
-                {activeTiers.map((tier) => {
-                  const isCurrent = membership?.tierId === tier.id;
-                  return (
-                    <div
-                      key={tier.id}
-                      className={`community-about-tier ${
-                        isCurrent ? "community-about-tier-current" : ""
-                      }`}
-                    >
-                      <div className="community-about-tier-top">
-                        <strong>{tier.name}</strong>
-                        {tierPrice(tier) && (
-                          <span className="community-about-tier-price">
-                            {tierPrice(tier)}
+              {activeTiers.length > 0 && (
+                <div className="community-about-tier-list">
+                  {activeTiers.map((tier) => {
+                    const isCurrent = membership?.tierId === tier.id;
+                    return (
+                      <div
+                        key={tier.id}
+                        className={`community-about-tier ${
+                          isCurrent ? "community-about-tier-current" : ""
+                        }`}
+                      >
+                        <div className="community-about-tier-top">
+                          <strong>{tier.name}</strong>
+                          {tierPrice(tier) && (
+                            <span className="community-about-tier-price">
+                              {tierPrice(tier)}
+                            </span>
+                          )}
+                        </div>
+                        {tier.description && <p>{tier.description}</p>}
+                        {isCurrent && (
+                          <span className="community-about-current">
+                            <Check size={14} />
+                            Current tier
                           </span>
                         )}
                       </div>
-                      {tier.description && <p>{tier.description}</p>}
-                      {isCurrent && (
-                        <span className="community-about-current">
-                          <Check size={14} />
-                          Current tier
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </section>
 
-          <section className="community-about-card community-about-copy-card">
+          <section className="community-about-copy-section">
             <div className="community-about-copy">
               <h2>About this community</h2>
             </div>
