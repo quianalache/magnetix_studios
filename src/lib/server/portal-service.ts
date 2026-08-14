@@ -1,7 +1,10 @@
 import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import {
+  getStandaloneCourse,
+  getStandaloneCourseTree,
+} from "@/lib/server/standalone-course-service";
 import { listProjectsForContact, listSteps } from "@/lib/server/project-service";
 import type { StandaloneEnrollment } from "@/types/standalone-courses";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
@@ -9,6 +12,7 @@ import { eventStatus, type CalendarEvent } from "@/types/events";
 import type { Quote } from "@/types/quotes";
 import type { Project, ProjectStep } from "@/types/projects";
 import type { CourseOfferPurchase } from "@/types/course-offers";
+import type { CommunityGroup, GroupMembership } from "@/types/community";
 
 /**
  * Client Portal MVP data aggregation — one login, everything a Contact has
@@ -23,6 +27,7 @@ export interface PortalCourse {
   title: string;
   coverUrl: string | null;
   progressPct: number;
+  nextLessonTitle: string | null;
   salesPageHref: string;
   classroomHref: string;
 }
@@ -49,11 +54,23 @@ export async function listPortalCourses(
     enrollments.map(async (e) => {
       const course = await getStandaloneCourse(subAccountId, e.courseId);
       if (!course) return null;
+      const tree = await getStandaloneCourseTree({
+        subAccountId,
+        courseId: e.courseId,
+        includeUnpublished: false,
+      });
+      const completed = new Set(e.completedLessonIds ?? []);
+      const nextLesson =
+        tree?.lessons
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .find((lesson) => !completed.has(lesson.id)) ?? null;
       const result: PortalCourse = {
         courseId: course.id,
         title: course.title,
         coverUrl: course.coverUrl,
         progressPct: e.progressPct,
+        nextLessonTitle: nextLesson?.title ?? null,
         salesPageHref: `/course/${subAccountId}/${course.id}`,
         classroomHref: `/course/${subAccountId}/${course.id}/classroom`,
       };
@@ -82,6 +99,7 @@ export interface PortalBooking {
   id: string;
   title: string;
   startAt: Date | null;
+  meetingUrl: string | null;
 }
 
 /** This contact's upcoming (not past, not cancelled) booked events. */
@@ -99,7 +117,12 @@ export async function listPortalUpcomingBookings(
   return snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<CalendarEvent, "id">) }))
     .filter((e) => eventStatus(e) !== "cancelled" && eventStatus(e) !== "completed")
-    .map((e) => ({ id: e.id, title: e.title, startAt: tsToDate(e.startAt) }))
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      startAt: tsToDate(e.startAt),
+      meetingUrl: e.meetingUrl ?? null,
+    }))
     .filter((e) => e.startAt !== null && e.startAt.getTime() >= now)
     .sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0));
 }
@@ -125,6 +148,57 @@ export interface PortalSessionBundle {
   total: number;
   used: number;
   remaining: number;
+}
+
+export interface PortalCommunity {
+  groupId: string;
+  name: string;
+  slug: string;
+  tagline: string;
+  memberStatus: GroupMembership["status"];
+  role: GroupMembership["role"];
+  level: number;
+  points: number;
+  href: string;
+}
+
+export async function listPortalCommunities(
+  subAccountId: string,
+  memberId: string,
+): Promise<PortalCommunity[]> {
+  const db = getAdminDb();
+  const groupsSnap = await db
+    .collection(`subAccounts/${subAccountId}/communityGroups`)
+    .where("status", "==", "published")
+    .get();
+  const communities = await Promise.all(
+    groupsSnap.docs.map(async (doc) => {
+      const group = {
+        id: doc.id,
+        ...(doc.data() as Omit<CommunityGroup, "id">),
+      };
+      const membershipSnap = await doc.ref.collection("memberships").doc(memberId).get();
+      if (!membershipSnap.exists) return null;
+      const membership = {
+        id: membershipSnap.id,
+        ...(membershipSnap.data() as Omit<GroupMembership, "id">),
+      };
+      if (membership.status !== "active") return null;
+      const result: PortalCommunity = {
+        groupId: group.id,
+        name: group.name,
+        slug: group.slug,
+        tagline: group.tagline,
+        memberStatus: membership.status,
+        role: membership.role,
+        level: membership.level,
+        points: membership.points,
+        href: `/c/${subAccountId}/${group.slug}/community`,
+      };
+      return result;
+    }),
+  );
+  return communities.filter((community): community is PortalCommunity => community !== null);
 }
 
 /**
