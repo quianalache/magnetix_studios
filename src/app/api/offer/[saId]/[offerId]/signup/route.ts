@@ -28,7 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string; offerId: string }> },
+  { params }: { params: Promise<{ saId: string; offerId: string }> }
 ) {
   const { saId, offerId } = await params;
 
@@ -60,25 +60,28 @@ export async function POST(
   if (!name || !EMAIL_RE.test(email)) {
     return NextResponse.json(
       { error: "Name and email are required." },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (collectPhoneNumber && !phone) {
     return NextResponse.json(
       { error: "Phone number is required." },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (collectAddress && !address) {
     return NextResponse.json(
       { error: "Address is required." },
-      { status: 400 },
+      { status: 400 }
     );
   }
-  if (serviceAgreement.mode !== "notRequired" && !body?.serviceAgreementAccepted) {
+  if (
+    serviceAgreement.mode !== "notRequired" &&
+    !body?.serviceAgreementAccepted
+  ) {
     return NextResponse.json(
       { error: "You must agree to the terms before continuing." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -96,7 +99,9 @@ export async function POST(
   await setMemberSessionCookie(token);
 
   const firstCourseId = offer.courseIds[0];
-  const classroomUrl = `/course/${saId}/${firstCourseId}/classroom`;
+  const successUrl = firstCourseId
+    ? `/course/${saId}/${firstCourseId}/classroom`
+    : `/portal/${saId}`;
 
   // Already enrolled in the bundle's first course (repeat free-join, or a
   // returning paid buyer) — skip straight in, never double-charge.
@@ -105,7 +110,11 @@ export async function POST(
     : null;
   const alreadyPaid = await hasPaidCourseOffer(saId, offerId, member.id);
   if (existingEnrollment || alreadyPaid) {
-    return NextResponse.json({ ok: true, mode: "free", redirectTo: classroomUrl });
+    return NextResponse.json({
+      ok: true,
+      mode: "free",
+      redirectTo: successUrl,
+    });
   }
 
   if (offer.type === "free") {
@@ -114,8 +123,10 @@ export async function POST(
       agencyId: gate.agencyId,
       courseIds: offer.courseIds,
       memberId: member.id,
+      offerId,
       offerTitle: offer.title,
       booking: offer.booking,
+      projectTemplates: offer.projectTemplates,
     });
     // Free offers have no purchase doc — the visit rollup + Contact are the
     // only places this conversion is recorded.
@@ -127,9 +138,15 @@ export async function POST(
         pageId: offerId,
         attribution,
         field: "conversions",
-      }).catch((err) => console.warn("[offer/signup] attribution bump failed", err));
+      }).catch((err) =>
+        console.warn("[offer/signup] attribution bump failed", err)
+      );
     }
-    return NextResponse.json({ ok: true, mode: "free", redirectTo: classroomUrl });
+    return NextResponse.json({
+      ok: true,
+      mode: "free",
+      redirectTo: successUrl,
+    });
   }
 
   try {
@@ -147,7 +164,7 @@ export async function POST(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Couldn't start checkout" },
-      { status: 400 },
+      { status: 400 }
     );
   }
 }

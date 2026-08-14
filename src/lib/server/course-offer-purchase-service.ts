@@ -16,6 +16,7 @@ import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundl
 import type {
   CourseOfferAccess,
   CourseOfferBookingBundle,
+  CourseOfferProjectTemplateBundle,
   CourseOfferPurchase,
 } from "@/types/course-offers";
 import type { PayPalConfig } from "@/types";
@@ -35,8 +36,121 @@ export const OFFER_CHARGE_KIND = "offerCharge";
 
 function purchasesCol(saId: string, offerId: string) {
   return getAdminDb().collection(
-    `subAccounts/${saId}/courseOffers/${offerId}/purchases`,
+    `subAccounts/${saId}/courseOffers/${offerId}/purchases`
   );
+}
+
+function projectEntitlementProjectId(
+  purchaseId: string,
+  templateId: string
+): string {
+  return `offer_${purchaseId}_${templateId}`
+    .replace(/[^A-Za-z0-9_-]/g, "_")
+    .slice(0, 120);
+}
+
+async function instantiateProjectEntitlements(opts: {
+  subAccountId: string;
+  agencyId: string;
+  offerId: string;
+  purchaseId: string;
+  memberId: string;
+  projectTemplates: CourseOfferProjectTemplateBundle[];
+}): Promise<{ created: number; skipped: number; error?: string }> {
+  if (opts.projectTemplates.length === 0) return { created: 0, skipped: 0 };
+  const db = getAdminDb();
+  const memberSnap = await db
+    .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+    .get();
+  const member = memberSnap.data();
+  const contactId =
+    typeof member?.contactId === "string" && member.contactId
+      ? member.contactId
+      : null;
+  if (!contactId) {
+    const error =
+      "Member has no linked contact; client projects were not created.";
+    console.warn(
+      `[course-offer] ${error} sa=${opts.subAccountId} member=${opts.memberId}`
+    );
+    return { created: 0, skipped: opts.projectTemplates.length, error };
+  }
+
+  const contactSnap = await db.doc(`contacts/${contactId}`).get();
+  const contact = contactSnap.data();
+  if (!contactSnap.exists || contact?.subAccountId !== opts.subAccountId) {
+    const error =
+      "Linked contact was not found in this sub-account; client projects were not created.";
+    console.warn(
+      `[course-offer] ${error} sa=${opts.subAccountId} member=${opts.memberId} contact=${contactId}`
+    );
+    return { created: 0, skipped: opts.projectTemplates.length, error };
+  }
+
+  let created = 0;
+  let skipped = 0;
+  for (const template of opts.projectTemplates) {
+    const projectId = projectEntitlementProjectId(
+      opts.purchaseId,
+      template.templateId
+    );
+    const projectRef = db.doc(`projects/${projectId}`);
+    const steps = [...template.steps].sort((a, b) => a.order - b.order);
+    const wasCreated = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(projectRef);
+      if (existing.exists) return false;
+      tx.set(projectRef, {
+        agencyId: opts.agencyId,
+        subAccountId: opts.subAccountId,
+        title: template.templateTitle,
+        description: template.description,
+        status: "active",
+        startAt: null,
+        dueAt: template.durationDays
+          ? Timestamp.fromDate(
+              new Date(Date.now() + template.durationDays * 24 * 60 * 60 * 1000)
+            )
+          : null,
+        assignedContactId: contactId,
+        assignedContactName:
+          (contact?.name as string | undefined) ??
+          (member?.displayName as string | undefined) ??
+          null,
+        createdByUid: null,
+        createdByMemberId: null,
+        templateId: template.templateId,
+        sourceOfferId: opts.offerId,
+        sourcePurchaseId: opts.purchaseId,
+        sourceTemplateId: template.templateId,
+        stepCount: steps.length,
+        stepsDoneCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      for (const [index, step] of steps.entries()) {
+        tx.set(
+          projectRef
+            .collection("steps")
+            .doc(`step_${String(index).padStart(3, "0")}`),
+          {
+            agencyId: opts.agencyId,
+            subAccountId: opts.subAccountId,
+            title: step.title,
+            done: false,
+            order: step.order,
+            createdByUid: null,
+            createdByMemberId: null,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }
+        );
+      }
+      return true;
+    });
+    if (wasCreated) created += 1;
+    else skipped += 1;
+  }
+  return { created, skipped };
 }
 
 /* --------------------------------- PayPal -------------------------------- */
@@ -58,7 +172,7 @@ export async function requestCourseOfferPaypalServerSide(opts: {
   const paypal = sub?.paypalConfig as PayPalConfig | null | undefined;
   if (!paypal?.username) {
     throw new Error(
-      "This offer hasn't set up payments yet. Contact the offer owner.",
+      "This offer hasn't set up payments yet. Contact the offer owner."
     );
   }
   const agencyId = (sub?.agencyId as string) ?? "";
@@ -96,6 +210,7 @@ export async function requestCourseOfferPaypalServerSide(opts: {
     offerId: opts.offerId,
     courseIds: offer.courseIds,
     booking: offer.booking,
+    projectTemplates: offer.projectTemplates,
     memberId: opts.memberId,
     amountCents,
     currency,
@@ -139,7 +254,9 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   if (!offer || offer.type === "free" || !offer.priceCents) {
     throw new Error("This offer isn't for sale.");
   }
-  const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  const subSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}`)
+    .get();
   const subData = subSnap.data();
   // Real fix (Stripe Connect) if this sub-account has linked their own
   // account — checkout runs as a direct charge on THEM
@@ -150,10 +267,11 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   // use PayPal (requestCourseOfferPaypalServerSide, below — already
   // correctly per-sub-account, unaffected by any of this).
   const connectAccountId = subData?.stripeConnect?.accountId ?? null;
-  const useSharedAccount = subData?.stripeCourseCheckoutEnabledByAgency === true;
+  const useSharedAccount =
+    subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
     throw new Error(
-      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
+      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay."
     );
   }
   const stripeRequestOptions = connectAccountId
@@ -221,7 +339,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
           metadata,
           allow_promotion_codes: offer.discountCodesEnabled,
         },
-    stripeRequestOptions,
+    stripeRequestOptions
   );
   if (!session.client_secret) {
     throw new Error("Stripe did not return a client secret.");
@@ -233,6 +351,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     offerId: opts.offerId,
     courseIds: offer.courseIds,
     booking: offer.booking,
+    projectTemplates: offer.projectTemplates,
     memberId: opts.memberId,
     amountCents,
     currency,
@@ -258,9 +377,10 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
 
 /* ------------------------------- Access grant ------------------------------ */
 
-function computeAccessWindow(
-  access: CourseOfferAccess | null | undefined,
-): { beginsAt: Date | null; expiresAt: Date | null } {
+function computeAccessWindow(access: CourseOfferAccess | null | undefined): {
+  beginsAt: Date | null;
+  expiresAt: Date | null;
+} {
   let beginsAt: Date | null = null;
   let expiresAt: Date | null = null;
   if (access?.beginAtSpecificDate && access.beginDate) {
@@ -282,7 +402,7 @@ async function stampAccessWindow(opts: {
 }): Promise<void> {
   if (!opts.beginsAt && !opts.expiresAt) return;
   const ref = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}/enrollments/${opts.memberId}`,
+    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}/enrollments/${opts.memberId}`
   );
   await ref.set(
     {
@@ -291,7 +411,7 @@ async function stampAccessWindow(opts: {
         ? Timestamp.fromDate(opts.expiresAt)
         : null,
     },
-    { merge: true },
+    { merge: true }
   );
 }
 
@@ -312,7 +432,7 @@ async function stampDirectPurchaseMarker(opts: {
   const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
   if (!course || course.access !== "purchase") return;
   const col = getAdminDb().collection(
-    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}/purchases`,
+    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}/purchases`
   );
   const existing = await col
     .where("memberId", "==", opts.memberId)
@@ -405,7 +525,7 @@ export async function grantCourseOfferAccessServerSide(opts: {
   billingCountry?: string | null;
 }): Promise<{ ok: boolean }> {
   const ref = purchasesCol(opts.subAccountId, opts.offerId).doc(
-    opts.purchaseId,
+    opts.purchaseId
   );
   const snap = await ref.get();
   if (!snap.exists) throw new Error("Purchase not found");
@@ -413,7 +533,26 @@ export async function grantCourseOfferAccessServerSide(opts: {
     id: snap.id,
     ...(snap.data() as Omit<CourseOfferPurchase, "id">),
   };
-  if (purchase.status === "paid") return { ok: true };
+  if (purchase.status === "paid") {
+    const retryProjectGrant = await instantiateProjectEntitlements({
+      subAccountId: opts.subAccountId,
+      agencyId: purchase.agencyId,
+      offerId: opts.offerId,
+      purchaseId: purchase.id,
+      memberId: purchase.memberId,
+      projectTemplates: purchase.projectTemplates ?? [],
+    });
+    if (retryProjectGrant.error) {
+      await ref.set(
+        {
+          projectEntitlementError: retryProjectGrant.error,
+          projectEntitlementCheckedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+    return { ok: true };
+  }
 
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
   const { beginsAt, expiresAt } = computeAccessWindow(offer?.access ?? null);
@@ -428,8 +567,12 @@ export async function grantCourseOfferAccessServerSide(opts: {
     ...(opts.stripeCustomerId !== undefined
       ? { stripeCustomerId: opts.stripeCustomerId }
       : {}),
-    ...(opts.billingCity !== undefined ? { billingCity: opts.billingCity } : {}),
-    ...(opts.billingState !== undefined ? { billingState: opts.billingState } : {}),
+    ...(opts.billingCity !== undefined
+      ? { billingCity: opts.billingCity }
+      : {}),
+    ...(opts.billingState !== undefined
+      ? { billingState: opts.billingState }
+      : {}),
     ...(opts.billingCountry !== undefined
       ? { billingCountry: opts.billingCountry }
       : {}),
@@ -447,7 +590,9 @@ export async function grantCourseOfferAccessServerSide(opts: {
       pageId: opts.offerId,
       attribution: purchase.attribution,
       field: "conversions",
-    }).catch((err) => console.warn("[course-offer] attribution bump failed", err));
+    }).catch((err) =>
+      console.warn("[course-offer] attribution bump failed", err)
+    );
   }
 
   for (const courseId of purchase.courseIds) {
@@ -482,6 +627,24 @@ export async function grantCourseOfferAccessServerSide(opts: {
     });
   }
 
+  const projectGrant = await instantiateProjectEntitlements({
+    subAccountId: opts.subAccountId,
+    agencyId: purchase.agencyId,
+    offerId: opts.offerId,
+    purchaseId: purchase.id,
+    memberId: purchase.memberId,
+    projectTemplates: purchase.projectTemplates ?? [],
+  });
+  if (projectGrant.error) {
+    await ref.set(
+      {
+        projectEntitlementError: projectGrant.error,
+        projectEntitlementCheckedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
+
   void emitWebhookEvent({
     subAccountId: opts.subAccountId,
     agencyId: purchase.agencyId,
@@ -502,11 +665,13 @@ export async function grantCourseOfferAccessServerSide(opts: {
 
 /** Webhook: `checkout.session.completed` with `metadata.kind === OFFER_CHARGE_KIND`. */
 export async function handleCourseOfferCheckoutCompleted(
-  session: Stripe.Checkout.Session,
+  session: Stripe.Checkout.Session
 ): Promise<void> {
   const { subAccountId, offerId } = session.metadata ?? {};
   if (!subAccountId || !offerId) {
-    console.error("[course-offer] offerCharge checkout completed without metadata");
+    console.error(
+      "[course-offer] offerCharge checkout completed without metadata"
+    );
     return;
   }
   const snap = await purchasesCol(subAccountId, offerId)
@@ -514,7 +679,9 @@ export async function handleCourseOfferCheckoutCompleted(
     .limit(1)
     .get();
   if (snap.empty) {
-    console.error(`[course-offer] no pending purchase for session ${session.id}`);
+    console.error(
+      `[course-offer] no pending purchase for session ${session.id}`
+    );
     return;
   }
   const subscriptionId =
@@ -529,7 +696,9 @@ export async function handleCourseOfferCheckoutCompleted(
     purchaseId: snap.docs[0].id,
     grantedByUid: null,
     stripePaymentIntentId:
-      typeof session.payment_intent === "string" ? session.payment_intent : null,
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : null,
     stripeCustomerId:
       typeof session.customer === "string" ? session.customer : null,
     billingCity: address?.city ?? null,
@@ -545,7 +714,7 @@ export async function handleCourseOfferCheckoutCompleted(
  * forward; enrollment/progress data is kept, never deleted.
  */
 export async function handleCourseOfferSubscriptionDeleted(
-  subscription: Stripe.Subscription,
+  subscription: Stripe.Subscription
 ): Promise<void> {
   const { subAccountId, offerId } = subscription.metadata ?? {};
   if (!subAccountId || !offerId) return;
@@ -582,6 +751,8 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
    *  the caller passes it straight through from the live offer. */
   offerTitle?: string;
   booking?: CourseOfferBookingBundle | null;
+  offerId?: string;
+  projectTemplates?: CourseOfferProjectTemplateBundle[];
 }): Promise<void> {
   for (const courseId of opts.courseIds) {
     await enrollInStandaloneCourseServerSide({
@@ -599,13 +770,21 @@ export async function enrollAllCoursesForFreeOfferServerSide(opts: {
       booking: opts.booking,
     });
   }
+  await instantiateProjectEntitlements({
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    offerId: opts.offerId ?? "free-offer",
+    purchaseId: `free_${opts.offerId ?? "offer"}_${opts.memberId}`,
+    memberId: opts.memberId,
+    projectTemplates: opts.projectTemplates ?? [],
+  });
 }
 
 /** Has this member paid for this offer? */
 export async function hasPaidCourseOffer(
   saId: string,
   offerId: string,
-  memberId: string,
+  memberId: string
 ): Promise<boolean> {
   const snap = await purchasesCol(saId, offerId)
     .where("memberId", "==", memberId)
@@ -620,7 +799,7 @@ export async function hasPaidCourseOffer(
 export async function getPaidPurchaseIdForMember(
   saId: string,
   offerId: string,
-  memberId: string,
+  memberId: string
 ): Promise<string | null> {
   const snap = await purchasesCol(saId, offerId)
     .where("memberId", "==", memberId)
@@ -665,10 +844,7 @@ export async function chargeOneClickUpsellServerSide(opts: {
   targetOfferId: string;
   memberId: string;
 }): Promise<ChargeOneClickUpsellResult> {
-  const triggerSnap = await purchasesCol(
-    opts.subAccountId,
-    opts.triggerOfferId,
-  )
+  const triggerSnap = await purchasesCol(opts.subAccountId, opts.triggerOfferId)
     .doc(opts.triggerPurchaseId)
     .get();
   const trigger = triggerSnap.data() as
@@ -678,7 +854,10 @@ export async function chargeOneClickUpsellServerSide(opts: {
     return { ok: false, needsManualCheckout: true };
   }
 
-  const targetOffer = await getCourseOffer(opts.subAccountId, opts.targetOfferId);
+  const targetOffer = await getCourseOffer(
+    opts.subAccountId,
+    opts.targetOfferId
+  );
   if (!targetOffer || targetOffer.type === "free" || !targetOffer.priceCents) {
     return { ok: false, needsManualCheckout: true };
   }
@@ -687,7 +866,7 @@ export async function chargeOneClickUpsellServerSide(opts: {
   const stripeCustomerId = trigger.stripeCustomerId;
   try {
     const originalIntent = await stripe.paymentIntents.retrieve(
-      trigger.stripePaymentIntentId,
+      trigger.stripePaymentIntentId
     );
     const paymentMethodId =
       typeof originalIntent.payment_method === "string"
@@ -723,6 +902,7 @@ export async function chargeOneClickUpsellServerSide(opts: {
       offerId: opts.targetOfferId,
       courseIds: targetOffer.courseIds,
       booking: targetOffer.booking,
+      projectTemplates: targetOffer.projectTemplates,
       memberId: opts.memberId,
       amountCents: targetOffer.priceCents,
       currency: targetOffer.currency ?? "USD",

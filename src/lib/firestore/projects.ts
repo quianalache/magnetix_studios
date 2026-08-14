@@ -8,7 +8,12 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
-import type { Project, ProjectStep, ProjectTemplate } from "@/types/projects";
+import type {
+  Project,
+  ProjectStep,
+  ProjectTemplate,
+  ProjectTemplateAudience,
+} from "@/types/projects";
 import type { TenantScope } from "@/types";
 
 /**
@@ -29,78 +34,93 @@ const TEMPLATES = "projectTemplates";
 export function subscribeToProjects(
   scope: TenantScope,
   callback: (projects: Project[]) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), PROJECTS),
-    where("subAccountId", "==", scope.subAccountId),
+    where("subAccountId", "==", scope.subAccountId)
   );
   return onSnapshot(
     q,
     (snap) => {
-      const projects = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as Omit<Project, "id">) }),
-      );
+      const projects = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Project, "id">),
+      }));
       projects.sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt));
       callback(projects);
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 
 export function subscribeToProject(
   projectId: string,
   callback: (project: Project | null) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   return onSnapshot(
     doc(getFirebaseDb(), PROJECTS, projectId),
     (snap) => {
-      callback(snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Project, "id">) } : null);
+      callback(
+        snap.exists()
+          ? { id: snap.id, ...(snap.data() as Omit<Project, "id">) }
+          : null
+      );
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 
 export function subscribeToProjectSteps(
   projectId: string,
   callback: (steps: ProjectStep[]) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), PROJECTS, projectId, "steps"),
-    orderBy("order", "asc"),
+    orderBy("order", "asc")
   );
   return onSnapshot(
     q,
     (snap) => {
       callback(
-        snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ProjectStep, "id">) })),
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<ProjectStep, "id">),
+        }))
       );
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 
 export function subscribeToProjectTemplates(
   scope: TenantScope,
   callback: (templates: ProjectTemplate[]) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), TEMPLATES),
-    where("subAccountId", "==", scope.subAccountId),
+    where("subAccountId", "==", scope.subAccountId)
   );
   return onSnapshot(
     q,
     (snap) => {
-      const templates = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as Omit<ProjectTemplate, "id">) }),
-      );
+      const templates = snap.docs.map((d) => {
+        const data = d.data();
+        const audience: ProjectTemplateAudience =
+          data.audience === "client" ? "client" : "internal";
+        return {
+          id: d.id,
+          ...(data as Omit<ProjectTemplate, "id">),
+          audience,
+        };
+      });
       templates.sort((a, b) => a.title.localeCompare(b.title));
       callback(templates);
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 
@@ -112,19 +132,24 @@ export function subscribeToProjectsForContact(
   scope: TenantScope,
   contactId: string,
   callback: (projects: Project[]) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), PROJECTS),
     where("subAccountId", "==", scope.subAccountId),
-    where("assignedContactId", "==", contactId),
+    where("assignedContactId", "==", contactId)
   );
   return onSnapshot(
     q,
     (snap) => {
-      callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Project, "id">) })));
+      callback(
+        snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Project, "id">),
+        }))
+      );
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 

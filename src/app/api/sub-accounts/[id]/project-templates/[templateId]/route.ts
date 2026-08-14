@@ -2,26 +2,44 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { deleteTemplate, updateTemplate } from "@/lib/server/project-service";
-import type { ProjectTemplateStep } from "@/types/projects";
+import {
+  deleteTemplate,
+  getTemplate,
+  updateTemplate,
+} from "@/lib/server/project-service";
+import type {
+  ProjectTemplateAudience,
+  ProjectTemplateStep,
+} from "@/types/projects";
 
 function parseSteps(v: unknown): ProjectTemplateStep[] | undefined {
   if (!Array.isArray(v)) return undefined;
   return v
     .map((s, i) => {
-      const title = typeof s?.title === "string" ? s.title.trim().slice(0, 300) : "";
+      const title =
+        typeof s?.title === "string" ? s.title.trim().slice(0, 300) : "";
       return title ? { title, order: i } : null;
     })
     .filter((s): s is ProjectTemplateStep => s !== null);
 }
 
+function parseAudience(v: unknown): ProjectTemplateAudience | undefined {
+  if (v === "client" || v === "internal") return v;
+  return undefined;
+}
+
 export async function PATCH(
   request: Request,
-  ctx: { params: Promise<{ id: string; templateId: string }> },
+  ctx: { params: Promise<{ id: string; templateId: string }> }
 ) {
   const { id: subAccountId, templateId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
+
+  const template = await getTemplate(templateId);
+  if (!template || template.subAccountId !== subAccountId) {
+    return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -31,28 +49,43 @@ export async function PATCH(
   }
 
   await updateTemplate(templateId, {
-    title: typeof body.title === "string" ? body.title.trim().slice(0, 200) : undefined,
-    category: typeof body.category === "string" ? body.category.trim().slice(0, 100) : undefined,
+    title:
+      typeof body.title === "string"
+        ? body.title.trim().slice(0, 200)
+        : undefined,
+    category:
+      typeof body.category === "string"
+        ? body.category.trim().slice(0, 100)
+        : undefined,
     durationDays:
-      typeof body.durationDays === "number" && Number.isFinite(body.durationDays)
+      typeof body.durationDays === "number" &&
+      Number.isFinite(body.durationDays)
         ? Math.max(0, Math.round(body.durationDays))
         : body.durationDays === null
           ? null
           : undefined,
     description:
-      typeof body.description === "string" ? body.description.trim().slice(0, 5000) : undefined,
+      typeof body.description === "string"
+        ? body.description.trim().slice(0, 5000)
+        : undefined,
     steps: parseSteps(body.steps),
+    audience: parseAudience(body.audience),
   });
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(
   request: Request,
-  ctx: { params: Promise<{ id: string; templateId: string }> },
+  ctx: { params: Promise<{ id: string; templateId: string }> }
 ) {
   const { id: subAccountId, templateId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
+
+  const template = await getTemplate(templateId);
+  if (!template || template.subAccountId !== subAccountId) {
+    return NextResponse.json({ error: "Template not found" }, { status: 404 });
+  }
 
   await deleteTemplate(templateId);
   return NextResponse.json({ ok: true });

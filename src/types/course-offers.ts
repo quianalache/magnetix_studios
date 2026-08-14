@@ -70,6 +70,15 @@ export interface CourseOfferBookingBundle {
   sessionCount: number;
 }
 
+export interface CourseOfferProjectTemplateBundle {
+  templateId: string;
+  templateTitle: string;
+  templateCategory: string;
+  durationDays: number | null;
+  description: string;
+  steps: { title: string; order: number }[];
+}
+
 export interface CourseOffer {
   id: string;
   subAccountId: string;
@@ -86,7 +95,7 @@ export interface CourseOffer {
   slug: string | null;
   /** Rich text; used as the checkout description when set. */
   descriptionHtml: string;
-  /** Attached Products (courses) — the bundle. At least one required to publish. */
+  /** Attached Products (courses). Offers may now also be project/session-only. */
   courseIds: string[];
   type: OfferType;
   /** Cents. Null when `type === "free"`. */
@@ -127,6 +136,8 @@ export interface CourseOffer {
   /** Bundled Booking Page + session count, or null if this offer is
    *  courses-only. See `CourseOfferBookingBundle`. */
   booking: CourseOfferBookingBundle | null;
+  /** Snapshotted client project templates included in this offer. */
+  projectTemplates: CourseOfferProjectTemplateBundle[];
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -148,15 +159,16 @@ export const DEFAULT_COURSE_OFFER_ADVANCED: CourseOfferAdvanced = {
 export const DEFAULT_SERVICE_AGREEMENT_TEXT =
   "I have read and agree to the terms and conditions of this page.";
 
-export const DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS: CourseOfferCheckoutSettings = {
-  collectAddress: false,
-  collectPhoneNumber: false,
-  serviceAgreement: {
-    mode: "notRequired",
-    customText: DEFAULT_SERVICE_AGREEMENT_TEXT,
-    linkUrl: "",
-  },
-};
+export const DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS: CourseOfferCheckoutSettings =
+  {
+    collectAddress: false,
+    collectPhoneNumber: false,
+    serviceAgreement: {
+      mode: "notRequired",
+      customText: DEFAULT_SERVICE_AGREEMENT_TEXT,
+      linkUrl: "",
+    },
+  };
 
 /**
  * A purchase of an Offer, at
@@ -166,7 +178,11 @@ export const DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS: CourseOfferCheckoutSettings
  * entitled to. Mirrors `StandaloneCoursePurchase`'s dual-rail (PayPal
  * manual-reconcile + Stripe instant/webhook) shape.
  */
-export type CourseOfferPurchaseStatus = "pending" | "paid" | "canceled" | "void";
+export type CourseOfferPurchaseStatus =
+  | "pending"
+  | "paid"
+  | "canceled"
+  | "void";
 export type CourseOfferPurchaseMethod = "paypal" | "stripe";
 
 export interface CourseOfferPurchase {
@@ -179,6 +195,8 @@ export interface CourseOfferPurchase {
    *  `courseIds` — later edits to the offer's bundle don't retroactively
    *  change what a past buyer was told they got. */
   booking: CourseOfferBookingBundle | null;
+  /** Snapshotted from the offer at purchase time so project fulfillment survives template edits/deletes. */
+  projectTemplates: CourseOfferProjectTemplateBundle[];
   memberId: string;
   amountCents: number;
   currency: string;
@@ -205,6 +223,8 @@ export interface CourseOfferPurchase {
   billingCity: string | null;
   billingState: string | null;
   billingCountry: string | null;
+  projectEntitlementError?: string | null;
+  projectEntitlementCheckedAt?: Timestamp | FieldValue | null;
   /** UTM/referrer data captured from the offer's checkout page at landing
    *  time — see `normalizeAttribution` in `src/lib/attribution.ts`. Not
    *  threaded into one-click-upsell purchases (the buyer never landed on

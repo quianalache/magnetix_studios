@@ -3,7 +3,12 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { createProject, listProjectsForSubAccount } from "@/lib/server/project-service";
+import {
+  createProject,
+  getTemplate,
+  listProjectsForSubAccount,
+} from "@/lib/server/project-service";
+import { projectTemplateAudience } from "@/types/projects";
 
 function str(v: unknown, max = 5000): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
@@ -16,7 +21,7 @@ function parseDate(v: unknown): Date | null {
 
 export async function GET(
   request: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
@@ -26,14 +31,14 @@ export async function GET(
   const status = searchParams.get("status");
   const projects = await listProjectsForSubAccount(
     subAccountId,
-    status === "active" || status === "archived" ? status : undefined,
+    status === "active" || status === "archived" ? status : undefined
   );
   return NextResponse.json({ ok: true, projects });
 }
 
 export async function POST(
   request: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
@@ -60,11 +65,44 @@ export async function POST(
     const contactSnap = await getAdminDb()
       .doc(`contacts/${assignedContactId}`)
       .get();
-    assignedContactName = (contactSnap.data()?.name as string | undefined) ?? null;
+    if (
+      !contactSnap.exists ||
+      contactSnap.data()?.subAccountId !== subAccountId
+    ) {
+      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+    }
+    assignedContactName =
+      (contactSnap.data()?.name as string | undefined) ?? null;
+  }
+
+  const templateId =
+    typeof body.templateId === "string" && body.templateId
+      ? body.templateId
+      : null;
+  if (templateId) {
+    const template = await getTemplate(templateId);
+    if (!template || template.subAccountId !== subAccountId) {
+      return NextResponse.json(
+        { error: "Template not found" },
+        { status: 404 }
+      );
+    }
+    const expectedAudience = assignedContactId ? "client" : "internal";
+    if (projectTemplateAudience(template) !== expectedAudience) {
+      return NextResponse.json(
+        {
+          error: assignedContactId
+            ? "Choose a client project template for assigned projects."
+            : "Choose an internal template for unassigned projects.",
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
-  const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
+  const agencyId =
+    (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
 
   const project = await createProject({
     agencyId,
@@ -77,7 +115,7 @@ export async function POST(
     assignedContactName,
     createdByUid: access.uid,
     createdByMemberId: null,
-    templateId: typeof body.templateId === "string" ? body.templateId : null,
+    templateId,
   });
 
   return NextResponse.json({ ok: true, project }, { status: 201 });

@@ -3,11 +3,19 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, ExternalLink, Link2, Loader2, Palette, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ExternalLink,
+  Link2,
+  Loader2,
+  Palette,
+  Trash2,
+} from "lucide-react";
 import {
   subscribeToCourseOffer,
   subscribeToCourseOffers,
 } from "@/lib/firestore/course-offers";
+import { subscribeToProjectTemplates } from "@/lib/firestore/projects";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildOfferUrl } from "@/lib/domains/public-url";
@@ -17,6 +25,7 @@ import { OfferDetailsTab } from "@/components/course-offers/offer-details-tab";
 import { OfferUpsellTab } from "@/components/course-offers/offer-upsell-tab";
 import type { CourseOffer } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+import type { ProjectTemplate } from "@/types/projects";
 
 export default function CourseOfferDetailPage({
   params,
@@ -24,10 +33,13 @@ export default function CourseOfferDetailPage({
   params: Promise<{ subAccountId: string; offerId: string }>;
 }) {
   const { subAccountId, offerId } = use(params);
-  const { subAccount } = useSubAccount();
+  const { subAccount, agencyId } = useSubAccount();
   const [offer, setOffer] = useState<CourseOffer | null>(null);
   const [allOffers, setAllOffers] = useState<CourseOffer[]>([]);
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
+  const [projectTemplates, setProjectTemplates] = useState<ProjectTemplate[]>(
+    []
+  );
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("details");
 
@@ -37,15 +49,23 @@ export default function CourseOfferDetailPage({
         setOffer(o);
         setLoaded(true);
       }),
-    [subAccountId, offerId],
+    [subAccountId, offerId]
   );
   useEffect(
     () => subscribeToCourseOffers(subAccountId, setAllOffers),
-    [subAccountId],
+    [subAccountId]
   );
   useEffect(
     () => subscribeToStandaloneCourses(subAccountId, setCourses),
-    [subAccountId],
+    [subAccountId]
+  );
+  useEffect(
+    () =>
+      subscribeToProjectTemplates(
+        { agencyId: agencyId ?? "", subAccountId },
+        setProjectTemplates
+      ),
+    [agencyId, subAccountId]
   );
 
   function copyLink() {
@@ -69,10 +89,11 @@ export default function CourseOfferDetailPage({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ visibility: next }),
-      },
+      }
     );
     const d = (await res.json().catch(() => ({}))) as { error?: string };
-    if (res.ok) toast.success(next === "published" ? "Published." : "Unpublished.");
+    if (res.ok)
+      toast.success(next === "published" ? "Published." : "Unpublished.");
     else toast.error(d.error ?? "Couldn't update");
   }
 
@@ -81,7 +102,7 @@ export default function CourseOfferDetailPage({
     if (!confirm(`Delete "${offer.title}"? This can't be undone.`)) return;
     const res = await fetch(
       `/api/sub-accounts/${subAccountId}/course-offers/${offer.id}`,
-      { method: "DELETE" },
+      { method: "DELETE" }
     );
     if (res.ok) {
       toast.success("Offer deleted.");
@@ -94,14 +115,14 @@ export default function CourseOfferDetailPage({
   if (!loaded) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       </div>
     );
   }
   if (!offer) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <p className="text-[13px] text-muted-foreground">Offer not found.</p>
+        <p className="text-muted-foreground text-[13px]">Offer not found.</p>
       </div>
     );
   }
@@ -112,13 +133,13 @@ export default function CourseOfferDetailPage({
         <div className="flex items-center gap-2">
           <Link
             href={`/sa/${subAccountId}/courses`}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md p-1.5"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <h1 className="text-lg font-semibold">{offer.title}</h1>
           {offer.version > 1 && (
-            <span className="rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            <span className="text-muted-foreground rounded-full border px-1.5 py-0.5 text-[10px]">
               Version {offer.version}
             </span>
           )}
@@ -167,6 +188,7 @@ export default function CourseOfferDetailPage({
             subAccountId={subAccountId}
             offer={offer}
             courses={courses}
+            projectTemplates={projectTemplates}
             onSaved={() => {}}
           />
         </TabsContent>

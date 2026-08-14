@@ -15,7 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSubAccount } from "@/context/sub-account-context";
-import type { ProjectTemplate, ProjectTemplateStep } from "@/types/projects";
+import type {
+  ProjectTemplate,
+  ProjectTemplateAudience,
+  ProjectTemplateStep,
+} from "@/types/projects";
 
 interface TemplateDialogProps {
   open: boolean;
@@ -24,7 +28,11 @@ interface TemplateDialogProps {
 }
 
 /** Coach-only, per her explicit "let's keep the templates only for the coach for now" — there's no member-facing equivalent of this dialog. */
-export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogProps) {
+export function TemplateDialog({
+  open,
+  onOpenChange,
+  template,
+}: TemplateDialogProps) {
   const { subAccountId } = useSubAccount();
   const isEdit = !!template;
 
@@ -33,6 +41,7 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
   const [durationDays, setDurationDays] = useState("");
   const [description, setDescription] = useState("");
   const [steps, setSteps] = useState<string[]>([]);
+  const [audience, setAudience] = useState<ProjectTemplateAudience>("internal");
   const [newStep, setNewStep] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,15 +52,19 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
     if (template) {
       setTitle(template.title);
       setCategory(template.category ?? "");
-      setDurationDays(template.durationDays != null ? String(template.durationDays) : "");
+      setDurationDays(
+        template.durationDays != null ? String(template.durationDays) : ""
+      );
       setDescription(template.description ?? "");
       setSteps(template.steps.map((s) => s.title));
+      setAudience(template.audience === "client" ? "client" : "internal");
     } else {
       setTitle("");
       setCategory("");
       setDurationDays("");
       setDescription("");
       setSteps([]);
+      setAudience("internal");
     }
     setNewStep("");
     setErrors({});
@@ -73,7 +86,10 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    const stepPayload: ProjectTemplateStep[] = steps.map((s, i) => ({ title: s, order: i }));
+    const stepPayload: ProjectTemplateStep[] = steps.map((s, i) => ({
+      title: s,
+      order: i,
+    }));
 
     setSaving(true);
     try {
@@ -89,6 +105,7 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
           durationDays: durationDays ? Number(durationDays) : null,
           description: description.trim(),
           steps: stepPayload,
+          audience,
         }),
       });
       if (!res.ok) throw new Error();
@@ -106,9 +123,12 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
     if (!confirm(`Delete template "${template.title}"?`)) return;
     setDeleting(true);
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/project-templates/${template.id}`, {
-        method: "DELETE",
-      });
+      await fetch(
+        `/api/sub-accounts/${subAccountId}/project-templates/${template.id}`,
+        {
+          method: "DELETE",
+        }
+      );
       toast.success("Template deleted");
       onOpenChange(false);
     } catch {
@@ -140,7 +160,9 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
               placeholder="12-Week Rebrand"
               aria-invalid={!!errors.title}
             />
-            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            {errors.title && (
+              <p className="text-destructive text-xs">{errors.title}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -176,19 +198,67 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
             />
           </div>
 
+          <div className="space-y-2 rounded-lg border p-3">
+            <div>
+              <Label className="text-[13px]">Who is this template for?</Label>
+            </div>
+            <label className="hover:bg-muted/40 flex cursor-pointer gap-3 rounded-md border p-3">
+              <input
+                type="radio"
+                name="template-audience"
+                value="internal"
+                checked={audience === "internal"}
+                onChange={() => setAudience("internal")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-[13px] font-medium">
+                  My business
+                </span>
+                <span className="text-muted-foreground block text-[12px]">
+                  For projects you or your team use internally.
+                </span>
+              </span>
+            </label>
+            <label className="hover:bg-muted/40 flex cursor-pointer gap-3 rounded-md border p-3">
+              <input
+                type="radio"
+                name="template-audience"
+                value="client"
+                checked={audience === "client"}
+                onChange={() => setAudience("client")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-[13px] font-medium">Clients</span>
+                <span className="text-muted-foreground block text-[12px]">
+                  For projects you can assign to clients or include in offers.
+                </span>
+              </span>
+            </label>
+          </div>
+
           <div className="space-y-1.5">
             <Label>Steps</Label>
             <div className="space-y-1 rounded-lg border p-2">
               {steps.length === 0 && (
-                <p className="px-1 py-2 text-xs italic text-muted-foreground">
-                  No steps yet — every project spawned from this template starts with these.
+                <p className="text-muted-foreground px-1 py-2 text-xs italic">
+                  No steps yet — every project spawned from this template starts
+                  with these.
                 </p>
               )}
               {steps.map((s, i) => (
-                <div key={i} className="group flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-muted/50">
+                <div
+                  key={i}
+                  className="group hover:bg-muted/50 flex items-center gap-2 rounded-md px-1 py-1.5"
+                >
                   <span className="flex-1 text-[13px]">{s}</span>
-                  <button type="button" onClick={() => removeStepDraft(i)} className="opacity-0 group-hover:opacity-100">
-                    <X className="h-3.5 w-3.5 text-muted-foreground" />
+                  <button
+                    type="button"
+                    onClick={() => removeStepDraft(i)}
+                    className="opacity-0 group-hover:opacity-100"
+                  >
+                    <X className="text-muted-foreground h-3.5 w-3.5" />
                   </button>
                 </div>
               ))}
@@ -205,7 +275,13 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
                   placeholder="Add a step…"
                   className="h-8 text-[13px]"
                 />
-                <Button type="button" variant="outline" size="sm" onClick={addStepDraft} disabled={!newStep.trim()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addStepDraft}
+                  disabled={!newStep.trim()}
+                >
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -214,7 +290,13 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
 
           <div className="flex items-center justify-between gap-2 pt-2">
             {isEdit ? (
-              <Button type="button" variant="destructive" size="sm" onClick={handleDelete} disabled={saving || deleting}>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+              >
                 <Trash2 className="mr-1 h-3.5 w-3.5" />
                 {deleting ? "Deleting…" : "Delete"}
               </Button>
@@ -222,11 +304,20 @@ export function TemplateDialog({ open, onOpenChange, template }: TemplateDialogP
               <span />
             )}
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Template"}
+                {saving
+                  ? "Saving…"
+                  : isEdit
+                    ? "Save Changes"
+                    : "Create Template"}
               </Button>
             </div>
           </div>

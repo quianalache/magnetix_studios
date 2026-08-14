@@ -16,6 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MultiSelect, MultiSelectChips } from "@/components/ui/multi-select";
 import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
+import {
+  projectTemplateAudience,
+  type ProjectTemplate,
+} from "@/types/projects";
 import type { OfferType } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import type { BookingPage } from "@/types/booking";
@@ -29,12 +33,14 @@ const SELECT =
 export function CreateOfferModal({
   subAccountId,
   courses,
+  projectTemplates,
   open,
   onOpenChange,
   defaultCourseId,
 }: {
   subAccountId: string;
   courses: StandaloneCourse[];
+  projectTemplates: ProjectTemplate[];
   open: boolean;
   onOpenChange: (o: boolean) => void;
   /** Pre-selects this course when opened from a single course's own "Offers"
@@ -44,8 +50,9 @@ export function CreateOfferModal({
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [courseIds, setCourseIds] = useState<string[]>(
-    defaultCourseId ? [defaultCourseId] : [],
+    defaultCourseId ? [defaultCourseId] : []
   );
+  const [projectTemplateIds, setProjectTemplateIds] = useState<string[]>([]);
   const [type, setType] = useState<OfferType>("free");
   const [priceTextOverride, setPriceTextOverride] = useState("");
   const [bookingPageId, setBookingPageId] = useState("");
@@ -55,12 +62,13 @@ export function CreateOfferModal({
 
   useEffect(
     () => subscribeToBookingPages(subAccountId, setBookingPages),
-    [subAccountId],
+    [subAccountId]
   );
 
   function reset() {
     setTitle("");
     setCourseIds(defaultCourseId ? [defaultCourseId] : []);
+    setProjectTemplateIds([]);
     setType("free");
     setPriceTextOverride("");
     setBookingPageId("");
@@ -72,13 +80,19 @@ export function CreateOfferModal({
       toast.error("Enter an offer title");
       return;
     }
-    if (courseIds.length === 0) {
-      toast.error("Attach at least one product");
+    if (
+      courseIds.length === 0 &&
+      projectTemplateIds.length === 0 &&
+      !bookingPageId
+    ) {
+      toast.error("Attach at least one entitlement");
       return;
     }
     setSaving(true);
     try {
-      const selectedBookingPage = bookingPages.find((p) => p.id === bookingPageId);
+      const selectedBookingPage = bookingPages.find(
+        (p) => p.id === bookingPageId
+      );
       const booking = selectedBookingPage
         ? {
             bookingPageId: selectedBookingPage.id,
@@ -95,11 +109,12 @@ export function CreateOfferModal({
           body: JSON.stringify({
             title: title.trim(),
             courseIds,
+            projectTemplateIds,
             type,
             priceTextOverride: priceTextOverride.trim() || null,
             booking,
           }),
-        },
+        }
       );
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -121,13 +136,16 @@ export function CreateOfferModal({
   }
 
   const options = courses.map((c) => ({ value: c.id, label: c.title }));
+  const clientProjectOptions = projectTemplates
+    .filter((t) => projectTemplateAudience(t) === "client")
+    .map((t) => ({ value: t.id, label: t.title }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add Offers</DialogTitle>
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-muted-foreground text-[13px]">
             Create and manage special offers for your courses
           </p>
         </DialogHeader>
@@ -189,9 +207,26 @@ export function CreateOfferModal({
                 className="mt-1.5"
               />
             )}
-            <p className="text-[12px] text-muted-foreground">
-              Optional — bundle a booking link buyers get after purchase, on
-              top of the products above
+            <p className="text-muted-foreground text-[12px]">
+              Optional — bundle a booking link buyers get after purchase.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[13px]">Client Projects</Label>
+            <MultiSelect
+              options={clientProjectOptions}
+              value={projectTemplateIds}
+              onChange={setProjectTemplateIds}
+              placeholder="Select client project templates"
+            />
+            <MultiSelectChips
+              options={clientProjectOptions}
+              value={projectTemplateIds}
+              onChange={setProjectTemplateIds}
+            />
+            <p className="text-muted-foreground text-[12px]">
+              Optional — creates assigned client projects when this offer is
+              granted.
             </p>
           </div>
           <div className="space-y-1.5">
@@ -220,7 +255,7 @@ export function CreateOfferModal({
               placeholder="Free Offer"
               maxLength={255}
             />
-            <p className="text-[12px] text-muted-foreground">
+            <p className="text-muted-foreground text-[12px]">
               Use a custom phrase to describe the price of this offer (e.g.,
               &apos;Free Trial&apos;, &apos;Limited Time Only&apos;)
             </p>
@@ -228,7 +263,11 @@ export function CreateOfferModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             Cancel
           </Button>
           <Button onClick={save} disabled={saving}>

@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FolderKanban, Plus, LayoutTemplate, Package, Archive } from "lucide-react";
+import {
+  FolderKanban,
+  Plus,
+  LayoutTemplate,
+  Package,
+  Archive,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
@@ -16,7 +22,11 @@ import { TemplateDialog } from "@/components/projects/template-dialog";
 import { AssetsTab } from "@/components/projects/assets-tab";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
-import type { Project, ProjectTemplate } from "@/types/projects";
+import {
+  projectTemplateAudience,
+  type Project,
+  type ProjectTemplate,
+} from "@/types/projects";
 
 type ProjectTab = "active" | "templates" | "assets" | "archived";
 
@@ -32,7 +42,9 @@ export default function ProjectsPage() {
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [editTemplate, setEditTemplate] = useState<ProjectTemplate | null>(null);
+  const [editTemplate, setEditTemplate] = useState<ProjectTemplate | null>(
+    null
+  );
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -68,11 +80,11 @@ export default function ProjectsPage() {
 
   const activeProjects = useMemo(
     () => projects.filter((p) => p.status === "active"),
-    [projects],
+    [projects]
   );
   const archivedProjects = useMemo(
     () => projects.filter((p) => p.status === "archived"),
-    [projects],
+    [projects]
   );
 
   function openNewProject() {
@@ -96,8 +108,18 @@ export default function ProjectsPage() {
   // wrapper + plain text-primary icons (never per-tab hue) + rounded-full
   // bg-muted pill container with hover:bg-background/60. Same rules, same
   // reasons — see Growth's own comments for the real-markup sourcing.
-  const TABS: { id: ProjectTab; label: string; count?: number; icon: typeof FolderKanban }[] = [
-    { id: "active", label: "Active Projects", count: activeProjects.length, icon: FolderKanban },
+  const TABS: {
+    id: ProjectTab;
+    label: string;
+    count?: number;
+    icon: typeof FolderKanban;
+  }[] = [
+    {
+      id: "active",
+      label: "Active Projects",
+      count: activeProjects.length,
+      icon: FolderKanban,
+    },
     { id: "templates", label: "Templates", icon: LayoutTemplate },
     { id: "assets", label: "Assets", icon: Package },
     { id: "archived", label: "Archived", icon: Archive },
@@ -108,7 +130,7 @@ export default function ProjectsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Your systems hub — projects, templates, and client deliverables.
           </p>
         </div>
@@ -126,7 +148,7 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      <div className="flex w-fit flex-wrap gap-1 rounded-full bg-muted p-1">
+      <div className="bg-muted flex w-fit flex-wrap gap-1 rounded-full p-1">
         {TABS.map((t) => {
           const isActive = tab === t.id;
           const Icon = t.icon;
@@ -138,16 +160,21 @@ export default function ProjectsPage() {
                 "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all",
                 isActive
                   ? "bg-background shadow-sm"
-                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
+                  : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
               )}
             >
-              <Icon className={cn("h-3.5 w-3.5", isActive ? "text-primary" : "opacity-60")} />
+              <Icon
+                className={cn(
+                  "h-3.5 w-3.5",
+                  isActive ? "text-primary" : "opacity-60"
+                )}
+              />
               {t.label}
               {t.count !== undefined && (
                 <span
                   className={cn(
                     "rounded-full px-1.5 text-[11px] tabular-nums",
-                    isActive ? "bg-muted" : "bg-background/80",
+                    isActive ? "bg-muted" : "bg-background/80"
                   )}
                 >
                   {t.count}
@@ -171,7 +198,11 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {activeProjects.map((p) => (
-              <ProjectCard key={p.id} project={p} onClick={() => openEditProject(p)} />
+              <ProjectCard
+                key={p.id}
+                project={p}
+                onClick={() => openEditProject(p)}
+              />
             ))}
           </div>
         )
@@ -189,16 +220,26 @@ export default function ProjectsPage() {
               <button
                 key={t.id}
                 onClick={() => openEditTemplate(t)}
-                className="rounded-xl border bg-card p-4 text-left shadow-xs transition-colors hover:border-primary/40"
+                className="bg-card hover:border-primary/40 rounded-xl border p-4 text-left shadow-xs transition-colors"
               >
-                <p className="text-[15px] font-semibold">{t.title}</p>
-                <p className="mt-1 text-[12.5px] text-muted-foreground">
-                  {[t.category, t.durationDays != null ? `${t.durationDays} days` : null]
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[15px] font-semibold">{t.title}</p>
+                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                    {projectTemplateAudience(t) === "client"
+                      ? "Clients"
+                      : "My business"}
+                  </span>
+                </div>
+                <p className="text-muted-foreground mt-1 text-[12.5px]">
+                  {[
+                    t.category,
+                    t.durationDays != null ? `${t.durationDays} days` : null,
+                  ]
                     .filter(Boolean)
                     .join(" · ") || "No category set"}
                 </p>
                 {t.steps.length > 0 && (
-                  <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  <p className="text-muted-foreground mt-2 text-[11.5px]">
                     {t.steps.length} step{t.steps.length === 1 ? "" : "s"}
                   </p>
                 )}
@@ -209,13 +250,19 @@ export default function ProjectsPage() {
       ) : tab === "assets" ? (
         <AssetsTab />
       ) : archivedProjects.length === 0 ? (
-        <div className="rounded-xl border border-dashed bg-card/50 p-10 text-center">
-          <p className="text-sm text-muted-foreground">No archived projects yet.</p>
+        <div className="bg-card/50 rounded-xl border border-dashed p-10 text-center">
+          <p className="text-muted-foreground text-sm">
+            No archived projects yet.
+          </p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {archivedProjects.map((p) => (
-            <ProjectCard key={p.id} project={p} onClick={() => openEditProject(p)} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onClick={() => openEditProject(p)}
+            />
           ))}
         </div>
       )}
@@ -240,7 +287,10 @@ function GridSkeleton() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="h-40 animate-pulse rounded-xl border bg-muted/30" />
+        <div
+          key={i}
+          className="bg-muted/30 h-40 animate-pulse rounded-xl border"
+        />
       ))}
     </div>
   );
@@ -258,12 +308,12 @@ function EmptyState({
   addLabel: string;
 }) {
   return (
-    <div className="rounded-xl border border-dashed bg-card/50 p-10 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-        <FolderKanban className="h-6 w-6 text-primary" />
+    <div className="bg-card/50 rounded-xl border border-dashed p-10 text-center">
+      <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+        <FolderKanban className="text-primary h-6 w-6" />
       </div>
       <h3 className="text-base font-semibold">{title}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
+      <p className="text-muted-foreground mt-1 text-sm">{desc}</p>
       <div className="mt-6 flex justify-center">
         <Button onClick={onAdd}>
           <Plus className="mr-1 h-4 w-4" />

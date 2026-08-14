@@ -12,6 +12,7 @@ import { ContactProfileHeader } from "@/components/contacts/contact-profile-head
 import { ContactDeals } from "@/components/contacts/contact-deals";
 import { ContactQuotes } from "@/components/contacts/contact-quotes";
 import { ContactTasks } from "@/components/contacts/contact-tasks";
+import { ContactProjects } from "@/components/contacts/contact-projects";
 import { ContactSubmittedForms } from "@/components/contacts/contact-submitted-forms";
 import { ContactEnergeticReadings } from "@/components/contacts/contact-energetic-readings";
 import { ContactPortalAccess } from "@/components/contacts/contact-portal-access";
@@ -66,7 +67,7 @@ export default function ContactProfilePage() {
     subAccount?.whatsappEnabledByAgency === true;
 
   return (
-    <div className="mx-auto w-full max-w-5xl grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <div className="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <div className="space-y-6">
         <ContactProfileHeader contact={contact} />
         <ContactDeals contact={contact} />
@@ -75,6 +76,7 @@ export default function ContactProfilePage() {
           scope={{ agencyId: agencyId ?? "", subAccountId }}
         />
         <ContactTasks contact={contact} />
+        <ContactProjects contact={contact} />
         <ContactSubmittedForms contact={contact} />
         <ContactEnergeticReadings contact={contact} />
         <ContactPortalAccess contact={contact} />
@@ -85,7 +87,7 @@ export default function ContactProfilePage() {
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Activity</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Notes and pipeline events for this contact.
           </p>
         </div>
@@ -100,13 +102,13 @@ function ProfileSkeleton() {
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <div className="space-y-4">
-        <div className="h-4 w-24 animate-pulse rounded bg-muted" />
-        <div className="h-8 w-64 animate-pulse rounded bg-muted" />
-        <div className="h-40 w-full animate-pulse rounded-xl bg-muted" />
+        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
+        <div className="bg-muted h-8 w-64 animate-pulse rounded" />
+        <div className="bg-muted h-40 w-full animate-pulse rounded-xl" />
       </div>
       <div className="space-y-4">
-        <div className="h-32 w-full animate-pulse rounded-xl bg-muted" />
-        <div className="h-24 w-full animate-pulse rounded-xl bg-muted" />
+        <div className="bg-muted h-32 w-full animate-pulse rounded-xl" />
+        <div className="bg-muted h-24 w-full animate-pulse rounded-xl" />
       </div>
     </div>
   );
@@ -115,12 +117,12 @@ function ProfileSkeleton() {
 function NotFound() {
   const { saPath } = useSubAccount();
   return (
-    <div className="mx-auto max-w-md rounded-xl border border-dashed bg-card/50 p-12 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <UserX className="h-6 w-6 text-muted-foreground" />
+    <div className="bg-card/50 mx-auto max-w-md rounded-xl border border-dashed p-12 text-center">
+      <div className="bg-muted mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+        <UserX className="text-muted-foreground h-6 w-6" />
       </div>
       <h2 className="text-lg font-semibold">Contact not found</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <p className="text-muted-foreground mt-1 text-sm">
         This contact may have been deleted or you don&apos;t have access.
       </p>
       <Button render={<Link href={saPath("/contacts")} />} className="mt-6">

@@ -41,7 +41,7 @@ export function PurchaseCompleteStatus({
 }: {
   saId: string;
   offerId: string;
-  firstCourseId: string;
+  firstCourseId: string | null;
 }) {
   const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
@@ -49,14 +49,18 @@ export function PurchaseCompleteStatus({
   const [upsellBusy, setUpsellBusy] = useState(false);
   const startedAt = useRef(Date.now());
 
-  const classroomUrl = `/course/${saId}/${firstCourseId}/classroom`;
+  const continueUrl = firstCourseId
+    ? `/course/${saId}/${firstCourseId}/classroom`
+    : `/portal/${saId}`;
 
   useEffect(() => {
     let cancelled = false;
 
     async function poll() {
       try {
-        const res = await fetch(`/api/offer/${saId}/${offerId}/purchase-status`);
+        const res = await fetch(
+          `/api/offer/${saId}/${offerId}/purchase-status`
+        );
         const data = (await res.json().catch(() => ({}))) as {
           paid?: boolean;
           oneClickUpsell?: OneClickUpsell | null;
@@ -66,7 +70,7 @@ export function PurchaseCompleteStatus({
           if (data.oneClickUpsell) {
             setUpsell(data.oneClickUpsell);
           } else {
-            router.push(classroomUrl);
+            router.push(continueUrl);
           }
           return;
         }
@@ -85,7 +89,7 @@ export function PurchaseCompleteStatus({
     return () => {
       cancelled = true;
     };
-  }, [saId, offerId, classroomUrl, router]);
+  }, [saId, offerId, continueUrl, router]);
 
   async function acceptUpsell() {
     if (!upsell) return;
@@ -101,7 +105,7 @@ export function PurchaseCompleteStatus({
         needsManualCheckout?: boolean;
       };
       if (data.ok) {
-        router.push(classroomUrl);
+        router.push(continueUrl);
         return;
       }
       if (data.needsManualCheckout) {
@@ -117,7 +121,7 @@ export function PurchaseCompleteStatus({
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4">
         <div className="max-w-sm space-y-4 rounded-xl border border-[#E4E4E4] bg-white p-6 text-center shadow-sm">
-          <p className="text-sm font-medium text-[#909090] uppercase tracking-wide">
+          <p className="text-sm font-medium tracking-wide text-[#909090] uppercase">
             Special one-time offer
           </p>
           <p className="text-lg font-semibold text-[#202124]">
@@ -138,7 +142,7 @@ export function PurchaseCompleteStatus({
             Yes, add it
           </button>
           <button
-            onClick={() => router.push(classroomUrl)}
+            onClick={() => router.push(continueUrl)}
             className="text-sm font-medium text-[#909090] underline"
           >
             No thanks, continue
@@ -172,7 +176,7 @@ export function PurchaseCompleteStatus({
           <>
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#202124]" />
             <p className="text-sm font-medium text-[#202124]">
-              Payment received — unlocking your courses
+              Payment received — unlocking your access
             </p>
             <p className="text-xs text-[#909090]">Just a moment…</p>
           </>

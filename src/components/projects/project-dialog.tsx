@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, X } from "lucide-react";
 import {
@@ -19,7 +19,12 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToProjectSteps } from "@/lib/firestore/projects";
 import { toDate } from "@/lib/format";
 import type { Contact } from "@/types/contacts";
-import type { Project, ProjectStep, ProjectTemplate } from "@/types/projects";
+import {
+  projectTemplateAudience,
+  type Project,
+  type ProjectStep,
+  type ProjectTemplate,
+} from "@/types/projects";
 
 interface ProjectDialogProps {
   open: boolean;
@@ -89,6 +94,23 @@ export function ProjectDialog({
     return subscribeToProjectSteps(project.id, setSteps);
   }, [open, project]);
 
+  const templateOptions = useMemo(
+    () =>
+      templates.filter((t) =>
+        contactId
+          ? projectTemplateAudience(t) === "client"
+          : projectTemplateAudience(t) === "internal"
+      ),
+    [templates, contactId]
+  );
+
+  useEffect(() => {
+    if (!templateId) return;
+    if (!templateOptions.some((t) => t.id === templateId)) {
+      setTemplateId("");
+    }
+  }, [templateId, templateOptions]);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const next: Record<string, string> = {};
@@ -99,17 +121,20 @@ export function ProjectDialog({
     setSaving(true);
     try {
       if (isEdit && project) {
-        const res = await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: title.trim(),
-            description: description.trim(),
-            startAt: startDate || null,
-            dueAt: dueDate || null,
-            assignedContactId: contactId,
-          }),
-        });
+        const res = await fetch(
+          `/api/sub-accounts/${subAccountId}/projects/${project.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: title.trim(),
+              description: description.trim(),
+              startAt: startDate || null,
+              dueAt: dueDate || null,
+              assignedContactId: contactId,
+            }),
+          }
+        );
         if (!res.ok) throw new Error();
         toast.success("Project updated");
       } else {
@@ -146,7 +171,9 @@ export function ProjectDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),
       });
-      toast.success(nextStatus === "archived" ? "Project archived" : "Project reactivated");
+      toast.success(
+        nextStatus === "archived" ? "Project archived" : "Project reactivated"
+      );
       onOpenChange(false);
     } catch {
       toast.error("Couldn't update this project.");
@@ -157,7 +184,8 @@ export function ProjectDialog({
 
   async function handleDelete() {
     if (!project) return;
-    if (!confirm(`Delete project "${project.title}"? This can't be undone.`)) return;
+    if (!confirm(`Delete project "${project.title}"? This can't be undone.`))
+      return;
     setDeleting(true);
     try {
       await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`, {
@@ -176,11 +204,14 @@ export function ProjectDialog({
     if (!project || !newStep.trim()) return;
     setAddingStep(true);
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}/steps`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newStep.trim() }),
-      });
+      await fetch(
+        `/api/sub-accounts/${subAccountId}/projects/${project.id}/steps`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: newStep.trim() }),
+        }
+      );
       setNewStep("");
     } catch {
       toast.error("Couldn't add that step.");
@@ -191,18 +222,24 @@ export function ProjectDialog({
 
   async function handleToggleStep(step: ProjectStep) {
     if (!project) return;
-    await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}/steps/${step.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: !step.done }),
-    }).catch(() => toast.error("Couldn't update that step."));
+    await fetch(
+      `/api/sub-accounts/${subAccountId}/projects/${project.id}/steps/${step.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done: !step.done }),
+      }
+    ).catch(() => toast.error("Couldn't update that step."));
   }
 
   async function handleDeleteStep(step: ProjectStep) {
     if (!project) return;
-    await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}/steps/${step.id}`, {
-      method: "DELETE",
-    }).catch(() => toast.error("Couldn't delete that step."));
+    await fetch(
+      `/api/sub-accounts/${subAccountId}/projects/${project.id}/steps/${step.id}`,
+      {
+        method: "DELETE",
+      }
+    ).catch(() => toast.error("Couldn't delete that step."));
   }
 
   return (
@@ -229,7 +266,9 @@ export function ProjectDialog({
               placeholder="12-Week Rebrand"
               aria-invalid={!!errors.title}
             />
-            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
+            {errors.title && (
+              <p className="text-destructive text-xs">{errors.title}</p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -278,35 +317,43 @@ export function ProjectDialog({
                 />
               </div>
               {contactId && (
-                <Button type="button" variant="ghost" size="sm" onClick={() => setContactId(null)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setContactId(null)}
+                >
                   Clear
                 </Button>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Assigning shows this project in that client&apos;s Client Portal — either of you can check off steps.
+            <p className="text-muted-foreground text-[11px]">
+              Assigning shows this project in that client&apos;s Client Portal —
+              either of you can check off steps.
             </p>
           </div>
 
-          {!isEdit && templates.length > 0 && (
+          {!isEdit && templateOptions.length > 0 && (
             <div className="space-y-1.5">
               <Label htmlFor="project-template">Start from a template</Label>
               <select
                 id="project-template"
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
               >
                 <option value="">Blank project</option>
-                {templates.map((t) => (
+                {templateOptions.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.title}
                     {t.category ? ` — ${t.category}` : ""}
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-muted-foreground">
-                Copies the template&apos;s steps in as a starting checklist.
+              <p className="text-muted-foreground text-[11px]">
+                {contactId
+                  ? "Only client templates are available for assigned projects."
+                  : "Only internal templates are available for unassigned projects."}
               </p>
             </div>
           )}
@@ -316,23 +363,27 @@ export function ProjectDialog({
               <Label>Steps</Label>
               <div className="space-y-1 rounded-lg border p-2">
                 {steps.length === 0 ? (
-                  <p className="px-1 py-2 text-xs italic text-muted-foreground">
+                  <p className="text-muted-foreground px-1 py-2 text-xs italic">
                     No steps yet — add the first one below.
                   </p>
                 ) : (
                   steps.map((s) => (
                     <div
                       key={s.id}
-                      className="group flex items-center gap-2 rounded-md px-1 py-1.5 hover:bg-muted/50"
+                      className="group hover:bg-muted/50 flex items-center gap-2 rounded-md px-1 py-1.5"
                     >
                       <button
                         type="button"
                         onClick={() => handleToggleStep(s)}
                         className={`flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full border-2 ${
-                          s.done ? "border-primary bg-primary" : "border-muted-foreground/40"
+                          s.done
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground/40"
                         }`}
                       >
-                        {s.done && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
+                        {s.done && (
+                          <span className="bg-primary-foreground h-1.5 w-1.5 rounded-full" />
+                        )}
                       </button>
                       <span
                         className={`flex-1 text-[13px] ${s.done ? "text-muted-foreground line-through" : ""}`}
@@ -344,7 +395,7 @@ export function ProjectDialog({
                         onClick={() => handleDeleteStep(s)}
                         className="opacity-0 group-hover:opacity-100"
                       >
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                        <X className="text-muted-foreground h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))
@@ -403,11 +454,20 @@ export function ProjectDialog({
               <span />
             )}
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving…" : isEdit ? "Save Changes" : "Create Project"}
+                {saving
+                  ? "Saving…"
+                  : isEdit
+                    ? "Save Changes"
+                    : "Create Project"}
               </Button>
             </div>
           </div>

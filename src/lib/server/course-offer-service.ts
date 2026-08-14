@@ -2,19 +2,27 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
+import {
+  ensureUniqueSlug,
+  isSlugAvailable,
+  isValidSlugFormat,
+} from "@/lib/slug";
 import {
   DEFAULT_COURSE_OFFER_ACCESS,
   DEFAULT_COURSE_OFFER_ADVANCED,
   DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
 } from "@/types/course-offers";
-import { DEFAULT_OFFER_THEME, normalizeCourseTheme } from "@/types/course-theme";
+import {
+  DEFAULT_OFFER_THEME,
+  normalizeCourseTheme,
+} from "@/types/course-theme";
 import type {
   CourseOffer,
   CourseOfferAccess,
   CourseOfferAdvanced,
   CourseOfferBookingBundle,
   CourseOfferCheckoutSettings,
+  CourseOfferProjectTemplateBundle,
   OfferType,
   OfferVisibility,
   RecurringInterval,
@@ -35,6 +43,64 @@ function offerDoc(saId: string, offerId: string) {
   return offersCol(saId).doc(offerId);
 }
 
+export async function buildClientProjectTemplateBundlesServerSide(
+  subAccountId: string,
+  templateIds: string[]
+): Promise<CourseOfferProjectTemplateBundle[]> {
+  const uniqueIds = [...new Set(templateIds.filter(Boolean))];
+  const bundles: CourseOfferProjectTemplateBundle[] = [];
+  for (const templateId of uniqueIds) {
+    const snap = await getAdminDb().doc(`projectTemplates/${templateId}`).get();
+    if (!snap.exists) {
+      throw new Error(
+        "One of the selected client project templates was not found."
+      );
+    }
+    const data = snap.data()!;
+    if (data.subAccountId !== subAccountId || data.audience !== "client") {
+      throw new Error(
+        "Only client project templates can be included in an offer."
+      );
+    }
+    const steps = Array.isArray(data.steps)
+      ? data.steps
+          .map((step, index) => {
+            const title =
+              typeof step?.title === "string"
+                ? step.title.trim().slice(0, 300)
+                : "";
+            return title
+              ? {
+                  title,
+                  order:
+                    typeof step?.order === "number" &&
+                    Number.isFinite(step.order)
+                      ? step.order
+                      : index,
+                }
+              : null;
+          })
+          .filter(
+            (step): step is { title: string; order: number } => step !== null
+          )
+      : [];
+    bundles.push({
+      templateId,
+      templateTitle:
+        typeof data.title === "string" ? data.title : "Client Project",
+      templateCategory: typeof data.category === "string" ? data.category : "",
+      durationDays:
+        typeof data.durationDays === "number" &&
+        Number.isFinite(data.durationDays)
+          ? data.durationDays
+          : null,
+      description: typeof data.description === "string" ? data.description : "",
+      steps,
+    });
+  }
+  return bundles;
+}
+
 export async function createCourseOfferServerSide(opts: {
   subAccountId: string;
   agencyId: string;
@@ -47,6 +113,7 @@ export async function createCourseOfferServerSide(opts: {
   trialDays?: number | null;
   priceTextOverride?: string | null;
   booking?: CourseOfferBookingBundle | null;
+  projectTemplates?: CourseOfferProjectTemplateBundle[];
 }): Promise<CourseOffer> {
   const type: OfferType = opts.type ?? "free";
   const slug = await ensureUniqueSlug({
@@ -78,6 +145,7 @@ export async function createCourseOfferServerSide(opts: {
     theme: DEFAULT_OFFER_THEME,
     checkoutSettings: DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
     booking: opts.booking ?? null,
+    projectTemplates: opts.projectTemplates ?? [],
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -110,6 +178,7 @@ export interface CourseOfferPatch {
    *  like `access`/`advanced`, since the editor always sends the full
    *  bundle or nothing. */
   booking?: CourseOfferBookingBundle | null;
+  projectTemplates?: CourseOfferProjectTemplateBundle[];
 }
 
 export async function updateCourseOfferServerSide(opts: {
@@ -127,7 +196,7 @@ export async function updateCourseOfferServerSide(opts: {
     const slug = p.slug.trim().toLowerCase();
     if (!isValidSlugFormat(slug)) {
       throw new Error(
-        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen.",
+        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen."
       );
     }
     const available = await isSlugAvailable({
@@ -157,8 +226,7 @@ export async function updateCourseOfferServerSide(opts: {
       updates.currency = p.currency ?? "USD";
       updates.recurringInterval =
         p.type === "recurring" ? (p.recurringInterval ?? "month") : null;
-      updates.trialDays =
-        p.type === "recurring" ? (p.trialDays ?? null) : null;
+      updates.trialDays = p.type === "recurring" ? (p.trialDays ?? null) : null;
     }
   } else {
     if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
@@ -195,6 +263,8 @@ export async function updateCourseOfferServerSide(opts: {
     }
   }
   if (p.booking !== undefined) updates.booking = p.booking;
+  if (Array.isArray(p.projectTemplates))
+    updates.projectTemplates = p.projectTemplates;
   await offerDoc(opts.subAccountId, opts.offerId).update(updates);
 }
 
@@ -212,11 +282,17 @@ function withDefaults(id: string, data: Record<string, unknown>): CourseOffer {
     access: (data.access as CourseOfferAccess) ?? DEFAULT_COURSE_OFFER_ACCESS,
     advanced:
       (data.advanced as CourseOfferAdvanced) ?? DEFAULT_COURSE_OFFER_ADVANCED,
-    theme: normalizeCourseTheme(data.theme as CourseOffer["theme"], DEFAULT_OFFER_THEME),
+    theme: normalizeCourseTheme(
+      data.theme as CourseOffer["theme"],
+      DEFAULT_OFFER_THEME
+    ),
     checkoutSettings:
       (data.checkoutSettings as CourseOfferCheckoutSettings) ??
       DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS,
     booking: (data.booking as CourseOfferBookingBundle | null) ?? null,
+    projectTemplates: Array.isArray(data.projectTemplates)
+      ? (data.projectTemplates as CourseOfferProjectTemplateBundle[])
+      : [],
   };
 }
 
@@ -234,7 +310,7 @@ export async function updateCourseOfferThemeServerSide(opts: {
 
 export async function getCourseOffer(
   saId: string,
-  offerId: string,
+  offerId: string
 ): Promise<CourseOffer | null> {
   const snap = await offerDoc(saId, offerId).get();
   if (!snap.exists) return null;
@@ -244,7 +320,7 @@ export async function getCourseOffer(
 /** Slug lookup for the human-readable custom-domain route (/courses/{slug}). Published-only — an unpublished offer 404s on its pretty URL same as it would on the opaque one. */
 export async function getCourseOfferBySlug(
   saId: string,
-  slug: string,
+  slug: string
 ): Promise<CourseOffer | null> {
   const snap = await offersCol(saId).where("slug", "==", slug).limit(1).get();
   if (snap.empty) return null;
@@ -261,7 +337,7 @@ export async function listCourseOffers(saId: string): Promise<CourseOffer[]> {
  *  "which offers include this" and the Add Products picker's reverse lookup. */
 export async function getCourseOffersForCourse(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<CourseOffer[]> {
   const snap = await offersCol(saId)
     .where("courseIds", "array-contains", courseId)

@@ -21,6 +21,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  */
 
 export type ProjectStatus = "active" | "archived";
+export type ProjectTemplateAudience = "internal" | "client";
 
 export interface Project {
   id: string;
@@ -40,6 +41,10 @@ export interface Project {
   createdByMemberId: string | null;
   /** The template this was spawned from, if any — informational only, no live link back. */
   templateId: string | null;
+  /** Offer entitlement provenance, when a client project was instantiated from a purchase/grant. */
+  sourceOfferId?: string | null;
+  sourcePurchaseId?: string | null;
+  sourceTemplateId?: string | null;
   /** Denormalized step counts, kept in sync by project-service.ts on every step mutation — avoids a subcollection read just to render a progress bar. */
   stepCount: number;
   stepsDoneCount: number;
@@ -66,7 +71,6 @@ export interface ProjectTemplateStep {
   order: number;
 }
 
-/** Coach-only — students never see or spawn from templates, per her explicit "keep templates only for the coach for now." */
 export interface ProjectTemplate {
   id: string;
   agencyId: string;
@@ -77,6 +81,8 @@ export interface ProjectTemplate {
   durationDays: number | null;
   description: string;
   steps: ProjectTemplateStep[];
+  /** "internal" = coach/business workflows. "client" = assignable to contacts and eligible for offers. Missing legacy values default to internal. */
+  audience?: ProjectTemplateAudience;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -95,9 +101,18 @@ export type ProjectTemplateFormData = {
   durationDays: number | null;
   description: string;
   steps: ProjectTemplateStep[];
+  audience: ProjectTemplateAudience;
 };
 
-export function projectProgressPct(project: Pick<Project, "stepCount" | "stepsDoneCount">): number {
+export function projectProgressPct(
+  project: Pick<Project, "stepCount" | "stepsDoneCount">
+): number {
   if (project.stepCount <= 0) return 0;
   return Math.round((project.stepsDoneCount / project.stepCount) * 100);
+}
+
+export function projectTemplateAudience(
+  template: Pick<ProjectTemplate, "audience">
+): ProjectTemplateAudience {
+  return template.audience === "client" ? "client" : "internal";
 }

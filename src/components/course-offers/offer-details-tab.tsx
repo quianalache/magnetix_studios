@@ -14,6 +14,10 @@ import { MultiSelect, MultiSelectChips } from "@/components/ui/multi-select";
 import { uploadCourseOfferImage } from "@/lib/community/upload-image";
 import { formatCurrency } from "@/lib/format";
 import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
+import {
+  projectTemplateAudience,
+  type ProjectTemplate,
+} from "@/types/projects";
 import type {
   CourseOffer,
   OfferType,
@@ -42,11 +46,13 @@ export function OfferDetailsTab({
   subAccountId,
   offer,
   courses,
+  projectTemplates,
   onSaved,
 }: {
   subAccountId: string;
   offer: CourseOffer;
   courses: StandaloneCourse[];
+  projectTemplates: ProjectTemplate[];
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState(offer.title);
@@ -54,50 +60,53 @@ export function OfferDetailsTab({
   const [courseIds, setCourseIds] = useState(offer.courseIds);
   const [type, setType] = useState<OfferType>(offer.type);
   const [price, setPrice] = useState(
-    offer.priceCents != null ? (offer.priceCents / 100).toString() : "",
+    offer.priceCents != null ? (offer.priceCents / 100).toString() : ""
   );
   const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(
-    offer.recurringInterval ?? "month",
+    offer.recurringInterval ?? "month"
   );
   const [trialDays, setTrialDays] = useState(
-    offer.trialDays != null ? offer.trialDays.toString() : "",
+    offer.trialDays != null ? offer.trialDays.toString() : ""
   );
   const [priceTextOverride, setPriceTextOverride] = useState(
-    offer.priceTextOverride ?? "",
+    offer.priceTextOverride ?? ""
   );
   const [thumbnailUrl, setThumbnailUrl] = useState(offer.thumbnailUrl);
   const [discountCodesEnabled, setDiscountCodesEnabled] = useState(
-    offer.discountCodesEnabled,
+    offer.discountCodesEnabled
   );
   const [showRecentPurchasePopup, setShowRecentPurchasePopup] = useState(
-    offer.showRecentPurchasePopup === true,
+    offer.showRecentPurchasePopup === true
   );
   const [beginAtSpecificDate, setBeginAtSpecificDate] = useState(
-    offer.access.beginAtSpecificDate,
+    offer.access.beginAtSpecificDate
   );
   const [beginDate, setBeginDate] = useState(
-    toDateInputValue(offer.access.beginDate),
+    toDateInputValue(offer.access.beginDate)
   );
   const [restrictToDays, setRestrictToDays] = useState(
-    offer.access.restrictToDays,
+    offer.access.restrictToDays
   );
   const [accessDays, setAccessDays] = useState(
-    offer.access.accessDays?.toString() ?? "",
+    offer.access.accessDays?.toString() ?? ""
   );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [customJs, setCustomJs] = useState(offer.advanced.customJs);
   const [customCss, setCustomCss] = useState(offer.advanced.customCss);
   const [headerTracking, setHeaderTracking] = useState(
-    offer.advanced.headerTracking,
+    offer.advanced.headerTracking
   );
   const [footerTracking, setFooterTracking] = useState(
-    offer.advanced.footerTracking,
+    offer.advanced.footerTracking
   );
   const [bookingPageId, setBookingPageId] = useState(
-    offer.booking?.bookingPageId ?? "",
+    offer.booking?.bookingPageId ?? ""
+  );
+  const [projectTemplateIds, setProjectTemplateIds] = useState(
+    offer.projectTemplates.map((t) => t.templateId)
   );
   const [sessionCount, setSessionCount] = useState(
-    offer.booking?.sessionCount?.toString() ?? "1",
+    offer.booking?.sessionCount?.toString() ?? "1"
   );
   const [bookingPages, setBookingPages] = useState<BookingPage[]>([]);
   const [imgUploading, setImgUploading] = useState(false);
@@ -105,7 +114,7 @@ export function OfferDetailsTab({
 
   useEffect(
     () => subscribeToBookingPages(subAccountId, setBookingPages),
-    [subAccountId],
+    [subAccountId]
   );
 
   // Re-sync local state whenever a fresh offer snapshot arrives (e.g. after
@@ -115,7 +124,9 @@ export function OfferDetailsTab({
     setDescriptionHtml(offer.descriptionHtml);
     setCourseIds(offer.courseIds);
     setType(offer.type);
-    setPrice(offer.priceCents != null ? (offer.priceCents / 100).toString() : "");
+    setPrice(
+      offer.priceCents != null ? (offer.priceCents / 100).toString() : ""
+    );
     setRecurringInterval(offer.recurringInterval ?? "month");
     setTrialDays(offer.trialDays != null ? offer.trialDays.toString() : "");
     setPriceTextOverride(offer.priceTextOverride ?? "");
@@ -131,6 +142,7 @@ export function OfferDetailsTab({
     setHeaderTracking(offer.advanced.headerTracking);
     setFooterTracking(offer.advanced.footerTracking);
     setBookingPageId(offer.booking?.bookingPageId ?? "");
+    setProjectTemplateIds(offer.projectTemplates.map((t) => t.templateId));
     setSessionCount(offer.booking?.sessionCount?.toString() ?? "1");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offer.id, offer.version]);
@@ -140,13 +152,19 @@ export function OfferDetailsTab({
       toast.error("Enter an offer title");
       return;
     }
-    if (courseIds.length === 0) {
-      toast.error("Attach at least one product to the offer");
+    if (
+      courseIds.length === 0 &&
+      projectTemplateIds.length === 0 &&
+      !bookingPageId
+    ) {
+      toast.error("Attach at least one entitlement to the offer");
       return;
     }
     setSaving(true);
     try {
-      const selectedBookingPage = bookingPages.find((p) => p.id === bookingPageId);
+      const selectedBookingPage = bookingPages.find(
+        (p) => p.id === bookingPageId
+      );
       const booking = selectedBookingPage
         ? {
             bookingPageId: selectedBookingPage.id,
@@ -167,21 +185,21 @@ export function OfferDetailsTab({
         currency: type !== "free" ? "USD" : null,
         recurringInterval: type === "recurring" ? recurringInterval : null,
         trialDays:
-          type === "recurring" && trialDays.trim()
-            ? Number(trialDays)
-            : null,
+          type === "recurring" && trialDays.trim() ? Number(trialDays) : null,
         priceTextOverride: priceTextOverride.trim() || null,
         thumbnailUrl,
         discountCodesEnabled,
         showRecentPurchasePopup,
         access: {
           beginAtSpecificDate,
-          beginDate: beginAtSpecificDate && beginDate ? new Date(beginDate) : null,
+          beginDate:
+            beginAtSpecificDate && beginDate ? new Date(beginDate) : null,
           restrictToDays,
           accessDays: restrictToDays && accessDays ? Number(accessDays) : null,
         },
         advanced: { customJs, customCss, headerTracking, footerTracking },
         booking,
+        projectTemplateIds,
         ...(publish !== undefined
           ? { visibility: publish ? "published" : "draft" }
           : {}),
@@ -192,13 +210,14 @@ export function OfferDetailsTab({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
-        },
+        }
       );
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
         error?: string;
       };
-      if (!res.ok || d.ok === false) throw new Error(d.error ?? "Couldn't save");
+      if (!res.ok || d.ok === false)
+        throw new Error(d.error ?? "Couldn't save");
       toast.success(publish ? "Offer published." : "Offer saved.");
       onSaved();
     } catch (err) {
@@ -209,8 +228,13 @@ export function OfferDetailsTab({
   }
 
   const options = courses.map((c) => ({ value: c.id, label: c.title }));
+  const clientProjectOptions = projectTemplates
+    .filter((t) => projectTemplateAudience(t) === "client")
+    .map((t) => ({ value: t.id, label: t.title }));
   const priceCentsPreview =
-    type !== "free" && price.trim() ? Math.round(parseFloat(price) * 100) : null;
+    type !== "free" && price.trim()
+      ? Math.round(parseFloat(price) * 100)
+      : null;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
@@ -232,9 +256,11 @@ export function OfferDetailsTab({
           <RichTextEditor
             value={descriptionHtml}
             onChange={setDescriptionHtml}
-            onUploadImage={(file) => uploadCourseOfferImage(file, subAccountId, offer.id)}
+            onUploadImage={(file) =>
+              uploadCourseOfferImage(file, subAccountId, offer.id)
+            }
           />
-          <p className="text-[12px] text-muted-foreground">
+          <p className="text-muted-foreground text-[12px]">
             In the absence of a custom checkout description, this will be used
             on the checkout page.
           </p>
@@ -248,20 +274,27 @@ export function OfferDetailsTab({
             onChange={setCourseIds}
             placeholder="Select Products"
           />
-          <MultiSelectChips options={options} value={courseIds} onChange={setCourseIds} />
-          <p className="text-[12px] text-muted-foreground">
+          <MultiSelectChips
+            options={options}
+            value={courseIds}
+            onChange={setCourseIds}
+          />
+          <p className="text-muted-foreground text-[12px]">
             Please attach product to the offer
           </p>
         </div>
 
         <div className="rounded-lg border p-3">
           <p className="mb-2 text-[13px] font-medium">Booking Session</p>
-          <p className="mb-2 text-[12px] text-muted-foreground">
-            Bundle a booking link so buyers can schedule sessions with you
-            after purchase — e.g. &quot;2 calls with that person&quot;
+          <p className="text-muted-foreground mb-2 text-[12px]">
+            Bundle a booking link so buyers can schedule sessions with you after
+            purchase — e.g. &quot;2 calls with that person&quot;
           </p>
           <div className="space-y-1.5">
-            <Label htmlFor="offer-d-booking-page" className="text-[12px] text-muted-foreground">
+            <Label
+              htmlFor="offer-d-booking-page"
+              className="text-muted-foreground text-[12px]"
+            >
               Booking Page
             </Label>
             <select
@@ -282,7 +315,10 @@ export function OfferDetailsTab({
           </div>
           {bookingPageId && (
             <div className="mt-3 space-y-1.5">
-              <Label htmlFor="offer-d-session-count" className="text-[12px] text-muted-foreground">
+              <Label
+                htmlFor="offer-d-session-count"
+                className="text-muted-foreground text-[12px]"
+              >
                 Sessions Included
               </Label>
               <Input
@@ -292,13 +328,32 @@ export function OfferDetailsTab({
                 value={sessionCount}
                 onChange={(e) => setSessionCount(e.target.value)}
               />
-              <p className="text-[12px] text-muted-foreground">
-                Shown to the buyer and sent by email with the booking link.
-                Not technically enforced — buyers can still book more via
-                the link, same as anyone else.
+              <p className="text-muted-foreground text-[12px]">
+                Shown to the buyer and sent by email with the booking link. Not
+                technically enforced — buyers can still book more via the link,
+                same as anyone else.
               </p>
             </div>
           )}
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <p className="mb-2 text-[13px] font-medium">Client Projects</p>
+          <p className="text-muted-foreground mb-2 text-[12px]">
+            Include client project templates that become assigned projects after
+            purchase.
+          </p>
+          <MultiSelect
+            options={clientProjectOptions}
+            value={projectTemplateIds}
+            onChange={setProjectTemplateIds}
+            placeholder="Select client project templates"
+          />
+          <MultiSelectChips
+            options={clientProjectOptions}
+            value={projectTemplateIds}
+            onChange={setProjectTemplateIds}
+          />
         </div>
 
         <div className="rounded-lg border">
@@ -357,7 +412,10 @@ export function OfferDetailsTab({
         <div className="rounded-lg border p-3">
           <p className="mb-2 text-[13px] font-medium">Offer Pricing</p>
           <div className="space-y-1.5">
-            <Label htmlFor="offer-d-type" className="text-[12px] text-muted-foreground">
+            <Label
+              htmlFor="offer-d-type"
+              className="text-muted-foreground text-[12px]"
+            >
               Type
             </Label>
             <select
@@ -374,7 +432,10 @@ export function OfferDetailsTab({
           {type !== "free" && (
             <div className="mt-2 flex items-end gap-2">
               <div className="flex-1 space-y-1.5">
-                <Label htmlFor="offer-d-price" className="text-[12px] text-muted-foreground">
+                <Label
+                  htmlFor="offer-d-price"
+                  className="text-muted-foreground text-[12px]"
+                >
                   Price (USD)
                 </Label>
                 <Input
@@ -404,13 +465,16 @@ export function OfferDetailsTab({
             </div>
           )}
           {priceCentsPreview != null && (
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <p className="text-muted-foreground mt-1 text-[12px]">
               {formatCurrency(priceCentsPreview / 100, "USD")}
             </p>
           )}
           {type === "recurring" && (
             <div className="mt-3 space-y-1.5">
-              <Label htmlFor="offer-d-trial-days" className="text-[12px] text-muted-foreground">
+              <Label
+                htmlFor="offer-d-trial-days"
+                className="text-muted-foreground text-[12px]"
+              >
                 Trial Days
               </Label>
               <Input
@@ -421,13 +485,16 @@ export function OfferDetailsTab({
                 onChange={(e) => setTrialDays(e.target.value)}
                 placeholder="0"
               />
-              <p className="text-[12px] text-muted-foreground">
+              <p className="text-muted-foreground text-[12px]">
                 Number of days until first billing
               </p>
             </div>
           )}
           <div className="mt-3 space-y-1.5">
-            <Label htmlFor="offer-d-price-text" className="text-[12px] text-muted-foreground">
+            <Label
+              htmlFor="offer-d-price-text"
+              className="text-muted-foreground text-[12px]"
+            >
               Price Text Override
             </Label>
             <Input
@@ -437,7 +504,7 @@ export function OfferDetailsTab({
               placeholder="Free Offer"
             />
           </div>
-          <p className="mt-2 text-[12px] text-muted-foreground">
+          <p className="text-muted-foreground mt-2 text-[12px]">
             Payment Mode:{" "}
             <span className="font-medium">
               {isStripeTestMode ? "Test" : "Live"}
@@ -453,7 +520,7 @@ export function OfferDetailsTab({
             />
             Enable Discount Codes
           </label>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-[12px]">
             Allow customers to apply discount codes at checkout
           </p>
         </div>
@@ -466,7 +533,7 @@ export function OfferDetailsTab({
             />
             Show recent purchases popup
           </label>
-          <p className="mt-1 text-[12px] text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-[12px]">
             A small notification cycles through recent buyers on the checkout
             page (first name + city only — never email, phone, or address).
           </p>
@@ -474,7 +541,7 @@ export function OfferDetailsTab({
 
         <div className="rounded-lg border p-3">
           <p className="mb-2 text-[13px] font-medium">Offer Access</p>
-          <p className="mb-2 text-[12px] text-muted-foreground">
+          <p className="text-muted-foreground mb-2 text-[12px]">
             Set accessibility for members who purchase this offer
           </p>
           <label className="flex items-center gap-2 text-[13px]">
@@ -517,14 +584,20 @@ export function OfferDetailsTab({
           value={thumbnailUrl}
           onChange={setThumbnailUrl}
           onUploadingChange={setImgUploading}
-          onUpload={(file) => uploadCourseOfferImage(file, subAccountId, offer.id)}
+          onUpload={(file) =>
+            uploadCourseOfferImage(file, subAccountId, offer.id)
+          }
         />
       </div>
 
       <div className="col-span-full flex items-center justify-between border-t pt-4">
         <span />
         <div className="flex gap-2">
-          <Button variant="outline" disabled={saving || imgUploading} onClick={() => save()}>
+          <Button
+            variant="outline"
+            disabled={saving || imgUploading}
+            onClick={() => save()}
+          >
             {saving && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             Save
           </Button>

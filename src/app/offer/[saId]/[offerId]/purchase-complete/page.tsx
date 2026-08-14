@@ -20,7 +20,7 @@ export default async function OfferPurchaseCompletePage({
   if (!member) redirect(`/course/${saId}/login`);
 
   const offer = await getCourseOffer(saId, offerId);
-  const firstCourseId = offer?.courseIds[0] ?? "";
+  const firstCourseId = offer?.courseIds[0] ?? null;
 
   return (
     <PurchaseCompleteStatus

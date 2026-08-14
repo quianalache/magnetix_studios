@@ -6,6 +6,7 @@ import type {
   Project,
   ProjectStep,
   ProjectTemplate,
+  ProjectTemplateAudience,
   ProjectTemplateStep,
 } from "@/types/projects";
 
@@ -31,6 +32,17 @@ function toDoc<T>(snap: FirebaseFirestore.DocumentSnapshot): T {
   return { id: snap.id, ...(snap.data() as Omit<T, "id">) } as T;
 }
 
+function normalizeTemplate(
+  id: string,
+  data: FirebaseFirestore.DocumentData
+): ProjectTemplate {
+  return {
+    id,
+    ...(data as Omit<ProjectTemplate, "id">),
+    audience: data.audience === "client" ? "client" : "internal",
+  };
+}
+
 export async function getProject(projectId: string): Promise<Project | null> {
   const snap = await projectsCol().doc(projectId).get();
   return snap.exists ? toDoc<Project>(snap) : null;
@@ -38,12 +50,12 @@ export async function getProject(projectId: string): Promise<Project | null> {
 
 export async function listProjectsForSubAccount(
   subAccountId: string,
-  status?: "active" | "archived",
+  status?: "active" | "archived"
 ): Promise<Project[]> {
   let q = projectsCol().where(
     "subAccountId",
     "==",
-    subAccountId,
+    subAccountId
   ) as FirebaseFirestore.Query;
   if (status) q = q.where("status", "==", status);
   const snap = await q.get();
@@ -53,7 +65,7 @@ export async function listProjectsForSubAccount(
 /** Every project assigned to this Contact — the Client Portal's "Your projects" section. */
 export async function listProjectsForContact(
   subAccountId: string,
-  contactId: string,
+  contactId: string
 ): Promise<Project[]> {
   const snap = await projectsCol()
     .where("subAccountId", "==", subAccountId)
@@ -70,10 +82,12 @@ export async function listSteps(projectId: string): Promise<ProjectStep[]> {
 /** True when `actor` may read/edit this project: any staff caller (already gated at the route level by requireSubAccountMember), or the specific member it's assigned to. */
 export function canActOnProject(
   project: Project,
-  actor: { uid: string } | { memberId: string; contactId: string | null },
+  actor: { uid: string } | { memberId: string; contactId: string | null }
 ): boolean {
   if ("uid" in actor) return true; // staff — route-level auth already scoped this to the right sub-account
-  return !!project.assignedContactId && project.assignedContactId === actor.contactId;
+  return (
+    !!project.assignedContactId && project.assignedContactId === actor.contactId
+  );
 }
 
 export interface CreateProjectOpts {
@@ -88,6 +102,10 @@ export interface CreateProjectOpts {
   createdByUid: string | null;
   createdByMemberId: string | null;
   templateId?: string | null;
+  templateSteps?: ProjectTemplateStep[] | null;
+  sourceOfferId?: string | null;
+  sourcePurchaseId?: string | null;
+  sourceTemplateId?: string | null;
 }
 
 export async function createProject(opts: CreateProjectOpts): Promise<Project> {
@@ -105,6 +123,9 @@ export async function createProject(opts: CreateProjectOpts): Promise<Project> {
     createdByUid: opts.createdByUid,
     createdByMemberId: opts.createdByMemberId,
     templateId: opts.templateId ?? null,
+    sourceOfferId: opts.sourceOfferId ?? null,
+    sourcePurchaseId: opts.sourcePurchaseId ?? null,
+    sourceTemplateId: opts.sourceTemplateId ?? null,
     stepCount: 0,
     stepsDoneCount: 0,
     createdAt: FieldValue.serverTimestamp(),
@@ -114,12 +135,18 @@ export async function createProject(opts: CreateProjectOpts): Promise<Project> {
 
   // Spawning from a template copies its steps in as real, independently
   // editable project steps — no live link back to the template afterward.
-  if (opts.templateId) {
-    const tSnap = await templatesCol().doc(opts.templateId).get();
-    if (tSnap.exists) {
-      const template = tSnap.data() as ProjectTemplate;
+  if (opts.templateSteps || opts.templateId) {
+    let steps = opts.templateSteps ?? [];
+    if (!opts.templateSteps && opts.templateId) {
+      const tSnap = await templatesCol().doc(opts.templateId).get();
+      if (tSnap.exists) {
+        const template = tSnap.data() as ProjectTemplate;
+        steps = template.steps;
+      }
+    }
+    if (steps.length > 0) {
       const batch = getAdminDb().batch();
-      for (const step of template.steps) {
+      for (const step of steps) {
         const stepRef = stepsCol(ref.id).doc();
         batch.set(stepRef, {
           agencyId: opts.agencyId,
@@ -133,10 +160,8 @@ export async function createProject(opts: CreateProjectOpts): Promise<Project> {
           updatedAt: FieldValue.serverTimestamp(),
         });
       }
-      if (template.steps.length > 0) {
-        batch.update(ref, { stepCount: template.steps.length });
-        await batch.commit();
-      }
+      batch.update(ref, { stepCount: steps.length });
+      await batch.commit();
     }
   }
 
@@ -156,9 +181,11 @@ export interface UpdateProjectOpts {
 
 export async function updateProject(
   projectId: string,
-  patch: UpdateProjectOpts,
+  patch: UpdateProjectOpts
 ): Promise<void> {
-  const data: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  const data: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
   if (patch.title !== undefined) data.title = patch.title;
   if (patch.description !== undefined) data.description = patch.description;
   if (patch.status !== undefined) data.status = patch.status;
@@ -189,7 +216,10 @@ async function recomputeStepCounts(projectId: string): Promise<void> {
   const stepsDoneCount = snap.docs.filter((d) => d.data().done === true).length;
   await projectsCol()
     .doc(projectId)
-    .set({ stepCount, stepsDoneCount, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    .set(
+      { stepCount, stepsDoneCount, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
 }
 
 export async function addStep(
@@ -200,7 +230,7 @@ export async function addStep(
     title: string;
     createdByUid: string | null;
     createdByMemberId: string | null;
-  },
+  }
 ): Promise<ProjectStep> {
   const existing = await stepsCol(projectId).get();
   const order = existing.size;
@@ -224,25 +254,41 @@ export async function addStep(
 export async function updateStep(
   projectId: string,
   stepId: string,
-  patch: { title?: string; done?: boolean },
+  patch: { title?: string; done?: boolean }
 ): Promise<void> {
-  const data: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  const data: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
   if (patch.title !== undefined) data.title = patch.title;
   if (patch.done !== undefined) data.done = patch.done;
   await stepsCol(projectId).doc(stepId).set(data, { merge: true });
   if (patch.done !== undefined) await recomputeStepCounts(projectId);
 }
 
-export async function deleteStep(projectId: string, stepId: string): Promise<void> {
+export async function deleteStep(
+  projectId: string,
+  stepId: string
+): Promise<void> {
   await stepsCol(projectId).doc(stepId).delete();
   await recomputeStepCounts(projectId);
 }
 
 // ── templates (coach-only) ──────────────────────────────────────────────────
 
-export async function listTemplates(subAccountId: string): Promise<ProjectTemplate[]> {
-  const snap = await templatesCol().where("subAccountId", "==", subAccountId).get();
-  return snap.docs.map((d) => toDoc<ProjectTemplate>(d));
+export async function listTemplates(
+  subAccountId: string
+): Promise<ProjectTemplate[]> {
+  const snap = await templatesCol()
+    .where("subAccountId", "==", subAccountId)
+    .get();
+  return snap.docs.map((d) => normalizeTemplate(d.id, d.data()));
+}
+
+export async function getTemplate(
+  templateId: string
+): Promise<ProjectTemplate | null> {
+  const snap = await templatesCol().doc(templateId).get();
+  return snap.exists ? normalizeTemplate(snap.id, snap.data()!) : null;
 }
 
 export async function createTemplate(opts: {
@@ -253,6 +299,7 @@ export async function createTemplate(opts: {
   durationDays: number | null;
   description: string;
   steps: ProjectTemplateStep[];
+  audience?: ProjectTemplateAudience;
 }): Promise<ProjectTemplate> {
   const ref = templatesCol().doc();
   await ref.set({
@@ -263,6 +310,7 @@ export async function createTemplate(opts: {
     durationDays: opts.durationDays,
     description: opts.description,
     steps: opts.steps,
+    audience: opts.audience === "client" ? "client" : "internal",
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -278,11 +326,15 @@ export async function updateTemplate(
     durationDays: number | null;
     description: string;
     steps: ProjectTemplateStep[];
-  }>,
+    audience: ProjectTemplateAudience;
+  }>
 ): Promise<void> {
   await templatesCol()
     .doc(templateId)
-    .set({ ...patch, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    .set(
+      { ...patch, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
 }
 
 export async function deleteTemplate(templateId: string): Promise<void> {
