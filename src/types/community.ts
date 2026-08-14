@@ -48,6 +48,14 @@ export interface Member {
    * the community doubles as lead capture. Null only if reconciliation failed.
    */
   contactId: string | null;
+  /**
+   * MyMagnetix foundation (2026-08-14) — the person-identity (`people/{id}`)
+   * this tenant-specific Member relationship belongs to, linked lazily on
+   * authentication (see person-identity-service.ts). Optional/absent on
+   * members not yet reconciled; this Member doc itself is never merged or
+   * migrated — `personId` is purely a pointer to the human above it.
+   */
+  personId?: string | null;
   /** Scrypt hash for member password auth. Null/absent for legacy passwordless members. */
   passwordHash?: string | null;
   passwordUpdatedAt?: Timestamp | FieldValue | null;

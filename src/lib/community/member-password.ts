@@ -7,6 +7,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { signMemberSessionToken } from "@/lib/community/member-auth";
 import { findMemberByEmail } from "@/lib/community/member-account";
+import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
 import type { Member } from "@/types/community";
 import type { SubAccountDoc } from "@/types";
 
@@ -79,7 +80,12 @@ export async function authenticateMemberWithPassword({
     member.id,
     member.email
   );
-  return { ok: true, member, sessionToken };
+  // MyMagnetix identity foundation (2026-08-14) — password login is the
+  // one auth path that doesn't go through ensureMember (a member can only
+  // have a password if they already exist), so it needs its own lazy
+  // reconciliation call. No-op once already linked.
+  const personId = await ensurePersonLinkForMember(subAccountId, member);
+  return { ok: true, member: { ...member, personId }, sessionToken };
 }
 
 function tokenDigest(token: string): string {
@@ -132,7 +138,9 @@ export async function consumeMemberPasswordToken({
     `subAccounts/${subAccountId}/memberPasswordTokens/${digest}`
   );
 
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction<
+    { ok: true; member: Member; sessionToken: string } | { ok: false; error: string }
+  >(async (tx) => {
     const tokenSnap = await tx.get(tokenRef);
     if (!tokenSnap.exists)
       return { ok: false, error: "Invalid or expired reset link." };
@@ -184,6 +192,18 @@ export async function consumeMemberPasswordToken({
     );
     return { ok: true, member: { ...member, passwordHash }, sessionToken };
   });
+
+  // MyMagnetix identity foundation (2026-08-14) — deliberately done AFTER
+  // the transaction commits, not inside it: this touches a different
+  // collection (`people`) than the transaction's own reads/writes
+  // (memberPasswordTokens + the one member doc), and stays idempotent/
+  // no-op on any transaction retry since it's a separate, safe follow-up
+  // rather than part of the atomic password-set operation itself.
+  if (result.ok) {
+    const personId = await ensurePersonLinkForMember(subAccountId, result.member);
+    return { ...result, member: { ...result.member, personId } };
+  }
+  return result;
 }
 
 export async function setMemberPassword({

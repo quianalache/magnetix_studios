@@ -6,6 +6,7 @@ import {
   createContactServerSide,
   updateContactServerSide,
 } from "@/lib/server/contacts-service";
+import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
 import type { Member } from "@/types/community";
 import type { ContactAttribution } from "@/types/contacts";
 
@@ -121,29 +122,35 @@ export async function ensureMember({
       }
     }
 
-    if (Object.keys(patch).length === 0) return existing;
+    let result = existing;
+    if (Object.keys(patch).length > 0) {
+      await db
+        .doc(`subAccounts/${subAccountId}/members/${existing.id}`)
+        .set(
+          { ...patch, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true }
+        );
 
-    await db
-      .doc(`subAccounts/${subAccountId}/members/${existing.id}`)
-      .set(
-        { ...patch, updatedAt: FieldValue.serverTimestamp() },
-        { merge: true }
-      );
+      if (existing.contactId) {
+        await updateContactServerSide({
+          contactId: existing.contactId,
+          patch: {
+            ...(patch.displayName ? { name: patch.displayName as string } : {}),
+            ...(patch.phone ? { phone: patch.phone as string } : {}),
+            ...(patch.address ? { address: patch.address as string } : {}),
+          },
+        }).catch((err) =>
+          console.warn("[community/member-account] contact sync failed", err)
+        );
+      }
 
-    if (existing.contactId) {
-      await updateContactServerSide({
-        contactId: existing.contactId,
-        patch: {
-          ...(patch.displayName ? { name: patch.displayName as string } : {}),
-          ...(patch.phone ? { phone: patch.phone as string } : {}),
-          ...(patch.address ? { address: patch.address as string } : {}),
-        },
-      }).catch((err) =>
-        console.warn("[community/member-account] contact sync failed", err)
-      );
+      result = { ...existing, ...patch } as Member;
     }
 
-    return { ...existing, ...patch } as Member;
+    // MyMagnetix identity foundation (2026-08-14) — lazy, idempotent; a
+    // no-op once this Member already carries a personId.
+    const personId = await ensurePersonLinkForMember(subAccountId, result);
+    return { ...result, personId };
   }
 
   // Resolve tenancy + the audit actor for the reconciled contact.
@@ -210,5 +217,11 @@ export async function ensureMember({
     });
 
   const snap = await docRef.get();
-  return { id: docRef.id, ...(snap.data() as Omit<Member, "id">) };
+  const created = { id: docRef.id, ...(snap.data() as Omit<Member, "id">) };
+
+  // MyMagnetix identity foundation (2026-08-14) — every new Member gets
+  // linked to a person identity at creation time, same lazy/idempotent
+  // helper as the existing-member branch above.
+  const personId = await ensurePersonLinkForMember(subAccountId, created);
+  return { ...created, personId };
 }
