@@ -11,6 +11,18 @@ import type { CourseTheme } from "@/types/course-theme";
 import type { CourseOffer } from "@/types/course-offers";
 import type { Member } from "@/types/community";
 
+type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
+type OfferSalesOffer = Pick<
+  CourseOffer,
+  | "title"
+  | "type"
+  | "showRecentPurchasePopup"
+  | "thumbnailUrl"
+  | "booking"
+  | "projectTemplates"
+  | "checkoutSettings"
+>;
+
 export interface OfferIncludedCourse {
   id: string;
   title: string;
@@ -46,12 +58,12 @@ export function OfferSalesPageView({
 }: {
   saId: string;
   offerId: string;
-  offer: CourseOffer;
+  offer: OfferSalesOffer;
   theme: CourseTheme;
   priceLabel: string;
   descriptionHtml: string;
   includedCourses: OfferIncludedCourse[];
-  member: Member | null;
+  member: CheckoutMember | null;
   alreadyPurchased: boolean;
   firstCourseId: string | null;
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;

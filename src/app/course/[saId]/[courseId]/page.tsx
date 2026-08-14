@@ -45,7 +45,9 @@ export default async function CourseSalesPage({
   const { course, member } = access;
   const theme = course.theme;
 
-  const enrollment = member ? await getStandaloneEnrollment(saId, courseId, member.id) : null;
+  const enrollment = member
+    ? await getStandaloneEnrollment(saId, courseId, member.id)
+    : null;
   // A member who already has access never sees the pricing/Enroll page —
   // they land straight on the Product page (`CourseHomeView`, the
   // curriculum/course-home hub), matching GHL: pricing only exists to get
@@ -78,7 +80,7 @@ export default async function CourseSalesPage({
           visibility: target.visibility,
         });
       }
-    }),
+    })
   );
 
   const priceLabel =
@@ -95,12 +97,28 @@ export default async function CourseSalesPage({
     <CourseSalesPageView
       saId={saId}
       courseId={courseId}
-      course={course}
+      course={{
+        title: course.title,
+        coverUrl: course.coverUrl,
+        category: course.category,
+        showMemberCount: course.showMemberCount,
+        enrollmentCount: course.enrollmentCount,
+        access: course.access,
+        instructor: course.instructor,
+      }}
       theme={theme}
       outline={outline}
       priceLabel={priceLabel}
       aboutHtml={aboutHtml}
-      member={member}
+      member={
+        member
+          ? {
+              email: member.email,
+              displayName: member.displayName,
+              phone: member.phone,
+            }
+          : null
+      }
       // Always null here — an existing enrollment redirects above before
       // this point is ever reached.
       enrollment={null}

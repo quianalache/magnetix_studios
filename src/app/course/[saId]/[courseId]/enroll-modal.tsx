@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Member } from "@/types/community";
 
+type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
+
 /**
  * Sales-page CTA + instant signup. Replaces the old magic-link-first flow:
  * clicking "Enroll Now" opens a popup that collects name/email/phone right
@@ -41,7 +43,7 @@ export function EnrollModal({
   access: "open" | "purchase";
   priceLabel: string;
   brand: string;
-  member: Member | null;
+  member: CheckoutMember | null;
   /** True when this course has a chart-gated lesson — asks for birth details so the classroom can show only the lessons that match. */
   needsBirthDetails: boolean;
 }) {
@@ -97,7 +99,9 @@ export function EnrollModal({
       }
       throw new Error("Something went wrong. Try again.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't sign up. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Couldn't sign up. Try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -166,7 +170,8 @@ export function EnrollModal({
               {needsBirthDetails && (
                 <>
                   <p className="pt-1 text-xs text-[#909090]">
-                    This course personalizes lessons to your own chart — we&apos;ll need your birth details.
+                    This course personalizes lessons to your own chart —
+                    we&apos;ll need your birth details.
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
@@ -202,7 +207,7 @@ export function EnrollModal({
                   </div>
                 </>
               )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
+              {error && <p className="text-destructive text-xs">{error}</p>}
               <Button
                 type="submit"
                 disabled={busy}

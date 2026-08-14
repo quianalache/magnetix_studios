@@ -17,5 +17,11 @@ export default async function CustomDomainPortalEntry() {
   const host = (await headers()).get("host");
   const sub = await getSubAccountByCustomDomain(host);
   if (!sub) notFound();
-  return <PortalHomeView saId={sub.id} loginPath="/portal/login" />;
+  return (
+    <PortalHomeView
+      saId={sub.id}
+      loginPath="/portal/login"
+      basePath="/portal"
+    />
+  );
 }

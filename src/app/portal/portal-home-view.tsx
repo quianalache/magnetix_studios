@@ -46,7 +46,9 @@ import type { PortalPromotionConfig } from "@/types/portal-branding";
 import type { SubAccountDoc } from "@/types/tenancy";
 import type { Project, ProjectStep } from "@/types/projects";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
+import type { Quote } from "@/types/quotes";
 import { PortalLogoutButton } from "./[saId]/logout-button";
+import { PortalProjectsPanel } from "./[saId]/projects-panel";
 
 /**
  * Client Portal Home — approved production visual direction.
@@ -56,14 +58,68 @@ import { PortalLogoutButton } from "./[saId]/logout-button";
  * modules that have real data for the signed-in member/contact.
  */
 
-const navItems = [
-  { label: "Home", icon: Home, href: "#", active: true },
-  { label: "Appointments", icon: Calendar, href: "#appointments" },
-  { label: "Communities", icon: MessagesSquare, href: "#communities" },
-  { label: "Courses", icon: BookOpen, href: "#courses" },
-  { label: "Projects", icon: FolderKanban, href: "#projects" },
-  { label: "Billing", icon: FileSignature, href: "#billing" },
+export type PortalSection =
+  | "home"
+  | "appointments"
+  | "communities"
+  | "courses"
+  | "projects"
+  | "billing";
+
+const navItems: Array<{
+  label: string;
+  icon: typeof Home;
+  section: PortalSection;
+  module?: keyof ReturnType<typeof resolvePortalBranding>["modules"];
+}> = [
+  { label: "Home", icon: Home, section: "home" },
+  {
+    label: "Appointments",
+    icon: Calendar,
+    section: "appointments",
+    module: "appointments",
+  },
+  {
+    label: "Communities",
+    icon: MessagesSquare,
+    section: "communities",
+    module: "community",
+  },
+  { label: "Courses", icon: BookOpen, section: "courses", module: "courses" },
+  {
+    label: "Projects",
+    icon: FolderKanban,
+    section: "projects",
+    module: "projects",
+  },
+  {
+    label: "Billing",
+    icon: FileSignature,
+    section: "billing",
+    module: "invoices",
+  },
 ];
+
+function portalSectionHref(basePath: string, section: PortalSection): string {
+  return section === "home" ? basePath : `${basePath}/${section}`;
+}
+
+const portalSectionModules: Record<
+  Exclude<PortalSection, "home">,
+  keyof ReturnType<typeof resolvePortalBranding>["modules"]
+> = {
+  appointments: "appointments",
+  communities: "community",
+  courses: "courses",
+  projects: "projects",
+  billing: "invoices",
+};
+
+function sectionModule(
+  section: Exclude<PortalSection, "home">
+): keyof ReturnType<typeof resolvePortalBranding>["modules"] {
+  return portalSectionModules[section];
+}
 
 interface PortalPromotion {
   id: string;
@@ -241,14 +297,21 @@ function formatPriceCents(
 export async function PortalHomeView({
   saId,
   loginPath,
+  basePath = `/portal/${saId}`,
+  section = "home",
 }: {
   saId: string;
   loginPath: string;
+  basePath?: string;
+  section?: PortalSection;
 }) {
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists) notFound();
   const sub = subSnap.data() as SubAccountDoc;
   const branding = resolvePortalBranding(sub.portalBranding);
+  if (section !== "home" && !branding.modules[sectionModule(section)]) {
+    notFound();
+  }
   const displayName = branding.portalName || sub.name || "Client Portal";
 
   const member = await getCurrentMember(saId);
@@ -319,7 +382,7 @@ export async function PortalHomeView({
             ? formatDateTime(nextBooking.startAt)
             : nextBooking.title,
           actionLabel: "View all",
-          href: "#appointments",
+          href: portalSectionHref(basePath, "appointments"),
           icon: <Calendar className="h-4 w-4" />,
         }
       : null,
@@ -341,7 +404,9 @@ export async function PortalHomeView({
           value: String(courses.length),
           detail: learningCourse?.title ?? "Continue learning",
           actionLabel: "Continue learning",
-          href: learningCourse?.classroomHref ?? "#courses",
+          href:
+            learningCourse?.classroomHref ??
+            portalSectionHref(basePath, "courses"),
           icon: <BookOpen className="h-4 w-4" />,
         }
       : null,
@@ -383,7 +448,11 @@ export async function PortalHomeView({
           memberName={member.displayName}
           saId={saId}
         />
-        <PortalNav />
+        <PortalNav
+          basePath={basePath}
+          activeSection={section}
+          modules={branding.modules}
+        />
 
         <div
           className={`grid gap-6 ${
@@ -391,37 +460,80 @@ export async function PortalHomeView({
           }`}
         >
           <main className="min-w-0 space-y-5">
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_460px]">
-              <WelcomeBlock
-                memberName={member.displayName}
-                displayName={displayName}
-                welcomeMessage={branding.welcomeMessage}
+            {section === "home" ? (
+              <>
+                <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_460px]">
+                  <WelcomeBlock
+                    memberName={member.displayName}
+                    displayName={displayName}
+                    welcomeMessage={branding.welcomeMessage}
+                  />
+                  {learningCourse && (
+                    <ContinueLearning course={learningCourse} />
+                  )}
+                </div>
+
+                {summaryItems.length > 0 && <SummaryRow items={summaryItems} />}
+                {!hasContent && <EmptyHomeState displayName={displayName} />}
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {nextBooking && (
+                    <AppointmentsModule
+                      booking={nextBooking}
+                      appointmentsHref={portalSectionHref(
+                        basePath,
+                        "appointments"
+                      )}
+                    />
+                  )}
+
+                  {communities.length > 0 && (
+                    <CommunitiesModule
+                      communities={communities}
+                      communitiesHref={portalSectionHref(
+                        basePath,
+                        "communities"
+                      )}
+                    />
+                  )}
+
+                  {secondaryCourses.length > 0 && (
+                    <CoursesModule
+                      courses={secondaryCourses}
+                      coursesHref={portalSectionHref(basePath, "courses")}
+                    />
+                  )}
+
+                  {projects.length > 0 && (
+                    <ProjectsModule
+                      projects={projects}
+                      projectsHref={portalSectionHref(basePath, "projects")}
+                    />
+                  )}
+
+                  {readings.length > 0 && (
+                    <ReadingsModule readings={readings} />
+                  )}
+
+                  {sessionRemaining > 0 && (
+                    <SessionsModule
+                      saId={saId}
+                      sessionBundles={sessionBundles}
+                    />
+                  )}
+                </div>
+              </>
+            ) : (
+              <PortalDestination
+                section={section}
+                saId={saId}
+                bookings={bookings}
+                communities={communities}
+                courses={courses}
+                projects={projects}
+                quotes={quotes}
               />
-              {learningCourse && <ContinueLearning course={learningCourse} />}
-            </div>
-
-            {summaryItems.length > 0 && <SummaryRow items={summaryItems} />}
-            {!hasContent && <EmptyHomeState displayName={displayName} />}
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              {nextBooking && <AppointmentsModule booking={nextBooking} />}
-
-              {communities.length > 0 && (
-                <CommunitiesModule communities={communities} />
-              )}
-
-              {secondaryCourses.length > 0 && (
-                <CoursesModule courses={secondaryCourses} />
-              )}
-
-              {projects.length > 0 && <ProjectsModule projects={projects} />}
-
-              {readings.length > 0 && <ReadingsModule readings={readings} />}
-
-              {sessionRemaining > 0 && (
-                <SessionsModule saId={saId} sessionBundles={sessionBundles} />
-              )}
-            </div>
+            )}
           </main>
 
           <PromotionalSidebar promotions={promotions} />
@@ -482,16 +594,17 @@ function PortalHeader({
         </label>
         <button
           type="button"
+          disabled
           className="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#DFE2EA] bg-white text-[#111827] shadow-[0_8px_22px_rgba(18,18,18,0.03)]"
           aria-label="Notifications"
+          title="Notifications are not available yet"
         >
           <Bell className="h-4 w-4" />
-          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
         </button>
-        <button
-          type="button"
+        <div
           className="flex h-11 items-center gap-2 rounded-full bg-transparent px-1.5 text-[#111827]"
           aria-label="Account"
+          title="Account settings are not available yet"
         >
           <span
             className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white"
@@ -502,37 +615,48 @@ function PortalHeader({
           <span className="hidden text-[13px] font-bold sm:inline">
             {memberName || "Account"}
           </span>
-        </button>
+        </div>
         <PortalLogoutButton saId={saId} />
       </div>
     </header>
   );
 }
 
-function PortalNav() {
+function PortalNav({
+  basePath,
+  activeSection,
+  modules,
+}: {
+  basePath: string;
+  activeSection: PortalSection;
+  modules: ReturnType<typeof resolvePortalBranding>["modules"];
+}) {
   return (
     <nav
       className="mb-5 flex gap-4 overflow-x-auto rounded-[11px] border border-[#DFE2EA] bg-white p-2 shadow-[0_8px_24px_rgba(18,18,18,0.035)] sm:gap-6"
       aria-label="Client Portal"
     >
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={`flex shrink-0 items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-bold ${
-              item.active ? "text-white" : "text-[#707070] hover:bg-[#F8F7F5]"
-            }`}
-            style={{
-              background: item.active ? "var(--portal-accent)" : undefined,
-            }}
-          >
-            <Icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        );
-      })}
+      {navItems
+        .filter((item) => !item.module || modules[item.module])
+        .map((item) => {
+          const Icon = item.icon;
+          const active = item.section === activeSection;
+          return (
+            <Link
+              key={item.label}
+              href={portalSectionHref(basePath, item.section)}
+              className={`flex shrink-0 items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-bold ${
+                active ? "text-white" : "text-[#707070] hover:bg-[#F8F7F5]"
+              }`}
+              style={{
+                background: active ? "var(--portal-accent)" : undefined,
+              }}
+            >
+              <Icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          );
+        })}
     </nav>
   );
 }
@@ -634,7 +758,13 @@ function ContinueLearning({ course }: { course: PortalCourse }) {
   );
 }
 
-function AppointmentsModule({ booking }: { booking: PortalBooking }) {
+function AppointmentsModule({
+  booking,
+  appointmentsHref,
+}: {
+  booking: PortalBooking;
+  appointmentsHref: string;
+}) {
   const month = booking.startAt
     ? booking.startAt
         .toLocaleString(undefined, { month: "short" })
@@ -649,7 +779,7 @@ function AppointmentsModule({ booking }: { booking: PortalBooking }) {
       icon={<Calendar className="h-full w-full" />}
       title="Next appointment"
       actionLabel="See all appointments"
-      actionHref="#appointments"
+      actionHref={appointmentsHref}
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
@@ -680,7 +810,7 @@ function AppointmentsModule({ booking }: { booking: PortalBooking }) {
               Join
             </PortalButton>
           )}
-          <PortalButton href="#appointments" variant="outline">
+          <PortalButton href={appointmentsHref} variant="outline">
             View Details
           </PortalButton>
         </div>
@@ -691,8 +821,10 @@ function AppointmentsModule({ booking }: { booking: PortalBooking }) {
 
 function CommunitiesModule({
   communities,
+  communitiesHref,
 }: {
   communities: PortalCommunity[];
+  communitiesHref: string;
 }) {
   return (
     <SectionBlock
@@ -700,7 +832,7 @@ function CommunitiesModule({
       icon={<MessagesSquare className="h-full w-full" />}
       title="Communities"
       actionLabel="See all"
-      actionHref={communities[0]?.href ?? "#communities"}
+      actionHref={communitiesHref}
     >
       <div className="space-y-3">
         {communities.slice(0, 3).map((community) => (
@@ -741,14 +873,20 @@ function CommunitiesModule({
   );
 }
 
-function CoursesModule({ courses }: { courses: PortalCourse[] }) {
+function CoursesModule({
+  courses,
+  coursesHref,
+}: {
+  courses: PortalCourse[];
+  coursesHref: string;
+}) {
   return (
     <SectionBlock
       id="courses"
       icon={<BookOpen className="h-full w-full" />}
       title="Courses"
       actionLabel="See all"
-      actionHref={courses[0]?.classroomHref ?? "#courses"}
+      actionHref={coursesHref}
     >
       <div className="space-y-4">
         {courses.slice(0, 3).map((course) => (
@@ -827,8 +965,10 @@ function SessionsModule({
 
 function ProjectsModule({
   projects,
+  projectsHref,
 }: {
   projects: (Project & { steps: ProjectStep[] })[];
+  projectsHref: string;
 }) {
   return (
     <SectionBlock
@@ -836,7 +976,7 @@ function ProjectsModule({
       icon={<FolderKanban className="h-full w-full" />}
       title="Projects"
       actionLabel="View projects"
-      actionHref="#projects"
+      actionHref={projectsHref}
     >
       <div className="space-y-3">
         {projects.slice(0, 3).map((project) => {
@@ -896,6 +1036,239 @@ function ReadingsModule({ readings }: { readings: EnergeticDecoderReading[] }) {
         ))}
       </div>
     </SectionBlock>
+  );
+}
+
+function PortalDestination({
+  section,
+  saId,
+  bookings,
+  communities,
+  courses,
+  projects,
+  quotes,
+}: {
+  section: Exclude<PortalSection, "home">;
+  saId: string;
+  bookings: PortalBooking[];
+  communities: PortalCommunity[];
+  courses: PortalCourse[];
+  projects: (Project & { steps: ProjectStep[] })[];
+  quotes: Quote[];
+}) {
+  const copy = {
+    appointments: {
+      title: "Appointments",
+      empty: "No appointments yet.",
+    },
+    communities: {
+      title: "Communities",
+      empty: "No communities available.",
+    },
+    courses: { title: "Courses", empty: "No courses yet." },
+    projects: { title: "Projects", empty: "No projects assigned." },
+    billing: { title: "Billing", empty: "No billing items." },
+  }[section];
+
+  const heading = (
+    <section className="py-3">
+      <h1 className="text-[28px] leading-tight font-extrabold tracking-[-0.01em] text-[#111217] md:text-[32px]">
+        {copy.title}
+      </h1>
+    </section>
+  );
+
+  if (section === "appointments") {
+    return (
+      <>
+        {heading}
+        {bookings.length === 0 ? (
+          <PortalEmptyState message={copy.empty} />
+        ) : (
+          <div className="space-y-3">
+            {bookings.map((booking) => (
+              <section
+                key={booking.id}
+                className="flex flex-col gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-[16px] font-bold text-[#111217]">
+                    {booking.title}
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#4F5565]">
+                    {booking.startAt
+                      ? formatDateTime(booking.startAt)
+                      : "Scheduled session"}
+                  </p>
+                </div>
+                {booking.meetingUrl && (
+                  <PortalButton href={booking.meetingUrl} external>
+                    <Video className="h-3.5 w-3.5" />
+                    Join meeting
+                  </PortalButton>
+                )}
+              </section>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (section === "communities") {
+    return (
+      <>
+        {heading}
+        {communities.length === 0 ? (
+          <PortalEmptyState message={copy.empty} />
+        ) : (
+          <div className="space-y-3">
+            {communities.map((community) => (
+              <Link
+                key={community.groupId}
+                href={community.href}
+                className="flex items-center justify-between gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] hover:border-[var(--portal-accent)]"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white"
+                    style={{ background: "var(--portal-accent)" }}
+                  >
+                    {initials(community.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[16px] font-bold text-[#111217]">
+                      {community.name}
+                    </p>
+                    <p className="mt-1 truncate text-[13px] text-[#4F5565]">
+                      {community.tagline || "Member · Active"}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-[#4F5565]" />
+              </Link>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (section === "courses") {
+    return (
+      <>
+        {heading}
+        {courses.length === 0 ? (
+          <PortalEmptyState message={copy.empty} />
+        ) : (
+          <div className="space-y-3">
+            {courses.map((course) => (
+              <section
+                key={course.courseId}
+                className="flex flex-col gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-[56px] w-[64px] shrink-0 overflow-hidden rounded-[7px] bg-[#EFE9EE]">
+                    {course.coverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={course.coverUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <BrandedFallback label="Course" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[16px] font-bold text-[#111217]">
+                      {course.title}
+                    </p>
+                    {course.nextLessonTitle && (
+                      <p className="mt-1 truncate text-[13px] text-[#4F5565]">
+                        {course.nextLessonTitle}
+                      </p>
+                    )}
+                    <ProgressBar value={course.progressPct} />
+                  </div>
+                </div>
+                <PortalButton href={course.classroomHref} variant="outline">
+                  Continue
+                </PortalButton>
+              </section>
+            ))}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (section === "projects") {
+    const projectViews = projects.map((project) => ({
+      id: project.id,
+      title: project.title,
+      description: project.description ?? "",
+      stepCount: project.stepCount,
+      stepsDoneCount: project.stepsDoneCount,
+      steps: project.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        done: step.done,
+      })),
+    }));
+    return (
+      <>
+        {heading}
+        {projectViews.length === 0 ? (
+          <PortalEmptyState message={copy.empty} />
+        ) : (
+          <PortalProjectsPanel saId={saId} projects={projectViews} />
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {heading}
+      {quotes.length === 0 ? (
+        <PortalEmptyState message={copy.empty} />
+      ) : (
+        <div className="space-y-3">
+          {quotes.map((quote) => {
+            const total = computeQuoteTotals(quote).total;
+            const isInvoice = quote.kind === "invoice";
+            return (
+              <a
+                key={quote.id}
+                href={`/api/portal/${saId}/quotes/${quote.id}/view`}
+                className="flex items-center justify-between gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] hover:border-[var(--portal-accent)]"
+              >
+                <div>
+                  <p className="text-[16px] font-bold text-[#111217]">
+                    {isInvoice ? "Invoice" : "Quote"} {quote.quoteNumber}
+                  </p>
+                  <p className="mt-1 text-[13px] text-[#4F5565] capitalize">
+                    {quote.status}
+                  </p>
+                </div>
+                <p className="shrink-0 text-[16px] font-bold text-[#111217]">
+                  {formatCurrency(total, quote.currency)}
+                </p>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function PortalEmptyState({ message }: { message: string }) {
+  return (
+    <section className="rounded-[12px] border border-dashed border-[#DFE2EA] bg-white px-5 py-10 text-center text-[14px] text-[#4F5565]">
+      {message}
+    </section>
   );
 }
 

@@ -21,7 +21,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Member } from "@/types/community";
-import type { CourseOfferCheckoutSettings, OfferType } from "@/types/course-offers";
+import type {
+  CourseOfferCheckoutSettings,
+  OfferType,
+} from "@/types/course-offers";
+
+type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 
 /**
  * Offer-page CTA + instant signup — same two-step pattern as the Standalone
@@ -45,7 +50,7 @@ export function EnrollOfferModal({
   type: OfferType;
   priceLabel: string;
   brand: string;
-  member: Member | null;
+  member: CheckoutMember | null;
   checkoutSettings: CourseOfferCheckoutSettings;
 }) {
   const router = useRouter();
@@ -113,7 +118,9 @@ export function EnrollOfferModal({
       }
       throw new Error("Something went wrong. Try again.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't sign up. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Couldn't sign up. Try again."
+      );
     } finally {
       setBusy(false);
     }
@@ -193,7 +200,7 @@ export function EnrollOfferModal({
                 </div>
               )}
               {agreementRequired && (
-                <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <label className="text-muted-foreground flex items-start gap-2 text-xs">
                   <Checkbox
                     checked={agreementAccepted}
                     onCheckedChange={(v) => setAgreementAccepted(v === true)}
@@ -217,7 +224,7 @@ export function EnrollOfferModal({
                   </span>
                 </label>
               )}
-              {error && <p className="text-xs text-destructive">{error}</p>}
+              {error && <p className="text-destructive text-xs">{error}</p>}
               <Button
                 type="submit"
                 disabled={busy}

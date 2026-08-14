@@ -44,7 +44,7 @@ export default async function OfferPage({
   const theme = offer.theme;
 
   const courses = await Promise.all(
-    offer.courseIds.map((id) => getStandaloneCourse(saId, id)),
+    offer.courseIds.map((id) => getStandaloneCourse(saId, id))
   );
   const validCourses = courses.filter((c): c is NonNullable<typeof c> => !!c);
   const includedCourses = validCourses.map((c) => ({
@@ -75,7 +75,7 @@ export default async function OfferPage({
           visibility: target.visibility,
         });
       }
-    }),
+    })
   );
 
   const priceLabel =
@@ -93,16 +93,36 @@ export default async function OfferPage({
 
   return (
     <>
-      <AttributionVisitLogger subAccountId={saId} pageType="offer" pageId={offerId} />
+      <AttributionVisitLogger
+        subAccountId={saId}
+        pageType="offer"
+        pageId={offerId}
+      />
       <OfferSalesPageView
         saId={saId}
         offerId={offerId}
-        offer={offer}
+        offer={{
+          title: offer.title,
+          type: offer.type,
+          showRecentPurchasePopup: offer.showRecentPurchasePopup,
+          thumbnailUrl: offer.thumbnailUrl,
+          booking: offer.booking,
+          projectTemplates: offer.projectTemplates,
+          checkoutSettings: offer.checkoutSettings,
+        }}
         theme={theme}
         priceLabel={priceLabel}
         descriptionHtml={descriptionHtml}
         includedCourses={includedCourses}
-        member={member}
+        member={
+          member
+            ? {
+                email: member.email,
+                displayName: member.displayName,
+                phone: member.phone,
+              }
+            : null
+        }
         alreadyPurchased={alreadyPurchased}
         firstCourseId={offer.courseIds[0] ?? null}
         crossSellTargets={crossSellTargets}
