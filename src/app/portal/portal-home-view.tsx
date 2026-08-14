@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getCurrentMember } from "@/lib/community/member-session";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
   listPortalCommunities,
   listPortalCourses,
@@ -31,9 +32,11 @@ import {
   type PortalCourse,
   type PortalSessionBundle,
 } from "@/lib/server/portal-service";
+import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
 import { projectProgressPct } from "@/types/projects";
 import { resolvePortalBranding } from "@/types/portal-branding";
+import type { PortalPromotionConfig } from "@/types/portal-branding";
 import type { SubAccountDoc } from "@/types/tenancy";
 import type { Quote } from "@/types/quotes";
 import type { Project, ProjectStep } from "@/types/projects";
@@ -67,7 +70,14 @@ const navItems = [
   { label: "Billing", icon: FileSignature, href: "#billing" },
 ];
 
-type PortalPromotion = never;
+interface PortalPromotion {
+  id: string;
+  label: string;
+  title: string;
+  description: string;
+  href: string;
+  imageUrl: string | null;
+}
 
 function initials(name: string): string {
   return (
@@ -87,6 +97,86 @@ function formatDateTime(date: Date): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function plainText(html: string | null | undefined): string {
+  return (html ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function resolvePromotions(
+  subAccountId: string,
+  configs: PortalPromotionConfig[]
+): Promise<PortalPromotion[]> {
+  const active = [...configs]
+    .filter((promo) => !promo.hidden)
+    .sort((a, b) => a.order - b.order)
+    .slice(0, 4);
+  const out: PortalPromotion[] = [];
+  for (const promo of active) {
+    if (promo.type === "custom") {
+      if (!promo.urlOverride || !promo.titleOverride) continue;
+      out.push({
+        id: promo.id,
+        label: "Featured",
+        title: promo.titleOverride,
+        description: promo.descriptionOverride ?? "",
+        href: promo.urlOverride,
+        imageUrl: null,
+      });
+      continue;
+    }
+    if (!promo.targetId) continue;
+    if (promo.type === "course") {
+      const course = await getStandaloneCourse(subAccountId, promo.targetId);
+      if (!course) continue;
+      out.push({
+        id: promo.id,
+        label: "Course",
+        title: promo.titleOverride || course.title,
+        description:
+          promo.descriptionOverride ||
+          plainText(course.aboutHtml).slice(0, 150),
+        href: `/course/${subAccountId}/${course.id}`,
+        imageUrl: course.coverUrl,
+      });
+    } else if (promo.type === "booking") {
+      const snap = await getAdminDb()
+        .doc(`subAccounts/${subAccountId}/bookingPages/${promo.targetId}`)
+        .get();
+      if (!snap.exists) continue;
+      const data = snap.data() as {
+        name?: string;
+        description?: string;
+        slug?: string;
+      };
+      const slug = data.slug || promo.targetId;
+      out.push({
+        id: promo.id,
+        label: "Session",
+        title: promo.titleOverride || data.name || "Book a session",
+        description: promo.descriptionOverride || data.description || "",
+        href: `/b/${subAccountId}/${slug}`,
+        imageUrl: null,
+      });
+    } else if (promo.type === "offer") {
+      const offer = await getCourseOffer(subAccountId, promo.targetId);
+      if (!offer) continue;
+      out.push({
+        id: promo.id,
+        label: "Offer",
+        title: promo.titleOverride || offer.title,
+        description:
+          promo.descriptionOverride ||
+          plainText(offer.descriptionHtml).slice(0, 150),
+        href: `/offer/${subAccountId}/${offer.id}`,
+        imageUrl: offer.thumbnailUrl,
+      });
+    }
+  }
+  return out;
 }
 
 export async function PortalHomeView({
@@ -120,13 +210,15 @@ export async function PortalHomeView({
     branding.modules.readings && member.contactId
       ? listPortalReadings(saId, member.contactId)
       : Promise.resolve([]),
-    member.contactId
+    branding.modules.appointments && member.contactId
       ? listPortalUpcomingBookings(saId, member.contactId)
       : Promise.resolve([]),
     branding.modules.invoices && member.contactId
       ? listPortalQuotes(saId, member.contactId)
       : Promise.resolve([]),
-    member.contactId ? listPortalProjects(saId, member.contactId) : Promise.resolve([]),
+    branding.modules.projects && member.contactId
+      ? listPortalProjects(saId, member.contactId)
+      : Promise.resolve([]),
     branding.modules.sessions
       ? listPortalSessionBundles(saId, member.id, member.contactId)
       : Promise.resolve([]),
@@ -136,25 +228,53 @@ export async function PortalHomeView({
   ]);
 
   const openInvoices = quotes.filter(
-    (q) => q.kind === "invoice" && q.status !== "paid",
+    (q) => q.kind === "invoice" && q.status !== "paid"
   );
   const nextBooking = bookings[0] ?? null;
-  const sessionRemaining = sessionBundles.reduce((sum, b) => sum + b.remaining, 0);
+  const sessionRemaining = sessionBundles.reduce(
+    (sum, b) => sum + b.remaining,
+    0
+  );
   const activeProjects = projects.length;
   const learningCourse =
     courses.find((course) => course.progressPct < 100) ?? courses[0] ?? null;
   const secondaryCourses = learningCourse
     ? courses.filter((course) => course.courseId !== learningCourse.courseId)
     : courses;
-  const promotions: PortalPromotion[] = [];
+  const promotions = await resolvePromotions(saId, branding.promotions);
   const hasPromotions = promotions.length > 0;
+  const summaryItems = [
+    courses.length > 0
+      ? { label: "Courses", value: String(courses.length) }
+      : null,
+    communities.length > 0
+      ? { label: "Communities", value: String(communities.length) }
+      : null,
+    activeProjects > 0
+      ? { label: "Projects", value: String(activeProjects) }
+      : null,
+    openInvoices.length > 0
+      ? { label: "Open invoices", value: String(openInvoices.length) }
+      : null,
+    sessionRemaining > 0
+      ? { label: "Sessions", value: String(sessionRemaining) }
+      : null,
+  ].filter((item): item is { label: string; value: string } => item !== null);
+  const hasContent =
+    courses.length > 0 ||
+    readings.length > 0 ||
+    bookings.length > 0 ||
+    openInvoices.length > 0 ||
+    sessionBundles.length > 0 ||
+    projects.length > 0 ||
+    communities.length > 0;
 
   return (
     <div
       className="min-h-screen bg-[#F8F7F5]"
       style={{ ["--portal-accent" as string]: branding.accentColor }}
     >
-      <div className="mx-auto w-full max-w-6xl px-5 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <PortalHeader
           brandingLogoUrl={branding.logoUrl}
           displayName={displayName}
@@ -172,14 +292,11 @@ export async function PortalHomeView({
             <WelcomeBlock
               memberName={member.displayName}
               displayName={displayName}
+              welcomeMessage={branding.welcomeMessage}
             />
 
-            <SummaryRow
-              coursesCount={courses.length}
-              communitiesCount={communities.length}
-              activeProjects={activeProjects}
-              openInvoiceCount={openInvoices.length}
-            />
+            {summaryItems.length > 0 && <SummaryRow items={summaryItems} />}
+            {!hasContent && <EmptyHomeState displayName={displayName} />}
 
             {learningCourse && <ContinueLearning course={learningCourse} />}
 
@@ -208,19 +325,6 @@ export async function PortalHomeView({
 
           <PromotionalSidebar promotions={promotions} />
         </div>
-
-        {courses.length === 0 &&
-          readings.length === 0 &&
-          bookings.length === 0 &&
-          openInvoices.length === 0 &&
-          sessionBundles.length === 0 &&
-          projects.length === 0 &&
-          communities.length === 0 && (
-            <p className="mt-4 rounded-xl border border-dashed border-[#E4E4E4] bg-white py-12 text-center text-sm text-[#909090]">
-              Nothing here yet. Check back after your next appointment,
-              purchase, or community invite.
-            </p>
-          )}
       </div>
     </div>
   );
@@ -242,7 +346,9 @@ function PortalHeader({
       <div className="flex items-center gap-2.5">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[13px] font-bold text-white"
-          style={{ background: brandingLogoUrl ? undefined : "var(--portal-accent)" }}
+          style={{
+            background: brandingLogoUrl ? undefined : "var(--portal-accent)",
+          }}
         >
           {brandingLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -325,44 +431,59 @@ function PortalNav() {
 function WelcomeBlock({
   memberName,
   displayName,
+  welcomeMessage,
 }: {
   memberName: string | null;
   displayName: string;
+  welcomeMessage: string;
 }) {
   return (
     <section>
-      <p className="text-[11px] font-semibold uppercase tracking-[.04em] text-[#909090]">
+      <p className="text-[11px] font-semibold tracking-[.04em] text-[#909090] uppercase">
         Home
       </p>
-      <h1 className="mt-1 text-[24px] font-bold leading-tight text-[#202124]">
+      <h1 className="mt-1 text-[24px] leading-tight font-bold text-[#202124]">
         Hi{memberName ? ` ${memberName}` : ""}, welcome back.
       </h1>
       <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-[#909090]">
-        Continue your programs, join what is coming up, and open anything that
-        needs attention inside {displayName}.
+        {welcomeMessage ||
+          `Continue your programs, join what is coming up, and open anything that needs attention inside ${displayName}.`}
       </p>
     </section>
   );
 }
 
-function SummaryRow({
-  coursesCount,
-  communitiesCount,
-  activeProjects,
-  openInvoiceCount,
-}: {
-  coursesCount: number;
-  communitiesCount: number;
-  activeProjects: number;
-  openInvoiceCount: number;
-}) {
+function SummaryRow({ items }: { items: { label: string; value: string }[] }) {
   return (
     <div className="flex flex-wrap gap-2.5">
-      <StatCard label="Courses" value={String(coursesCount)} />
-      <StatCard label="Communities" value={String(communitiesCount)} />
-      <StatCard label="Projects" value={String(activeProjects)} />
-      <StatCard label="Open invoices" value={String(openInvoiceCount)} />
+      {items.map((item) => (
+        <StatCard key={item.label} label={item.label} value={item.value} />
+      ))}
     </div>
+  );
+}
+
+function EmptyHomeState({ displayName }: { displayName: string }) {
+  return (
+    <section className="rounded-[13px] border border-[#E4E4E4] bg-white p-[15px]">
+      <div className="flex items-start gap-3">
+        <span
+          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#F8F7F5] p-1.5"
+          style={{ color: "var(--portal-accent)" }}
+        >
+          <Home className="h-full w-full" />
+        </span>
+        <div>
+          <h2 className="text-[13px] font-bold text-[#202124]">
+            Your portal is ready.
+          </h2>
+          <p className="mt-1 max-w-lg text-[12px] leading-relaxed text-[#909090]">
+            As {displayName} adds appointments, courses, communities, projects,
+            readings, or invoices for you, they will appear here.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -371,7 +492,7 @@ function ContinueLearning({ course }: { course: PortalCourse }) {
     <section className="rounded-[13px] border border-[#E4E4E4] bg-white p-[15px]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[.04em] text-[#909090]">
+          <p className="text-[11px] font-bold tracking-[.04em] text-[#909090] uppercase">
             Continue Learning
           </p>
           <h2 className="mt-1 text-[15px] font-bold text-[#202124]">
@@ -384,7 +505,10 @@ function ContinueLearning({ course }: { course: PortalCourse }) {
           )}
           <ProgressBar value={course.progressPct} />
         </div>
-        <PortalButton href={course.classroomHref} icon={<PlayCircle className="h-3.5 w-3.5" />}>
+        <PortalButton
+          href={course.classroomHref}
+          icon={<PlayCircle className="h-3.5 w-3.5" />}
+        >
           Continue
         </PortalButton>
       </div>
@@ -577,11 +701,7 @@ function ProjectsModule({
   );
 }
 
-function ReadingsModule({
-  readings,
-}: {
-  readings: EnergeticDecoderReading[];
-}) {
+function ReadingsModule({ readings }: { readings: EnergeticDecoderReading[] }) {
   return (
     <SectionBlock
       id="readings"
@@ -639,7 +759,9 @@ function BillingModule({
               className="flex flex-col gap-1 rounded-[11px] bg-[#F8F7F5] px-3 py-2.5 text-[12px] hover:bg-[#EFE9EE] sm:flex-row sm:items-center sm:justify-between"
             >
               <span>
-                <strong className="text-[#202124]">{invoice.quoteNumber}</strong>
+                <strong className="text-[#202124]">
+                  {invoice.quoteNumber}
+                </strong>
                 <span className="text-[#909090]">
                   {" "}
                   - {QUOTE_STATUS_LABEL[invoice.status] ?? invoice.status}
@@ -657,11 +779,57 @@ function BillingModule({
 }
 
 function PromotionalSidebar({ promotions }: { promotions: PortalPromotion[] }) {
-  // Presentation area intentionally renders only when real promotional
-  // configuration exists. The admin/source-of-truth for these promotional
-  // cards is deferred, so production does not show fake offers.
   if (promotions.length === 0) return null;
-  return <aside className="hidden lg:block" aria-label="Promotions" />;
+  return (
+    <aside
+      className="space-y-3 lg:sticky lg:top-6 lg:self-start"
+      aria-label="Promotions"
+    >
+      {promotions.map((promotion) => (
+        <Link
+          key={promotion.id}
+          href={promotion.href}
+          className="block overflow-hidden rounded-[13px] border border-[#E4E4E4] bg-white transition-colors hover:border-[var(--portal-accent)]"
+        >
+          {promotion.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={promotion.imageUrl}
+              alt=""
+              className="aspect-video w-full object-cover"
+            />
+          ) : (
+            <div
+              className="flex aspect-video w-full items-center justify-center text-[13px] font-bold text-white"
+              style={{ background: "var(--portal-accent)" }}
+            >
+              {promotion.label}
+            </div>
+          )}
+          <div className="p-[15px]">
+            <p className="text-[10px] font-bold tracking-[.04em] text-[#909090] uppercase">
+              {promotion.label}
+            </p>
+            <h2 className="mt-1 text-[14px] leading-snug font-bold text-[#202124]">
+              {promotion.title}
+            </h2>
+            {promotion.description && (
+              <p className="mt-1.5 line-clamp-3 text-[12px] leading-relaxed text-[#909090]">
+                {promotion.description}
+              </p>
+            )}
+            <span
+              className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold"
+              style={{ color: "var(--portal-accent)" }}
+            >
+              Open
+              <ChevronRight className="h-3 w-3" />
+            </span>
+          </div>
+        </Link>
+      ))}
+    </aside>
+  );
 }
 
 function SectionBlock({
@@ -711,10 +879,10 @@ function SectionBlock({
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-[108px] flex-1 rounded-[11px] bg-[#EFE9EE] px-[13px] py-[11px]">
-      <p className="text-[19px] font-bold leading-[1.1] tabular-nums text-[#202124]">
+      <p className="text-[19px] leading-[1.1] font-bold text-[#202124] tabular-nums">
         {value}
       </p>
-      <p className="mt-[3px] text-[10px] uppercase tracking-[.03em] text-[#909090]">
+      <p className="mt-[3px] text-[10px] tracking-[.03em] text-[#909090] uppercase">
         {label}
       </p>
     </div>
@@ -755,7 +923,9 @@ function PortalButton({
     <Link
       href={href}
       className={className}
-      style={{ background: variant === "solid" ? "var(--portal-accent)" : undefined }}
+      style={{
+        background: variant === "solid" ? "var(--portal-accent)" : undefined,
+      }}
       target={external ? "_blank" : undefined}
       rel={external ? "noreferrer" : undefined}
     >

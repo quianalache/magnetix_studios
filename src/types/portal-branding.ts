@@ -13,11 +13,26 @@
  */
 
 export interface PortalModuleVisibility {
+  appointments: boolean;
   courses: boolean;
+  projects: boolean;
   readings: boolean;
   sessions: boolean;
   invoices: boolean;
   community: boolean;
+}
+
+export type PortalPromotionType = "course" | "booking" | "offer" | "custom";
+
+export interface PortalPromotionConfig {
+  id: string;
+  type: PortalPromotionType;
+  targetId: string | null;
+  titleOverride: string | null;
+  descriptionOverride: string | null;
+  urlOverride: string | null;
+  hidden: boolean;
+  order: number;
 }
 
 export interface PortalBranding {
@@ -30,10 +45,13 @@ export interface PortalBranding {
   /** Powers the "Need help?" line on the sign-in screen. Null hides it. */
   supportEmail: string | null;
   modules: PortalModuleVisibility;
+  promotions: PortalPromotionConfig[];
 }
 
 export const DEFAULT_PORTAL_MODULES: PortalModuleVisibility = {
+  appointments: true,
   courses: true,
+  projects: true,
   readings: true,
   sessions: true,
   invoices: true,
@@ -43,14 +61,17 @@ export const DEFAULT_PORTAL_MODULES: PortalModuleVisibility = {
 export const DEFAULT_PORTAL_ACCENT = "#5E2574";
 
 export function resolvePortalBranding(
-  raw: Partial<PortalBranding> | null | undefined,
+  raw: Partial<PortalBranding> | null | undefined
 ): PortalBranding {
   return {
     portalName: raw?.portalName ?? null,
-    welcomeMessage: raw?.welcomeMessage ?? "Your courses, readings, and sessions — all in one place.",
+    welcomeMessage:
+      raw?.welcomeMessage ??
+      "Your courses, readings, and sessions — all in one place.",
     logoUrl: raw?.logoUrl ?? null,
     accentColor: raw?.accentColor || DEFAULT_PORTAL_ACCENT,
     supportEmail: raw?.supportEmail ?? null,
     modules: { ...DEFAULT_PORTAL_MODULES, ...(raw?.modules ?? {}) },
+    promotions: Array.isArray(raw?.promotions) ? raw.promotions : [],
   };
 }
