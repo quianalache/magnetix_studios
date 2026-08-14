@@ -178,6 +178,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.warn("[auth] claim-pending-invites failed", err);
           });
 
+          // MyMagnetix staff <-> Person bridge (2026-08-14) — same
+          // fire-and-forget, once-per-session pattern as the invite claim
+          // above. Idempotent no-op once users/{uid}.personId is already
+          // set; identity only, never touches authorization/claims.
+          void fetch("/api/auth/ensure-person", {
+            method: "POST",
+            credentials: "include",
+          }).catch((err) => {
+            console.warn("[auth] ensure-person failed", err);
+          });
+
           // Subscribe to the user's sub-account memberships so the switcher
           // updates live when an admin adds/removes them somewhere.
           membershipUnsub = onSnapshot(

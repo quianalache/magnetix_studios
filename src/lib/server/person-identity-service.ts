@@ -23,15 +23,12 @@ import { getAdminDb } from "@/lib/firebase/admin";
  *     email change on a person doc doesn't orphan anything referencing
  *     `personId`, the same reasoning the existing Member lookup-by-query
  *     (not deterministic doc id) already uses.
- *   - No password, no session, no staff/uid link, no relationship list.
- *     Staff (Firebase Auth) identity is explicitly NOT touched or linked
- *     here — the approved principles said don't treat staff and member
- *     permissions as interchangeable; whether/how to eventually link a
- *     staff uid to a person doc is evaluated in the Build Log, not built.
- *   - The link direction is Member -> Person (`Member.personId`), not
- *     Person -> [Member ids]. A field on the many side avoids array-
- *     mutation races across concurrent logins in different sub-accounts
- *     and needs no transaction to add a new relationship.
+ *   - No password, no session, no relationship list on the person doc
+ *     itself.
+ *   - The link direction is [Member | staff user] -> Person, never the
+ *     reverse. A field on the many side avoids array-mutation races
+ *     across concurrent logins/sessions and needs no transaction to add
+ *     a new relationship.
  *
  * Reconciliation is LAZY, on authentication only (no backfill migration
  * run by this task) — every real place a Member session is minted today
@@ -39,6 +36,20 @@ import { getAdminDb } from "@/lib/firebase/admin";
  * calls `ensurePersonLinkForMember` once, idempotently. An existing Member
  * that never logs in again simply never gets a `personId` until it does;
  * that's an accepted, deliberate tradeoff for zero migration risk.
+ *
+ * Staff <-> Person bridge (2026-08-14) — the identity/authorization
+ * boundary is load-bearing here, not decorative: `ensurePersonLinkForStaffUser`
+ * writes ONLY `users/{uid}.personId`. It never reads or writes Firebase
+ * custom claims, `subAccountMembers`, `agencyMembers`, or any Member doc's
+ * own tenant relationship. A staff user and a Member sharing one personId
+ * means "same human," nothing more — every existing authorization check
+ * (requireSubAccountMember, requireAgencyOwner, getCurrentMember's `sa`
+ * scope check) is completely unaware personId exists and stays fully
+ * authoritative for "what can this identity access." personId reconciles
+ * to the SAME person as an existing Member with the same email (both go
+ * through the identical `ensurePersonIdentity` email lookup) — a staff
+ * account and a Member account for the same real email always converge
+ * on one `people` doc, never create two.
  */
 
 /**
@@ -132,4 +143,78 @@ export async function ensurePersonLinkForMember(
     console.warn("[person-identity-service] ensurePersonLinkForMember failed", err);
     return member.personId;
   }
+}
+
+/**
+ * Lazily link a staff/business Firebase Auth account (its `users/{uid}`
+ * doc) to its person identity. Same contract as `ensurePersonLinkForMember`
+ * in every respect — no-op once linked, best-effort/non-blocking, resolves
+ * through the identical `ensurePersonIdentity` email lookup so a staff
+ * account and a Member account sharing one real email always converge on
+ * the SAME `people` doc rather than creating a second one.
+ *
+ * IDENTITY ONLY: writes exactly one field (`personId`) onto exactly one
+ * `users/{uid}` doc. Never reads or writes Firebase custom claims,
+ * `subAccountMembers`, `agencyMembers`, or any Member/Contact record —
+ * staff authorization is untouched and remains fully authoritative.
+ */
+export async function ensurePersonLinkForStaffUser(staffUser: {
+  uid: string;
+  email: string;
+  personId?: string | null;
+}): Promise<string | null | undefined> {
+  if (staffUser.personId) return staffUser.personId;
+
+  try {
+    const personId = await ensurePersonIdentity(staffUser.email);
+    await getAdminDb()
+      .doc(`users/${staffUser.uid}`)
+      .set({ personId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return personId;
+  } catch (err) {
+    console.warn("[person-identity-service] ensurePersonLinkForStaffUser failed", err);
+    return staffUser.personId;
+  }
+}
+
+/**
+ * Dual-role detection readiness (2026-08-14) — read-only, not called by
+ * any UI yet (no Business Center / MyMagnetix gateway exists). Answers
+ * ONLY "does this person have at least one active staff/business
+ * account" — never which one, never what it's allowed to do; that stays
+ * with the existing Firebase-claims/subAccountMembers authorization path.
+ * `users` is a normal top-level collection, so this equality query is
+ * covered by Firestore's automatic single-field indexing — no new index
+ * needed, unlike the Member-side lookup below.
+ */
+export async function personHasStaffAccess(personId: string): Promise<boolean> {
+  const snap = await getAdminDb()
+    .collection("users")
+    .where("personId", "==", personId)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
+/**
+ * Dual-role detection readiness (2026-08-14) — read-only, not called by
+ * any UI yet. Answers ONLY "does this person have at least one Member
+ * relationship in any sub-account" — never which business, never what
+ * that Member is entitled to; the existing tenant-scoped Member/session
+ * checks remain authoritative for actual access.
+ *
+ * Unlike `personHasStaffAccess`, this queries ACROSS every sub-account's
+ * `members` subcollection via a collection-group query, which needs its
+ * own explicit collection-group index (added to firestore.indexes.json
+ * and deployed alongside this change — see the Build Log). This is the
+ * one piece of "genuinely necessary" infrastructure Step 5 asked for.
+ */
+export async function personHasMemberRelationships(personId: string): Promise<boolean> {
+  const snap = await getAdminDb()
+    .collectionGroup("members")
+    .where("personId", "==", personId)
+    .limit(1)
+    .get();
+  return !snap.empty;
 }

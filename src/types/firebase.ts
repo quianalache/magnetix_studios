@@ -26,6 +26,16 @@ export interface UserDoc {
   primaryAgencyId: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * MyMagnetix identity bridge (2026-08-14) — the same `people/{id}`
+   * person identity a Member.personId points at, linked lazily on session
+   * establishment (see person-identity-service.ts's
+   * ensurePersonLinkForStaffUser). This is IDENTITY only ("is this staff
+   * account the same human as some Member elsewhere"), never
+   * authorization — staff permissions still come exclusively from Firebase
+   * custom claims + subAccountMembers, unaffected by this field.
+   */
+  personId?: string | null;
 }
 
 export interface AppConfig {
