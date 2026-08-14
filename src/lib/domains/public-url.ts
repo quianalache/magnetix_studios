@@ -120,6 +120,28 @@ export function buildPortalLoginUrl(opts: {
     : `${platformOrigin()}/portal/${opts.subAccountId}/login`;
 }
 
+/** The member-facing Portal home/entry destination for admin "View Portal" actions. */
+export function buildPortalHomeUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  subAccountId: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/portal`
+    : `${platformOrigin()}/portal/${opts.subAccountId}`;
+}
+
+/** The explicit Portal login page, used when the admin wants to open the login screen itself. */
+export function buildPortalLoginPageUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  subAccountId: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/portal/login`
+    : `${platformOrigin()}/portal/${opts.subAccountId}/login`;
+}
+
 /**
  * Bare origin (no path) for building portal links FROM the server side —
  * the magic-link email's verify URL, the "sign in" redirect target, etc.

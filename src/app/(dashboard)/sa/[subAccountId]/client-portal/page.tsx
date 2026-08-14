@@ -5,7 +5,11 @@ import { toast } from "sonner";
 import {
   BookOpen,
   Calendar,
+  Check,
+  Copy,
+  ExternalLink,
   FileSignature,
+  LogIn,
   MessagesSquare,
   Orbit,
   Upload,
@@ -15,6 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  buildPortalHomeUrl,
+  buildPortalLoginPageUrl,
+  buildPortalLoginUrl,
+} from "@/lib/domains/public-url";
 import { cn } from "@/lib/utils";
 import { resolvePortalBranding, type PortalBranding } from "@/types/portal-branding";
 
@@ -29,6 +38,7 @@ export default function ClientPortalSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -81,6 +91,17 @@ export default function ClientPortalSettingsPage() {
   }
 
   const portalDisplayName = branding.portalName || subAccount?.name || "Your Portal";
+  const portalHomeUrl = buildPortalHomeUrl({ subAccount, subAccountId });
+  const portalEntryUrl = buildPortalLoginUrl({ subAccount, subAccountId });
+  const portalLoginPageUrl = buildPortalLoginPageUrl({ subAccount, subAccountId });
+  const hasVerifiedPortalDomain = subAccount?.customDomain?.status === "verified";
+
+  async function copyPortalLink() {
+    await navigator.clipboard.writeText(portalEntryUrl);
+    setCopied(true);
+    toast.success("Portal link copied");
+    setTimeout(() => setCopied(false), 2000);
+  }
 
   return (
     <div className="momentum-scope mx-auto w-full max-w-3xl space-y-6 rounded-2xl">
@@ -92,6 +113,52 @@ export default function ClientPortalSettingsPage() {
         <p className="text-sm text-muted-foreground">
           What clients see when they sign in — separate from your own account name.
         </p>
+      </div>
+
+      <div className="rounded-xl border bg-card p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">Portal access</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Open the member-facing portal or copy the clean customer entry
+              link.
+            </p>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              {hasVerifiedPortalDomain
+                ? `Using your verified domain: ${subAccount.customDomain?.domain}/portal`
+                : "Using the shared Magnetix portal fallback until a custom domain is verified."}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+            <Button
+              render={
+                <a href={portalHomeUrl} target="_blank" rel="noreferrer" />
+              }
+              size="sm"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View Client Portal
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={copyPortalLink}>
+              {copied ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              {copied ? "Copied" : "Copy Portal Link"}
+            </Button>
+            <Button
+              render={
+                <a href={portalLoginPageUrl} target="_blank" rel="noreferrer" />
+              }
+              variant="outline"
+              size="sm"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              Open Login Page
+            </Button>
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-1 rounded-xl border bg-muted/30 p-1">
