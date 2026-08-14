@@ -4,9 +4,9 @@ import {
   Bell,
   BookOpen,
   Calendar,
+  CheckCircle2,
   ChevronRight,
-  CircleUserRound,
-  CreditCard,
+  DollarSign,
   FileSignature,
   FolderKanban,
   Home,
@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getCurrentMember } from "@/lib/community/member-session";
+import {
+  buildBookingUrl,
+  buildCourseUrl,
+  buildOfferUrl,
+} from "@/lib/domains/public-url";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
   listPortalCommunities,
@@ -33,12 +38,12 @@ import {
   type PortalSessionBundle,
 } from "@/lib/server/portal-service";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
+import { formatCurrency } from "@/lib/format";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
 import { projectProgressPct } from "@/types/projects";
 import { resolvePortalBranding } from "@/types/portal-branding";
 import type { PortalPromotionConfig } from "@/types/portal-branding";
 import type { SubAccountDoc } from "@/types/tenancy";
-import type { Quote } from "@/types/quotes";
 import type { Project, ProjectStep } from "@/types/projects";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { PortalLogoutButton } from "./[saId]/logout-button";
@@ -50,16 +55,6 @@ import { PortalLogoutButton } from "./[saId]/logout-button";
  * feature. It reuses existing server-side portal queries and only renders
  * modules that have real data for the signed-in member/contact.
  */
-
-const QUOTE_STATUS_LABEL: Record<string, string> = {
-  draft: "Draft",
-  sent: "Sent",
-  viewed: "Viewed",
-  accepted: "Accepted",
-  declined: "Declined",
-  expired: "Expired",
-  paid: "Paid",
-};
 
 const navItems = [
   { label: "Home", icon: Home, href: "#", active: true },
@@ -77,6 +72,17 @@ interface PortalPromotion {
   description: string;
   href: string;
   imageUrl: string | null;
+  ctaLabel: string;
+  meta: string | null;
+}
+
+interface SummaryItem {
+  label: string;
+  value: string;
+  detail: string;
+  actionLabel: string;
+  href: string;
+  icon: React.ReactNode;
 }
 
 function initials(name: string): string {
@@ -108,7 +114,9 @@ function plainText(html: string | null | undefined): string {
 
 async function resolvePromotions(
   subAccountId: string,
-  configs: PortalPromotionConfig[]
+  subAccount: SubAccountDoc,
+  configs: PortalPromotionConfig[],
+  ownedCourses: PortalCourse[]
 ): Promise<PortalPromotion[]> {
   const active = [...configs]
     .filter((promo) => !promo.hidden)
@@ -125,6 +133,8 @@ async function resolvePromotions(
         description: promo.descriptionOverride ?? "",
         href: promo.urlOverride,
         imageUrl: null,
+        ctaLabel: "Open",
+        meta: null,
       });
       continue;
     }
@@ -132,15 +142,30 @@ async function resolvePromotions(
     if (promo.type === "course") {
       const course = await getStandaloneCourse(subAccountId, promo.targetId);
       if (!course) continue;
+      const owned = ownedCourses.find((item) => item.courseId === course.id);
       out.push({
         id: promo.id,
-        label: "Course",
+        label: owned ? "Continue learning" : "Featured course",
         title: promo.titleOverride || course.title,
         description:
           promo.descriptionOverride ||
           plainText(course.aboutHtml).slice(0, 150),
-        href: `/course/${subAccountId}/${course.id}`,
+        href:
+          owned?.classroomHref ??
+          buildCourseUrl({
+            subAccount,
+            subAccountId,
+            courseId: course.id,
+            slug: course.slug,
+          }),
         imageUrl: course.coverUrl,
+        ctaLabel: owned ? "Open course" : "Learn more",
+        meta:
+          owned != null
+            ? `${Math.round(owned.progressPct)}% complete`
+            : course.access === "purchase"
+              ? formatPriceCents(course.priceCents, course.currency)
+              : "Free",
       });
     } else if (promo.type === "booking") {
       const snap = await getAdminDb()
@@ -151,32 +176,66 @@ async function resolvePromotions(
         name?: string;
         description?: string;
         slug?: string;
+        durationMinutes?: number;
+        payment?: { amount?: number | null; currency?: string | null } | null;
+        logoUrl?: string | null;
       };
       const slug = data.slug || promo.targetId;
+      const metaParts = [
+        data.durationMinutes ? `${data.durationMinutes} min` : null,
+        typeof data.payment?.amount === "number"
+          ? formatCurrency(data.payment.amount, data.payment.currency ?? "USD")
+          : null,
+      ].filter(Boolean);
       out.push({
         id: promo.id,
-        label: "Session",
+        label: "Book a session",
         title: promo.titleOverride || data.name || "Book a session",
         description: promo.descriptionOverride || data.description || "",
-        href: `/b/${subAccountId}/${slug}`,
-        imageUrl: null,
+        href: buildBookingUrl({ subAccount, subAccountId, slug }),
+        imageUrl: data.logoUrl ?? null,
+        ctaLabel: "Book session",
+        meta: metaParts.join(" · ") || null,
       });
     } else if (promo.type === "offer") {
       const offer = await getCourseOffer(subAccountId, promo.targetId);
       if (!offer) continue;
       out.push({
         id: promo.id,
-        label: "Offer",
+        label: "Featured offer",
         title: promo.titleOverride || offer.title,
         description:
           promo.descriptionOverride ||
           plainText(offer.descriptionHtml).slice(0, 150),
-        href: `/offer/${subAccountId}/${offer.id}`,
+        href: buildOfferUrl({
+          subAccount,
+          subAccountId,
+          offerId: offer.id,
+          slug: offer.slug,
+        }),
         imageUrl: offer.thumbnailUrl,
+        ctaLabel: "View offer",
+        meta:
+          offer.priceTextOverride ||
+          (offer.type === "free"
+            ? "Free"
+            : offer.type === "recurring"
+              ? `${formatPriceCents(offer.priceCents, offer.currency)} / ${
+                  offer.recurringInterval ?? "month"
+                }`
+              : formatPriceCents(offer.priceCents, offer.currency)),
       });
     }
   }
   return out;
+}
+
+function formatPriceCents(
+  cents: number | null,
+  currency: string | null
+): string {
+  if (cents == null) return "";
+  return formatCurrency(cents / 100, currency ?? "USD");
 }
 
 export async function PortalHomeView({
@@ -235,31 +294,74 @@ export async function PortalHomeView({
     (sum, b) => sum + b.remaining,
     0
   );
-  const activeProjects = projects.length;
   const learningCourse =
     courses.find((course) => course.progressPct < 100) ?? courses[0] ?? null;
   const secondaryCourses = learningCourse
     ? courses.filter((course) => course.courseId !== learningCourse.courseId)
     : courses;
-  const promotions = await resolvePromotions(saId, branding.promotions);
+  const promotions = await resolvePromotions(
+    saId,
+    sub,
+    branding.promotions,
+    courses
+  );
   const hasPromotions = promotions.length > 0;
-  const summaryItems = [
-    courses.length > 0
-      ? { label: "Courses", value: String(courses.length) }
-      : null,
-    communities.length > 0
-      ? { label: "Communities", value: String(communities.length) }
-      : null,
-    activeProjects > 0
-      ? { label: "Projects", value: String(activeProjects) }
-      : null,
-    openInvoices.length > 0
-      ? { label: "Open invoices", value: String(openInvoices.length) }
+  const firstOpenInvoice = openInvoices[0] ?? null;
+  const firstOpenInvoiceTotal = firstOpenInvoice
+    ? computeQuoteTotals(firstOpenInvoice).total
+    : null;
+  const summaryCandidates: Array<SummaryItem | null> = [
+    nextBooking
+      ? {
+          label: "Upcoming appointment",
+          value: "1",
+          detail: nextBooking.startAt
+            ? formatDateTime(nextBooking.startAt)
+            : nextBooking.title,
+          actionLabel: "View all",
+          href: "#appointments",
+          icon: <Calendar className="h-4 w-4" />,
+        }
       : null,
     sessionRemaining > 0
-      ? { label: "Sessions", value: String(sessionRemaining) }
+      ? {
+          label: "Session remaining",
+          value: String(sessionRemaining),
+          detail: "Available to schedule",
+          actionLabel: "Book session",
+          href: sessionBundles[0]
+            ? `/b/${saId}/${sessionBundles[0].bookingPageSlug}`
+            : "#sessions",
+          icon: <CheckCircle2 className="h-4 w-4" />,
+        }
       : null,
-  ].filter((item): item is { label: string; value: string } => item !== null);
+    courses.length > 0
+      ? {
+          label: "Courses in progress",
+          value: String(courses.length),
+          detail: learningCourse?.title ?? "Continue learning",
+          actionLabel: "Continue learning",
+          href: learningCourse?.classroomHref ?? "#courses",
+          icon: <BookOpen className="h-4 w-4" />,
+        }
+      : null,
+    firstOpenInvoice && firstOpenInvoiceTotal !== null
+      ? {
+          label: "Payment due",
+          value: formatCurrency(
+            firstOpenInvoiceTotal,
+            firstOpenInvoice.currency
+          ),
+          detail: firstOpenInvoice.quoteNumber,
+          actionLabel: "View invoice",
+          href: `/api/portal/${saId}/quotes/${firstOpenInvoice.id}/view`,
+          icon: <DollarSign className="h-4 w-4" />,
+        }
+      : null,
+  ];
+  const summaryItems = summaryCandidates.filter(
+    (item): item is SummaryItem => item !== null
+  );
   const hasContent =
     courses.length > 0 ||
     readings.length > 0 ||
@@ -284,43 +386,42 @@ export async function PortalHomeView({
         <PortalNav />
 
         <div
-          className={`grid gap-5 ${
-            hasPromotions ? "lg:grid-cols-[minmax(0,1fr)_300px]" : ""
+          className={`grid gap-6 ${
+            hasPromotions ? "xl:grid-cols-[minmax(0,1fr)_320px]" : ""
           }`}
         >
-          <main className="min-w-0 space-y-4">
-            <WelcomeBlock
-              memberName={member.displayName}
-              displayName={displayName}
-              welcomeMessage={branding.welcomeMessage}
-            />
+          <main className="min-w-0 space-y-5">
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_460px]">
+              <WelcomeBlock
+                memberName={member.displayName}
+                displayName={displayName}
+                welcomeMessage={branding.welcomeMessage}
+              />
+              {learningCourse && <ContinueLearning course={learningCourse} />}
+            </div>
 
             {summaryItems.length > 0 && <SummaryRow items={summaryItems} />}
             {!hasContent && <EmptyHomeState displayName={displayName} />}
 
-            {learningCourse && <ContinueLearning course={learningCourse} />}
+            <div className="grid gap-4 lg:grid-cols-2">
+              {nextBooking && <AppointmentsModule booking={nextBooking} />}
 
-            {nextBooking && <AppointmentsModule booking={nextBooking} />}
+              {communities.length > 0 && (
+                <CommunitiesModule communities={communities} />
+              )}
 
-            {communities.length > 0 && (
-              <CommunitiesModule communities={communities} />
-            )}
+              {secondaryCourses.length > 0 && (
+                <CoursesModule courses={secondaryCourses} />
+              )}
 
-            {secondaryCourses.length > 0 && (
-              <CoursesModule courses={secondaryCourses} />
-            )}
+              {projects.length > 0 && <ProjectsModule projects={projects} />}
 
-            {sessionRemaining > 0 && (
-              <SessionsModule saId={saId} sessionBundles={sessionBundles} />
-            )}
+              {readings.length > 0 && <ReadingsModule readings={readings} />}
 
-            {projects.length > 0 && <ProjectsModule projects={projects} />}
-
-            {readings.length > 0 && <ReadingsModule readings={readings} />}
-
-            {openInvoices.length > 0 && (
-              <BillingModule saId={saId} invoices={openInvoices} />
-            )}
+              {sessionRemaining > 0 && (
+                <SessionsModule saId={saId} sessionBundles={sessionBundles} />
+              )}
+            </div>
           </main>
 
           <PromotionalSidebar promotions={promotions} />
@@ -342,10 +443,10 @@ function PortalHeader({
   saId: string;
 }) {
   return (
-    <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2.5">
+    <header className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
         <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[10px] text-[13px] font-bold text-white"
+          className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[11px] text-[15px] font-bold text-white shadow-sm"
           style={{
             background: brandingLogoUrl ? undefined : "var(--portal-accent)",
           }}
@@ -362,35 +463,43 @@ function PortalHeader({
           )}
         </div>
         <div>
-          <p className="text-[14px] font-bold text-[#202124]">{displayName}</p>
-          <p className="text-[11px] text-[#909090]">Client Portal</p>
+          <p className="text-[18px] leading-tight font-bold text-[#111217]">
+            {displayName}
+          </p>
+          <p className="mt-0.5 text-[13px] text-[#4F5565]">Client Portal</p>
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="hidden h-9 min-w-[220px] items-center gap-2 rounded-[10px] border border-[#E4E4E4] bg-white px-3 text-[#909090] md:flex">
-          <Search className="h-3.5 w-3.5" />
+        <label className="hidden h-11 min-w-[232px] items-center gap-2 rounded-[10px] border border-[#DFE2EA] bg-white px-3.5 text-[#111827] shadow-[0_8px_22px_rgba(18,18,18,0.03)] md:flex">
+          <Search className="h-4 w-4" />
           <span className="sr-only">Search portal</span>
           <input
             type="search"
             placeholder="Search portal"
-            className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#909090]"
+            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#6B7280]"
           />
         </label>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[#E4E4E4] bg-white text-[#606060]"
+          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#DFE2EA] bg-white text-[#111827] shadow-[0_8px_22px_rgba(18,18,18,0.03)]"
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
+          <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
         </button>
         <button
           type="button"
-          className="flex h-9 items-center gap-2 rounded-[10px] border border-[#E4E4E4] bg-white px-2.5 text-[#606060]"
+          className="flex h-11 items-center gap-2 rounded-full bg-transparent px-1.5 text-[#111827]"
           aria-label="Account"
         >
-          <CircleUserRound className="h-4 w-4" />
-          <span className="hidden text-[11px] font-semibold sm:inline">
+          <span
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-[13px] font-bold text-white"
+            style={{ background: "var(--portal-accent)" }}
+          >
+            {initials(memberName || "Account")}
+          </span>
+          <span className="hidden text-[13px] font-bold sm:inline">
             {memberName || "Account"}
           </span>
         </button>
@@ -403,7 +512,7 @@ function PortalHeader({
 function PortalNav() {
   return (
     <nav
-      className="mb-5 flex gap-1.5 overflow-x-auto rounded-[13px] border border-[#E4E4E4] bg-white p-1"
+      className="mb-5 flex gap-4 overflow-x-auto rounded-[11px] border border-[#DFE2EA] bg-white p-2 shadow-[0_8px_24px_rgba(18,18,18,0.035)] sm:gap-6"
       aria-label="Client Portal"
     >
       {navItems.map((item) => {
@@ -412,14 +521,14 @@ function PortalNav() {
           <Link
             key={item.label}
             href={item.href}
-            className={`flex shrink-0 items-center gap-1.5 rounded-[9px] px-2.5 py-2 text-[11px] font-bold ${
+            className={`flex shrink-0 items-center gap-2 rounded-[8px] px-3 py-2 text-[13px] font-bold ${
               item.active ? "text-white" : "text-[#707070] hover:bg-[#F8F7F5]"
             }`}
             style={{
               background: item.active ? "var(--portal-accent)" : undefined,
             }}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className="h-4 w-4" />
             {item.label}
           </Link>
         );
@@ -438,14 +547,11 @@ function WelcomeBlock({
   welcomeMessage: string;
 }) {
   return (
-    <section>
-      <p className="text-[11px] font-semibold tracking-[.04em] text-[#909090] uppercase">
-        Home
-      </p>
-      <h1 className="mt-1 text-[24px] leading-tight font-bold text-[#202124]">
-        Hi{memberName ? ` ${memberName}` : ""}, welcome back.
+    <section className="py-3">
+      <h1 className="text-[32px] leading-tight font-extrabold tracking-[-0.01em] text-[#111217] md:text-[34px]">
+        Good morning{memberName ? `, ${memberName.split(" ")[0]}` : ""}.
       </h1>
-      <p className="mt-1.5 max-w-xl text-[12.5px] leading-relaxed text-[#909090]">
+      <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[#4F5565]">
         {welcomeMessage ||
           `Continue your programs, join what is coming up, and open anything that needs attention inside ${displayName}.`}
       </p>
@@ -453,11 +559,11 @@ function WelcomeBlock({
   );
 }
 
-function SummaryRow({ items }: { items: { label: string; value: string }[] }) {
+function SummaryRow({ items }: { items: SummaryItem[] }) {
   return (
-    <div className="flex flex-wrap gap-2.5">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
-        <StatCard key={item.label} label={item.label} value={item.value} />
+        <StatCard key={item.label} item={item} />
       ))}
     </div>
   );
@@ -489,26 +595,38 @@ function EmptyHomeState({ displayName }: { displayName: string }) {
 
 function ContinueLearning({ course }: { course: PortalCourse }) {
   return (
-    <section className="rounded-[13px] border border-[#E4E4E4] bg-white p-[15px]">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold tracking-[.04em] text-[#909090] uppercase">
-            Continue Learning
+    <section className="rounded-[12px] border border-[#DFE2EA] bg-white p-3.5 shadow-[0_12px_34px_rgba(18,18,18,0.04)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative h-24 w-full shrink-0 overflow-hidden rounded-[8px] bg-[#EFE9EE] sm:h-[94px] sm:w-[108px]">
+          {course.coverUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={course.coverUrl}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <BrandedFallback label="Course" />
+          )}
+          <span className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-white/92 text-[var(--portal-accent)] shadow-lg">
+            <PlayCircle className="h-7 w-7" />
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-medium text-[#4F5565]">
+            Continue learning
           </p>
-          <h2 className="mt-1 text-[15px] font-bold text-[#202124]">
+          <h2 className="mt-1 text-[15px] font-bold text-[#111217]">
             {course.title}
           </h2>
           {course.nextLessonTitle && (
-            <p className="mt-1 text-[12px] leading-relaxed text-[#909090]">
-              Next lesson: {course.nextLessonTitle}
+            <p className="mt-1 text-[13px] leading-relaxed text-[#4F5565]">
+              {course.nextLessonTitle}
             </p>
           )}
           <ProgressBar value={course.progressPct} />
         </div>
-        <PortalButton
-          href={course.classroomHref}
-          icon={<PlayCircle className="h-3.5 w-3.5" />}
-        >
+        <PortalButton href={course.classroomHref} variant="outline">
           Continue
         </PortalButton>
       </div>
@@ -517,24 +635,43 @@ function ContinueLearning({ course }: { course: PortalCourse }) {
 }
 
 function AppointmentsModule({ booking }: { booking: PortalBooking }) {
+  const month = booking.startAt
+    ? booking.startAt
+        .toLocaleString(undefined, { month: "short" })
+        .toUpperCase()
+    : "";
+  const day = booking.startAt
+    ? booking.startAt.toLocaleString(undefined, { day: "2-digit" })
+    : "";
   return (
     <SectionBlock
       id="appointments"
       icon={<Calendar className="h-full w-full" />}
-      title="Next Appointment"
+      title="Next appointment"
       actionLabel="See all appointments"
       actionHref="#appointments"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[12.5px] font-bold text-[#202124]">
-            {booking.title}
-          </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
           {booking.startAt && (
-            <p className="mt-1 text-[12px] leading-relaxed text-[#909090]">
-              {formatDateTime(booking.startAt)}
-            </p>
+            <div className="flex h-[76px] w-[78px] shrink-0 flex-col items-center justify-center rounded-[10px] bg-[#F1EAF5] text-[var(--portal-accent)]">
+              <span className="text-[13px] font-bold">{month}</span>
+              <span className="text-[28px] leading-none font-extrabold text-[#111217]">
+                {day}
+              </span>
+            </div>
           )}
+          <div>
+            {booking.startAt && (
+              <p className="text-[15px] font-bold text-[var(--portal-accent)]">
+                {formatDateTime(booking.startAt)}
+              </p>
+            )}
+            <p className="mt-1 text-[17px] font-bold text-[#111217]">
+              {booking.title}
+            </p>
+            <p className="mt-1 text-[13px] text-[#4F5565]">Scheduled session</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {booking.meetingUrl && (
@@ -562,26 +699,41 @@ function CommunitiesModule({
       id="communities"
       icon={<MessagesSquare className="h-full w-full" />}
       title="Communities"
-      actionLabel="Open community"
+      actionLabel="See all"
       actionHref={communities[0]?.href ?? "#communities"}
     >
       <div className="space-y-3">
         {communities.slice(0, 3).map((community) => (
           <div
             key={community.groupId}
-            className="flex flex-col gap-2 border-b border-[#EEEEEE] pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-3 border-b border-[#EEEEEE] pb-3 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
           >
-            <div>
-              <p className="text-[12.5px] font-bold text-[#202124]">
-                {community.name}
-              </p>
-              <p className="mt-1 text-[11.5px] leading-relaxed text-[#909090]">
-                {community.tagline || `Level ${community.level} member`}
-              </p>
+            <div className="flex items-center gap-3">
+              <span
+                className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full text-[20px] font-bold text-white"
+                style={{ background: "var(--portal-accent)" }}
+              >
+                {initials(community.name)}
+              </span>
+              <div>
+                <p className="text-[15px] font-bold text-[#111217]">
+                  {community.name}
+                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[#4F5565]">
+                  {community.tagline || `Level ${community.level} member`}
+                </p>
+                <span className="mt-2 inline-flex rounded-[7px] bg-[#F1EAF5] px-2.5 py-1 text-[11px] font-bold text-[var(--portal-accent)]">
+                  Member · Active
+                </span>
+              </div>
             </div>
-            <PortalButton href={community.href} variant="outline">
-              Enter
-            </PortalButton>
+            <Link
+              href={community.href}
+              className="text-[#4F5565] hover:text-[var(--portal-accent)]"
+              aria-label={`Open ${community.name}`}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Link>
           </div>
         ))}
       </div>
@@ -595,28 +747,41 @@ function CoursesModule({ courses }: { courses: PortalCourse[] }) {
       id="courses"
       icon={<BookOpen className="h-full w-full" />}
       title="Courses"
-      actionLabel="View courses"
+      actionLabel="See all"
       actionHref={courses[0]?.classroomHref ?? "#courses"}
     >
       <div className="space-y-4">
         {courses.slice(0, 3).map((course) => (
-          <div key={course.courseId}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[12.5px] font-bold text-[#202124]">
-                  {course.title}
-                </p>
-                {course.nextLessonTitle && (
-                  <p className="mt-1 text-[11.5px] leading-relaxed text-[#909090]">
-                    Next: {course.nextLessonTitle}
-                  </p>
-                )}
-              </div>
-              <PortalButton href={course.classroomHref} variant="outline">
-                Continue
-              </PortalButton>
+          <div
+            key={course.courseId}
+            className="flex items-center gap-3 border-b border-[#EEEEEE] pb-3 last:border-0 last:pb-0"
+          >
+            <div className="h-[56px] w-[64px] shrink-0 overflow-hidden rounded-[7px] bg-[#EFE9EE]">
+              {course.coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={course.coverUrl}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <BrandedFallback label="Course" />
+              )}
             </div>
-            <ProgressBar value={course.progressPct} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-bold text-[#111217]">
+                {course.title}
+              </p>
+              {course.nextLessonTitle && (
+                <p className="mt-0.5 truncate text-[12px] text-[#4F5565]">
+                  {course.nextLessonTitle}
+                </p>
+              )}
+              <ProgressBar value={course.progressPct} compact />
+            </div>
+            <PortalButton href={course.classroomHref} variant="outline">
+              Continue
+            </PortalButton>
           </div>
         ))}
       </div>
@@ -734,101 +899,73 @@ function ReadingsModule({ readings }: { readings: EnergeticDecoderReading[] }) {
   );
 }
 
-function BillingModule({
-  saId,
-  invoices,
-}: {
-  saId: string;
-  invoices: Quote[];
-}) {
-  return (
-    <SectionBlock
-      id="billing"
-      icon={<CreditCard className="h-full w-full" />}
-      title="Billing"
-      actionLabel="View invoice"
-      actionHref={`/api/portal/${saId}/quotes/${invoices[0].id}/view`}
-    >
-      <div className="space-y-3">
-        {invoices.slice(0, 2).map((invoice) => {
-          const { total } = computeQuoteTotals(invoice);
-          return (
-            <Link
-              key={invoice.id}
-              href={`/api/portal/${saId}/quotes/${invoice.id}/view`}
-              className="flex flex-col gap-1 rounded-[11px] bg-[#F8F7F5] px-3 py-2.5 text-[12px] hover:bg-[#EFE9EE] sm:flex-row sm:items-center sm:justify-between"
-            >
-              <span>
-                <strong className="text-[#202124]">
-                  {invoice.quoteNumber}
-                </strong>
-                <span className="text-[#909090]">
-                  {" "}
-                  - {QUOTE_STATUS_LABEL[invoice.status] ?? invoice.status}
-                </span>
-              </span>
-              <span className="font-bold text-[#202124]">
-                {invoice.currency} {total.toFixed(2)}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </SectionBlock>
-  );
-}
-
 function PromotionalSidebar({ promotions }: { promotions: PortalPromotion[] }) {
   if (promotions.length === 0) return null;
   return (
     <aside
-      className="space-y-3 lg:sticky lg:top-6 lg:self-start"
+      className="space-y-4 xl:sticky xl:top-6 xl:self-start"
       aria-label="Promotions"
     >
+      <h2 className="px-1 text-[16px] font-extrabold text-[var(--portal-accent)]">
+        What&apos;s new for you
+      </h2>
       {promotions.map((promotion) => (
         <Link
           key={promotion.id}
           href={promotion.href}
-          className="block overflow-hidden rounded-[13px] border border-[#E4E4E4] bg-white transition-colors hover:border-[var(--portal-accent)]"
+          className="group block overflow-hidden rounded-[12px] border border-[#DFE2EA] bg-white shadow-[0_14px_38px_rgba(18,18,18,0.045)] transition-all hover:-translate-y-0.5 hover:border-[var(--portal-accent)]"
         >
-          {promotion.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={promotion.imageUrl}
-              alt=""
-              className="aspect-video w-full object-cover"
-            />
-          ) : (
-            <div
-              className="flex aspect-video w-full items-center justify-center text-[13px] font-bold text-white"
-              style={{ background: "var(--portal-accent)" }}
-            >
-              {promotion.label}
-            </div>
-          )}
-          <div className="p-[15px]">
-            <p className="text-[10px] font-bold tracking-[.04em] text-[#909090] uppercase">
-              {promotion.label}
-            </p>
-            <h2 className="mt-1 text-[14px] leading-snug font-bold text-[#202124]">
-              {promotion.title}
-            </h2>
-            {promotion.description && (
-              <p className="mt-1.5 line-clamp-3 text-[12px] leading-relaxed text-[#909090]">
-                {promotion.description}
-              </p>
+          <div className="relative min-h-[178px] overflow-hidden p-4">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(94,37,116,0.12),transparent_45%),linear-gradient(135deg,#fff_0%,#F7F0FA_100%)]" />
+            {promotion.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={promotion.imageUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <div className="absolute right-[-22px] bottom-[-28px] h-36 w-36 rounded-full bg-[var(--portal-accent)] opacity-15" />
             )}
-            <span
-              className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold"
-              style={{ color: "var(--portal-accent)" }}
-            >
-              Open
-              <ChevronRight className="h-3 w-3" />
-            </span>
+            {promotion.imageUrl && (
+              <div className="absolute inset-0 bg-gradient-to-r from-white via-white/88 to-white/20" />
+            )}
+            <div className="relative z-10 flex min-h-[146px] max-w-[78%] flex-col items-start">
+              <span className="rounded-[6px] bg-[#F1EAF5] px-2.5 py-1 text-[10px] font-extrabold tracking-[.03em] text-[var(--portal-accent)] uppercase">
+                {promotion.label}
+              </span>
+              <h3 className="mt-4 text-[20px] leading-tight font-extrabold text-[#111217]">
+                {promotion.title}
+              </h3>
+              {promotion.meta && (
+                <p className="mt-1 text-[12px] font-bold text-[var(--portal-accent)]">
+                  {promotion.meta}
+                </p>
+              )}
+              {promotion.description && (
+                <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-[#2F3441]">
+                  {promotion.description}
+                </p>
+              )}
+              <span
+                className="mt-auto inline-flex h-9 items-center justify-center rounded-[7px] px-4 text-[12px] font-bold text-white shadow-sm"
+                style={{ background: "var(--portal-accent)" }}
+              >
+                {promotion.ctaLabel}
+              </span>
+            </div>
           </div>
         </Link>
       ))}
     </aside>
+  );
+}
+
+function BrandedFallback({ label }: { label: string }) {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.45),transparent_38%),linear-gradient(135deg,var(--portal-accent),#121217)] text-[10px] font-bold tracking-[.04em] text-white uppercase">
+      {label}
+    </div>
   );
 }
 
@@ -850,52 +987,81 @@ function SectionBlock({
   return (
     <section
       id={id}
-      className="rounded-[13px] border border-[#E4E4E4] bg-white p-[15px]"
+      className="rounded-[12px] border border-[#DFE2EA] bg-white shadow-[0_12px_34px_rgba(18,18,18,0.035)]"
     >
-      <div className="mb-[12px] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 border-b border-[#EEF0F4] px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
           <span
-            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] bg-[#F8F7F5] p-1.5"
+            className="flex h-[24px] w-[24px] shrink-0 items-center justify-center rounded-[6px] bg-[#F1EAF5] p-1.5"
             style={{ color: "var(--portal-accent)" }}
           >
             {icon}
           </span>
-          <h2 className="text-[12.5px] font-bold text-[#202124]">{title}</h2>
+          <h2 className="text-[15px] font-bold text-[#111217]">{title}</h2>
         </div>
         <Link
           href={actionHref}
-          className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold"
+          className="inline-flex shrink-0 items-center gap-1 text-[12px] font-bold"
           style={{ color: "var(--portal-accent)" }}
         >
           {actionLabel}
-          <ChevronRight className="h-3 w-3" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
-      <div>{children}</div>
+      <div className="p-4">{children}</div>
     </section>
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ item }: { item: SummaryItem }) {
   return (
-    <div className="min-w-[108px] flex-1 rounded-[11px] bg-[#EFE9EE] px-[13px] py-[11px]">
-      <p className="text-[19px] leading-[1.1] font-bold text-[#202124] tabular-nums">
-        {value}
-      </p>
-      <p className="mt-[3px] text-[10px] tracking-[.03em] text-[#909090] uppercase">
-        {label}
-      </p>
-    </div>
+    <Link
+      href={item.href}
+      className="block rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_32px_rgba(18,18,18,0.035)] transition-colors hover:border-[var(--portal-accent)]"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#F1EAF5] text-[var(--portal-accent)]">
+          {item.icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[24px] leading-none font-extrabold text-[#111217]">
+            {item.value}
+          </p>
+          <p className="mt-2 text-[13px] leading-snug font-medium text-[#4F5565]">
+            {item.label}
+          </p>
+          <p className="mt-1 line-clamp-1 text-[12px] text-[#4F5565]">
+            {item.detail}
+          </p>
+          <span
+            className="mt-3 inline-flex text-[12px] font-bold"
+            style={{ color: "var(--portal-accent)" }}
+          >
+            {item.actionLabel}
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
-function ProgressBar({ value }: { value: number }) {
+function ProgressBar({
+  value,
+  compact = false,
+}: {
+  value: number;
+  compact?: boolean;
+}) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <div className="mt-2 h-[5px] overflow-hidden rounded-[3px] bg-[#E4E4E4]">
+    <div
+      className={`mt-2 overflow-hidden rounded-full bg-[#E4E6EE] ${
+        compact ? "h-[5px]" : "h-[5px]"
+      }`}
+    >
       <div
-        className="h-full rounded-[3px]"
-        style={{ width: `${pct}%`, background: "var(--portal-accent)" }}
+        className="h-full rounded-full"
+        style={{ width: `${pct}%`, background: "#5667FF" }}
       />
     </div>
   );
@@ -916,8 +1082,8 @@ function PortalButton({
 }) {
   const className =
     variant === "solid"
-      ? "inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] border border-[var(--portal-accent)] px-2.5 text-[11px] font-bold text-white"
-      : "inline-flex h-8 items-center justify-center gap-1.5 rounded-[9px] border border-[#E4E4E4] bg-white px-2.5 text-[11px] font-bold text-[#606060]";
+      ? "inline-flex h-9 items-center justify-center gap-1.5 rounded-[7px] border border-[var(--portal-accent)] px-4 text-[12px] font-bold text-white shadow-sm"
+      : "inline-flex h-9 items-center justify-center gap-1.5 rounded-[7px] border border-[var(--portal-accent)] bg-white px-4 text-[12px] font-bold text-[var(--portal-accent)]";
 
   return (
     <Link
