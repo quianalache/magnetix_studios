@@ -3,14 +3,27 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, MessageCircle, Menu, X, Search, LogOut, ArrowLeftRight } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import {
+  Bell,
+  MessageCircle,
+  Menu,
+  X,
+  Search,
+  LogOut,
+  ArrowLeftRight,
+  Home,
+  BookOpen,
+  MessagesSquare,
+} from "lucide-react";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-}
+// Defined locally (not received as a prop) — icon COMPONENT REFERENCES are
+// functions, which cannot cross the Server -> Client boundary as props.
+// Keep hrefs/labels in sync with (app)/layout.tsx's own sidebar nav.
+const NAV_ITEMS = [
+  { href: "/my", label: "Home", icon: Home },
+  { href: "/my/courses", label: "My Courses", icon: BookOpen },
+  { href: "/my/communities", label: "My Communities", icon: MessagesSquare },
+];
 
 /**
  * MyMagnetix header — search treatment, notification/message icon slots
@@ -22,11 +35,9 @@ interface NavItem {
  */
 export function MyMagnetixHeader({
   primaryEmail,
-  navItems,
   hasStaffAccess,
 }: {
   primaryEmail: string;
-  navItems: NavItem[];
   hasStaffAccess: boolean;
 }) {
   const pathname = usePathname();
@@ -130,7 +141,7 @@ export function MyMagnetixHeader({
 
       {mobileOpen && (
         <nav className="absolute left-0 right-0 top-full flex flex-col gap-0.5 border-b border-[#E4E4E4] bg-white p-3 lg:hidden">
-          {navItems.map((item) => (
+          {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}

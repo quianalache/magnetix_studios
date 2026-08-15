@@ -60,9 +60,20 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
           </div>
         </aside>
         <div className="flex min-h-screen flex-1 flex-col">
+          {/*
+            Only serializable props (strings/booleans) cross the Server ->
+            Client boundary here — the Lucide icon COMPONENT REFERENCES in
+            NAV_ITEMS above are functions, which Next.js cannot serialize
+            across that boundary. Passing them as a prop to a "use client"
+            component throws server-side on every request under this
+            layout (caught live: crm.magnetixstudios.com/my returned 500
+            despite still streaming a mostly-complete page). Fixed by
+            giving MyMagnetixHeader its own local copy of the nav items
+            (same hrefs/labels, icons imported directly in that client
+            file) instead of receiving them as a prop.
+          */}
           <MyMagnetixHeader
             primaryEmail={person.primaryEmail}
-            navItems={NAV_ITEMS}
             hasStaffAccess={hasStaffAccess}
           />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
