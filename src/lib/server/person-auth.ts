@@ -22,6 +22,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const HANDOFF_TTL_MS = 2 * 60 * 1000; // 2 minutes — see "ho" kind below
 
 function getSecret(): string {
   const secret = process.env.AUTOMATIONS_TOKEN_SECRET;
@@ -59,11 +60,12 @@ function sign(payload: string): string {
 interface PersonTokenPayload {
   /** Email at time of issue (lookup only, not the permanent key). */
   e: string;
-  /** Person id. Present on session tokens; absent on magic-link tokens
-   *  (same "don't mint junk on a bot POST" rationale as member-auth). */
+  /** Person id. Present on session/handoff tokens; absent on magic-link
+   *  tokens (same "don't mint junk on a bot POST" rationale as
+   *  member-auth). */
   pid?: string;
   exp: number;
-  k: "ml" | "ses";
+  k: "ml" | "ses" | "ho";
 }
 
 function encodeToken(payload: PersonTokenPayload): string {
@@ -94,7 +96,7 @@ function decodeToken(token: string): PersonTokenPayload | null {
     if (
       typeof parsed.e !== "string" ||
       typeof parsed.exp !== "number" ||
-      (parsed.k !== "ml" && parsed.k !== "ses")
+      (parsed.k !== "ml" && parsed.k !== "ses" && parsed.k !== "ho")
     ) {
       return null;
     }
@@ -135,6 +137,38 @@ export function verifyPersonSessionToken(
 ): { personId: string; email: string } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ses" || !payload.pid) return null;
+  return { personId: payload.pid, email: payload.e };
+}
+
+/**
+ * Cross-domain handoff token (2026-08-17) — cookies cannot be set
+ * cross-origin, full stop: a Route Handler running on a business's custom
+ * domain (e.g. quianalache.com, reached via the Client Portal's "Back to
+ * MyMagnetix" link) can verify an ls_member_session and resolve a
+ * personId just fine, but any `mm_session` cookie it tried to set would
+ * be scoped to THAT domain, not the platform origin MyMagnetix actually
+ * lives on — invisible to /my, silently broken. This short-lived (2
+ * minute), single-hop token carries the already-verified identity across
+ * that one redirect to the platform origin, where the REAL mm_session
+ * cookie gets set on the correct domain. It is never itself a valid
+ * session credential (verifyPersonSessionToken rejects kind "ho"), and
+ * its short TTL bounds the exposure window since — like magic-link
+ * tokens — it is TTL-bound, not database-tracked single-use.
+ */
+export function signPersonHandoffToken(personId: string, email: string): string {
+  return encodeToken({
+    e: email.trim().toLowerCase(),
+    pid: personId,
+    exp: Date.now() + HANDOFF_TTL_MS,
+    k: "ho",
+  });
+}
+
+export function verifyPersonHandoffToken(
+  token: string,
+): { personId: string; email: string } | null {
+  const payload = decodeToken(token);
+  if (!payload || payload.k !== "ho" || !payload.pid) return null;
   return { personId: payload.pid, email: payload.e };
 }
 
