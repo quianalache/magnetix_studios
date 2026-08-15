@@ -31,8 +31,8 @@ export default async function MyMagnetixCommunitiesPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="font-serif text-[20px] font-semibold text-[#202124]">My Communities</h1>
-      <p className="mt-1 text-[13px] text-[#909090]">Every community you belong to, across every Magnetix business.</p>
+      <h1 className="text-[20px] font-bold text-[#1D1B27]">My Communities</h1>
+      <p className="mt-1 text-[13px] text-[#84809A]">Every community you belong to, across every Magnetix business.</p>
 
       {sorted.length === 0 ? (
         <p className="mt-6 text-[13px] text-[#909090]">No communities yet.</p>
@@ -41,14 +41,14 @@ export default async function MyMagnetixCommunitiesPage() {
           {sorted.map((community) => (
             <div
               key={`${community.subAccountId}:${community.groupId}`}
-              className="flex items-center gap-3 rounded-xl border border-[#E4E4E4] p-3 transition-colors hover:border-[#5E2574]"
+              className="flex items-center gap-3 rounded-xl border border-[#ECE9F5] bg-white p-3 transition-shadow hover:shadow-md"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#F3E4F0] text-[#5E2574]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EDE9FE] text-[#6D28D9]">
                 <MessagesSquare className="h-5 w-5" />
               </span>
               <Link href={community.enterHref} className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-[#202124]">{community.name}</p>
-                <p className="truncate text-[11px] text-[#909090]">
+                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">{community.name}</p>
+                <p className="truncate text-[11px] text-[#8A87A0]">
                   {community.businessName} · Level {community.level}
                 </p>
               </Link>

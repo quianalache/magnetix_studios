@@ -101,6 +101,7 @@ export interface PersonSpace {
   logoUrl: string | null;
   accentColor: string;
   enterHref: string;
+  pinKey: string;
 }
 
 /** The businesses this Person has a relationship with — "Your Spaces." */
@@ -124,6 +125,7 @@ export async function listSpacesForPerson(memberships: PersonMembership[]): Prom
         // business's own custom domain here would leave the visitor
         // cookie-less there and bounce them to a login screen anyway.
         enterHref: `/api/my/enter?subAccountId=${sub.id}&next=${encodeURIComponent(`/portal/${sub.id}`)}`,
+        pinKey: `space:${sub.id}`,
       };
     }),
   );

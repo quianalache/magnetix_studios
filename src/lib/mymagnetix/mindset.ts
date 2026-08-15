@@ -13,6 +13,15 @@ export interface MindsetEntry {
   text: string;
 }
 
+/** Display label for each entry kind — matches the approved mockup's small pill tag. */
+export const MINDSET_KIND_LABEL: Record<MindsetEntry["kind"], string> = {
+  affirmation: "Affirmation",
+  prompt: "Reflection",
+  reframe: "Reframe",
+  permission: "Permission",
+  invitation: "Invitation",
+};
+
 export const MINDSET_LIBRARY: MindsetEntry[] = [
   { kind: "affirmation", text: "You don't have to feel ready to begin — beginning is what makes you ready." },
   { kind: "prompt", text: "What's one thing you're proud of from this week, even a small one?" },
