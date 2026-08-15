@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { signPersonMagicLinkToken, signPersonSessionToken } from "@/lib/server/person-auth";
 import { setPersonSessionCookie } from "@/lib/server/person-session";
 import { authenticatePersonWithPassword } from "@/lib/server/person-password";
+import { verifyFirebasePassword } from "@/lib/server/firebase-rest-auth";
+import { ensurePersonLinkForStaffUser } from "@/lib/server/person-identity-service";
 import { checkMemberAuthRateLimit } from "@/lib/community/member-rate-limit";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 
@@ -13,10 +16,19 @@ export const dynamic = "force-dynamic";
  * `/api/portal/[saId]/login`, translated to the global Person layer: no
  * `saId`, no tenant email-domain lookup (uses the shared platform sender).
  *
- * SECURITY: password mode only ever authenticates against
- * `people/{id}.passwordHash` — never a tenant Member's passwordHash. See
- * person-password.ts's header comment for why those are deliberately
- * separate, additive password namespaces.
+ * UNIFIED CREDENTIALS (2026-08-17): password mode tries TWO credential
+ * authorities, in order, and accepts either:
+ *   1. `people/{id}.passwordHash` — the MyMagnetix-only password, for a
+ *      Person with no Business Center/Firebase account.
+ *   2. An existing Business Center Firebase email/password, verified
+ *      through Firebase's OWN REST auth endpoint (never a copied/read
+ *      password hash — see firebase-rest-auth.ts). A dual-role human
+ *      should not have to maintain a second password for the same
+ *      Magnetix account just to reach MyMagnetix.
+ * Either path only ever resolves an IDENTITY (a personId) and mints
+ * mm_session — never Firebase custom claims, never a `__session` cookie,
+ * never tenant/staff authorization. That boundary is unchanged; only the
+ * set of credentials MyMagnetix will accept as proof of identity grew.
  */
 export async function POST(request: Request) {
   let body: { email?: string; password?: string; mode?: string };
@@ -47,21 +59,48 @@ export async function POST(request: Request) {
         { status: 429 },
       );
     }
-    const result = await authenticatePersonWithPassword({
-      email,
-      password: typeof body.password === "string" ? body.password : "",
-    });
-    if (!result.ok) {
-      return NextResponse.json(
-        {
-          error:
-            "Email or password is incorrect. If you have not set a MyMagnetix password yet, use the email sign-in link.",
-        },
-        { status: 401 },
-      );
+    const password = typeof body.password === "string" ? body.password : "";
+
+    // Authority 1: MyMagnetix-only password (member-only Person path,
+    // unaffected — checked first since it's the common case and needs no
+    // external call).
+    const personResult = await authenticatePersonWithPassword({ email, password });
+    if (personResult.ok) {
+      await setPersonSessionCookie(personResult.sessionToken);
+      return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
     }
-    await setPersonSessionCookie(result.sessionToken);
-    return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
+
+    // Authority 2: existing Business Center Firebase credential. Only
+    // attempted when Authority 1 fails, so a member-only Person never
+    // pays for the extra network round-trip. Firebase's own REST endpoint
+    // fails closed to null for wrong password / no such account / disabled
+    // account — none of those are distinguished here (or below), so no
+    // enumeration signal escapes either path.
+    const firebaseResult = await verifyFirebasePassword(email, password);
+    if (firebaseResult) {
+      const userSnap = await getAdminDb().doc(`users/${firebaseResult.uid}`).get();
+      const user = userSnap.data();
+      if (userSnap.exists && user?.status === "active") {
+        const personId = await ensurePersonLinkForStaffUser({
+          uid: firebaseResult.uid,
+          email,
+          personId: (user.personId as string | null | undefined) ?? null,
+        });
+        if (personId) {
+          const sessionToken = signPersonSessionToken(personId, email);
+          await setPersonSessionCookie(sessionToken);
+          return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
+        }
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          "Email or password is incorrect. If you have not set a MyMagnetix password yet, use the email sign-in link.",
+      },
+      { status: 401 },
+    );
   }
 
   // Magic-link mode — always returns the generic message regardless of
