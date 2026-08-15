@@ -587,8 +587,21 @@ export function EnergeticDecoderReadingsTab({
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(280px,340px)_1fr]">
           {/* List pane — Profile-centered (Task 8): each Profile is the
-              primary row, its Readings nest underneath. */}
-          <div className="flex h-[640px] flex-col overflow-hidden rounded-2xl border bg-card">
+              primary row, its Readings nest underneath.
+
+              Phase 4 correctness pass (2026-08-15) — `max-h` instead of a
+              flat `h-[640px]`: a 2-profile account no longer renders a
+              tall box of empty white space below the list. `lg:sticky
+              lg:top-4` is new: now that the detail pane (below) grows to
+              its natural height instead of being clipped, a chart can run
+              well past 640px tall — keeping the list pinned in the
+              viewport while the page scrolls past a tall chart is what
+              actually lets you pick a different reading without scrolling
+              back up first. Single-column (mobile/tablet) drops both the
+              cap and the sticky — same reasoning as the detail pane below,
+              a short device viewport makes a pinned list fight the chart
+              for space instead of helping. */}
+          <div className="flex max-h-[640px] flex-col overflow-hidden rounded-2xl border bg-card lg:sticky lg:top-4">
             <div className="border-b p-3">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -752,13 +765,28 @@ export function EnergeticDecoderReadingsTab({
             </div>
           </div>
 
-          {/* Detail pane */}
-          <div className="h-[640px] overflow-y-auto rounded-2xl border bg-card">
+          {/* Detail pane.
+
+              Phase 4 correctness pass (2026-08-15) — this was
+              `h-[640px] overflow-y-auto`: every chart (BodyGraph runs well
+              past 2900px of real content — see human-design-chart.tsx)
+              was being viewed through a small nested scroll window instead
+              of as one coherent composition, the exact failure the parity
+              audit flagged. Fix: let the pane grow to its natural content
+              height and let the page itself scroll, same as the rest of
+              this app's own tabs — no inner scrollbar competing with the
+              outer one, no arbitrary taller fixed height standing in for
+              an actual fix. The sticky reading-header below still pins
+              itself to the top of the real scroll container (the page),
+              same `sticky top-0` it already used; it just sticks to a
+              container that now genuinely scrolls instead of one that was
+              artificially boxed in. */}
+          <div className="rounded-2xl border bg-card lg:self-start">
             {!selected ? (
               <p className="p-6 text-center text-sm text-muted-foreground">Select a reading.</p>
             ) : (
               <>
-                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-card p-4">
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b bg-card p-4">
                   <div className="flex items-center gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
                       {selected.name.slice(0, 1).toUpperCase()}

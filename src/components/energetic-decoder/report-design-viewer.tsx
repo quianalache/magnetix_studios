@@ -10,6 +10,7 @@ import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import type { ChartDesign } from "@/types/chart-design";
+import type { CenterKey } from "@/lib/energetics/human-design-data";
 
 /**
  * Renders a saved Report Design against one specific reading — the piece
@@ -194,6 +195,31 @@ function ReportBlockView({
   }
 }
 
+/**
+ * Phase 4 correctness pass (2026-08-15) — this call site was silently
+ * dropping `centersMode`/`centerColors`, so a sub-account with "Enable
+ * Traditional Centers Colors" turned on in Chart Designs would see that
+ * mode correctly in the Chart Designs preview and in the exported PDF
+ * (both already build this same map — see reading-pdf-document.tsx's
+ * identical derivation), but a real delivered report would silently fall
+ * back to uniform mode instead. Mirrors that existing derivation exactly,
+ * not a new convention.
+ */
+function centerColorsFromDesign(design: ChartDesign | null | undefined): Partial<Record<CenterKey, string>> | undefined {
+  if (!design) return undefined;
+  return {
+    head: design.headCenterColor,
+    ajna: design.ajnaCenterColor,
+    throat: design.throatCenterColor,
+    g: design.gCenterColor,
+    heart: design.heartCenterColor,
+    spleen: design.spleenCenterColor,
+    sacral: design.sacralCenterColor,
+    solarplexus: design.solarPlexusCenterColor,
+    root: design.rootCenterColor,
+  };
+}
+
 function ChartPieceView({
   piece,
   readingInput,
@@ -219,6 +245,8 @@ function ChartPieceView({
           channelsColor={hdDesign?.channelsColor}
           gatesColor={hdDesign?.gatesColor}
           backgroundColor={hdDesign?.backgroundColor}
+          centersMode={hdDesign?.centersMode}
+          centerColors={centerColorsFromDesign(hdDesign)}
         />
       ) : (
         <MissingPiece label="Human Design chart" />

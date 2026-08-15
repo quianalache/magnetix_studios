@@ -1,7 +1,7 @@
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { VariableArrowDirection, VariableArrowSource } from "@/lib/energetics/human-design-variables";
 import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/chart-design";
-import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
+import { HD_BODY_LABELS, type CenterKey } from "@/lib/energetics/human-design-data";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 
 /**
@@ -78,6 +78,31 @@ const FALLBACK = {
  * (no effect in iconOnly, which has no filled box to round).
  */
 const PLAIN_TEXT = "#3f3f46"; // zinc-700 — same neutral ink already used for arrowColor's own default above
+
+/**
+ * Phase 4 correctness pass (2026-08-15) — this component's own
+ * <HumanDesignChart> call was silently dropping `centersMode`/
+ * `centerColors`, so a sub-account with "Enable Traditional Centers
+ * Colors" turned on in Chart Designs rendered correctly in the Chart
+ * Designs preview and in the exported PDF, but always fell back to flat
+ * uniform mode here — on the actual practitioner Readings tab, the chart
+ * this component exists to render. Mirrors the identical derivation
+ * chart-designs-tab.tsx and reading-pdf-document.tsx already use.
+ */
+function centerColorsFromDesign(design: ChartDesign | null | undefined): Partial<Record<CenterKey, string>> | undefined {
+  if (!design) return undefined;
+  return {
+    head: design.headCenterColor,
+    ajna: design.ajnaCenterColor,
+    throat: design.throatCenterColor,
+    g: design.gCenterColor,
+    heart: design.heartCenterColor,
+    spleen: design.spleenCenterColor,
+    sacral: design.sacralCenterColor,
+    solarplexus: design.solarPlexusCenterColor,
+    root: design.rootCenterColor,
+  };
+}
 
 function ArrowGlyph({
   direction,
@@ -275,6 +300,8 @@ export function HumanDesignFullChart({
           channelsColor={design?.channelsColor}
           gatesColor={design?.gatesColor}
           backgroundColor={backgroundColor}
+          centersMode={design?.centersMode}
+          centerColors={centerColorsFromDesign(design)}
         />
 
         <ActivationColumn
