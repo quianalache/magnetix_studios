@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { renderReadingPdfStream, readingPdfFilename } from "@/lib/energetics/reading-pdf-render";
 
 export const runtime = "nodejs";
@@ -31,18 +31,14 @@ export async function GET(
   const sub = subSnap.data() ?? {};
   const businessName = (sub.name as string) || "Your reading";
   const businessLogoUrl = typeof sub.logoUrl === "string" ? (sub.logoUrl as string) : null;
-  // Real Chart Design, not the legacy single-field theme — same source
-  // the web report page (reading-summary.tsx) reads, so the PDF's Human
-  // Design section matches what's actually shown on screen.
-  const hdDesign = reading.humanDesign ? await getDefaultChartDesign(saId, "humanDesign") : null;
-  // Same real Mandala Chart Design record (system: "mandala", separate from
-  // hdDesign) reading-summary.tsx reads, so the PDF's Mandala matches the
-  // web Mandala's own colors, not the BodyGraph's.
-  const mandalaDesign = reading.humanDesign ? await getDefaultChartDesign(saId, "mandala") : null;
-  // Same real Astrology Chart Design record reading-summary.tsx's
-  // AstrologySummary reads, so the PDF wheel's accent matches the web
-  // wheel's.
-  const astroDesign = reading.astrology ? await getDefaultChartDesign(saId, "astrology") : null;
+  // Real Chart Design, not the legacy single-field theme — same source the
+  // web report page (reading-summary.tsx) reads, so the PDF's Human
+  // Design/Mandala/Astrology sections match what's actually shown on
+  // screen, including this reading's Profile's own saved-design override
+  // if it has one (2026-08-15, Bodygraph gap closure) — the public
+  // download link a client actually uses should match what the
+  // practitioner picked for them, same as the report page itself.
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(saId, reading);
 
   const stream = await renderReadingPdfStream({
     readerName: reading.name,

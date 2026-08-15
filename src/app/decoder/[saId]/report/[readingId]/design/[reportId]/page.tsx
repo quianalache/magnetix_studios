@@ -3,7 +3,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { getReportDesign } from "@/lib/server/report-design-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { ReportDesignViewer } from "@/components/energetic-decoder/report-design-viewer";
 
 export const dynamic = "force-dynamic";
@@ -48,13 +48,11 @@ export default async function EnergeticDecoderReportDesignPage({
     spheres: reading.spheres,
   };
 
-  const [hdDesign, mandalaDesign, astroDesign] = reading.humanDesign || reading.astrology
-    ? await Promise.all([
-        reading.humanDesign ? getDefaultChartDesign(saId, "humanDesign") : Promise.resolve(null),
-        reading.humanDesign ? getDefaultChartDesign(saId, "mandala") : Promise.resolve(null),
-        reading.astrology ? getDefaultChartDesign(saId, "astrology") : Promise.resolve(null),
-      ])
-    : [null, null, null];
+  // Honors this reading's Profile's saved-design override when it has one
+  // (2026-08-15, Bodygraph gap closure) — same shared resolver the plain
+  // report page uses, so a practitioner's per-person design choice is
+  // consistent across every client-facing delivery surface, not just one.
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(saId, reading);
 
   return (
     <div

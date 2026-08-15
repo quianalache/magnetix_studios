@@ -151,12 +151,27 @@ export function HumanDesignSummary({
   profile,
   hdDesign,
   mandalaDesign,
+  chartStyle = "both",
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
   /** The sub-account's default Human Design Chart Design (2026-08-09 rebuild — full color set, not just one field) — falls back to the traditional black/white/gray base when not passed. */
   hdDesign?: ChartDesign | null;
   /** The sub-account's default Mandala Chart Design — the real Mandala chart only renders when this is passed; omitted entirely otherwise rather than showing a fake/empty chart. */
   mandalaDesign?: ChartDesign | null;
+  /**
+   * Which chart(s) to actually show — 2026-08-15, Bodygraph gap closure
+   * (Decision Brief Decision 5's follow-up: a real style switcher, not
+   * just the correct Human Design → Traditional/Mandala hierarchy).
+   * Defaults to "both" — every existing caller (the public report page,
+   * the report-design preview) that doesn't pass this keeps its exact
+   * current stacked-both-charts behavior, zero regression. Only the
+   * Readings tab passes "traditional" or "mandala" explicitly, to show
+   * one at a time with a real switch control above this component. The
+   * data block below (Type/Authority/Gates/Variables/etc.) is
+   * chart-agnostic and always renders regardless of this prop — it's the
+   * same underlying reading data either way, not tied to one chart style.
+   */
+  chartStyle?: "both" | "traditional" | "mandala";
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -192,14 +207,16 @@ export function HumanDesignSummary({
         would double the padding and nest two round-cornered boxes for no
         reason.
       */}
-      <div>
-        <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Human Design — Design (left) · BodyGraph · Personality (right)
-        </p>
-        <HumanDesignFullChart profile={profile} design={hdDesign} />
-      </div>
+      {(chartStyle === "both" || chartStyle === "traditional") && (
+        <div>
+          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Human Design — Design (left) · BodyGraph · Personality (right)
+          </p>
+          <HumanDesignFullChart profile={profile} design={hdDesign} />
+        </div>
+      )}
 
-      {mandalaDesign && (
+      {(chartStyle === "both" || chartStyle === "mandala") && mandalaDesign && (
         <div className="rounded-2xl border bg-card p-4">
           <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Mandala — real, built 2026-08-09 (not available from Bodygraph&apos;s API, drawn locally)

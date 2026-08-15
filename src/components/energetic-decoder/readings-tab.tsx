@@ -37,7 +37,7 @@ import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/e
 import { EnergeticDecoderReadingConfiguration } from "@/components/energetic-decoder/reading-configuration";
 import { NewReadingDialog, type NewReadingDialogOpenRequest } from "@/components/energetic-decoder/new-reading-dialog";
 import type { ReportDesign } from "@/types/report-blocks";
-import type { ChartDesign } from "@/types/chart-design";
+import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { GeneratedReport } from "@/types/generated-report";
 
 type ReadingSystem = "frequency" | "hd" | "astro";
@@ -100,6 +100,18 @@ export function EnergeticDecoderReadingsTab({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeSystem, setActiveSystem] = useState<ReadingSystem | null>(null);
   const [search, setSearch] = useState("");
+  /**
+   * 2026-08-15, Bodygraph gap closure — which Human Design chart style is
+   * actually showing (never both stacked, matching Bodygraph's own
+   * person-page dropdown). Local view state only, not persisted — Decision
+   * 5 keeps Traditional/Mandala firmly under Human Design, not peer
+   * systems, so this lives inside the "hd" system view, not as a 4th
+   * `ReadingSystem`. Reset to "traditional" whenever a different reading
+   * is selected (selectReading below), same reset `activeSystem` already gets.
+   */
+  const [hdStyleView, setHdStyleView] = useState<"traditional" | "mandala">("traditional");
+  /** Which system's design-preset dropdown is mid-save, for a small inline spinner — keyed by ChartDesignSystem so Traditional/Mandala/Astrology don't block each other. */
+  const [savingDesignFor, setSavingDesignFor] = useState<ChartDesignSystem | null>(null);
 
   // Profile-centered grouping (Task 8) — profiles + contacts loaded
   // alongside readings; readings-tab.tsx never writes to either directly,
@@ -209,6 +221,27 @@ export function EnergeticDecoderReadingsTab({
   const defaultMandalaDesign = chartDesigns.find((d) => d.system === "mandala" && d.isDefault) ?? null;
   const defaultAstroDesign = chartDesigns.find((d) => d.system === "astrology" && d.isDefault) ?? null;
 
+  /**
+   * 2026-08-15, Bodygraph gap closure — resolve which ChartDesign actually
+   * renders for a given system, honoring the selected Profile's own
+   * override (if any) over the sub-account default. Mirrors
+   * `resolveChartDesignForProfile` server-side exactly, just client-side
+   * against the already-loaded `chartDesigns` list (no extra fetch) —
+   * same rule, same safe fallback: an override pointing at a design that
+   * no longer exists in `chartDesigns` (deleted) simply doesn't match
+   * `.find()`, so `??` falls through to the current default automatically,
+   * never a broken/blank chart.
+   */
+  function resolveDesign(
+    system: ChartDesignSystem,
+    overrideId: string | null | undefined,
+    fallback: ChartDesign | null,
+  ): ChartDesign | null {
+    if (!overrideId) return fallback;
+    const found = chartDesigns.find((d) => d.id === overrideId && d.system === system);
+    return found ?? fallback;
+  }
+
   // Phase 3 Task 4 (2026-08-13) — NewReadingDialog owns the entire "who is
   // this for" workflow and its own success toast; this just re-syncs the
   // list and selects the new reading, same as the old inline form did.
@@ -302,6 +335,45 @@ export function EnergeticDecoderReadingsTab({
   }, [orphanReadings, search]);
 
   const selected = readings.find((r) => r.id === selectedId) ?? readings[0] ?? null;
+  /** The Profile behind the selected Reading, if any — orphan (pre-migration/architecturally-shouldn't-happen) Readings simply resolve to null, same graceful-degrade as everywhere else Task 8 introduced Profiles. */
+  const selectedProfile = selected?.profileId ? (profiles.find((p) => p.id === selected.profileId) ?? null) : null;
+
+  const resolvedHdDesign = resolveDesign("humanDesign", selectedProfile?.hdChartDesignId, defaultHdDesign);
+  const resolvedMandalaDesign = resolveDesign("mandala", selectedProfile?.mandalaChartDesignId, defaultMandalaDesign);
+  const resolvedAstroDesign = resolveDesign("astrology", selectedProfile?.astrologyChartDesignId, defaultAstroDesign);
+
+  /**
+   * 2026-08-15, Bodygraph gap closure — save (or clear, via `designId:
+   * null`) this Profile's saved-design override for one system. Uses the
+   * PATCH profiles/[profileId] route's design-override-only path (added
+   * this pass) — never touches name/birth data, so it can't collide with
+   * or partially overwrite an in-progress Edit Profile edit. Updates
+   * `profiles` state optimistically-on-success only (not before — a
+   * rejected/invalid design id, e.g. one that's cross-tenant or the wrong
+   * system, must not silently "stick" in the UI before the server's
+   * confirmed it), which is exactly the isolation that keeps this
+   * Profile's choice from ever touching another Profile's rendering.
+   */
+  async function saveDesignOverride(profile: EnergeticProfile, system: ChartDesignSystem, designId: string | null) {
+    const field = system === "humanDesign" ? "hdChartDesignId" : system === "mandala" ? "mandalaChartDesignId" : "astrologyChartDesignId";
+    setSavingDesignFor(system);
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/profiles/${profile.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: designId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; profile?: EnergeticProfile; error?: string };
+      if (!res.ok || !data.ok || !data.profile) throw new Error(data.error ?? "Couldn't save that design.");
+      const updated = data.profile;
+      setProfiles((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast.success(designId ? "Design applied to this profile." : "Reverted to the default design.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save that design.");
+    } finally {
+      setSavingDesignFor(null);
+    }
+  }
 
   /** Task 8 — "Generate" on a zero-Reading Profile row. Same POST /readings + { profileId } call NewReadingDialog's confirm-profile screen already makes — not a second implementation. */
   async function generateReadingForProfile(profile: EnergeticProfile) {
@@ -363,6 +435,7 @@ export function EnergeticDecoderReadingsTab({
   function selectReading(id: string) {
     setSelectedId(id);
     setActiveSystem(null);
+    setHdStyleView("traditional");
   }
 
   function openGenerateDialog() {
@@ -847,15 +920,64 @@ export function EnergeticDecoderReadingsTab({
                   )}
 
                   {currentSystem === "frequency" && <SphereList spheres={selected.spheres} />}
+
                   {currentSystem === "hd" && selected.humanDesign && (
-                    <HumanDesignSummary
-                      profile={selected.humanDesign}
-                      hdDesign={defaultHdDesign}
-                      mandalaDesign={defaultMandalaDesign}
-                    />
+                    <>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        {/* Bodygraph gap closure, 2026-08-15 — a real Traditional/Mandala switch, both still firmly under Human Design (Decision 5), never a 4th ReadingSystem. Only offered when there's an actual Mandala chart to switch to — same "omit rather than fake" rule the old always-stacked Mandala section already followed. */}
+                        {resolvedMandalaDesign ? (
+                          <div className="inline-flex rounded-lg bg-muted/30 p-1">
+                            {(["traditional", "mandala"] as const).map((style) => (
+                              <button
+                                key={style}
+                                type="button"
+                                onClick={() => setHdStyleView(style)}
+                                className={cn(
+                                  "rounded-md px-2.5 py-1 text-[11px] font-semibold",
+                                  hdStyleView === style ? "bg-background shadow-sm text-foreground" : "text-muted-foreground",
+                                )}
+                              >
+                                {style === "traditional" ? "Traditional" : "Mandala"}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span />
+                        )}
+                        {selectedProfile && (
+                          <DesignPicker
+                            system={hdStyleView === "mandala" ? "mandala" : "humanDesign"}
+                            designs={chartDesigns}
+                            overrideId={hdStyleView === "mandala" ? selectedProfile.mandalaChartDesignId : selectedProfile.hdChartDesignId}
+                            saving={savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign")}
+                            onChange={(id) => void saveDesignOverride(selectedProfile, hdStyleView === "mandala" ? "mandala" : "humanDesign", id)}
+                          />
+                        )}
+                      </div>
+                      <HumanDesignSummary
+                        profile={selected.humanDesign}
+                        hdDesign={resolvedHdDesign}
+                        mandalaDesign={resolvedMandalaDesign}
+                        chartStyle={hdStyleView}
+                      />
+                    </>
                   )}
+
                   {currentSystem === "astro" && selected.astrology && (
-                    <AstrologySummary chart={selected.astrology} astroDesign={defaultAstroDesign} />
+                    <>
+                      {selectedProfile && (
+                        <div className="mb-3 flex justify-end">
+                          <DesignPicker
+                            system="astrology"
+                            designs={chartDesigns}
+                            overrideId={selectedProfile.astrologyChartDesignId}
+                            saving={savingDesignFor === "astrology"}
+                            onChange={(id) => void saveDesignOverride(selectedProfile, "astrology", id)}
+                          />
+                        </div>
+                      )}
+                      <AstrologySummary chart={selected.astrology} astroDesign={resolvedAstroDesign} />
+                    </>
                   )}
                   {availableSystems.length === 0 && (
                     <p className="py-8 text-center text-xs text-muted-foreground">This reading has no systems yet.</p>
@@ -947,6 +1069,54 @@ export function EnergeticDecoderReadingsTab({
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * 2026-08-15, Bodygraph gap closure — the audit's own documented gap: "the
+ * practitioner picks a saved chart design from the individual person's
+ * chart experience." Deliberately lightweight (Part 6's own requirement):
+ * no internal ids shown, just each design's real `name`; editing/creating
+ * presets is explicitly NOT duplicated here — that stays Chart Designs'
+ * job, this is selection only. Hidden entirely (returns null) when there's
+ * only one design for this system to choose from — nothing meaningful to
+ * pick between, matching this codebase's existing convention of omitting
+ * a control that would do nothing rather than showing a fake/pointless
+ * one.
+ */
+function DesignPicker({
+  system,
+  designs,
+  overrideId,
+  saving,
+  onChange,
+}: {
+  system: ChartDesignSystem;
+  designs: ChartDesign[];
+  overrideId: string | null | undefined;
+  saving: boolean;
+  onChange: (designId: string | null) => void;
+}) {
+  const options = designs.filter((d) => d.system === system);
+  if (options.length <= 1) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[11px] text-muted-foreground">Design:</span>
+      <select
+        value={overrideId ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        disabled={saving}
+        className="h-7 rounded-md border bg-background px-1.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <option value="">Default</option>
+        {options.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+      </select>
+      {saving && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />}
     </div>
   );
 }

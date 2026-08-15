@@ -139,7 +139,22 @@ export function findMatchingProfile(
 export async function updateEnergeticProfile(
   subAccountId: string,
   id: string,
-  patch: Partial<Pick<EnergeticProfile, "name" | "relationshipLabel" | "birthDate" | "birthTime" | "birthPlace" | "timeZone" | "lat" | "lng">>,
+  patch: Partial<
+    Pick<
+      EnergeticProfile,
+      | "name"
+      | "relationshipLabel"
+      | "birthDate"
+      | "birthTime"
+      | "birthPlace"
+      | "timeZone"
+      | "lat"
+      | "lng"
+      | "hdChartDesignId"
+      | "mandalaChartDesignId"
+      | "astrologyChartDesignId"
+    >
+  >,
 ): Promise<EnergeticProfile> {
   const ref = col().doc(id);
   const snap = await ref.get();

@@ -3,7 +3,9 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { updateEnergeticProfile, deleteEnergeticProfile } from "@/lib/server/energetic-profile-service";
+import { getChartDesign } from "@/lib/server/chart-design-service";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
+import type { ChartDesignSystem } from "@/types/chart-design";
 
 /**
  * Phase 3 Task 5 (2026-08-13) — Edit Profile. Thin wrapper around Task 1's
@@ -26,6 +28,38 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
+/**
+ * 2026-08-15, Bodygraph gap closure — the per-Profile chart-design
+ * override fields, keyed by the ChartDesignSystem they apply to. Kept
+ * deliberately separate from the full Edit Profile body below: the
+ * Readings tab's design picker only ever sends one of these three keys at
+ * a time, never the birth-data fields, so it must not be forced through
+ * the full-edit validation (name/birthDate/birthTime/birthPlace all
+ * required) or trigger a geocode call for a request that never touched
+ * birth data at all.
+ */
+const DESIGN_OVERRIDE_FIELDS = {
+  hdChartDesignId: "humanDesign",
+  mandalaChartDesignId: "mandala",
+  astrologyChartDesignId: "astrology",
+} as const satisfies Record<string, ChartDesignSystem>;
+type DesignOverrideKey = keyof typeof DESIGN_OVERRIDE_FIELDS;
+const DESIGN_OVERRIDE_KEYS = Object.keys(DESIGN_OVERRIDE_FIELDS) as DesignOverrideKey[];
+
+/** Returns the design-override patch when the request body is ONLY override keys (and at least one), else null — signals "fall through to the full Edit Profile path" below. */
+function readDesignOverridePatch(body: Record<string, unknown>): Partial<Record<DesignOverrideKey, string | null>> | null {
+  const keys = Object.keys(body);
+  if (keys.length === 0 || !keys.every((k) => (DESIGN_OVERRIDE_KEYS as string[]).includes(k))) return null;
+  const patch: Partial<Record<DesignOverrideKey, string | null>> = {};
+  for (const key of DESIGN_OVERRIDE_KEYS) {
+    if (!(key in body)) continue;
+    const v = body[key];
+    if (v !== null && typeof v !== "string") return null; // malformed — fall through to the normal 400 below via the full-edit path's own validation
+    patch[key] = v;
+  }
+  return patch;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; profileId: string }> },
@@ -39,6 +73,28 @@ export async function PATCH(
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const overridePatch = readDesignOverridePatch(body);
+  if (overridePatch) {
+    // Tenant- and system-scoped validation for every non-null override —
+    // never trust a client-supplied designId as-is. `getChartDesign` is
+    // already tenant-scoped (null for a wrong-subAccountId design), so
+    // this also closes the door on a cross-tenant reference.
+    for (const key of DESIGN_OVERRIDE_KEYS) {
+      const value = overridePatch[key];
+      if (!value) continue;
+      const design = await getChartDesign(subAccountId, value);
+      if (!design || design.system !== DESIGN_OVERRIDE_FIELDS[key]) {
+        return NextResponse.json({ error: "That chart design could not be found." }, { status: 404 });
+      }
+    }
+    try {
+      const profile = await updateEnergeticProfile(subAccountId, profileId, overridePatch);
+      return NextResponse.json({ ok: true, profile });
+    } catch {
+      return NextResponse.json({ error: "That profile could not be found." }, { status: 404 });
+    }
   }
 
   const name = str(body.name)?.trim();

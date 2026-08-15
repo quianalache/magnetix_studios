@@ -4,6 +4,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import { defaultChartDesignColor } from "@/types/chart-design";
+import type { EnergeticProfile } from "@/types/energetic-profile";
+import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
+import { getEnergeticProfile } from "@/lib/server/energetic-profile-service";
 
 /**
  * Chart Designs — flat top-level collection, same convention as
@@ -223,6 +226,77 @@ export async function getDefaultChartDesign(
     .get();
   if (snap.empty) return null;
   return toDesign(snap.docs[0].id, snap.docs[0].data());
+}
+
+/**
+ * Which override field on an EnergeticProfile applies to a given system —
+ * kept here (not in energetic-profile-service.ts) since it's purely about
+ * resolving a ChartDesign, not about Profile CRUD.
+ */
+function overrideIdFor(
+  profile: Pick<EnergeticProfile, "hdChartDesignId" | "mandalaChartDesignId" | "astrologyChartDesignId">,
+  system: ChartDesignSystem,
+): string | null {
+  if (system === "humanDesign") return profile.hdChartDesignId ?? null;
+  if (system === "mandala") return profile.mandalaChartDesignId ?? null;
+  return profile.astrologyChartDesignId ?? null;
+}
+
+/**
+ * The design that should actually render for THIS Profile's chart, for a
+ * given system — 2026-08-15, Bodygraph gap closure (the audit's "practitioner
+ * picks a saved chart design from the individual person's chart
+ * experience," never built before now). Single shared resolution point so
+ * every consumer (practitioner Readings tab, the public report/PDF
+ * surfaces) agrees on the same rule instead of re-implementing it:
+ *
+ *  1. No profile, or no override set for this system → sub-account default
+ *     (unchanged behavior for every Profile that predates this feature).
+ *  2. Override set, but the referenced design no longer exists (deleted)
+ *     or somehow belongs to a different system → safe fallback to the
+ *     sub-account default, never a broken/blank chart. `getChartDesign` is
+ *     already tenant-scoped (returns null for a wrong-subAccountId design),
+ *     so a cross-tenant reference can't leak through here either.
+ *  3. Override set and valid → that design, regardless of which one is
+ *     currently marked `isDefault` — this Profile's own choice always wins
+ *     over the sub-account default, which is the entire point of the
+ *     override.
+ */
+export async function resolveChartDesignForProfile(
+  subAccountId: string,
+  profile: Pick<EnergeticProfile, "hdChartDesignId" | "mandalaChartDesignId" | "astrologyChartDesignId"> | null,
+  system: ChartDesignSystem,
+): Promise<ChartDesign | null> {
+  const overrideId = profile ? overrideIdFor(profile, system) : null;
+  if (overrideId) {
+    const overridden = await getChartDesign(subAccountId, overrideId);
+    if (overridden && overridden.system === system) return overridden;
+  }
+  return getDefaultChartDesign(subAccountId, system);
+}
+
+/**
+ * Convenience wrapper around `resolveChartDesignForProfile` for the
+ * common case every client-facing/PDF surface actually has: a Reading,
+ * not yet its Profile. Resolves the Profile from `reading.profileId`
+ * (null for a Reading with none — pre-migration/orphan cases resolve to
+ * the sub-account default automatically, same fallback as everywhere
+ * else) and returns all 3 systems' designs in one call, so every
+ * consumer (the public report page/design viewer, the practitioner and
+ * public PDF routes, the GeneratedReport PDF/preview routes) resolves
+ * designs identically instead of six near-duplicate implementations.
+ */
+export async function resolveChartDesignsForReading(
+  subAccountId: string,
+  reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology">,
+): Promise<{ hdDesign: ChartDesign | null; mandalaDesign: ChartDesign | null; astroDesign: ChartDesign | null }> {
+  const profile = reading.profileId ? await getEnergeticProfile(subAccountId, reading.profileId) : null;
+  const [hdDesign, mandalaDesign, astroDesign] = await Promise.all([
+    reading.humanDesign ? resolveChartDesignForProfile(subAccountId, profile, "humanDesign") : Promise.resolve(null),
+    reading.humanDesign ? resolveChartDesignForProfile(subAccountId, profile, "mandala") : Promise.resolve(null),
+    reading.astrology ? resolveChartDesignForProfile(subAccountId, profile, "astrology") : Promise.resolve(null),
+  ]);
+  return { hdDesign, mandalaDesign, astroDesign };
 }
 
 export async function createChartDesign(opts: {

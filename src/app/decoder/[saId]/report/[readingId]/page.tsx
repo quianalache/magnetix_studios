@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { defaultEnergeticDecoderTheme } from "@/types/energetic-decoder";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
 
 export const dynamic = "force-dynamic";
@@ -41,16 +41,14 @@ export default async function EnergeticDecoderReportPage({
 
   const hasAnySystem = reading.spheres.length > 0 || !!reading.humanDesign || !!reading.astrology;
 
-  // Full chart-design richness (2026-08-09 rebuild) — fetched in parallel,
-  // each independently optional (null when a sub-account never set one up),
-  // matching every component's own "falls back to traditional base" rule.
-  const [hdDesign, mandalaDesign, astroDesign] = reading.humanDesign || reading.astrology
-    ? await Promise.all([
-        reading.humanDesign ? getDefaultChartDesign(saId, "humanDesign") : Promise.resolve(null),
-        reading.humanDesign ? getDefaultChartDesign(saId, "mandala") : Promise.resolve(null),
-        reading.astrology ? getDefaultChartDesign(saId, "astrology") : Promise.resolve(null),
-      ])
-    : [null, null, null];
+  // Full chart-design richness (2026-08-09 rebuild), honoring this
+  // reading's Profile's own saved-design override when it has one
+  // (2026-08-15, Bodygraph gap closure) — a practitioner's per-person
+  // design choice should reach the actual client-facing report, not just
+  // their own internal Readings tab view. Falls back to the sub-account
+  // default exactly as before for every reading with no override (or no
+  // Profile at all, e.g. pre-migration).
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(saId, reading);
 
   return (
     <div

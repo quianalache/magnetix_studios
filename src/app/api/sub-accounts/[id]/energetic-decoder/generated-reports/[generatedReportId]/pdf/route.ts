@@ -5,7 +5,7 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { renderReportDesignPdfStream, reportDesignPdfFilename } from "@/lib/energetics/report-design-pdf-render";
 
 export const runtime = "nodejs";
@@ -38,11 +38,11 @@ export async function GET(
   const businessName = (sub.name as string) || "Your report";
   const businessLogoUrl = typeof sub.logoUrl === "string" ? (sub.logoUrl as string) : null;
 
-  const [hdDesign, mandalaDesign, astroDesign] = await Promise.all([
-    reading.humanDesign ? getDefaultChartDesign(subAccountId, "humanDesign") : Promise.resolve(null),
-    reading.humanDesign ? getDefaultChartDesign(subAccountId, "mandala") : Promise.resolve(null),
-    reading.astrology ? getDefaultChartDesign(subAccountId, "astrology") : Promise.resolve(null),
-  ]);
+  // Honors the source reading's Profile's saved-design override, if it has
+  // one (2026-08-15, Bodygraph gap closure) — the downloaded PDF should
+  // match what the practitioner chose for this person, not silently
+  // revert to the sub-account default.
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(subAccountId, reading);
 
   const stream = await renderReportDesignPdfStream({
     title: generatedReport.reportDesignTitleAtGeneration,

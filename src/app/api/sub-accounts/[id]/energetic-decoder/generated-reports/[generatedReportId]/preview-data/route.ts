@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 
 /**
  * Generate Report preview (Phase 2 Build Plan, 2026-08-12) — everything
@@ -48,11 +48,10 @@ export async function GET(
     astrology: real.astrology,
   };
 
-  const [hdDesign, mandalaDesign, astroDesign] = await Promise.all([
-    getDefaultChartDesign(subAccountId, "humanDesign"),
-    getDefaultChartDesign(subAccountId, "mandala"),
-    getDefaultChartDesign(subAccountId, "astrology"),
-  ]);
+  // Honors the source reading's Profile's saved-design override, if it has
+  // one (2026-08-15, Bodygraph gap closure) — the practitioner's own
+  // Preview should show exactly what the client-facing surfaces show.
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(subAccountId, real);
 
   return NextResponse.json({ ok: true, design, reading, sourceLabel: real.name, hdDesign, mandalaDesign, astroDesign });
 }
