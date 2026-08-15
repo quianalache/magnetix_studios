@@ -46,22 +46,66 @@ import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
  * uses (bg-card/bg-secondary/bg-accent/bg-muted) instead of one uniform
  * card color — her direct ask (2026-08-09): "the growth tab... we had the
  * different colors for the different cards... more visually appealing."
+ *
+ * Decision Brief Decision 5 (owner-resolved 2026-08-15) — Mandala follows
+ * the Bodygraph model: a Human Design chart STYLE, not a peer top-level
+ * system. Bodygraph itself was re-checked before this change (its person-
+ * page system dropdown offers Human Design / Astrology / Success Codex,
+ * with Mandala one of Human Design's own chart-style options; the
+ * Report Builder here already independently reached the same hierarchy —
+ * `report-editor.tsx`'s CHART_PIECES labels its options "Human Design —
+ * Full Chart" / "Human Design — Mandala" / "Astrology — Natal Wheel").
+ * This tab was the one real holdout, presenting Human Design / Astrology
+ * / Mandala as 3 flat peer filter chips and a 3-way system picker.
+ *
+ * Deliberately UI-only: `ChartDesignSystem` stays `"humanDesign" |
+ * "astrology" | "mandala"`, `chart-design-service.ts`/the API routes are
+ * untouched, and every existing `system: "mandala"` Firestore doc is
+ * still valid as-is — Bodygraph's own Chart Design editor keeps an
+ * independently stylable settings tree for Mandala too (confirmed in the
+ * Bodygraph audit, Section 5: "its own left-nav item... not a shared/
+ * derived style"), which is exactly what `SYSTEM_FIELDS.mandala` already
+ * is here. Only the user-facing grouping/labeling changes: the filter
+ * bar and the New Chart Design dialog now present Human Design as one
+ * top-level choice with Traditional/Mandala as its two styles, Astrology
+ * as the other top-level choice — never 3 flat peers — and every card
+ * labels itself "Human Design — Traditional"/"Human Design — Mandala"/
+ * "Astrology" instead of a bare system name. No migration, no renamed
+ * enum values, no deleted or altered designs.
  */
 
 const CARD_BG = ["bg-card", "bg-secondary", "bg-accent/20", "bg-muted"] as const;
 
+/** Kept for internal/type-level use — the visible card/picker labels below use {@link designLabel} instead, which reflects the Human Design → Traditional/Mandala hierarchy (Decision 5). */
 const SYSTEM_LABEL: Record<ChartDesignSystem, string> = {
   humanDesign: "Human Design",
   astrology: "Astrology",
   mandala: "Mandala",
 };
 
+/** User-facing label reflecting the corrected hierarchy — Mandala reads as a Human Design style, never a bare peer name. */
+function designLabel(system: ChartDesignSystem): string {
+  if (system === "mandala") return "Human Design — Mandala";
+  if (system === "humanDesign") return "Human Design — Traditional";
+  return "Astrology";
+}
+
+/** Top-level filter — Human Design and Astrology as peers, Mandala folded into Human Design (Decision 5). */
+type TopFilter = "all" | "humanDesign" | "astrology";
+/** Secondary filter, only meaningful/shown while `topFilter === "humanDesign"`. */
+type HdStyleFilter = "all" | "humanDesign" | "mandala";
+
 export function EnergeticDecoderChartDesignsTab() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
   const [designs, setDesigns] = useState<ChartDesign[] | null>(null);
-  const [filter, setFilter] = useState<"all" | ChartDesignSystem>("all");
+  const [topFilter, setTopFilter] = useState<TopFilter>("all");
+  const [hdStyleFilter, setHdStyleFilter] = useState<HdStyleFilter>("all");
   const [open, setOpen] = useState(false);
-  const [newSystem, setNewSystem] = useState<ChartDesignSystem>("humanDesign");
+  /** Top-level choice in the New Chart Design dialog — Human Design or Astrology, never Mandala directly. */
+  const [newTop, setNewTop] = useState<"humanDesign" | "astrology">("humanDesign");
+  /** Which Human Design style the new design actually is — only relevant/shown while `newTop === "humanDesign"`. */
+  const [newHdStyle, setNewHdStyle] = useState<"humanDesign" | "mandala">("humanDesign");
+  const newSystem: ChartDesignSystem = newTop === "astrology" ? "astrology" : newHdStyle;
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -145,7 +189,18 @@ export function EnergeticDecoderChartDesignsTab() {
     }
   }
 
-  const shown = designs?.filter((d) => filter === "all" || d.system === filter) ?? [];
+  // Decision 5 — Human Design and Mandala storage docs both live under the
+  // "Human Design" top filter; hdStyleFilter narrows further to just one
+  // style. Astrology is unaffected, still its own peer. "all" ignores both.
+  const shown =
+    designs?.filter((d) => {
+      if (topFilter === "astrology") return d.system === "astrology";
+      if (topFilter === "humanDesign") {
+        if (d.system !== "humanDesign" && d.system !== "mandala") return false;
+        return hdStyleFilter === "all" || d.system === hdStyleFilter;
+      }
+      return true;
+    }) ?? [];
 
   return (
     <div className="space-y-5">
@@ -172,18 +227,36 @@ export function EnergeticDecoderChartDesignsTab() {
                 <div className="space-y-2">
                   <Label>System</Label>
                   <div className="inline-flex rounded-lg bg-muted/30 p-1">
-                    {(["humanDesign", "astrology", "mandala"] as const).map((s) => (
+                    {(["humanDesign", "astrology"] as const).map((s) => (
                       <button
                         key={s}
                         type="button"
-                        onClick={() => setNewSystem(s)}
-                        className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newSystem === s ? "bg-background shadow-sm" : "text-muted-foreground")}
+                        onClick={() => setNewTop(s)}
+                        className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newTop === s ? "bg-background shadow-sm" : "text-muted-foreground")}
                       >
                         {SYSTEM_LABEL[s]}
                       </button>
                     ))}
                   </div>
                 </div>
+                {/* Decision 5 — Mandala is never a 3rd top-level choice; it's the style picker one level down, inside Human Design. */}
+                {newTop === "humanDesign" && (
+                  <div className="space-y-2">
+                    <Label>Human Design style</Label>
+                    <div className="inline-flex rounded-lg bg-muted/30 p-1">
+                      {(["humanDesign", "mandala"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setNewHdStyle(s)}
+                          className={cn("rounded-md px-3 py-1.5 text-sm font-medium", newHdStyle === s ? "bg-background shadow-sm" : "text-muted-foreground")}
+                        >
+                          {s === "mandala" ? "Mandala" : "Traditional"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Name</Label>
                   <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Client Portal Match" />
@@ -196,17 +269,37 @@ export function EnergeticDecoderChartDesignsTab() {
           </Dialog>
         </div>
 
-        <div className="mb-4 inline-flex rounded-lg bg-muted/30 p-1">
-          {(["all", "humanDesign", "astrology", "mandala"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={cn("rounded-md px-3 py-1.5 text-sm font-medium", filter === f ? "bg-background shadow-sm" : "text-muted-foreground")}
-            >
-              {f === "all" ? "All" : SYSTEM_LABEL[f]}
-            </button>
-          ))}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg bg-muted/30 p-1">
+            {(["all", "humanDesign", "astrology"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  setTopFilter(f);
+                  if (f !== "humanDesign") setHdStyleFilter("all");
+                }}
+                className={cn("rounded-md px-3 py-1.5 text-sm font-medium", topFilter === f ? "bg-background shadow-sm" : "text-muted-foreground")}
+              >
+                {f === "all" ? "All" : SYSTEM_LABEL[f]}
+              </button>
+            ))}
+          </div>
+          {/* Decision 5 — the Mandala/Traditional split shows only once Human Design is the active top filter, never as a 4th peer chip alongside it. */}
+          {topFilter === "humanDesign" && (
+            <div className="inline-flex rounded-lg bg-muted/30 p-1">
+              {(["all", "humanDesign", "mandala"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setHdStyleFilter(f)}
+                  className={cn("rounded-md px-3 py-1.5 text-xs font-medium", hdStyleFilter === f ? "bg-background shadow-sm" : "text-muted-foreground")}
+                >
+                  {f === "all" ? "Both styles" : f === "mandala" ? "Mandala" : "Traditional"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {designs === null ? (
@@ -445,7 +538,7 @@ function ChartDesignCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{design.name}</p>
-          <p className="text-[11px] text-muted-foreground">{SYSTEM_LABEL[design.system]}</p>
+          <p className="text-[11px] text-muted-foreground">{designLabel(design.system)}</p>
         </div>
         {design.isDefault ? (
           <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
