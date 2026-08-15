@@ -22,8 +22,17 @@ function verifiedDomain(sub: HasCustomDomain | null | undefined): string | null 
   return sub?.customDomain?.status === "verified" ? sub.customDomain.domain : null;
 }
 
-/** The shared platform origin — same env var every pre-existing link builder already uses. */
-function platformOrigin(): string {
+/**
+ * The shared platform origin — same env var every pre-existing link
+ * builder already uses. Exported (2026-08-17) for MyMagnetix's
+ * Portal->MyMagnetix bridge: unlike every other destination in this file
+ * (which intentionally prefers a business's verified custom domain when
+ * available), MyMagnetix itself must NEVER resolve under a tenant's
+ * custom domain — it's a person-wide surface, not business-branded — so
+ * that one caller always wants the bare platform origin regardless of
+ * which host the request came in on.
+ */
+export function platformOrigin(): string {
   return (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 }
 

@@ -5,16 +5,18 @@ import { MEMBER_SESSION_COOKIE, verifyMemberSessionToken } from "@/lib/community
 import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
 import { signPersonSessionToken } from "@/lib/server/person-auth";
 import { setPersonSessionCookie } from "@/lib/server/person-session";
+import { platformOrigin } from "@/lib/domains/public-url";
 import type { Member } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The tenant-Portal -> MyMagnetix identity bridge (2026-08-16). Fixes a
- * real gap caught in owner QA: someone already authenticated inside a
- * business-specific Client Portal (holding a valid `ls_member_session`)
- * got asked to log into MyMagnetix again, even though their Member
- * relationship is already linked to a global Person.
+ * The tenant-Portal -> MyMagnetix identity bridge (2026-08-16, extended
+ * 2026-08-17 for the Client Portal's own "Back to MyMagnetix" control).
+ * Fixes a real gap caught in owner QA: someone already authenticated
+ * inside a business-specific Client Portal (holding a valid
+ * `ls_member_session`) got asked to log into MyMagnetix again, even
+ * though their Member relationship is already linked to a global Person.
  *
  * This is the mirror image of /api/my/bridge-from-staff — same contract,
  * opposite direction:
@@ -33,19 +35,27 @@ export const dynamic = "force-dynamic";
  * `ls_member_session` cookie is never read destructively and is never
  * cleared here — both sessions coexist afterward.
  *
+ * CUSTOM-DOMAIN SAFE: this route is now reachable from a business's own
+ * custom domain (e.g. quianalache.com/portal's "Back to MyMagnetix"
+ * link), so every redirect it issues deliberately targets the PLATFORM
+ * origin (`platformOrigin()`), never `request.url`'s own origin —
+ * MyMagnetix must never appear to live under a tenant's branded domain.
+ *
  * Called from Server Components (which cannot set cookies themselves)
- * via a redirect — see (app)/layout.tsx and /my/login/page.tsx.
+ * via a redirect — see (app)/layout.tsx and /my/login/page.tsx — and now
+ * also directly as a plain link from the Client Portal shell.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const nextParam = url.searchParams.get("next");
   const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/my";
+  const origin = platformOrigin() || url.origin;
   // `bridge_unavailable` on every failure path (never a bare /my/login) —
   // load-bearing for loop-safety: /my/login only auto-retries this bridge
   // when NO error param is present (see that page), so a stale/expired/
   // invalid ls_member_session cookie fails ONCE and lands on a normal
   // login screen instead of redirect-looping forever.
-  const loginUrl = new URL("/my/login?error=bridge_unavailable", url);
+  const loginUrl = new URL("/my/login?error=bridge_unavailable", origin);
 
   const cookieStore = await cookies();
   const memberToken = cookieStore.get(MEMBER_SESSION_COOKIE)?.value;
@@ -72,5 +82,5 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.redirect(new URL(next, url));
+  return NextResponse.redirect(new URL(next, origin));
 }

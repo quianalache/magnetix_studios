@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
+  ArrowLeft,
   Bell,
   BookOpen,
   Calendar,
@@ -442,6 +443,7 @@ export async function PortalHomeView({
       style={{ ["--portal-accent" as string]: branding.accentColor }}
     >
       <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+        <BackToMyMagnetixLink />
         <PortalHeader
           brandingLogoUrl={branding.logoUrl}
           displayName={displayName}
@@ -540,6 +542,39 @@ export async function PortalHomeView({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * "Back to MyMagnetix" (2026-08-17) — a deliberately understated
+ * breadcrumb-style link, not a second nav bar: this Client Portal is a
+ * business-specific Space inside the Person's larger MyMagnetix account,
+ * and there must always be an easy way back to that global home,
+ * regardless of whether the visitor arrived here from MyMagnetix or
+ * logged into this Portal directly (Portal password, Portal magic link).
+ *
+ * Rendered once here in the shared PortalHomeView shell — every section
+ * (Home/Appointments/Communities/Courses/Projects/Billing) gets it for
+ * free, no per-page wiring.
+ *
+ * A plain anchor, not next/link: this needs a REAL browser navigation to
+ * a Route Handler (/api/my/bridge-from-member) that reads the already-
+ * valid ls_member_session cookie server-side, safely reconciles/resolves
+ * the linked Person, mints mm_session, and redirects to the canonical
+ * platform /my — reusing the exact bridge already shipped for MyMagnetix
+ * itself, not a second identity path. Never requires a second login, and
+ * never touches or clears the Portal's own session — someone can leave
+ * and come back to this same Portal without re-authenticating.
+ */
+function BackToMyMagnetixLink() {
+  return (
+    <a
+      href="/api/my/bridge-from-member"
+      className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] transition-colors hover:text-[#111827]"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" />
+      Back to MyMagnetix
+    </a>
   );
 }
 
