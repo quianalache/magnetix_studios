@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -76,8 +76,20 @@ function formatReadingDate(iso: string | null | undefined): string {
  * "selected" down — is completely untouched: selecting any Reading, at
  * any nesting level, still opens the exact same Reading detail
  * experience that existed before this task.
+ *
+ * `initialProfileId` (Decision Brief Decision 9, 2026-08-15) — the
+ * Contact page's "Energetic Decoding" quick links deep-link here via
+ * `?tab=readings&profileId=`. Applied once, after Profiles/Readings have
+ * both loaded: selects that Profile's latest Reading (same as clicking
+ * its row) and scrolls the row into view. A Profile with zero Readings
+ * still resolves — there's just nothing to auto-select, the row itself
+ * (with its "Generate" action) is what the deep link lands on.
  */
-export function EnergeticDecoderReadingsTab() {
+export function EnergeticDecoderReadingsTab({
+  initialProfileId,
+}: {
+  initialProfileId?: string;
+} = {}) {
   const { subAccountId, subAccount, agencyId } = useSubAccount();
   const [configOpen, setConfigOpen] = useState(false);
   const [reportDesigns, setReportDesigns] = useState<ReportDesign[]>([]);
@@ -99,6 +111,12 @@ export function EnergeticDecoderReadingsTab() {
   const [openRequest, setOpenRequest] = useState<NewReadingDialogOpenRequest | null>(null);
   const [generatingForProfileId, setGeneratingForProfileId] = useState<string | null>(null);
   const [deletingProfileId, setDeletingProfileId] = useState<string | null>(null);
+
+  // Decision 9 deep-link (see doc comment above) — row refs to scroll a
+  // linked-to Profile into view, and a ref (not state) to apply the
+  // deep link exactly once even if `groups` re-derives afterward.
+  const profileRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const deepLinkAppliedRef = useRef(false);
 
   // Generate Report (Phase 2 Build Plan, 2026-08-12) — Reading is today's
   // real source context; the Profile architecture isn't built yet, so this
@@ -248,6 +266,21 @@ export function EnergeticDecoderReadingsTab() {
     });
     return { groups: list, orphanReadings: orphans };
   }, [profiles, readings, contactById]);
+
+  // Decision 9 deep-link — runs once, after both Profiles and Readings
+  // have loaded, so the target Profile's Readings (if any) are actually
+  // present to select from.
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    if (!initialProfileId) return;
+    if (readingsLoading || profilesLoading) return;
+    deepLinkAppliedRef.current = true;
+    const group = groups.find((g) => g.profile.id === initialProfileId);
+    if (!group) return; // bad/stale id, or a profile in another sub-account — fail quiet, same as an unmatched search
+    const latest = group.readings[0];
+    if (latest) selectReading(latest.id);
+    profileRowRefs.current[group.profile.id]?.scrollIntoView({ block: "center" });
+  }, [initialProfileId, groups, readingsLoading, profilesLoading]);
 
   const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -499,7 +532,12 @@ export function EnergeticDecoderReadingsTab() {
                 const [latest, ...older] = g.readings;
                 const isExpanded = expandedProfileId === g.profile.id;
                 return (
-                  <div key={g.profile.id}>
+                  <div
+                    key={g.profile.id}
+                    ref={(el) => {
+                      profileRowRefs.current[g.profile.id] = el;
+                    }}
+                  >
                     <div
                       className={cn(
                         "flex w-full items-center gap-1 px-3.5 py-2.5 hover:bg-accent/40",

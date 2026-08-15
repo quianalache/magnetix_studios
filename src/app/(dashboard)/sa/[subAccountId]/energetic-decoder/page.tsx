@@ -44,6 +44,13 @@ export default function EnergeticDecoderPage() {
   const requestedTab = searchParams.get("tab");
   const initialTab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";
   const [tab, setTab] = useState<Tab>(initialTab);
+  // `?profileId=` — the Contact page's "Energetic Decoding" quick links
+  // (Decision Brief Decision 9, 2026-08-15) deep-link straight into a
+  // specific Profile's row on the Readings tab, always paired with
+  // `?tab=readings` by the link itself, so this never overrides the
+  // Home-vs-Readings default (Decision 3, still unresolved, untouched).
+  // Read once on mount, same as `requestedTab` above.
+  const requestedProfileId = searchParams.get("profileId");
 
   // Icon per tab, plain text-primary when active — same locked-in rule as
   // Growth/Projects (2026-08-08): icons don't carry per-tab hue, only
@@ -101,7 +108,9 @@ export default function EnergeticDecoderPage() {
       {tab === "home" && <EnergeticDecoderHomeTab onGoto={goto} />}
       {tab === "builder" && <EnergeticDecoderReportBuilderTab />}
       {tab === "content" && <EnergeticDecoderContentTab />}
-      {tab === "readings" && <EnergeticDecoderReadingsTab />}
+      {tab === "readings" && (
+        <EnergeticDecoderReadingsTab initialProfileId={requestedProfileId ?? undefined} />
+      )}
       {tab === "chartDesigns" && <EnergeticDecoderChartDesignsTab />}
       {tab === "embeds" && <EnergeticDecoderEmbedsTab />}
     </div>

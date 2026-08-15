@@ -14,7 +14,7 @@ import { ContactQuotes } from "@/components/contacts/contact-quotes";
 import { ContactTasks } from "@/components/contacts/contact-tasks";
 import { ContactProjects } from "@/components/contacts/contact-projects";
 import { ContactSubmittedForms } from "@/components/contacts/contact-submitted-forms";
-import { ContactEnergeticReadings } from "@/components/contacts/contact-energetic-readings";
+import { ContactEnergeticDecoding } from "@/components/contacts/contact-energetic-decoding";
 import { ContactPortalAccess } from "@/components/contacts/contact-portal-access";
 import { ContactMessagesThread } from "@/components/contacts/contact-messages-thread";
 import { ContactWhatsappThread } from "@/components/contacts/contact-whatsapp-thread";
@@ -78,7 +78,7 @@ export default function ContactProfilePage() {
         <ContactTasks contact={contact} />
         <ContactProjects contact={contact} />
         <ContactSubmittedForms contact={contact} />
-        <ContactEnergeticReadings contact={contact} />
+        <ContactEnergeticDecoding contact={contact} />
         <ContactPortalAccess contact={contact} />
         {showMessages && <ContactMessagesThread contact={contact} />}
         {showWhatsapp && <ContactWhatsappThread contact={contact} />}
