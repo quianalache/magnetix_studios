@@ -7,6 +7,7 @@ import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
+import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import type { ChartDesign } from "@/types/chart-design";
@@ -227,7 +228,7 @@ function ChartPieceView({
   mandalaDesign,
   astroDesign,
 }: {
-  piece: "human-design-full" | "human-design-mandala" | "human-design-gates" | "astrology-wheel";
+  piece: "human-design-full" | "human-design-mandala" | "human-design-gates" | "astrology-wheel" | "frequency-hologenetic";
   readingInput: ShortcodeReadingInput;
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
@@ -235,6 +236,7 @@ function ChartPieceView({
 }) {
   const hd = readingInput.humanDesign as HumanDesignProfile | null | undefined;
   const astro = readingInput.astrology as AstrologyChart | null | undefined;
+  const spheres = readingInput.spheres;
 
   switch (piece) {
     case "human-design-full":
@@ -285,6 +287,17 @@ function ChartPieceView({
         />
       ) : (
         <MissingPiece label="Mandala chart" />
+      );
+    case "frequency-hologenetic":
+      // Added 2026-08-15 (Phase 5) — real gap: Frequency had no Report
+      // Builder chart-block option at all before this. Same shared
+      // GeneKeysChart component the Readings tab and public report page
+      // already use, so a report design's Frequency block always matches
+      // what the reading itself shows.
+      return spheres && spheres.length > 0 ? (
+        <GeneKeysChart spheres={spheres} />
+      ) : (
+        <MissingPiece label="Frequency profile" />
       );
     default:
       return null;

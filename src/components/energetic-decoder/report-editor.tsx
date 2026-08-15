@@ -59,6 +59,7 @@ const CHART_PIECES: { value: ChartPieceKind; label: string }[] = [
   { value: "human-design-mandala", label: "Human Design — Mandala" },
   { value: "human-design-gates", label: "Human Design — Gates Table" },
   { value: "astrology-wheel", label: "Astrology — Natal Wheel" },
+  { value: "frequency-hologenetic", label: "Frequency — Hologenetic Profile" },
 ];
 
 function newBlockId(): string {

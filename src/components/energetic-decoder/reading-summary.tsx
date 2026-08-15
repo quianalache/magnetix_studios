@@ -105,45 +105,91 @@ function SkillLayerList({ title, entries }: { title: string; entries: LocalSkill
   );
 }
 
+/**
+ * Sequence grouping for the detail list below the chart — same 3 real
+ * sequences/order gene-keys-chart.tsx draws (Life's Work->Evolution->
+ * Radiance->Purpose, Attraction->IQ->EQ->SQ,
+ * Vocation->Culture->Brand->Pearl), so the list reads as an extension of
+ * the chart above it instead of a second, differently-ordered view of the
+ * same 12 spheres. Purely a presentation grouping — no calculation, no
+ * interpretive text invented here; every shadow/gift/siddhi/showsUp/
+ * giftText value below still comes straight from the same `spheres` array
+ * the chart reads (calculation, visualization and interpretive content
+ * stay separable — this component only lays out what it's given).
+ */
+const DETAIL_SEQUENCES: { label: string; color: string; order: GeneKeysSphereResult["sphere"][] }[] = [
+  { label: "Activation Sequence", color: "#b45309", order: ["Life's Work", "Evolution", "Radiance", "Purpose"] },
+  { label: "Venus Sequence", color: "#9d3a63", order: ["Attraction", "IQ", "EQ", "SQ"] },
+  { label: "Pearl Sequence", color: "#5E2574", order: ["Vocation", "Culture", "Brand", "Pearl"] },
+];
+
 export function SphereList({ spheres }: { spheres: GeneKeysSphereResult[] }) {
+  const bySphere = new Map(spheres.map((s) => [s.sphere, s]));
+  // Any sphere the fixed sequence order above doesn't account for (should
+  // never happen against the real 12 — defensive only) still renders,
+  // appended after the 3 grouped sections, so nothing silently disappears.
+  const grouped = new Set(DETAIL_SEQUENCES.flatMap((g) => g.order));
+  const ungrouped = spheres.filter((s) => !grouped.has(s.sphere));
+
   return (
     <div className="space-y-4">
-      {/*
-        Visual chart added alongside the existing text list 2026-08-10, not
-        in place of it — her explicit instruction was to keep both so the
-        two can be compared before anything is replaced. Same underlying
-        `spheres` array both ways, so they can't show different values.
-      */}
       <div className="rounded-2xl border bg-card p-4">
         <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Frequency — Hologenetic Profile</p>
         <GeneKeysChart spheres={spheres} className="mx-auto w-full max-w-[560px]" />
       </div>
-      <div className="divide-y rounded-2xl border bg-card">
-        {spheres.map((s) => (
-          <div key={s.sphere} className="px-5 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
-                <p className="text-sm font-semibold">
-                  Gate {s.gate}.{s.line}
-                </p>
-              </div>
-              <p className="text-right text-xs text-muted-foreground">
-                <span className="text-rose-500">{s.shadow}</span>
-                {" → "}
-                <span className="text-emerald-500">{s.gift}</span>
-                {" → "}
-                <span>☆ {s.siddhi}</span>
-              </p>
+      {DETAIL_SEQUENCES.map((group) => {
+        const rows = group.order.map((name) => bySphere.get(name)).filter((s): s is GeneKeysSphereResult => !!s);
+        if (rows.length === 0) return null;
+        return (
+          <div key={group.label} className="overflow-hidden rounded-2xl border bg-card">
+            <p
+              className="border-b px-5 py-2 text-xs font-semibold uppercase tracking-wide"
+              style={{ color: group.color, backgroundColor: `${group.color}14` }}
+            >
+              {group.label}
+            </p>
+            <div className="divide-y">
+              {rows.map((s) => (
+                <SphereRow key={s.sphere} sphere={s} />
+              ))}
             </div>
-            {(s.showsUp || s.giftText) && (
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                {s.showsUp} {s.giftText}
-              </p>
-            )}
           </div>
-        ))}
+        );
+      })}
+      {ungrouped.length > 0 && (
+        <div className="divide-y rounded-2xl border bg-card">
+          {ungrouped.map((s) => (
+            <SphereRow key={s.sphere} sphere={s} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SphereRow({ sphere: s }: { sphere: GeneKeysSphereResult }) {
+  return (
+    <div className="px-5 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{s.sphere}</p>
+          <p className="text-sm font-semibold">
+            Gate {s.gate}.{s.line}
+          </p>
+        </div>
+        <p className="text-right text-xs text-muted-foreground">
+          <span className="text-rose-500">{s.shadow}</span>
+          {" → "}
+          <span className="text-emerald-500">{s.gift}</span>
+          {" → "}
+          <span>☆ {s.siddhi}</span>
+        </p>
       </div>
+      {(s.showsUp || s.giftText) && (
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          {s.showsUp} {s.giftText}
+        </p>
+      )}
     </div>
   );
 }

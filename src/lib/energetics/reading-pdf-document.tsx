@@ -862,102 +862,130 @@ export function AstrologyWheelPdf({ chart, wheelAccentColor }: { chart: Astrolog
   );
 }
 
-// ── Frequency / Gene Keys Golden Path chart (react-pdf Svg) — 2026-08-10,
-// ports gene-keys-chart.tsx's already-verified canonical structure into
-// react-pdf's own primitives (G/Line/Circle/Text/Path instead of DOM svg
-// g/line/circle/text/path). No PDF counterpart existed before this. Same
-// SEQUENCES grouping, same canonical Pearl order (Vocation -> Culture ->
-// Brand -> Pearl, verified against genekeys.com — see gene-keys-chart.tsx's
-// own header for the source-by-source breakdown), same 2 real Golden Path
-// bridges (Purpose -> Attraction, SQ -> Vocation), same original colors —
-// only the shape components differ, so this can't drift from the
-// already-verified web chart. All layout constants below are copied
-// verbatim from gene-keys-chart.tsx, not re-derived. ──
+// ── Frequency / Gene Keys Hologenetic Profile chart (react-pdf Svg) —
+// rebuilt 2026-08-15 (Phase 5) to mirror gene-keys-chart.tsx's real
+// radial-by-planetary-body structure exactly (see that file's own header
+// for the full derivation — every position/connection below is copied
+// from the same SPHERE_POSITION/SEQUENCES tables, not re-derived). react-
+// pdf can't share the DOM component directly (same constraint as the
+// BodyGraph/Mandala PDF mirrors below), so this ports it to G/Line/Circle/
+// Text/Path. No hover state — a PDF page is static, same reasoning
+// HumanDesignFullChartPdf already documents for its own responsive/
+// interactive web-only features. ──
 
-const GK_SEQUENCES: { key: "activation" | "venus" | "pearl"; label: string; color: string; start: number }[] = [
-  { key: "activation", label: "Activation Sequence", color: "#b45309", start: 0 },
-  { key: "venus", label: "Venus Sequence", color: "#9d3a63", start: 4 },
-  { key: "pearl", label: "Pearl Sequence", color: "#5E2574", start: 8 },
+type GkAxis = "sun" | "earth" | "venus" | "mars" | "jupiter" | "moon";
+type GkRing = "personality" | "design";
+
+const GK_AXIS_ORDER: GkAxis[] = ["earth", "sun", "jupiter", "mars", "venus", "moon"];
+
+const GK_SPHERE_POSITION: Record<GeneKeysSphereResult["sphere"], { axis: GkAxis; ring: GkRing }> = {
+  "Life's Work": { axis: "sun", ring: "personality" },
+  Brand: { axis: "sun", ring: "personality" },
+  Radiance: { axis: "sun", ring: "design" },
+  Evolution: { axis: "earth", ring: "personality" },
+  Purpose: { axis: "earth", ring: "design" },
+  IQ: { axis: "venus", ring: "personality" },
+  SQ: { axis: "venus", ring: "design" },
+  EQ: { axis: "mars", ring: "personality" },
+  Vocation: { axis: "mars", ring: "design" },
+  Culture: { axis: "jupiter", ring: "design" },
+  Pearl: { axis: "jupiter", ring: "personality" },
+  Attraction: { axis: "moon", ring: "design" },
+};
+
+const GK_SEQUENCES: { key: "activation" | "venus" | "pearl"; color: string; order: GeneKeysSphereResult["sphere"][] }[] = [
+  { key: "activation", color: "#b45309", order: ["Life's Work", "Evolution", "Radiance", "Purpose"] },
+  { key: "venus", color: "#9d3a63", order: ["Attraction", "IQ", "EQ", "SQ"] },
+  { key: "pearl", color: "#5E2574", order: ["Vocation", "Culture", "Brand", "Pearl"] },
 ];
 
-const GK_VIEW_W = 200;
-const GK_ROW_H = 38;
-const GK_ROW_GAP = 22;
-const GK_ROW_TOP_PAD = 2;
-const GK_NODE_XS = [30, 80, 130, 180];
-const GK_NODE_R = 8;
-const GK_LINE_COLOR = "#d4d4d8";
-const GK_BRIDGE_COLOR = "#a1a1aa";
-const GK_NAME_COLOR = "#71717a";
-const GK_GATE_TEXT_COLOR = "#ffffff";
+const GK_VIEW = 340;
+const GK_CENTER = GK_VIEW / 2;
+const GK_OUTER_R = 118;
+const GK_INNER_R = 66;
+const GK_NODE_R_OUTER = 12;
+const GK_NODE_R_INNER = 10;
+const GK_SPOKE_COLOR = "#e4e4e7";
+const GK_LABEL_COLOR = "#52525b";
 
-function gkRowTop(i: number): number {
-  return GK_ROW_TOP_PAD + i * (GK_ROW_H + GK_ROW_GAP);
+function gkAxisAngleRad(axisIndex: number): number {
+  return ((-90 + axisIndex * 60) * Math.PI) / 180;
 }
-function gkRowCenterY(i: number): number {
-  return gkRowTop(i) + 20;
+function gkAxisIndexOf(axis: GkAxis): number {
+  return GK_AXIS_ORDER.indexOf(axis);
 }
-
-function GeneKeysRowPdf({ label, color, spheres, top }: { label: string; color: string; spheres: GeneKeysSphereResult[]; top: number }) {
-  const centerY = top + 20;
-  return (
-    <G>
-      <Text x={10} y={top + 7} style={{ fontSize: 6, fontWeight: 700, fill: color }}>
-        {label.toUpperCase()}
-      </Text>
-
-      {spheres.slice(1).map((s, i) => (
-        <Line key={`${s.sphere}-line`} x1={GK_NODE_XS[i]} y1={centerY} x2={GK_NODE_XS[i + 1]} y2={centerY} stroke={GK_LINE_COLOR} strokeWidth={1} />
-      ))}
-
-      {spheres.map((s, i) => (
-        <G key={s.sphere}>
-          <Circle cx={GK_NODE_XS[i]} cy={centerY} r={GK_NODE_R} fill={color} />
-          {/* Single template-literal child, not `{s.gate}.{s.line}` as 3 separate JSX children — react-pdf's Svg Text (unlike its regular document-flow Text, and unlike a browser's DOM svg <text>) doesn't reliably concatenate multiple text-node children into one run; real bug caught 2026-08-10 by exporting an actual PDF: most nodes silently dropped the ".line" half, one showed both halves overlapping/garbled. */}
-          <Text x={GK_NODE_XS[i]} y={centerY + 2.2} style={{ fontSize: 6, fontWeight: 700, textAnchor: "middle", fill: GK_GATE_TEXT_COLOR }}>
-            {`${s.gate}.${s.line}`}
-          </Text>
-          <Text x={GK_NODE_XS[i]} y={centerY + GK_NODE_R + 8} style={{ fontSize: 5.5, textAnchor: "middle", fill: GK_NAME_COLOR }}>
-            {s.sphere}
-          </Text>
-        </G>
-      ))}
-    </G>
-  );
+function gkPointOn(radius: number, axisIndex: number): { x: number; y: number } {
+  const a = gkAxisAngleRad(axisIndex);
+  return { x: GK_CENTER + radius * Math.cos(a), y: GK_CENTER + radius * Math.sin(a) };
+}
+function gkLabelAnchor(axisIndex: number): { anchor: "start" | "middle" | "end"; dy: number } {
+  const a = gkAxisAngleRad(axisIndex);
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const anchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
+  const dy = sin > 0.35 ? 9 : sin < -0.35 ? -4 : 3;
+  return { anchor, dy };
 }
 
-/** Mirrors GoldenPathBridge in gene-keys-chart.tsx — the real Purpose->Attraction / SQ->Vocation bridges, dashed to stay visually distinct from the solid within-sequence pathway lines above. */
-function GoldenPathBridgePdf({ fromRow, toRow }: { fromRow: number; toRow: number }) {
-  const x1 = GK_NODE_XS[GK_NODE_XS.length - 1];
-  const y1 = gkRowCenterY(fromRow);
-  const x2 = GK_NODE_XS[0];
-  const y2 = gkRowCenterY(toRow);
-  const midY = (y1 + y2) / 2;
-  return (
-    <Path d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`} fill="none" stroke={GK_BRIDGE_COLOR} strokeWidth={1} strokeDasharray="3 2.5" />
-  );
-}
-
-/** Mirrors GeneKeysChart in gene-keys-chart.tsx. No responsive/container-query layout needed — a PDF page is a fixed known size, same reasoning HumanDesignFullChartPdf already documents. */
+/** Mirrors GeneKeysChart in gene-keys-chart.tsx. Fixed pixel size, no responsive/container-query layout needed — a PDF page is a fixed known size, same reasoning HumanDesignFullChartPdf already documents. */
 function GeneKeysChartPdf({ spheres }: { spheres: GeneKeysSphereResult[] }) {
-  const rowsAll = GK_SEQUENCES.map((seq, i) => ({ ...seq, index: i, spheres: spheres.slice(seq.start, seq.start + 4) }));
-  const rows = rowsAll.filter((r) => r.spheres.length > 0);
-  if (rows.length === 0) return null;
+  if (spheres.length === 0) return null;
+  const bySphere = new Map(spheres.map((s) => [s.sphere, s]));
 
-  const height = gkRowTop(rows[rows.length - 1].index) + GK_ROW_H + GK_ROW_TOP_PAD;
-  const activationRow = rows.find((r) => r.key === "activation");
-  const venusRow = rows.find((r) => r.key === "venus");
-  const pearlRow = rows.find((r) => r.key === "pearl");
+  const nodesByKey = new Map<string, { axis: GkAxis; ring: GkRing; spheres: GeneKeysSphereResult[] }>();
+  for (const s of spheres) {
+    const pos = GK_SPHERE_POSITION[s.sphere];
+    if (!pos) continue;
+    const key = `${pos.axis}-${pos.ring}`;
+    const existing = nodesByKey.get(key);
+    if (existing) existing.spheres.push(s);
+    else nodesByKey.set(key, { axis: pos.axis, ring: pos.ring, spheres: [s] });
+  }
 
   return (
-    <Svg viewBox={`0 0 ${GK_VIEW_W} ${height}`} style={{ width: 300, height: (300 * height) / GK_VIEW_W }}>
-      {activationRow && venusRow && activationRow.spheres.length === 4 && (
-        <GoldenPathBridgePdf fromRow={activationRow.index} toRow={venusRow.index} />
-      )}
-      {venusRow && pearlRow && venusRow.spheres.length === 4 && <GoldenPathBridgePdf fromRow={venusRow.index} toRow={pearlRow.index} />}
-      {rows.map((r) => (
-        <GeneKeysRowPdf key={r.key} label={r.label} color={r.color} spheres={r.spheres} top={gkRowTop(r.index)} />
-      ))}
+    <Svg viewBox={`0 0 ${GK_VIEW} ${GK_VIEW}`} style={{ width: 300, height: 300 }}>
+      {GK_AXIS_ORDER.map((axis, i) => {
+        const outer = gkPointOn(GK_OUTER_R, i);
+        return <Line key={axis} x1={GK_CENTER} y1={GK_CENTER} x2={outer.x} y2={outer.y} stroke={GK_SPOKE_COLOR} strokeWidth={1} />;
+      })}
+
+      {GK_SEQUENCES.map((seq) => {
+        const pts = seq.order
+          .map((name) => {
+            const pos = GK_SPHERE_POSITION[name];
+            if (!pos || !bySphere.has(name)) return null;
+            const r = pos.ring === "personality" ? GK_OUTER_R : GK_INNER_R;
+            return gkPointOn(r, gkAxisIndexOf(pos.axis));
+          })
+          .filter((p): p is { x: number; y: number } => p !== null);
+        if (pts.length < 2) return null;
+        const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+        return <Path key={seq.key} d={d} fill="none" stroke={seq.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />;
+      })}
+
+      {Array.from(nodesByKey.values()).map((node) => {
+        const axisIndex = gkAxisIndexOf(node.axis);
+        const r = node.ring === "personality" ? GK_OUTER_R : GK_INNER_R;
+        const nodeR = node.ring === "personality" ? GK_NODE_R_OUTER : GK_NODE_R_INNER;
+        const pt = gkPointOn(r, axisIndex);
+        const color = node.ring === "personality" ? PERSONALITY_FILL : DESIGN_FILL;
+        const { anchor, dy } = gkLabelAnchor(axisIndex);
+        const labelR = node.ring === "personality" ? r + 16 : r - 17;
+        const labelPt = gkPointOn(labelR, axisIndex);
+        const primary = node.spheres[0];
+        return (
+          <G key={`${node.axis}-${node.ring}`}>
+            <Circle cx={pt.x} cy={pt.y} r={nodeR} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+            {/* Single template-literal child, not `{gate}.{line}` as 3 separate JSX children — react-pdf's Svg Text (unlike its regular document-flow Text, and unlike a browser's DOM svg <text>) doesn't reliably concatenate multiple text-node children into one run; real bug caught 2026-08-10 by exporting an actual PDF. */}
+            <Text x={pt.x} y={pt.y + 2.6} style={{ fontSize: 7.5, fontWeight: 700, textAnchor: "middle", fill: "#ffffff" }}>
+              {`${primary.gate}.${primary.line}`}
+            </Text>
+            <Text x={labelPt.x} y={labelPt.y + dy} style={{ fontSize: 7.5, fontWeight: 600, textAnchor: anchor, fill: GK_LABEL_COLOR }}>
+              {node.spheres.map((s) => s.sphere).join(" / ")}
+            </Text>
+          </G>
+        );
+      })}
     </Svg>
   );
 }

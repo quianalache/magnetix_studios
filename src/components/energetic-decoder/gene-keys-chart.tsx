@@ -1,163 +1,277 @@
-import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
+"use client";
+
+import { useState } from "react";
+import type { GeneKeysSphereName, GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
+import { PERSONALITY_FILL, DESIGN_FILL } from "@/lib/energetics/human-design-chart-constants";
 
 /**
- * The Frequency / Gene Keys visual chart — real, built 2026-08-10. Draws
- * purely from the already-calculated `spheres` array (gene-keys.ts's
- * calculateGeneKeysProfile) — no new math, no Bodygraph, nothing scraped
- * from a third party. Same "own SVG/React layout, drawn locally" precedent
- * mandala-chart.tsx already set for Human Design's Mandala.
+ * The Frequency / Gene Keys Hologenetic Profile chart — rebuilt 2026-08-15
+ * (Phase 5 of the Bodygraph parity audit's revised roadmap). The prior
+ * version (built 2026-08-10) drew the 3 sequences as 3 mostly-independent
+ * horizontal rows with 2 dashed "bridge" lines between them — accurate as
+ * far as it went, but the owner's own read was correct: it doesn't
+ * communicate a real profile, just a longer list.
  *
- * 2026-08-10 structure pass — verified against genekeys.com's own pages
- * (Pearl Sequence page, "How to Read Your Profile," the Venus Sequence
- * course intro, and its planetary-correlation docs), not a blog or
- * assumption:
+ * OWNER DECISION (2026-08-15, this pass): Magnetix keeps its Gene Keys /
+ * Hologenetic Profile system and its "Frequency" product name. This is NOT
+ * a rebuild toward Bodygraph's Success Codex — no Success Codex naming
+ * (Primary Genius, Leadership, Expansion, Permission, Rebirth, etc.)
+ * appears anywhere below. This is a from-scratch Magnetix visualization of
+ * Magnetix's own real Gene Keys data, laid out around the actual planetary
+ * structure that already existed in gene-keys.ts's own calculation code —
+ * not copied from Bodygraph, not copied from genekeys.com's own diagram
+ * (which was not accessible to inspect and would be off-limits to copy
+ * regardless).
  *
- *  - Activation Sequence (spheres.slice(0, 4), confirmed by gene-keys.ts's
- *    own `activationSequence` field): Life's Work -> Evolution -> Radiance
- *    -> Purpose. Unchanged.
- *  - Venus Sequence's 4 *exclusive* spheres, in order: Attraction -> IQ ->
- *    EQ -> SQ. Unchanged. (genekeys.com itself describes Venus as having
- *    "6 spheres" — but the first and last of those 6 are Purpose and
- *    Vocation, reused from the neighboring sequences, not new values; see
- *    the bridges below.)
- *  - Pearl Sequence, in genekeys.com's own stated order ("the Vocation,
- *    Culture, Brand and Pearl"): Vocation -> Culture -> Brand -> Pearl.
- *    Was Vocation/Brand/Culture/Pearl before this pass — an arbitrary
- *    array order, not a deliberate one; fixed at the source in
- *    gene-keys.ts so this chart, the text list, and any future consumer
- *    all inherit the same real order automatically.
- *  - Two real bridges, not invented for visual effect: Purpose is
- *    genekeys.com's own stated opening member of the Venus Sequence (same
- *    Design Earth value as Activation's Purpose, not recalculated), and
- *    Vocation/"Core Wound" is the shared closing member of Venus and
- *    opening member of Pearl (same Design Mars value). Drawn as dashed
- *    curves — visually distinct from the solid within-sequence pathway
- *    lines — so the chart reads as one continuous Golden Path rather than
- *    3 disconnected rows, without overstating a specific curve shape as
- *    "the" official one (genekeys.com doesn't publish exact bridge
- *    geometry, just the fact that these two spheres are shared).
+ * THE REAL STRUCTURE THIS DRAWS (derived directly from
+ * calculateGeneKeysProfile, not invented): every one of the 12 spheres
+ * reduces to one of 6 planetary bodies, at either the Personality (birth
+ * moment) or Design (~88 solar days earlier) position — the exact same
+ * Personality/Design duality the BodyGraph chart already draws, just
+ * applied to Gene Keys' own smaller set of points instead of all 13 HD
+ * activations:
  *
- * Colors are original picks for this app, not copied from genekeys.com or
- * any other tool: warm amber for Activation (the spark/core), muted rose
- * for Venus (relationships), the app's own established brand purple
- * (#5E2574, already used as the default wheelAccentColor elsewhere) for
- * Pearl.
+ *   Sun     — Life's Work (Pers) · Radiance (Design) · Brand (Pers, the
+ *             EXACT same value as Life's Work — same longitude, confirmed
+ *             in gene-keys.ts, not a rendering choice)
+ *   Earth   — Evolution (Pers) · Purpose (Design)
+ *   Venus   — IQ (Pers) · SQ (Design)
+ *   Mars    — EQ (Pers) · Vocation (Design)
+ *   Jupiter — Pearl (Pers) · Culture (Design)
+ *   Moon    — Attraction (Design only — this system has no Personality
+ *             Moon sphere)
  *
- * viewBox-scaled and container-width-driven (no fixed pixel size) for the
- * same two reasons the BodyGraph/Mandala charts already are: real
- * responsiveness today, and a straightforward future port to react-pdf's
- * own Svg primitives (same technique reading-pdf-document.tsx already uses
- * for the BodyGraph and Mandala) whenever the Frequency PDF section is
- * built — not built in this pass.
+ * Drawn as 6 spokes around a center, Personality on the outer ring, Design
+ * on the inner ring — then the 3 real sequences (Activation, Venus, Pearl,
+ * same real order already verified against genekeys.com in the prior
+ * build: Life's Work->Evolution->Radiance->Purpose,
+ * Attraction->IQ->EQ->SQ, Vocation->Culture->Brand->Pearl) are drawn as 3
+ * colored paths connecting their own 4 spheres across those spokes. Two
+ * genuinely emergent, non-invented results of drawing it this way:
+ *
+ *   1. The Activation path visits only the Sun and Earth spokes (all 4 of
+ *      its spheres are Sun/Earth positions) — it folds back on itself in
+ *      an hourglass, not because that shape was chosen but because that's
+ *      what the real data does.
+ *   2. The Pearl path's 3rd stop (Brand) lands on the EXACT SAME physical
+ *      node as the Activation path's 1st stop (Life's Work) — the one
+ *      point in the whole diagram where two sequences share a real,
+ *      identical activation, not just a spoke. That convergence is the
+ *      clearest single "this is one interconnected profile, not three
+ *      separate lists" moment on the chart, and it's load-bearing data,
+ *      not decoration.
+ *
+ * Node color = Personality (#18181b) / Design (#9a3412) — the exact same
+ * two constants human-design-chart.tsx already uses, so this chart reads
+ * as visually related to the BodyGraph rather than an unrelated style.
+ * Sequence identity lives in the PATH color instead (own original picks,
+ * unchanged from the prior build: amber/rose/purple) — a node can't be
+ * single-sequence-colored since the shared Sun/outer node genuinely
+ * belongs to two sequences at once.
  */
+
+const AXIS_ORDER: { body: PlanetAxis; label: string }[] = [
+  { body: "earth", label: "Earth" },
+  { body: "sun", label: "Sun" },
+  { body: "jupiter", label: "Jupiter" },
+  { body: "mars", label: "Mars" },
+  { body: "venus", label: "Venus" },
+  { body: "moon", label: "Moon" },
+];
+
+type PlanetAxis = "sun" | "earth" | "venus" | "mars" | "jupiter" | "moon";
+type Ring = "personality" | "design";
+
+const SPHERE_POSITION: Record<GeneKeysSphereName, { axis: PlanetAxis; ring: Ring }> = {
+  "Life's Work": { axis: "sun", ring: "personality" },
+  Brand: { axis: "sun", ring: "personality" }, // same physical node as Life's Work — see header note
+  Radiance: { axis: "sun", ring: "design" },
+  Evolution: { axis: "earth", ring: "personality" },
+  Purpose: { axis: "earth", ring: "design" },
+  IQ: { axis: "venus", ring: "personality" },
+  SQ: { axis: "venus", ring: "design" },
+  EQ: { axis: "mars", ring: "personality" },
+  Vocation: { axis: "mars", ring: "design" },
+  Culture: { axis: "jupiter", ring: "design" },
+  Pearl: { axis: "jupiter", ring: "personality" },
+  Attraction: { axis: "moon", ring: "design" },
+};
 
 type SequenceKey = "activation" | "venus" | "pearl";
 
-const SEQUENCES: { key: SequenceKey; label: string; color: string; start: number }[] = [
-  { key: "activation", label: "Activation Sequence", color: "#b45309", start: 0 },
-  { key: "venus", label: "Venus Sequence", color: "#9d3a63", start: 4 },
-  { key: "pearl", label: "Pearl Sequence", color: "#5E2574", start: 8 },
+const SEQUENCES: { key: SequenceKey; label: string; color: string; order: GeneKeysSphereName[] }[] = [
+  { key: "activation", label: "Activation Sequence", color: "#b45309", order: ["Life's Work", "Evolution", "Radiance", "Purpose"] },
+  { key: "venus", label: "Venus Sequence", color: "#9d3a63", order: ["Attraction", "IQ", "EQ", "SQ"] },
+  { key: "pearl", label: "Pearl Sequence", color: "#5E2574", order: ["Vocation", "Culture", "Brand", "Pearl"] },
 ];
 
-const VIEW_W = 200;
-const ROW_H = 38;
-// Wide enough to give the Purpose->Attraction and SQ->Vocation bridge
-// curves real clearance between one row's sphere-name labels and the next
-// row's sequence-title label — a tight gap (this used to be 8) made the
-// bridge curves cut through that text. Not a value from any external
-// source, just enough room for our own labels to stay clean.
-const ROW_GAP = 22;
-const ROW_TOP_PAD = 2;
-const NODE_XS = [30, 80, 130, 180];
-const NODE_R = 8;
-const LINE_COLOR = "#d4d4d8";
-const BRIDGE_COLOR = "#a1a1aa";
-const NAME_COLOR = "#71717a";
-const GATE_TEXT_COLOR = "#ffffff";
+const VIEW = 340;
+const CENTER = VIEW / 2;
+const OUTER_R = 118;
+const INNER_R = 66;
+const NODE_R_OUTER = 12;
+const NODE_R_INNER = 10;
+const SPOKE_COLOR = "#e4e4e7";
+const LABEL_COLOR = "#52525b";
 
-function rowTop(i: number): number {
-  return ROW_TOP_PAD + i * (ROW_H + ROW_GAP);
-}
-function rowCenterY(i: number): number {
-  return rowTop(i) + 20;
+function axisAngleRad(axisIndex: number): number {
+  return ((-90 + axisIndex * 60) * Math.PI) / 180;
 }
 
-function GeneKeysRow({ label, color, spheres, top }: { label: string; color: string; spheres: GeneKeysSphereResult[]; top: number }) {
-  const centerY = top + 20;
-  return (
-    <g>
-      <text x={10} y={top + 7} fontSize={6} fontWeight={700} letterSpacing={0.4} fill={color}>
-        {label.toUpperCase()}
-      </text>
-
-      {/* Within-sequence pathways — drawn first so the node circles paint over the overlapped ends, same layering convention CompleteChannelHalf/HangingGateStub already use elsewhere in this app. */}
-      {spheres.slice(1).map((s, i) => (
-        <line
-          key={`${s.sphere}-line`}
-          x1={NODE_XS[i]}
-          y1={centerY}
-          x2={NODE_XS[i + 1]}
-          y2={centerY}
-          stroke={LINE_COLOR}
-          strokeWidth={1}
-        />
-      ))}
-
-      {spheres.map((s, i) => (
-        <g key={s.sphere}>
-          <circle cx={NODE_XS[i]} cy={centerY} r={NODE_R} fill={color} />
-          <text x={NODE_XS[i]} y={centerY + 2.2} fontSize={6} fontWeight={700} textAnchor="middle" fill={GATE_TEXT_COLOR}>
-            {s.gate}.{s.line}
-          </text>
-          <text x={NODE_XS[i]} y={centerY + NODE_R + 8} fontSize={5.5} textAnchor="middle" fill={NAME_COLOR}>
-            {s.sphere}
-          </text>
-        </g>
-      ))}
-    </g>
-  );
+function axisIndexOf(body: PlanetAxis): number {
+  return AXIS_ORDER.findIndex((a) => a.body === body);
 }
 
-/** A real Golden Path bridge (Purpose->Attraction or SQ->Vocation), not a within-sequence pathway — dashed and drawn as a smooth curve so it reads as structurally different from the solid chain lines, and so it visually clears both rows' label text rather than cutting a straight line through it. */
-function GoldenPathBridge({ fromRow, toRow }: { fromRow: number; toRow: number }) {
-  const x1 = NODE_XS[NODE_XS.length - 1];
-  const y1 = rowCenterY(fromRow);
-  const x2 = NODE_XS[0];
-  const y2 = rowCenterY(toRow);
-  const midY = (y1 + y2) / 2;
-  return <path d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`} fill="none" stroke={BRIDGE_COLOR} strokeWidth={1} strokeDasharray="3 2.5" />;
+function pointOn(radius: number, axisIndex: number): { x: number; y: number } {
+  const a = axisAngleRad(axisIndex);
+  return { x: CENTER + radius * Math.cos(a), y: CENTER + radius * Math.sin(a) };
 }
 
-export function GeneKeysChart({ spheres, className }: { spheres: GeneKeysSphereResult[]; className?: string }) {
-  const rowsAll = SEQUENCES.map((seq, i) => ({ ...seq, index: i, spheres: spheres.slice(seq.start, seq.start + 4) }));
-  const rows = rowsAll.filter((r) => r.spheres.length > 0);
-  if (rows.length === 0) return null;
+function nodeKey(axis: PlanetAxis, ring: Ring): string {
+  return `${axis}-${ring}`;
+}
 
-  // Measured off the last actually-rendered row's own real position
-  // (rowTop uses each row's fixed SEQUENCES index, not its position within
-  // the filtered `rows` array) rather than `rows.length`, so this stays
-  // correct even if a row were ever skipped instead of being the last one.
-  const height = rowTop(rows[rows.length - 1].index) + ROW_H + ROW_TOP_PAD;
+/** Text anchor + vertical nudge for a label sitting along a given spoke angle, so labels lean away from the center instead of centering blindly over the spoke line. */
+function labelAnchor(axisIndex: number): { anchor: "start" | "middle" | "end"; dy: number } {
+  const a = axisAngleRad(axisIndex);
+  const cos = Math.cos(a);
+  const sin = Math.sin(a);
+  const anchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
+  const dy = sin > 0.35 ? 9 : sin < -0.35 ? -4 : 3;
+  return { anchor, dy };
+}
 
-  // Bridges only draw between rows that are both actually present and
-  // adjacent in the real Golden Path (Activation->Venus via Purpose,
-  // Venus->Pearl via Vocation) — guards a reading with a partial/missing
-  // sphere set from drawing a bridge to a row that isn't there.
-  const activationRow = rows.find((r) => r.key === "activation");
-  const venusRow = rows.find((r) => r.key === "venus");
-  const pearlRow = rows.find((r) => r.key === "pearl");
+export function GeneKeysChart({
+  spheres,
+  className,
+  personalityColor = PERSONALITY_FILL,
+  designColor = DESIGN_FILL,
+  sequenceColors,
+}: {
+  spheres: GeneKeysSphereResult[];
+  className?: string;
+  /** Chart Design override — falls back to the same Personality/Design colors the BodyGraph itself uses. */
+  personalityColor?: string;
+  designColor?: string;
+  /** Chart Design override for the 3 sequence path colors, keyed by sequence. Falls back to this chart's own original amber/rose/purple picks. */
+  sequenceColors?: Partial<Record<SequenceKey, string>>;
+}) {
+  const [hovered, setHovered] = useState<SequenceKey | null>(null);
+  const bySphere = new Map(spheres.map((s) => [s.sphere, s]));
+  if (spheres.length === 0) return null;
+
+  // One rendered node per physical position — Life's Work and Brand collapse
+  // onto the same sun/personality node (see header note); every other
+  // sphere maps 1:1.
+  const nodesByKey = new Map<string, { axis: PlanetAxis; ring: Ring; spheres: GeneKeysSphereResult[] }>();
+  for (const s of spheres) {
+    const pos = SPHERE_POSITION[s.sphere];
+    if (!pos) continue;
+    const key = nodeKey(pos.axis, pos.ring);
+    const existing = nodesByKey.get(key);
+    if (existing) existing.spheres.push(s);
+    else nodesByKey.set(key, { axis: pos.axis, ring: pos.ring, spheres: [s] });
+  }
+
+  const seqColor = (key: SequenceKey, fallback: string) => sequenceColors?.[key] || fallback;
 
   return (
     <div className={className}>
-      <svg viewBox={`0 0 ${VIEW_W} ${height}`} role="img" aria-label="Frequency / Gene Keys Golden Path chart" className="w-full">
-        {activationRow && venusRow && activationRow.spheres.length === 4 && (
-          <GoldenPathBridge fromRow={activationRow.index} toRow={venusRow.index} />
-        )}
-        {venusRow && pearlRow && venusRow.spheres.length === 4 && <GoldenPathBridge fromRow={venusRow.index} toRow={pearlRow.index} />}
-        {rows.map((r) => (
-          <GeneKeysRow key={r.key} label={r.label} color={r.color} spheres={r.spheres} top={rowTop(r.index)} />
-        ))}
+      <svg viewBox={`0 0 ${VIEW} ${VIEW}`} role="img" aria-label="Frequency — Gene Keys Hologenetic Profile" className="w-full">
+        {/* Spokes — faint background structure, purely positional, drawn first. */}
+        {AXIS_ORDER.map((a, i) => {
+          const outer = pointOn(OUTER_R, i);
+          return <line key={a.body} x1={CENTER} y1={CENTER} x2={outer.x} y2={outer.y} stroke={SPOKE_COLOR} strokeWidth={1} />;
+        })}
+        {AXIS_ORDER.map((a, i) => {
+          const inner = pointOn(INNER_R, i);
+          return <circle key={`ring-${a.body}`} cx={inner.x} cy={inner.y} r={1.4} fill={SPOKE_COLOR} />;
+        })}
+
+        {/* The 3 sequence paths — drawn before the nodes so node circles paint cleanly over their ends, same layering convention used throughout this app's other charts. */}
+        {SEQUENCES.map((seq) => {
+          const pts = seq.order
+            .map((name) => {
+              const pos = SPHERE_POSITION[name];
+              if (!pos || !bySphere.has(name)) return null;
+              const r = pos.ring === "personality" ? OUTER_R : INNER_R;
+              return pointOn(r, axisIndexOf(pos.axis));
+            })
+            .filter((p): p is { x: number; y: number } => p !== null);
+          if (pts.length < 2) return null;
+          const d = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+          const isHovered = hovered === seq.key;
+          const isDimmed = hovered !== null && !isHovered;
+          return (
+            <path
+              key={seq.key}
+              d={d}
+              fill="none"
+              stroke={seqColor(seq.key, seq.color)}
+              strokeWidth={isHovered ? 3 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={isDimmed ? 0.25 : 1}
+              style={{ transition: "opacity 120ms ease, stroke-width 120ms ease" }}
+              onMouseEnter={() => setHovered(seq.key)}
+              onMouseLeave={() => setHovered(null)}
+            />
+          );
+        })}
+
+        {/* Nodes — one per physical position, Personality outer ring / Design inner ring, same color convention as the BodyGraph. */}
+        {Array.from(nodesByKey.values()).map((node) => {
+          const axisIndex = axisIndexOf(node.axis);
+          const r = node.ring === "personality" ? OUTER_R : INNER_R;
+          const nodeR = node.ring === "personality" ? NODE_R_OUTER : NODE_R_INNER;
+          const pt = pointOn(r, axisIndex);
+          const color = node.ring === "personality" ? personalityColor : designColor;
+          const { anchor, dy } = labelAnchor(axisIndex);
+          const labelR = node.ring === "personality" ? r + 16 : r - 17;
+          const labelPt = pointOn(labelR, axisIndex);
+          const primary = node.spheres[0];
+          const isNodeDimmed =
+            hovered !== null &&
+            !node.spheres.some((s) => SEQUENCES.find((seq) => seq.key === hovered)?.order.includes(s.sphere));
+
+          return (
+            <g key={nodeKey(node.axis, node.ring)} opacity={isNodeDimmed ? 0.35 : 1} style={{ transition: "opacity 120ms ease" }}>
+              <circle cx={pt.x} cy={pt.y} r={nodeR} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+              <text x={pt.x} y={pt.y + 2.6} fontSize={7.5} fontWeight={700} textAnchor="middle" fill="#ffffff">
+                {primary.gate}.{primary.line}
+              </text>
+              <text x={labelPt.x} y={labelPt.y + dy} fontSize={7.5} fontWeight={600} textAnchor={anchor} fill={LABEL_COLOR}>
+                {node.spheres.map((s) => s.sphere).join(" / ")}
+              </text>
+            </g>
+          );
+        })}
       </svg>
+
+      {/* Legend — sequence colors + Personality/Design, hoverable to match the chart's own hover-highlight. */}
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[11px] text-muted-foreground">
+        {SEQUENCES.map((seq) => (
+          <button
+            key={seq.key}
+            type="button"
+            onMouseEnter={() => setHovered(seq.key)}
+            onMouseLeave={() => setHovered(null)}
+            className="flex items-center gap-1.5"
+          >
+            <span className="inline-block h-2 w-4 rounded-full" style={{ backgroundColor: seqColor(seq.key, seq.color) }} />
+            {seq.label}
+          </button>
+        ))}
+        <span className="mx-1 h-3 w-px bg-border" />
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: personalityColor }} />
+          Personality
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: designColor }} />
+          Design
+        </span>
+      </div>
     </div>
   );
 }
