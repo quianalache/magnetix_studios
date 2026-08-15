@@ -62,16 +62,22 @@ export async function GET(request: Request) {
   }
   const id = verified.subAccountId;
 
-  // Now that we trust the sub-account id (HMAC-authenticated), gate on the
-  // caller being an admin of it.
-  const access = await requireSubAccountAdmin(request, id);
-  if (access instanceof NextResponse) return access;
-
   const settingsUrl = new URL(`/sa/${id}/dashboard/settings`, appBase(request));
   const finish = (status: string) => {
     settingsUrl.searchParams.set("meta", status);
     return NextResponse.redirect(settingsUrl);
   };
+
+  // Now that we trust the sub-account id (HMAC-authenticated), gate on the
+  // caller being an admin of it. This is a real full-page browser
+  // navigation (Facebook redirecting the user back here), not a fetch() —
+  // showing requireSubAccountAdmin's raw JSON 401/403 body would leave the
+  // admin staring at plain text instead of landing back in the app. Every
+  // OTHER failure mode on this route already redirects to Settings with a
+  // friendly `?meta=` status; this one now matches that pattern instead of
+  // being the one exception.
+  const access = await requireSubAccountAdmin(request, id);
+  if (access instanceof NextResponse) return finish("not_admin");
 
   // User declined the Facebook dialog, or it errored.
   if (declined || !code) {

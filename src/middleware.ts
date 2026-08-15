@@ -269,6 +269,45 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PATTERNS.some((re) => re.test(pathname));
 }
 
+/**
+ * A handful of routes are one-shot ACTIONS, not real pages: visiting them
+ * (with a valid session) immediately 30x-redirects somewhere else — most
+ * notably the Meta (Facebook/Instagram) OAuth connect route, which
+ * immediately bounces to facebook.com. If an authenticated user's session
+ * ever gets flagged invalid for exactly THAT one request (a token-refresh
+ * hiccup, a stale bfcache re-fetch on browser back-navigation, etc.), the
+ * generic `redirect=<pathname>` behavior below would send them back to
+ * /login only to be shot straight back out to Facebook again the instant
+ * they sign in — confusing, and exactly the "why did I see the login page
+ * in my browser history" symptom reported during Meta connect testing
+ * (2026-08-18). These routes get a real, stable page as their post-login
+ * destination instead of themselves.
+ */
+const ACTION_ROUTE_REDIRECT_OVERRIDES: Array<{
+  pattern: RegExp;
+  target: (pathname: string) => string;
+}> = [
+  {
+    pattern: /^\/api\/sub-accounts\/([^/]+)\/meta\/connect$/,
+    target: (pathname) => {
+      const id = pathname.match(/^\/api\/sub-accounts\/([^/]+)\/meta\/connect$/)?.[1];
+      return id ? `/sa/${id}/dashboard/settings` : "/dashboard";
+    },
+  },
+  {
+    // No sub-account id in the path here (it lives in the signed `state`
+    // query param) — a re-consumed OAuth `code` is single-use and invalid
+    // anyway, so there's nothing useful to return to; land somewhere real.
+    pattern: /^\/api\/meta\/callback$/,
+    target: () => "/dashboard",
+  },
+];
+
+function loginRedirectTarget(pathname: string): string {
+  const override = ACTION_ROUTE_REDIRECT_OVERRIDES.find((o) => o.pattern.test(pathname));
+  return override ? override.target(pathname) : pathname;
+}
+
 export default function middleware(request: NextRequest) {
   // Skip auth middleware if Firebase is not configured
   if (
@@ -321,7 +360,7 @@ export default function middleware(request: NextRequest) {
       // Redirect unauthenticated users to login for protected paths
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("redirect", pathname);
+      url.searchParams.set("redirect", loginRedirectTarget(pathname));
       return NextResponse.redirect(url);
     },
     handleError: async () => {
@@ -334,7 +373,7 @@ export default function middleware(request: NextRequest) {
 
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("redirect", pathname);
+      url.searchParams.set("redirect", loginRedirectTarget(pathname));
       return NextResponse.redirect(url);
     },
   });

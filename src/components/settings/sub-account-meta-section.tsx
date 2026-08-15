@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -50,6 +50,10 @@ const STATUS_MESSAGES: Record<
     text: "Facebook/Instagram isn't configured on this deployment yet (missing Meta app credentials).",
   },
   gate_off: { ok: false, text: "This feature is locked by your agency." },
+  not_admin: {
+    ok: false,
+    text: "You need to be a sub-account admin to finish connecting Facebook & Instagram.",
+  },
   no_pages: {
     ok: false,
     text: "No Facebook Pages were available on that account.",
@@ -86,24 +90,25 @@ export function SubAccountMetaSection() {
     );
   }, []);
 
-  const webhookUrl = useMemo(() => {
-    const base =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    return `${base}/api/webhooks/meta`;
-  }, []);
-
-  // ONE redirect URI for the whole deployment — registered once in the Meta
-  // app, never per sub-account. The connecting sub-account travels in the
-  // signed OAuth `state`. Must mirror metaRedirectUri() on the server.
-  const redirectUri = useMemo(() => {
-    const base =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
-    return `${base}/api/meta/callback`;
-  }, []);
+  // IMPORTANT: this must show the exact same base the SERVER actually sends
+  // to Meta (metaRedirectUri() in lib/comms/meta.ts uses ONLY
+  // NEXT_PUBLIC_APP_URL, deliberately never the request's own origin — see
+  // that function's doc comment for why: Meta validates redirect_uri with a
+  // strict exact-match, so it must be stable regardless of which host/
+  // preview alias someone happens to be viewing Settings from). Bug found
+  // 2026-08-18: this previously fell back to `window.location.origin` once
+  // hydrated in the browser — whatever host the admin's OWN browser tab
+  // happens to be on. If that host ever differs from NEXT_PUBLIC_APP_URL (a
+  // Vercel preview URL, an alternate alias, anything but the canonical
+  // domain), this panel would display a DIFFERENT redirect URI than the one
+  // actually sent to Meta — and copying the wrong value into Meta's
+  // dashboard registers a URI that can never match, producing exactly the
+  // "redirect URI is not whitelisted" error. Now sourced from the identical
+  // env var the server uses, no origin-guessing fallback: if it's unset,
+  // this says so plainly instead of silently showing a maybe-wrong URL.
+  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") || null;
+  const webhookUrl = appBase ? `${appBase}/api/webhooks/meta` : null;
+  const redirectUri = appBase ? `${appBase}/api/meta/callback` : null;
 
   // Gate: invisible unless admin + at least one Meta feature enabled.
   if (!isAdmin || !gateOn) return null;
@@ -285,13 +290,14 @@ export function SubAccountMetaSection() {
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded bg-background px-2 py-1.5 text-[11px]">
-                {webhookUrl}
+                {webhookUrl ?? "NEXT_PUBLIC_APP_URL is not set on this deployment"}
               </code>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => copy(webhookUrl, "Webhook URL")}
+                disabled={!webhookUrl}
+                onClick={() => webhookUrl && copy(webhookUrl, "Webhook URL")}
               >
                 <Copy className="mr-1 h-3 w-3" />
                 Copy
@@ -304,13 +310,14 @@ export function SubAccountMetaSection() {
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded bg-background px-2 py-1.5 text-[11px]">
-                {redirectUri}
+                {redirectUri ?? "NEXT_PUBLIC_APP_URL is not set on this deployment"}
               </code>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => copy(redirectUri, "Redirect URI")}
+                disabled={!redirectUri}
+                onClick={() => redirectUri && copy(redirectUri, "Redirect URI")}
               >
                 <Copy className="mr-1 h-3 w-3" />
                 Copy
