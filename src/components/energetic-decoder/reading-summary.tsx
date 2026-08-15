@@ -7,6 +7,7 @@ import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types/energetic-decoder";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import type { ChartDesign } from "@/types/chart-design";
@@ -495,6 +496,15 @@ export function AstrologySummary({
           })}
         </div>
       </div>
+
+      {chart.aspects.length > 0 && (
+        <div className="rounded-2xl border bg-card p-4">
+          <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Aspect Grid
+          </p>
+          <AspectGrid placements={chart.placements} aspects={chart.aspects} accentColor={astroDesign?.wheelAccentColor} />
+        </div>
+      )}
 
       {chart.aspects.length > 0 && (
         <div className="rounded-2xl border bg-card p-4">
