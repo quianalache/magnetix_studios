@@ -195,6 +195,16 @@ const PUBLIC_PATHS = [
   // requires the existing member HMAC session inside the route handlers.
   "/member-password",
   "/api/member-password",
+  // MyMagnetix — the person-centered member/customer experience across the
+  // whole ecosystem. Own session model (global `mm_session` HMAC cookie,
+  // see person-auth.ts/person-session.ts), NOT Firebase Auth and NOT the
+  // tenant-scoped `ls_member_session` either — a deliberate third session
+  // type. Auth checks happen inside each route/page, same pattern as
+  // /portal, /c, /course above. Without this entry, every /my/* request
+  // would be treated as an unauthenticated STAFF request and redirected to
+  // /login before ever reaching MyMagnetix's own login page.
+  "/my",
+  "/api/my",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid

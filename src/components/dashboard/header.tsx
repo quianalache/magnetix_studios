@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Check,
   Building2,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { CUSTOM_BRAND } from "@/config/landing";
@@ -115,9 +116,26 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
   const isMac =
     typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
+  // MyMagnetix staff<->person bridge (2026-08-15) — only render the
+  // "Switch to MyMagnetix" control for a confirmed dual-role human (this
+  // staff account's linked personId also has at least one real Member
+  // relationship somewhere). Read-only check; grants nothing on its own.
+  const [hasMyMagnetixAccess, setHasMyMagnetixAccess] = useState(false);
+  useEffect(() => {
+    fetch("/api/my/has-access")
+      .then((res) => res.json())
+      .then((data: { hasMemberAccess?: boolean }) => setHasMyMagnetixAccess(!!data.hasMemberAccess))
+      .catch(() => setHasMyMagnetixAccess(false));
+  }, []);
+
   async function handleSignOut() {
     await signOutUser();
     router.push("/");
+  }
+
+  async function handleSwitchToMyMagnetix() {
+    const res = await fetch("/api/my/bridge-from-staff", { method: "POST" });
+    if (res.ok) window.location.href = "/my";
   }
 
   function handleSwitchSubAccount(targetSubId: string) {
@@ -288,6 +306,15 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
               <CreditCard className="mr-2 h-4 w-4" />
               Billing
             </DropdownMenuItem>
+            {hasMyMagnetixAccess && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSwitchToMyMagnetix}>
+                  <ArrowLeftRight className="mr-2 h-4 w-4" />
+                  Switch to MyMagnetix
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
