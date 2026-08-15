@@ -37,18 +37,25 @@ const VALID_TABS: Tab[] = ["home", "builder", "content", "readings", "chartDesig
 export default function EnergeticDecoderPage() {
   // `?tab=builder` (etc.) picks the initial tab — added 2026-08-12 so the
   // Report Editor's Back button can return to Report Builder specifically
-  // instead of always landing on Home, the previous hardcoded default.
-  // Read once on mount; the tab strip itself stays plain client state
-  // after that, same as before.
+  // instead of always landing on the default. Read once on mount; the tab
+  // strip itself stays plain client state after that, same as before.
+  //
+  // Decision Brief Decision 3 (approved 2026-08-15): default landing tab
+  // is Readings, not Home — the Readings experience (Contact → Profile →
+  // Reading history → chart/report actions) is the operational center of
+  // the tool. Home stays a real, fully-functional secondary tab; nothing
+  // about it was deprecated, only the default changed. An explicit
+  // `?tab=` always wins regardless of this default, unchanged from before.
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const initialTab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";
+  const initialTab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "readings";
   const [tab, setTab] = useState<Tab>(initialTab);
   // `?profileId=` — the Contact page's "Energetic Decoding" quick links
   // (Decision Brief Decision 9, 2026-08-15) deep-link straight into a
-  // specific Profile's row on the Readings tab, always paired with
-  // `?tab=readings` by the link itself, so this never overrides the
-  // Home-vs-Readings default (Decision 3, still unresolved, untouched).
+  // specific Profile's row on the Readings tab. Previously always paired
+  // with an explicit `?tab=readings` by the link itself so it wouldn't
+  // silently decide the still-open default — now that Readings IS the
+  // default, that pairing is just belt-and-suspenders, not load-bearing.
   // Read once on mount, same as `requestedTab` above.
   const requestedProfileId = searchParams.get("profileId");
 
