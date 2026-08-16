@@ -1,10 +1,11 @@
 import "server-only";
 
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer";
-import { HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf } from "./reading-pdf-document";
+import { HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf, GeneKeysChartPdf } from "./reading-pdf-document";
 import { DEFAULT_DEFINED_FILL } from "./human-design-chart-constants";
 import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
+import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
 import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind } from "@/types/report-blocks";
 
@@ -53,6 +54,7 @@ function ChartPiecePdf({
   piece,
   humanDesign,
   astrology,
+  spheres,
   hdDesign,
   mandalaDesign,
   astroDesign,
@@ -60,6 +62,7 @@ function ChartPiecePdf({
   piece: ChartPieceKind;
   humanDesign?: HumanDesignProfile | null;
   astrology?: AstrologyChart | null;
+  spheres?: GeneKeysSphereResult[];
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
@@ -77,6 +80,12 @@ function ChartPiecePdf({
           profile={humanDesign}
           gateColor={mandalaDesign.chartDefinedColor || DEFAULT_DEFINED_FILL}
           backgroundColor={mandalaDesign.backgroundColor || "#ffffff"}
+          personalityColor={mandalaDesign.personalityActivationColor}
+          designColor={mandalaDesign.designActivationColor}
+          zodiacColor={mandalaDesign.mandalaZodiacColor}
+          gateRingColor={mandalaDesign.mandalaGateRingColor}
+          quadrantColor={mandalaDesign.mandalaQuadrantColor}
+          hdDesign={hdDesign}
         />
       ) : (
         <Text style={styles.missingPiece}>Mandala chart isn&apos;t part of this reading.</Text>
@@ -96,6 +105,17 @@ function ChartPiecePdf({
         <AstrologyWheelPdf chart={astrology} wheelAccentColor={astroDesign?.wheelAccentColor || "#7c3aed"} />
       ) : (
         <Text style={styles.missingPiece}>Astrology wheel isn&apos;t part of this reading.</Text>
+      );
+    case "frequency-hologenetic":
+      // Added 2026-08-15 (Phase 5) alongside the same chart-block option
+      // on the web side (report-design-viewer.tsx) — same shared
+      // GeneKeysChartPdf this file's reading-pdf-document.tsx sibling
+      // already uses for the standard reading PDF, not a second
+      // implementation.
+      return spheres && spheres.length > 0 ? (
+        <GeneKeysChartPdf spheres={spheres} />
+      ) : (
+        <Text style={styles.missingPiece}>Frequency profile isn&apos;t part of this reading.</Text>
       );
     default:
       return null;
@@ -153,6 +173,7 @@ export function ReportDesignPdfDocument({
   pages,
   humanDesign,
   astrology,
+  spheres,
   hdDesign,
   mandalaDesign,
   astroDesign,
@@ -165,6 +186,7 @@ export function ReportDesignPdfDocument({
   pages: ReportPage[];
   humanDesign?: HumanDesignProfile | null;
   astrology?: AstrologyChart | null;
+  spheres?: GeneKeysSphereResult[];
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
@@ -194,6 +216,7 @@ export function ReportDesignPdfDocument({
                     piece={block.piece}
                     humanDesign={humanDesign}
                     astrology={astrology}
+                    spheres={spheres}
                     hdDesign={hdDesign}
                     mandalaDesign={mandalaDesign}
                     astroDesign={astroDesign}

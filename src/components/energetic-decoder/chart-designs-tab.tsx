@@ -358,6 +358,9 @@ interface EditableFields {
   backgroundColor: string;
   wheelAccentColor: string;
   houseSystem: ChartDesign["houseSystem"];
+  mandalaZodiacColor: string;
+  mandalaGateRingColor: string;
+  mandalaQuadrantColor: string;
 }
 
 function fieldsFrom(design: ChartDesign): EditableFields {
@@ -385,6 +388,9 @@ function fieldsFrom(design: ChartDesign): EditableFields {
     backgroundColor: design.backgroundColor,
     wheelAccentColor: design.wheelAccentColor,
     houseSystem: design.houseSystem,
+    mandalaZodiacColor: design.mandalaZodiacColor,
+    mandalaGateRingColor: design.mandalaGateRingColor,
+    mandalaQuadrantColor: design.mandalaQuadrantColor,
   };
 }
 
@@ -452,7 +458,24 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     "backgroundColor",
   ],
   astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
-  mandala: ["chartDefinedColor", "backgroundColor"],
+  // Expanded 2026-08-15 (Phase 6) — the Mandala rebuild added real layers
+  // (zodiac ring, gate ring, quadrants, Personality/Design distinction)
+  // that had no design controls before because there was nothing to
+  // control. personalityActivationColor/designActivationColor are the
+  // exact same fields humanDesign already exposes (see chart-design.ts's
+  // header note on why this reuses them instead of adding a duplicate
+  // pair) — a sub-account's Personality/Design colors now mean the same
+  // thing consistently across HD Traditional and Mandala, not two
+  // separately-configured pairs that could drift apart.
+  mandala: [
+    "chartDefinedColor",
+    "personalityActivationColor",
+    "designActivationColor",
+    "mandalaZodiacColor",
+    "mandalaGateRingColor",
+    "mandalaQuadrantColor",
+    "backgroundColor",
+  ],
 };
 
 const FIELD_LABEL: Record<keyof EditableFields, string> = {
@@ -485,7 +508,25 @@ const FIELD_LABEL: Record<keyof EditableFields, string> = {
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   houseSystem: "House system",
+  mandalaZodiacColor: "Zodiac ring",
+  mandalaGateRingColor: "Gate ring",
+  mandalaQuadrantColor: "Quadrant dividers",
 };
+
+/**
+ * chartDefinedColor means something different per system (HD: defined-
+ * center fill; Mandala: activated-gate accent ring — see chart-design.ts's
+ * own field comment) but FIELD_LABEL above is one flat label per field
+ * key. Real, pre-existing mislabel found while expanding Mandala's
+ * controls 2026-08-15 (Phase 6) — the Mandala card showed "Defined
+ * centers" for a field that has nothing to do with centers. Fixed with
+ * this one small override rather than restructuring FIELD_LABEL into a
+ * per-system map for a single affected field.
+ */
+function labelFor(system: ChartDesignSystem, key: keyof EditableFields): string {
+  if (key === "chartDefinedColor" && system === "mandala") return "Activated gates";
+  return FIELD_LABEL[key];
+}
 
 function ChartDesignCard({
   design,
@@ -623,7 +664,7 @@ function ChartDesignCard({
                   onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
                   disabled={!isAdmin}
                   className="h-8 w-8 shrink-0 cursor-pointer rounded-md border disabled:cursor-not-allowed"
-                  aria-label={FIELD_LABEL[key]}
+                  aria-label={labelFor(design.system, key)}
                 />
                 <Input
                   value={fields[key]}
@@ -631,7 +672,7 @@ function ChartDesignCard({
                   disabled={!isAdmin}
                   className="h-8 text-xs"
                 />
-                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{FIELD_LABEL[key]}</span>
+                <span className="w-28 shrink-0 text-[11px] text-muted-foreground">{labelFor(design.system, key)}</span>
               </div>
               {key === "channelsColor" && (
                 <p className="pl-10 text-[10px] leading-snug text-muted-foreground/70">
@@ -731,6 +772,17 @@ function CardPreview({
         className="mx-auto w-full max-w-[220px]"
         gateColor={fields.chartDefinedColor}
         backgroundColor={fields.backgroundColor}
+        personalityColor={fields.personalityActivationColor}
+        designColor={fields.designActivationColor}
+        zodiacColor={fields.mandalaZodiacColor}
+        gateRingColor={fields.mandalaGateRingColor}
+        quadrantColor={fields.mandalaQuadrantColor}
+        // This 220px card thumbnail previews the Mandala's OWN ring
+        // colors — showing a second, real, full-size embedded BodyGraph
+        // at this scale would be illegible and isn't what this preview is
+        // for (compare against the HD Traditional card above it, which
+        // previews that system's own chart, not a Mandala-in-miniature).
+        showCenterChart={false}
       />
     );
   }

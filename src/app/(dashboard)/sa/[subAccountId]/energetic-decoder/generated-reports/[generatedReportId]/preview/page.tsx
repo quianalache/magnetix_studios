@@ -8,6 +8,7 @@ import { ReportDesignViewer } from "@/components/energetic-decoder/report-design
 import type { ReportDesign } from "@/types/report-blocks";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
+import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
 
 interface PreviewData {
@@ -18,6 +19,7 @@ interface PreviewData {
     birthPlace: string;
     humanDesign: HumanDesignProfile | null;
     astrology: AstrologyChart | null;
+    spheres?: GeneKeysSphereResult[];
   };
   sourceLabel: string;
   hdDesign: ChartDesign | null;

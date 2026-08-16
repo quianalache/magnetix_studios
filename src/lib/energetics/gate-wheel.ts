@@ -4,7 +4,7 @@ import { Body, Ecliptic, GeoVector, MakeTime } from "astronomy-engine";
 import { trueNode, perigee as meanLunarPerigee } from "astronomia/moonposition";
 import { nutation } from "astronomia/nutation";
 import { utcFromWallClock } from "@/lib/booking/availability";
-import { GATE_WHEEL_ORDER } from "./gate-data";
+import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG, DEGREES_PER_GATE } from "./gate-data";
 
 /**
  * The proven gate-wheel primitives, extracted out of gene-keys.ts (2026-08-08)
@@ -17,17 +17,17 @@ import { GATE_WHEEL_ORDER } from "./gate-data";
  * point, real independent confirmation this is correct).
  */
 
-/** 360° / 64 gates. */
-const DEGREES_PER_GATE = 360 / 64;
-/** Each gate spans 6 lines. */
+/** Each gate spans 6 lines. DEGREES_PER_GATE itself now lives in gate-data.ts (2026-08-15) — imported above, not redeclared — so the Mandala's zodiac ring can share the exact same constant without a client-safe file importing this server-only one. */
 const DEGREES_PER_LINE = DEGREES_PER_GATE / 6;
 /**
  * The gate wheel's zero point sits at 302° of raw tropical ecliptic
  * longitude, not 0° Aries — this offset rotates raw longitude into
  * "wheel space" before the gate lookup. Fixed by the Human Design / Gene
- * Keys system, not a tunable.
+ * Keys system, not a tunable. Now WHEEL_START_LONGITUDE_DEG, imported from
+ * gate-data.ts (2026-08-15) — same value, same reason as DEGREES_PER_GATE
+ * above.
  */
-const WHEEL_OFFSET_DEG = 302;
+const WHEEL_OFFSET_DEG = WHEEL_START_LONGITUDE_DEG;
 /** How many days before birth the "Design" (unconscious) chart is cast —
  *  the classic ~88° solar-arc offset, refined below to the exact instant. */
 const DESIGN_OFFSET_DAYS = 88;

@@ -284,6 +284,12 @@ function ChartPieceView({
           profile={hd}
           gateColor={mandalaDesign.chartDefinedColor}
           backgroundColor={mandalaDesign.backgroundColor}
+          personalityColor={mandalaDesign.personalityActivationColor}
+          designColor={mandalaDesign.designActivationColor}
+          zodiacColor={mandalaDesign.mandalaZodiacColor}
+          gateRingColor={mandalaDesign.mandalaGateRingColor}
+          quadrantColor={mandalaDesign.mandalaQuadrantColor}
+          hdDesign={hdDesign}
         />
       ) : (
         <MissingPiece label="Mandala chart" />

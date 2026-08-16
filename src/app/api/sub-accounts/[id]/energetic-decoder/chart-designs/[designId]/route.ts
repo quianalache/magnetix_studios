@@ -73,6 +73,15 @@ export async function PATCH(
     if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
     if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
     if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;
+    // Mandala fields, added 2026-08-15 (Phase 6) — real near-miss caught
+    // while wiring these up: this route's allow-list is hand-maintained,
+    // separate from chart-designs-tab.tsx's SYSTEM_FIELDS, so adding a
+    // field to the UI alone would have saved silently as a no-op (a real
+    // "not wired" bug, exactly the class of issue the Phase 4 correctness
+    // pass exists to catch) without this route also accepting it.
+    if (typeof body.mandalaZodiacColor === "string") fields.mandalaZodiacColor = body.mandalaZodiacColor;
+    if (typeof body.mandalaGateRingColor === "string") fields.mandalaGateRingColor = body.mandalaGateRingColor;
+    if (typeof body.mandalaQuadrantColor === "string") fields.mandalaQuadrantColor = body.mandalaQuadrantColor;
 
     const design = await updateChartDesign(subAccountId, designId, fields);
     return NextResponse.json({ ok: true, design });

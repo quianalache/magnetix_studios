@@ -4,6 +4,7 @@ import { renderToStream } from "@react-pdf/renderer";
 import { ReportDesignPdfDocument } from "./report-design-pdf-document";
 import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
+import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
 import type { ReportPage } from "@/types/report-blocks";
 
@@ -16,6 +17,8 @@ export async function renderReportDesignPdfStream(opts: {
   pages: ReportPage[];
   humanDesign?: HumanDesignProfile | null;
   astrology?: AstrologyChart | null;
+  /** Added 2026-08-15 (Phase 5) alongside the "frequency-hologenetic" chart block — was missing entirely, which would have silently dropped Frequency data even though ReportDesignPdfDocument itself already accepted the prop. */
+  spheres?: GeneKeysSphereResult[];
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;

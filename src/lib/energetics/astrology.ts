@@ -10,6 +10,7 @@ import {
   parseBirthToUtc,
   type WallClockBirthInput,
 } from "./gate-wheel";
+import { SIGNS, type ZodiacSign } from "./gate-data";
 
 /**
  * Western Tropical natal-chart calculator — Ascendant/MC/houses/aspects.
@@ -34,14 +35,12 @@ const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
 const J2000_JD = 2451545.0;
 
-export type ZodiacSign =
-  | "Aries" | "Taurus" | "Gemini" | "Cancer" | "Leo" | "Virgo"
-  | "Libra" | "Scorpio" | "Sagittarius" | "Capricorn" | "Aquarius" | "Pisces";
-
-export const SIGNS: readonly ZodiacSign[] = [
-  "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-  "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
-];
+// ZodiacSign/SIGNS moved to gate-data.ts (2026-08-15, Phase 6) so the
+// client-rendered Mandala can import them without pulling in this
+// `server-only` file. Re-exported here so every existing importer of
+// astrology.ts keeps working unchanged.
+export type { ZodiacSign };
+export { SIGNS };
 
 function normalizeDeg(deg: number): number {
   const d = deg % 360;

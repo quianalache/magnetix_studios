@@ -46,6 +46,11 @@ export async function GET(
     birthPlace: real.birthPlace,
     humanDesign: real.humanDesign,
     astrology: real.astrology,
+    // Added 2026-08-15 (Phase 5) — was missing here, which would have
+    // silently blanked the Frequency block on this preview surface even
+    // though the sibling report-designs preview-data route (and the PDF
+    // route) already carry it.
+    spheres: real.spheres,
   };
 
   // Honors the source reading's Profile's saved-design override, if it has

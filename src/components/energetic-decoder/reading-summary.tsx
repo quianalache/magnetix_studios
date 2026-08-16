@@ -273,6 +273,12 @@ export function HumanDesignSummary({
             className="mx-auto w-full max-w-[420px]"
             gateColor={mandalaDesign.chartDefinedColor}
             backgroundColor={mandalaDesign.backgroundColor}
+            personalityColor={mandalaDesign.personalityActivationColor}
+            designColor={mandalaDesign.designActivationColor}
+            zodiacColor={mandalaDesign.mandalaZodiacColor}
+            gateRingColor={mandalaDesign.mandalaGateRingColor}
+            quadrantColor={mandalaDesign.mandalaQuadrantColor}
+            hdDesign={hdDesign}
           />
         </div>
       )}

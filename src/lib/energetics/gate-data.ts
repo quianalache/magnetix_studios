@@ -19,6 +19,34 @@ export const GATE_WHEEL_ORDER: readonly number[] = [
   11, 10, 58, 38, 54, 61, 60,
 ];
 
+/**
+ * The wheel's real astronomical anchor — moved here 2026-08-15 (Phase 6,
+ * Mandala rebuild) from being a private constant inside gate-wheel.ts
+ * (which is `server-only` and can't be imported into a client-rendered
+ * chart) so the Mandala's zodiac ring can compute each gate's real
+ * ecliptic sign without a second, hand-copied "302" living in two files.
+ * gate-wheel.ts now imports these from here instead of declaring its own —
+ * same values, single source, not a recalculation or a new engine.
+ */
+export const WHEEL_START_LONGITUDE_DEG = 302;
+export const DEGREES_PER_GATE = 360 / 64;
+
+/**
+ * The 12 tropical zodiac signs — moved here 2026-08-15 (Phase 6, Mandala
+ * rebuild) from astrology.ts, which is `server-only` and therefore couldn't
+ * be imported into the client-rendered Mandala's zodiac ring. Same values,
+ * same order, single source — astrology.ts now re-exports these instead of
+ * declaring its own, exactly the WHEEL_START_LONGITUDE_DEG pattern above.
+ */
+export type ZodiacSign =
+  | "Aries" | "Taurus" | "Gemini" | "Cancer" | "Leo" | "Virgo"
+  | "Libra" | "Scorpio" | "Sagittarius" | "Capricorn" | "Aquarius" | "Pisces";
+
+export const SIGNS: readonly ZodiacSign[] = [
+  "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+  "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+];
+
 export interface GeneKeyNames {
   gate: number;
   shadow: string;

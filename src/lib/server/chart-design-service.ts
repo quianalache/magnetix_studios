@@ -88,6 +88,17 @@ function freshDesignFields() {
     backgroundColor: "#ffffff",
     houseSystem: "placidus" as const,
     wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
+    // Mandala-only, added 2026-08-15 (Phase 6, completing the Mandala
+    // rebuild) — defaults are this chart's own original picks, not copied
+    // from Bodygraph (whose Mandala isn't reachable through its API to
+    // even compare against). Violet for the zodiac ring ties it visually
+    // to this app's own established brand purple (wheelAccentColor above)
+    // without being the identical value, so the two rings read as
+    // related but distinct on a chart that shows both HD and astrology
+    // structure at once.
+    mandalaZodiacColor: "#8b5cf6",
+    mandalaGateRingColor: "#71717a", // zinc-500 — neutral structural ink, matches this app's other faint-ring conventions
+    mandalaQuadrantColor: "#71717a",
   };
 }
 
@@ -173,6 +184,10 @@ function missingFieldsPatch(d: ChartDesign): Record<string, string | number> {
   if (d.sacralCenterColor === undefined) patch.sacralCenterColor = fresh.sacralCenterColor;
   if (d.solarPlexusCenterColor === undefined) patch.solarPlexusCenterColor = fresh.solarPlexusCenterColor;
   if (d.rootCenterColor === undefined) patch.rootCenterColor = fresh.rootCenterColor;
+  // Mandala fields — same backfill reasoning, 2026-08-15.
+  if (d.mandalaZodiacColor === undefined) patch.mandalaZodiacColor = fresh.mandalaZodiacColor;
+  if (d.mandalaGateRingColor === undefined) patch.mandalaGateRingColor = fresh.mandalaGateRingColor;
+  if (d.mandalaQuadrantColor === undefined) patch.mandalaQuadrantColor = fresh.mandalaQuadrantColor;
   return patch;
 }
 

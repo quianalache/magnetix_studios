@@ -52,6 +52,7 @@ export async function GET(
     pages: generatedReport.snapshot.pages,
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
+    spheres: reading.spheres,
     hdDesign,
     mandalaDesign,
     astroDesign,

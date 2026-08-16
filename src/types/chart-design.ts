@@ -81,13 +81,14 @@ export interface ChartDesign {
   /** HD only — activated-gate number/dot accent color. */
   gatesColor: string;
   /**
-   * HD only — Personality-side activation marker color, for the full
-   * chart layout's Personality column (not built yet — see header
-   * comment). `human-design-chart.tsx`'s BodyGraph itself still uses its
-   * own hardcoded Personality color, unaffected by this field for now.
+   * HD and Mandala — Personality-side activation marker color. Originally
+   * HD-only (the full chart layout's Personality column); reused as-is by
+   * mandala-chart.tsx as of 2026-08-15 (Phase 6) for its own Personality
+   * dots/planet-glyphs/line-glyphs instead of adding a second, redundant
+   * field for the same concept on the same record shape.
    */
   personalityActivationColor: string;
-  /** HD only — Design-side activation marker color. Same "not wired to the BodyGraph yet" note as personalityActivationColor above. */
+  /** HD and Mandala — Design-side activation marker color. Same reuse note as personalityActivationColor above. */
   designActivationColor: string;
   /** HD only — Variable arrow accent color, for the 4 arrows around the full chart layout (not built yet). */
   arrowColor: string;
@@ -117,6 +118,12 @@ export interface ChartDesign {
   houseSystem: "placidus" | "whole" | "equal";
   /** Astrology only — ring/planet-marker accent color. */
   wheelAccentColor: string;
+  /** Mandala only, added 2026-08-15 (Phase 6, completing the Mandala rebuild) — the outer zodiac ring's band/label color. */
+  mandalaZodiacColor: string;
+  /** Mandala only — the structural gate-ring boundary circles and inactive-gate tick color (distinct from chartDefinedColor/gateColor, which is the accent ring around each activated dot). */
+  mandalaGateRingColor: string;
+  /** Mandala only — the 4 quadrant divider lines and their numbers. */
+  mandalaQuadrantColor: string;
   /**
    * ISO string, not a raw Firestore Timestamp — resolved server-side
    * (chart-design-service.ts's `toDesign`) before this ever reaches a
