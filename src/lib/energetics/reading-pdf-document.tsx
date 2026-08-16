@@ -38,6 +38,8 @@ import {
   JUNCTION_GATES,
   declutterGateLabels,
   shapePoints,
+  channelStripPoints,
+  CHANNEL_STRIP_HALF_WIDTH,
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { SIGNS } from "./astrology";
@@ -208,33 +210,30 @@ function HangingGateStubPdf({
   const length = Math.min(STUB_LENGTH, dist * STUB_LENGTH_CAP_FRACTION);
   const ux = dx / dist;
   const uy = dy / dist;
-  const endX = gate.x + ux * length;
-  const endY = gate.y + uy * length;
+  const end = { x: gate.x + ux * length, y: gate.y + uy * length };
 
+  // Real construction fix, 2026-08-16 — same as the DOM version: a real
+  // Bodygraph hanging/defined connector is a filled polygon strip, not a
+  // stroked line (confirmed from Alex Davis's actual SVG). Same colors,
+  // same split logic.
   if (personalityActive && designActive) {
-    const midX = gate.x + ux * length * 0.5;
-    const midY = gate.y + uy * length * 0.5;
+    const mid = { x: gate.x + ux * length * 0.5, y: gate.y + uy * length * 0.5 };
     return (
       <>
-        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.8} strokeLinecap="round" />
-        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.8} strokeLinecap="round" />
+        <Polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
+        <Polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
       </>
     );
   }
   return (
-    <Line
-      x1={gate.x}
-      y1={gate.y}
-      x2={endX}
-      y2={endY}
-      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={2.8}
-      strokeLinecap="round"
+    <Polygon
+      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
+      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
     />
   );
 }
 
-/** Mirrors CompleteChannelHalf in human-design-chart.tsx — same geometry, react-pdf's Line instead of DOM line. */
+/** Mirrors CompleteChannelHalf in human-design-chart.tsx — same geometry, filled-polygon construction (2026-08-16 fix, see that file's comment). */
 function CompleteChannelHalfPdf({
   gate,
   toward,
@@ -253,28 +252,21 @@ function CompleteChannelHalfPdf({
   const ux = dx / dist;
   const uy = dy / dist;
   const half = dist / 2;
-  const endX = gate.x + ux * half;
-  const endY = gate.y + uy * half;
+  const end = { x: gate.x + ux * half, y: gate.y + uy * half };
 
   if (personalityActive && designActive) {
-    const midX = gate.x + ux * half * 0.5;
-    const midY = gate.y + uy * half * 0.5;
+    const mid = { x: gate.x + ux * half * 0.5, y: gate.y + uy * half * 0.5 };
     return (
       <>
-        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.6} strokeLinecap="round" />
-        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.6} strokeLinecap="round" />
+        <Polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
+        <Polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
       </>
     );
   }
   return (
-    <Line
-      x1={gate.x}
-      y1={gate.y}
-      x2={endX}
-      y2={endY}
-      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={2.6}
-      strokeLinecap="round"
+    <Polygon
+      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
+      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
     />
   );
 }
@@ -350,17 +342,14 @@ function HumanDesignBodygraphPdf({
                 <CompleteChannelHalfPdf gate={a} toward={b} personalityActive={personalityGates.has(gateA)} designActive={designGates.has(gateA)} />
                 <CompleteChannelHalfPdf gate={b} toward={a} personalityActive={personalityGates.has(gateB)} designActive={designGates.has(gateB)} />
               </>
+            ) : isDefined ? (
+              // Defined junction channel — same filled-polygon fix as the
+              // DOM version (2026-08-16), one flat color, no P/D split
+              // (deliberate, pre-existing treatment for these 6 channels).
+              <Polygon points={channelStripPoints(a, b, CHANNEL_STRIP_HALF_WIDTH)} fill={channelsColor} fillOpacity={0.9} />
             ) : (
-              <Line
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
-                strokeWidth={isDefined ? 2.6 : 0.4}
-                strokeLinecap={isDefined ? "round" : undefined}
-                strokeOpacity={isDefined ? 0.9 : 0.7}
-              />
+              // Undefined/background channel — faint full network, unchanged.
+              <Line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={DEFAULT_DEFINED_FILL} strokeWidth={0.4} strokeOpacity={0.7} />
             )}
             {!isJunctionChannel && !twoTone && (
               <>

@@ -18,6 +18,8 @@ import {
   JUNCTION_GATES,
   declutterGateLabels,
   shapePoints,
+  channelStripPoints,
+  CHANNEL_STRIP_HALF_WIDTH,
 } from "@/lib/energetics/human-design-chart-constants";
 
 /**
@@ -83,6 +85,13 @@ import {
  * "personality is primary, design extends further" framing already used
  * for the activated-gate number offset above), not a measured match to
  * Bodygraph's own internal stub geometry, which we don't copy.
+ *
+ * Real construction fix, 2026-08-16 — confirmed by inspecting Alex
+ * Davis's actual defined-channel SVG via the live Bodygraph API: a real
+ * hanging/defined connector is a closed FILLED POLYGON strip with real
+ * width, not a stroked line (however thick). Rendered with
+ * channelStripPoints below instead of `<line>` — same colors, same
+ * split logic, only the shape primitive changed.
  */
 function HangingGateStub({
   gate,
@@ -102,28 +111,21 @@ function HangingGateStub({
   const length = Math.min(STUB_LENGTH, dist * STUB_LENGTH_CAP_FRACTION);
   const ux = dx / dist;
   const uy = dy / dist;
-  const endX = gate.x + ux * length;
-  const endY = gate.y + uy * length;
+  const end = { x: gate.x + ux * length, y: gate.y + uy * length };
 
   if (personalityActive && designActive) {
-    const midX = gate.x + ux * length * 0.5;
-    const midY = gate.y + uy * length * 0.5;
+    const mid = { x: gate.x + ux * length * 0.5, y: gate.y + uy * length * 0.5 };
     return (
       <>
-        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.8} strokeLinecap="round" />
-        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.8} strokeLinecap="round" />
+        <polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
+        <polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
       </>
     );
   }
   return (
-    <line
-      x1={gate.x}
-      y1={gate.y}
-      x2={endX}
-      y2={endY}
-      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={2.8}
-      strokeLinecap="round"
+    <polygon
+      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
+      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
     />
   );
 }
@@ -151,9 +153,17 @@ function HangingGateStub({
  *
  * Only applies to complete, non-junction channels — junction channels
  * (the "Community square", see JUNCTION_GATES below) keep their
- * existing full-strength single-color line exactly as before, same
+ * existing full-strength single-color rendering exactly as before, same
  * conservative treatment already established for hanging-gate stubs on
  * those 6 channels.
+ *
+ * Real construction fix, 2026-08-16 — same as HangingGateStub above:
+ * confirmed from Alex Davis's actual defined-channel SVG (gate 37-40,
+ * pulled live via the Bodygraph API) that a real defined channel is a
+ * closed FILLED POLYGON strip, not a stroked line — each half a
+ * separate polygon, matching the personality-N/design-N element pair
+ * Bodygraph's own SVG uses for that same gate. Same colors, same split
+ * logic as before; only the shape primitive changed.
  */
 function CompleteChannelHalf({
   gate,
@@ -173,28 +183,21 @@ function CompleteChannelHalf({
   const ux = dx / dist;
   const uy = dy / dist;
   const half = dist / 2;
-  const endX = gate.x + ux * half;
-  const endY = gate.y + uy * half;
+  const end = { x: gate.x + ux * half, y: gate.y + uy * half };
 
   if (personalityActive && designActive) {
-    const midX = gate.x + ux * half * 0.5;
-    const midY = gate.y + uy * half * 0.5;
+    const mid = { x: gate.x + ux * half * 0.5, y: gate.y + uy * half * 0.5 };
     return (
       <>
-        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.6} strokeLinecap="round" />
-        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.6} strokeLinecap="round" />
+        <polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
+        <polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
       </>
     );
   }
   return (
-    <line
-      x1={gate.x}
-      y1={gate.y}
-      x2={endX}
-      y2={endY}
-      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={2.6}
-      strokeLinecap="round"
+    <polygon
+      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
+      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
     />
   );
 }
@@ -320,17 +323,19 @@ export function HumanDesignChart({
                     designActive={designGates.has(gateB)}
                   />
                 </>
+              ) : isDefined ? (
+                // Defined junction channel — real construction fix,
+                // 2026-08-16: same filled-polygon technique as
+                // CompleteChannelHalf above, just one flat color spanning
+                // the whole channel (junction channels don't get the
+                // Personality/Design split — deliberate, pre-existing
+                // conservative treatment, unchanged here).
+                <polygon points={channelStripPoints(a, b, CHANNEL_STRIP_HALF_WIDTH)} fill={channelsColor} fillOpacity={0.9} />
               ) : (
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
-                  strokeWidth={isDefined ? 2.6 : 0.4}
-                  strokeLinecap={isDefined ? "round" : undefined}
-                  strokeOpacity={isDefined ? 0.9 : 0.7}
-                />
+                // Undefined/background channel — the faint full 36-channel
+                // network, unchanged: a thin line, not part of today's
+                // fix (only DEFINED channel construction changed).
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={DEFAULT_DEFINED_FILL} strokeWidth={0.4} strokeOpacity={0.7} />
               )}
               {!isJunctionChannel && !twoTone && (
                 <>

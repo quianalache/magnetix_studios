@@ -123,6 +123,39 @@ export function declutterGateLabels(
 }
 
 /**
+ * A channel/stub segment as a filled polygon strip, not a stroked line —
+ * the real Bodygraph technique, confirmed 2026-08-16 by inspecting Alex
+ * Davis's actual defined-channel SVG (gate 37-40) via the live API: each
+ * channel half is a closed 4-point polygon with real width, not a
+ * stroke. Reusable as-is by both DOM `<polygon points="...">` and
+ * react-pdf's `<Polygon points="...">`, same string format as
+ * shapePoints below. A clean rectangular strip (perpendicular offset,
+ * uniform width) — not a hand-fitted taper like Bodygraph's own
+ * per-gate coordinates, which isn't verifiable/reproducible generically
+ * from one sample; this is the honest, computable approximation of
+ * their real construction, not a guess at decorative detail.
+ */
+export function channelStripPoints(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  halfWidth: number,
+): string {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 0.0001;
+  const px = (-dy / dist) * halfWidth;
+  const py = (dx / dist) * halfWidth;
+  return [
+    `${(from.x + px).toFixed(2)},${(from.y + py).toFixed(2)}`,
+    `${(to.x + px).toFixed(2)},${(to.y + py).toFixed(2)}`,
+    `${(to.x - px).toFixed(2)},${(to.y - py).toFixed(2)}`,
+    `${(from.x - px).toFixed(2)},${(from.y - py).toFixed(2)}`,
+  ].join(" ");
+}
+/** Half-width (viewBox units) for the filled channel-strip polygons — full width ~2.4, comparable to the stroke weight it replaces. */
+export const CHANNEL_STRIP_HALF_WIDTH = 1.2;
+
+/**
  * Center shape geometry — pure string math. Reusable as-is by both DOM
  * `<polygon points="...">` and react-pdf's `<Polygon points="...">`,
  * which use the identical "x,y x,y ..." string format.
