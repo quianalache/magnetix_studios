@@ -216,8 +216,8 @@ function HangingGateStubPdf({
     const midY = gate.y + uy * length * 0.5;
     return (
       <>
-        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.3} strokeLinecap="round" />
-        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.3} strokeLinecap="round" />
+        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.8} strokeLinecap="round" />
+        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.8} strokeLinecap="round" />
       </>
     );
   }
@@ -228,7 +228,7 @@ function HangingGateStubPdf({
       x2={endX}
       y2={endY}
       stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={1.3}
+      strokeWidth={2.8}
       strokeLinecap="round"
     />
   );
@@ -261,8 +261,8 @@ function CompleteChannelHalfPdf({
     const midY = gate.y + uy * half * 0.5;
     return (
       <>
-        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.1} strokeLinecap="round" />
-        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.1} strokeLinecap="round" />
+        <Line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.6} strokeLinecap="round" />
+        <Line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.6} strokeLinecap="round" />
       </>
     );
   }
@@ -273,7 +273,7 @@ function CompleteChannelHalfPdf({
       x2={endX}
       y2={endY}
       stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={1.1}
+      strokeWidth={2.6}
       strokeLinecap="round"
     />
   );
@@ -311,17 +311,15 @@ function HumanDesignBodygraphPdf({
   const resolveCenterColor = (c: CenterKey): string =>
     centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? centersColor) : centersColor;
 
-  // Real bug caught 2026-08-16 comparing this SVG directly against a real
-  // Bodygraph API-rendered SVG for the same chart: same fix as
-  // human-design-chart.tsx's identical finding — the real content only
-  // spans a tall ~0.6:1 width:height shape, matching Bodygraph's own
-  // measured ~0.577:1; the old viewBox was ~1.06:1 (nearly square),
-  // leaving ~45% dead horizontal margin around a correctly-proportioned
-  // diagram. Tightened to the real content bounds, same coordinates.
-  const height = size * (106 / 64); // matches the real viewBox aspect ratio, "18 -7 64 106"
+  // viewBox recomputed 2026-08-16 alongside the CENTER_LAYOUT/GATE_OFFSETS
+  // fix (see human-design-chart-layout.ts's header comment) — same
+  // recomputation as human-design-chart.tsx's identical viewBox, not
+  // reused from the prior pass since the real content bounds grew once
+  // centers got bigger and gate offsets were corrected.
+  const height = size * (142 / 84); // matches the real viewBox aspect ratio, "8 -25 84 142"
 
   return (
-    <Svg viewBox="18 -7 64 106" style={{ width: size, height }}>
+    <Svg viewBox="8 -25 84 142" style={{ width: size, height }}>
       {/*
        * Real bug caught 2026-08-15 rendering an actual PDF (the Mandala's
        * embedded copy of this chart passes backgroundColor="transparent"
@@ -359,7 +357,8 @@ function HumanDesignBodygraphPdf({
                 x2={b.x}
                 y2={b.y}
                 stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
-                strokeWidth={isDefined ? 1.1 : 0.35}
+                strokeWidth={isDefined ? 2.6 : 0.4}
+                strokeLinecap={isDefined ? "round" : undefined}
                 strokeOpacity={isDefined ? 0.9 : 0.7}
               />
             )}
@@ -653,18 +652,17 @@ const MANDALA_PLANET_GLYPH_R = 32;
 const MANDALA_GATE_ARC_DEG = 360 / 64;
 const MANDALA_SIZE = 300; // bigger than the 180pt BodyGraph/240pt Astrology wheel — 64 tightly-packed gate numbers need more room to stay legible than either of those.
 /**
- * % of MANDALA_SIZE the embedded BodyGraph occupies. 80% was tuned
- * (2026-08-16, first pass) against the bodygraph's OLD, loosely-padded
- * viewBox. That viewBox was tightened the same day after comparing it
- * against a real Bodygraph API SVG (see HumanDesignBodygraphPdf's own
- * viewBox comment) — its real ink now fills ~88% of its own box instead
- * of ~55%, so the same 80% here overcorrected into overlapping the
- * gate-number rows once that fix landed (caught by re-rendering this
- * same Mandala PDF, not assumed). Rescaled down by that same ratio to
- * restore the original, already-verified ink size — same fix as
- * mandala-chart.tsx.
+ * % of MANDALA_SIZE the embedded BodyGraph occupies. Retuned twice more
+ * (2026-08-16) after the shared HumanDesignBodygraphPdf's own layout was
+ * fixed for a separate, real reason (G-center gates genuinely outside
+ * the diamond, every center too cramped for its own gates — see
+ * human-design-chart-layout.ts's header comment): bigger centers mean
+ * the same bodygraph content now fills even more of its own tightly-
+ * fitted viewBox, so this percentage needed to come down again to avoid
+ * re-overlapping the gate-number rows — caught by re-rendering this same
+ * Mandala PDF after each layout change, not assumed still correct.
  */
-const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.62;
+const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.48;
 
 function mandalaAngleForGateIndex(i: number): number {
   // 12 o'clock = -90°, clockwise = increasing angle — same convention mandala-chart.tsx documents.

@@ -46,6 +46,22 @@ import {
  * solid-filled circle + reversed white text 2026-08-10 — see
  * PERSONALITY_FILL/DESIGN_FILL below — after comparing against real
  * Bodygraph renders, every one of which fills the circle solid.)
+ *
+ * 2026-08-16 — two real, evidenced fixes, not a re-theme: (1) real
+ * geometry bug, confirmed by measurement — several G-center gates
+ * (7/13/15/46) sat mathematically outside the diamond's own boundary
+ * (a diamond's interior is |dx|+|dy|<=1, not a square's independent
+ * per-axis bound), and every other center left only ~1-1.2 units of
+ * clearance before even subtracting the activated marker's own radius.
+ * Centers enlarged 1.35x (uniformly, around a fixed anchor, so relative
+ * spacing between centers didn't change) and every GATE_OFFSETS entry
+ * pulled inward to a verified-by-computation clearance — see
+ * human-design-chart-layout.ts's header comment for the exact numbers.
+ * (2) Channel lines thickened substantially (defined channels/hanging
+ * stubs ~1.1-1.3 -> ~2.6-2.8, real fillable bands instead of thin
+ * wires) — a real legibility/weight gap against Bodygraph's own
+ * rendering, closed with Magnetix's own existing Personality/Design/
+ * channel colors, not a new palette.
  */
 
 /**
@@ -94,8 +110,8 @@ function HangingGateStub({
     const midY = gate.y + uy * length * 0.5;
     return (
       <>
-        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.3} strokeLinecap="round" />
-        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.3} strokeLinecap="round" />
+        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.8} strokeLinecap="round" />
+        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.8} strokeLinecap="round" />
       </>
     );
   }
@@ -106,7 +122,7 @@ function HangingGateStub({
       x2={endX}
       y2={endY}
       stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={1.3}
+      strokeWidth={2.8}
       strokeLinecap="round"
     />
   );
@@ -165,8 +181,8 @@ function CompleteChannelHalf({
     const midY = gate.y + uy * half * 0.5;
     return (
       <>
-        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={1.1} strokeLinecap="round" />
-        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={1.1} strokeLinecap="round" />
+        <line x1={gate.x} y1={gate.y} x2={midX} y2={midY} stroke={HANGING_PERSONALITY} strokeWidth={2.6} strokeLinecap="round" />
+        <line x1={midX} y1={midY} x2={endX} y2={endY} stroke={HANGING_DESIGN} strokeWidth={2.6} strokeLinecap="round" />
       </>
     );
   }
@@ -177,7 +193,7 @@ function CompleteChannelHalf({
       x2={endX}
       y2={endY}
       stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-      strokeWidth={1.1}
+      strokeWidth={2.6}
       strokeLinecap="round"
     />
   );
@@ -261,20 +277,15 @@ export function HumanDesignChart({
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
       {/*
-       * Real bug caught 2026-08-16 comparing this SVG directly against a
-       * real Bodygraph API-rendered SVG for the same chart: the actual
-       * bodygraph content (CENTER_LAYOUT + shapePoints extents) only spans
-       * roughly x:[21.8, 78.2] y:[-3.85, 95] — a tall, narrow ~0.6:1
-       * width:height shape, matching Bodygraph's own real rendered
-       * proportions (measured: 400x693, ~0.577:1). The old viewBox
-       * ("-4 -3 108 102", ~1.06:1 — nearly square) gave the diagram
-       * roughly 45% dead horizontal margin on top of that correctly-
-       * proportioned content, rendering it small and letterboxed. Tightened
-       * to match the real content bounds (plus a small safety pad) instead
-       * of changing any center/gate coordinate — same diagram, same
-       * calculations, just no longer shrunk inside an oversized canvas.
+       * viewBox recomputed 2026-08-16 alongside the CENTER_LAYOUT/
+       * GATE_OFFSETS fix (see human-design-chart-layout.ts's header
+       * comment) — centers got bigger and gate offsets were corrected, so
+       * the real content bounds grew from the previous pass's measurement.
+       * Recomputed from the actual new CENTER_LAYOUT/shapePoints extents
+       * (x:[11.9,88.1] y:[-21.1,112.3], + a small safety pad), not
+       * reused from the prior fix.
        */}
-      <svg viewBox="18 -7 64 106" role="img" aria-label="Human Design bodygraph">
+      <svg viewBox="8 -25 84 142" role="img" aria-label="Human Design bodygraph">
         {/* All 36 possible channels, faint — the full network structure, real gate-to-gate geometry.
             Complete, non-junction channels render as two-tone Design/Personality halves
             (CompleteChannelHalf above) instead of one flat channelsColor line — real behavior
@@ -316,7 +327,8 @@ export function HumanDesignChart({
                   x2={b.x}
                   y2={b.y}
                   stroke={isDefined ? channelsColor : DEFAULT_DEFINED_FILL}
-                  strokeWidth={isDefined ? 1.1 : 0.35}
+                  strokeWidth={isDefined ? 2.6 : 0.4}
+                  strokeLinecap={isDefined ? "round" : undefined}
                   strokeOpacity={isDefined ? 0.9 : 0.7}
                 />
               )}

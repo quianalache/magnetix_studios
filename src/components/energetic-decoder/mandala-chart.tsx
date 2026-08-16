@@ -132,17 +132,17 @@ const PLANET_GLYPH_R = 32;
 
 /**
  * % of the container's width/height the embedded BodyGraph occupies.
- * 80% was tuned (2026-08-16, first pass) against the bodygraph's OLD,
- * loosely-padded viewBox. That same viewBox was tightened the same day
- * after comparing it directly against a real Bodygraph API SVG (see
- * human-design-chart.tsx's viewBox comment) — its real ink now fills
- * ~88% of its own box instead of ~55%, so the exact same 80% here
- * overcorrected into overlapping the gate-number rows once that fix
- * landed (caught by re-rendering this same Mandala, not assumed).
- * Rescaled down by that same ratio (~0.55/0.88) to restore the original,
- * already-verified ink size relative to GATE_SECTOR_INNER.
+ * Retuned twice more (2026-08-16) after the shared HumanDesignChart's
+ * own layout was fixed for a separate, real reason (G-center gates
+ * genuinely outside the diamond, every center too cramped for its own
+ * gates — see human-design-chart-layout.ts's header comment): bigger
+ * centers mean the same bodygraph content now fills even more of its
+ * own tightly-fitted viewBox, so this percentage needed to come down
+ * again to avoid re-overlapping the gate-number rows — caught by
+ * re-rendering this same Mandala after each layout change, not assumed
+ * to still be correct just because nothing here changed.
  */
-const CENTER_CHART_PCT = 62;
+const CENTER_CHART_PCT = 48;
 
 const GATE_ARC_DEG = 360 / 64;
 
