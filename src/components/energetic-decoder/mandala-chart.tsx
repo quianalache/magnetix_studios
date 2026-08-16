@@ -7,76 +7,143 @@ import type { ChartDesign, CentersMode } from "@/types/chart-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
 
 /**
- * The Mandala chart — completed 2026-08-15 (Phase 6 of the Bodygraph
- * parity audit's revised roadmap). The 2026-08-09/10 version had only the
- * innermost skeleton: activation dots and 4 numbered quadrants, on a bare
- * 64-tick ring. This pass adds every layer the audit found missing —
- * zodiac ring, gate ring numbering (kept from before), planet glyphs,
- * Personality/Design distinction (kept), a line-position glyph inspired
- * by the I-Ching's 6-line hexagram structure, and a real embedded
- * BodyGraph at the center — using only data this app already calculates,
- * no second engine, no new astronomy.
+ * The Mandala chart — visual composition rebuild, 2026-08-16, against a
+ * direct side-by-side study of a real Bodygraph Mandala screenshot (not
+ * the written audit alone). The 2026-08-15 version had every required
+ * data layer but read as independent rings of tiny dots/glyphs on an
+ * almost-white field, with a small center BodyGraph floating in a large
+ * dead zone. Same data, same calculations, same props — this pass is
+ * pure visual composition:
  *
- * ZODIAC RING — real degrees, not decorative. Gate positions on this
- * chart come from `GATE_WHEEL_ORDER`, itself anchored at
- * `WHEEL_START_LONGITUDE_DEG` (302° raw tropical ecliptic longitude — see
- * gate-data.ts). The zodiac ring uses the exact same anchor: a real raw
- * ecliptic longitude `d` lands at SVG angle `-90 + ((d - WHEEL_START + 360)
- * % 360)`, which is the same formula the gate ring's own
- * `angleForGateIndex` reduces to when `d` sits exactly on a gate boundary
- * — the two rings are guaranteed to agree, not eyeballed into alignment.
- * Sign names/order come from `SIGNS` (astrology.ts) — same 12 signs, same
- * 0°-Aries convention that chart already uses; the 30°-per-sign boundary
- * math is a fixed, universal convention, not re-derived astronomy.
+ *  - Color is now structural, not decorative: the quadrant band, zodiac
+ *    band, and every activated gate sector get real, bold fills derived
+ *    from the sub-account's own configured Chart Design colors
+ *    (deriveShade() below rotates hue/lightness off ONE configured
+ *    color per band type — never a hardcoded second palette, never
+ *    Bodygraph's actual hues).
+ *  - Each of the 64 gates is a real radial wedge (GATE_SECTOR_OUTER to
+ *    GATE_SECTOR_INNER), not a tick + a floating dot. An activated
+ *    gate's wedge is filled with Personality/Design color (split down
+ *    the wedge's own angular center when both are active); its gate
+ *    number, line-glyph, and planet glyph all render INSIDE that same
+ *    wedge instead of on 3 separate concentric "ghost rings."
+ *  - GATE_SECTOR_INNER is pulled in much closer to center, and the
+ *    embedded BodyGraph is rendered far larger (CENTER_CHART_PCT), so
+ *    the two structures visually converge instead of leaving a dead
+ *    gap between them.
  *
- * HEXAGRAM / LINE GLYPH — deliberately NOT a reproduction of the
- * traditional King Wen yin/yang hexagram shape for each gate. That shape
- * exists and is public domain, but this build has no verified, authoritative
- * source for the full 64-hexagram line table to check it against, and
- * shipping 64 hand-typed traditional symbols with no way to verify them
- * against a live authoritative reference risked putting real errors in
- * front of clients — worse than a simpler, honest, 100%-accurate
- * alternative. What's drawn instead is real data, not decoration: for
- * each ACTIVATED gate, a small 6-tick vertical stack (the same "six
- * stacked lines" structure a hexagram has) with this profile's own real
- * activated line (1-6, already computed by longitudeToGateLine) picked
- * out — Personality lines black, Design lines rust, both marked if dual.
+ * ZODIAC RING — unchanged math, still real degrees: gate positions come
+ * from `GATE_WHEEL_ORDER`, anchored at `WHEEL_START_LONGITUDE_DEG` (see
+ * gate-data.ts); the zodiac ring uses the same anchor via
+ * `angleForLongitude` so the two rings are guaranteed to agree.
  *
- * PLANET GLYPHS — `HD_BODY_LABELS`' own symbol field (☉ ☽ ☿ ♀ ♂ ♃ ♄ ♅ ♆ ♇
- * ☊ ☋ ⊕), already used elsewhere in this app (human-design-full-chart.tsx's
- * activation columns) — not invented here, reused directly so the same
- * glyph always means the same body everywhere in this app.
+ * HEXAGRAM / LINE GLYPH — still deliberately NOT the traditional King
+ * Wen yin/yang shape (no verified authoritative 64-row source to check
+ * hand-typed symbols against — see the original 2026-08-15 note this
+ * carries forward). Still a real 6-tick stack showing this profile's own
+ * activated line, now rendered in white against the wedge's own color
+ * instead of a second color layered on top of it.
  *
- * CENTER BODYGRAPH — the exact same `HumanDesignChart` component the
- * practitioner Readings tab and PDF use, composited via CSS absolute
- * positioning (not a second SVG coordinate system nested through
- * foreignObject — simpler, and avoids foreignObject's real cross-renderer
- * support gaps). Takes the sub-account's actual HD Traditional
- * `hdDesign` — same centersMode/centerColors props the Phase 4
- * correctness pass fixed on the main chart — so this embedded copy can't
- * silently reproduce that bug; there's only one place centersMode is
- * threaded through, not a second hand-copy.
+ * PLANET GLYPHS — still `HD_BODY_LABELS`' own symbol field, reused as-is.
+ *
+ * CENTER BODYGRAPH — still the exact same `HumanDesignChart` component
+ * the Readings tab and PDF use, same hdDesign/centersMode threading (the
+ * Phase 4 correctness fix). Only its rendered size changed.
+ *
+ * Not copied from Bodygraph: its specific palette, its badge/number
+ * styling, any proprietary decorative artwork. What's studied and
+ * reproduced is the INFORMATION HIERARCHY (band → band → sector →
+ * center) and the principle that color should carry real meaning.
  */
+
+// ---- Color utilities — derive a small, related palette from ONE
+// configured hex color per band type, so "use bold color" doesn't mean
+// "hardcode a second palette." Pure, no dependencies. ----
+
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return [113, 113, 122]; // neutral gray fallback for an unparsable value
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, "0");
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = d / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d) % 6;
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  h *= 60;
+  if (h < 0) h += 360;
+  return [h, s, l];
+}
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let rgb: [number, number, number];
+  if (h < 60) rgb = [c, x, 0];
+  else if (h < 120) rgb = [x, c, 0];
+  else if (h < 180) rgb = [0, c, x];
+  else if (h < 240) rgb = [0, x, c];
+  else if (h < 300) rgb = [x, 0, c];
+  else rgb = [c, 0, x];
+  return [(rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255];
+}
+/** One configured accent -> a related shade (hue rotation + lightness/saturation nudge). Offset 0/0/0 returns the color unchanged. */
+function deriveShade(hex: string, hueOffsetDeg: number, lightnessDelta = 0, saturationDelta = 0): string {
+  const [h, s, l] = rgbToHsl(...hexToRgb(hex));
+  const h2 = (h + hueOffsetDeg + 360) % 360;
+  const s2 = Math.min(1, Math.max(0.18, s + saturationDelta));
+  const l2 = Math.min(0.86, Math.max(0.14, l + lightnessDelta));
+  return rgbToHex(...hslToRgb(h2, s2, l2));
+}
+/** Perceived luminance (ITU-R BT.601) — decides white vs. dark ink for legible text on a given fill. */
+function isDarkFill(hex: string): boolean {
+  const [r, g, b] = hexToRgb(hex);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 150;
+}
 
 const VIEW = 200;
 const CX = 100;
 const CY = 100;
 
-const ZODIAC_OUTER = 96;
-const ZODIAC_INNER = 86;
-const GATE_TICK_OUTER = 86;
-const GATE_TICK_INNER = 78;
-const GATE_LABEL_R = 71;
-const LINE_GLYPH_R = 63;
-const DOT_R = 53;
-const PLANET_GLYPH_R = 44;
-const QUADRANT_OUTER = 96;
-const QUADRANT_INNER = 36;
-const QUADRANT_LABEL_R = 100;
-const CENTER_CHART_PCT = 40; // % of the container's width/height the embedded BodyGraph occupies
+const QUADRANT_OUTER = 98;
+const QUADRANT_INNER = 89;
+const QUADRANT_LABEL_R = (QUADRANT_OUTER + QUADRANT_INNER) / 2;
+
+const ZODIAC_OUTER = 89;
+const ZODIAC_INNER = 73;
+
+const GATE_SECTOR_OUTER = 73;
+const GATE_SECTOR_INNER = 23;
+const GATE_LABEL_R = 68.5;
+const LINE_GLYPH_R = 52;
+const PLANET_GLYPH_R = 32;
+
+/**
+ * % of the container's width/height the embedded BodyGraph occupies.
+ * Real bug caught 2026-08-16 rendering an actual PDF and looking at it
+ * directly, twice: 66% still left a visible dead ring (the BodyGraph's
+ * bounding box being large isn't enough — its real glyph content only
+ * fills roughly a third to a half of whatever box it's given); 92%
+ * overcorrected into overlapping the gate-number rows. 80% is the
+ * settled middle, verified by regenerating and re-inspecting the PDF a
+ * third time — real glyph content reaches close to GATE_SECTOR_INNER
+ * without crossing into the gate labels.
+ */
+const CENTER_CHART_PCT = 80;
 
 const GATE_ARC_DEG = 360 / 64;
-const DOT_SIZE = 2.6;
 
 function angleForGateIndex(i: number): number {
   return -90 + i * GATE_ARC_DEG;
@@ -90,56 +157,91 @@ function toXY(angleDeg: number, r: number): { x: number; y: number } {
   const rad = (angleDeg * Math.PI) / 180;
   return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 }
-
-function ZodiacRing({ ringColor, textColor }: { ringColor: string; textColor: string }) {
-  const segments = SIGNS.map((sign, i) => {
-    const startLon = i * 30;
-    const endLon = startLon + 30;
-    const a0 = angleForLongitude(startLon);
-    const a1 = angleForLongitude(endLon);
-    const outerStart = toXY(a0, ZODIAC_OUTER);
-    const outerEnd = toXY(a1, ZODIAC_OUTER);
-    const innerEnd = toXY(a1, ZODIAC_INNER);
-    const innerStart = toXY(a0, ZODIAC_INNER);
-    const midA = angleForLongitude(startLon + 15);
-    const labelPos = toXY(midA, (ZODIAC_OUTER + ZODIAC_INNER) / 2);
-    const path = [
-      `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
-      `A ${ZODIAC_OUTER} ${ZODIAC_OUTER} 0 0 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
-      `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
-      `A ${ZODIAC_INNER} ${ZODIAC_INNER} 0 0 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
-      "Z",
-    ].join(" ");
-    return (
-      <g key={sign}>
-        <path d={path} fill={i % 2 === 0 ? `${ringColor}22` : `${ringColor}0d`} stroke={`${ringColor}55`} strokeWidth={0.3} />
-        <text
-          x={labelPos.x}
-          y={labelPos.y}
-          fontSize={3.4}
-          fontWeight={700}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={textColor}
-          transform={`rotate(${midA + 90}, ${labelPos.x}, ${labelPos.y})`}
-        >
-          {signAbbrev(sign)}
-        </text>
-      </g>
-    );
-  });
-  return <>{segments}</>;
+/** One angular band (a0->a1) as a filled ring wedge — shared by the quadrant band, zodiac band, and every gate sector. */
+function bandPath(a0: number, a1: number, rOuter: number, rInner: number): string {
+  const o0 = toXY(a0, rOuter);
+  const o1 = toXY(a1, rOuter);
+  const i1 = toXY(a1, rInner);
+  const i0 = toXY(a0, rInner);
+  return [
+    `M ${o0.x.toFixed(2)} ${o0.y.toFixed(2)}`,
+    `A ${rOuter} ${rOuter} 0 0 1 ${o1.x.toFixed(2)} ${o1.y.toFixed(2)}`,
+    `L ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}`,
+    `A ${rInner} ${rInner} 0 0 0 ${i0.x.toFixed(2)} ${i0.y.toFixed(2)}`,
+    "Z",
+  ].join(" ");
 }
 
 function signAbbrev(sign: ZodiacSign): string {
   return sign.slice(0, 3).toUpperCase();
 }
 
-/** Small 6-tick vertical hexagram-inspired glyph for one activated gate — see header note on why this represents the real activated line, not the traditional King Wen shape. */
+/** The bold, colored outer band — 4 quadrants, each a related shade of one configured accent so they read as genuinely distinct without a second hardcoded palette. */
+function QuadrantBand({ baseColor }: { baseColor: string }) {
+  const HUE_OFFSETS = [0, 28, -28, 52];
+  const LIGHT_DELTAS = [0, 0.04, -0.06, 0.08];
+  return (
+    <>
+      {[0, 1, 2, 3].map((q) => {
+        const a0 = angleForGateIndex(q * 16);
+        const a1 = angleForGateIndex(q * 16 + 16);
+        const fill = deriveShade(baseColor, HUE_OFFSETS[q], LIGHT_DELTAS[q]);
+        const textColor = isDarkFill(fill) ? "#ffffff" : "#1c1e24";
+        const labelPos = toXY(angleForGateIndex(q * 16 + 8), QUADRANT_LABEL_R);
+        return (
+          <g key={q}>
+            <path d={bandPath(a0, a1, QUADRANT_OUTER, QUADRANT_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
+            <text x={labelPos.x} y={labelPos.y + 2} fontSize={6.5} fontWeight={800} textAnchor="middle" fill={textColor}>
+              {q + 1}
+            </text>
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+/** The bold, colored zodiac band — 12 signs, each a related shade of one configured accent, alternating lightness so neighboring signs stay visually distinct. */
+function ZodiacRing({ baseColor }: { baseColor: string }) {
+  return (
+    <>
+      {SIGNS.map((sign, i) => {
+        const startLon = i * 30;
+        const endLon = startLon + 30;
+        const a0 = angleForLongitude(startLon);
+        const a1 = angleForLongitude(endLon);
+        const midA = angleForLongitude(startLon + 15);
+        const labelPos = toXY(midA, (ZODIAC_OUTER + ZODIAC_INNER) / 2);
+        const hueOffset = -55 + i * (110 / 11);
+        const fill = deriveShade(baseColor, hueOffset, i % 2 === 0 ? 0.03 : -0.05);
+        const textColor = isDarkFill(fill) ? "#ffffff" : "#1c1e24";
+        return (
+          <g key={sign}>
+            <path d={bandPath(a0, a1, ZODIAC_OUTER, ZODIAC_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
+            <text
+              x={labelPos.x}
+              y={labelPos.y}
+              fontSize={4.2}
+              fontWeight={700}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill={textColor}
+              transform={`rotate(${midA + 90}, ${labelPos.x}, ${labelPos.y})`}
+            >
+              {signAbbrev(sign)}
+            </text>
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+/** Small 6-tick vertical hexagram-inspired glyph for one activated gate's own wedge — white against the wedge's own color fill (was colored-on-colored before, which lost contrast once gates became filled sectors). See header note on why this represents the real activated line, not the traditional King Wen shape. */
 function LineGlyph({ cx, cy, personalityLine, designLine, angleDeg }: { cx: number; cy: number; personalityLine?: number; designLine?: number; angleDeg: number }) {
-  const tickH = 1.1;
-  const tickW = 5;
-  const gap = 1.5;
+  const tickH = 1.3;
+  const tickW = 6;
+  const gap = 1.9;
   const totalH = 6 * tickH + 5 * (gap - tickH);
   const startY = cy - totalH / 2;
   return (
@@ -148,13 +250,8 @@ function LineGlyph({ cx, cy, personalityLine, designLine, angleDeg }: { cx: numb
         // Line 1 at the bottom (traditional reading order), so line `line`
         // sits at index (6-line) counting down from the top of the stack.
         const y = startY + (6 - line) * gap;
-        const isPersonality = personalityLine === line;
-        const isDesign = designLine === line;
-        let fill = "#d4d4d8";
-        if (isPersonality && isDesign) fill = "url(#mandalaDualLine)";
-        else if (isPersonality) fill = PERSONALITY_FILL;
-        else if (isDesign) fill = DESIGN_FILL;
-        return <rect key={line} x={cx - tickW / 2} y={y} width={tickW} height={tickH} rx={0.4} fill={fill} />;
+        const active = personalityLine === line || designLine === line;
+        return <rect key={line} x={cx - tickW / 2} y={y} width={tickW} height={tickH} rx={0.4} fill="#ffffff" fillOpacity={active ? 1 : 0.3} />;
       })}
     </g>
   );
@@ -174,19 +271,19 @@ export function MandalaChart({
   showCenterChart = true,
 }: {
   profile: HumanDesignProfile;
-  /** Accent ring color around each activated gate's dot — same role as human-design-chart.tsx's `gatesColor`, not the Personality/Design fill itself (that's fixed, universal convention, see ActivationDot below). */
+  /** Accent color for each activated gate wedge's outline/edge — same role human-design-chart.tsx's `gatesColor` plays around BodyGraph gate markers. */
   gateColor: string;
   backgroundColor: string;
   className?: string;
-  /** Chart Design overrides, all optional — falls back to this chart's own considered defaults, none copied from Bodygraph. */
+  /** Chart Design overrides, all optional — falls back to this chart's own considered defaults, none copied from Bodygraph. Each is used here as the SEED for a derived multi-shade band (see deriveShade above), not applied as one flat color. */
   zodiacColor?: string;
   gateRingColor?: string;
   quadrantColor?: string;
   personalityColor?: string;
   designColor?: string;
-  /** The sub-account's HD Traditional Chart Design — passed straight into the embedded center BodyGraph so it can't drift from the corrected (Phase 4) centersMode/centerColors behavior the main chart already uses. Center chart omitted entirely if this is absent, same "real field or absent" rule the rest of this app follows. */
+  /** The sub-account's HD Traditional Chart Design — passed straight into the embedded center BodyGraph so it can't drift from the corrected (Phase 4) centersMode/centerColors behavior the main chart already uses. */
   hdDesign?: ChartDesign | null;
-  /** Lets a caller that already shows the full BodyGraph elsewhere on the same page (the Readings tab's own Traditional/Mandala switch) skip rendering a second one here — defaults to shown for every other consumer (PDF, Report Builder, public pages), which don't already have a BodyGraph on screen. */
+  /** Lets a caller that already shows the full BodyGraph elsewhere on the same page (the Readings tab's own Traditional/Mandala switch) skip rendering a second one here — defaults to shown for every other consumer (PDF, Report Builder, public pages). */
   showCenterChart?: boolean;
 }) {
   const personalityGates = new Set(profile.personality.map((a) => a.gate));
@@ -212,97 +309,71 @@ export function MandalaChart({
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "4%", position: "relative" }}>
       <svg viewBox={`0 0 ${VIEW} ${VIEW}`} role="img" aria-label="Mandala chart">
-        <defs>
-          {/* Split-color fill for a line active in both Personality and Design — same convention the activation dot below already uses for a dual gate. */}
-          <linearGradient id="mandalaDualLine" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={personalityColor} />
-            <stop offset="50%" stopColor={personalityColor} />
-            <stop offset="50%" stopColor={designColor} />
-            <stop offset="100%" stopColor={designColor} />
-          </linearGradient>
-        </defs>
+        <QuadrantBand baseColor={quadrantColor} />
+        <ZodiacRing baseColor={zodiacColor} />
 
-        <ZodiacRing ringColor={zodiacColor} textColor={zodiacColor} />
+        <circle cx={CX} cy={CY} r={GATE_SECTOR_OUTER} fill="none" stroke={gateRingColor} strokeOpacity={0.5} strokeWidth={0.4} />
+        <circle cx={CX} cy={CY} r={GATE_SECTOR_INNER} fill="none" stroke={gateRingColor} strokeOpacity={0.35} strokeWidth={0.35} />
 
-        <circle cx={CX} cy={CY} r={GATE_TICK_OUTER} fill="none" stroke={gateRingColor} strokeOpacity={0.5} strokeWidth={0.4} />
-        <circle cx={CX} cy={CY} r={GATE_TICK_INNER} fill="none" stroke={gateRingColor} strokeOpacity={0.25} strokeWidth={0.3} />
-
-        {/* 4 quadrant dividers — "Quadrants 1-4," her real Bodygraph account's own verified naming (numbered, not named). Untouched logic, extended to the new outer radius. */}
+        {/* Quadrant dividers, extended the full depth of the gate-sector ring so the 4-quadrant structure organizes the whole radial field, not just the outer band. */}
         {[0, 1, 2, 3].map((q) => {
           const angle = angleForGateIndex(q * 16);
-          const outer = toXY(angle, QUADRANT_OUTER + 2);
-          const inner = toXY(angle, QUADRANT_INNER);
-          return <line key={q} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={quadrantColor} strokeWidth={0.6} />;
-        })}
-        {[0, 1, 2, 3].map((q) => {
-          const midAngle = angleForGateIndex(q * 16 + 8);
-          const pos = toXY(midAngle, QUADRANT_LABEL_R);
-          return (
-            <text key={q} x={pos.x} y={pos.y + 1} fontSize={4} fontWeight={700} textAnchor="middle" fill={quadrantColor}>
-              {q + 1}
-            </text>
-          );
+          const outer = toXY(angle, QUADRANT_OUTER + 1);
+          const inner = toXY(angle, GATE_SECTOR_INNER);
+          return <line key={q} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={quadrantColor} strokeOpacity={0.6} strokeWidth={0.5} />;
         })}
 
         {GATE_WHEEL_ORDER.map((gate, i) => {
           const angle = angleForGateIndex(i);
-          const tickA = toXY(angle, GATE_TICK_OUTER);
-          const tickB = toXY(angle, GATE_TICK_INNER);
-          const labelPos = toXY(angle + GATE_ARC_DEG / 2, GATE_LABEL_R);
+          const angleMid = angle + GATE_ARC_DEG / 2;
+          const angleEnd = angle + GATE_ARC_DEG;
+          const labelPos = toXY(angleMid, GATE_LABEL_R);
+          const glyphPos = toXY(angleMid, LINE_GLYPH_R);
+          const planetPos = toXY(angleMid, PLANET_GLYPH_R);
           const inPersonality = personalityGates.has(gate);
           const inDesign = designGates.has(gate);
           const activated = inPersonality || inDesign;
-          const dotPos = toXY(angle + GATE_ARC_DEG / 2, DOT_R);
-          const glyphPos = toXY(angle + GATE_ARC_DEG / 2, LINE_GLYPH_R);
-          const planetPos = toXY(angle + GATE_ARC_DEG / 2, PLANET_GLYPH_R);
-          const labelColor = activated ? (inDesign && !inPersonality ? designColor : personalityColor) : INACTIVE_GATE_TEXT;
           const pAct = byGatePersonality.get(gate);
           const dAct = byGateDesign.get(gate);
+          const textColor = activated ? "#ffffff" : INACTIVE_GATE_TEXT;
 
           return (
             <g key={gate}>
-              <line x1={tickA.x} y1={tickA.y} x2={tickB.x} y2={tickB.y} stroke={gateRingColor} strokeOpacity={0.3} strokeWidth={0.25} />
-              <text
-                x={labelPos.x}
-                y={labelPos.y + 0.8}
-                fontSize={activated ? 3.1 : 2.6}
-                fontWeight={activated ? 700 : 400}
-                textAnchor="middle"
-                fill={labelColor}
-              >
+              {/* The gate's own wedge — the real fix for "activation as a floating dot": an activated gate's ENTIRE sector is now filled, split down its own angular center when both Personality and Design are active, so the color itself (not a 2px dot) is the primary activation signal. */}
+              {activated ? (
+                inPersonality && inDesign ? (
+                  <>
+                    <path d={bandPath(angle, angleMid, GATE_SECTOR_OUTER, GATE_SECTOR_INNER)} fill={personalityColor} stroke={gateColor} strokeWidth={0.3} />
+                    <path d={bandPath(angleMid, angleEnd, GATE_SECTOR_OUTER, GATE_SECTOR_INNER)} fill={designColor} stroke={gateColor} strokeWidth={0.3} />
+                  </>
+                ) : (
+                  <path
+                    d={bandPath(angle, angleEnd, GATE_SECTOR_OUTER, GATE_SECTOR_INNER)}
+                    fill={inPersonality ? personalityColor : designColor}
+                    stroke={gateColor}
+                    strokeWidth={0.3}
+                  />
+                )
+              ) : (
+                <path d={bandPath(angle, angleEnd, GATE_SECTOR_OUTER, GATE_SECTOR_INNER)} fill={gateRingColor} fillOpacity={0.06} stroke={gateRingColor} strokeOpacity={0.18} strokeWidth={0.2} />
+              )}
+
+              <text x={labelPos.x} y={labelPos.y + 0.9} fontSize={activated ? 4.4 : 3.2} fontWeight={activated ? 800 : 500} textAnchor="middle" fill={textColor}>
                 {gate}
               </text>
 
               {activated && (
-                <LineGlyph
-                  cx={glyphPos.x}
-                  cy={glyphPos.y}
-                  personalityLine={pAct?.line}
-                  designLine={dAct?.line}
-                  angleDeg={angle + GATE_ARC_DEG / 2}
-                />
+                <LineGlyph cx={glyphPos.x} cy={glyphPos.y} personalityLine={pAct?.line} designLine={dAct?.line} angleDeg={angleMid} />
               )}
 
-              {activated && (
-                <ActivationDot
-                  cx={dotPos.x}
-                  cy={dotPos.y}
-                  inPersonality={inPersonality}
-                  inDesign={inDesign}
-                  stroke={gateColor}
-                  personalityColor={personalityColor}
-                  designColor={designColor}
-                />
-              )}
-
-              {/* Planet glyph(s) — the real body(ies) that activated this gate, reusing HD_BODY_LABELS' own symbols. Personality above, Design below when both are present, so a dual activation never collapses the two bodies into one illegible overlap. */}
+              {/* Planet glyph(s) — the real body(ies) that activated this gate, now living inside this gate's own wedge instead of a separate concentric ring. White for contrast against the wedge's own color. */}
               {pAct && (
-                <text x={planetPos.x} y={planetPos.y - (dAct ? 1.6 : 0)} fontSize={4.2} textAnchor="middle" fill={personalityColor}>
+                <text x={planetPos.x} y={planetPos.y - (dAct ? 2 : 0)} fontSize={5.4} fontWeight={700} textAnchor="middle" fill="#ffffff">
                   {bodySymbol.get(pAct.body) ?? ""}
                 </text>
               )}
               {dAct && (
-                <text x={planetPos.x} y={planetPos.y + (pAct ? 4.4 : 1.6)} fontSize={4.2} textAnchor="middle" fill={designColor}>
+                <text x={planetPos.x} y={planetPos.y + (pAct ? 5.2 : 2)} fontSize={5.4} fontWeight={700} textAnchor="middle" fill="#ffffff">
                   {bodySymbol.get(dAct.body) ?? ""}
                 </text>
               )}
@@ -311,19 +382,6 @@ export function MandalaChart({
         })}
       </svg>
 
-      {/*
-       * Real bug caught 2026-08-15 generating an actual PDF (the sibling
-       * MandalaPdf had the identical mistake) and inspecting it directly:
-       * this used to also require `hdDesign !== null`, which silently
-       * hid the entire embedded BodyGraph for any sub-account that never
-       * separately created an HD Traditional chart design — a completely
-       * normal state, not an error state, and unrelated to whether this
-       * chart should render at all. hdDesign only ever influences this
-       * block's colors below (every field already optional-chains), so
-       * it has no business gating existence. Exactly the "field exists
-       * but doesn't visibly affect output"/silent-failure shape this
-       * whole Mandala rebuild was told not to repeat.
-       */}
       {showCenterChart && (
         <div
           style={{
@@ -347,47 +405,4 @@ export function MandalaChart({
       )}
     </div>
   );
-}
-
-/**
- * One activated gate's dot. Personality-only solid black, Design-only
- * solid rust/brown, dual split down the middle (left half Personality,
- * right half Design) via two semicircle paths rather than a blended
- * color — same "never collapse dual to one color" principle already
- * established for the BodyGraph's own dual-gate markers and hanging-gate
- * stubs, adapted to a single small dot since there's no room here for
- * two fully offset circles. `stroke` is the sub-account's customizable
- * accent ring (the `gateColor` prop above) — same role `gatesColor`
- * plays around BodyGraph gate markers, not a brand choice for the fill
- * itself. Colors now take Chart Design overrides (personalityColor/
- * designColor) instead of the hardcoded PERSONALITY_FILL/DESIGN_FILL
- * constants directly — Phase 6 addition, part of expanding Mandala's
- * design controls.
- */
-function ActivationDot({
-  cx,
-  cy,
-  inPersonality,
-  inDesign,
-  stroke,
-  personalityColor,
-  designColor,
-}: {
-  cx: number;
-  cy: number;
-  inPersonality: boolean;
-  inDesign: boolean;
-  stroke: string;
-  personalityColor: string;
-  designColor: string;
-}) {
-  if (inPersonality && inDesign) {
-    return (
-      <>
-        <path d={`M ${cx} ${cy - DOT_SIZE} A ${DOT_SIZE} ${DOT_SIZE} 0 0 0 ${cx} ${cy + DOT_SIZE} Z`} fill={personalityColor} stroke={stroke} strokeWidth={0.3} />
-        <path d={`M ${cx} ${cy - DOT_SIZE} A ${DOT_SIZE} ${DOT_SIZE} 0 0 1 ${cx} ${cy + DOT_SIZE} Z`} fill={designColor} stroke={stroke} strokeWidth={0.3} />
-      </>
-    );
-  }
-  return <circle cx={cx} cy={cy} r={DOT_SIZE} fill={inPersonality ? personalityColor : designColor} stroke={stroke} strokeWidth={0.3} />;
 }
