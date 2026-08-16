@@ -311,10 +311,17 @@ function HumanDesignBodygraphPdf({
   const resolveCenterColor = (c: CenterKey): string =>
     centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? centersColor) : centersColor;
 
-  const height = size * (102 / 108); // matches the real viewBox aspect ratio, "-4 -3 108 102"
+  // Real bug caught 2026-08-16 comparing this SVG directly against a real
+  // Bodygraph API-rendered SVG for the same chart: same fix as
+  // human-design-chart.tsx's identical finding — the real content only
+  // spans a tall ~0.6:1 width:height shape, matching Bodygraph's own
+  // measured ~0.577:1; the old viewBox was ~1.06:1 (nearly square),
+  // leaving ~45% dead horizontal margin around a correctly-proportioned
+  // diagram. Tightened to the real content bounds, same coordinates.
+  const height = size * (106 / 64); // matches the real viewBox aspect ratio, "18 -7 64 106"
 
   return (
-    <Svg viewBox="-4 -3 108 102" style={{ width: size, height }}>
+    <Svg viewBox="18 -7 64 106" style={{ width: size, height }}>
       {/*
        * Real bug caught 2026-08-15 rendering an actual PDF (the Mandala's
        * embedded copy of this chart passes backgroundColor="transparent"
@@ -646,16 +653,18 @@ const MANDALA_PLANET_GLYPH_R = 32;
 const MANDALA_GATE_ARC_DEG = 360 / 64;
 const MANDALA_SIZE = 300; // bigger than the 180pt BodyGraph/240pt Astrology wheel — 64 tightly-packed gate numbers need more room to stay legible than either of those.
 /**
- * % of MANDALA_SIZE the embedded BodyGraph occupies. Real bug caught
- * 2026-08-16 rendering an actual PDF and looking at it directly, twice:
- * 66% still left a visible dead ring (the BodyGraph's bounding box being
- * large isn't enough — its real glyph content only fills roughly a
- * third to a half of whatever box it's given); 92% overcorrected into
- * overlapping the gate-number rows. 80% is the settled middle, verified
- * by regenerating and re-inspecting the PDF a third time — same fix as
+ * % of MANDALA_SIZE the embedded BodyGraph occupies. 80% was tuned
+ * (2026-08-16, first pass) against the bodygraph's OLD, loosely-padded
+ * viewBox. That viewBox was tightened the same day after comparing it
+ * against a real Bodygraph API SVG (see HumanDesignBodygraphPdf's own
+ * viewBox comment) — its real ink now fills ~88% of its own box instead
+ * of ~55%, so the same 80% here overcorrected into overlapping the
+ * gate-number rows once that fix landed (caught by re-rendering this
+ * same Mandala PDF, not assumed). Rescaled down by that same ratio to
+ * restore the original, already-verified ink size — same fix as
  * mandala-chart.tsx.
  */
-const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.8;
+const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.62;
 
 function mandalaAngleForGateIndex(i: number): number {
   // 12 o'clock = -90°, clockwise = increasing angle — same convention mandala-chart.tsx documents.

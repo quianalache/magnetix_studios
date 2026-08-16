@@ -260,7 +260,21 @@ export function HumanDesignChart({
 
   return (
     <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "6% 4%" }}>
-      <svg viewBox="-4 -3 108 102" role="img" aria-label="Human Design bodygraph">
+      {/*
+       * Real bug caught 2026-08-16 comparing this SVG directly against a
+       * real Bodygraph API-rendered SVG for the same chart: the actual
+       * bodygraph content (CENTER_LAYOUT + shapePoints extents) only spans
+       * roughly x:[21.8, 78.2] y:[-3.85, 95] — a tall, narrow ~0.6:1
+       * width:height shape, matching Bodygraph's own real rendered
+       * proportions (measured: 400x693, ~0.577:1). The old viewBox
+       * ("-4 -3 108 102", ~1.06:1 — nearly square) gave the diagram
+       * roughly 45% dead horizontal margin on top of that correctly-
+       * proportioned content, rendering it small and letterboxed. Tightened
+       * to match the real content bounds (plus a small safety pad) instead
+       * of changing any center/gate coordinate — same diagram, same
+       * calculations, just no longer shrunk inside an oversized canvas.
+       */}
+      <svg viewBox="18 -7 64 106" role="img" aria-label="Human Design bodygraph">
         {/* All 36 possible channels, faint — the full network structure, real gate-to-gate geometry.
             Complete, non-junction channels render as two-tone Design/Personality halves
             (CompleteChannelHalf above) instead of one flat channelsColor line — real behavior

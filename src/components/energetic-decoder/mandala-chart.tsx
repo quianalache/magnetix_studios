@@ -132,16 +132,17 @@ const PLANET_GLYPH_R = 32;
 
 /**
  * % of the container's width/height the embedded BodyGraph occupies.
- * Real bug caught 2026-08-16 rendering an actual PDF and looking at it
- * directly, twice: 66% still left a visible dead ring (the BodyGraph's
- * bounding box being large isn't enough — its real glyph content only
- * fills roughly a third to a half of whatever box it's given); 92%
- * overcorrected into overlapping the gate-number rows. 80% is the
- * settled middle, verified by regenerating and re-inspecting the PDF a
- * third time — real glyph content reaches close to GATE_SECTOR_INNER
- * without crossing into the gate labels.
+ * 80% was tuned (2026-08-16, first pass) against the bodygraph's OLD,
+ * loosely-padded viewBox. That same viewBox was tightened the same day
+ * after comparing it directly against a real Bodygraph API SVG (see
+ * human-design-chart.tsx's viewBox comment) — its real ink now fills
+ * ~88% of its own box instead of ~55%, so the exact same 80% here
+ * overcorrected into overlapping the gate-number rows once that fix
+ * landed (caught by re-rendering this same Mandala, not assumed).
+ * Rescaled down by that same ratio (~0.55/0.88) to restore the original,
+ * already-verified ink size relative to GATE_SECTOR_INNER.
  */
-const CENTER_CHART_PCT = 80;
+const CENTER_CHART_PCT = 62;
 
 const GATE_ARC_DEG = 360 / 64;
 
