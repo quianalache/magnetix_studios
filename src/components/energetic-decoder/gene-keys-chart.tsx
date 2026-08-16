@@ -227,7 +227,14 @@ export function GeneKeysChart({
           const pt = pointOn(r, axisIndex);
           const color = node.ring === "personality" ? personalityColor : designColor;
           const { anchor, dy } = labelAnchor(axisIndex);
-          const labelR = node.ring === "personality" ? r + 16 : r - 17;
+          // Real bug caught 2026-08-15 rendering an actual PDF and looking
+          // at it directly: Design-ring labels used to sit INSIDE their own
+          // node (r - 17, toward the shared center), where all 6 axes
+          // converge and the labels collided with the node circle and each
+          // other. Both rings now offset outward from their own node
+          // instead — Design's offset is smaller than Personality's so it
+          // never reaches as far as the Personality ring on the same axis.
+          const labelR = node.ring === "personality" ? r + 16 : r + 14;
           const labelPt = pointOn(labelR, axisIndex);
           const primary = node.spheres[0];
           const isNodeDimmed =
@@ -241,8 +248,23 @@ export function GeneKeysChart({
                 {primary.gate}.{primary.line}
               </text>
               <text x={labelPt.x} y={labelPt.y + dy} fontSize={7.5} fontWeight={600} textAnchor={anchor} fill={LABEL_COLOR}>
-                {node.spheres.map((s) => s.sphere).join(" / ")}
+                {/*
+                 * Real bug caught 2026-08-15 rendering an actual PDF and
+                 * looking at it directly: "Life's Work / Brand" (the one
+                 * collapsed node with 2 sphere names, see the header
+                 * comment) ran ~20 characters wide, well past the canvas
+                 * edge at this node's diagonal angle. Showing only the
+                 * primary sphere name fixes the clip without losing
+                 * information — the collapsed node's own <title> below
+                 * still names every sphere it represents, and the
+                 * practitioner detail view (SphereList) always lists both
+                 * in full regardless.
+                 */}
+                {primary.sphere}
               </text>
+              {node.spheres.length > 1 && (
+                <title>{node.spheres.map((s) => s.sphere).join(" / ")}</title>
+              )}
             </g>
           );
         })}

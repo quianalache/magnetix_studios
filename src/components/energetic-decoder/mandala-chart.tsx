@@ -311,7 +311,20 @@ export function MandalaChart({
         })}
       </svg>
 
-      {showCenterChart && hdDesign !== null && (
+      {/*
+       * Real bug caught 2026-08-15 generating an actual PDF (the sibling
+       * MandalaPdf had the identical mistake) and inspecting it directly:
+       * this used to also require `hdDesign !== null`, which silently
+       * hid the entire embedded BodyGraph for any sub-account that never
+       * separately created an HD Traditional chart design — a completely
+       * normal state, not an error state, and unrelated to whether this
+       * chart should render at all. hdDesign only ever influences this
+       * block's colors below (every field already optional-chains), so
+       * it has no business gating existence. Exactly the "field exists
+       * but doesn't visibly affect output"/silent-failure shape this
+       * whole Mandala rebuild was told not to repeat.
+       */}
+      {showCenterChart && (
         <div
           style={{
             position: "absolute",

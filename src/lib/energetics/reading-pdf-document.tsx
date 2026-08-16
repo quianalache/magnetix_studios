@@ -315,7 +315,18 @@ function HumanDesignBodygraphPdf({
 
   return (
     <Svg viewBox="-4 -3 108 102" style={{ width: size, height }}>
-      <Rect x={-4} y={-3} width={108} height={102} fill={backgroundColor} />
+      {/*
+       * Real bug caught 2026-08-15 rendering an actual PDF (the Mandala's
+       * embedded copy of this chart passes backgroundColor="transparent"
+       * so it composites over the zodiac/gate rings) and inspecting it
+       * directly: react-pdf's SVG fill parser doesn't recognize the CSS
+       * keyword "transparent" the way a browser does — it silently
+       * painted solid black instead of nothing. SVG's own "none" is the
+       * correct way to paint no fill at all; every other real color this
+       * shared component receives (from an actual Chart Design's
+       * backgroundColor field) is unaffected by this check.
+       */}
+      <Rect x={-4} y={-3} width={108} height={102} fill={backgroundColor === "transparent" ? "none" : backgroundColor} />
 
       {/* Channels — complete, non-junction channels render two-tone (CompleteChannelHalfPdf);
           hanging-gate stubs layer on only for hanging channels; junction channels keep a flat line. */}
@@ -778,7 +789,17 @@ export function MandalaPdf({
   const designGates = new Set(profile.design.map((a) => a.gate));
   const byGatePersonality = new Map(profile.personality.map((a) => [a.gate, a]));
   const byGateDesign = new Map(profile.design.map((a) => [a.gate, a]));
-  const bodySymbol = new Map(HD_BODY_LABELS.map((b) => [b.body, b.symbol]));
+  // Real bug caught 2026-08-15 rendering an actual PDF and looking at it
+  // directly (same class of bug this file's own PLANET_ABBR comment
+  // above already documents for the full-chart planet boxes and the
+  // Astrology wheel): HD_BODY_LABELS' `symbol` field is a real Unicode
+  // astrological glyph (☉☽♃…), correct for the web SVG (real font
+  // fallback), but react-pdf's only font here is WinAnsi Helvetica —
+  // it doesn't fail safely, it silently prints a garbled substitute
+  // character. Reusing PLANET_ABBR (the same ASCII-safe 2-letter map
+  // already proven correct elsewhere in this file) instead of adding a
+  // second, PDF-unsafe lookup.
+  const bodySymbol = new Map(HD_BODY_LABELS.map((b) => [b.body, PLANET_ABBR[b.body] ?? b.label.slice(0, 2)]));
 
   return (
     <View style={{ backgroundColor, borderRadius: 12, padding: MANDALA_SIZE * 0.05, position: "relative" }}>
@@ -855,20 +876,31 @@ export function MandalaPdf({
         })}
       </Svg>
 
-      {hdDesign !== null && hdDesign !== undefined && (
-        <View style={{ position: "absolute", top: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2, left: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2 }}>
-          <HumanDesignBodygraphPdf
-            profile={profile}
-            centersColor={hdDesign.chartDefinedColor || DEFAULT_DEFINED_FILL}
-            centersMode={hdDesign.centersMode || "uniform"}
-            centerColors={centerColorsFromHdDesignPdf(hdDesign)}
-            channelsColor={hdDesign.channelsColor || DEFINED_STROKE}
-            gatesColor={hdDesign.gatesColor || "#e4e4e7"}
-            backgroundColor="transparent"
-            size={MANDALA_CENTER_CHART_SIZE}
-          />
-        </View>
-      )}
+      {/*
+       * Real bug caught 2026-08-15 generating an actual PDF (the sibling
+       * web MandalaChart had the identical mistake) and inspecting it
+       * directly: this used to require `hdDesign` to be non-null/defined
+       * before the embedded BodyGraph would render at all, which
+       * silently hid it for any sub-account that never separately
+       * created an HD Traditional chart design — a normal state, not an
+       * error, and unrelated to whether this chart should render.
+       * `centerColorsFromHdDesignPdf` and every field below already
+       * degrade to the same defaults `HumanDesignFullChartPdf` uses when
+       * hdDesign is absent, so there's nothing left that actually needs
+       * the gate.
+       */}
+      <View style={{ position: "absolute", top: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2, left: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2 }}>
+        <HumanDesignBodygraphPdf
+          profile={profile}
+          centersColor={hdDesign?.chartDefinedColor || DEFAULT_DEFINED_FILL}
+          centersMode={hdDesign?.centersMode || "uniform"}
+          centerColors={centerColorsFromHdDesignPdf(hdDesign)}
+          channelsColor={hdDesign?.channelsColor || DEFINED_STROKE}
+          gatesColor={hdDesign?.gatesColor || "#e4e4e7"}
+          backgroundColor="transparent"
+          size={MANDALA_CENTER_CHART_SIZE}
+        />
+      </View>
     </View>
   );
 }
@@ -1116,7 +1148,17 @@ export function GeneKeysChartPdf({ spheres }: { spheres: GeneKeysSphereResult[] 
         const pt = gkPointOn(r, axisIndex);
         const color = node.ring === "personality" ? PERSONALITY_FILL : DESIGN_FILL;
         const { anchor, dy } = gkLabelAnchor(axisIndex);
-        const labelR = node.ring === "personality" ? r + 16 : r - 17;
+        // Same 2 real bugs as the web GeneKeysChart, caught 2026-08-15
+        // rendering an actual PDF and looking at it directly: (1) Design-
+        // ring labels sitting inside their own node (r - 17, toward the
+        // shared center where all 6 axes converge) now offset outward
+        // instead, same as Personality's own offset direction; (2) the one
+        // collapsed 2-sphere node's combined "Life's Work / Brand" label
+        // ran well past the canvas edge at its diagonal angle — showing
+        // only the primary sphere name fixes the clip without losing
+        // information (this PDF has no hover/title equivalent, but the
+        // reading's own sphere detail section always lists both in full).
+        const labelR = node.ring === "personality" ? r + 16 : r + 14;
         const labelPt = gkPointOn(labelR, axisIndex);
         const primary = node.spheres[0];
         return (
@@ -1127,7 +1169,7 @@ export function GeneKeysChartPdf({ spheres }: { spheres: GeneKeysSphereResult[] 
               {`${primary.gate}.${primary.line}`}
             </Text>
             <Text x={labelPt.x} y={labelPt.y + dy} style={{ fontSize: 7.5, fontWeight: 600, textAnchor: anchor, fill: GK_LABEL_COLOR }}>
-              {node.spheres.map((s) => s.sphere).join(" / ")}
+              {primary.sphere}
             </Text>
           </G>
         );
