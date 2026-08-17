@@ -110,6 +110,20 @@ export const FONT_SIZE_INACTIVE = 4.5;
 const INACTIVE_LABEL_HALF_WIDTH = 2.4;
 
 /**
+ * Real production collision, 2026-08-17 correction-pass-2: Root's own 9
+ * gates are the tightest packing of any center EVEN AFTER the marker-size
+ * fix above — measured directly from GATE_POINT, its worst real pairs are
+ * 19-52 at 7.88, 53-54 at 8.06, 52-60 at 8.90, 53-60 at 9.00 (every other
+ * center's worst pair is 7.96 or looser, but Root has FOUR pairs under
+ * 9.0, not one). The shared DUAL_BONUS (2.4) already covers ordinary
+ * centers; Root still visibly collided (53/54/38/60, confirmed on her
+ * real production render) whenever one of those tight pairs included a
+ * dual gate. Root-only bonus, not a global change — every other center
+ * keeps the shared DUAL_BONUS below untouched.
+ */
+const ROOT_DUAL_BONUS = 3.8;
+
+/**
  * Collision avoidance for activated-gate labels — pure math, no JSX.
  *
  * 2026-08-17 correction pass, two real changes:
@@ -126,6 +140,11 @@ const INACTIVE_LABEL_HALF_WIDTH = 2.4;
  *     spot) — only the active marker yields, and by much less than an
  *     active-vs-active push (inactive numbers have no marker circle, just
  *     a small text footprint).
+ *
+ * 2026-08-17 correction-pass-2: Root-specific ROOT_DUAL_BONUS above,
+ * applied only when BOTH points in a pair belong to Root — see its own
+ * comment. Iterations bumped 40->60 since Root's tighter real packing
+ * needs a couple more passes to fully settle.
  */
 export function declutterGateLabels(
   gates: number[],
@@ -140,10 +159,12 @@ export function declutterGateLabels(
   const MIN_GAP = 7.2; // base clearance two single-label circles need at this font size — just under the real global-minimum gate spacing (7.88), so it's a no-op for ordinary already-clear pairs
   const DUAL_BONUS = 2.4; // a dual gate's own two offset labels need more room from its neighbors
   const INACTIVE_GAP = GATE_MARKER_R + INACTIVE_LABEL_HALF_WIDTH; // an active marker vs. a fixed inactive gate's plain text
-  for (let iter = 0; iter < 40; iter++) {
+  for (let iter = 0; iter < 60; iter++) {
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
-        const gap = MIN_GAP + (pts[i].dual ? DUAL_BONUS : 0) + (pts[j].dual ? DUAL_BONUS : 0);
+        const bothRoot = pts[i].center === "root" && pts[j].center === "root";
+        const dualBonus = bothRoot ? ROOT_DUAL_BONUS : DUAL_BONUS;
+        const gap = MIN_GAP + (pts[i].dual ? dualBonus : 0) + (pts[j].dual ? dualBonus : 0);
         const dx = pts[j].x - pts[i].x;
         const dy = pts[j].y - pts[i].y;
         const dist = Math.hypot(dx, dy) || 0.0001;
@@ -162,7 +183,8 @@ export function declutterGateLabels(
       // does (it's real background reference geometry, not part of the
       // declutter problem).
       for (const inactive of inactivePoints) {
-        const gap = INACTIVE_GAP + (pts[i].dual ? DUAL_BONUS : 0);
+        const dualBonus = pts[i].center === "root" && inactive.center === "root" ? ROOT_DUAL_BONUS : DUAL_BONUS;
+        const gap = INACTIVE_GAP + (pts[i].dual ? dualBonus : 0);
         const dx = pts[i].x - inactive.x;
         const dy = pts[i].y - inactive.y;
         const dist = Math.hypot(dx, dy) || 0.0001;

@@ -225,7 +225,14 @@ function ActivationColumn({
   align: "left" | "right";
 }) {
   return (
-    <div className="space-y-2.5">
+    // pt-11 correction-pass-2, 2026-08-17: lines this column's own "DESIGN"/
+    // "PERSONALITY" header up with roughly where the BodyGraph itself
+    // visually starts (below the Variables cluster in the center column,
+    // see its own comment) — real production screenshot showed both
+    // columns starting at the grid's top edge while the chart started
+    // noticeably lower, reading as two unrelated pieces instead of one
+    // chart composition.
+    <div className="space-y-2.5 pt-11">
       <p
         className={`mb-2 text-xs font-semibold uppercase tracking-wide ${align === "right" ? "text-right" : ""}`}
         style={{ color }}
@@ -302,24 +309,27 @@ export function HumanDesignFullChart({
 
         <div className="mx-auto w-full max-w-[640px]">
           {/*
-           * Real bug fix, 2026-08-17: the 4 Variable arrows used to be
-           * two `justify-between` rows spanning this component's FULL
-           * width (all 3 columns) — harmless when everything was
-           * cramped into one ~900px card, but once the workspace gave
-           * each column real room, "full width" became "the far corners
-           * of a 1200px+ page," not "the corners of the chart" the way
-           * they read in every real Bodygraph tool. Scoped to the
-           * chart's own max-w-[640px] now (same wrapper as the chart
-           * itself) and pulled into one compact row directly above it,
-           * matching her explicit ask ("around the upper/head area of
-           * the chart," not page-corner decoration) — same real
-           * calculated arrows/directions/colors, just re-scoped.
+           * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
+           * badges (her prior fix's own scoping to the chart's own
+           * max-w-[640px] was correct — the real remaining problem was
+           * the ROW shape itself) wrapped Motivation onto a second line
+           * at normal widths, reading as loose header text instead of
+           * chart-associated information. Real Bodygraph convention (her
+           * reference screenshot): 2 badges stacked at the chart's upper-
+           * left (its own Design-side arrows), 2 stacked upper-right
+           * (Personality-side) — never a single row. Same real
+           * calculated arrows/directions/colors as before, arranged as
+           * two fixed 2-item stacks instead of 4 items that could wrap.
            */}
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-            <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
-            <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
-            <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
-            <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+          <div className="mb-1 flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
+              <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+            </div>
+            <div className="space-y-1">
+              <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
+              <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+            </div>
           </div>
 
           <HumanDesignChart
