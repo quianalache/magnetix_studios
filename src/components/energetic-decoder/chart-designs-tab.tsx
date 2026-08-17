@@ -480,13 +480,14 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
 
 const FIELD_LABEL: Record<keyof EditableFields, string> = {
   chartDefinedColor: "Defined centers",
-  // Real scope, confirmed 2026-08-10 field audit: only the 6 "Community
-  // square" junction channels (10-20/10-34/10-57/20-34/20-57/34-57) ever
-  // read this — every other complete channel now renders in the Design/
-  // Personality two-tone split instead. Renamed from "Defined channels"
-  // so the label doesn't overpromise; not repurposed yet, per her
-  // explicit instruction.
-  channelsColor: "Junction Channel Color",
+  // Remapped 2026-08-17 alongside the Astrolo geometry rewrite: junction
+  // gates (10/20/34/57) no longer get special single-color treatment —
+  // every gate's spine (including theirs) is now colored purely by its
+  // own Personality/Design activation, same as any other gate. This
+  // field now controls the one channel-related thing that's still a
+  // brand choice: the faint background color of every UNactivated gate
+  // spine (previously hardcoded gray, not customizable at all).
+  channelsColor: "Channel Network Color",
   gatesColor: "Gate accent",
   personalityActivationColor: "Personality activation",
   designActivationColor: "Design activation",
@@ -745,7 +746,7 @@ function ChartDesignCard({
               </div>
               {key === "channelsColor" && (
                 <p className="pl-10 text-[10px] leading-snug text-muted-foreground/70">
-                  Applies only to special junction channels that do not use the Design/Personality split.
+                  Background color of the channel network where nothing is activated. Activated channels always use the fixed Personality/Design colors.
                 </p>
               )}
             </div>

@@ -131,18 +131,20 @@ const LINE_GLYPH_R = 52;
 const PLANET_GLYPH_R = 32;
 
 /**
- * % of the container's width/height the embedded BodyGraph occupies.
- * Retuned twice more (2026-08-16) after the shared HumanDesignChart's
- * own layout was fixed for a separate, real reason (G-center gates
- * genuinely outside the diamond, every center too cramped for its own
- * gates — see human-design-chart-layout.ts's header comment): bigger
- * centers mean the same bodygraph content now fills even more of its
- * own tightly-fitted viewBox, so this percentage needed to come down
- * again to avoid re-overlapping the gate-number rows — caught by
- * re-rendering this same Mandala after each layout change, not assumed
- * to still be correct just because nothing here changed.
+ * % of the container's width the embedded BodyGraph occupies (height
+ * follows automatically from CHART_VIEWBOX's own aspect ratio — CSS
+ * `transform: translate(-50%, -50%)` centers correctly either way, no
+ * separate height math needed here the way the PDF twin needs, see its
+ * own MANDALA_CENTER_CHART_HEIGHT comment).
+ *
+ * Retuned 2026-08-17 for the Astrolo geometry port (see human-design-
+ * chart-layout.ts's header) — real bounding-box math changed (a wider,
+ * tighter-cropped viewBox), so this was re-derived from scratch by
+ * real-rendering the Mandala PDF (identical CHART_VIEWBOX/aspect ratio
+ * to this web version) and inspecting it, not carried over from the old
+ * value.
  */
-const CENTER_CHART_PCT = 48;
+const CENTER_CHART_PCT = 30;
 
 const GATE_ARC_DEG = 360 / 64;
 

@@ -47,7 +47,7 @@ function toDesign(id: string, data: FirebaseFirestore.DocumentData): ChartDesign
 function freshDesignFields() {
   return {
     chartDefinedColor: defaultChartDesignColor(),
-    channelsColor: "#52525b", // zinc-600 — matches the traditional defined-channel line color already used
+    channelsColor: "#52525b", // zinc-600 — the faint background channel-network color (remapped 2026-08-17, see chart-designs-tab.tsx's FIELD_LABEL comment)
     gatesColor: "#18181b", // zinc-900 — matches the traditional Personality gate-text color
     // 2026-08-10 — full-chart-layout fields, see chart-design.ts's header
     // comment. Defaults match human-design-chart.tsx's current hardcoded

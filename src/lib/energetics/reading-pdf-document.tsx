@@ -16,8 +16,8 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { HumanDesignProfile, LocalSkillEntry } from "./human-design";
-import { CENTERS, CENTER_LABELS, CHANNELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
-import { CENTER_LAYOUT, GATE_POINT, type CenterLayout, type CenterShape } from "./human-design-chart-layout";
+import { CENTERS, CENTER_LABELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
+import { CENTER_LAYOUT, GATE_POINT, GATE_SPINE, CHART_VIEWBOX, type CenterGeometry } from "./human-design-chart-layout";
 import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG } from "./gate-data";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
 import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
@@ -33,13 +33,19 @@ import {
   ACTIVATED_TEXT,
   HANGING_PERSONALITY,
   HANGING_DESIGN,
-  STUB_LENGTH,
-  STUB_LENGTH_CAP_FRACTION,
-  JUNCTION_GATES,
+  CHANNEL_STROKE_WIDTH,
+  CHANNEL_STROKE_WIDTH_RECESSIVE,
+  CHANNEL_STROKE_OPACITY_RECESSIVE,
+  CENTER_STROKE_WIDTH,
+  GATE_MARKER_STROKE_WIDTH,
+  GATE_MARKER_R,
+  GATE_MARKER_R_DUAL,
+  GATE_LABEL_OFFSET_DUAL,
+  FONT_SIZE_ACTIVE,
+  FONT_SIZE_ACTIVE_DUAL,
+  FONT_SIZE_INACTIVE,
   declutterGateLabels,
-  shapePoints,
-  channelStripPoints,
-  CHANNEL_STRIP_HALF_WIDTH,
+  halfSplitDasharray,
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { SIGNS } from "./astrology";
@@ -81,7 +87,8 @@ import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/cha
  * @react-pdf/image's source, not assumed), so a foreign SVG string can't
  * just be dropped in. Redrawn instead using the exact same real geometry
  * this app's own on-screen HumanDesignChart/AstrologyWheelChart components
- * use (CENTER_LAYOUT/GATE_POINT/CHANNELS, the real astrology wheel math) —
+ * use (CENTER_LAYOUT/GATE_POINT/GATE_SPINE — the real Astrolo-ported
+ * bodygraph geometry, 2026-08-17 — plus the real astrology wheel math) —
  * same accurate chart, just re-expressed in react-pdf's shape components.
  *
  * Full rewrite 2026-08-10 — her real downloaded PDF showed 2 confirmed
@@ -177,101 +184,55 @@ const PLANET_ABBR: Record<string, string> = {
 // page is a fixed, known size, so this always renders the full 3-column
 // layout directly.
 
-function CenterShapePdf({ layout, defined, color }: { layout: CenterLayout; defined: boolean; color: string }) {
+/** Mirrors CenterShapeEl in human-design-chart.tsx — same ported Astrolo geometry, react-pdf's Path/Rect instead of DOM path/rect. */
+function CenterShapePdf({ layout, defined, color }: { layout: CenterGeometry; defined: boolean; color: string }) {
   const fill = defined ? color : UNDEFINED_FILL;
   const stroke = defined ? DEFINED_STROKE : UNDEFINED_STROKE;
-  if (layout.shape === "square") {
-    const r = layout.size;
-    return <Rect x={layout.x - r} y={layout.y - r} width={r * 2} height={r * 2} rx={r * 0.25} fill={fill} stroke={stroke} strokeWidth={0.5} />;
+  if (layout.shape === "rect") {
+    return <Rect x={layout.x} y={layout.y} width={layout.width} height={layout.height} rx={layout.rx} fill={fill} stroke={stroke} strokeWidth={CENTER_STROKE_WIDTH} />;
   }
-  // G / Identity center renders as a standard diamond, not the 8-point
-  // star CENTER_LAYOUT still declares — same override human-design-
-  // chart.tsx's own CenterShapeEl applies, mirrored here.
-  const effectiveShape: CenterShape | "diamond" = layout.center === "g" ? "diamond" : layout.shape;
-  return <Polygon points={shapePoints(effectiveShape, layout.x, layout.y, layout.size)} fill={fill} stroke={stroke} strokeWidth={0.5} />;
+  return <Path d={layout.d} transform={layout.transform} fill={fill} stroke={stroke} strokeWidth={CENTER_STROKE_WIDTH} />;
 }
 
-/** Mirrors HangingGateStub in human-design-chart.tsx — same geometry, react-pdf's Line instead of DOM line. */
-function HangingGateStubPdf({
+/**
+ * Mirrors GateSpine in human-design-chart.tsx — one gate's own ported
+ * Astrolo channel-stub spine, colored by that gate's own activation (not
+ * the channel pair's). react-pdf's Path instead of DOM path, same
+ * strokeDasharray-based dual-split technique (confirmed to work
+ * identically in react-pdf — @react-pdf/render applies strokeDasharray
+ * generically to any stroked shape node, and @react-pdf/layout's
+ * transform parser supports CSS matrix() the same way the G-center's
+ * rotation needs).
+ */
+function GateSpinePdf({
   gate,
-  toward,
   personalityActive,
   designActive,
+  recessiveColor,
 }: {
-  gate: { x: number; y: number };
-  toward: { x: number; y: number };
+  gate: number;
   personalityActive: boolean;
   designActive: boolean;
+  recessiveColor: string;
 }) {
-  if (!personalityActive && !designActive) return null;
-  const dx = toward.x - gate.x;
-  const dy = toward.y - gate.y;
-  const dist = Math.hypot(dx, dy) || 0.0001;
-  const length = Math.min(STUB_LENGTH, dist * STUB_LENGTH_CAP_FRACTION);
-  const ux = dx / dist;
-  const uy = dy / dist;
-  const end = { x: gate.x + ux * length, y: gate.y + uy * length };
+  const d = GATE_SPINE[gate];
+  if (!d) return null;
 
-  // Real construction fix, 2026-08-16 — same as the DOM version: a real
-  // Bodygraph hanging/defined connector is a filled polygon strip, not a
-  // stroked line (confirmed from Alex Davis's actual SVG). Same colors,
-  // same split logic.
+  if (!personalityActive && !designActive) {
+    return <Path d={d} fill="none" stroke={recessiveColor} strokeWidth={CHANNEL_STROKE_WIDTH_RECESSIVE} strokeOpacity={CHANNEL_STROKE_OPACITY_RECESSIVE} strokeLinecap="round" />;
+  }
   if (personalityActive && designActive) {
-    const mid = { x: gate.x + ux * length * 0.5, y: gate.y + uy * length * 0.5 };
     return (
       <>
-        <Polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
-        <Polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
+        <Path d={d} fill="none" stroke={HANGING_DESIGN} strokeWidth={CHANNEL_STROKE_WIDTH} strokeLinecap="round" />
+        <Path d={d} fill="none" stroke={HANGING_PERSONALITY} strokeWidth={CHANNEL_STROKE_WIDTH} strokeLinecap="round" strokeDasharray={halfSplitDasharray(d)} />
       </>
     );
   }
-  return (
-    <Polygon
-      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
-      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-    />
-  );
+  return <Path d={d} fill="none" stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN} strokeWidth={CHANNEL_STROKE_WIDTH} strokeLinecap="round" />;
 }
 
-/** Mirrors CompleteChannelHalf in human-design-chart.tsx — same geometry, filled-polygon construction (2026-08-16 fix, see that file's comment). */
-function CompleteChannelHalfPdf({
-  gate,
-  toward,
-  personalityActive,
-  designActive,
-}: {
-  gate: { x: number; y: number };
-  toward: { x: number; y: number };
-  personalityActive: boolean;
-  designActive: boolean;
-}) {
-  if (!personalityActive && !designActive) return null;
-  const dx = toward.x - gate.x;
-  const dy = toward.y - gate.y;
-  const dist = Math.hypot(dx, dy) || 0.0001;
-  const ux = dx / dist;
-  const uy = dy / dist;
-  const half = dist / 2;
-  const end = { x: gate.x + ux * half, y: gate.y + uy * half };
-
-  if (personalityActive && designActive) {
-    const mid = { x: gate.x + ux * half * 0.5, y: gate.y + uy * half * 0.5 };
-    return (
-      <>
-        <Polygon points={channelStripPoints(gate, mid, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_PERSONALITY} />
-        <Polygon points={channelStripPoints(mid, end, CHANNEL_STRIP_HALF_WIDTH)} fill={HANGING_DESIGN} />
-      </>
-    );
-  }
-  return (
-    <Polygon
-      points={channelStripPoints(gate, end, CHANNEL_STRIP_HALF_WIDTH)}
-      fill={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
-    />
-  );
-}
-
-/** Mirrors HumanDesignChart in human-design-chart.tsx — the BodyGraph itself, react-pdf primitives instead of DOM/SVG. */
+/** Mirrors HumanDesignChart in human-design-chart.tsx — the BodyGraph itself, react-pdf primitives instead of DOM/SVG. Full geometry replacement 2026-08-17, see that file's header for the Astrolo source/license story. */
 function HumanDesignBodygraphPdf({
   profile,
   centersColor,
@@ -292,26 +253,22 @@ function HumanDesignBodygraphPdf({
   size: number;
 }) {
   const definedSet = new Set(profile.definedCenters);
-  const definedChannelKeys = new Set(profile.definedChannels.map((c) => c.key));
   const personalityGates = new Set(profile.personality.map((a) => a.gate));
   const designGates = new Set(profile.design.map((a) => a.gate));
-  const activatedGates = Object.keys(GATE_POINT)
-    .map(Number)
-    .filter((g) => personalityGates.has(g) || designGates.has(g));
+  const allGates = Object.keys(GATE_SPINE).map(Number);
+  const activatedGates = allGates.filter((g) => personalityGates.has(g) || designGates.has(g));
   const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
   const labelPositions = declutterGateLabels(activatedGates, dualGates);
   const resolveCenterColor = (c: CenterKey): string =>
     centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? centersColor) : centersColor;
 
-  // viewBox recomputed 2026-08-16 alongside the CENTER_LAYOUT/GATE_OFFSETS
-  // fix (see human-design-chart-layout.ts's header comment) — same
-  // recomputation as human-design-chart.tsx's identical viewBox, not
-  // reused from the prior pass since the real content bounds grew once
-  // centers got bigger and gate offsets were corrected.
-  const height = size * (142 / 84); // matches the real viewBox aspect ratio, "8 -25 84 142"
+  // viewBox is the shared CHART_VIEWBOX ("18 -4 200 320") — see
+  // human-design-chart-layout.ts's header for how it was computed.
+  const [vbX, vbY, vbW, vbH] = CHART_VIEWBOX.split(" ").map(Number);
+  const height = size * (vbH / vbW);
 
   return (
-    <Svg viewBox="8 -25 84 142" style={{ width: size, height }}>
+    <Svg viewBox={CHART_VIEWBOX} style={{ width: size, height }}>
       {/*
        * Real bug caught 2026-08-15 rendering an actual PDF (the Mandala's
        * embedded copy of this chart passes backgroundColor="transparent"
@@ -323,43 +280,21 @@ function HumanDesignBodygraphPdf({
        * shared component receives (from an actual Chart Design's
        * backgroundColor field) is unaffected by this check.
        */}
-      <Rect x={-4} y={-3} width={108} height={102} fill={backgroundColor === "transparent" ? "none" : backgroundColor} />
+      <Rect x={vbX} y={vbY} width={vbW} height={vbH} fill={backgroundColor === "transparent" ? "none" : backgroundColor} />
 
-      {/* Channels — complete, non-junction channels render two-tone (CompleteChannelHalfPdf);
-          hanging-gate stubs layer on only for hanging channels; junction channels keep a flat line. */}
-      {CHANNELS.map((ch) => {
-        const [gateA, gateB] = ch.gates;
-        const a = GATE_POINT[gateA];
-        const b = GATE_POINT[gateB];
-        if (!a || !b) return null;
-        const isDefined = definedChannelKeys.has(ch.key);
-        const isJunctionChannel = JUNCTION_GATES.has(gateA) || JUNCTION_GATES.has(gateB);
-        const twoTone = isDefined && !isJunctionChannel;
-        return (
-          <G key={ch.key}>
-            {twoTone ? (
-              <>
-                <CompleteChannelHalfPdf gate={a} toward={b} personalityActive={personalityGates.has(gateA)} designActive={designGates.has(gateA)} />
-                <CompleteChannelHalfPdf gate={b} toward={a} personalityActive={personalityGates.has(gateB)} designActive={designGates.has(gateB)} />
-              </>
-            ) : isDefined ? (
-              // Defined junction channel — same filled-polygon fix as the
-              // DOM version (2026-08-16), one flat color, no P/D split
-              // (deliberate, pre-existing treatment for these 6 channels).
-              <Polygon points={channelStripPoints(a, b, CHANNEL_STRIP_HALF_WIDTH)} fill={channelsColor} fillOpacity={0.9} />
-            ) : (
-              // Undefined/background channel — faint full network, unchanged.
-              <Line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={DEFAULT_DEFINED_FILL} strokeWidth={0.4} strokeOpacity={0.7} />
-            )}
-            {!isJunctionChannel && !twoTone && (
-              <>
-                <HangingGateStubPdf gate={a} toward={b} personalityActive={personalityGates.has(gateA)} designActive={designGates.has(gateA)} />
-                <HangingGateStubPdf gate={b} toward={a} personalityActive={personalityGates.has(gateB)} designActive={designGates.has(gateB)} />
-              </>
-            )}
-          </G>
-        );
-      })}
+      {/* Every gate's own spine — recessive/faint pass first (drawn under
+          everything), then the active pass on top, same as the web
+          renderer and same reasoning (the 10/20/34/57 junction cluster's
+          4 spines converge, so an active one must never be visually
+          broken by an inactive one crossing near it). */}
+      {allGates
+        .filter((g) => !personalityGates.has(g) && !designGates.has(g))
+        .map((gate) => (
+          <GateSpinePdf key={gate} gate={gate} personalityActive={false} designActive={false} recessiveColor={channelsColor} />
+        ))}
+      {activatedGates.map((gate) => (
+        <GateSpinePdf key={gate} gate={gate} personalityActive={personalityGates.has(gate)} designActive={designGates.has(gate)} recessiveColor={channelsColor} />
+      ))}
 
       {/* 9 centers — traditional or uniform per resolveCenterColor above */}
       {CENTERS.map((c) => (
@@ -367,11 +302,12 @@ function HumanDesignBodygraphPdf({
       ))}
 
       {/* All 64 gate numbers, inactive ones faint, drawn before the activated layer */}
-      {Object.entries(GATE_POINT).map(([gateStr, point]) => {
-        const gate = Number(gateStr);
+      {allGates.map((gate) => {
         if (personalityGates.has(gate) || designGates.has(gate)) return null;
+        const point = GATE_POINT[gate];
+        if (!point) return null;
         return (
-          <Text key={gate} x={point.x} y={point.y + 0.8} style={{ fontSize: 1.9, fill: INACTIVE_GATE_TEXT, textAnchor: "middle" }}>
+          <Text key={gate} x={point.x} y={point.y + FONT_SIZE_INACTIVE * 0.35} style={{ fontSize: FONT_SIZE_INACTIVE, fill: INACTIVE_GATE_TEXT, textAnchor: "middle" }}>
             {gate}
           </Text>
         );
@@ -385,28 +321,28 @@ function HumanDesignBodygraphPdf({
         const dual = inPersonality && inDesign;
 
         if (dual) {
-          const OFFSET = 1.5;
-          const R = 1.55;
+          const OFFSET = GATE_LABEL_OFFSET_DUAL;
+          const R = GATE_MARKER_R_DUAL;
           return (
             <G key={gate}>
-              <Circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={0.35} />
-              <Text x={point.x + OFFSET} y={point.y + OFFSET + 0.6} style={{ fontSize: 1.6, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+              <Circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+              <Text x={point.x + OFFSET} y={point.y + OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE_DUAL, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
                 {gate}
               </Text>
-              <Circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={0.35} />
-              <Text x={point.x - OFFSET} y={point.y - OFFSET + 0.6} style={{ fontSize: 1.6, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+              <Circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+              <Text x={point.x - OFFSET} y={point.y - OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE_DUAL, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
                 {gate}
               </Text>
             </G>
           );
         }
 
-        const R = 1.9;
+        const R = GATE_MARKER_R;
         const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
         return (
           <G key={gate}>
-            <Circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={0.35} />
-            <Text x={point.x} y={point.y + 0.7} style={{ fontSize: 2, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+            <Circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+            <Text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
               {gate}
             </Text>
           </G>
@@ -641,17 +577,18 @@ const MANDALA_PLANET_GLYPH_R = 32;
 const MANDALA_GATE_ARC_DEG = 360 / 64;
 const MANDALA_SIZE = 300; // bigger than the 180pt BodyGraph/240pt Astrology wheel — 64 tightly-packed gate numbers need more room to stay legible than either of those.
 /**
- * % of MANDALA_SIZE the embedded BodyGraph occupies. Retuned twice more
- * (2026-08-16) after the shared HumanDesignBodygraphPdf's own layout was
- * fixed for a separate, real reason (G-center gates genuinely outside
- * the diamond, every center too cramped for its own gates — see
- * human-design-chart-layout.ts's header comment): bigger centers mean
- * the same bodygraph content now fills even more of its own tightly-
- * fitted viewBox, so this percentage needed to come down again to avoid
- * re-overlapping the gate-number rows — caught by re-rendering this same
- * Mandala PDF after each layout change, not assumed still correct.
+ * Width (pt) the embedded BodyGraph occupies, as a fraction of
+ * MANDALA_SIZE. Retuned 2026-08-17 for the Astrolo geometry port (see
+ * human-design-chart-layout.ts's header) — real bounding-box math is
+ * different now (a wider, tighter-cropped viewBox: CHART_VIEWBOX below
+ * vs. the old "8 -25 84 142"), so this was re-derived from scratch by
+ * real-rendering the Mandala PDF and inspecting it, not carried over
+ * from the old value.
  */
-const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.48;
+const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.3;
+/** Real height of the embedded chart at MANDALA_CENTER_CHART_SIZE width — CHART_VIEWBOX isn't square, so this must be computed, not assumed equal to the width (a real bug this rewrite fixed: the old code used one value for both the width AND the vertical centering offset, silently assuming a square embed). */
+const [, , CHART_VIEWBOX_W, CHART_VIEWBOX_H] = CHART_VIEWBOX.split(" ").map(Number);
+const MANDALA_CENTER_CHART_HEIGHT = MANDALA_CENTER_CHART_SIZE * (CHART_VIEWBOX_H / CHART_VIEWBOX_W);
 
 function mandalaAngleForGateIndex(i: number): number {
   // 12 o'clock = -90°, clockwise = increasing angle — same convention mandala-chart.tsx documents.
@@ -946,7 +883,7 @@ export function MandalaPdf({
        * hdDesign is absent, so there's nothing left that actually needs
        * the gate.
        */}
-      <View style={{ position: "absolute", top: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2, left: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2 }}>
+      <View style={{ position: "absolute", top: (MANDALA_SIZE - MANDALA_CENTER_CHART_HEIGHT) / 2, left: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2 }}>
         <HumanDesignBodygraphPdf
           profile={profile}
           centersColor={hdDesign?.chartDefinedColor || DEFAULT_DEFINED_FILL}

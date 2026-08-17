@@ -1,5 +1,5 @@
-import { CHANNELS, type CenterKey } from "./human-design-data";
-import { GATE_POINT, type CenterShape } from "./human-design-chart-layout";
+import type { CenterKey } from "./human-design-data";
+import { GATE_POINT } from "./human-design-chart-layout";
 
 /**
  * Shared BodyGraph rendering constants + pure geometry — extracted
@@ -9,18 +9,29 @@ import { GATE_POINT, type CenterShape } from "./human-design-chart-layout";
  * could silently drift out of sync between the two, or re-deriving
  * geometry that's already been tuned against real data.
  *
- * Every value/function here is an unmodified extraction from where it
- * originally lived directly inside human-design-chart.tsx — this file
- * changes nothing about what already renders, it just gives the PDF
- * renderer (and any other future non-DOM renderer) a real, single
- * source of truth to import from instead of a second hand-copy.
+ * 2026-08-17 — rewritten alongside the Astrolo geometry port (see
+ * human-design-chart-layout.ts's header). Two real changes:
  *
- * The JSX-returning pieces (CenterShapeEl, HangingGateStub,
- * CompleteChannelHalf, the activated-gate marker circles) deliberately
- * stay in human-design-chart.tsx itself — they're DOM-SVG components,
- * and react-pdf needs its own Svg/Polygon/Circle/Line primitives instead;
- * only the pure colors and math that both renderers need identically
- * move here.
+ *  1. The old per-gate/per-channel geometry helpers (shapePoints,
+ *     channelStripPoints, STUB_LENGTH*, JUNCTION_GATES) are gone. They
+ *     existed to compute channel/center shapes from scratch (straight
+ *     line -> perpendicular-offset rectangle; center shape type -> polygon
+ *     formula). Centers and channel spines are now real ported vector
+ *     paths (CENTER_LAYOUT/GATE_SPINE in human-design-chart-layout.ts)
+ *     drawn directly as stroked/filled <path>s, so there's no longer
+ *     anything to compute for them.
+ *
+ *  2. Every visual-weight constant below (marker radius, font sizes,
+ *     stroke widths, label-declutter spacing) is rescaled ~2.4x from its
+ *     old value — the ported geometry lives in Astrolo's own native
+ *     240x320-ish coordinate space instead of this app's old 0-100 space,
+ *     and 2.4x is that space's real growth factor (new viewBox width 200
+ *     / old viewBox width 84). Where the rescaled value landed close to
+ *     one of Astrolo's own real authored weights (channel stroke ~5.5 vs
+ *     Astrolo's own StrokeThickness=5; gate marker ~4.5 vs Astrolo's own
+ *     6.5-diameter/3.25-radius gate button), that's a real independent
+ *     cross-check that the rescale is right, not a coincidence to worry
+ *     about.
  */
 
 export const DEFAULT_DEFINED_FILL = "#d4d4d8"; // zinc-300 — light gray
@@ -55,51 +66,45 @@ export const DESIGN_FILL = "#9a3412"; // rust/brown
 export const ACTIVATED_TEXT = "#ffffff";
 
 /**
- * Hanging-gate channel stub colors — real hex values reverse-derived
- *2026-08-10 from Bodygraph's own real SVG fill values for
- * personality-N/design-N elements, not invented.
+ * Channel-spine colors — real hex values reverse-derived 2026-08-10 from
+ * Bodygraph's own real SVG fill values for personality-N/design-N
+ * elements, not invented. Used for every gate's own spine stroke
+ * (GATE_SPINE in human-design-chart-layout.ts) when that gate is
+ * Personality-only, Design-only, or (split via CHANNEL_DASH_MIDPOINT
+ * below) both.
  */
 export const HANGING_PERSONALITY = "#654422"; // brown
 export const HANGING_DESIGN = "#e4b54b"; // gold
-/** Fixed absolute stub length (viewBox units), capped at 40% of the real gate-to-partner distance — see human-design-chart.tsx's own header comment for the full real-tuning history. */
-export const STUB_LENGTH = 3.2;
-export const STUB_LENGTH_CAP_FRACTION = 0.4;
 
 /**
- * The "Community square" junction gates (10/20/34/57) — each belongs to
- * 3 of the 36 channels instead of 1, and Bodygraph's own renderer
- * suppresses the hanging-gate stub when two of a junction gate's channels
- * are both complete at once rather than picking one to point at. See
- * human-design-chart.tsx's own header comment for the full real
- * investigation this conservative treatment came from.
+ * Visual weights — see header comment for the ~2.4x rescale this session
+ * (old 0-100-ish space -> Astrolo's native ~200x320 space).
  */
-function computeJunctionGates(): Set<number> {
-  const channelCount = new Map<number, number>();
-  for (const ch of CHANNELS) {
-    channelCount.set(ch.gates[0], (channelCount.get(ch.gates[0]) ?? 0) + 1);
-    channelCount.set(ch.gates[1], (channelCount.get(ch.gates[1]) ?? 0) + 1);
-  }
-  const junctions = new Set<number>();
-  for (const [gate, count] of channelCount) {
-    if (count > 1) junctions.add(gate);
-  }
-  return junctions;
-}
-export const JUNCTION_GATES = computeJunctionGates();
+export const CHANNEL_STROKE_WIDTH = 5.5; // an active (Personality/Design/Both) gate spine — real "fillable pipe" weight, not a thin wire
+export const CHANNEL_STROKE_WIDTH_RECESSIVE = 1.1; // an inactive gate's own spine, drawn faint — still the real geometry, just recessive (matches Astrolo's own ZIndex=0/Background-color treatment for ActivationState=None)
+export const CHANNEL_STROKE_OPACITY_RECESSIVE = 0.55;
+export const CENTER_STROKE_WIDTH = 1.2;
+export const GATE_MARKER_STROKE_WIDTH = 0.8;
+export const GATE_MARKER_R = 4.5; // single (non-dual) activated-gate marker circle radius
+export const GATE_MARKER_R_DUAL = 3.7; // each of a dual-activated gate's two offset circles
+export const GATE_LABEL_OFFSET_DUAL = 3.6; // how far apart a dual gate's two offset circles sit
+export const FONT_SIZE_ACTIVE = 4.8;
+export const FONT_SIZE_ACTIVE_DUAL = 3.8;
+export const FONT_SIZE_INACTIVE = 4.5;
 
 /**
- * Collision avoidance for activated-gate labels — pure math, no JSX. See
- * human-design-chart.tsx's own header comment for the full real-tuning
- * history (MIN_GAP/DUAL_BONUS retuned against her actual reading's real
- * crowded-center gate data, not guessed).
+ * Collision avoidance for activated-gate labels — pure math, no JSX.
+ * MIN_GAP/DUAL_BONUS rescaled 2026-08-17 (see header); the underlying
+ * approach/history is unchanged from the 2026-08-10 real-data tuning
+ * pass.
  */
 export function declutterGateLabels(
   gates: number[],
   dualSet: Set<number>,
 ): Map<number, { x: number; y: number }> {
   const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
-  const MIN_GAP = 3.6; // base clearance two single-label circles need at this font size
-  const DUAL_BONUS = 1.6; // a dual gate's own two offset labels need more room from its neighbors
+  const MIN_GAP = 8.6; // base clearance two single-label circles need at this font size
+  const DUAL_BONUS = 3.8; // a dual gate's own two offset labels need more room from its neighbors
   for (let iter = 0; iter < 40; iter++) {
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
@@ -122,72 +127,122 @@ export function declutterGateLabels(
   return new Map(pts.map((p) => [p.gate, { x: p.x, y: p.y }]));
 }
 
-/**
- * A channel/stub segment as a filled polygon strip, not a stroked line —
- * the real Bodygraph technique, confirmed 2026-08-16 by inspecting Alex
- * Davis's actual defined-channel SVG (gate 37-40) via the live API: each
- * channel half is a closed 4-point polygon with real width, not a
- * stroke. Reusable as-is by both DOM `<polygon points="...">` and
- * react-pdf's `<Polygon points="...">`, same string format as
- * shapePoints below. A clean rectangular strip (perpendicular offset,
- * uniform width) — not a hand-fitted taper like Bodygraph's own
- * per-gate coordinates, which isn't verifiable/reproducible generically
- * from one sample; this is the honest, computable approximation of
- * their real construction, not a guess at decorative detail.
- */
-export function channelStripPoints(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-  halfWidth: number,
-): string {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const dist = Math.hypot(dx, dy) || 0.0001;
-  const px = (-dy / dist) * halfWidth;
-  const py = (dx / dist) * halfWidth;
-  return [
-    `${(from.x + px).toFixed(2)},${(from.y + py).toFixed(2)}`,
-    `${(to.x + px).toFixed(2)},${(to.y + py).toFixed(2)}`,
-    `${(to.x - px).toFixed(2)},${(to.y - py).toFixed(2)}`,
-    `${(from.x - px).toFixed(2)},${(from.y - py).toFixed(2)}`,
-  ].join(" ");
-}
-/** Half-width (viewBox units) for the filled channel-strip polygons — full width ~2.4, comparable to the stroke weight it replaces. */
-export const CHANNEL_STRIP_HALF_WIDTH = 1.2;
+// ── Path-length math for the dual (Personality + Design) split overlay ──
+//
+// A dual-activated gate's own spine needs to render as two colors along
+// its length (personality nearer the gate, design farther toward the
+// partner — same convention this app already established). The ported
+// GATE_SPINE paths are a mix of straight segments and real cubic Bézier
+// curves (the 10/20/34/57 junction cluster, plus several other gates —
+// confirmed by inspecting Astrolo's own source, not assumed to be just
+// the 4 junction gates), so the split can't be computed with simple
+// straight-line midpoint math the way the old channelStripPoints
+// approach did. Instead: measure the spine's real length (straight
+// segments exactly, Bézier segments via dense sampling — accurate to a
+// fraction of a percent, plenty for a visual split), then use
+// `strokeDasharray` to paint only the first half of the SAME path data in
+// the overlay color — works identically for straight and curved spines,
+// no separate geometry needed.
 
-/**
- * Center shape geometry — pure string math. Reusable as-is by both DOM
- * `<polygon points="...">` and react-pdf's `<Polygon points="...">`,
- * which use the identical "x,y x,y ..." string format.
- */
-export function shapePoints(shape: CenterShape | "diamond", cx: number, cy: number, r: number): string {
-  switch (shape) {
-    case "triangle-up":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + r} ${cx + r},${cy + r}`;
-    case "triangle-down":
-      return `${cx},${cy + 0.9 * r} ${cx - r},${cy - r} ${cx + r},${cy - r}`;
-    case "triangle-left":
-      return `${cx - 0.9 * r},${cy} ${cx + r},${cy - r} ${cx + r},${cy + r}`;
-    case "triangle-right":
-      return `${cx + 0.9 * r},${cy} ${cx - r},${cy - r} ${cx - r},${cy + r}`;
-    case "triangle-heart":
-      return `${cx},${cy - 0.9 * r} ${cx - r},${cy + 0.9 * r} ${cx + 1.1 * r},${cy + r}`;
-    // Standard 4-point diamond — the G / Identity center's real shape,
-    // confirmed against every real Bodygraph chart compared so far.
-    case "diamond":
-      return `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`;
-    case "octagram": {
-      // No longer reachable for the G center — kept for CenterShape type
-      // completeness, in case CENTER_LAYOUT data changes later.
-      const pts: string[] = [];
-      for (let s = 0; s < 16; s++) {
-        const angle = -Math.PI / 2 + (s * Math.PI) / 8;
-        const radius = s % 2 === 0 ? r : 0.72 * r;
-        pts.push(`${cx + Math.cos(angle) * radius},${cy + Math.sin(angle) * radius}`);
-      }
-      return pts.join(" ");
+type PathCmd = { cmd: "M" | "L" | "H" | "V" | "C"; args: number[] };
+
+function parseSpine(d: string): PathCmd[] {
+  const tokens = d.match(/[MmLlHhVvCc]|-?\d+\.?\d*(?:[eE][-+]?\d+)?/g) ?? [];
+  const cmds: PathCmd[] = [];
+  let i = 0;
+  let cur: string | null = null;
+  let x = 0;
+  let y = 0;
+  const isLetter = (t: string) => /^[MmLlHhVvCc]$/.test(t);
+  while (i < tokens.length) {
+    const t = tokens[i];
+    if (isLetter(t)) {
+      cur = t;
+      i += 1;
+      continue;
     }
-    default:
-      return "";
+    if (!cur) break;
+    if (cur === "M" || cur === "m") {
+      const nx = Number(tokens[i]);
+      const ny = Number(tokens[i + 1]);
+      x = cur === "m" ? x + nx : nx;
+      y = cur === "m" ? y + ny : ny;
+      cmds.push({ cmd: "M", args: [x, y] });
+      i += 2;
+      cur = cur === "m" ? "l" : "L"; // subsequent bare coordinate pairs are implicit lineto
+    } else if (cur === "L" || cur === "l") {
+      const nx = Number(tokens[i]);
+      const ny = Number(tokens[i + 1]);
+      x = cur === "l" ? x + nx : nx;
+      y = cur === "l" ? y + ny : ny;
+      cmds.push({ cmd: "L", args: [x, y] });
+      i += 2;
+    } else if (cur === "V" || cur === "v") {
+      const ny = Number(tokens[i]);
+      y = cur === "v" ? y + ny : ny;
+      cmds.push({ cmd: "V", args: [x, y] });
+      i += 1;
+    } else if (cur === "H" || cur === "h") {
+      const nx = Number(tokens[i]);
+      x = cur === "h" ? x + nx : nx;
+      cmds.push({ cmd: "H", args: [x, y] });
+      i += 1;
+    } else if (cur === "C" || cur === "c") {
+      const v = [0, 1, 2, 3, 4, 5].map((k) => Number(tokens[i + k]));
+      const [x1, y1, x2, y2, ex, ey] =
+        cur === "c" ? [x + v[0], y + v[1], x + v[2], y + v[3], x + v[4], y + v[5]] : v;
+      cmds.push({ cmd: "C", args: [x, y, x1, y1, x2, y2, ex, ey] });
+      x = ex;
+      y = ey;
+      i += 6;
+    } else {
+      i += 1;
+    }
   }
+  return cmds;
+}
+
+function cubicPoint(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, t: number) {
+  const mt = 1 - t;
+  const a = mt * mt * mt;
+  const b = 3 * mt * mt * t;
+  const c = 3 * mt * t * t;
+  const dd = t * t * t;
+  return { x: a * x0 + b * x1 + c * x2 + dd * x3, y: a * y0 + b * y1 + c * y2 + dd * y3 };
+}
+
+/** Real total length of a GATE_SPINE path — straight segments exact, Bézier segments sampled (24 steps, sub-percent accurate). */
+export function spineLength(d: string): number {
+  const cmds = parseSpine(d);
+  let length = 0;
+  let px = 0;
+  let py = 0;
+  for (const c of cmds) {
+    if (c.cmd === "M") {
+      [px, py] = c.args;
+    } else if (c.cmd === "L" || c.cmd === "V" || c.cmd === "H") {
+      const [nx, ny] = c.args;
+      length += Math.hypot(nx - px, ny - py);
+      px = nx;
+      py = ny;
+    } else if (c.cmd === "C") {
+      const [x0, y0, x1, y1, x2, y2, x3, y3] = c.args;
+      const STEPS = 24;
+      let prev = { x: x0, y: y0 };
+      for (let s = 1; s <= STEPS; s++) {
+        const p = cubicPoint(x0, y0, x1, y1, x2, y2, x3, y3, s / STEPS);
+        length += Math.hypot(p.x - prev.x, p.y - prev.y);
+        prev = p;
+      }
+      px = x3;
+      py = y3;
+    }
+  }
+  return length;
+}
+
+/** `strokeDasharray` value that paints exactly the first half of a spine — the personality-nearer-the-gate portion of a dual-activated gate's split overlay. */
+export function halfSplitDasharray(d: string): string {
+  const len = spineLength(d);
+  return `${(len / 2).toFixed(2)} ${len.toFixed(2)}`;
 }
