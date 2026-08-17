@@ -23,7 +23,6 @@ import {
   FONT_SIZE_INACTIVE,
   declutterGateLabels,
   halfSplitDasharray,
-  halfCirclePath,
 } from "@/lib/energetics/human-design-chart-constants";
 
 /**
@@ -228,40 +227,25 @@ export function HumanDesignChart({
         {/* Gate numbers — the activated ones, solid-filled circle with
             reversed white text. Personality solid black, Design solid
             rust/brown. Dual (Personality + Design) activation, 2026-08-17
-            correction-pass-3: ONE circle, same GATE_MARKER_R as every
-            other gate, split left/right between the two real colors —
-            not two separate smaller offset circles (that read as a
-            duplicated gate next to real Bodygraph software, confirmed
-            directly against her side-by-side production screenshot, and
-            was never itself verified against a real reference — see
-            halfCirclePath's own header for the full story). Position is
-            the decluttered label point, not the true GATE_POINT — spine
-            paths above still use the true gate position, so the network
-            geometry never shifts, only the number labels/circles nudge
-            apart when crowded. */}
+            correction-pass-4: back to ONE plain flat-colored circle, same
+            as every other gate — the split-circle treatment from
+            correction-pass-3 was a real improvement over the old two-
+            offset-circles bug, but her direct follow-up was explicit: no
+            split, no center divider line, "one color the same way the
+            other gates are." Design wins as the single color when both
+            are active — the same real "Both -> Design as base" rule
+            already established for the channel spine itself (GateSpine
+            above), not a new invented choice. The Personality/Design
+            distinction for a dual gate is still visible on its own
+            channel spine (the real two-tone split there is unchanged);
+            it just doesn't duplicate onto the small number marker too. */}
         {activatedGates.map((gate) => {
           const point = labelPositions.get(gate)!;
-          const inPersonality = personalityGates.has(gate);
           const inDesign = designGates.has(gate);
-          const dual = inPersonality && inDesign;
-          const R = GATE_MARKER_R;
-
-          if (dual) {
-            return (
-              <g key={gate}>
-                <path d={halfCirclePath(point.x, point.y, R, "left")} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-                <path d={halfCirclePath(point.x, point.y, R, "right")} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-                <text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} fontSize={FONT_SIZE_ACTIVE} fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
-                  {gate}
-                </text>
-              </g>
-            );
-          }
-
-          const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
+          const fill = inDesign ? DESIGN_FILL : PERSONALITY_FILL;
           return (
             <g key={gate}>
-              <circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+              <circle cx={point.x} cy={point.y} r={GATE_MARKER_R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
               <text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} fontSize={FONT_SIZE_ACTIVE} fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
                 {gate}
               </text>

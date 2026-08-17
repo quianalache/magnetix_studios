@@ -102,37 +102,24 @@ export const CENTER_STROKE_WIDTH = 1.2;
 export const GATE_MARKER_STROKE_WIDTH = 0.6;
 /**
  * Single activated-gate marker circle radius — used for EVERY activated
- * gate now, dual included (see halfCirclePath below and its own header
- * comment for the 2026-08-17 correction-pass-3 rework: dual gates used to
- * render as two separate SMALLER offset circles, which is what she was
- * actually seeing as "duplicate"/"too small" gates comparing side-by-side
- * against real Bodygraph software, not a rendering bug). Real cross-check
- * for the value itself unchanged from correction-pass-1: Astrolo's own
+ * gate, dual included. Real cross-check for the value: Astrolo's own
  * native gate buttons are radius 3.25 in this same coordinate space.
+ *
+ * Dual (Personality + Design) marker color, 2026-08-17 correction-pass-4:
+ * a plain flat circle like every other gate, Design as the single color
+ * — see GateSpine's/the activated-gate render block's own comment. Two
+ * earlier passes tried a two-offset-circles treatment, then a same-size
+ * split-circle treatment; both were real attempts at showing dual state
+ * visually at the marker, but her direct, explicit follow-up was "one
+ * color the same way the other gates are" — no more visual distinction
+ * at the marker level. The real P/D split is still visible on the
+ * gate's own channel spine, unchanged.
  */
 export const GATE_MARKER_R = 3.4;
 export const FONT_SIZE_ACTIVE = 3.7;
 export const FONT_SIZE_INACTIVE = 4.5;
 /** Half-footprint of a plain inactive gate-number text label — used only to keep an active gate's marker from landing on top of a NEARBY inactive gate's printed number (see declutterGateLabels below). Not a circle radius; inactive gates have no marker, just this much text. */
 const INACTIVE_LABEL_HALF_WIDTH = 2.4;
-
-/**
- * One activated gate's marker, as an SVG/react-pdf path — a plain full
- * circle for Personality-only or Design-only, or (correction-pass-3,
- * 2026-08-17, see GATE_MARKER_R's own comment) a single circle split
- * left/right for dual (Personality + Design) activation, same size as
- * every other marker. Real bug fix: the old two-small-offset-circles
- * treatment for dual gates was a rendering choice made early in this
- * project, never actually verified against real Bodygraph software — her
- * direct side-by-side comparison caught it reading as a duplicated gate,
- * not a real dual-activation indicator. This single-circle split keeps
- * the same real Personality/Design colors and the same "both, distinctly,
- * never blended" rule, just expressed as one gate marker instead of two.
- */
-export function halfCirclePath(cx: number, cy: number, r: number, side: "left" | "right"): string {
-  const sweep = side === "right" ? 1 : 0;
-  return `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${sweep} ${cx} ${cy + r} Z`;
-}
 
 /**
  * Collision avoidance for activated-gate labels — pure math, no JSX.

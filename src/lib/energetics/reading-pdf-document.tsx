@@ -43,7 +43,6 @@ import {
   FONT_SIZE_INACTIVE,
   declutterGateLabels,
   halfSplitDasharray,
-  halfCirclePath,
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { SIGNS } from "./astrology";
@@ -310,30 +309,14 @@ function HumanDesignBodygraphPdf({
         );
       })}
 
-      {/* Activated gates — solid-filled circle + reversed white number. Dual activation, 2026-08-17 correction-pass-3: one same-size circle split left/right, not two smaller offset circles — see halfCirclePath's own header comment. */}
+      {/* Activated gates — solid-filled circle + reversed white number. Dual activation, 2026-08-17 correction-pass-4: one plain flat-colored circle, same as every other gate (Design wins as the single color when both are active — same real rule already used for the channel spine itself). See human-design-chart.tsx's identical block for the full story. */}
       {activatedGates.map((gate) => {
         const point = labelPositions.get(gate)!;
-        const inPersonality = personalityGates.has(gate);
         const inDesign = designGates.has(gate);
-        const dual = inPersonality && inDesign;
-        const R = GATE_MARKER_R;
-
-        if (dual) {
-          return (
-            <G key={gate}>
-              <Path d={halfCirclePath(point.x, point.y, R, "left")} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-              <Path d={halfCirclePath(point.x, point.y, R, "right")} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-              <Text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
-                {gate}
-              </Text>
-            </G>
-          );
-        }
-
-        const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
+        const fill = inDesign ? DESIGN_FILL : PERSONALITY_FILL;
         return (
           <G key={gate}>
-            <Circle cx={point.x} cy={point.y} r={R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+            <Circle cx={point.x} cy={point.y} r={GATE_MARKER_R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
             <Text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
               {gate}
             </Text>
