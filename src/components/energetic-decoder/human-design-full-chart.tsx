@@ -283,7 +283,19 @@ export function HumanDesignFullChart({
         <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 @5xl/hdfc:grid-cols-[minmax(180px,240px)_minmax(320px,480px)_minmax(180px,240px)] @5xl/hdfc:items-start">
+      {/*
+       * Column tracks widened 2026-08-17 for the new Readings workspace
+       * (human-design-reading-workspace.tsx) — this component's real
+       * width was always capped by the old narrow detail pane it lived
+       * in, so the BodyGraph's own max-width never mattered in practice.
+       * Now that the workspace gives it real desktop width, the old
+       * minmax(320px,480px)/max-w-[420px] caps were the actual bottleneck
+       * keeping the chart small — bumped so it can become the page's
+       * real visual centerpiece, per her explicit ask. Activation columns
+       * widened slightly too, to stay visually balanced next to a bigger
+       * chart rather than looking like two thin strips beside it.
+       */}
+      <div className="grid grid-cols-1 gap-6 @5xl/hdfc:grid-cols-[minmax(200px,280px)_minmax(420px,720px)_minmax(200px,280px)] @5xl/hdfc:items-start">
         <ActivationColumn
           side="Design"
           activations={profile.design}
@@ -295,7 +307,7 @@ export function HumanDesignFullChart({
 
         <HumanDesignChart
           profile={profile}
-          className="mx-auto w-full max-w-[420px]"
+          className="mx-auto w-full max-w-[640px]"
           definedColor={design?.chartDefinedColor}
           channelsColor={design?.channelsColor}
           gatesColor={design?.gatesColor}

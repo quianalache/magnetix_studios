@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Copy,
   Loader2,
   Search,
-  ExternalLink,
-  FileOutput,
   Eye,
   Download,
   SlidersHorizontal,
@@ -32,8 +28,7 @@ import {
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { EnergeticProfile } from "@/types/energetic-profile";
 import type { Contact } from "@/types/contacts";
-import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
-import { SphereList, HumanDesignSummary, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import { HumanDesignReadingWorkspace } from "@/components/energetic-decoder/human-design-reading-workspace";
 import { EnergeticDecoderReadingConfiguration } from "@/components/energetic-decoder/reading-configuration";
 import { NewReadingDialog, type NewReadingDialogOpenRequest } from "@/components/energetic-decoder/new-reading-dialog";
 import type { ReportDesign } from "@/types/report-blocks";
@@ -547,36 +542,45 @@ export function EnergeticDecoderReadingsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Readings</h2>
-          <p className="text-sm text-muted-foreground">Your saved client charts.</p>
+      {/* Hidden once a reading is explicitly selected — the workspace
+          (below) has its own "Readings" breadcrumb/back control, and the
+          approved mockup's header has no room for a second, redundant
+          page title. `!selectedId`, not `!selected` — `selected` falls
+          back to `readings[0]` when nothing's explicitly chosen (existing
+          behavior), so `!selected` would stay permanently false, hiding
+          this row forever, once any reading exists at all. */}
+      {!selectedId && (
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Readings</h2>
+            <p className="text-sm text-muted-foreground">Your saved client charts.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Dialog open={configOpen} onOpenChange={setConfigOpen}>
+              <DialogTrigger
+                title="Reading configuration"
+                aria-label="Reading configuration"
+                className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Reading configuration</DialogTitle>
+                </DialogHeader>
+                <EnergeticDecoderReadingConfiguration />
+              </DialogContent>
+            </Dialog>
+            <NewReadingDialog
+              onCreated={handleReadingCreated}
+              openRequest={openRequest}
+              onOpenRequestHandled={() => setOpenRequest(null)}
+              onProfileUpdated={handleProfileUpdated}
+              onProfileDeleted={handleProfileDeleted}
+            />
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Dialog open={configOpen} onOpenChange={setConfigOpen}>
-            <DialogTrigger
-              title="Reading configuration"
-              aria-label="Reading configuration"
-              className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Reading configuration</DialogTitle>
-              </DialogHeader>
-              <EnergeticDecoderReadingConfiguration />
-            </DialogContent>
-          </Dialog>
-          <NewReadingDialog
-            onCreated={handleReadingCreated}
-            openRequest={openRequest}
-            onOpenRequestHandled={() => setOpenRequest(null)}
-            onProfileUpdated={handleProfileUpdated}
-            onProfileDeleted={handleProfileDeleted}
-          />
-        </div>
-      </div>
+      )}
 
       {readingsLoading || profilesLoading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
@@ -584,6 +588,56 @@ export function EnergeticDecoderReadingsTab({
         <p className="rounded-lg border border-dashed py-8 text-center text-xs text-muted-foreground">
           No profiles or readings saved yet — click &ldquo;New reading&rdquo; to generate one.
         </p>
+      ) : selectedId && selected ? (
+        /*
+         * Full-width Traditional Human Design workspace (2026-08-17,
+         * approved mockup) — replaces the old list-pane + narrow detail-
+         * pane split entirely once a reading is explicitly selected.
+         * Real bug caught here, not assumed: `selected` itself falls back
+         * to `readings[0]` when `selectedId` is null (existing behavior,
+         * unchanged), so checking `selected` alone would make this branch
+         * permanently stuck once any reading exists — "back" (which just
+         * clears `selectedId`) would never actually show the list again.
+         * `selectedId &&` is the real gate; `selected` (guaranteed
+         * non-null here since `readings` is non-empty in this branch,
+         * see the guard above) is what gets passed down.
+         * The list pane (below, in the other branch) is how you get back here for
+         * a different reading, via the workspace's own "Readings"
+         * breadcrumb/back control (onBack -> setSelectedId(null)).
+         * HumanDesignReadingWorkspace itself decides what to render per
+         * system/style (currentSystem/hdStyleView) — Traditional HD gets
+         * the new 3-column layout, Mandala/Frequency/Astrology render
+         * through the exact same existing components as before, just
+         * inside this wider chrome (see that file's own header comment).
+         */
+        <HumanDesignReadingWorkspace
+          reading={selected}
+          selectedProfile={selectedProfile}
+          subAccountId={subAccountId}
+          subAccount={subAccount}
+          chartDesigns={chartDesigns}
+          reportDesigns={reportDesigns}
+          hdDesign={resolvedHdDesign}
+          mandalaDesign={resolvedMandalaDesign}
+          astroDesign={resolvedAstroDesign}
+          savingDesignFor={savingDesignFor}
+          onSaveDesignOverride={(profile, system, id) => void saveDesignOverride(profile, system, id)}
+          availableSystems={availableSystems}
+          currentSystem={currentSystem}
+          onSetSystem={setActiveSystem}
+          hdStyleView={hdStyleView}
+          onSetHdStyleView={setHdStyleView}
+          onBack={() => setSelectedId(null)}
+          generatedReports={generatedReports}
+          deletingReportId={deletingReportId}
+          onPreviewGeneratedReport={(r) =>
+            window.open(`/sa/${subAccountId}/energetic-decoder/generated-reports/${r.id}/preview`, "_blank")
+          }
+          onDeleteGeneratedReport={(r) => void deleteGeneratedReport(r)}
+          onOpenGenerateDialog={openGenerateDialog}
+          deletingReadingId={deletingReadingId}
+          onDeleteReading={(r) => void deleteReading(r)}
+        />
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(280px,340px)_1fr]">
           {/* List pane — Profile-centered (Task 8): each Profile is the
@@ -765,254 +819,15 @@ export function EnergeticDecoderReadingsTab({
             </div>
           </div>
 
-          {/* Detail pane.
-
-              Phase 4 correctness pass (2026-08-15) — this was
-              `h-[640px] overflow-y-auto`: every chart (BodyGraph runs well
-              past 2900px of real content — see human-design-chart.tsx)
-              was being viewed through a small nested scroll window instead
-              of as one coherent composition, the exact failure the parity
-              audit flagged. Fix: let the pane grow to its natural content
-              height and let the page itself scroll, same as the rest of
-              this app's own tabs — no inner scrollbar competing with the
-              outer one, no arbitrary taller fixed height standing in for
-              an actual fix. The sticky reading-header below still pins
-              itself to the top of the real scroll container (the page),
-              same `sticky top-0` it already used; it just sticks to a
-              container that now genuinely scrolls instead of one that was
-              artificially boxed in. */}
-          <div className="rounded-2xl border bg-card lg:self-start">
-            {!selected ? (
-              <p className="p-6 text-center text-sm text-muted-foreground">Select a reading.</p>
-            ) : (
-              <>
-                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b bg-card p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                      {selected.name.slice(0, 1).toUpperCase()}
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold">{selected.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selected.birthPlace} · {selected.birthDate}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const url = buildDecoderReportUrl({ subAccount, subAccountId, readingId: selected.id });
-                        navigator.clipboard.writeText(url);
-                        toast.success("Report link copied — this is the actual deliverable, safe to send to the client.");
-                      }}
-                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                    >
-                      <Copy className="h-3 w-3" />
-                      Share report
-                    </button>
-                    <a
-                      href={`/api/sub-accounts/${subAccountId}/energetic-decoder/readings/${selected.id}/pdf`}
-                      download
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      Download PDF
-                    </a>
-                    <button
-                      type="button"
-                      onClick={openGenerateDialog}
-                      className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground hover:opacity-90"
-                    >
-                      <FileOutput className="h-3 w-3" />
-                      Generate Report
-                    </button>
-                    {reportDesigns.length > 0 && (
-                      <select
-                        value=""
-                        onChange={(e) => {
-                          const reportId = e.target.value;
-                          if (!reportId) return;
-                          const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: selected.id, reportId });
-                          navigator.clipboard.writeText(url);
-                          toast.success("Report design link copied.");
-                          e.target.value = "";
-                        }}
-                        className="rounded-md border bg-background px-1.5 py-0.5 text-xs text-primary"
-                      >
-                        <option value="">Copy report design link…</option>
-                        {reportDesigns.map((d) => (
-                          <option key={d.id} value={d.id}>{d.title}</option>
-                        ))}
-                      </select>
-                    )}
-                    <Link
-                      href={`/sa/${subAccountId}/contacts/${selected.contactId}`}
-                      className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                    >
-                      View contact
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                    <button
-                      type="button"
-                      title="Delete this reading"
-                      disabled={deletingReadingId === selected.id}
-                      onClick={() => void deleteReading(selected)}
-                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive disabled:opacity-50"
-                    >
-                      {deletingReadingId === selected.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3 w-3" />
-                      )}
-                      Delete
-                    </button>
-                  </div>
-                </div>
-
-                {generatedReports.length > 0 && (
-                  <div className="border-b p-4">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Generated Reports
-                    </p>
-                    <div className="space-y-1.5">
-                      {generatedReports.map((r) => (
-                        <div
-                          key={r.id}
-                          className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate font-medium">{r.reportDesignTitleAtGeneration}</p>
-                            <p className="text-muted-foreground">
-                              {r.generatedAt ? new Date(r.generatedAt).toLocaleString() : "—"}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-3">
-                            <button
-                              type="button"
-                              title="Preview"
-                              onClick={() =>
-                                window.open(
-                                  `/sa/${subAccountId}/energetic-decoder/generated-reports/${r.id}/preview`,
-                                  "_blank",
-                                )
-                              }
-                              className="text-muted-foreground hover:text-primary"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
-                            <a
-                              href={`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports/${r.id}/pdf`}
-                              download
-                              title="Download PDF"
-                              className="text-muted-foreground hover:text-primary"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </a>
-                            <button
-                              type="button"
-                              title="Delete"
-                              disabled={deletingReportId === r.id}
-                              onClick={() => deleteGeneratedReport(r)}
-                              className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                            >
-                              {deletingReportId === r.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="p-4">
-                  {availableSystems.length > 1 && (
-                    <div className="mb-4 inline-flex rounded-lg bg-muted/30 p-1">
-                      {availableSystems.map((s) => (
-                        <button
-                          key={s.key}
-                          type="button"
-                          onClick={() => setActiveSystem(s.key)}
-                          className={cn(
-                            "rounded-md px-3 py-1.5 text-xs font-semibold",
-                            currentSystem === s.key ? "bg-background shadow-sm text-foreground" : "text-muted-foreground",
-                          )}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {currentSystem === "frequency" && <SphereList spheres={selected.spheres} />}
-
-                  {currentSystem === "hd" && selected.humanDesign && (
-                    <>
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        {/* Bodygraph gap closure, 2026-08-15 — a real Traditional/Mandala switch, both still firmly under Human Design (Decision 5), never a 4th ReadingSystem. Only offered when there's an actual Mandala chart to switch to — same "omit rather than fake" rule the old always-stacked Mandala section already followed. */}
-                        {resolvedMandalaDesign ? (
-                          <div className="inline-flex rounded-lg bg-muted/30 p-1">
-                            {(["traditional", "mandala"] as const).map((style) => (
-                              <button
-                                key={style}
-                                type="button"
-                                onClick={() => setHdStyleView(style)}
-                                className={cn(
-                                  "rounded-md px-2.5 py-1 text-[11px] font-semibold",
-                                  hdStyleView === style ? "bg-background shadow-sm text-foreground" : "text-muted-foreground",
-                                )}
-                              >
-                                {style === "traditional" ? "Traditional" : "Mandala"}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <span />
-                        )}
-                        {selectedProfile && (
-                          <DesignPicker
-                            system={hdStyleView === "mandala" ? "mandala" : "humanDesign"}
-                            designs={chartDesigns}
-                            overrideId={hdStyleView === "mandala" ? selectedProfile.mandalaChartDesignId : selectedProfile.hdChartDesignId}
-                            saving={savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign")}
-                            onChange={(id) => void saveDesignOverride(selectedProfile, hdStyleView === "mandala" ? "mandala" : "humanDesign", id)}
-                          />
-                        )}
-                      </div>
-                      <HumanDesignSummary
-                        profile={selected.humanDesign}
-                        hdDesign={resolvedHdDesign}
-                        mandalaDesign={resolvedMandalaDesign}
-                        chartStyle={hdStyleView}
-                      />
-                    </>
-                  )}
-
-                  {currentSystem === "astro" && selected.astrology && (
-                    <>
-                      {selectedProfile && (
-                        <div className="mb-3 flex justify-end">
-                          <DesignPicker
-                            system="astrology"
-                            designs={chartDesigns}
-                            overrideId={selectedProfile.astrologyChartDesignId}
-                            saving={savingDesignFor === "astrology"}
-                            onChange={(id) => void saveDesignOverride(selectedProfile, "astrology", id)}
-                          />
-                        </div>
-                      )}
-                      <AstrologySummary chart={selected.astrology} astroDesign={resolvedAstroDesign} />
-                    </>
-                  )}
-                  {availableSystems.length === 0 && (
-                    <p className="py-8 text-center text-xs text-muted-foreground">This reading has no systems yet.</p>
-                  )}
-                </div>
-              </>
-            )}
+          {/*
+            Placeholder pane — real detail rendering moved out to
+            HumanDesignReadingWorkspace (2026-08-17), which replaces this
+            whole grid entirely once `selected` is truthy (see the ternary
+            branch above). Nothing below is reachable with a real
+            selection anymore, so this is just the empty state.
+          */}
+          <div className="rounded-2xl border bg-card p-6 text-center text-sm text-muted-foreground lg:self-start">
+            Select a reading.
           </div>
         </div>
       )}
@@ -1097,54 +912,6 @@ export function EnergeticDecoderReadingsTab({
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-/**
- * 2026-08-15, Bodygraph gap closure — the audit's own documented gap: "the
- * practitioner picks a saved chart design from the individual person's
- * chart experience." Deliberately lightweight (Part 6's own requirement):
- * no internal ids shown, just each design's real `name`; editing/creating
- * presets is explicitly NOT duplicated here — that stays Chart Designs'
- * job, this is selection only. Hidden entirely (returns null) when there's
- * only one design for this system to choose from — nothing meaningful to
- * pick between, matching this codebase's existing convention of omitting
- * a control that would do nothing rather than showing a fake/pointless
- * one.
- */
-function DesignPicker({
-  system,
-  designs,
-  overrideId,
-  saving,
-  onChange,
-}: {
-  system: ChartDesignSystem;
-  designs: ChartDesign[];
-  overrideId: string | null | undefined;
-  saving: boolean;
-  onChange: (designId: string | null) => void;
-}) {
-  const options = designs.filter((d) => d.system === system);
-  if (options.length <= 1) return null;
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[11px] text-muted-foreground">Design:</span>
-      <select
-        value={overrideId ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        disabled={saving}
-        className="h-7 rounded-md border bg-background px-1.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        <option value="">Default</option>
-        {options.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
-      {saving && <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />}
     </div>
   );
 }

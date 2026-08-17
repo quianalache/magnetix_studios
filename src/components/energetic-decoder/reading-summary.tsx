@@ -199,6 +199,7 @@ export function HumanDesignSummary({
   hdDesign,
   mandalaDesign,
   chartStyle = "both",
+  hideChartAndBasics = false,
 }: {
   profile: HumanDesignProfile & { content?: HumanDesignReadingContent };
   /** The sub-account's default Human Design Chart Design (2026-08-09 rebuild — full color set, not just one field) — falls back to the traditional black/white/gray base when not passed. */
@@ -219,6 +220,18 @@ export function HumanDesignSummary({
    * same underlying reading data either way, not tied to one chart style.
    */
   chartStyle?: "both" | "traditional" | "mandala";
+  /**
+   * 2026-08-17, Readings workspace rebuild — the new
+   * HumanDesignReadingWorkspace (Traditional view only) renders its own
+   * chart (widened HumanDesignFullChart) and its own compact Chart
+   * Information strip, matching the approved mockup. Passing true here
+   * skips both of those blocks so they don't render twice, while
+   * Centers/Defined Channels/Variables/Skills below are untouched and
+   * still render. Defaults to false — every other caller (public report
+   * page, public decoder form, the Mandala/"both" views inside this same
+   * component) keeps its exact existing output, zero regression.
+   */
+  hideChartAndBasics?: boolean;
 }) {
   const content = profile.content;
   const typeStrategy = content?.typeStrategy || TYPE_CONTENT[profile.type].strategy;
@@ -254,7 +267,7 @@ export function HumanDesignSummary({
         would double the padding and nest two round-cornered boxes for no
         reason.
       */}
-      {(chartStyle === "both" || chartStyle === "traditional") && (
+      {!hideChartAndBasics && (chartStyle === "both" || chartStyle === "traditional") && (
         <div>
           <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Human Design — Design (left) · BodyGraph · Personality (right)
@@ -283,42 +296,55 @@ export function HumanDesignSummary({
         </div>
       )}
 
-      <div className="rounded-2xl border bg-card p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
-        <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold">{profile.type}</p>
-            <p className="text-xs text-muted-foreground">Strategy: {typeStrategy}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{typeDescription}</p>
+      {!hideChartAndBasics && (
+        <div className="rounded-2xl border bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Human Design</p>
+          <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-sm font-semibold">{profile.type}</p>
+              <p className="text-xs text-muted-foreground">Strategy: {typeStrategy}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{typeDescription}</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold">{profile.authority} Authority</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{authorityDescription}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold">{profile.authority} Authority</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{authorityDescription}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-          <span>
-            Profile: <span className="font-medium text-foreground">{profile.profile ?? "—"}</span>
-          </span>
-          <span>
-            Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
-          </span>
-          {profile.incarnationCross && (
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
             <span>
-              Incarnation Cross: <span className="font-medium text-foreground">{profile.incarnationCross}</span>
+              Profile: <span className="font-medium text-foreground">{profile.profile ?? "—"}</span>
             </span>
-          )}
-          <span>
-            Signature: <span className="font-medium text-foreground">{profile.signature}</span>
-          </span>
-          <span>
-            Not-Self Theme: <span className="font-medium text-foreground">{profile.notSelfTheme}</span>
-          </span>
-          <span>
-            Design date: <span className="font-medium text-foreground">{formatDesignDate(profile.designDateUtc)}</span>
-          </span>
+            <span>
+              Definition: <span className="font-medium text-foreground">{profile.definitionLabel}</span>
+            </span>
+            {profile.incarnationCross && (
+              <span>
+                Incarnation Cross: <span className="font-medium text-foreground">{profile.incarnationCross}</span>
+              </span>
+            )}
+            <span>
+              Signature: <span className="font-medium text-foreground">{profile.signature}</span>
+            </span>
+            <span>
+              Not-Self Theme: <span className="font-medium text-foreground">{profile.notSelfTheme}</span>
+            </span>
+            <span>
+              Design date: <span className="font-medium text-foreground">{formatDesignDate(profile.designDateUtc)}</span>
+            </span>
+          </div>
         </div>
-        <div className="mt-3 border-t pt-3">
+      )}
+
+      {/*
+        Gates activated / Variables / Skills — real, unique content this
+        component's compact-strip replacement (HumanDesignReadingWorkspace's
+        ChartInformation, 2026-08-17) doesn't cover, so this stays visible
+        even when hideChartAndBasics hides the block above it (which only
+        duplicated Type/Authority/Profile/Definition/etc., already shown
+        there).
+      */}
+      <div className="rounded-2xl border bg-card p-4">
+        <div>
           <p className="mb-1.5 text-xs text-muted-foreground">
             Gates activated: <span className="font-medium text-foreground">{profile.activatedGates.length}</span>
           </p>
