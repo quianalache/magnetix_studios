@@ -272,6 +272,8 @@ export function MandalaChart({
   designColor = DESIGN_FILL,
   hdDesign,
   showCenterChart = true,
+  showPersonality = true,
+  showDesign = true,
 }: {
   profile: HumanDesignProfile;
   /** Accent color for each activated gate wedge's outline/edge — same role human-design-chart.tsx's `gatesColor` plays around BodyGraph gate markers. */
@@ -288,11 +290,25 @@ export function MandalaChart({
   hdDesign?: ChartDesign | null;
   /** Lets a caller that already shows the full BodyGraph elsewhere on the same page (the Readings tab's own Traditional/Mandala switch) skip rendering a second one here — defaults to shown for every other consumer (PDF, Report Builder, public pages). */
   showCenterChart?: boolean;
+  /**
+   * 2026-08-17, Mandala workspace rebuild — real "Show in Mandala"
+   * layer toggles, additive and backward-compatible (both default true,
+   * so every existing caller — PDF, Report Builder, chart-designs
+   * preview, the public report page — renders exactly as before with no
+   * prop changes needed). A gate's own real Personality/Design
+   * activation data is untouched either way; these only decide whether
+   * that side's wedge fill/glyphs are DRAWN. No "Both" toggle: a gate
+   * showing both colors is just what happens automatically when a gate
+   * has real activations on both sides and both toggles are on — not a
+   * separate state to fake.
+   */
+  showPersonality?: boolean;
+  showDesign?: boolean;
 }) {
-  const personalityGates = new Set(profile.personality.map((a) => a.gate));
-  const designGates = new Set(profile.design.map((a) => a.gate));
-  const byGatePersonality = new Map<number, HdActivation>(profile.personality.map((a) => [a.gate, a]));
-  const byGateDesign = new Map<number, HdActivation>(profile.design.map((a) => [a.gate, a]));
+  const personalityGates = new Set(showPersonality ? profile.personality.map((a) => a.gate) : []);
+  const designGates = new Set(showDesign ? profile.design.map((a) => a.gate) : []);
+  const byGatePersonality = new Map<number, HdActivation>(showPersonality ? profile.personality.map((a) => [a.gate, a]) : []);
+  const byGateDesign = new Map<number, HdActivation>(showDesign ? profile.design.map((a) => [a.gate, a]) : []);
   const bodySymbol = new Map(HD_BODY_LABELS.map((b) => [b.body, b.symbol]));
 
   const centerColors: Partial<Record<CenterKey, string>> | undefined = hdDesign

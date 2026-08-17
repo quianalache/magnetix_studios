@@ -30,6 +30,7 @@ import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { HumanDesignSummary, SphereList, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import { MandalaReadingView } from "@/components/energetic-decoder/mandala-reading-view";
 
 /**
  * The full-width Traditional Human Design reading workspace — approved
@@ -387,7 +388,7 @@ export function HumanDesignReadingWorkspace({
       )}
 
       {currentSystem === "hd" && hdStyleView === "mandala" && profile && mandalaDesign && (
-        <HumanDesignSummary profile={profile} hdDesign={hdDesign} mandalaDesign={mandalaDesign} chartStyle="mandala" />
+        <MandalaReadingView profile={profile} mandalaDesign={mandalaDesign} hdDesign={hdDesign} />
       )}
 
       {currentSystem === "frequency" && <SphereList spheres={reading.spheres} />}

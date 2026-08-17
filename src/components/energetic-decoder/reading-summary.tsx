@@ -87,7 +87,7 @@ function formatDesignDate(iso: string): string {
  * when a person has no entries for a layer (a chart with zero defined
  * Channels, for instance, would have no Signature Talents).
  */
-function SkillLayerList({ title, entries }: { title: string; entries: LocalSkillEntry[] }) {
+export function SkillLayerList({ title, entries }: { title: string; entries: LocalSkillEntry[] }) {
   if (entries.length === 0) return null;
   return (
     <div className="mb-2 last:mb-0">
