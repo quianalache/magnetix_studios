@@ -19,13 +19,11 @@ import {
   CENTER_STROKE_WIDTH,
   GATE_MARKER_STROKE_WIDTH,
   GATE_MARKER_R,
-  GATE_MARKER_R_DUAL,
-  GATE_LABEL_OFFSET_DUAL,
   FONT_SIZE_ACTIVE,
-  FONT_SIZE_ACTIVE_DUAL,
   FONT_SIZE_INACTIVE,
   declutterGateLabels,
   halfSplitDasharray,
+  halfCirclePath,
 } from "@/lib/energetics/human-design-chart-constants";
 
 /**
@@ -181,8 +179,7 @@ export function HumanDesignChart({
   const designGates = new Set(profile.design.map((a) => a.gate));
   const allGates = Object.keys(GATE_SPINE).map(Number);
   const activatedGates = allGates.filter((g) => personalityGates.has(g) || designGates.has(g));
-  const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
-  const labelPositions = declutterGateLabels(activatedGates, dualGates);
+  const labelPositions = declutterGateLabels(activatedGates);
 
   // Per-center resolved color — the only new logic this feature adds.
   // CenterShapeEl itself (shape/definition rendering) is completely
@@ -230,36 +227,37 @@ export function HumanDesignChart({
 
         {/* Gate numbers — the activated ones, solid-filled circle with
             reversed white text. Personality solid black, Design solid
-            rust/brown, each ringed in the sub-account's own `gatesColor`
-            accent. Dual activation renders as two separate offset circles
-            (never one blended color). Position is the decluttered label
-            point, not the true GATE_POINT — spine paths above still use
-            the true gate position, so the network geometry never shifts,
-            only the number labels/circles nudge apart when crowded. */}
+            rust/brown. Dual (Personality + Design) activation, 2026-08-17
+            correction-pass-3: ONE circle, same GATE_MARKER_R as every
+            other gate, split left/right between the two real colors —
+            not two separate smaller offset circles (that read as a
+            duplicated gate next to real Bodygraph software, confirmed
+            directly against her side-by-side production screenshot, and
+            was never itself verified against a real reference — see
+            halfCirclePath's own header for the full story). Position is
+            the decluttered label point, not the true GATE_POINT — spine
+            paths above still use the true gate position, so the network
+            geometry never shifts, only the number labels/circles nudge
+            apart when crowded. */}
         {activatedGates.map((gate) => {
           const point = labelPositions.get(gate)!;
           const inPersonality = personalityGates.has(gate);
           const inDesign = designGates.has(gate);
           const dual = inPersonality && inDesign;
+          const R = GATE_MARKER_R;
 
           if (dual) {
-            const OFFSET = GATE_LABEL_OFFSET_DUAL;
-            const R = GATE_MARKER_R_DUAL;
             return (
               <g key={gate}>
-                <circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-                <text x={point.x + OFFSET} y={point.y + OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} fontSize={FONT_SIZE_ACTIVE_DUAL} fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
-                  {gate}
-                </text>
-                <circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-                <text x={point.x - OFFSET} y={point.y - OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} fontSize={FONT_SIZE_ACTIVE_DUAL} fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
+                <path d={halfCirclePath(point.x, point.y, R, "left")} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+                <path d={halfCirclePath(point.x, point.y, R, "right")} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+                <text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} fontSize={FONT_SIZE_ACTIVE} fontWeight="700" fill={ACTIVATED_TEXT} textAnchor="middle">
                   {gate}
                 </text>
               </g>
             );
           }
 
-          const R = GATE_MARKER_R;
           const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
           return (
             <g key={gate}>

@@ -100,76 +100,73 @@ export const CHANNEL_STROKE_WIDTH_RECESSIVE = 1.1; // an inactive gate's own spi
 export const CHANNEL_STROKE_OPACITY_RECESSIVE = 0.55;
 export const CENTER_STROKE_WIDTH = 1.2;
 export const GATE_MARKER_STROKE_WIDTH = 0.6;
-export const GATE_MARKER_R = 3.4; // single (non-dual) activated-gate marker circle radius — see header note just above
-export const GATE_MARKER_R_DUAL = 2.8; // each of a dual-activated gate's two offset circles
-export const GATE_LABEL_OFFSET_DUAL = 2.2; // how far apart a dual gate's two offset circles sit
+/**
+ * Single activated-gate marker circle radius — used for EVERY activated
+ * gate now, dual included (see halfCirclePath below and its own header
+ * comment for the 2026-08-17 correction-pass-3 rework: dual gates used to
+ * render as two separate SMALLER offset circles, which is what she was
+ * actually seeing as "duplicate"/"too small" gates comparing side-by-side
+ * against real Bodygraph software, not a rendering bug). Real cross-check
+ * for the value itself unchanged from correction-pass-1: Astrolo's own
+ * native gate buttons are radius 3.25 in this same coordinate space.
+ */
+export const GATE_MARKER_R = 3.4;
 export const FONT_SIZE_ACTIVE = 3.7;
-export const FONT_SIZE_ACTIVE_DUAL = 2.9;
 export const FONT_SIZE_INACTIVE = 4.5;
 /** Half-footprint of a plain inactive gate-number text label — used only to keep an active gate's marker from landing on top of a NEARBY inactive gate's printed number (see declutterGateLabels below). Not a circle radius; inactive gates have no marker, just this much text. */
 const INACTIVE_LABEL_HALF_WIDTH = 2.4;
 
 /**
- * Real production collision, 2026-08-17 correction-pass-2: Root's own 9
- * gates are the tightest packing of any center EVEN AFTER the marker-size
- * fix above — measured directly from GATE_POINT, its worst real pairs are
- * 19-52 at 7.88, 53-54 at 8.06, 52-60 at 8.90, 53-60 at 9.00 (every other
- * center's worst pair is 7.96 or looser, but Root has FOUR pairs under
- * 9.0, not one). The shared DUAL_BONUS (2.4) already covers ordinary
- * centers; Root still visibly collided (53/54/38/60, confirmed on her
- * real production render) whenever one of those tight pairs included a
- * dual gate. Root-only bonus, not a global change — every other center
- * keeps the shared DUAL_BONUS below untouched.
+ * One activated gate's marker, as an SVG/react-pdf path — a plain full
+ * circle for Personality-only or Design-only, or (correction-pass-3,
+ * 2026-08-17, see GATE_MARKER_R's own comment) a single circle split
+ * left/right for dual (Personality + Design) activation, same size as
+ * every other marker. Real bug fix: the old two-small-offset-circles
+ * treatment for dual gates was a rendering choice made early in this
+ * project, never actually verified against real Bodygraph software — her
+ * direct side-by-side comparison caught it reading as a duplicated gate,
+ * not a real dual-activation indicator. This single-circle split keeps
+ * the same real Personality/Design colors and the same "both, distinctly,
+ * never blended" rule, just expressed as one gate marker instead of two.
  */
-const ROOT_DUAL_BONUS = 3.8;
+export function halfCirclePath(cx: number, cy: number, r: number, side: "left" | "right"): string {
+  const sweep = side === "right" ? 1 : 0;
+  return `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${sweep} ${cx} ${cy + r} Z`;
+}
 
 /**
  * Collision avoidance for activated-gate labels — pure math, no JSX.
  *
- * 2026-08-17 correction pass, two real changes:
- *  1. MIN_GAP/DUAL_BONUS retuned alongside the marker-radius fix above —
- *     MIN_GAP now sits just under the real global-minimum gate spacing
- *     (7.88, see above) so two ordinarily-close active neighbors need
- *     little-to-no push at their real correct positions; DUAL_BONUS
- *     scaled down to match the smaller dual-marker footprint.
- *  2. Real fix for the actual reported bug ("a competing duplicate
- *     static number directly underneath" an active badge): active gates
- *     now also repel away from every INACTIVE gate's fixed true
- *     position, not just from each other. Inactive numbers never move
- *     (they're plain background reference text at their real authored
- *     spot) — only the active marker yields, and by much less than an
- *     active-vs-active push (inactive numbers have no marker circle, just
- *     a small text footprint).
- *
- * 2026-08-17 correction-pass-2: Root-specific ROOT_DUAL_BONUS above,
- * applied only when BOTH points in a pair belong to Root — see its own
- * comment. Iterations bumped 40->60 since Root's tighter real packing
- * needs a couple more passes to fully settle.
+ * 2026-08-17 correction-pass-3: no more per-gate `dual` bonus at all.
+ * Correction-pass-1/2 gave dual-activated gates extra declutter room
+ * because their old rendering (two small offset circles) had a bigger
+ * real footprint than a single marker. Now that dual gates render as one
+ * GATE_MARKER_R circle like every other gate (see halfCirclePath above),
+ * a dual gate's footprint is IDENTICAL to a single gate's — there's
+ * nothing left to give it extra room for. Root's own tighter real
+ * packing (measured directly from GATE_POINT: worst pairs 19-52 at 7.88,
+ * 53-54 at 8.06, 52-60 at 8.90, 53-60 at 9.00, all tighter than every
+ * other center's worst pair at 7.96) is still real, but MIN_GAP below
+ * already clears it for same-size markers with margin — no center-
+ * specific case needed anymore either.
  */
-export function declutterGateLabels(
-  gates: number[],
-  dualSet: Set<number>,
-): Map<number, { x: number; y: number }> {
+export function declutterGateLabels(gates: number[]): Map<number, { x: number; y: number }> {
   const activeSet = new Set(gates);
   const inactivePoints = Object.keys(GATE_POINT)
     .map(Number)
     .filter((g) => !activeSet.has(g))
     .map((g) => GATE_POINT[g]);
-  const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
-  const MIN_GAP = 7.2; // base clearance two single-label circles need at this font size — just under the real global-minimum gate spacing (7.88), so it's a no-op for ordinary already-clear pairs
-  const DUAL_BONUS = 2.4; // a dual gate's own two offset labels need more room from its neighbors
+  const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate] }));
+  const MIN_GAP = 7.2; // base clearance two label circles need at this font size — just under the real global-minimum gate spacing (7.88), so it's a no-op for ordinary already-clear pairs
   const INACTIVE_GAP = GATE_MARKER_R + INACTIVE_LABEL_HALF_WIDTH; // an active marker vs. a fixed inactive gate's plain text
-  for (let iter = 0; iter < 60; iter++) {
+  for (let iter = 0; iter < 40; iter++) {
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
-        const bothRoot = pts[i].center === "root" && pts[j].center === "root";
-        const dualBonus = bothRoot ? ROOT_DUAL_BONUS : DUAL_BONUS;
-        const gap = MIN_GAP + (pts[i].dual ? dualBonus : 0) + (pts[j].dual ? dualBonus : 0);
         const dx = pts[j].x - pts[i].x;
         const dy = pts[j].y - pts[i].y;
         const dist = Math.hypot(dx, dy) || 0.0001;
-        if (dist < gap) {
-          const push = (gap - dist) / 2;
+        if (dist < MIN_GAP) {
+          const push = (MIN_GAP - dist) / 2;
           const ux = dist ? dx / dist : 1;
           const uy = dist ? dy / dist : 0;
           pts[i].x -= ux * push;
@@ -183,13 +180,11 @@ export function declutterGateLabels(
       // does (it's real background reference geometry, not part of the
       // declutter problem).
       for (const inactive of inactivePoints) {
-        const dualBonus = pts[i].center === "root" && inactive.center === "root" ? ROOT_DUAL_BONUS : DUAL_BONUS;
-        const gap = INACTIVE_GAP + (pts[i].dual ? dualBonus : 0);
         const dx = pts[i].x - inactive.x;
         const dy = pts[i].y - inactive.y;
         const dist = Math.hypot(dx, dy) || 0.0001;
-        if (dist < gap) {
-          const push = gap - dist;
+        if (dist < INACTIVE_GAP) {
+          const push = INACTIVE_GAP - dist;
           const ux = dist ? dx / dist : 1;
           const uy = dist ? dy / dist : 0;
           pts[i].x += ux * push;

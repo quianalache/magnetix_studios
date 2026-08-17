@@ -39,13 +39,11 @@ import {
   CENTER_STROKE_WIDTH,
   GATE_MARKER_STROKE_WIDTH,
   GATE_MARKER_R,
-  GATE_MARKER_R_DUAL,
-  GATE_LABEL_OFFSET_DUAL,
   FONT_SIZE_ACTIVE,
-  FONT_SIZE_ACTIVE_DUAL,
   FONT_SIZE_INACTIVE,
   declutterGateLabels,
   halfSplitDasharray,
+  halfCirclePath,
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
 import { SIGNS } from "./astrology";
@@ -257,8 +255,7 @@ function HumanDesignBodygraphPdf({
   const designGates = new Set(profile.design.map((a) => a.gate));
   const allGates = Object.keys(GATE_SPINE).map(Number);
   const activatedGates = allGates.filter((g) => personalityGates.has(g) || designGates.has(g));
-  const dualGates = new Set(activatedGates.filter((g) => personalityGates.has(g) && designGates.has(g)));
-  const labelPositions = declutterGateLabels(activatedGates, dualGates);
+  const labelPositions = declutterGateLabels(activatedGates);
   const resolveCenterColor = (c: CenterKey): string =>
     centersMode === "traditional" ? (centerColors?.[c] ?? TRADITIONAL_CENTER_COLORS[c] ?? centersColor) : centersColor;
 
@@ -313,31 +310,26 @@ function HumanDesignBodygraphPdf({
         );
       })}
 
-      {/* Activated gates — solid-filled circle + reversed white number. Dual activation splits into 2 offset circles. */}
+      {/* Activated gates — solid-filled circle + reversed white number. Dual activation, 2026-08-17 correction-pass-3: one same-size circle split left/right, not two smaller offset circles — see halfCirclePath's own header comment. */}
       {activatedGates.map((gate) => {
         const point = labelPositions.get(gate)!;
         const inPersonality = personalityGates.has(gate);
         const inDesign = designGates.has(gate);
         const dual = inPersonality && inDesign;
+        const R = GATE_MARKER_R;
 
         if (dual) {
-          const OFFSET = GATE_LABEL_OFFSET_DUAL;
-          const R = GATE_MARKER_R_DUAL;
           return (
             <G key={gate}>
-              <Circle cx={point.x + OFFSET} cy={point.y + OFFSET} r={R} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-              <Text x={point.x + OFFSET} y={point.y + OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE_DUAL, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
-                {gate}
-              </Text>
-              <Circle cx={point.x - OFFSET} cy={point.y - OFFSET} r={R} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
-              <Text x={point.x - OFFSET} y={point.y - OFFSET + FONT_SIZE_ACTIVE_DUAL * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE_DUAL, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
+              <Path d={halfCirclePath(point.x, point.y, R, "left")} fill={PERSONALITY_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+              <Path d={halfCirclePath(point.x, point.y, R, "right")} fill={DESIGN_FILL} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
+              <Text x={point.x} y={point.y + FONT_SIZE_ACTIVE * 0.35} style={{ fontSize: FONT_SIZE_ACTIVE, fontWeight: 700, fill: ACTIVATED_TEXT, textAnchor: "middle" }}>
                 {gate}
               </Text>
             </G>
           );
         }
 
-        const R = GATE_MARKER_R;
         const fill = inPersonality ? PERSONALITY_FILL : DESIGN_FILL;
         return (
           <G key={gate}>
