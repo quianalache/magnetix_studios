@@ -79,32 +79,67 @@ export const HANGING_DESIGN = "#e4b54b"; // gold
 /**
  * Visual weights — see header comment for the ~2.4x rescale this session
  * (old 0-100-ish space -> Astrolo's native ~200x320 space).
+ *
+ * 2026-08-17 correction pass — GATE_MARKER_R (and everything scaled off
+ * it) was too big for the real ported gate spacing, not a guess: computed
+ * the real nearest-neighbor distance between every pair of gates sharing
+ * a center directly from GATE_POINT (human-design-chart-layout.ts) —
+ * global minimum 7.88 units (gates 19/52, Root), Throat's tightest pair
+ * (35/56) at 7.96. At the old R=4.5, two simultaneously-active neighbors
+ * need 2*4.5=9.0 units clear — more than either real minimum, so any
+ * busy center with 2+ adjacent activations collided by construction,
+ * independent of declutter. Astrolo's own native gate buttons are
+ * MinWidth/MinHeight=6.5 (radius 3.25) in this exact same coordinate
+ * space and don't collide at their real authored positions — real
+ * evidence the geometry itself is fine at that scale. R brought down to
+ * 3.4 (2*3.4=6.8, clears the 7.88 global minimum with ~1.1 units to
+ * spare), everything derived from it scaled down to match.
  */
 export const CHANNEL_STROKE_WIDTH = 5.5; // an active (Personality/Design/Both) gate spine — real "fillable pipe" weight, not a thin wire
 export const CHANNEL_STROKE_WIDTH_RECESSIVE = 1.1; // an inactive gate's own spine, drawn faint — still the real geometry, just recessive (matches Astrolo's own ZIndex=0/Background-color treatment for ActivationState=None)
 export const CHANNEL_STROKE_OPACITY_RECESSIVE = 0.55;
 export const CENTER_STROKE_WIDTH = 1.2;
-export const GATE_MARKER_STROKE_WIDTH = 0.8;
-export const GATE_MARKER_R = 4.5; // single (non-dual) activated-gate marker circle radius
-export const GATE_MARKER_R_DUAL = 3.7; // each of a dual-activated gate's two offset circles
-export const GATE_LABEL_OFFSET_DUAL = 3.6; // how far apart a dual gate's two offset circles sit
-export const FONT_SIZE_ACTIVE = 4.8;
-export const FONT_SIZE_ACTIVE_DUAL = 3.8;
+export const GATE_MARKER_STROKE_WIDTH = 0.6;
+export const GATE_MARKER_R = 3.4; // single (non-dual) activated-gate marker circle radius — see header note just above
+export const GATE_MARKER_R_DUAL = 2.8; // each of a dual-activated gate's two offset circles
+export const GATE_LABEL_OFFSET_DUAL = 2.2; // how far apart a dual gate's two offset circles sit
+export const FONT_SIZE_ACTIVE = 3.7;
+export const FONT_SIZE_ACTIVE_DUAL = 2.9;
 export const FONT_SIZE_INACTIVE = 4.5;
+/** Half-footprint of a plain inactive gate-number text label — used only to keep an active gate's marker from landing on top of a NEARBY inactive gate's printed number (see declutterGateLabels below). Not a circle radius; inactive gates have no marker, just this much text. */
+const INACTIVE_LABEL_HALF_WIDTH = 2.4;
 
 /**
  * Collision avoidance for activated-gate labels — pure math, no JSX.
- * MIN_GAP/DUAL_BONUS rescaled 2026-08-17 (see header); the underlying
- * approach/history is unchanged from the 2026-08-10 real-data tuning
- * pass.
+ *
+ * 2026-08-17 correction pass, two real changes:
+ *  1. MIN_GAP/DUAL_BONUS retuned alongside the marker-radius fix above —
+ *     MIN_GAP now sits just under the real global-minimum gate spacing
+ *     (7.88, see above) so two ordinarily-close active neighbors need
+ *     little-to-no push at their real correct positions; DUAL_BONUS
+ *     scaled down to match the smaller dual-marker footprint.
+ *  2. Real fix for the actual reported bug ("a competing duplicate
+ *     static number directly underneath" an active badge): active gates
+ *     now also repel away from every INACTIVE gate's fixed true
+ *     position, not just from each other. Inactive numbers never move
+ *     (they're plain background reference text at their real authored
+ *     spot) — only the active marker yields, and by much less than an
+ *     active-vs-active push (inactive numbers have no marker circle, just
+ *     a small text footprint).
  */
 export function declutterGateLabels(
   gates: number[],
   dualSet: Set<number>,
 ): Map<number, { x: number; y: number }> {
+  const activeSet = new Set(gates);
+  const inactivePoints = Object.keys(GATE_POINT)
+    .map(Number)
+    .filter((g) => !activeSet.has(g))
+    .map((g) => GATE_POINT[g]);
   const pts = gates.map((gate) => ({ gate, ...GATE_POINT[gate], dual: dualSet.has(gate) }));
-  const MIN_GAP = 8.6; // base clearance two single-label circles need at this font size
-  const DUAL_BONUS = 3.8; // a dual gate's own two offset labels need more room from its neighbors
+  const MIN_GAP = 7.2; // base clearance two single-label circles need at this font size — just under the real global-minimum gate spacing (7.88), so it's a no-op for ordinary already-clear pairs
+  const DUAL_BONUS = 2.4; // a dual gate's own two offset labels need more room from its neighbors
+  const INACTIVE_GAP = GATE_MARKER_R + INACTIVE_LABEL_HALF_WIDTH; // an active marker vs. a fixed inactive gate's plain text
   for (let iter = 0; iter < 40; iter++) {
     for (let i = 0; i < pts.length; i++) {
       for (let j = i + 1; j < pts.length; j++) {
@@ -120,6 +155,23 @@ export function declutterGateLabels(
           pts[i].y -= uy * push;
           pts[j].x += ux * push;
           pts[j].y += uy * push;
+        }
+      }
+      // One-sided repulsion from every fixed inactive gate position —
+      // only the active point (pts[i]) moves, the inactive point never
+      // does (it's real background reference geometry, not part of the
+      // declutter problem).
+      for (const inactive of inactivePoints) {
+        const gap = INACTIVE_GAP + (pts[i].dual ? DUAL_BONUS : 0);
+        const dx = pts[i].x - inactive.x;
+        const dy = pts[i].y - inactive.y;
+        const dist = Math.hypot(dx, dy) || 0.0001;
+        if (dist < gap) {
+          const push = gap - dist;
+          const ux = dist ? dx / dist : 1;
+          const uy = dist ? dy / dist : 0;
+          pts[i].x += ux * push;
+          pts[i].y += uy * push;
         }
       }
     }

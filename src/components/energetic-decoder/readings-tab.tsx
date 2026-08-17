@@ -414,11 +414,22 @@ export function EnergeticDecoderReadingsTab({
     }
   }
 
+  /**
+   * Real bug fix, 2026-08-17: order here doubles as the default-system
+   * fallback below (`availableSystems[0]`) whenever `activeSystem` is
+   * null — which it always is right after selecting a reading
+   * (selectReading resets it, on purpose, so a stale tab from a
+   * PREVIOUS reading never leaks into a freshly-opened one). Frequency
+   * used to be pushed first, so any reading with Gene Keys data opened
+   * on Frequency instead of Human Design, every time — not a stale-
+   * state bug, an array-order bug. Human Design first now, matching
+   * both the intended default and the workspace's own nav order.
+   */
   const availableSystems: { key: ReadingSystem; label: string }[] = useMemo(() => {
     if (!selected) return [];
     const list: { key: ReadingSystem; label: string }[] = [];
-    if (selected.spheres.length > 0) list.push({ key: "frequency", label: "Frequency" });
     if (selected.humanDesign) list.push({ key: "hd", label: "Human Design" });
+    if (selected.spheres.length > 0) list.push({ key: "frequency", label: "Frequency" });
     if (selected.astrology) list.push({ key: "astro", label: "Astrology" });
     return list;
   }, [selected]);

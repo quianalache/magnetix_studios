@@ -180,10 +180,10 @@ function PlanetBox({
   if (mode === "fullBox") {
     return (
       <div
-        className="flex items-center justify-between gap-2 px-2 py-1 text-[11px] text-white"
+        className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-white"
         style={{ backgroundColor: activationColor, borderRadius }}
       >
-        <span className="flex min-w-0 items-center gap-1.5">
+        <span className="flex min-w-0 items-center gap-2">
           <span aria-hidden="true">{symbol}</span>
           <span className="truncate">{label}</span>
         </span>
@@ -193,11 +193,11 @@ function PlanetBox({
   }
   // iconOnly — row stays genuinely unfilled; only the glyph gets a colored chip.
   return (
-    <div className="flex items-center justify-between gap-2 px-2 py-1 text-[11px]" style={{ color: PLAIN_TEXT }}>
-      <span className="flex min-w-0 items-center gap-1.5">
+    <div className="flex items-center justify-between gap-2 px-3 py-2 text-xs" style={{ color: PLAIN_TEXT }}>
+      <span className="flex min-w-0 items-center gap-2">
         <span
           aria-hidden="true"
-          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] leading-none text-white"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] leading-none text-white"
           style={{ backgroundColor: activationColor }}
         >
           {symbol}
@@ -225,9 +225,9 @@ function ActivationColumn({
   align: "left" | "right";
 }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-2.5">
       <p
-        className={`mb-1.5 text-xs font-semibold uppercase tracking-wide ${align === "right" ? "text-right" : ""}`}
+        className={`mb-2 text-xs font-semibold uppercase tracking-wide ${align === "right" ? "text-right" : ""}`}
         style={{ color }}
       >
         {side}
@@ -278,11 +278,6 @@ export function HumanDesignFullChart({
       className={`@container/hdfc rounded-2xl p-4 ${className ?? ""}`}
       style={{ backgroundColor }}
     >
-      <div className="hidden items-center justify-between gap-4 pb-2 @5xl/hdfc:flex">
-        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
-      </div>
-
       {/*
        * Column tracks widened 2026-08-17 for the new Readings workspace
        * (human-design-reading-workspace.tsx) — this component's real
@@ -305,16 +300,39 @@ export function HumanDesignFullChart({
           align="left"
         />
 
-        <HumanDesignChart
-          profile={profile}
-          className="mx-auto w-full max-w-[640px]"
-          definedColor={design?.chartDefinedColor}
-          channelsColor={design?.channelsColor}
-          gatesColor={design?.gatesColor}
-          backgroundColor={backgroundColor}
-          centersMode={design?.centersMode}
-          centerColors={centerColorsFromDesign(design)}
-        />
+        <div className="mx-auto w-full max-w-[640px]">
+          {/*
+           * Real bug fix, 2026-08-17: the 4 Variable arrows used to be
+           * two `justify-between` rows spanning this component's FULL
+           * width (all 3 columns) — harmless when everything was
+           * cramped into one ~900px card, but once the workspace gave
+           * each column real room, "full width" became "the far corners
+           * of a 1200px+ page," not "the corners of the chart" the way
+           * they read in every real Bodygraph tool. Scoped to the
+           * chart's own max-w-[640px] now (same wrapper as the chart
+           * itself) and pulled into one compact row directly above it,
+           * matching her explicit ask ("around the upper/head area of
+           * the chart," not page-corner decoration) — same real
+           * calculated arrows/directions/colors, just re-scoped.
+           */}
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+            <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
+            <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+            <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
+            <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+          </div>
+
+          <HumanDesignChart
+            profile={profile}
+            className="w-full"
+            definedColor={design?.chartDefinedColor}
+            channelsColor={design?.channelsColor}
+            gatesColor={design?.gatesColor}
+            backgroundColor={backgroundColor}
+            centersMode={design?.centersMode}
+            centerColors={centerColorsFromDesign(design)}
+          />
+        </div>
 
         <ActivationColumn
           side="Personality"
@@ -324,19 +342,6 @@ export function HumanDesignFullChart({
           borderRadius={planetBoxBorderRadius}
           align="right"
         />
-      </div>
-
-      <div className="hidden items-center justify-between gap-4 pt-2 @5xl/hdfc:flex">
-        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
-      </div>
-
-      {/* Below the 1024px container-query threshold, all 4 arrows collapse into one compact 2x2 grid under the stacked columns/chart, instead of the 2 split top/bottom rows above — same data, no crushing. */}
-      <div className="grid grid-cols-2 gap-3 pt-3 @5xl/hdfc:hidden">
-        <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
-        <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
-        <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
       </div>
     </div>
   );
