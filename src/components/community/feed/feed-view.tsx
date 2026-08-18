@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ImagePlus, Loader2, Mic, MessageCircle, Pin, ThumbsUp, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, Mic, MessageCircle, Pin, ThumbsUp, X } from "lucide-react";
 import type { AuthorView } from "@/types/community";
 import type { ImageAttachment, MediaAttachment, VoiceNote } from "@/types/media-attachment";
 import { MemberAvatar } from "@/components/community/member-avatar";
@@ -223,28 +223,38 @@ export function FeedView({
                           author={p.author}
                           brand={brand}
                         />
-                        <span className="text-xs text-[#909090]">
+                        {/* Timestamp doubles as a permalink to the post —
+                            a small, explicit, well-understood affordance
+                            (same pattern as Twitter/Reddit/HN) rather than
+                            wrapping the whole card body in one giant <a>,
+                            which made member-inserted links inside the
+                            body invalid-nested and unclickable. */}
+                        <Link
+                          href={detail}
+                          className="text-xs text-[#909090] hover:underline"
+                        >
                           {timeAgo(p.createdAtMs)}
-                        </span>
+                        </Link>
                         {p.category && (
                           <span className="text-xs text-[#909090]">
                             · {p.category}
                           </span>
                         )}
                       </div>
-                      <Link href={detail} className="mt-1 block">
-                        {p.title && (
-                          <h3 className="font-semibold text-[#202124]">
-                            {p.title}
-                          </h3>
-                        )}
-                        <CommunityPostBody html={p.body} brand={brand} clamp className="mt-0.5" />
-                      </Link>
-                      {/* Deliberately NOT inside the title/body <Link> above —
-                          the voice-note player's own Play/seek controls need
-                          to work directly from the feed (Phase C QA #13),
-                          which a nested interactive element inside an <a>
-                          would break. */}
+                      {p.title && (
+                        <Link href={detail} className="mt-1 block hover:underline">
+                          <h3 className="font-semibold text-[#202124]">{p.title}</h3>
+                        </Link>
+                      )}
+                      {/* NOT wrapped in a <Link> — the old "wrap the whole
+                          title+body in one <a>" pattern made any link a
+                          member inserted into their own post text an
+                          invalid nested anchor (unpredictable clicks, and
+                          Chrome's status bar always showed the post-detail
+                          URL no matter what you hovered). The timestamp
+                          above and the comment-count link below remain as
+                          the card's "open post detail" affordances. */}
+                      <CommunityPostBody html={p.body} brand={brand} clamp className={cn(p.title ? "mt-0.5" : "mt-1")} />
                       {p.attachments && p.attachments.length > 0 && (
                         <CommunityPostAttachments
                           attachments={p.attachments}
@@ -514,9 +524,18 @@ function Composer({
 
       {showRecorder && !voiceNote && (
         <div className="mt-2">
+          {/* "Attach" here, not "Send" — inside a post composer, a
+              separate inner "Send" followed by an outer "Post" button
+              read as two sends and confused whether the recording had
+              actually made it into the draft (Phase C QA correction).
+              This is a label/icon override on the SAME reusable
+              recorder — a future DM integration keeps the component's
+              own default "Send" wording, unchanged. */}
           <VoiceNoteRecorder
             saId={saId}
             brand={brand}
+            confirmLabel="Attach"
+            confirmIcon={Check}
             onUploaded={(vn) => {
               setVoiceNote(vn);
               setShowRecorder(false);
@@ -525,16 +544,21 @@ function Composer({
         </div>
       )}
       {voiceNote && (
-        <div className="mt-2 flex items-center gap-2">
-          <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
-          <button
-            type="button"
-            onClick={removeVoiceNote}
-            title="Remove voice note"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:text-[#202124]"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div className="mt-2 space-y-1">
+          <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
+            <Check className="h-3.5 w-3.5" /> Voice note attached to this post
+          </p>
+          <div className="flex items-center gap-2">
+            <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
+            <button
+              type="button"
+              onClick={removeVoiceNote}
+              title="Remove voice note"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:text-[#202124]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { communityPostTypographyClasses } from "./community-post-typography";
 
 /**
  * ONE shared Community post-body renderer — feed cards, post detail, and
@@ -34,12 +35,7 @@ export function CommunityPostBody({
       style={{ ["--post-link-color" as string]: brand }}
       className={cn(
         "text-sm text-[#3a3a44]",
-        "[&_p]:whitespace-pre-wrap [&_p+p]:mt-2",
-        "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5",
-        "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5",
-        "[&_li]:my-0.5",
-        "[&_blockquote]:my-1 [&_blockquote]:border-l-2 [&_blockquote]:border-[#E4E4E4] [&_blockquote]:pl-3 [&_blockquote]:text-[#909090]",
-        "[&_a]:text-[color:var(--post-link-color)] [&_a]:underline [&_a]:underline-offset-2",
+        communityPostTypographyClasses("var(--post-link-color)"),
         clamp && "line-clamp-4",
         className,
       )}

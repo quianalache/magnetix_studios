@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, Loader2, Mic, Send, Square, Trash2 } from "lucide-react";
+import { AlertCircle, Loader2, Mic, Send, Square, Trash2, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useVoiceRecorder } from "@/hooks/use-voice-recorder";
 import { uploadVoiceNote } from "@/lib/community/upload-voice-note";
@@ -15,19 +15,38 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * Reusable record -> preview -> send -> upload widget. Surface-agnostic by
- * design: it knows nothing about DMs/Posts/channels — a finished upload is
- * handed back via `onUploaded`, and the caller decides what to do with it
- * (attach to a draft message, append to a list, etc). This is the ONE
- * recording UI Phase 2+ surfaces should mount, not rebuild.
+ * Reusable record -> preview -> confirm -> upload widget. Surface-agnostic
+ * by design: it knows nothing about DMs/Posts/channels — a finished
+ * upload is handed back via `onUploaded`, and the caller decides what to
+ * do with it (attach to a draft message, append to a list, etc). This is
+ * the ONE recording UI Phase 2+ surfaces should mount, not rebuild.
+ *
+ * Deliberately keeps the preview-before-committing step (record -> stop
+ * -> listen -> confirm) rather than auto-confirming on stop — audio can't
+ * be corrected the way text can, so a real "does this sound right?"
+ * moment before it's committed is worth the one extra tap, in a DM or a
+ * post alike.
+ *
+ * `confirmLabel`/`confirmIcon` let the SAME confirm action communicate
+ * differently per context (default "Send" — the right word once this
+ * mounts inside a DM thread; a Community post composer passes "Attach"
+ * instead, since "Send" a voice note followed by a separate "Post" button
+ * for the whole post was confusing — see the Phase C QA correction). This
+ * is a label/icon override only — the underlying confirm behavior
+ * (upload, hand back via onUploaded, reset) is identical regardless of
+ * context, so there's still exactly one recorder implementation.
  */
 export function VoiceNoteRecorder({
   saId,
   brand = "#202124",
+  confirmLabel = "Send",
+  confirmIcon: ConfirmIcon = Send,
   onUploaded,
 }: {
   saId: string;
   brand?: string;
+  confirmLabel?: string;
+  confirmIcon?: LucideIcon;
   onUploaded: (voiceNote: VoiceNote) => void;
 }) {
   const { state, elapsedMs, error, result, supported, start, stop, cancel, reset, maxDurationMs } =
@@ -161,9 +180,9 @@ export function VoiceNoteRecorder({
             {uploading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Send className="h-3.5 w-3.5" />
+              <ConfirmIcon className="h-3.5 w-3.5" />
             )}
-            {uploading ? "Uploading…" : uploadError ? "Retry" : "Send"}
+            {uploading ? "Uploading…" : uploadError ? "Retry" : confirmLabel}
           </button>
           <button
             type="button"

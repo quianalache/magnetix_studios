@@ -3,6 +3,8 @@
 import { EditorContent } from "@tiptap/react";
 import { useRichTextEditor } from "@/components/editor/use-rich-text-editor";
 import { RichTextToolbar, type RichTextToolbarItem } from "@/components/editor/rich-text-toolbar-items";
+import { communityPostTypographyClasses } from "@/components/community/feed/community-post-typography";
+import { cn } from "@/lib/utils";
 
 /**
  * Community post composer body — a text-formatting-only configuration of
@@ -50,7 +52,13 @@ export function CommunityPostEditor({
     toolbar: COMMUNITY_POST_TOOLBAR,
     value,
     onChange,
-    proseClassName: "text-sm text-[#3a3a44]",
+    // Same typography classes CommunityPostBody renders the published
+    // post with (see community-post-typography.ts) — this is the actual
+    // fix: without them, list markers are structurally real but visually
+    // suppressed by Tailwind's Preflight reset while composing, only
+    // appearing once the published renderer (which already had these
+    // overrides) takes over.
+    proseClassName: cn("text-sm text-[#3a3a44]", communityPostTypographyClasses("#2563eb")),
     minHeightClassName: "min-h-[84px]",
     contentPaddingClassName: "px-0 py-0",
   });
