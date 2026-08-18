@@ -260,6 +260,13 @@ export interface CommunityPost {
   pinned: boolean;
   likeCount: number;
   commentCount: number;
+  /** Phase D — author-controlled "allow comments/replies" toggle. Absent
+   *  (undefined) means comments are allowed — same additive convention as
+   *  `attachments`, so every post written before this field existed stays
+   *  valid with comments enabled by default. Disabling this does NOT hide
+   *  existing comments; it only blocks NEW ones (enforced server-side in
+   *  the comments POST route, not merely hidden in the UI). */
+  commentsDisabled?: boolean;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }

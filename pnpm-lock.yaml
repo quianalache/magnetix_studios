@@ -41,6 +41,9 @@ importers:
       '@tiptap/extension-link':
         specifier: ^3.27.1
         version: 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
+      '@tiptap/extension-mention':
+        specifier: ^3.30.1
+        version: 3.30.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)(@tiptap/suggestion@3.30.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1))
       '@tiptap/extension-text-align':
         specifier: ^3.29.2
         version: 3.29.2(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))
@@ -56,6 +59,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.27.1
         version: 3.27.1
+      '@tiptap/suggestion':
+        specifier: ^3.30.1
+        version: 3.30.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
       '@upstash/qstash':
         specifier: ^2.10.1
         version: 2.10.1
@@ -71,6 +77,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      emoji-picker-react:
+        specifier: ^4.19.1
+        version: 4.19.1(react@19.1.0)
       firebase:
         specifier: ^12.10.0
         version: 12.10.0
@@ -1567,6 +1576,13 @@ packages:
       '@tiptap/core': 3.27.1
       '@tiptap/pm': 3.27.1
 
+  '@tiptap/extension-mention@3.30.1':
+    resolution: {integrity: sha512-XM0m73+pPgPB277oUGOs9L8Wf5kR9H8+IVkj/kGdEOr7gw98wWARc6lfEulSd9ZttbDXkPKGt4Gsz9PsBsKq1A==}
+    peerDependencies:
+      '@tiptap/core': 3.30.1
+      '@tiptap/pm': 3.30.1
+      '@tiptap/suggestion': 3.30.1
+
   '@tiptap/extension-ordered-list@3.27.1':
     resolution: {integrity: sha512-GYrKqD//9nHJ2r80uXqbDMzRnFpGzbaEQRTSGaO/SH7DvXWFMow8evkOdjQ7PCQO07jNjJo75+A85Jwu3Ov3AA==}
     peerDependencies:
@@ -1618,6 +1634,13 @@ packages:
 
   '@tiptap/starter-kit@3.27.1':
     resolution: {integrity: sha512-vfxRsqW8rCc0k4pzo0ilU3wobVi2wqVj88VZI2SlgZlNnUAkrDGDIAph7CTa9k9fshV+O1ivpEgPC5yC046jow==}
+
+  '@tiptap/suggestion@3.30.1':
+    resolution: {integrity: sha512-jhzZGR+6SCCHCdfsAi8g5DRo+lvcTfsw/71s4IEki+SFL8ykpOAF4tpV+G51IcGLOhxvB6xfkWDvm4B4eACqjw==}
+    peerDependencies:
+      '@floating-ui/dom': ^1.0.0
+      '@tiptap/core': 3.30.1
+      '@tiptap/pm': 3.30.1
 
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
@@ -2399,6 +2422,12 @@ packages:
   electron-to-chromium@1.5.313:
     resolution: {integrity: sha512-QBMrTWEf00GXZmJyx2lbYD45jpI3TUFnNIzJ5BBc8piGUDwMPa1GV6HJWTZVvY/eiN3fSopl7NRbgGp9sZ9LTA==}
 
+  emoji-picker-react@4.19.1:
+    resolution: {integrity: sha512-BmDdqInKFVYJpv7qS9WI6L9656cDAC+FkDvUjJds56nKHbaVTBNeDmLwKBytRnzu37zWHs9Isg7gt5PT43y6xA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16'
+
   emoji-regex-xs@1.0.0:
     resolution: {integrity: sha512-LRlerrMYoIDrT6jgpeZ2YYl/L8EulRTt5hQcYjy5AInh7HWXKimpqx68aknBFpGL2+/IcogTcaydJEgaTmOpDg==}
 
@@ -2772,6 +2801,9 @@ packages:
 
   firebase@12.10.0:
     resolution: {integrity: sha512-tAjHnEirksqWpa+NKDUSUMjulOnsTcsPC1X1rQ+gwPtjlhJS572na91CwaBXQJHXharIrfj7sw/okDkXOsphjA==}
+
+  flairup@1.0.0:
+    resolution: {integrity: sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==}
 
   flat-cache@4.0.1:
     resolution: {integrity: sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==}
@@ -6327,6 +6359,12 @@ snapshots:
       '@tiptap/core': 3.27.1(@tiptap/pm@3.27.1)
       '@tiptap/pm': 3.27.1
 
+  '@tiptap/extension-mention@3.30.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)(@tiptap/suggestion@3.30.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1))':
+    dependencies:
+      '@tiptap/core': 3.27.1(@tiptap/pm@3.27.1)
+      '@tiptap/pm': 3.27.1
+      '@tiptap/suggestion': 3.30.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
+
   '@tiptap/extension-ordered-list@3.27.1(@tiptap/extension-list@3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1))':
     dependencies:
       '@tiptap/extension-list': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
@@ -6414,6 +6452,12 @@ snapshots:
       '@tiptap/extension-text': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))
       '@tiptap/extension-underline': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))
       '@tiptap/extensions': 3.27.1(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
+      '@tiptap/pm': 3.27.1
+
+  '@tiptap/suggestion@3.30.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)':
+    dependencies:
+      '@floating-ui/dom': 1.7.6
+      '@tiptap/core': 3.27.1(@tiptap/pm@3.27.1)
       '@tiptap/pm': 3.27.1
 
   '@tootallnate/once@2.0.0':
@@ -7173,6 +7217,11 @@ snapshots:
 
   electron-to-chromium@1.5.313: {}
 
+  emoji-picker-react@4.19.1(react@19.1.0):
+    dependencies:
+      flairup: 1.0.0
+      react: 19.1.0
+
   emoji-regex-xs@1.0.0: {}
 
   emoji-regex@10.6.0: {}
@@ -7788,6 +7837,8 @@ snapshots:
       '@firebase/util': 1.14.0
     transitivePeerDependencies:
       - '@react-native-async-storage/async-storage'
+
+  flairup@1.0.0: {}
 
   flat-cache@4.0.1:
     dependencies:

@@ -1,8 +1,10 @@
 "use client";
 
-import { EditorContent } from "@tiptap/react";
+import { useEffect } from "react";
+import { EditorContent, type Editor } from "@tiptap/react";
 import { useRichTextEditor } from "@/components/editor/use-rich-text-editor";
 import { RichTextToolbar, type RichTextToolbarItem } from "@/components/editor/rich-text-toolbar-items";
+import type { MentionSuggestionItem } from "@/components/editor/mention-suggestion";
 import {
   communityPostLinkColorStyle,
   communityPostTypographyClasses,
@@ -11,10 +13,11 @@ import { cn } from "@/lib/utils";
 
 /**
  * Community post composer body — a text-formatting-only configuration of
- * the Phase A shared rich-text core. No headings, no images, no video, no
- * code blocks, no arbitrary embeds — deliberately smaller than either
- * existing configuration (About, Lesson), matching what a social post
- * composer actually needs per the Composer Capability Gap Analysis.
+ * the Phase A shared rich-text core, plus (Phase D) opt-in @ mention / #
+ * channel-reference suggestions. No headings, no images, no code blocks,
+ * no arbitrary embeds — media/GIF/file/video attachments remain the
+ * composer's own attachment tray below the editor, never inline nodes
+ * inside it (see the Phase D report for why).
  *
  * Composed directly from `useRichTextEditor` + `RichTextToolbar` (the same
  * shared pieces `RichTextEditorCore` is built from) rather than mounting
@@ -44,6 +47,9 @@ export function CommunityPostEditor({
   onChange,
   toolbarOpen,
   brand,
+  mentions,
+  channelRefs,
+  onEditorReady,
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -52,12 +58,19 @@ export function CommunityPostEditor({
    *  the text; it only hides the button row. */
   toolbarOpen: boolean;
   /** Same tenant brand color CommunityPostBody renders published links
-   *  with — see communityPostLinkColorStyle. Previously hardcoded to a
-   *  generic blue here, which quietly didn't even match what shipped:
-   *  the link-color class never actually compiled either way (fixed in
-   *  this pass), so threading the real brand color through now is a
-   *  correctness fix, not new scope. */
+   *  with — see communityPostLinkColorStyle. */
   brand: string;
+  /** Phase D — @ mention autocomplete data source. Omit to disable
+   *  mentions entirely (kept optional so a future non-Community consumer
+   *  of this component, if one ever exists, doesn't inherit it for free). */
+  mentions?: { fetchItems: (query: string) => Promise<MentionSuggestionItem[]> };
+  /** Phase D — # channel-reference autocomplete data source. */
+  channelRefs?: { fetchItems: (query: string) => Promise<MentionSuggestionItem[]> };
+  /** Phase D — hands the live TipTap editor instance up to the parent
+   *  composer, which needs it for the Emoji action (insert-at-cursor is a
+   *  content operation, not something the composer can do without a
+   *  reference to the SAME editor instance this component owns). */
+  onEditorReady?: (editor: Editor | null) => void;
 }) {
   const editor = useRichTextEditor({
     toolbar: COMMUNITY_POST_TOOLBAR,
@@ -72,7 +85,18 @@ export function CommunityPostEditor({
     proseClassName: cn("text-sm text-[#3a3a44]", communityPostTypographyClasses()),
     minHeightClassName: "min-h-[84px]",
     contentPaddingClassName: "px-0 py-0",
+    mentions,
+    channelRefs,
   });
+
+  useEffect(() => {
+    onEditorReady?.(editor ?? null);
+    // Also clear the reference on unmount, so a stale editor instance is
+    // never handed back to a still-mounted parent (e.g. Cancel closing
+    // this editor while the composer chrome remains).
+    return () => onEditorReady?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
 
   if (!editor) {
     return <div className="min-h-[84px]" />;

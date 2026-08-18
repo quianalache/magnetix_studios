@@ -10,6 +10,7 @@ import { ActionsMenu, type MenuItem } from "@/components/community/actions-menu"
 import { AuthorLink } from "@/components/community/author-link";
 import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
+import { PostComposer } from "@/components/community/feed/post-composer";
 import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
@@ -49,6 +50,7 @@ export function PostDetailView({
   groupId,
   groupSlug,
   brand,
+  categories,
   post,
   initialComments,
   viewer,
@@ -59,6 +61,7 @@ export function PostDetailView({
   groupId: string;
   groupSlug: string;
   brand: string;
+  categories: string[];
   post: ClientPost;
   initialComments: ClientComment[];
   viewer: Viewer;
@@ -67,6 +70,8 @@ export function PostDetailView({
   const [liked, setLiked] = useState(post.likedByViewer);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [pinned, setPinned] = useState(post.pinned);
+  const [currentPost, setCurrentPost] = useState(post);
+  const [editing, setEditing] = useState(false);
   const [comments, setComments] = useState(initialComments);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
@@ -215,44 +220,76 @@ export function PostDetailView({
   }
 
   const canModerate = viewer.role === "moderator";
+  // Same broad "moderator can act on any post" convention as
+  // canModerate/Delete below — not a new permission concept.
+  const canEdit = canModerate || currentPost.author.memberId === viewer.memberId;
   const postMenu: MenuItem[] = [
+    ...(canEdit ? [{ label: "Edit post", onClick: () => setEditing(true) }] : []),
     ...(canModerate
       ? [{ label: pinned ? "Unpin post" : "Pin post", onClick: togglePin }]
       : []),
-    ...(canModerate || post.author.memberId === viewer.memberId
+    ...(canModerate || currentPost.author.memberId === viewer.memberId
       ? [{ label: "Delete post", onClick: deletePost, destructive: true }]
       : []),
   ];
+
+  if (editing) {
+    return (
+      <div className="space-y-4">
+        <PostComposer
+          saId={saId}
+          groupId={groupId}
+          brand={brand}
+          categories={categories}
+          viewer={viewer}
+          mode="edit"
+          editingPost={currentPost}
+          onSaved={(updated) => {
+            setCurrentPost(updated);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       {/* Post */}
       <article className="rounded-xl border border-[#E4E4E4] bg-white p-5">
         <div className="flex items-start gap-3">
-          <MemberAvatar author={post.author} size={44} brand={brand} />
+          <MemberAvatar author={currentPost.author} size={44} brand={brand} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-sm">
               <AuthorLink
                 saId={saId}
                 pretty={pretty}
                 viewerMemberId={viewer.memberId}
-                author={post.author}
+                author={currentPost.author}
                 brand={brand}
               />
               <span className="text-xs text-[#909090]">
-                {timeAgo(post.createdAtMs)}
+                {timeAgo(currentPost.createdAtMs)}
               </span>
-              {post.category && (
-                <span className="text-xs text-[#909090]">· {post.category}</span>
+              {currentPost.category && (
+                <span className="text-xs text-[#909090]">· {currentPost.category}</span>
               )}
             </div>
-            {post.title && (
+            {currentPost.title && (
               <h1 className="mt-1 text-lg font-semibold text-[#202124]">
-                {post.title}
+                {currentPost.title}
               </h1>
             )}
-            <CommunityPostBody html={post.body} brand={brand} className="mt-1" />
-            <CommunityPostAttachments attachments={post.attachments} brand={brand} className="mt-2" />
+            <CommunityPostBody
+              html={currentPost.body}
+              brand={brand}
+              className="mt-1"
+              saId={saId}
+              pretty={pretty}
+              groupSlug={groupSlug}
+            />
+            <CommunityPostAttachments attachments={currentPost.attachments} brand={brand} className="mt-2" />
             <div className="mt-3 flex items-center gap-2 border-t border-[#f0f0f0] pt-3 text-sm">
               <button
                 onClick={togglePostLike}
@@ -291,6 +328,7 @@ export function PostDetailView({
               comment={c}
               viewer={viewer}
               brand={brand}
+              canReply={!currentPost.commentsDisabled}
               onLike={toggleCommentLike}
               onReply={() => {
                 setReplyingTo(replyingTo === c.id ? null : c.id);
@@ -307,6 +345,7 @@ export function PostDetailView({
                 viewer={viewer}
                 brand={brand}
                 indented
+                canReply={!currentPost.commentsDisabled}
                 onLike={toggleCommentLike}
                 onReply={() => {
                   setReplyingTo(c.id);
@@ -343,24 +382,35 @@ export function PostDetailView({
         ))}
       </div>
 
-      {/* Comment composer (bottom, Skool-style) */}
-      <div className="flex items-start gap-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write a comment…"
-          rows={1}
-          className="flex-1 resize-none rounded-xl border border-[#E4E4E4] bg-white px-3 py-2.5 text-sm text-[#3a3a44] outline-none placeholder:text-[#909090]"
-        />
-        <button
-          onClick={submitComment}
-          disabled={saving}
-          className="rounded-md px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
-          style={{ backgroundColor: brand }}
-        >
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Comment"}
-        </button>
-      </div>
+      {/* Comment composer (bottom, Skool-style) — the author's "Allow
+          comments/replies" toggle is enforced server-side (the comments
+          POST route 403s regardless), but hiding the form here too is the
+          honest UI per the Phase D instruction: a member should never be
+          invited to type a comment that's guaranteed to fail. Existing
+          comments above remain fully visible either way. */}
+      {currentPost.commentsDisabled ? (
+        <p className="rounded-xl border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2.5 text-center text-xs text-[#909090]">
+          Comments are turned off for this post
+        </p>
+      ) : (
+        <div className="flex items-start gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Write a comment…"
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-[#E4E4E4] bg-white px-3 py-2.5 text-sm text-[#3a3a44] outline-none placeholder:text-[#909090]"
+          />
+          <button
+            onClick={submitComment}
+            disabled={saving}
+            className="rounded-md px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+            style={{ backgroundColor: brand }}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Comment"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,6 +422,7 @@ function CommentBubble({
   viewer,
   brand,
   indented,
+  canReply = true,
   onLike,
   onReply,
   onDelete,
@@ -383,6 +434,11 @@ function CommentBubble({
   viewer: Viewer;
   brand: string;
   indented?: boolean;
+  /** Phase D — false when the post's author turned comments/replies off.
+   *  Existing comments (this bubble) stay fully visible either way; this
+   *  only hides the affordance to add a NEW reply, matching the
+   *  server-side 403 the comments route now enforces regardless. */
+  canReply?: boolean;
   onLike: (id: string) => void;
   onReply: () => void;
   onDelete: (id: string) => void;
@@ -437,9 +493,11 @@ function CommentBubble({
             />
             {comment.likeCount}
           </button>
-          <button onClick={onReply} className="font-medium hover:text-[#202124]">
-            Reply
-          </button>
+          {canReply && (
+            <button onClick={onReply} className="font-medium hover:text-[#202124]">
+              Reply
+            </button>
+          )}
         </div>
       </div>
     </div>

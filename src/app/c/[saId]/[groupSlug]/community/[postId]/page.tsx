@@ -82,6 +82,7 @@ export default async function PostDetailPage({
     body: renderCommunityPostHtml(feedPost.body),
     attachments: feedPost.attachments,
     category: feedPost.category,
+    commentsDisabled: feedPost.commentsDisabled,
     pinned: feedPost.pinned,
     likeCount: feedPost.likeCount,
     commentCount: feedPost.commentCount,
@@ -114,6 +115,7 @@ export default async function PostDetailPage({
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}
+        categories={group.categories}
         post={post}
         initialComments={clientComments}
         viewer={{

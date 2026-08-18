@@ -32,6 +32,12 @@ export function communityPostTypographyClasses(): string {
     // `text-(--var)` shorthand), never a runtime color baked directly into
     // the class name — see `communityPostLinkColorStyle` for why.
     "[&_a]:text-(--community-post-link-color) [&_a]:underline [&_a]:underline-offset-2",
+    // Phase D — @ mention / # channel-reference nodes (see
+    // community-mention-extensions.ts). Same brand-color custom property
+    // as links, distinct from plain body text via weight, not underline
+    // (a mention/channel-ref isn't literally a hyperlink to a URL).
+    "[&_span[data-type=mention]]:font-semibold [&_span[data-type=mention]]:text-(--community-post-link-color) [&_span[data-type=mention]]:cursor-pointer",
+    "[&_span[data-type=channelRef]]:font-semibold [&_span[data-type=channelRef]]:text-(--community-post-link-color) [&_span[data-type=channelRef]]:cursor-pointer",
   ].join(" ");
 }
 

@@ -22,6 +22,15 @@ export {
  * the client import path, same discipline as lesson-html.ts. Client
  * components use the re-exported `lesson-html-shared` helpers above
  * instead (no sanitizer dependency).
+ *
+ * Phase D adds exactly one more tag — `span` — and ONLY for the two
+ * structured node types the shared editor's @ mention / # channel-ref
+ * extensions produce (community-mention-extensions.ts). `data-type` is the
+ * discriminator; anything else is stripped down to a bare, harmless
+ * `<span>` (still allowed, since a member's post text having a genuinely
+ * ordinary reason to contain `<span>` is impossible from this editor's own
+ * schema — but degrading rather than deleting the tag preserves the
+ * member's visible text either way).
  */
 
 const COMMUNITY_POST_ALLOWED_TAGS = [
@@ -36,7 +45,10 @@ const COMMUNITY_POST_ALLOWED_TAGS = [
   "ol",
   "li",
   "a",
+  "span",
 ];
+
+const MENTION_SPAN_DATA_TYPES = new Set(["mention", "channelRef"]);
 
 /** Sanitize a Community post body for rendering (or before storing, as
  *  defense-in-depth on write). Server-side only. */
@@ -46,6 +58,7 @@ export function sanitizeCommunityPostHtml(html: string): string {
     allowedTags: COMMUNITY_POST_ALLOWED_TAGS,
     allowedAttributes: {
       a: ["href", "target", "rel"],
+      span: ["data-type", "data-id", "data-label"],
     },
     allowedSchemes: ["http", "https", "mailto"],
     // Harden every surviving link, same convention as sanitizeLessonHtml.
@@ -58,6 +71,21 @@ export function sanitizeCommunityPostHtml(html: string): string {
           rel: "noopener noreferrer nofollow",
         },
       }),
+      // Only a recognized mention/channelRef data-type, with both id and
+      // label present, survives with its attributes — anything else
+      // (a stray/malformed/hand-crafted span) loses its attributes but
+      // keeps its text, never the whole tag+content removed outright.
+      span: (tagName, attribs) => {
+        const dataType = attribs["data-type"];
+        const ok =
+          typeof dataType === "string" &&
+          MENTION_SPAN_DATA_TYPES.has(dataType) &&
+          typeof attribs["data-id"] === "string" &&
+          attribs["data-id"].length > 0 &&
+          typeof attribs["data-label"] === "string" &&
+          attribs["data-label"].length > 0;
+        return ok ? { tagName: "span", attribs } : { tagName: "span", attribs: {} };
+      },
     },
   });
 }

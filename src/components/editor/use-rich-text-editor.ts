@@ -10,6 +10,13 @@ import {
   headingLevelsFromToolbar,
   type RichTextToolbarItem,
 } from "./rich-text-toolbar-items";
+import {
+  CommunityMention,
+  CommunityChannelRef,
+  mentionSuggestionConfig,
+  channelRefSuggestionConfig,
+} from "./community-mention-extensions";
+import type { MentionSuggestionItem } from "./mention-suggestion";
 
 /**
  * ONE shared TipTap editor setup + extension-registration mechanism.
@@ -34,6 +41,8 @@ export function useRichTextEditor({
   proseClassName,
   minHeightClassName,
   contentPaddingClassName = "px-3 py-2.5",
+  mentions,
+  channelRefs,
 }: {
   /** Drives which StarterKit sub-features are enabled (currently only
    *  heading levels vary this way) and whether the Underline extension is
@@ -56,6 +65,13 @@ export function useRichTextEditor({
    *  textarea it replaces did) can override it — added specifically for
    *  that, not a speculative knob. */
   contentPaddingClassName?: string;
+  /** Phase D — Community post @ mentions. Omit entirely for every other
+   *  consumer (About, Lesson); this is opt-in, not a shared-core default. */
+  mentions?: { fetchItems: (query: string) => Promise<MentionSuggestionItem[]> };
+  /** Phase D — Community post # channel references. Same opt-in shape as
+   *  `mentions`, sharing the suggestion dropdown architecture (see
+   *  mention-suggestion.ts) rather than a second autocomplete system. */
+  channelRefs?: { fetchItems: (query: string) => Promise<MentionSuggestionItem[]> };
 }) {
   const headingLevels = headingLevelsFromToolbar(toolbar);
   const needsUnderline = toolbar.includes("underline");
@@ -72,6 +88,16 @@ export function useRichTextEditor({
         },
       }),
       ...(needsUnderline ? [Underline] : []),
+      ...(mentions
+        ? [CommunityMention.configure({ suggestion: mentionSuggestionConfig(mentions.fetchItems) })]
+        : []),
+      ...(channelRefs
+        ? [
+            CommunityChannelRef.configure({
+              suggestion: channelRefSuggestionConfig(channelRefs.fetchItems),
+            }),
+          ]
+        : []),
     ],
     content: lessonBodyToEditorHtml(value),
     onUpdate: ({ editor }) => onChange(editor.getHTML()),

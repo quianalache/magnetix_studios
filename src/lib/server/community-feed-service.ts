@@ -117,6 +117,9 @@ export interface CreatePostInput {
    *  layer just stores it. */
   attachments?: MediaAttachment[];
   category: string | null;
+  /** Phase D — defaults to false (comments allowed), matching
+   *  `CommunityPost.commentsDisabled`'s "absent = allowed" convention. */
+  commentsDisabled?: boolean;
 }
 
 export async function createPostServerSide(
@@ -141,6 +144,10 @@ export async function createPostServerSide(
     // stay valid with no special-casing here.
     attachments: input.attachments?.length ? input.attachments : undefined,
     category: input.category,
+    // Same ignoreUndefinedProperties convention: only actually stored when
+    // true, so a plain post costs nothing extra and old-post compatibility
+    // needs no special-casing on read (`commentsDisabled` absent === false).
+    commentsDisabled: input.commentsDisabled ? true : undefined,
     pinned: false,
     likeCount: 0,
     commentCount: 0,
@@ -149,6 +156,41 @@ export async function createPostServerSide(
   };
   const ref = await postsCol(input.subAccountId, input.groupId).add(doc);
   return { id: ref.id, ...doc } as CommunityPost;
+}
+
+/**
+ * Phase D — search this GROUP's own active members for the @ mention
+ * autocomplete. Deliberately NOT `listDmableMembersServerSide` (DM
+ * infrastructure spans every group the viewer belongs to, and layers in
+ * DM-block filtering that has nothing to do with "who can be mentioned in
+ * THIS post") — a plain group-membership query, reusing `hydrateAuthors`
+ * already defined above rather than a second name-lookup path.
+ */
+export async function searchGroupMembersServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  query: string;
+  excludeMemberId?: string;
+  limit?: number;
+}): Promise<{ id: string; label: string; avatarUrl: string | null }[]> {
+  const db = getAdminDb();
+  const membershipsSnap = await db
+    .collection(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`)
+    .where("status", "==", "active")
+    .limit(500)
+    .get();
+  const ids = membershipsSnap.docs
+    .map((d) => d.id)
+    .filter((id) => id !== opts.excludeMemberId);
+  if (ids.length === 0) return [];
+
+  const authors = await hydrateAuthors(opts.subAccountId, opts.groupId, ids);
+  const q = opts.query.trim().toLowerCase();
+  return [...authors.values()]
+    .filter((a) => !q || a.displayName.toLowerCase().includes(q))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName))
+    .slice(0, opts.limit ?? 8)
+    .map((a) => ({ id: a.memberId, label: a.displayName, avatarUrl: a.avatarUrl }));
 }
 
 /** List the feed: pinned first, then newest. Optional category filter. */
@@ -384,6 +426,22 @@ export async function setPinnedServerSide(opts: {
  * block deleting the post itself — the alternative (a stuck, undeletable
  * post because of an unrelated Storage hiccup) is worse.
  */
+/** Attachment storage path, or null for kinds with nothing of ours to
+ *  clean up (gif = provider CDN URL, video-link = metadata only). */
+function attachmentStoragePath(a: MediaAttachment): string | null {
+  switch (a.kind) {
+    case "image":
+      return a.image.storagePath;
+    case "voice":
+      return a.voice.storagePath;
+    case "file":
+      return a.file.storagePath;
+    case "gif":
+    case "video-link":
+      return null;
+  }
+}
+
 async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefined) {
   if (!attachments?.length) return;
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
@@ -391,7 +449,8 @@ async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefine
   const bucket = getStorage().bucket(bucketName);
   await Promise.allSettled(
     attachments.map(async (a) => {
-      const storagePath = a.kind === "image" ? a.image.storagePath : a.voice.storagePath;
+      const storagePath = attachmentStoragePath(a);
+      if (!storagePath) return;
       try {
         await bucket.file(storagePath).delete();
       } catch (err) {
@@ -399,6 +458,80 @@ async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefine
       }
     }),
   );
+}
+
+/**
+ * Phase D — edit an existing post. Reuses the exact same
+ * attachment-shape validation the create route already did (the API
+ * route normalizes/validates before this is ever called, same as
+ * `createPostServerSide`). The safe-edit-transaction attachment lifecycle
+ * lives here: any attachment present in the OLD stored post but absent
+ * from the NEW attachments array is treated as "removed during this
+ * edit" and has its Storage object deleted (best-effort, same philosophy
+ * as `deleteAttachmentStorage` above) — newly added attachments need no
+ * action here (already uploaded/validated by the time this runs); the
+ * client is responsible for cleaning up anything it uploaded but the
+ * member then cancelled out of before ever calling this.
+ */
+export interface UpdatePostInput {
+  subAccountId: string;
+  groupId: string;
+  postId: string;
+  title: string;
+  body: string;
+  attachments?: MediaAttachment[];
+  category: string | null;
+  commentsDisabled: boolean;
+}
+
+export async function updatePostServerSide(input: UpdatePostInput): Promise<CommunityPost | null> {
+  const ref = postsCol(input.subAccountId, input.groupId).doc(input.postId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const existing = snap.data() as Omit<CommunityPost, "id">;
+
+  const newPaths = new Set(
+    (input.attachments ?? []).map(attachmentStoragePath).filter((p): p is string => !!p),
+  );
+  const removed = (existing.attachments ?? []).filter((a) => {
+    const p = attachmentStoragePath(a);
+    return p ? !newPaths.has(p) : false;
+  });
+
+  const updates = {
+    title: input.title.trim(),
+    body: sanitizeCommunityPostHtml(input.body.trim()),
+    // `.update()` respects `ignoreUndefinedProperties` by SKIPPING a field
+    // entirely when its value is `undefined` — that's the right behavior
+    // for `createPostServerSide`'s `.add()` (nothing to clear yet), but
+    // here it would silently leave a stale `attachments` array in place
+    // when a member removes every attachment during an edit. FieldValue
+    // .delete() is the explicit "actually clear this field" instruction.
+    attachments: input.attachments?.length ? input.attachments : FieldValue.delete(),
+    category: input.category,
+    // Same "only stored when true" convention as createPostServerSide —
+    // re-enabling comments during an edit clears the field entirely
+    // rather than writing `false`.
+    commentsDisabled: input.commentsDisabled ? true : FieldValue.delete(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.update(updates);
+  // Best-effort, after the write succeeds — a Storage hiccup here must
+  // never leave the post itself in a broken/half-saved state.
+  await deleteAttachmentStorage(removed);
+
+  // Built from `input`, not `updates` — `updates.attachments` may be a
+  // FieldValue.delete() sentinel, not a real value safe to hand back to
+  // an API response.
+  return {
+    id: input.postId,
+    ...existing,
+    title: input.title.trim(),
+    body: sanitizeCommunityPostHtml(input.body.trim()),
+    attachments: input.attachments?.length ? input.attachments : undefined,
+    category: input.category,
+    commentsDisabled: input.commentsDisabled,
+  } as CommunityPost;
 }
 
 export async function deletePostServerSide(opts: {

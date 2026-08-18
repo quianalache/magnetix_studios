@@ -78,6 +78,7 @@ export default async function CommunityFeedPage({
     body: renderCommunityPostHtml(p.body),
     attachments: p.attachments,
     category: p.category,
+    commentsDisabled: p.commentsDisabled,
     pinned: p.pinned,
     likeCount: p.likeCount,
     commentCount: p.commentCount,
