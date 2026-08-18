@@ -12,6 +12,7 @@ import {
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
+import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import { CommunityBanner } from "@/components/community/community-banner";
 import { CommunityLeftNav } from "@/components/community/community-left-nav";
 import { AboutCommunityCard } from "@/components/community/about-community-card";
@@ -71,7 +72,10 @@ export default async function CommunityFeedPage({
     id: p.id,
     authorMemberId: p.authorMemberId,
     title: p.title,
-    body: p.body,
+    // Sanitized here, server-side, before this ever reaches the client —
+    // the required read-path boundary (see post-html.ts). Handles old
+    // plain-text posts and new rich-HTML posts identically.
+    body: renderCommunityPostHtml(p.body),
     category: p.category,
     pinned: p.pinned,
     likeCount: p.likeCount,

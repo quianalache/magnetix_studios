@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { levelForPoints } from "@/config/community";
+import { sanitizeCommunityPostHtml } from "@/lib/community/post-html";
 import type {
   AuthorView,
   CommunityComment,
@@ -121,7 +122,12 @@ export async function createPostServerSide(
     groupId: input.groupId,
     authorMemberId: input.authorMemberId,
     title: input.title.trim(),
-    body: input.body.trim(),
+    // Defense-in-depth: sanitize on write too, not just on read (the
+    // read path — see post-html.ts's renderCommunityPostHtml, used by
+    // every page that fetches a post — is the one this MUST NOT skip;
+    // this second pass just means a post is never stored with anything
+    // the read-time sanitizer would have to strip in the first place).
+    body: sanitizeCommunityPostHtml(input.body.trim()),
     category: input.category,
     pinned: false,
     likeCount: 0,

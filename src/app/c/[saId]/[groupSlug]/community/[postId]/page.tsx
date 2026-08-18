@@ -17,6 +17,7 @@ import {
   type ClientComment,
 } from "@/components/community/feed/post-detail-view";
 import type { ClientPost } from "@/components/community/feed/feed-view";
+import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +78,8 @@ export default async function PostDetailPage({
     id: feedPost.id,
     authorMemberId: feedPost.authorMemberId,
     title: feedPost.title,
-    body: feedPost.body,
+    // Sanitized server-side before reaching the client — see post-html.ts.
+    body: renderCommunityPostHtml(feedPost.body),
     category: feedPost.category,
     pinned: feedPost.pinned,
     likeCount: feedPost.likeCount,

@@ -8,6 +8,7 @@ import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu, type MenuItem } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
+import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
@@ -249,9 +250,7 @@ export function PostDetailView({
                 {post.title}
               </h1>
             )}
-            <p className="mt-1 whitespace-pre-wrap text-sm text-[#3a3a44]">
-              {post.body}
-            </p>
+            <CommunityPostBody html={post.body} brand={brand} className="mt-1" />
             <div className="mt-3 flex items-center gap-2 border-t border-[#f0f0f0] pt-3 text-sm">
               <button
                 onClick={togglePostLike}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { createPostServerSide } from "@/lib/server/community-feed-service";
+import { aboutPlainTextLength } from "@/lib/community/about-html";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,21 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const text = body.body?.trim();
-  if (!text) {
+  // `body.body` is now real HTML from the Community rich-text composer
+  // (Phase B), not plain text — the 10,000-char cap must be measured
+  // against the VISIBLE text a member actually typed, not the raw HTML
+  // string (which would otherwise silently shrink/inflate the real limit
+  // depending on how much formatting markup happens to be in the post).
+  // `aboutPlainTextLength` is a plain regex tag-stripper (no HTML
+  // parsing/rendering assumptions), already proven for exactly this job
+  // by the About/Guidelines character counters — reused as-is here, not
+  // duplicated.
+  const html = body.body?.trim() ?? "";
+  const visibleLength = aboutPlainTextLength(html);
+  if (visibleLength === 0) {
     return NextResponse.json({ error: "Write something first" }, { status: 400 });
   }
-  if (text.length > 10000) {
+  if (visibleLength > 10000) {
     return NextResponse.json({ error: "Post is too long" }, { status: 400 });
   }
 
@@ -42,7 +53,7 @@ export async function POST(
     groupId,
     authorMemberId: access.member.id,
     title: body.title?.trim() ?? "",
-    body: text,
+    body: html,
     category,
   });
 

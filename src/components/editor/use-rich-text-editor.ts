@@ -33,6 +33,7 @@ export function useRichTextEditor({
   disabled,
   proseClassName,
   minHeightClassName,
+  contentPaddingClassName = "px-3 py-2.5",
 }: {
   /** Drives which StarterKit sub-features are enabled (currently only
    *  heading levels vary this way) and whether the Underline extension is
@@ -48,6 +49,13 @@ export function useRichTextEditor({
   disabled?: boolean;
   proseClassName: string;
   minHeightClassName: string;
+  /** Defaults to the padding both existing consumers (About, Lesson) use
+   *  inside their own bordered box. A config that wants the editor to sit
+   *  flush inside a parent that already has its own padding (Phase B's
+   *  Community composer, which blends into its card the way the plain
+   *  textarea it replaces did) can override it — added specifically for
+   *  that, not a speculative knob. */
+  contentPaddingClassName?: string;
 }) {
   const headingLevels = headingLevelsFromToolbar(toolbar);
   const needsUnderline = toolbar.includes("underline");
@@ -69,7 +77,7 @@ export function useRichTextEditor({
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
     editorProps: {
       attributes: {
-        class: cn(proseClassName, "focus:outline-none", minHeightClassName, "px-3 py-2.5"),
+        class: cn(proseClassName, "focus:outline-none", minHeightClassName, contentPaddingClassName),
       },
     },
   });

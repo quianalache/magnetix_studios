@@ -9,7 +9,10 @@ import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
+import { CommunityPostEditor } from "@/components/community/feed/community-post-editor";
+import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { communityPostHref } from "@/lib/community/routes";
+import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { cn } from "@/lib/utils";
 
 export interface ClientPost {
@@ -224,9 +227,7 @@ export function FeedView({
                             {p.title}
                           </h3>
                         )}
-                        <p className="mt-0.5 line-clamp-4 whitespace-pre-wrap text-sm text-[#3a3a44]">
-                          {p.body}
-                        </p>
+                        <CommunityPostBody html={p.body} brand={brand} clamp className="mt-0.5" />
                       </Link>
                       <div className="mt-3 flex items-center gap-4 text-xs text-[#909090]">
                         <button
@@ -298,14 +299,17 @@ function Composer({
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+  const [body, setBody] = useState(""); // rich HTML from CommunityPostEditor
+  const [toolbarOpen, setToolbarOpen] = useState(false);
   const [category, setCategory] = useState(categories[0] ?? "General");
   const [saving, setSaving] = useState(false);
 
   async function submit() {
     const trimmedTitle = title.trim();
-    const trimmedBody = body.trim();
-    if (!trimmedBody) {
+    // `body` is HTML now, not plain text — check VISIBLE content length,
+    // not raw-string truthiness (an empty TipTap doc is still `<p></p>`,
+    // which is a truthy string with zero visible characters).
+    if (aboutPlainTextLength(body) === 0) {
       toast.error("Write something first");
       return;
     }
@@ -314,7 +318,7 @@ function Composer({
       const res = await fetch(`/api/community/${saId}/${groupId}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: trimmedTitle, body: trimmedBody, category }),
+        body: JSON.stringify({ title: trimmedTitle, body, category }),
       });
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -325,12 +329,16 @@ function Composer({
         throw new Error(d.error ?? "Couldn't post");
       }
       // Optimistic: drop the real created post (we have its id) into the feed
-      // immediately — no server round-trip / re-render to wait on.
+      // immediately — no server round-trip / re-render to wait on. Safe to
+      // render this HTML directly (CommunityPostBody doesn't re-sanitize):
+      // it came straight from TipTap's own schema-constrained output, not
+      // arbitrary input — every subsequent fetch (refresh, other viewers)
+      // goes through the real server-side sanitizer regardless.
       onCreated({
         id: d.post.id,
         authorMemberId: viewer.memberId,
         title: trimmedTitle,
-        body: trimmedBody,
+        body,
         category: categories.includes(category) ? category : null,
         pinned: false,
         likeCount: 0,
@@ -346,6 +354,7 @@ function Composer({
       });
       setTitle("");
       setBody("");
+      setToolbarOpen(false);
       setOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't post");
@@ -375,25 +384,38 @@ function Composer({
         className="w-full border-0 p-0 text-base font-semibold text-[#202124] outline-none placeholder:text-[#b4b4b4]"
         autoFocus
       />
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder="Write something…"
-        rows={4}
-        className="mt-2 w-full resize-none border-0 p-0 text-sm text-[#3a3a44] outline-none placeholder:text-[#b4b4b4]"
-      />
+      <div className="mt-2">
+        <CommunityPostEditor value={body} onChange={setBody} toolbarOpen={toolbarOpen} />
+      </div>
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f0f0f0] pt-3">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded-md border border-[#E4E4E4] bg-white px-2 py-1 text-xs text-[#3a3a44]"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setToolbarOpen((o) => !o)}
+            aria-pressed={toolbarOpen}
+            title="Formatting"
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs font-semibold",
+              toolbarOpen
+                ? "border-transparent text-white"
+                : "border-[#E4E4E4] text-[#909090] hover:text-[#202124]",
+            )}
+            style={toolbarOpen ? { backgroundColor: brand } : undefined}
+          >
+            Aa
+          </button>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="rounded-md border border-[#E4E4E4] bg-white px-2 py-1 text-xs text-[#3a3a44]"
+          >
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setOpen(false)}
