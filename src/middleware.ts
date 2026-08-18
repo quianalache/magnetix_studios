@@ -155,6 +155,15 @@ const PUBLIC_PATHS = [
   // a member session can never resolve into the staff `/sa/*` surface.
   "/c",
   "/api/community",
+  // Staff -> Member Seamless Entry (2026-08-19) cross-domain handoff
+  // completion step — reachable on a business's own verified custom
+  // domain (e.g. quianalache.com), which never carries a staff `__session`
+  // cookie at all. Deliberately its own top-level prefix (not nested under
+  // /api/community) since Client Portal/Courses share the same
+  // Member/ls_member_session identity system and can redirect here
+  // unchanged later. See staff-member-bridge.ts + member-auth.ts's
+  // signMemberHandoffToken.
+  "/api/member-session",
   // Standalone Courses — a course/product sold on its own public sales page,
   // independent of Community. Same session model (magic-link HMAC cookie
   // scoped to the sub-account), NOT Firebase Auth. The agency gate + member-

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   BookOpen,
+  DoorOpen,
   ExternalLink,
   Loader2,
   Plus,
@@ -338,14 +339,34 @@ export default function CommunityGroupSettingsPage({
         >
           <ArrowLeft className="h-4 w-4" /> Community
         </Link>
-        <a
-          href={publicUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          View public page <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+        <div className="flex items-center gap-4">
+          {/* Staff -> Member Seamless Entry (2026-08-19) — signs the
+              current staff session into its own Member/GroupMembership for
+              THIS Community (auto-provisioned + auto-moderated the same
+              way any staff/admin email already was on manual join — see
+              community-service.ts's isStaffEmail) and lands on the real
+              customer-facing page, no separate Community login. A plain
+              link (not a fetch call) so the browser follows the full
+              redirect chain — including, for a verified custom domain, the
+              cross-domain handoff hop — and actually receives the
+              resulting Set-Cookie along the way. */}
+          <a
+            href={`/api/sub-accounts/${subAccountId}/community/${groupId}/enter`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <DoorOpen className="h-3.5 w-3.5" /> Enter Community
+          </a>
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            View public page <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-4">

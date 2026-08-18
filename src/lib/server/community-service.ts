@@ -411,6 +411,17 @@ export type JoinOutcome =
  *
  * The membership doc id is the memberId, so a member can only hold one
  * membership per group (natural idempotency).
+ *
+ * Staff/admin bypass (extended 2026-08-19 for Staff -> Member Seamless
+ * Entry): a joining email that `isStaffEmail` resolves as staff/admin for
+ * this sub-account was ALREADY auto-elevated to `moderator` role — this
+ * just extends that same, single, existing staff-detection check to also
+ * bypass the approval-pending gate and the paid-access gate. A sub-account
+ * owner entering their own paid or approval-gated Community through the
+ * legitimate CRM bridge must land active, not stuck pending an approval
+ * they'd have to grant themselves, or asked to pay for their own product.
+ * Ordinary (non-staff) members are completely unaffected — same pending/
+ * payment_required behavior as before.
  */
 export async function joinGroupServerSide(opts: {
   subAccountId: string;
@@ -435,25 +446,26 @@ export async function joinGroupServerSide(opts: {
     }
   }
 
-  if (group.access === "paid") {
+  // Single staff-detection check, reused for role, the approval gate, AND
+  // the paid gate below — was previously computed only for role.
+  const memberSnap = await db
+    .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+    .get();
+  const email = memberSnap.data()?.email as string | undefined;
+  const staff = !!email && (await isStaffEmail(opts.subAccountId, email));
+
+  if (group.access === "paid" && !staff) {
     // Paid join is wired in Slice 6 (one-time PayPal + admin mark-paid).
     return { status: "payment_required" };
   }
 
-  const becomesActive = group.joinPolicy !== "approval";
+  const becomesActive = group.joinPolicy !== "approval" || staff;
   const status: GroupMembership["status"] = becomesActive
     ? "active"
     : "pending";
 
   // Auto-elevate staff admins to moderator so they can moderate inline.
-  const memberSnap = await db
-    .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
-    .get();
-  const email = memberSnap.data()?.email as string | undefined;
-  const role: GroupMembership["role"] =
-    email && (await isStaffEmail(opts.subAccountId, email))
-      ? "moderator"
-      : "member";
+  const role: GroupMembership["role"] = staff ? "moderator" : "member";
 
   await memRef.set({
     subAccountId: opts.subAccountId,
@@ -475,7 +487,7 @@ export async function joinGroupServerSide(opts: {
       agencyId: opts.agencyId,
       mode: "live",
       type: "community.member.joined",
-      payload: { groupId: opts.groupId, memberId: opts.memberId, via: "open" },
+      payload: { groupId: opts.groupId, memberId: opts.memberId, via: staff ? "staff" : "open" },
     });
   }
 

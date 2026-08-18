@@ -17,6 +17,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const MAGIC_LINK_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const HANDOFF_TTL_MS = 2 * 60 * 1000; // 2 minutes — see "ho" kind below
 
 function getSecret(): string {
   const secret = process.env.AUTOMATIONS_TOKEN_SECRET;
@@ -51,14 +52,17 @@ function sign(payload: string): string {
 interface TokenPayload {
   /** Sub-account the token is scoped to. */
   sa: string;
-  /** Member doc id. Present on session tokens; absent on magic-link tokens. */
+  /** Member doc id. Present on session and handoff tokens; absent on
+   *  magic-link tokens. */
   mid?: string;
   /** Email at the time of issue. */
   e: string;
   /** Expiration epoch ms. */
   exp: number;
-  /** "ml" = magic link (one-time, 15min); "ses" = session cookie (30d). */
-  k: "ml" | "ses";
+  /** "ml" = magic link (one-time, 15min); "ses" = session cookie (30d);
+   *  "ho" = cross-domain handoff (single-hop, 2min) — see
+   *  signMemberHandoffToken below. */
+  k: "ml" | "ses" | "ho";
   /** Optional "join this group on verify" intent (magic-link tokens only). */
   j?: string;
   /**
@@ -69,6 +73,11 @@ interface TokenPayload {
    * as an explicit follow-up action.
    */
   c?: string;
+  /** Destination path on the handoff's target domain (handoff tokens only).
+   *  Signed into the token itself — not a separate mutable query param —
+   *  so the redirect destination can't be altered after the token was
+   *  issued. See signMemberHandoffToken. */
+  next?: string;
 }
 
 function encodeToken(payload: TokenPayload): string {
@@ -102,7 +111,7 @@ function decodeToken(token: string): TokenPayload | null {
       typeof parsed.sa !== "string" ||
       typeof parsed.e !== "string" ||
       typeof parsed.exp !== "number" ||
-      (parsed.k !== "ml" && parsed.k !== "ses")
+      (parsed.k !== "ml" && parsed.k !== "ses" && parsed.k !== "ho")
     ) {
       return null;
     }
@@ -167,6 +176,57 @@ export function verifyMemberSessionToken(
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ses" || !payload.mid) return null;
   return { subAccountId: payload.sa, memberId: payload.mid, email: payload.e };
+}
+
+/**
+ * Cross-domain Staff -> Member handoff (2026-08-19) — a Member-flavored
+ * sibling of `signPersonHandoffToken`/`verifyPersonHandoffToken`
+ * (person-auth.ts), same rationale: cookies cannot be set cross-origin, so
+ * a route running on crm.magnetixstudios.com that has just resolved (or
+ * provisioned) a Member + GroupMembership for an already-authenticated
+ * staff user cannot itself set `ls_member_session` scoped correctly to a
+ * business's own verified custom domain — this short-lived, single-hop
+ * token carries that already-verified outcome across the one redirect to
+ * the domain that actually needs to set the cookie.
+ *
+ * Deliberately a distinct token KIND ("ho") within the SAME payload shape
+ * member-auth.ts already uses (not a new file/secret) — `verifyMemberSessionToken`
+ * above explicitly requires `k === "ses"`, so a handoff token can never be
+ * replayed as a session credential itself, only exchanged once by
+ * /api/member-session/handoff within its 2-minute TTL. `next` is signed
+ * INTO the token (not a separate mutable query param) specifically so the
+ * redirect destination can't be altered after issuance — see the Staff ->
+ * Member Seamless Entry report for why this is a deliberate strengthening
+ * over the person-handoff token's own (path-restricted, but unsigned)
+ * `next` query param.
+ */
+export function signMemberHandoffToken(
+  subAccountId: string,
+  memberId: string,
+  email: string,
+  next: string,
+): string {
+  return encodeToken({
+    sa: subAccountId,
+    mid: memberId,
+    e: email.trim().toLowerCase(),
+    exp: Date.now() + HANDOFF_TTL_MS,
+    k: "ho",
+    next,
+  });
+}
+
+export function verifyMemberHandoffToken(
+  token: string,
+): { subAccountId: string; memberId: string; email: string; next: string } | null {
+  const payload = decodeToken(token);
+  if (!payload || payload.k !== "ho" || !payload.mid || !payload.next) return null;
+  return {
+    subAccountId: payload.sa,
+    memberId: payload.mid,
+    email: payload.e,
+    next: payload.next,
+  };
 }
 
 export const MEMBER_SESSION_COOKIE = "ls_member_session";
