@@ -76,6 +76,7 @@ export default async function CommunityFeedPage({
     // the required read-path boundary (see post-html.ts). Handles old
     // plain-text posts and new rich-HTML posts identically.
     body: renderCommunityPostHtml(p.body),
+    attachments: p.attachments,
     category: p.category,
     pinned: p.pinned,
     likeCount: p.likeCount,

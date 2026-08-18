@@ -80,6 +80,7 @@ export default async function PostDetailPage({
     title: feedPost.title,
     // Sanitized server-side before reaching the client — see post-html.ts.
     body: renderCommunityPostHtml(feedPost.body),
+    attachments: feedPost.attachments,
     category: feedPost.category,
     pinned: feedPost.pinned,
     likeCount: feedPost.likeCount,

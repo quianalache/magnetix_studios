@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { MediaAttachment } from "./media-attachment";
 
 /**
  * Community + Courses (Skool-style) — shared types.
@@ -250,6 +251,11 @@ export interface CommunityPost {
   authorMemberId: string;
   title: string;
   body: string;
+  /** Phase C — image/voice attachments, rendered below the rich-text body,
+   *  never inline inside it. Optional/additive: every post written before
+   *  this field existed is still a fully valid CommunityPost with
+   *  `attachments` simply absent. See src/types/media-attachment.ts. */
+  attachments?: MediaAttachment[];
   category: string | null;
   pinned: boolean;
   likeCount: number;

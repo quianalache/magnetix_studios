@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, MessageCircle, Pin, ThumbsUp } from "lucide-react";
+import { ImagePlus, Loader2, Mic, MessageCircle, Pin, ThumbsUp, X } from "lucide-react";
 import type { AuthorView } from "@/types/community";
+import type { ImageAttachment, MediaAttachment, VoiceNote } from "@/types/media-attachment";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
 import { CommunityPostEditor } from "@/components/community/feed/community-post-editor";
 import { CommunityPostBody } from "@/components/community/feed/community-post-body";
+import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
+import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
+import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
+import {
+  deleteCommunityPostImage,
+  uploadCommunityPostImage,
+} from "@/lib/community/upload-community-image";
+import { deleteVoiceNote } from "@/lib/community/upload-voice-note";
+import { MAX_IMAGES_PER_POST } from "@/lib/community/community-image-mime";
 import { communityPostHref } from "@/lib/community/routes";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { cn } from "@/lib/utils";
@@ -20,6 +30,7 @@ export interface ClientPost {
   authorMemberId: string;
   title: string;
   body: string;
+  attachments?: MediaAttachment[];
   category: string | null;
   pinned: boolean;
   likeCount: number;
@@ -229,6 +240,18 @@ export function FeedView({
                         )}
                         <CommunityPostBody html={p.body} brand={brand} clamp className="mt-0.5" />
                       </Link>
+                      {/* Deliberately NOT inside the title/body <Link> above —
+                          the voice-note player's own Play/seek controls need
+                          to work directly from the feed (Phase C QA #13),
+                          which a nested interactive element inside an <a>
+                          would break. */}
+                      {p.attachments && p.attachments.length > 0 && (
+                        <CommunityPostAttachments
+                          attachments={p.attachments}
+                          brand={brand}
+                          className="mt-2"
+                        />
+                      )}
                       <div className="mt-3 flex items-center gap-4 text-xs text-[#909090]">
                         <button
                           onClick={() => toggleLike(p.id)}
@@ -304,13 +327,90 @@ function Composer({
   const [category, setCategory] = useState(categories[0] ?? "General");
   const [saving, setSaving] = useState(false);
 
+  // Phase C: images upload immediately on selection (not deferred to
+  // submit), so a member sees a real preview/error per file right away.
+  // Voice notes reuse VoiceNoteRecorder's own record->preview->upload flow
+  // unchanged — this component only decides what happens with the
+  // resulting VoiceNote.
+  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [voiceNote, setVoiceNote] = useState<VoiceNote | null>(null);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageFiles(files: FileList) {
+    const remaining = MAX_IMAGES_PER_POST - images.length;
+    if (remaining <= 0) {
+      toast.error(`You can attach up to ${MAX_IMAGES_PER_POST} images.`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    if (files.length > toUpload.length) {
+      toast.error(`Only attaching the first ${toUpload.length} — max ${MAX_IMAGES_PER_POST} images per post.`);
+    }
+    setImageUploading(true);
+    for (const file of toUpload) {
+      try {
+        const img = await uploadCommunityPostImage({ saId, file });
+        setImages((prev) => [...prev, img]);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Image upload failed");
+      }
+    }
+    setImageUploading(false);
+  }
+
+  // Removing an already-uploaded draft attachment cleans up its Storage
+  // object right away — the whole point of uploading eagerly is that we
+  // must not leave it orphaned if the member changes their mind before
+  // ever submitting the post.
+  function removeImage(img: ImageAttachment) {
+    setImages((prev) => prev.filter((i) => i.id !== img.id));
+    void deleteCommunityPostImage(saId, img.storagePath).catch(() => {
+      /* best-effort cleanup; already removed from the draft either way */
+    });
+  }
+
+  function removeVoiceNote() {
+    if (!voiceNote) return;
+    void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {
+      /* best-effort cleanup */
+    });
+    setVoiceNote(null);
+  }
+
+  function cleanupDraftAttachments() {
+    images.forEach((img) => void deleteCommunityPostImage(saId, img.storagePath).catch(() => {}));
+    if (voiceNote) void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
+  }
+
+  function resetComposer() {
+    setTitle("");
+    setBody("");
+    setToolbarOpen(false);
+    setImages([]);
+    setVoiceNote(null);
+    setShowRecorder(false);
+    setOpen(false);
+  }
+
+  function handleCancel() {
+    cleanupDraftAttachments();
+    resetComposer();
+  }
+
   async function submit() {
     const trimmedTitle = title.trim();
-    // `body` is HTML now, not plain text — check VISIBLE content length,
-    // not raw-string truthiness (an empty TipTap doc is still `<p></p>`,
-    // which is a truthy string with zero visible characters).
-    if (aboutPlainTextLength(body) === 0) {
-      toast.error("Write something first");
+    const attachments: MediaAttachment[] = [
+      ...images.map((image): MediaAttachment => ({ kind: "image", image })),
+      ...(voiceNote ? [{ kind: "voice", voice: voiceNote } as MediaAttachment] : []),
+    ];
+    // A post is valid with visible text OR at least one attachment — an
+    // image/voice-only post is real content, not an empty post. `body` is
+    // HTML now, not plain text, so check VISIBLE content length, not
+    // raw-string truthiness (an empty TipTap doc is still `<p></p>`).
+    if (aboutPlainTextLength(body) === 0 && attachments.length === 0) {
+      toast.error("Write something, or attach a photo or voice note");
       return;
     }
     setSaving(true);
@@ -318,7 +418,7 @@ function Composer({
       const res = await fetch(`/api/community/${saId}/${groupId}/posts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: trimmedTitle, body, category }),
+        body: JSON.stringify({ title: trimmedTitle, body, category, attachments }),
       });
       const d = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -333,12 +433,15 @@ function Composer({
       // render this HTML directly (CommunityPostBody doesn't re-sanitize):
       // it came straight from TipTap's own schema-constrained output, not
       // arbitrary input — every subsequent fetch (refresh, other viewers)
-      // goes through the real server-side sanitizer regardless.
+      // goes through the real server-side sanitizer regardless. Same for
+      // attachments — they're already real, uploaded, server-validated
+      // objects by this point, not user-typed content.
       onCreated({
         id: d.post.id,
         authorMemberId: viewer.memberId,
         title: trimmedTitle,
         body,
+        attachments,
         category: categories.includes(category) ? category : null,
         pinned: false,
         likeCount: 0,
@@ -352,10 +455,7 @@ function Composer({
         },
         likedByViewer: false,
       });
-      setTitle("");
-      setBody("");
-      setToolbarOpen(false);
-      setOpen(false);
+      resetComposer();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't post");
     } finally {
@@ -387,6 +487,57 @@ function Composer({
       <div className="mt-2">
         <CommunityPostEditor value={body} onChange={setBody} toolbarOpen={toolbarOpen} />
       </div>
+
+      {(images.length > 0 || imageUploading) && (
+        <div className="mt-2 grid grid-cols-4 gap-1.5">
+          {images.map((img) => (
+            <div key={img.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={img.url} alt="" className="aspect-square w-full rounded-lg object-cover" />
+              <button
+                type="button"
+                onClick={() => removeImage(img)}
+                title="Remove image"
+                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+          {imageUploading && (
+            <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-[#E4E4E4]">
+              <Loader2 className="h-4 w-4 animate-spin text-[#909090]" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {showRecorder && !voiceNote && (
+        <div className="mt-2">
+          <VoiceNoteRecorder
+            saId={saId}
+            brand={brand}
+            onUploaded={(vn) => {
+              setVoiceNote(vn);
+              setShowRecorder(false);
+            }}
+          />
+        </div>
+      )}
+      {voiceNote && (
+        <div className="mt-2 flex items-center gap-2">
+          <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
+          <button
+            type="button"
+            onClick={removeVoiceNote}
+            title="Remove voice note"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:text-[#202124]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f0f0f0] pt-3">
         <div className="flex items-center gap-2">
           <button
@@ -404,6 +555,44 @@ function Composer({
           >
             Aa
           </button>
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
+            title="Add photo"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#E4E4E4] text-[#909090] hover:text-[#202124] disabled:opacity-40"
+          >
+            <ImagePlus className="h-4 w-4" />
+          </button>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) void handleImageFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          {!voiceNote && (
+            <button
+              type="button"
+              onClick={() => setShowRecorder((o) => !o)}
+              disabled={!!voiceNote}
+              aria-pressed={showRecorder}
+              title="Add voice note"
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+                showRecorder
+                  ? "border-transparent text-white"
+                  : "border-[#E4E4E4] text-[#909090] hover:text-[#202124]",
+              )}
+              style={showRecorder ? { backgroundColor: brand } : undefined}
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+          )}
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -418,7 +607,7 @@ function Composer({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setOpen(false)}
+            onClick={handleCancel}
             disabled={saving}
             className="rounded-md px-3 py-1.5 text-xs font-medium text-[#909090] hover:text-[#202124]"
           >

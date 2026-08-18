@@ -1,6 +1,7 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { levelForPoints } from "@/config/community";
 import { sanitizeCommunityPostHtml } from "@/lib/community/post-html";
@@ -12,6 +13,7 @@ import type {
   FeedPost,
   Member,
 } from "@/types/community";
+import type { MediaAttachment } from "@/types/media-attachment";
 
 /**
  * Server-side feed service (Admin SDK). Members are not Firebase users, so the
@@ -110,6 +112,10 @@ export interface CreatePostInput {
   authorMemberId: string;
   title: string;
   body: string;
+  /** Phase C — already validated/normalized by the API route (shape +
+   *  per-kind count caps + authorMemberId overwritten there). This
+   *  layer just stores it. */
+  attachments?: MediaAttachment[];
   category: string | null;
 }
 
@@ -128,6 +134,12 @@ export async function createPostServerSide(
     // this second pass just means a post is never stored with anything
     // the read-time sanitizer would have to strip in the first place).
     body: sanitizeCommunityPostHtml(input.body.trim()),
+    // Firestore's admin client is configured with
+    // ignoreUndefinedProperties (see firebase/admin.ts), so an empty/
+    // undefined attachments array is simply omitted from the stored doc
+    // rather than throwing — old posts and image/voice-only posts alike
+    // stay valid with no special-casing here.
+    attachments: input.attachments?.length ? input.attachments : undefined,
     category: input.category,
     pinned: false,
     likeCount: 0,
@@ -362,13 +374,43 @@ export async function setPinnedServerSide(opts: {
     .update({ pinned: opts.pinned, updatedAt: FieldValue.serverTimestamp() });
 }
 
+/**
+ * Phase C: deleting a post also deletes any image/voice-note Storage
+ * objects it referenced — a CommunityPost document must not disappear
+ * while its media is left permanently orphaned, unlike existing
+ * image-upload flows elsewhere in the app that never keep a storagePath
+ * to clean up in the first place. Best-effort: an individual Storage
+ * delete failing (already gone, transient error) is logged and does NOT
+ * block deleting the post itself — the alternative (a stuck, undeletable
+ * post because of an unrelated Storage hiccup) is worse.
+ */
+async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefined) {
+  if (!attachments?.length) return;
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) return;
+  const bucket = getStorage().bucket(bucketName);
+  await Promise.allSettled(
+    attachments.map(async (a) => {
+      const storagePath = a.kind === "image" ? a.image.storagePath : a.voice.storagePath;
+      try {
+        await bucket.file(storagePath).delete();
+      } catch (err) {
+        console.warn("[community-feed] attachment cleanup: object missing or already removed", err);
+      }
+    }),
+  );
+}
+
 export async function deletePostServerSide(opts: {
   subAccountId: string;
   groupId: string;
   postId: string;
 }): Promise<void> {
-  // Recursive delete cleans up the comments + likes subcollections.
   const ref = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
+  const snap = await ref.get();
+  const attachments = (snap.data() as CommunityPost | undefined)?.attachments;
+  await deleteAttachmentStorage(attachments);
+  // Recursive delete cleans up the comments + likes subcollections.
   await getAdminDb().recursiveDelete(ref);
 }
 

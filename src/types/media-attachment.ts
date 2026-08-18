@@ -6,10 +6,10 @@
  * modules. See the Voice Notes Reusable Architecture Investigation
  * (Phase 0) for the full rationale.
  *
- * Phase 1 scope: `MediaAttachment` only has a "voice" kind. The union
- * shape exists so adding "image"/"file" kinds later is additive, not a
- * migration — no surface should ever need a second, parallel attachment
- * concept.
+ * Phase 1 added the "voice" kind. Phase C (Community post attachments)
+ * adds "image" here, additively, exactly as Phase 1 anticipated — no
+ * surface needed a second, parallel attachment concept. `file`/other
+ * kinds remain future, out of scope.
  */
 
 export type VoiceNoteStatus = "uploading" | "ready" | "failed";
@@ -42,10 +42,39 @@ export interface VoiceNote {
   status: VoiceNoteStatus;
 }
 
-export type MediaAttachmentKind = "voice";
+export type ImageAttachmentStatus = "uploading" | "ready" | "failed";
 
-/** The extensible wrapper — only "voice" is populated in Phase 1. */
-export interface MediaAttachment {
-  kind: MediaAttachmentKind;
-  voice: VoiceNote;
+/**
+ * One uploaded image. Same shape/philosophy as VoiceNote — not tied to any
+ * Firestore document itself; whichever surface attaches it decides how to
+ * persist it. `width`/`height` are populated from the browser's own
+ * decoded dimensions at upload time (readily available, genuinely useful
+ * for rendering without layout shift) — no other speculative metadata.
+ */
+export interface ImageAttachment {
+  id: string;
+  /** Public URL. Never shown to end users as text/UI — only ever passed
+   *  to an <img>. */
+  url: string;
+  /** Firebase Storage object path — retained so the object can actually
+   *  be deleted later, unlike existing image-upload flows elsewhere in
+   *  the app, which never keep this and so can never clean up. */
+  storagePath: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  width?: number;
+  height?: number;
+  authorMemberId: string;
+  /** Epoch ms, same convention as VoiceNote.createdAt. */
+  createdAt: number;
+  status: ImageAttachmentStatus;
 }
+
+export type MediaAttachmentKind = "voice" | "image";
+
+/** The extensible wrapper — a real discriminated union so consumers get
+ *  exhaustive narrowing on `kind`. Phase 1 shipped "voice"; Phase C adds
+ *  "image" the same way. */
+export type MediaAttachment =
+  | { kind: "voice"; voice: VoiceNote }
+  | { kind: "image"; image: ImageAttachment };
