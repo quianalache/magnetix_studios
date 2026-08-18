@@ -15,6 +15,18 @@ export const ABOUT_MAX_CHARS = 1000;
 /** Max length of the short join-card tagline. Enforced server + client. */
 export const TAGLINE_MAX_CHARS = 100;
 
+/** Max length of a group's Community Guidelines copy. Same budget as About,
+ *  reusing the same rich-text editor + sanitizer. Enforced server + client. */
+export const GUIDELINES_MAX_CHARS = 1000;
+
+/** Max number of owner-configurable Home sidebar content cards (Part 6). */
+export const SIDEBAR_CARDS_MAX = 2;
+
+/** Field-length caps for a sidebar content card. */
+export const SIDEBAR_CARD_HEADING_MAX = 60;
+export const SIDEBAR_CARD_BODY_MAX = 200;
+export const SIDEBAR_CARD_BUTTON_LABEL_MAX = 30;
+
 /**
  * Skool's exact points→level curve (1 like = 1 point, per-group). A member's
  * level is the highest entry whose threshold is ≤ their points. Used by the

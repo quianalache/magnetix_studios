@@ -1,8 +1,7 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityLeaderboardHref } from "@/lib/community/routes";
 import { listFeed } from "@/lib/server/community-feed-service";
 import {
   getLeaderboard,
@@ -13,8 +12,12 @@ import {
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
-import { MemberAvatar } from "@/components/community/member-avatar";
-import { GroupRailCard } from "@/components/community/group-rail-card";
+import { CommunityBanner } from "@/components/community/community-banner";
+import { CommunityLeftNav } from "@/components/community/community-left-nav";
+import { AboutCommunityCard } from "@/components/community/about-community-card";
+import { TopContributorsCard } from "@/components/community/top-contributors-card";
+import { SidebarContentCard } from "@/components/community/sidebar-content-card";
+import { GuidelinesCard } from "@/components/community/guidelines-card";
 import type { AuthorView } from "@/types/community";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -80,6 +83,10 @@ export default async function CommunityFeedPage({
 
   void gate;
 
+  // Real, already-proven data sources — same calls the previous right rail
+  // (GroupRailCard + an inline "Leaderboard" block) used. Nothing new is
+  // fetched here beyond what Home already computed (see the 2026-08-17
+  // investigation report + Part 14.C).
   const [topMembers, directory] = await Promise.all([
     getLeaderboard({
       subAccountId: saId,
@@ -96,19 +103,8 @@ export default async function CommunityFeedPage({
   const memberCount = activeMembers.length;
   const onlineCount = activeMembers.filter((r) => isOnline(r.lastSeenAtMs)).length;
   const adminCount = activeMembers.filter((r) => r.role === "moderator").length;
-  const avatars: AuthorView[] = [...activeMembers]
-    .sort(
-      (a, b) =>
-        Number(isOnline(b.lastSeenAtMs)) - Number(isOnline(a.lastSeenAtMs)) ||
-        b.points - a.points,
-    )
-    .slice(0, 8)
-    .map((r) => ({
-      memberId: r.memberId,
-      displayName: r.displayName,
-      avatarUrl: r.avatarUrl,
-      level: r.level,
-    }));
+
+  const sidebarCards = (group.sidebarCards ?? []).slice().sort((a, b) => a.order - b.order);
 
   return (
     <CommunityShell
@@ -119,73 +115,57 @@ export default async function CommunityFeedPage({
       viewer={viewer}
       rightRail={
         <>
-          <GroupRailCard
+          <AboutCommunityCard
             group={group}
             brand={brand}
             memberCount={memberCount}
             onlineCount={onlineCount}
             adminCount={adminCount}
-            avatars={avatars}
           />
-          {topMembers.length > 0 && (
-            <div className="rounded-xl border border-[#E4E4E4] bg-white p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-[#202124]">
-                  Leaderboard
-                </h2>
-                <Link
-                  href={communityLeaderboardHref({ saId, pretty }, group.slug)}
-                  className="text-xs text-[#909090] hover:text-[#202124]"
-                >
-                  See all
-                </Link>
-              </div>
-              <div className="space-y-2">
-                {topMembers.map((r) => (
-                  <div key={r.memberId} className="flex items-center gap-2">
-                    <span className="w-4 text-xs font-semibold text-[#909090]">
-                      {r.rank}
-                    </span>
-                    <MemberAvatar
-                      author={{
-                        memberId: r.memberId,
-                        displayName: r.displayName,
-                        avatarUrl: r.avatarUrl,
-                        level: r.level,
-                      }}
-                      size={28}
-                      brand={brand}
-                    />
-                    <span className="flex-1 truncate text-xs text-[#202124]">
-                      {r.displayName}
-                    </span>
-                    <span className="text-xs font-semibold text-[#909090]">
-                      +{r.points}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <TopContributorsCard
+            saId={saId}
+            pretty={pretty}
+            groupSlug={group.slug}
+            brand={brand}
+            members={topMembers}
+          />
+          {sidebarCards.map((card) => (
+            <SidebarContentCard key={card.id} card={card} brand={brand} />
+          ))}
+          <GuidelinesCard guidelinesHtml={group.guidelinesHtml ?? ""} />
         </>
       }
     >
-      <FeedView
-        saId={saId}
-        pretty={pretty}
-        groupId={group.id}
-        groupSlug={group.slug}
-        brand={brand}
-        categories={group.categories}
-        viewer={{
-          memberId: member.id,
-          role: membership.role,
-          displayName: viewer.displayName,
-          avatarUrl: viewer.avatarUrl,
-          level: viewer.level,
-        }}
-        initialPosts={posts}
-      />
+      <div className="space-y-4">
+        <CommunityBanner group={group} brand={brand} />
+        <Suspense fallback={null}>
+          <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+            <CommunityLeftNav
+              saId={saId}
+              pretty={pretty}
+              groupSlug={group.slug}
+              brand={brand}
+              categories={group.categories}
+            />
+            <FeedView
+              saId={saId}
+              pretty={pretty}
+              groupId={group.id}
+              groupSlug={group.slug}
+              brand={brand}
+              categories={group.categories}
+              viewer={{
+                memberId: member.id,
+                role: membership.role,
+                displayName: viewer.displayName,
+                avatarUrl: viewer.avatarUrl,
+                level: viewer.level,
+              }}
+              initialPosts={posts}
+            />
+          </div>
+        </Suspense>
+      </div>
     </CommunityShell>
   );
 }

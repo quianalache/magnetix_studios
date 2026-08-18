@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, MessageCircle, Pin, ThumbsUp } from "lucide-react";
 import type { AuthorView } from "@/types/community";
@@ -67,15 +68,27 @@ export function FeedView({
   initialPosts: ClientPost[];
 }) {
   const [posts, setPosts] = useState(initialPosts);
-  const [filter, setFilter] = useState<string>("All");
+  const [sort, setSort] = useState<"latest" | "top" | "unanswered">("latest");
+  // Category filter is driven by the left nav's `?c=` link (Part 7) rather
+  // than an in-feed pill row, so there's one control for it, not two.
+  const searchParams = useSearchParams();
+  const filter = searchParams.get("c") ?? "All";
 
   function prependPost(post: ClientPost) {
     setPosts((prev) => [post, ...prev]);
   }
 
   const base = `/api/community/${saId}/${groupId}`;
-  const visible =
-    filter === "All" ? posts : posts.filter((p) => p.category === filter);
+  const filtered = filter === "All" ? posts : posts.filter((p) => p.category === filter);
+  const sorted = [...filtered].sort((a, b) => {
+    if (sort === "top") return b.likeCount - a.likeCount;
+    if (sort === "unanswered") {
+      if (a.commentCount === 0 && b.commentCount !== 0) return -1;
+      if (a.commentCount !== 0 && b.commentCount === 0) return 1;
+    }
+    return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
+  });
+  const visible = sorted;
 
   async function toggleLike(postId: string) {
     setPosts((prev) =>
@@ -146,20 +159,18 @@ export function FeedView({
         onCreated={prependPost}
       />
 
-      <div className="flex flex-wrap gap-1.5">
-        {["All", ...categories].map((c) => (
+      <div className="flex items-center gap-4 border-b border-[#E4E4E4] px-1">
+        {(["latest", "top", "unanswered"] as const).map((s) => (
           <button
-            key={c}
-            onClick={() => setFilter(c)}
+            key={s}
+            onClick={() => setSort(s)}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              filter === c
-                ? "border-transparent text-white"
-                : "border-[#E4E4E4] bg-white text-[#909090] hover:text-[#202124]",
+              "border-b-2 py-2 text-sm font-medium capitalize transition-colors",
+              sort === s ? "text-[#202124]" : "border-transparent text-[#909090] hover:text-[#202124]",
             )}
-            style={filter === c ? { backgroundColor: brand } : undefined}
+            style={sort === s ? { borderColor: brand } : { borderColor: "transparent" }}
           >
-            {c}
+            {s}
           </button>
         ))}
       </div>
@@ -346,6 +357,7 @@ function Composer({
   if (!open) {
     return (
       <button
+        id="community-composer-trigger"
         onClick={() => setOpen(true)}
         className="w-full rounded-xl border border-[#E4E4E4] bg-white p-4 text-left text-sm text-[#909090] hover:border-[#d4d4d4]"
       >

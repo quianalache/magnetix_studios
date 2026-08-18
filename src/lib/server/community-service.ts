@@ -3,7 +3,15 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
-import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
+import {
+  ABOUT_MAX_CHARS,
+  GUIDELINES_MAX_CHARS,
+  SIDEBAR_CARDS_MAX,
+  SIDEBAR_CARD_BODY_MAX,
+  SIDEBAR_CARD_BUTTON_LABEL_MAX,
+  SIDEBAR_CARD_HEADING_MAX,
+  TAGLINE_MAX_CHARS,
+} from "@/config/community";
 import {
   aboutHtmlToPlainText,
   aboutPlainTextLength,
@@ -16,6 +24,7 @@ import type {
   CommunityGroup,
   CommunityReview,
   CommunityReviewView,
+  CommunitySidebarCard,
   CommunityTier,
   GroupAccess,
   GroupJoinPolicy,
@@ -63,6 +72,38 @@ function cleanAboutHtml(input: { about?: string; aboutHtml?: string }): string {
   return aboutPlainTextLength(normalized) <= ABOUT_MAX_CHARS
     ? normalized
     : normalizeAboutHtml(aboutHtmlToPlainText(normalized).slice(0, ABOUT_MAX_CHARS));
+}
+
+/** Same sanitize-and-cap convention as {@link cleanAboutHtml}, own length budget. */
+function cleanGuidelinesHtml(candidate: string): string {
+  const normalized = normalizeAboutHtml(candidate);
+  return aboutPlainTextLength(normalized) <= GUIDELINES_MAX_CHARS
+    ? normalized
+    : normalizeAboutHtml(
+        aboutHtmlToPlainText(normalized).slice(0, GUIDELINES_MAX_CHARS),
+      );
+}
+
+/** Normalize admin-entered sidebar cards: trim, drop cards with no heading,
+ *  cap field lengths, cap at {@link SIDEBAR_CARDS_MAX}, re-sequence order. */
+function cleanSidebarCards(
+  cards: CommunitySidebarCard[] | undefined,
+): CommunitySidebarCard[] {
+  return (cards ?? [])
+    .filter((c) => c && c.heading?.trim())
+    .map((c, index) => ({
+      id: c.id?.trim() || `card-${Date.now()}-${index}`,
+      heading: c.heading.trim().slice(0, SIDEBAR_CARD_HEADING_MAX),
+      body: (c.body ?? "").trim().slice(0, SIDEBAR_CARD_BODY_MAX),
+      imageUrl: c.imageUrl?.trim() || null,
+      buttonLabel: (c.buttonLabel ?? "").trim().slice(0, SIDEBAR_CARD_BUTTON_LABEL_MAX),
+      buttonUrl: (c.buttonUrl ?? "").trim(),
+      accentColor: c.accentColor?.trim() || null,
+      order: Number.isFinite(c.order) ? c.order : index,
+    }))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, SIDEBAR_CARDS_MAX)
+    .map((c, index) => ({ ...c, order: index }));
 }
 
 function toMillis(v: unknown): number | null {
@@ -167,6 +208,8 @@ export async function createGroupServerSide(
     pointsEnabled: true,
     categories: ["General"],
     links: [],
+    guidelinesHtml: "",
+    sidebarCards: [],
     status: input.status ?? "draft",
     memberCount: 0,
     reviewCount: 0,
@@ -198,6 +241,8 @@ export interface UpdateGroupPatch {
   status?: GroupStatus;
   categories?: string[];
   links?: ResourceLink[];
+  guidelinesHtml?: string;
+  sidebarCards?: CommunitySidebarCard[];
 }
 
 export async function updateGroupServerSide(opts: {
@@ -248,6 +293,10 @@ export async function updateGroupServerSide(opts: {
     updates.categories = deduped.slice(0, 10);
   }
   if (Array.isArray(p.links)) updates.links = cleanLinks(p.links);
+  if (typeof p.guidelinesHtml === "string")
+    updates.guidelinesHtml = cleanGuidelinesHtml(p.guidelinesHtml);
+  if (Array.isArray(p.sidebarCards))
+    updates.sidebarCards = cleanSidebarCards(p.sidebarCards);
   if (p.access) {
     updates.access = p.access;
     if (p.access === "paid") {

@@ -18,17 +18,27 @@ import {
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
-import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
+import {
+  ABOUT_MAX_CHARS,
+  GUIDELINES_MAX_CHARS,
+  SIDEBAR_CARDS_MAX,
+  SIDEBAR_CARD_BODY_MAX,
+  SIDEBAR_CARD_BUTTON_LABEL_MAX,
+  SIDEBAR_CARD_HEADING_MAX,
+  TAGLINE_MAX_CHARS,
+} from "@/config/community";
 import { AboutRichTextEditor } from "@/components/community/about-rich-text-editor";
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunityImage } from "@/lib/community/upload-image";
 import { Button } from "@/components/ui/button";
+import { ColorInput } from "@/components/ui/color-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type {
   CommunityAboutMediaItem,
   CommunityGroup,
   CommunityReview,
+  CommunitySidebarCard,
   CommunityTier,
   GroupAccess,
   GroupJoinPolicy,
@@ -75,6 +85,8 @@ export default function CommunityGroupSettingsPage({
   const [price, setPrice] = useState("");
   const [categories, setCategories] = useState("");
   const [links, setLinks] = useState<ResourceLink[]>([]);
+  const [guidelines, setGuidelines] = useState("");
+  const [sidebarCards, setSidebarCards] = useState<CommunitySidebarCard[]>([]);
   const [tiers, setTiers] = useState<Partial<CommunityTier>[]>([]);
   const [reviews, setReviews] = useState<CommunityReview[]>([]);
   const [saving, setSaving] = useState(false);
@@ -106,6 +118,8 @@ export default function CommunityGroupSettingsPage({
         setPrice(g.priceCents != null ? (g.priceCents / 100).toString() : "");
         setCategories((g.categories ?? ["General"]).join(", "));
         setLinks(g.links ?? []);
+        setGuidelines(g.guidelinesHtml ?? "");
+        setSidebarCards(g.sidebarCards ?? []);
         setLoaded(true);
       },
       () => setLoaded(true),
@@ -170,6 +184,8 @@ export default function CommunityGroupSettingsPage({
               .map((c) => c.trim())
               .filter(Boolean),
             links: links.filter((l) => l.url.trim()),
+            guidelinesHtml: guidelines,
+            sidebarCards,
           }),
         },
       );
@@ -243,6 +259,7 @@ export default function CommunityGroupSettingsPage({
     groupSlug: group.slug,
   });
   const aboutTextCount = clientPlainTextLength(about);
+  const guidelinesTextCount = clientPlainTextLength(guidelines);
   const activeReviews = reviews.filter((review) => review.status === "active");
 
   function updateMedia(
@@ -265,6 +282,28 @@ export default function CommunityGroupSettingsPage({
         thumbnailUrl: null,
         provider: null,
         videoId: null,
+        order: prev.length,
+      },
+    ]);
+  }
+
+  function updateSidebarCard(index: number, patch: Partial<CommunitySidebarCard>) {
+    setSidebarCards((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, ...patch } : c)),
+    );
+  }
+
+  function addSidebarCard() {
+    setSidebarCards((prev) => [
+      ...prev,
+      {
+        id: `card-${Date.now()}`,
+        heading: "",
+        body: "",
+        imageUrl: null,
+        buttonLabel: "",
+        buttonUrl: "",
+        accentColor: null,
         order: prev.length,
       },
     ]);
@@ -573,6 +612,128 @@ export default function CommunityGroupSettingsPage({
           >
             <Plus className="h-4 w-4" /> Add link
           </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="guidelines">Community Guidelines</Label>
+          <AboutRichTextEditor
+            value={guidelines}
+            onChange={setGuidelines}
+            disabled={!isAdmin || saving}
+          />
+          <p
+            className={`text-right text-xs ${
+              guidelinesTextCount > GUIDELINES_MAX_CHARS
+                ? "text-destructive"
+                : "text-muted-foreground"
+            }`}
+          >
+            {guidelinesTextCount}/{GUIDELINES_MAX_CHARS}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Shown as a compact card in the Community Home right rail. Leave
+            empty to hide that card.
+          </p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label>Home sidebar cards</Label>
+              <p className="text-xs text-muted-foreground">
+                Up to {SIDEBAR_CARDS_MAX} owner-configurable cards shown near
+                the bottom of the Community Home right rail — promote an
+                offer, a resource, a start-here guide, anything with an
+                image, a short blurb, and one button.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={addSidebarCard}
+              disabled={sidebarCards.length >= SIDEBAR_CARDS_MAX}
+            >
+              <Plus className="h-4 w-4" /> Add card
+            </Button>
+          </div>
+          {sidebarCards.length === 0 ? (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No sidebar cards yet. The Home right rail simply won&apos;t show this section.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sidebarCards.map((card, i) => (
+                <div key={card.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-[140px_1fr_auto]">
+                  <ImageUpload
+                    label="Image"
+                    value={card.imageUrl}
+                    onChange={(url) => updateSidebarCard(i, { imageUrl: url })}
+                    onUploadingChange={setImgUploading}
+                    onUpload={(file) =>
+                      uploadCommunityImage(file, subAccountId, groupId, "sidebar-card")
+                    }
+                    aspect="video"
+                    disabled={!isAdmin}
+                  />
+                  <div className="grid gap-2">
+                    <Input
+                      value={card.heading}
+                      onChange={(e) =>
+                        updateSidebarCard(i, {
+                          heading: e.target.value.slice(0, SIDEBAR_CARD_HEADING_MAX),
+                        })
+                      }
+                      placeholder="Heading"
+                      maxLength={SIDEBAR_CARD_HEADING_MAX}
+                    />
+                    <textarea
+                      value={card.body}
+                      onChange={(e) =>
+                        updateSidebarCard(i, {
+                          body: e.target.value.slice(0, SIDEBAR_CARD_BODY_MAX),
+                        })
+                      }
+                      placeholder="Short description"
+                      rows={2}
+                      maxLength={SIDEBAR_CARD_BODY_MAX}
+                      className={SELECT_CLASS.replace("h-9", "min-h-16 py-2")}
+                    />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={card.buttonLabel}
+                        onChange={(e) =>
+                          updateSidebarCard(i, {
+                            buttonLabel: e.target.value.slice(0, SIDEBAR_CARD_BUTTON_LABEL_MAX),
+                          })
+                        }
+                        placeholder="Button label"
+                        maxLength={SIDEBAR_CARD_BUTTON_LABEL_MAX}
+                      />
+                      <Input
+                        value={card.buttonUrl}
+                        onChange={(e) => updateSidebarCard(i, { buttonUrl: e.target.value })}
+                        placeholder="https://…"
+                      />
+                    </div>
+                    <ColorInput
+                      label="Button color (optional — falls back to brand color)"
+                      value={card.accentColor ?? ""}
+                      onChange={(hex) => updateSidebarCard(i, { accentColor: hex || null })}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSidebarCards(sidebarCards.filter((_, j) => j !== i))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

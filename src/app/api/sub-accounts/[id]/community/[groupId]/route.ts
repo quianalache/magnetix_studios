@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { updateGroupServerSide } from "@/lib/server/community-service";
 import type {
   CommunityAboutMediaItem,
+  CommunitySidebarCard,
   GroupAccess,
   GroupJoinPolicy,
   GroupStatus,
@@ -53,6 +54,8 @@ export async function PATCH(
     status?: GroupStatus;
     categories?: string[];
     links?: ResourceLink[];
+    guidelinesHtml?: string;
+    sidebarCards?: CommunitySidebarCard[];
   };
   try {
     body = await request.json();

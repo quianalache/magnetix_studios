@@ -133,6 +133,23 @@ export interface CommunityGroup {
   categories: string[];
   /** Admin-added links shown in the feed right-rail info card. */
   links: ResourceLink[];
+  /**
+   * Community Home right-rail: compact rules/expectations copy shown via the
+   * "Community Guidelines" card. Sanitized rich text, same convention as
+   * {@link CommunityGroup.aboutHtml}. Empty string = not configured, card
+   * renders nothing (Part 10 — no hardcoded fallback copy).
+   */
+  guidelinesHtml: string;
+  /**
+   * Up to {@link "@/config/community".SIDEBAR_CARDS_MAX} owner-configurable
+   * promo/resource cards shown near the bottom of the Home right rail (Part
+   * 6). Deliberately a small, self-contained shape — reuses the same
+   * `ImageUpload`/`ColorInput` primitives as the Course block system's CTA
+   * block rather than importing that system's full block/editor machinery
+   * (see the 2026-08-17 content-block investigation report). Not a general
+   * block system: fixed image+heading+body+button shape only.
+   */
+  sidebarCards: CommunitySidebarCard[];
   status: GroupStatus;
   /** Denormalized count of active memberships; bumped on join/leave. */
   memberCount: number;
@@ -341,6 +358,22 @@ export type VideoProvider = "youtube" | "vimeo" | "loom" | "descript";
 export interface ResourceLink {
   label: string;
   url: string;
+}
+
+/**
+ * One owner-configurable Home sidebar card (Part 6). See
+ * {@link CommunityGroup.sidebarCards}.
+ */
+export interface CommunitySidebarCard {
+  id: string;
+  heading: string;
+  body: string;
+  imageUrl: string | null;
+  buttonLabel: string;
+  buttonUrl: string;
+  /** Falls back to the group's `brandColor` (then the neutral default) when null. */
+  accentColor: string | null;
+  order: number;
 }
 
 export interface Lesson {

@@ -21,7 +21,7 @@ export async function uploadCommunityImage(
   file: File,
   saId: string,
   groupId: string,
-  kind: "cover" | "card" | "logo" | "course" | "about",
+  kind: "cover" | "card" | "logo" | "course" | "about" | "sidebar-card",
 ): Promise<string> {
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
