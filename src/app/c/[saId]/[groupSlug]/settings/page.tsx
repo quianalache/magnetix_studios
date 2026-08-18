@@ -72,7 +72,18 @@ export default async function CommunitySettingsPage({
         saId={saId}
         pretty={pretty}
         groupId={group.id}
-        group={group}
+        // `group`'s `createdAt`/`updatedAt` are raw Firestore Admin SDK
+        // Timestamp CLASS instances, not plain objects — React's Server->
+        // Client Component boundary rejects those outright ("Only plain
+        // objects... Classes... are not supported"), which is exactly
+        // what was crashing this page for every real visitor. `CommunityShell`
+        // above never hits this: it has no "use client" directive, so
+        // passing it the real `group` never crosses that boundary at all.
+        // `SettingsWorkspace` does (it's "use client") and never actually
+        // reads either field (see stateFromGroup) — nulling them out here
+        // is honest, not a lossy workaround, and needs no type change
+        // since CommunityGroup already allows `Timestamp | FieldValue | null`.
+        group={{ ...group, createdAt: null, updatedAt: null }}
         brand={brand}
         memberCount={memberCount}
         onlineCount={onlineCount}
