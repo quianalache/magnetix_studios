@@ -113,6 +113,7 @@ export default async function CommunityFeedPage({
       group={group}
       active="community"
       viewer={viewer}
+      viewerIsModerator={membership.role === "moderator"}
       rightRail={
         <>
           <AboutCommunityCard

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup } from "@/types/community";
 import {
@@ -9,6 +10,7 @@ import {
   communityLearningHref,
   communityMembersHref,
   communityProfileHref,
+  communitySettingsHref,
 } from "@/lib/community/routes";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
@@ -22,7 +24,8 @@ export type CommunityTab =
   | "events"
   | "members"
   | "leaderboards"
-  | "about";
+  | "about"
+  | "settings";
 
 /**
  * Skool-style group shell: a thin top bar with the group name + horizontal tab
@@ -36,6 +39,15 @@ export function CommunityShell({
   group,
   active,
   viewer,
+  /**
+   * Gates the "Settings" nav entry — real authorization happens server-side
+   * (the `/settings` route re-checks `membership.role === "moderator"`
+   * itself, per the "don't treat hiding the nav as security" instruction).
+   * This prop only controls whether the link is rendered at all. Optional +
+   * defaults to false so every pre-existing call site that doesn't pass it
+   * keeps behaving exactly as before (no Settings link shown).
+   */
+  viewerIsModerator = false,
   children,
   rightRail,
 }: {
@@ -45,6 +57,7 @@ export function CommunityShell({
   group: CommunityGroup;
   active: CommunityTab;
   viewer: AuthorView;
+  viewerIsModerator?: boolean;
   children: ReactNode;
   rightRail?: ReactNode;
 }) {
@@ -100,6 +113,20 @@ export function CommunityShell({
             })}
           </nav>
           <div className="flex items-center gap-2">
+            {viewerIsModerator && (
+              <Link
+                href={communitySettingsHref(linkBase, group.slug)}
+                className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+                style={
+                  active === "settings"
+                    ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
+                    : { borderColor: "#E4E4E4", color: "#3a3a44" }
+                }
+              >
+                <Settings className="h-3.5 w-3.5" />
+                Settings
+              </Link>
+            )}
             <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
             <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile">
               <MemberAvatar author={viewer} size={28} brand={brand} />

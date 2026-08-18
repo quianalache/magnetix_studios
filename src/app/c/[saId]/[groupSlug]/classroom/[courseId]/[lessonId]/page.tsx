@@ -92,7 +92,7 @@ export default async function LessonPlayerPage({
   }));
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
       <Link
         href={catalog}
         className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"

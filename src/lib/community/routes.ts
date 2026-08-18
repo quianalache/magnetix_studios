@@ -71,6 +71,11 @@ export function communityProfileHref(b: CommunityLinkBase, groupSlug: string): s
   return b.pretty ? `/communities/${groupSlug}/profile` : `/c/${b.saId}/${groupSlug}/profile`;
 }
 
+/** Moderator-only Community Settings workspace (General today; more sections later). */
+export function communitySettingsHref(b: CommunityLinkBase, groupSlug: string): string {
+  return b.pretty ? `/communities/${groupSlug}/settings` : `/c/${b.saId}/${groupSlug}/settings`;
+}
+
 /** The group-less "enter your community" entry point — where messages/profile pages' "back" link goes, since they aren't group-scoped. */
 export function communityRootHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities" : `/c/${b.saId}`;

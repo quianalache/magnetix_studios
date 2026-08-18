@@ -59,7 +59,7 @@ export default async function LeaderboardsPage({
   });
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="leaderboards" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="leaderboards" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
       <div className="mb-4 flex gap-1.5">
         {WINDOWS.map((w) => (
           <Link

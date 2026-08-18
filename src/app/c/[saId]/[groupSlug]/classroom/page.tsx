@@ -44,7 +44,7 @@ export default async function ClassroomCatalogPage({
   });
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
       {courses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
           No courses yet.

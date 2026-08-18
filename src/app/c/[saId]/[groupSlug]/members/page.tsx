@@ -43,7 +43,7 @@ export default async function MembersPage({
   const accessLabel = group.access === "paid" ? "Lifetime access" : "Free";
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="members" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="members" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
       <MembersDirectory
         saId={saId}
         groupId={group.id}

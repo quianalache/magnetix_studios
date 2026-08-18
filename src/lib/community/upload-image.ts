@@ -17,6 +17,35 @@ import { getFirebaseStorage } from "@/lib/firebase/client";
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
+/**
+ * Member-facing sibling of `uploadCommunityImage` for Community Settings →
+ * General. Members have no Firebase auth, so this can't write to Storage
+ * client-side — it POSTs to the member-session-authenticated
+ * `/api/community/[saId]/[groupId]/settings/upload` route instead, which
+ * does the actual Admin-SDK write and returns the same kind of public URL.
+ * Validation (file type / 5 MB cap) happens again server-side; this just
+ * surfaces whatever error message the route returns.
+ */
+export async function uploadCommunitySettingsImage(
+  file: File,
+  saId: string,
+  groupId: string,
+  kind: "logo" | "cover",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`/api/community/${saId}/${groupId}/settings/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) {
+    throw new Error(data.error ?? "Upload failed");
+  }
+  return data.url;
+}
+
 export async function uploadCommunityImage(
   file: File,
   saId: string,

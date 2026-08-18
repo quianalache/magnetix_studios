@@ -226,6 +226,8 @@ export async function createGroupServerSide(
 
 export interface UpdateGroupPatch {
   name?: string;
+  /** Explicit slug edit — see the precedence note in {@link updateGroupServerSide}. */
+  slug?: string;
   about?: string;
   aboutHtml?: string;
   tagline?: string;
@@ -263,12 +265,22 @@ export async function updateGroupServerSide(opts: {
   const p = opts.patch;
   if (typeof p.name === "string" && p.name.trim()) {
     updates.name = p.name.trim();
-    // Re-slug when the name changes, keeping uniqueness + our own slug.
-    updates.slug = await uniqueSlug(
-      opts.subAccountId,
-      p.name,
-      opts.groupId,
-    );
+    // Re-slug when the name changes, keeping uniqueness + our own slug —
+    // UNLESS the caller also sent an explicit `slug` (an admin directly
+    // editing the Slug field in Community Settings), which takes
+    // precedence and is handled below instead.
+    if (typeof p.slug !== "string" || !p.slug.trim()) {
+      updates.slug = await uniqueSlug(opts.subAccountId, p.name, opts.groupId);
+    }
+  }
+  // An explicit slug edit (Part 3, Community Settings → General). Runs
+  // uniqueness through the same `uniqueSlug` helper as the name-driven path
+  // — if the exact text is taken, a numeric suffix is appended just like a
+  // name collision would produce; the caller gets the real, persisted slug
+  // back in the response and can tell the admin if it didn't come back
+  // verbatim.
+  if (typeof p.slug === "string" && p.slug.trim()) {
+    updates.slug = await uniqueSlug(opts.subAccountId, p.slug, opts.groupId);
   }
   if (typeof p.about === "string" || typeof p.aboutHtml === "string") {
     const aboutHtml = cleanAboutHtml(p);

@@ -83,6 +83,7 @@ export default async function GroupAboutPage({
         group={group}
         active="about"
         viewer={viewer}
+        viewerIsModerator={membership.role === "moderator"}
       >
         {about}
       </CommunityShell>

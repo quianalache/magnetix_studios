@@ -98,7 +98,7 @@ export default async function PostDetailPage({
   }));
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="community" viewer={viewer}>
+    <CommunityShell saId={saId} pretty={pretty} group={group} active="community" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
       <Link
         href={communityHomeHref({ saId, pretty }, group.slug)}
         className="mb-3 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
