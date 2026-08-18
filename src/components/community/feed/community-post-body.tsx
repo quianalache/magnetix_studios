@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { communityPostTypographyClasses } from "./community-post-typography";
+import { communityPostLinkColorStyle, communityPostTypographyClasses } from "./community-post-typography";
 
 /**
  * ONE shared Community post-body renderer — feed cards, post detail, and
@@ -32,10 +32,10 @@ export function CommunityPostBody({
 }) {
   return (
     <div
-      style={{ ["--post-link-color" as string]: brand }}
+      style={communityPostLinkColorStyle(brand)}
       className={cn(
         "text-sm text-[#3a3a44]",
-        communityPostTypographyClasses("var(--post-link-color)"),
+        communityPostTypographyClasses(),
         clamp && "line-clamp-4",
         className,
       )}

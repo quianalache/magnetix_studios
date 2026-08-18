@@ -3,7 +3,10 @@
 import { EditorContent } from "@tiptap/react";
 import { useRichTextEditor } from "@/components/editor/use-rich-text-editor";
 import { RichTextToolbar, type RichTextToolbarItem } from "@/components/editor/rich-text-toolbar-items";
-import { communityPostTypographyClasses } from "@/components/community/feed/community-post-typography";
+import {
+  communityPostLinkColorStyle,
+  communityPostTypographyClasses,
+} from "@/components/community/feed/community-post-typography";
 import { cn } from "@/lib/utils";
 
 /**
@@ -40,6 +43,7 @@ export function CommunityPostEditor({
   value,
   onChange,
   toolbarOpen,
+  brand,
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -47,6 +51,13 @@ export function CommunityPostEditor({
    *  Collapsing this does NOT remove any formatting already applied to
    *  the text; it only hides the button row. */
   toolbarOpen: boolean;
+  /** Same tenant brand color CommunityPostBody renders published links
+   *  with — see communityPostLinkColorStyle. Previously hardcoded to a
+   *  generic blue here, which quietly didn't even match what shipped:
+   *  the link-color class never actually compiled either way (fixed in
+   *  this pass), so threading the real brand color through now is a
+   *  correctness fix, not new scope. */
+  brand: string;
 }) {
   const editor = useRichTextEditor({
     toolbar: COMMUNITY_POST_TOOLBAR,
@@ -58,7 +69,7 @@ export function CommunityPostEditor({
     // suppressed by Tailwind's Preflight reset while composing, only
     // appearing once the published renderer (which already had these
     // overrides) takes over.
-    proseClassName: cn("text-sm text-[#3a3a44]", communityPostTypographyClasses("#2563eb")),
+    proseClassName: cn("text-sm text-[#3a3a44]", communityPostTypographyClasses()),
     minHeightClassName: "min-h-[84px]",
     contentPaddingClassName: "px-0 py-0",
   });
@@ -68,7 +79,7 @@ export function CommunityPostEditor({
   }
 
   return (
-    <div>
+    <div style={communityPostLinkColorStyle(brand)}>
       {toolbarOpen && (
         <div className="mb-2 overflow-x-auto rounded-lg border border-[#E4E4E4]">
           <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />

@@ -10,7 +10,6 @@ import {
   Heading3,
   Heading4,
   Italic,
-  Link2,
   List,
   ListOrdered,
   type LucideIcon,
@@ -20,6 +19,7 @@ import {
   Eraser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LinkPopover } from "./link-popover";
 
 /**
  * The full vocabulary of toolbar buttons the shared rich-text core knows
@@ -60,17 +60,6 @@ export function headingLevelsFromToolbar(items: RichTextToolbarItem[]): (1 | 2 |
   return items
     .map((item) => HEADING_LEVEL[item])
     .filter((level): level is 1 | 2 | 3 | 4 => level !== undefined);
-}
-
-function addLink(editor: Editor) {
-  const prev = editor.getAttributes("link").href as string | undefined;
-  const url = window.prompt("Link URL", prev ?? "https://");
-  if (url === null) return;
-  if (url.trim() === "") {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    return;
-  }
-  editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
 }
 
 interface ToolbarItemDef {
@@ -159,12 +148,6 @@ const DEFS: Partial<Record<RichTextToolbarItem, ToolbarItemDef>> = {
     isActive: (e) => e.isActive("blockquote"),
     run: (e) => e.chain().focus().toggleBlockquote().run(),
   },
-  link: {
-    icon: Link2,
-    defaultTitle: "Link",
-    isActive: (e) => e.isActive("link"),
-    run: (e) => addLink(e),
-  },
   clearFormatting: {
     icon: Eraser,
     defaultTitle: "Clear formatting",
@@ -197,6 +180,17 @@ function ToolbarBtn({
       aria-label={title}
       aria-pressed={active}
       disabled={disabled}
+      // Without this, mousedown on the button blurs the ProseMirror editor
+      // and can collapse/shift its selection BEFORE onClick's command runs
+      // — marks (bold/italic/etc) tend to still look like they "work"
+      // against whatever the collapsed selection lands on, but block-level
+      // toggles (bulletList/orderedList/blockquote) are far more sensitive
+      // to acting on the exact selection the member actually made, and can
+      // silently no-op or apply to the wrong node instead. Preventing the
+      // default here keeps the editor's own selection state untouched by
+      // the click, so `.chain().focus()` in each command reliably resumes
+      // from the selection the member actually had.
+      onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={cn(
         "flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40",
@@ -228,6 +222,9 @@ export function RichTextToolbar({
     <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/40 p-1">
       {items.map((item, i) => {
         if (item === "divider") return <Divider key={`divider-${i}`} />;
+        if (item === "link") {
+          return <LinkPopover key="link" editor={editor} title={titles?.link ?? "Link"} />;
+        }
         const def = DEFS[item];
         if (!def) return null;
         const Icon = def.icon;

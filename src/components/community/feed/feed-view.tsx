@@ -495,7 +495,7 @@ function Composer({
         autoFocus
       />
       <div className="mt-2">
-        <CommunityPostEditor value={body} onChange={setBody} toolbarOpen={toolbarOpen} />
+        <CommunityPostEditor value={body} onChange={setBody} toolbarOpen={toolbarOpen} brand={brand} />
       </div>
 
       {(images.length > 0 || imageUploading) && (
