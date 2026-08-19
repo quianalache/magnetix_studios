@@ -136,7 +136,16 @@ export function CreatePollSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="max-h-[85vh] overflow-y-auto sm:inset-x-auto sm:left-1/2 sm:right-auto sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:rounded-t-2xl"
+        // Desktop centering (Part 2: "appropriately sized modal/panel")
+        // MUST be qualified with `data-[side=bottom]:` on every override,
+        // not just `sm:` — SheetContent's own base classes already apply
+        // `data-[side=bottom]:inset-x-0` etc. unconditionally, and that
+        // compound (class + attribute selector) beats a plain `sm:`
+        // single-class rule on specificity regardless of viewport width,
+        // so a bare `sm:inset-x-auto` silently loses and never applies.
+        // Confirmed live: without this, the sheet stayed pinned flush-left
+        // full-bleed on desktop even past the `sm:` breakpoint.
+        className="max-h-[85vh] overflow-y-auto sm:data-[side=bottom]:inset-x-auto sm:data-[side=bottom]:left-1/2 sm:data-[side=bottom]:right-auto sm:data-[side=bottom]:w-full sm:data-[side=bottom]:max-w-md sm:data-[side=bottom]:-translate-x-1/2 sm:data-[side=bottom]:rounded-t-2xl"
       >
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
