@@ -683,10 +683,19 @@ export function PostComposer({
                   channelRefs={{ fetchItems: channelRefFetchItems }}
                   onEditorReady={setEditor}
                   // A real composition workspace on desktop, not a cramped
-                  // textarea (Part 4) — mobile stays close to the original
-                  // compact height, since screen real estate there is
-                  // already scarce.
-                  minHeightClassName="min-h-[110px] sm:min-h-[240px]"
+                  // textarea, but tuned so a PLAIN post (no poll, no
+                  // attachments) still fits without scrolling at shorter
+                  // desktop viewport heights (e.g. a non-maximized browser
+                  // window) — 240px fit fine at 768px tall but pushed the
+                  // action row below the fold at ~690px tall, confirmed
+                  // live during QA. Scrolling the body is the correct,
+                  // intended fallback once a poll expands or a viewport is
+                  // genuinely short (see the Popup's own comment above) —
+                  // it just shouldn't be the norm for an empty post on an
+                  // ordinary laptop window. Mobile stays close to the
+                  // original compact height, since screen real estate
+                  // there is already scarce.
+                  minHeightClassName="min-h-[110px] sm:min-h-[180px]"
                 />
               </div>
             </div>
