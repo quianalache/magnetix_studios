@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { updateGroupServerSide } from "@/lib/server/community-service";
-import type { GroupJoinPolicy } from "@/types/community";
+import type { CommunityTheme, GroupJoinPolicy } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
  * for the full settings surface; this route is the member/moderator entry
  * point for just the General fields, calling the SAME
  * `updateGroupServerSide` write path so both surfaces edit one underlying
- * record. Deliberately whitelists only the General-tab fields — the other
- * Settings sections (Branding, Navigation & Channels, Access & Membership,
- * etc.) are out of scope for this task and have no write path here.
+ * record. Deliberately whitelists only the General + Branding tab fields
+ * (Navigation & Channels, Access & Membership, etc. are still out of scope
+ * and have no write path here).
  */
 export async function PATCH(
   request: Request,
@@ -40,6 +40,8 @@ export async function PATCH(
     joinPolicy?: GroupJoinPolicy;
     logoUrl?: string | null;
     coverUrl?: string | null;
+    faviconUrl?: string | null;
+    theme?: CommunityTheme;
   };
   try {
     body = await request.json();
@@ -57,6 +59,8 @@ export async function PATCH(
       joinPolicy: body.joinPolicy,
       logoUrl: body.logoUrl,
       coverUrl: body.coverUrl,
+      faviconUrl: body.faviconUrl,
+      theme: body.theme,
     },
   });
   if (!group) {

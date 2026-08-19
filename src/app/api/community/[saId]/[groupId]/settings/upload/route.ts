@@ -8,7 +8,12 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * Logo/cover image upload for Community Settings → General, moderator-only.
+ * Logo/cover/favicon image upload for Community Settings → General,
+ * moderator-only. Favicon reuses the exact same validation as logo/cover
+ * (image/* MIME + 5MB cap) — the mock-up's "PNG or ICO up to 200KB"
+ * guidance is copy shown in the UI, not a stricter enforced limit; `image/
+ * x-icon`/`image/vnd.microsoft.icon` (.ico) already satisfy the existing
+ * `image/*` check, so no new validation branch was needed.
  * Members are NOT Firebase users (see `storage.rules`'s doc comment on the
  * `community/**` path — client Storage writes require `request.auth`, which
  * a member session never has), so this mirrors the same Admin-SDK-upload
@@ -47,7 +52,7 @@ export async function POST(
     const f = form.get("file");
     if (f instanceof File) file = f;
     const k = form.get("kind");
-    if (typeof k === "string" && (k === "logo" || k === "cover")) kind = k;
+    if (typeof k === "string" && (k === "logo" || k === "cover" || k === "favicon")) kind = k;
   } catch {
     return NextResponse.json({ error: "Invalid upload" }, { status: 400 });
   }

@@ -25,6 +25,7 @@ import type {
   CommunityReview,
   CommunityReviewView,
   CommunitySidebarCard,
+  CommunityTheme,
   CommunityTier,
   GroupAccess,
   GroupJoinPolicy,
@@ -200,6 +201,7 @@ export async function createGroupServerSide(
     cardImageUrl: input.cardImageUrl ?? null,
     aboutMedia: cleanAboutMedia(input.aboutMedia),
     logoUrl: input.logoUrl ?? null,
+    faviconUrl: null,
     brandColor: input.brandColor ?? null,
     access,
     priceCents: access === "paid" ? (input.priceCents ?? null) : null,
@@ -235,7 +237,12 @@ export interface UpdateGroupPatch {
   cardImageUrl?: string | null;
   aboutMedia?: CommunityAboutMediaItem[];
   logoUrl?: string | null;
+  faviconUrl?: string | null;
   brandColor?: string | null;
+  /** Community Settings → Branding. See `CommunityGroup.theme`'s own doc
+   *  comment — saving this also derives `brandColor` (below), which is
+   *  what actually reaches the real, already-themed Community surfaces. */
+  theme?: CommunityTheme;
   access?: GroupAccess;
   priceCents?: number | null;
   currency?: string | null;
@@ -293,7 +300,20 @@ export async function updateGroupServerSide(opts: {
   if (p.cardImageUrl !== undefined) updates.cardImageUrl = p.cardImageUrl;
   if (Array.isArray(p.aboutMedia)) updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
   if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
+  if (p.faviconUrl !== undefined) updates.faviconUrl = p.faviconUrl;
   if (p.brandColor !== undefined) updates.brandColor = p.brandColor;
+  // Branding (Part 9) — saving a theme is also the mechanism that makes
+  // Primary/Brand real on production TODAY: every existing Community
+  // surface already reads `brandColor`, so deriving it here from
+  // `theme.light.primary` is what lets a Branding save actually change the
+  // live Community without touching every one of those surfaces. This
+  // deliberately overrides an explicit `p.brandColor` sent in the SAME
+  // request — Branding is the more specific/newer control for this value;
+  // General's own save never sends `theme`, so this never fires there.
+  if (p.theme !== undefined) {
+    updates.theme = p.theme;
+    updates.brandColor = p.theme.light.primary;
+  }
   if (p.joinPolicy) updates.joinPolicy = p.joinPolicy;
   if (p.status) updates.status = p.status;
   if (Array.isArray(p.categories)) {

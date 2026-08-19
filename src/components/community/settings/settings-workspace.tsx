@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 import { communityHomeHref } from "@/lib/community/routes";
 import { uploadCommunitySettingsImage } from "@/lib/community/upload-image";
 import { AboutRichTextEditor } from "@/components/community/about-rich-text-editor";
-import { ImageUpload } from "@/components/community/image-upload";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SettingsNav } from "@/components/community/settings/settings-nav";
+import { SettingsImageRow } from "@/components/community/settings/settings-image-row";
 import { LivePreviewPanel } from "@/components/community/settings/live-preview-panel";
 import type { CommunityGroup, GroupJoinPolicy } from "@/types/community";
 
@@ -32,6 +32,7 @@ interface EditState {
   slug: string;
   joinPolicy: GroupJoinPolicy;
   logoUrl: string | null;
+  faviconUrl: string | null;
   coverUrl: string | null;
 }
 
@@ -42,6 +43,11 @@ function stateFromGroup(group: CommunityGroup): EditState {
     slug: group.slug,
     joinPolicy: group.joinPolicy,
     logoUrl: group.logoUrl,
+    // `?? null` even though the type says non-optional — older community
+    // docs written before this field existed genuinely lack it in
+    // Firestore (schemaless), same defensive read every sibling image URL
+    // here would need if it had been added after the type was first written.
+    faviconUrl: group.faviconUrl ?? null,
     coverUrl: group.coverUrl,
   };
 }
@@ -107,6 +113,7 @@ export function SettingsWorkspace({
           slug: trimmedSlug,
           joinPolicy: form.joinPolicy,
           logoUrl: form.logoUrl,
+          faviconUrl: form.faviconUrl,
           coverUrl: form.coverUrl,
         }),
       });
@@ -169,7 +176,12 @@ export function SettingsWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr_340px]">
-        <SettingsNav brand={brand} />
+        <SettingsNav
+          brand={brand}
+          active="general"
+          link={{ saId, pretty }}
+          groupSlug={savedGroup.slug}
+        />
 
         <div className="space-y-6">
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
@@ -258,24 +270,36 @@ export function SettingsWorkspace({
             <p className="mt-0.5 text-sm text-[#909090]">
               These images represent your community across the platform.
             </p>
-            <div className="mt-5 grid gap-6 sm:grid-cols-2">
-              <ImageUpload
+            <div className="mt-5 divide-y divide-[#f0f0f0]">
+              <SettingsImageRow
                 label="Community Logo"
-                hint="Square image recommended."
+                description="Square image recommended."
+                guidance={["Recommended: 512x512px", "PNG or JPG up to 2MB"]}
                 value={form.logoUrl}
                 onChange={(url) => set("logoUrl", url)}
                 onUploadingChange={setUploading}
                 onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "logo")}
-                aspect="square"
+                shape="square"
               />
-              <ImageUpload
+              <SettingsImageRow
+                label="Community Favicon"
+                description="Displayed in browser tabs."
+                guidance={["Recommended: 32x32px", "PNG or ICO up to 200KB"]}
+                value={form.faviconUrl}
+                onChange={(url) => set("faviconUrl", url)}
+                onUploadingChange={setUploading}
+                onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "favicon")}
+                shape="tiny"
+              />
+              <SettingsImageRow
                 label="Community Cover Image"
-                hint="Wide image for your community banner."
+                description="Wide image for your community banner."
+                guidance={["Recommended: 2400x600px", "PNG or JPG up to 2MB"]}
                 value={form.coverUrl}
                 onChange={(url) => set("coverUrl", url)}
                 onUploadingChange={setUploading}
                 onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "cover")}
-                aspect="video"
+                shape="wide"
               />
             </div>
           </section>

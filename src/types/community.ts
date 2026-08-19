@@ -95,6 +95,52 @@ export interface CommunityAboutMediaItem {
   order: number;
 }
 
+/**
+ * Community Settings → Branding. A small, deliberately-limited set of color
+ * ROLES a normal business owner can reason about ("what does this affect?"),
+ * not a dump of internal CSS custom properties — see
+ * community-theme-presets.ts for the actual preset values and the Branding
+ * workspace's module comment for which of these currently reach the real
+ * Community UI vs. remain preview-only.
+ */
+export interface CommunityThemeColors {
+  /** Primary / Brand — the community's main identity color. */
+  primary: string;
+  /** Primary Actions / Buttons. */
+  primaryAction: string;
+  /** Accent / Highlights. */
+  accent: string;
+  /** Page Background. */
+  background: string;
+  /** Surface / Cards. */
+  surface: string;
+  /** Text / Links. */
+  text: string;
+}
+
+export type CommunityThemePresetKey =
+  | "magnetix-purple"
+  | "ocean-blue"
+  | "forest-green"
+  | "sunset-orange"
+  | "rose-pink"
+  | "royal-blue"
+  | "slate-gray"
+  | "deep-teal"
+  | "custom";
+
+/**
+ * Independent Light/Dark color sets (Part 7 — "do not assume Light and Dark
+ * must share every exact value"), plus which preset (if any) they currently
+ * came from, so the Branding UI can show the right card as selected without
+ * re-deriving it from the color values themselves.
+ */
+export interface CommunityTheme {
+  preset: CommunityThemePresetKey;
+  light: CommunityThemeColors;
+  dark: CommunityThemeColors;
+}
+
 export interface CommunityGroup {
   id: string;
   subAccountId: string;
@@ -118,11 +164,35 @@ export interface CommunityGroup {
   /** Small brand mark shown in the page header (falls back to cover). */
   logoUrl: string | null;
   /**
+   * Browser-tab icon (Community Settings → General, added alongside Logo/
+   * Cover). Persisted here so it travels with the rest of the community's
+   * identity assets; see the community layout `generateMetadata` for
+   * whether/how it's actually applied to the real browser tab.
+   */
+  faviconUrl: string | null;
+  /**
    * Hex accent that themes the member surface — primary buttons/accents use
    * this instead of Skool amber, so the community wears the agency's brand.
-   * Null falls back to a neutral default.
+   * Null falls back to a neutral default. Kept as the single source of
+   * truth real Community surfaces already read (see every `brand`/
+   * `brandColor` prop threaded through this codebase) — Branding's richer
+   * `theme` below is layered ON TOP of this, not a replacement for it:
+   * saving a theme also derives this field from `theme.light.primary`, so
+   * every existing surface picks up the new primary color for free without
+   * needing its own theme-awareness.
    */
   brandColor: string | null;
+  /**
+   * Community Settings → Branding (theme presets / custom colors / light &
+   * dark). Absent = community has never configured Branding — every reader
+   * must treat that as "use default Magnetix styling" (Part 11's explicit
+   * backward-compatibility requirement), never assume this is present.
+   * Only `theme.light.primary` currently has any effect on the real,
+   * production Community surface (via `brandColor` above) — see the
+   * Branding workspace's own module comment for exactly what's real vs.
+   * preview-only, and why.
+   */
+  theme?: CommunityTheme;
   access: GroupAccess;
   /** One-time price in cents when `access === "paid"`. */
   priceCents: number | null;

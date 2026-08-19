@@ -76,6 +76,13 @@ export function communitySettingsHref(b: CommunityLinkBase, groupSlug: string): 
   return b.pretty ? `/communities/${groupSlug}/settings` : `/c/${b.saId}/${groupSlug}/settings`;
 }
 
+/** Community Settings → Branding — same shape as General with `/branding`
+ *  appended for both route families (they diverge on the segment BEFORE
+ *  `/settings`, not after it), so no separate pretty/opaque branch needed. */
+export function communitySettingsBrandingHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/branding`;
+}
+
 /** The group-less "enter your community" entry point — where messages/profile pages' "back" link goes, since they aren't group-scoped. */
 export function communityRootHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities" : `/c/${b.saId}`;

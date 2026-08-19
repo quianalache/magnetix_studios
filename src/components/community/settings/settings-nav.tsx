@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Bell,
   Gauge,
@@ -10,18 +11,24 @@ import {
   SlidersHorizontal,
   Trophy,
 } from "lucide-react";
+import {
+  communitySettingsBrandingHref,
+  communitySettingsHref,
+  type CommunityLinkBase,
+} from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
+export type SettingsSection = "general" | "branding";
+
 /**
- * Community Settings left nav. Establishes the future section architecture
- * from the approved mockup, but only "General" is wired up in this task —
- * every other item is intentionally inert (no href, disabled styling, no
- * hidden functionality behind it), per the explicit "do not secretly
- * implement the other sections" instruction.
+ * Community Settings left nav. General and Branding are real, navigable
+ * sections now (this task) — every other item stays exactly as it was
+ * before: intentionally inert (no href, disabled styling, no hidden
+ * functionality behind it), per the explicit "do not secretly implement
+ * the other sections" instruction, unchanged from the original General-only
+ * task.
  */
-const SECTIONS: { key: string; label: string; icon: typeof SettingsIcon; active?: boolean }[] = [
-  { key: "general", label: "General", icon: SettingsIcon, active: true },
-  { key: "branding", label: "Branding & Appearance", icon: Palette },
+const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
   { key: "navigation", label: "Navigation & Channels", icon: LayoutGrid },
   { key: "access", label: "Access & Membership", icon: Shield },
   { key: "home", label: "Community Home", icon: Layers },
@@ -32,25 +39,57 @@ const SECTIONS: { key: string; label: string; icon: typeof SettingsIcon; active?
   { key: "advanced", label: "Advanced", icon: SlidersHorizontal },
 ];
 
-export function SettingsNav({ brand }: { brand: string }) {
+export function SettingsNav({
+  brand,
+  active,
+  link,
+  groupSlug,
+}: {
+  brand: string;
+  active: SettingsSection;
+  /** `{ saId, pretty }` — the same base every other community href builder
+   *  in this codebase takes, so General <-> Branding navigation respects
+   *  the opaque vs. custom-domain route shape automatically. */
+  link: CommunityLinkBase;
+  groupSlug: string;
+}) {
+  const sections: { key: SettingsSection; label: string; icon: typeof SettingsIcon; href: string }[] = [
+    { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
+    { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
+  ];
+
   return (
     <nav className="space-y-0.5">
       <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#909090]">
         Settings
       </p>
-      {SECTIONS.map((s) => {
+      {sections.map((s) => {
+        const Icon = s.icon;
+        const isActive = s.key === active;
+        return (
+          <Link
+            key={s.key}
+            href={s.href}
+            aria-current={isActive ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              isActive ? "text-white" : "text-[#3a3a44] hover:bg-[#F5F4F2]",
+            )}
+            style={isActive ? { backgroundColor: brand } : undefined}
+          >
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="truncate">{s.label}</span>
+          </Link>
+        );
+      })}
+      {INERT_SECTIONS.map((s) => {
         const Icon = s.icon;
         return (
           <div
             key={s.key}
-            aria-disabled={!s.active}
-            aria-current={s.active ? "page" : undefined}
-            title={s.active ? undefined : "Coming soon"}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium",
-              s.active ? "text-white" : "cursor-not-allowed text-[#b4b4b4]",
-            )}
-            style={s.active ? { backgroundColor: brand } : undefined}
+            aria-disabled="true"
+            title="Coming soon"
+            className="flex cursor-not-allowed items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-[#b4b4b4]"
           >
             <Icon className="h-4 w-4 shrink-0" />
             <span className="truncate">{s.label}</span>
