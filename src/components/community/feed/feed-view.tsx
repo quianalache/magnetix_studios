@@ -14,6 +14,7 @@ import { CommunityPostBody } from "@/components/community/feed/community-post-bo
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
 import { CommunityPollCard } from "@/components/community/feed/community-poll-card";
 import { PostComposer } from "@/components/community/feed/post-composer";
+import { GifResolverProvider, collectGifProviderIds } from "@/components/community/feed/gif-resolver-context";
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +65,7 @@ export function FeedView({
   groupId,
   groupSlug,
   brand,
+  communityName,
   categories,
   viewer,
   initialPosts,
@@ -74,6 +76,8 @@ export function FeedView({
   groupId: string;
   groupSlug: string;
   brand: string;
+  /** Part 3's "for [Community Name]" composer header line. */
+  communityName: string;
   categories: string[];
   viewer: Viewer;
   initialPosts: ClientPost[];
@@ -108,6 +112,14 @@ export function FeedView({
     return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
   });
   const visible = sorted;
+  // Editing is ONE modal instance driven by which post's id is currently
+  // being edited, not a composer mounted inline in place of every post's
+  // card (Phase D: the composer is a modal now, so the card underneath
+  // stays exactly as it always looked while the modal is open above it).
+  const editingPost = editingPostId ? (posts.find((p) => p.id === editingPostId) ?? null) : null;
+  // Every GIF currently visible in the feed, resolved in ONE batched
+  // request rather than one per post — see gif-resolver-context.tsx.
+  const gifProviderIds = collectGifProviderIds(visible);
 
   async function toggleLike(postId: string) {
     setPosts((prev) =>
@@ -186,25 +198,36 @@ export function FeedView({
 
   return (
     <div className="space-y-4">
-      {composerOpen ? (
+      {/* Modal composer launcher (Phase D, Part 2) — a lightweight
+          affordance, not the composer itself. Clicking opens the full
+          `PostComposer` modal; this button never turns into a composer
+          inline the way it used to. Permission/channel-awareness is
+          unchanged — anything that could post before can still open this
+          (server-side enforcement is what actually gates posting, same as
+          always), this is purely the entry point. */}
+      <button
+        type="button"
+        id="community-composer-trigger"
+        onClick={() => setComposerOpen(true)}
+        className="flex w-full items-center gap-3 rounded-xl border border-[#E4E4E4] bg-white p-4 text-left hover:border-[#d4d4d4]"
+      >
+        <MemberAvatar author={viewer} size={36} brand={brand} />
+        <span className="text-sm text-[#909090]">What do you want to share today?</span>
+      </button>
+      {composerOpen && (
         <PostComposer
           saId={saId}
           groupId={groupId}
           brand={brand}
+          communityName={communityName}
           categories={categories}
           viewer={viewer}
           mode="create"
+          initialCategory={filter !== "All" ? filter : undefined}
+          open={composerOpen}
           onCreated={prependPost}
           onCancel={() => setComposerOpen(false)}
         />
-      ) : (
-        <button
-          id="community-composer-trigger"
-          onClick={() => setComposerOpen(true)}
-          className="w-full rounded-xl border border-[#E4E4E4] bg-white p-4 text-left text-sm text-[#909090] hover:border-[#d4d4d4]"
-        >
-          Write something…
-        </button>
       )}
 
       <div className="flex items-center gap-4 border-b border-[#E4E4E4] px-1">
@@ -223,6 +246,7 @@ export function FeedView({
         ))}
       </div>
 
+      <GifResolverProvider providerIds={gifProviderIds}>
       {visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
           Nothing here yet. Be the first to post.
@@ -240,23 +264,6 @@ export function FeedView({
               // this wasn't a new permission concept.
               const canEdit = canModerate || p.authorMemberId === viewer.memberId;
               const detail = communityPostHref({ saId, pretty }, groupSlug, p.id);
-
-              if (editingPostId === p.id) {
-                return (
-                  <PostComposer
-                    key={p.id}
-                    saId={saId}
-                    groupId={groupId}
-                    brand={brand}
-                    categories={categories}
-                    viewer={viewer}
-                    mode="edit"
-                    editingPost={p}
-                    onSaved={applyEditedPost}
-                    onCancel={() => setEditingPostId(null)}
-                  />
-                );
-              }
 
               return (
                 <article
@@ -384,6 +391,24 @@ export function FeedView({
               );
             })}
         </div>
+      )}
+      </GifResolverProvider>
+
+      {editingPost && (
+        <PostComposer
+          key={editingPost.id}
+          saId={saId}
+          groupId={groupId}
+          brand={brand}
+          communityName={communityName}
+          categories={categories}
+          viewer={viewer}
+          mode="edit"
+          editingPost={editingPost}
+          open
+          onSaved={applyEditedPost}
+          onCancel={() => setEditingPostId(null)}
+        />
       )}
     </div>
   );

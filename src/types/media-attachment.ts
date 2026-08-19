@@ -94,28 +94,38 @@ export interface FileAttachment {
 }
 
 /**
- * Phase D — a GIF selected from the provider picker (Tenor). Deliberately
- * NOT downloaded/re-uploaded into our own Storage — `url` is the
- * provider's own CDN URL, `previewUrl` its (usually smaller/looping) still
- * or reduced-size preview. No `storagePath`/upload lifecycle at all: there
- * is nothing of ours to clean up when a GIF is removed, unlike image/
- * voice/file. See the Phase D report for why Tenor was chosen and why
- * live search isn't wired yet (pending an API key).
+ * A GIF selected from the provider picker. GIPHY-shaped as of the Phase D
+ * GIF integration (migrated from an earlier Tenor-shaped scaffold that was
+ * never wired to a live key — see below for why the shape changed, not
+ * just what it changed to).
+ *
+ * Deliberately stores ONLY the provider's content id plus small display
+ * metadata — no media URL, no dimensions, no Storage object, no upload
+ * lifecycle at all. This is a real compliance requirement, not a style
+ * choice: GIPHY's terms require media to be resolved and rendered through
+ * their own SDK at render time (so their CDN URLs, query params, and
+ * analytics pingbacks stay exactly as GIPHY issued them), not downloaded,
+ * cached, or persisted by the integrating app. The renderer re-resolves
+ * `providerId` -> full GIF object client-side via `@giphy/react-components`
+ * (see gif-resolver-context.tsx) every time it's displayed.
+ *
+ * The migration from the old Tenor-shaped scaffold (`url`/`previewUrl`/
+ * `width`/`height`/`attribution`, all now removed): that shape assumed the
+ * app would own and persist the media reference directly, which is exactly
+ * what GIPHY's current requirements rule out for a GIPHY-sourced GIF. There
+ * was no live data in the old shape (no provider key had ever been wired),
+ * so this is a clean type change, not a backfill/data-migration.
  */
 export interface GifAttachment {
   id: string;
-  provider: "tenor";
-  /** The provider's own id for this GIF — kept so a future feature (e.g.
-   *  re-fetching fresher metadata) doesn't have to re-search by content. */
+  provider: "giphy";
+  /** GIPHY's own id for this GIF — the only thing persisted; everything
+   *  else is re-resolved from it at render time. */
   providerId: string;
-  url: string;
-  previewUrl: string;
-  width: number;
-  height: number;
-  /** Attribution text some GIF providers' terms require showing alongside
-   *  the media — stored so the renderer doesn't have to know provider
-   *  policy details. */
-  attribution?: string;
+  /** GIPHY's title for the GIF, captured at selection time purely for
+   *  alt text / accessibility — never used as a cache of media metadata,
+   *  and never trusted over a fresh SDK resolution for anything else. */
+  title?: string;
   authorMemberId: string;
   createdAt: number;
 }

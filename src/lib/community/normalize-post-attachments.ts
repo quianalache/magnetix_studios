@@ -8,17 +8,10 @@ import {
   MAX_VOICE_NOTES_PER_COMMENT,
 } from "@/lib/community/community-image-mime";
 import { MAX_FILES_PER_POST, MAX_FILES_PER_COMMENT } from "@/lib/community/community-file-mime";
+import { MAX_GIFS_PER_POST, MAX_GIFS_PER_COMMENT } from "@/lib/community/gif-limits";
 import type { MediaAttachment, VideoProviderName } from "@/types/media-attachment";
 
-const MAX_GIFS_PER_POST = 1;
 const MAX_VIDEO_LINKS_PER_POST = 1;
-
-/** Comments & Replies (2026-08-19) — no client-safe export yet since no
- *  GIF picker UI exists to consume it (same as MAX_GIFS_PER_POST above) —
- *  add one alongside MAX_GIFS_PER_POST's own client-safe home the moment a
- *  provider is wired. No `video-link` cap at all — see
- *  normalizeCommentAttachments below for why. */
-const MAX_GIFS_PER_COMMENT = 1;
 
 /**
  * Normalize + validate client-supplied attachments — shared by the
@@ -42,11 +35,15 @@ const MAX_GIFS_PER_COMMENT = 1;
  * below has no video-link branch, so a hand-crafted request claiming a
  * `kind: "video-link"` item on a comment is silently dropped, not stored.
  *
- * `gif` is shape-checked but not re-verified against the provider (no
- * live provider is wired yet). Uses the literal string `"tenor"` as the
- * only accepted provider today, matching the Phase D scaffold — revisit
- * this the moment a real provider is selected (see the Comments & Replies
- * report for exactly what remains).
+ * `gif` is shape-checked but not re-verified against the provider — GIPHY
+ * (Phase D) is the only accepted provider; the id itself isn't re-resolved
+ * server-side (no server-side GIPHY calls at all, per GIPHY's own
+ * client-side-only Search/Trending requirement), so a hand-crafted request
+ * could technically claim a `providerId` that doesn't exist. That's an
+ * accepted, bounded risk: the client-side SDK re-resolution the renderer
+ * always does simply fails closed (the "GIF unavailable" state) for a
+ * bogus id, so this can never render or serve anything other than a real
+ * GIPHY asset.
  *
  * `authorMemberId` is always overwritten with the real authenticated
  * member — never trusted from the client, same discipline as everything
@@ -160,12 +157,9 @@ function validateGifItem(
   const gif = (item as { gif?: Record<string, unknown> }).gif;
   if (
     !gif ||
-    gif.provider !== "tenor" ||
+    gif.provider !== "giphy" ||
     typeof gif.providerId !== "string" ||
-    typeof gif.url !== "string" ||
-    typeof gif.previewUrl !== "string" ||
-    typeof gif.width !== "number" ||
-    typeof gif.height !== "number"
+    !gif.providerId.trim()
   ) {
     return null;
   }
@@ -173,13 +167,9 @@ function validateGifItem(
     kind: "gif",
     gif: {
       id: typeof gif.id === "string" ? gif.id : gif.providerId,
-      provider: "tenor",
+      provider: "giphy",
       providerId: gif.providerId,
-      url: gif.url,
-      previewUrl: gif.previewUrl,
-      width: gif.width,
-      height: gif.height,
-      attribution: typeof gif.attribution === "string" ? gif.attribution : undefined,
+      title: typeof gif.title === "string" ? gif.title.slice(0, 300) : undefined,
       authorMemberId,
       createdAt: Date.now(),
     },

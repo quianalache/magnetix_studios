@@ -164,6 +164,7 @@ export default async function CommunityFeedPage({
               groupId={group.id}
               groupSlug={group.slug}
               brand={brand}
+              communityName={group.name}
               categories={group.categories}
               viewer={{
                 memberId: member.id,

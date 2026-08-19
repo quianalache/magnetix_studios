@@ -1,5 +1,9 @@
-import { Download } from "lucide-react";
+"use client";
+
+import { Download, ImageOff } from "lucide-react";
+import { Gif } from "@giphy/react-components";
 import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
+import { useGifResolverStatus, useResolvedGif } from "@/components/community/feed/gif-resolver-context";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import { labelForCommunityFileMimeType, formatFileSize } from "@/lib/community/community-file-mime";
 import { cn } from "@/lib/utils";
@@ -100,17 +104,35 @@ function CommunityImageGrid({ images }: { images: ImageAttachment[] }) {
   );
 }
 
+/**
+ * Only `providerId` is ever persisted (see media-attachment.ts) — this
+ * resolves it back to a full GIPHY object via the page-level
+ * `GifResolverProvider`/`useResolvedGif` (batched, see gif-resolver-
+ * context.tsx) and renders it with the OFFICIAL `Gif` component, never a
+ * bare `<img>` pointed at a URL we constructed or cached ourselves.
+ * `percentWidth="100%"` lets it fill this card's own width responsively;
+ * the numeric `width` still informs which GIPHY rendition gets requested.
+ */
 function CommunityGifBlock({ gif }: { gif: GifAttachment }) {
-  return (
-    <div>
-      <div
-        className="overflow-hidden rounded-xl"
-        style={{ aspectRatio: `${gif.width} / ${gif.height}`, maxHeight: 420 }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={gif.url} alt="" loading="lazy" className="h-full w-full object-cover" />
+  const resolved = useResolvedGif(gif.providerId);
+  const { loading, keyAvailable } = useGifResolverStatus();
+
+  if (!keyAvailable) return null; // Missing-key: fail gracefully, render nothing rather than a broken block.
+
+  if (!resolved) {
+    if (loading) {
+      return <div className="aspect-[4/3] w-full max-w-sm animate-pulse rounded-xl bg-[#F0F0F0]" />;
+    }
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-dashed border-[#E4E4E4] px-3 py-4 text-xs text-[#909090]">
+        <ImageOff className="h-4 w-4" /> GIF unavailable
       </div>
-      {gif.attribution && <p className="mt-1 text-[10px] text-[#b4b4b4]">{gif.attribution}</p>}
+    );
+  }
+
+  return (
+    <div className="max-w-sm overflow-hidden rounded-xl">
+      <Gif gif={resolved} width={480} percentWidth="100%" noLink hideAttribution={false} />
     </div>
   );
 }

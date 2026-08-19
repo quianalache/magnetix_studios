@@ -124,6 +124,7 @@ export default async function PostDetailPage({
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}
+        communityName={group.name}
         categories={group.categories}
         post={post}
         initialComments={clientComments}

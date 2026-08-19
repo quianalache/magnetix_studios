@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorContent } from "@tiptap/react";
 import { toast } from "sonner";
+import type { IGif } from "@giphy/js-types";
+import { Gif } from "@giphy/react-components";
 import {
+  ArrowLeft,
   Check,
   FileUp,
   Image as ImageIcon,
@@ -16,10 +19,12 @@ import {
 import { useRichTextEditor } from "@/components/editor/use-rich-text-editor";
 import { LinkPopover } from "@/components/editor/link-popover";
 import { EmojiPickerButton } from "@/components/community/feed/emoji-picker-button";
+import { GiphyPicker } from "@/components/community/feed/giphy-picker";
 import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
 import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { getGiphyFetch } from "@/lib/community/giphy-client";
 import {
   deleteCommunityPostImage,
   uploadCommunityPostImage,
@@ -133,6 +138,40 @@ export function CommentComposer({
   );
   const [fileUploading, setFileUploading] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  // GIF (Part 11) — activates the already-scaffolded capability via the
+  // SAME shared `GiphyPicker` the post composer uses; every other comment
+  // capability (links/emoji/mentions/1-image/1-voice/1-file/edit/delete/
+  // threading) is unchanged. The `+` menu itself stays exactly as it was
+  // (Part 11: "the comment + menu may stay as-is") — only its "Add GIF"
+  // row goes from a "coming soon" toast to actually opening the picker,
+  // swapping the SAME popover's content rather than opening a second one.
+  const [menuView, setMenuView] = useState<"list" | "gif">("list");
+  const existingGif = initialAttachments.find(
+    (a): a is Extract<MediaAttachment, { kind: "gif" }> => a.kind === "gif",
+  )?.gif;
+  const [gif, setGif] = useState<IGif | null>(null);
+  const [gifResolving, setGifResolving] = useState(!!existingGif);
+  useEffect(() => {
+    if (!existingGif) return;
+    const gf = getGiphyFetch();
+    if (!gf) {
+      setGifResolving(false);
+      return;
+    }
+    let cancelled = false;
+    gf.gif(existingGif.providerId)
+      .then(({ data }) => {
+        if (!cancelled) setGif(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setGifResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -275,12 +314,19 @@ export function CommentComposer({
     );
   }
 
+  function removeGif() {
+    // No Storage object behind a GIF (Part 13) — a draft state update
+    // only, same as PostComposer's own removeGif.
+    setGif(null);
+  }
+
   function resetDraft() {
     setBody("");
     editor?.commands.clearContent();
     setImages([]);
     setVoiceNote(null);
     setFiles([]);
+    setGif(null);
     insertedMentionForKeyRef.current = null;
     if (collapsedByDefault) setOpen(false);
   }
@@ -301,13 +347,28 @@ export function CommentComposer({
       ...images.map((image): MediaAttachment => ({ kind: "image", image })),
       ...(voiceNote ? [{ kind: "voice", voice: voiceNote } as MediaAttachment] : []),
       ...files.map((file): MediaAttachment => ({ kind: "file", file })),
+      ...(gif
+        ? [
+            {
+              kind: "gif",
+              gif: {
+                id: existingGif?.providerId === String(gif.id) ? existingGif.id : crypto.randomUUID(),
+                provider: "giphy",
+                providerId: String(gif.id),
+                title: gif.title || undefined,
+                authorMemberId: viewer.memberId,
+                createdAt: Date.now(),
+              },
+            } as MediaAttachment,
+          ]
+        : []),
     ];
   }
 
   async function submit() {
     const attachments = buildAttachments();
     if (aboutPlainTextLength(body) === 0 && attachments.length === 0) {
-      toast.error("Write something, or attach a photo, voice note, or file");
+      toast.error("Write something, or attach a photo, voice note, file, or GIF");
       return;
     }
     setSaving(true);
@@ -470,6 +531,30 @@ export function CommentComposer({
             </div>
           )}
 
+          {(gif || gifResolving) && (
+            <div className="px-3 pb-2">
+              <div className="max-w-[180px]">
+                {gifResolving ? (
+                  <div className="aspect-[4/3] w-full animate-pulse rounded-lg bg-[#F0F0F0]" />
+                ) : (
+                  gif && (
+                    <div className="group relative overflow-hidden rounded-lg">
+                      <Gif gif={gif} width={180} percentWidth="100%" noLink hideAttribution={false} />
+                      <button
+                        type="button"
+                        onClick={removeGif}
+                        title="Remove GIF"
+                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
           {showRecorder && !voiceNote && (
             <div className="px-3 pb-2">
               <VoiceNoteRecorder
@@ -503,7 +588,16 @@ export function CommentComposer({
 
           <div className="flex items-center justify-between gap-1 border-t border-[#f0f0f0] px-2 py-1.5">
             <div className="flex items-center gap-0.5">
-              <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
+              <Popover
+                open={plusMenuOpen}
+                onOpenChange={(next) => {
+                  setPlusMenuOpen(next);
+                  // Always land back on the menu list next time this
+                  // opens — a member who backed out of the GIF search
+                  // shouldn't reopen straight into it.
+                  if (!next) setMenuView("list");
+                }}
+              >
                 <PopoverTrigger
                   type="button"
                   title="Add to comment"
@@ -512,65 +606,85 @@ export function CommentComposer({
                 >
                   <Plus className="h-4 w-4" />
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlusMenuOpen(false);
-                      imageInputRef.current?.click();
-                    }}
-                    disabled={images.length >= MAX_IMAGES_PER_COMMENT || imageUploading}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-                  >
-                    <ImageIcon className="h-4 w-4 text-[#909090]" /> Add photo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlusMenuOpen(false);
-                      setShowRecorder(true);
-                    }}
-                    disabled={!!voiceNote}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-                  >
-                    <Mic className="h-4 w-4 text-[#909090]" /> Record voice note
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlusMenuOpen(false);
-                      fileInputRef.current?.click();
-                    }}
-                    disabled={files.length >= MAX_FILES_PER_COMMENT || fileUploading}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-                  >
-                    <FileUp className="h-4 w-4 text-[#909090]" /> Upload file
-                  </button>
-                  {editor && (
-                    <LinkPopover
-                      editor={editor}
-                      renderTrigger={() => (
-                        <span className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2]">
-                          <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#909090]" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          Add link
-                        </span>
+                <PopoverContent className={menuView === "gif" ? "w-auto p-2" : "w-56 p-1.5"}>
+                  {menuView === "list" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          imageInputRef.current?.click();
+                        }}
+                        disabled={images.length >= MAX_IMAGES_PER_COMMENT || imageUploading}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
+                      >
+                        <ImageIcon className="h-4 w-4 text-[#909090]" /> Add photo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          setShowRecorder(true);
+                        }}
+                        disabled={!!voiceNote}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
+                      >
+                        <Mic className="h-4 w-4 text-[#909090]" /> Record voice note
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        disabled={files.length >= MAX_FILES_PER_COMMENT || fileUploading}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
+                      >
+                        <FileUp className="h-4 w-4 text-[#909090]" /> Upload file
+                      </button>
+                      {editor && (
+                        <LinkPopover
+                          editor={editor}
+                          renderTrigger={() => (
+                            <span className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2]">
+                              <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#909090]" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              Add link
+                            </span>
+                          )}
+                        />
                       )}
-                    />
+                      <button
+                        type="button"
+                        onClick={() => setMenuView("gif")}
+                        disabled={!!gif || gifResolving}
+                        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
+                      >
+                        <Sticker className="h-4 w-4 text-[#909090]" /> Add GIF
+                      </button>
+                    </>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMenuView("list")}
+                        className="flex items-center gap-1 text-xs font-medium text-[#606060] hover:text-[#202124]"
+                      >
+                        <ArrowLeft className="h-3 w-3" /> Back
+                      </button>
+                      <GiphyPicker
+                        onSelect={(g) => {
+                          setGif(g);
+                          setPlusMenuOpen(false);
+                          setMenuView("list");
+                        }}
+                        gridWidth={224}
+                        className="w-56"
+                      />
+                    </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPlusMenuOpen(false);
-                      toast("GIFs are coming soon — we're finishing the provider setup.");
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#b4b4b4] hover:bg-[#F5F4F2]"
-                  >
-                    <Sticker className="h-4 w-4 text-[#b4b4b4]" /> Add GIF
-                    <span className="ml-auto text-[10px] uppercase tracking-wide text-[#b4b4b4]">Soon</span>
-                  </button>
                 </PopoverContent>
               </Popover>
               <input

@@ -13,6 +13,7 @@ import { CommunityPostBody } from "@/components/community/feed/community-post-bo
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
 import { CommunityPollCard } from "@/components/community/feed/community-poll-card";
 import { PostComposer } from "@/components/community/feed/post-composer";
+import { GifResolverProvider, collectGifProviderIds } from "@/components/community/feed/gif-resolver-context";
 import { CommentComposer, type ReplyTarget } from "@/components/community/feed/comment-composer";
 import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ export function PostDetailView({
   groupId,
   groupSlug,
   brand,
+  communityName,
   categories,
   post,
   initialComments,
@@ -69,6 +71,8 @@ export function PostDetailView({
   groupId: string;
   groupSlug: string;
   brand: string;
+  /** Part 3's "for [Community Name]" composer header line. */
+  communityName: string;
   categories: string[];
   post: ClientPost;
   initialComments: ClientComment[];
@@ -208,29 +212,33 @@ export function PostDetailView({
       : []),
   ];
 
-  if (editing) {
-    return (
-      <div className="space-y-4">
+  return (
+    <div className="space-y-4">
+      {/* Modal composer (Phase D) — the post card underneath stays
+          mounted and visible exactly as always; editing no longer
+          replaces it with an inline composer. */}
+      {editing && (
         <PostComposer
           saId={saId}
           groupId={groupId}
           brand={brand}
+          communityName={communityName}
           categories={categories}
           viewer={viewer}
           mode="edit"
           editingPost={currentPost}
+          open={editing}
           onSaved={(updated) => {
             setCurrentPost(updated);
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
         />
-      </div>
-    );
-  }
+      )}
 
-  return (
-    <div className="space-y-4">
+      {/* Every GIF on this page (the post + every comment/reply),
+          resolved in ONE batched request — see gif-resolver-context.tsx. */}
+      <GifResolverProvider providerIds={collectGifProviderIds([currentPost, ...comments])}>
       {/* Post */}
       <article className="rounded-xl border border-[#E4E4E4] bg-white p-5">
         <div className="flex items-start gap-3">
@@ -370,6 +378,7 @@ export function PostDetailView({
           </div>
         ))}
       </div>
+      </GifResolverProvider>
 
       {/* Comment composer (bottom, always reachable) — the author's "Allow
           comments/replies" toggle is enforced server-side (the comments

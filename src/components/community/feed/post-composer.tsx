@@ -1,17 +1,19 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Editor } from "@tiptap/react";
+import type { IGif } from "@giphy/js-types";
+import { Gif } from "@giphy/react-components";
 import {
+  AtSign,
   Check,
   FileUp,
+  Hash,
   ImagePlus,
   ListChecks,
   Loader2,
   Mic,
-  Sticker,
-  Type,
   Video,
   X,
 } from "lucide-react";
@@ -25,16 +27,28 @@ import type {
 import type { FeedPoll } from "@/types/community";
 import { CommunityPostEditor, COMMUNITY_POST_TOOLBAR } from "@/components/community/feed/community-post-editor";
 import { RichTextToolbar } from "@/components/editor/rich-text-toolbar-items";
+import { MemberAvatar } from "@/components/community/member-avatar";
 import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
 import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
 import { AddVideoPopover } from "@/components/community/feed/add-video-popover";
 import { EmojiPickerButton } from "@/components/community/feed/emoji-picker-button";
+import { ComposerActionIconButton } from "@/components/community/feed/composer-action-icon-button";
+import { GiphyPickerButton } from "@/components/community/feed/giphy-picker-button";
 import {
   CreatePollSheet,
   emptyPollDraft,
   type PollDraftState,
 } from "@/components/community/feed/create-poll-sheet";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { getGiphyFetch } from "@/lib/community/giphy-client";
 import {
   deleteCommunityPostImage,
   uploadCommunityPostImage,
@@ -45,7 +59,6 @@ import { MAX_IMAGES_PER_POST } from "@/lib/community/community-image-mime";
 import { MAX_FILES_PER_POST, formatFileSize } from "@/lib/community/community-file-mime";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import type { MentionSuggestionItem } from "@/components/editor/mention-suggestion";
-import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
 
 interface Viewer {
@@ -104,56 +117,57 @@ function draftToApiPayload(draft: PollDraftState) {
   };
 }
 
+/** Extracts this post's/comment's persisted GIF attachment, if any — used
+ *  once here (to seed the resolve-on-open effect below) rather than
+ *  inline at every call site. */
+function existingGifAttachment(attachments: MediaAttachment[]) {
+  return attachments.find((a): a is Extract<MediaAttachment, { kind: "gif" }> => a.kind === "gif")?.gif ?? null;
+}
+
 /**
- * ONE shared post composer/editor — mounted by `feed-view.tsx`'s inline
- * "Write something…" flow (`mode="create"`) AND by the post-detail page's
- * Edit Post flow (`mode="edit"`, `editingPost` supplied). Phase D's
- * explicit instruction was not to build a second EditPost editor; this is
- * that reuse, not two composers that happen to look similar.
+ * ONE shared post composer/editor — mounted by `feed-view.tsx`'s launcher
+ * flow (`mode="create"`) AND by the post-detail page's Edit Post flow
+ * (`mode="edit"`, `editingPost` supplied). Not a second EditPost editor.
  *
- * Composer UX refinement (2026-08-20) — the action row below the editor
- * was rebuilt around the same "one coherent, progressively-disclosed
- * system" the comment composer's `+` menu already established, rather
- * than a permanent row of always-visible icons that grew feature-by-
- * feature:
- *  - Formatting ("Aa") is now a `Popover` anchored to its own trigger,
- *    rendering the SAME `RichTextToolbar`/`COMMUNITY_POST_TOOLBAR` the
- *    editor always used — it used to render inline above the editor
- *    (near the TOP of the card) while the toggle lived in the action row
- *    at the BOTTOM, so tapping it made a control strip appear far from
- *    where the member was looking, especially with attachments/previews
- *    in between on a tall mobile composer. A Popover is physically
- *    anchored to its trigger by construction, so this can't recur.
- *  - Photo/voice/file/video/GIF are now one `+` Popover menu, mirroring
- *    the comment composer's menu content almost exactly (video is the
- *    one addition — comments don't support it, posts do).
- *  - Poll is its own one-tap icon (not buried in `+`, matching the
- *    reference screenshots' dedicated poll icon), visible ONLY to
- *    moderators — `viewer.role === "moderator"`. Selecting it opens
- *    `CreatePollSheet`; the result is held as local draft state
- *    (`poll`) and submitted together with the rest of the post, same
- *    "attachment tray" pattern images/voice/files already use. Editing an
- *    EXISTING published poll reuses this exact same Edit Post flow — no
- *    separate "Edit poll" surface — with `locked` passed to the sheet
- *    once the poll already has votes (Part 9's "no destructive changes
- *    after votes exist"), independently re-enforced server-side by
- *    `normalizePollEdit` regardless of what this UI sends.
- *  - Emoji stays its own one-tap icon (unchanged) — already lightweight
- *    enough not to need hiding behind a menu, same call the comment
- *    composer already made.
+ * Modal composer (Phase D) — rebuilt from an inline feed card into a real
+ * modal: a `Sheet` using the same proven `side="bottom"` + desktop-
+ * centering override pattern `CreatePollSheet` already established (full-
+ * bleed bottom sheet on mobile, a centered wide panel on desktop — see the
+ * className comment below for exactly why the `sm:data-[side=bottom]:*`
+ * qualifiers are required, not optional). The caller controls mounting the
+ * same way it always did (only rendered while `open`), which is what
+ * still gives every field below a clean, freshly-initialized starting
+ * state on every open — no separate "reset on reopen" effect needed.
  *
- * Edit-mode attachment lifecycle (the "safe edit transaction" the Phase D
- * task asked to be reported precisely) is UNCHANGED by this refinement —
- * see the inline comments below, still exactly as before.
+ * Also folds in the GIPHY GIF integration and the Part 4/5 action-system
+ * rebuild:
+ *  - Formatting is now a PERMANENTLY VISIBLE `RichTextToolbar` rendered
+ *    directly above the editor (Part 4) — no more "Aa" popover toggle.
+ *  - Photo/video/voice/file/GIF/mention/channel-ref/poll are each their
+ *    own always-visible, tooltipped icon button (Part 5) — no more
+ *    consolidated `+` popover menu. (Comments keep their own `+` menu —
+ *    this change is scoped to the full post composer only.)
+ *  - GIF uses the shared, PostComposer-independent `GiphyPickerButton` /
+ *    `GiphyPicker` — see giphy-client.ts for the compliance rationale.
+ *
+ * Edit-mode attachment lifecycle (the "safe edit transaction") is
+ * UNCHANGED by any of this — see the inline comments below, still exactly
+ * as before. GIF is the one attachment kind that was never part of that
+ * lifecycle to begin with (Part 13): there's no Storage object behind a
+ * GIF at all, so removing/replacing one is just a state update, never a
+ * cleanup call.
  */
 export function PostComposer({
   saId,
   groupId,
   brand,
+  communityName,
   categories,
   viewer,
   mode,
   editingPost,
+  initialCategory,
+  open,
   onCreated,
   onSaved,
   onCancel,
@@ -161,10 +175,21 @@ export function PostComposer({
   saId: string;
   groupId: string;
   brand: string;
+  /** Part 3's "for [Community Name]" header line. */
+  communityName: string;
   categories: string[];
   viewer: Viewer;
   mode: "create" | "edit";
   editingPost?: ClientPost;
+  /** Create mode only — defaults the channel selector to whatever channel
+   *  the member was viewing when they opened the composer (Part 3), e.g.
+   *  the feed's `?c=` filter. Ignored in edit mode (the post's own
+   *  existing category always wins there). */
+  initialCategory?: string;
+  /** Purely drives the Sheet's own open/enter-animation state — this
+   *  component is only ever mounted while it should be visible, so this is
+   *  always `true` in practice, but the Sheet primitive still wants it. */
+  open: boolean;
   onCreated?: (post: ClientPost) => void;
   onSaved?: (post: ClientPost) => void;
   onCancel: () => void;
@@ -172,7 +197,9 @@ export function PostComposer({
   const initialAttachments = editingPost?.attachments ?? [];
   const [title, setTitle] = useState(editingPost?.title ?? "");
   const [body, setBody] = useState(editingPost?.body ?? "");
-  const [category, setCategory] = useState(editingPost?.category ?? categories[0] ?? "General");
+  const [category, setCategory] = useState(
+    editingPost?.category ?? initialCategory ?? categories[0] ?? "General",
+  );
   const [commentsDisabled, setCommentsDisabled] = useState(editingPost?.commentsDisabled === true);
   const [saving, setSaving] = useState(false);
 
@@ -192,10 +219,51 @@ export function PostComposer({
     initialAttachments.filter((a): a is Extract<MediaAttachment, { kind: "video-link" }> => a.kind === "video-link").map((a) => a.videoLink),
   );
 
-  // Polls (2026-08-20) — held as local draft state, same "not persisted
-  // until Post/Save Changes" convention as every other attachment kind
-  // above. `null` = no poll attached. The moderator gate is enforced both
-  // here (icon hidden) and server-side (the route independently checks
+  // GIF (Phase D) — holds the FULL GIPHY object the picker returned, not
+  // just an id, so the preview below can render it immediately via the
+  // official `Gif` component without a round-trip. On edit mode with an
+  // already-attached GIF, only `providerId`/`title` exist in
+  // `editingPost` (that's all that's ever persisted — see
+  // media-attachment.ts) — resolve it back to the full object once, on
+  // mount, exactly like the render-side resolver does, just not batched
+  // (a composer only ever has at most one GIF).
+  const existingGif = existingGifAttachment(initialAttachments);
+  const [gif, setGif] = useState<IGif | null>(null);
+  const [gifResolving, setGifResolving] = useState(!!existingGif);
+  useEffect(() => {
+    if (!existingGif) return;
+    const gf = getGiphyFetch();
+    if (!gf) {
+      setGifResolving(false);
+      return;
+    }
+    let cancelled = false;
+    gf.gif(existingGif.providerId)
+      .then(({ data }) => {
+        if (!cancelled) setGif(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setGifResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Mount-only — this composer instance never gets handed a different
+    // `editingPost` mid-life (see the module comment on remount-per-open).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function removeGif() {
+    // No Storage object behind a GIF (Part 13) — this is just a draft
+    // state update, unlike every other attachment kind's remove handler.
+    setGif(null);
+  }
+
+  // Polls — held as local draft state, same "not persisted until Post/
+  // Save Changes" convention as every other attachment kind above. `null`
+  // = no poll attached. The moderator gate is enforced both here (icon
+  // hidden) and server-side (the route independently checks
   // `access.membership.role`).
   const [poll, setPoll] = useState<PollDraftState | null>(
     editingPost?.poll ? feedPollToDraft(editingPost.poll) : null,
@@ -203,9 +271,6 @@ export function PostComposer({
   const [pollSheetOpen, setPollSheetOpen] = useState(false);
   const pollLocked = (editingPost?.poll?.voterCount ?? 0) > 0;
   const canManagePoll = viewer.role === "moderator";
-
-  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const [formattingOpen, setFormattingOpen] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +298,18 @@ export function PostComposer({
     return categories
       .filter((c) => !q || c.toLowerCase().includes(q))
       .map((c) => ({ id: c, label: c }));
+  }
+
+  // Part 5's "programmatically insert @/# and trigger the existing
+  // suggestion dropdown" — TipTap's suggestion plugin watches document
+  // transactions for its trigger char, not raw keystrokes, so inserting
+  // the character at the cursor opens the SAME dropdown a member typing
+  // it manually would get. No second suggestion system.
+  function insertMentionTrigger() {
+    editor?.chain().focus().insertContent("@").run();
+  }
+  function insertChannelRefTrigger() {
+    editor?.chain().focus().insertContent("#").run();
   }
 
   async function handleImageFiles(fileList: FileList) {
@@ -313,7 +390,8 @@ export function PostComposer({
   function cleanupDraftAttachments() {
     // Create-mode cancel cleanup — unchanged from Phase C. Deletes
     // whatever's STILL in local state (anything already removed was
-    // already deleted eagerly by the remove handlers above).
+    // already deleted eagerly by the remove handlers above). GIF is
+    // deliberately absent here — there's no Storage object behind one.
     images.forEach((img) => void deleteCommunityPostImage(saId, img.storagePath).catch(() => {}));
     if (voiceNote) void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
     files.forEach((f) => void deleteCommunityPostFile(saId, f.storagePath).catch(() => {}));
@@ -348,6 +426,21 @@ export function PostComposer({
       ...(voiceNote ? [{ kind: "voice", voice: voiceNote } as MediaAttachment] : []),
       ...files.map((file): MediaAttachment => ({ kind: "file", file })),
       ...videoLinks.map((videoLink): MediaAttachment => ({ kind: "video-link", videoLink })),
+      ...(gif
+        ? [
+            {
+              kind: "gif",
+              gif: {
+                id: existingGif?.providerId === String(gif.id) ? existingGif.id : crypto.randomUUID(),
+                provider: "giphy",
+                providerId: String(gif.id),
+                title: gif.title || undefined,
+                authorMemberId: viewer.memberId,
+                createdAt: Date.now(),
+              },
+            } as MediaAttachment,
+          ]
+        : []),
     ];
   }
 
@@ -355,7 +448,7 @@ export function PostComposer({
     const trimmedTitle = title.trim();
     const attachments = buildAttachments();
     if (aboutPlainTextLength(body) === 0 && attachments.length === 0 && !poll) {
-      toast.error("Write something, attach a photo, file, video, or voice note, or add a poll");
+      toast.error("Write something, attach a photo, file, video, GIF, or voice note, or add a poll");
       return;
     }
     setSaving(true);
@@ -467,258 +560,295 @@ export function PostComposer({
   }
 
   return (
-    <div className="rounded-xl border border-[#E4E4E4] bg-white p-4">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Title (optional)"
-        className="w-full border-0 p-0 text-base font-semibold text-[#202124] outline-none placeholder:text-[#b4b4b4]"
-        autoFocus
-      />
-      <div className="mt-2">
-        <CommunityPostEditor
-          value={body}
-          onChange={setBody}
-          brand={brand}
-          mentions={{ fetchItems: mentionFetchItems }}
-          channelRefs={{ fetchItems: channelRefFetchItems }}
-          onEditorReady={setEditor}
-        />
-      </div>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) handleCancel();
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        showCloseButton
+        // Desktop centering — MUST be qualified with `data-[side=bottom]:`
+        // on every override, not just `sm:` (see create-poll-sheet.tsx's
+        // identical comment for exactly why a bare `sm:` rule silently
+        // loses to SheetContent's own compound base-class selectors).
+        // Wider than the Poll sheet (`max-w-2xl` vs `max-w-md`) — this is
+        // a full post editor, not a handful of option rows.
+        className="flex max-h-[92vh] flex-col gap-0 p-0 sm:data-[side=bottom]:inset-x-auto sm:data-[side=bottom]:left-1/2 sm:data-[side=bottom]:right-auto sm:data-[side=bottom]:w-full sm:data-[side=bottom]:max-w-2xl sm:data-[side=bottom]:-translate-x-1/2 sm:data-[side=bottom]:rounded-t-2xl"
+      >
+        <SheetHeader className="shrink-0 border-b border-[#f0f0f0] px-4 py-3 sm:px-5">
+          <SheetTitle>{mode === "create" ? "Create post" : "Edit post"}</SheetTitle>
+          <div className="mt-2 flex items-center gap-3">
+            <MemberAvatar author={viewer} size={40} brand={brand} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-[#202124]">{viewer.displayName}</p>
+              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[#909090]">
+                <select
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  aria-label="Channel"
+                  className="rounded-md border border-[#E4E4E4] bg-white px-1.5 py-0.5 text-xs text-[#3a3a44]"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <span>for {communityName}</span>
+              </div>
+            </div>
+          </div>
+        </SheetHeader>
 
-      {(images.length > 0 || imageUploading) && (
-        <div className="mt-2 grid grid-cols-4 gap-1.5">
-          {images.map((img) => (
-            <div key={img.id} className="group relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" className="aspect-square w-full rounded-lg object-cover" />
-              <button
-                type="button"
-                onClick={() => removeImage(img)}
-                title="Remove image"
-                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-          {imageUploading && (
-            <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-[#E4E4E4]">
-              <Loader2 className="h-4 w-4 animate-spin text-[#909090]" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {(files.length > 0 || fileUploading) && (
-        <div className="mt-2 space-y-1.5">
-          {files.map((f) => (
-            <div key={f.id} className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
-                {f.fileName} <span className="text-[#909090]">· {formatFileSize(f.fileSizeBytes)}</span>
-              </span>
-              <button type="button" onClick={() => removeFile(f)} title="Remove file" className="text-[#909090] hover:text-[#202124]">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-          {fileUploading && (
-            <div className="flex items-center gap-2 rounded-lg border border-dashed border-[#E4E4E4] px-3 py-2 text-xs text-[#909090]">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
-            </div>
-          )}
-        </div>
-      )}
-
-      {videoLinks.length > 0 && (
-        <div className="mt-2 space-y-1.5">
-          {videoLinks.map((v) => (
-            <div key={v.id} className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-xs capitalize text-[#3a3a44]">{v.provider} video attached</span>
-              <button type="button" onClick={() => removeVideoLink(v)} title="Remove video" className="text-[#909090] hover:text-[#202124]">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showRecorder && !voiceNote && (
-        <div className="mt-2">
-          {/* "Attach" here, not "Send" — inside a post composer, a
-              separate inner "Send" followed by an outer "Post"/"Save
-              Changes" button read as two sends. Label/icon override on
-              the same reusable recorder — a future DM integration keeps
-              the component's own default "Send" wording, unchanged. */}
-          <VoiceNoteRecorder
-            saId={saId}
-            brand={brand}
-            confirmLabel="Attach"
-            confirmIcon={Check}
-            onUploaded={(vn) => {
-              setVoiceNote(vn);
-              setShowRecorder(false);
-              if (mode === "edit") sessionUploadsRef.current.push({ storagePath: vn.storagePath, kind: "voice" });
-            }}
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title (optional)"
+            className="w-full border-0 p-0 text-base font-semibold text-[#202124] outline-none placeholder:text-[#b4b4b4]"
+            autoFocus
           />
-        </div>
-      )}
-      {voiceNote && (
-        <div className="mt-2 space-y-1">
-          <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
-            <Check className="h-3.5 w-3.5" /> Voice note attached to this post
-          </p>
-          <div className="flex items-center gap-2">
-            <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
-            <button
-              type="button"
-              onClick={removeVoiceNote}
-              title="Remove voice note"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:text-[#202124]"
-            >
-              <X className="h-4 w-4" />
-            </button>
+
+          {/* Formatting toolbar — PERMANENTLY visible above the writing
+              surface (Part 4), not behind an "Aa" popover toggle anymore.
+              "Description -> toolbar -> writing surface" hierarchy. */}
+          <div className="mt-2 overflow-hidden rounded-lg border border-[#E4E4E4]">
+            {editor && <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />}
+            <div className="px-3 py-2">
+              <CommunityPostEditor
+                value={body}
+                onChange={setBody}
+                brand={brand}
+                mentions={{ fetchItems: mentionFetchItems }}
+                channelRefs={{ fetchItems: channelRefFetchItems }}
+                onEditorReady={setEditor}
+              />
+            </div>
           </div>
-        </div>
-      )}
 
-      {poll && (
-        <div className="mt-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
-          <div className="flex items-center gap-2">
-            <ListChecks className="h-4 w-4 shrink-0 text-[#909090]" />
-            <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
-              Poll attached · {poll.options.filter((o) => o.text.trim()).length} options
-              {pollLocked && " · has votes"}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPollSheetOpen(true)}
-              className="shrink-0 text-xs font-medium text-[#606060] hover:text-[#202124]"
-            >
-              Edit
-            </button>
-            {!pollLocked && (
-              <button
-                type="button"
-                onClick={() => setPoll(null)}
-                title="Remove poll"
-                className="shrink-0 text-[#909090] hover:text-[#202124]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      <label className="mt-3 flex items-center gap-2 text-xs text-[#606060]">
-        <input
-          type="checkbox"
-          checked={!commentsDisabled}
-          onChange={(e) => setCommentsDisabled(!e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-[#E4E4E4]"
-        />
-        Allow comments/replies
-      </label>
-
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f0f0f0] pt-3">
-        <div className="flex flex-wrap items-center gap-1">
-          {/* Formatting — a Popover anchored to THIS trigger, not an
-              inline block rendered above the editor. See the module
-              comment for why that mattered. */}
-          <Popover open={formattingOpen} onOpenChange={setFormattingOpen}>
-            <PopoverTrigger
-              type="button"
-              title="Formatting"
-              aria-label="Formatting"
-              aria-pressed={formattingOpen}
-              className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-xs font-semibold",
-                formattingOpen ? "border-transparent text-white" : "border-[#E4E4E4] text-[#909090] hover:text-[#202124]",
+          {(images.length > 0 || imageUploading) && (
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {images.map((img) => (
+                <div key={img.id} className="group relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.url} alt="" className="aspect-square w-full rounded-lg object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(img)}
+                    title="Remove image"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+              {imageUploading && (
+                <div className="flex aspect-square w-full items-center justify-center rounded-lg border border-dashed border-[#E4E4E4]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#909090]" />
+                </div>
               )}
-              style={formattingOpen ? { backgroundColor: brand } : undefined}
-            >
-              <Type className="h-3.5 w-3.5" />
-            </PopoverTrigger>
-            <PopoverContent className="w-auto overflow-x-auto p-1">
-              {editor && <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />}
-            </PopoverContent>
-          </Popover>
+            </div>
+          )}
 
-          {/* Photo / voice / file / video / GIF — one consolidated `+`
-              menu, mirroring the comment composer's own `+` menu almost
-              exactly (video is the one addition posts get that comments
-              don't). Progressive disclosure instead of five permanent
-              icons. */}
-          <Popover open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
-            <PopoverTrigger
-              type="button"
-              title="Add to post"
-              aria-label="Add to post"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:bg-[#F0F0F0] hover:text-[#202124]"
-            >
-              <span className="text-base leading-none">+</span>
-            </PopoverTrigger>
-            <PopoverContent className="w-56 p-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setAttachMenuOpen(false);
-                  imageInputRef.current?.click();
+          {(files.length > 0 || fileUploading) && (
+            <div className="mt-2 space-y-1.5">
+              {files.map((f) => (
+                <div key={f.id} className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
+                    {f.fileName} <span className="text-[#909090]">· {formatFileSize(f.fileSizeBytes)}</span>
+                  </span>
+                  <button type="button" onClick={() => removeFile(f)} title="Remove file" className="text-[#909090] hover:text-[#202124]">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              {fileUploading && (
+                <div className="flex items-center gap-2 rounded-lg border border-dashed border-[#E4E4E4] px-3 py-2 text-xs text-[#909090]">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                </div>
+              )}
+            </div>
+          )}
+
+          {videoLinks.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              {videoLinks.map((v) => (
+                <div key={v.id} className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate text-xs capitalize text-[#3a3a44]">{v.provider} video attached</span>
+                  <button type="button" onClick={() => removeVideoLink(v)} title="Remove video" className="text-[#909090] hover:text-[#202124]">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(gif || gifResolving) && (
+            <div className="mt-2 max-w-[220px]">
+              {gifResolving ? (
+                <div className="aspect-[4/3] w-full animate-pulse rounded-lg bg-[#F0F0F0]" />
+              ) : (
+                gif && (
+                  <div className="group relative overflow-hidden rounded-lg">
+                    <GifPreview gif={gif} />
+                    <button
+                      type="button"
+                      onClick={removeGif}
+                      title="Remove GIF"
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          {showRecorder && !voiceNote && (
+            <div className="mt-2">
+              {/* "Attach" here, not "Send" — inside a post composer, a
+                  separate inner "Send" followed by an outer "Post"/"Save
+                  Changes" button read as two sends. Label/icon override on
+                  the same reusable recorder — a future DM integration keeps
+                  the component's own default "Send" wording, unchanged. */}
+              <VoiceNoteRecorder
+                saId={saId}
+                brand={brand}
+                confirmLabel="Attach"
+                confirmIcon={Check}
+                onUploaded={(vn) => {
+                  setVoiceNote(vn);
+                  setShowRecorder(false);
+                  if (mode === "edit") sessionUploadsRef.current.push({ storagePath: vn.storagePath, kind: "voice" });
                 }}
+              />
+            </div>
+          )}
+          {voiceNote && (
+            <div className="mt-2 space-y-1">
+              <p className="flex items-center gap-1 text-xs font-medium text-emerald-700">
+                <Check className="h-3.5 w-3.5" /> Voice note attached to this post
+              </p>
+              <div className="flex items-center gap-2">
+                <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
+                <button
+                  type="button"
+                  onClick={removeVoiceNote}
+                  title="Remove voice note"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#909090] hover:text-[#202124]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {poll && (
+            <div className="mt-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <ListChecks className="h-4 w-4 shrink-0 text-[#909090]" />
+                <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
+                  Poll attached · {poll.options.filter((o) => o.text.trim()).length} options
+                  {pollLocked && " · has votes"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPollSheetOpen(true)}
+                  className="shrink-0 text-xs font-medium text-[#606060] hover:text-[#202124]"
+                >
+                  Edit
+                </button>
+                {!pollLocked && (
+                  <button
+                    type="button"
+                    onClick={() => setPoll(null)}
+                    title="Remove poll"
+                    className="shrink-0 text-[#909090] hover:text-[#202124]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          <label className="mt-3 flex items-center gap-2 text-xs text-[#606060]">
+            <input
+              type="checkbox"
+              checked={!commentsDisabled}
+              onChange={(e) => setCommentsDisabled(!e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-[#E4E4E4]"
+            />
+            Allow comments/replies
+          </label>
+
+          {/* Action row — every action is its OWN always-visible,
+              tooltipped icon button (Part 5). No more "+" popover. */}
+          <TooltipProvider>
+            <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-[#f0f0f0] pt-3">
+              <ComposerActionIconButton
+                icon={ImagePlus}
+                label="Add photo"
+                onClick={() => imageInputRef.current?.click()}
                 disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-              >
-                <ImagePlus className="h-4 w-4 text-[#909090]" /> Add photo
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAttachMenuOpen(false);
-                  setShowRecorder(true);
-                }}
-                disabled={!!voiceNote}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-              >
-                <Mic className="h-4 w-4 text-[#909090]" /> Record voice note
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAttachMenuOpen(false);
-                  fileInputRef.current?.click();
-                }}
-                disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
-              >
-                <FileUp className="h-4 w-4 text-[#909090]" /> Upload file
-              </button>
+              />
               <AddVideoPopover
                 authorMemberId={viewer.memberId}
                 disabled={videoLinks.length >= 1}
-                onAdd={(v) => {
-                  setVideoLinks((prev) => [...prev, v]);
-                  setAttachMenuOpen(false);
-                }}
+                onAdd={(v) => setVideoLinks((prev) => [...prev, v])}
                 renderTrigger={() => (
-                  <span className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2]">
-                    <Video className="h-4 w-4 text-[#909090]" /> Add video
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full text-[#909090] hover:bg-[#F0F0F0] hover:text-[#202124]" />
+                      }
+                    >
+                      <Video className="h-4 w-4" />
+                    </TooltipTrigger>
+                    <TooltipContent>Add video</TooltipContent>
+                  </Tooltip>
                 )}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  setAttachMenuOpen(false);
-                  toast("GIFs are coming soon — we're finishing the provider setup.");
-                }}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#b4b4b4] hover:bg-[#F5F4F2]"
-              >
-                <Sticker className="h-4 w-4 text-[#b4b4b4]" /> Add GIF
-                <span className="ml-auto text-[10px] uppercase tracking-wide text-[#b4b4b4]">Soon</span>
-              </button>
-            </PopoverContent>
-          </Popover>
+              <ComposerActionIconButton
+                icon={Mic}
+                label="Record voice note"
+                onClick={() => setShowRecorder(true)}
+                disabled={!!voiceNote}
+              />
+              <ComposerActionIconButton
+                icon={FileUp}
+                label="Upload file"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
+              />
+              <GiphyPickerButton label="Add GIF" disabled={!!gif || gifResolving} onSelect={setGif} />
+              <ComposerActionIconButton
+                icon={AtSign}
+                label="Mention someone"
+                onClick={insertMentionTrigger}
+                disabled={!editor}
+              />
+              <ComposerActionIconButton
+                icon={Hash}
+                label="Reference a channel"
+                onClick={insertChannelRefTrigger}
+                disabled={!editor}
+              />
+              {canManagePoll && (
+                <ComposerActionIconButton
+                  icon={ListChecks}
+                  label={poll ? "Poll already attached" : "Add poll"}
+                  onClick={() => setPollSheetOpen(true)}
+                  disabled={!!poll}
+                />
+              )}
+              <EmojiPickerButton editor={editor} />
+            </div>
+          </TooltipProvider>
+
           <input
             ref={imageInputRef}
             type="file"
@@ -740,56 +870,24 @@ export function PostComposer({
               e.target.value = "";
             }}
           />
-
-          {/* Poll — moderator/admin-only (Part 1), server-enforced
-              regardless of this hidden-icon UX gate. */}
-          {canManagePoll && (
-            <button
-              type="button"
-              onClick={() => setPollSheetOpen(true)}
-              disabled={!!poll}
-              title={poll ? "Poll already attached" : "Add poll"}
-              aria-label="Add poll"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#E4E4E4] text-[#909090] hover:text-[#202124] disabled:opacity-40"
-            >
-              <ListChecks className="h-4 w-4" />
-            </button>
-          )}
-
-          <div className="flex h-7 w-7 items-center justify-center">
-            <EmojiPickerButton editor={editor} />
-          </div>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="rounded-md border border-[#E4E4E4] bg-white px-2 py-1 text-xs text-[#3a3a44]"
-          >
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCancel}
-            disabled={saving}
-            className="rounded-md px-3 py-1.5 text-xs font-medium text-[#909090] hover:text-[#202124]"
-          >
+
+        <SheetFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t border-[#f0f0f0] px-4 py-3 sm:px-5">
+          <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={submit}
             disabled={saving}
-            className="flex items-center gap-1 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: brand }}
+            className="text-white hover:opacity-90"
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {mode === "create" ? "Post" : "Save changes"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </SheetFooter>
+      </SheetContent>
 
       {canManagePoll && (
         <CreatePollSheet
@@ -800,6 +898,15 @@ export function PostComposer({
           onSave={setPoll}
         />
       )}
-    </div>
+    </Sheet>
   );
+}
+
+/** Lightweight inline preview of a freshly-picked GIF — the composer
+ *  already has the FULL `IGif` object in memory (the picker handed it
+ *  over directly), so this never needs the batched page-level resolver;
+ *  it's the official `Gif` component rendering an object we already have,
+ *  not a second resolution path. */
+function GifPreview({ gif }: { gif: IGif }) {
+  return <Gif gif={gif} width={220} percentWidth="100%" noLink hideAttribution={false} />;
 }
