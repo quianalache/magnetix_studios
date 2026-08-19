@@ -23,6 +23,7 @@ export async function POST(
     body?: string;
     category?: string | null;
     attachments?: unknown;
+    commentsDisabled?: boolean;
     poll?: unknown;
   };
   try {
@@ -103,6 +104,16 @@ export async function POST(
     body: html,
     attachments,
     category,
+    // Found during the composer correction pass' own required regression
+    // check (item 52: "comments-disabled behavior remains enforced") —
+    // this route accepted `CreatePostInput.commentsDisabled` but never
+    // actually read it off the request body, so the composer's "Allow
+    // comments/replies" checkbox has never had any effect on a NEWLY
+    // created post (only on an edit — the PATCH route already did this
+    // correctly). Pre-existing gap, unrelated to anything else in this
+    // pass; fixed here since leaving a checkbox that silently does
+    // nothing in production is worse than the small, isolated fix.
+    commentsDisabled: body.commentsDisabled === true,
     poll,
   });
 
