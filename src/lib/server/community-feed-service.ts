@@ -129,7 +129,16 @@ function toMillisOrNull(v: unknown): number | null {
  * read per-request, never cached/denormalized onto the post, so a vote
  * cast a second ago is reflected immediately.
  */
-function buildFeedPoll(
+/** Exported (2026-08-20, found live during QA) — the create/edit POST/PATCH
+ *  routes must run every poll they hand back through this SAME function
+ *  before it reaches the client. `createPostServerSide`/
+ *  `updatePostServerSide` return the RAW stored `CommunityPoll` (server
+ *  shape: no `viewerSelection`/`resultsVisible`/`closed`/`canManage`) —
+ *  handing that straight to the client as if it were a `FeedPoll` crashed
+ *  `CommunityPollCard` immediately (`poll.viewerSelection.length` on
+ *  `undefined`) the moment a newly-created poll rendered optimistically.
+ *  Confirmed live, fixed before this ever reached a real member. */
+export function buildFeedPoll(
   poll: CommunityPoll,
   viewerVote: string[] | null,
   viewerIsModerator: boolean,
@@ -153,8 +162,10 @@ function buildFeedPoll(
 
 /** Batch-read this viewer's own vote (if any) for each post that has a
  *  poll — mirrors `viewerLikes`'s "one small doc per post per viewer"
- *  shape, same reasoning: cheap, bounded, no aggregation query needed. */
-async function viewerPollVotes(
+ *  shape, same reasoning: cheap, bounded, no aggregation query needed.
+ *  Exported (2026-08-20) for the create/edit routes' own `buildFeedPoll`
+ *  call — see that export's comment. */
+export async function viewerPollVotes(
   saId: string,
   groupId: string,
   postIdsWithPolls: string[],

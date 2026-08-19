@@ -4,6 +4,8 @@ import {
   deletePostServerSide,
   setPinnedServerSide,
   updatePostServerSide,
+  buildFeedPoll,
+  viewerPollVotes,
 } from "@/lib/server/community-feed-service";
 import { getGroupById } from "@/lib/server/community-service";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -127,7 +129,18 @@ export async function PATCH(
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
-    return NextResponse.json({ ok: true, post });
+    // Same fix as the create route — `updatePostServerSide` returns the
+    // raw stored poll, not a viewer-safe `FeedPoll`. Only a moderator can
+    // ever reach this branch with a poll change, so `resultsVisible`/
+    // `canManage` are always true; unlike create, an edit CAN happen on a
+    // poll the editing moderator already voted on themselves, so their
+    // own vote is looked up for real rather than assumed empty.
+    let responsePoll: ReturnType<typeof buildFeedPoll> | undefined;
+    if (post.poll) {
+      const votes = await viewerPollVotes(saId, groupId, [postId], access.member.id);
+      responsePoll = buildFeedPoll(post.poll, votes.get(postId) ?? null, true);
+    }
+    return NextResponse.json({ ok: true, post: { ...post, poll: responsePoll } });
   }
 
   // Pin/unpin — unchanged from Phase C, moderator-only.

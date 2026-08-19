@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
-import { createPostServerSide } from "@/lib/server/community-feed-service";
+import { createPostServerSide, buildFeedPoll } from "@/lib/server/community-feed-service";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
 import { normalizePollDraft } from "@/lib/community/normalize-poll";
@@ -93,5 +93,14 @@ export async function POST(
     poll,
   });
 
-  return NextResponse.json({ ok: true, post });
+  // The stored `post.poll` is the raw server shape — `createPostServerSide`
+  // never computes a viewer-safe view. The moderator who just created this
+  // poll can't have a vote on it yet (it didn't exist a moment ago), so
+  // `viewerSelection` is always `[]` here, no lookup needed; they're a
+  // moderator by construction (checked above), so `resultsVisible`/
+  // `canManage` are always true for their own optimistic render.
+  return NextResponse.json({
+    ok: true,
+    post: { ...post, poll: post.poll ? buildFeedPoll(post.poll, [], true) : undefined },
+  });
 }
