@@ -78,13 +78,29 @@ function msToDatetimeLocal(ms: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** `PollDraftState` -> the raw shape `normalizePollDraft` (server) expects. */
+/** `PollDraftState` -> the raw shape `normalizePollDraft` (server) expects.
+ *
+ * `draft.endsAt` is a `<input type="datetime-local">` value — a
+ * timezone-NAIVE string ("2026-08-18T23:37", no offset). Found live during
+ * QA: sending that string as-is let the SERVER'S `new Date(...)` decide
+ * what timezone it means, and a serverless function's runtime timezone
+ * (typically UTC) is essentially never the same as the browser's — a
+ * moderator in EDT picking "1 hour from now" was silently sending a
+ * timestamp the server read as 1 hour from now IN UTC, ~4 hours off,
+ * sometimes landing in the past outright ("must be in the future" on an
+ * end date the moderator had just picked as clearly future). The fix has
+ * to happen HERE, client-side, where `new Date(localString)` still
+ * correctly resolves against the BROWSER's own local timezone (the one
+ * the moderator actually picked in) — converting to `.toISOString()`
+ * before it ever leaves the browser makes the instant unambiguous, so the
+ * server's own `new Date(...)` parses the exact same moment regardless of
+ * what timezone it happens to run in. */
 function draftToApiPayload(draft: PollDraftState) {
   return {
     options: draft.options.map((o) => ({ text: o.text })),
     allowMultiple: draft.allowMultiple,
     showResults: draft.showResults,
-    endsAt: draft.endsAt || null,
+    endsAt: draft.endsAt ? new Date(draft.endsAt).toISOString() : null,
   };
 }
 
