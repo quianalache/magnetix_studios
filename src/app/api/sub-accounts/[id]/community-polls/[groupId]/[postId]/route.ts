@@ -14,9 +14,14 @@ export async function GET(
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  const detail = await getPollDetailForAdmin({ subAccountId, groupId, postId });
-  if (!detail) {
-    return NextResponse.json({ error: "Poll not found" }, { status: 404 });
+  try {
+    const detail = await getPollDetailForAdmin({ subAccountId, groupId, postId });
+    if (!detail) {
+      return NextResponse.json({ error: "Poll not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, poll: detail });
+  } catch (err) {
+    console.error("[community-polls] detail failed", err);
+    return NextResponse.json({ error: "Couldn't load this poll" }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, poll: detail });
 }

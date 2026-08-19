@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Search } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Input } from "@/components/ui/input";
 
@@ -38,14 +38,27 @@ export default function PollResponsesPage({
   const [detail, setDetail] = useState<AdminPollDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  // Same fix as the list page (found live during QA there) — a real
+  // server error must never render identically to a genuine 404.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     fetch(`/api/sub-accounts/${subAccountId}/community-polls/${groupId}/${postId}`)
-      .then((r) => r.json())
-      .then((d: { poll?: AdminPollDetail }) => {
-        if (!cancelled) setDetail(d.poll ?? null);
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as { poll?: AdminPollDetail; error?: string };
+        if (cancelled) return;
+        if (!r.ok) {
+          if (r.status !== 404) setError(d.error ?? "Couldn't load this poll");
+          setDetail(null);
+          return;
+        }
+        setDetail(d.poll ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load this poll");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -79,6 +92,12 @@ export default function PollResponsesPage({
 
       {loading ? (
         <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" />
+      ) : error ? (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-10 text-center">
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+          <p className="text-sm font-medium text-destructive">Couldn&apos;t load this poll</p>
+          <p className="mt-1 text-xs text-muted-foreground">{error}</p>
+        </div>
       ) : !detail ? (
         <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
           Poll not found.

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ListChecks, Users } from "lucide-react";
+import { AlertTriangle, ListChecks, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 
 interface AdminPollSummary {
@@ -35,14 +35,30 @@ export default function CommunityPollsPage() {
   const { subAccountId, saPath } = useSubAccount();
   const [polls, setPolls] = useState<AdminPollSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  // Found live during QA: the old version parsed the response body
+  // unconditionally and did `d.polls ?? []` — a genuine server error (a
+  // missing Firestore index threw a 500 here at one point) rendered
+  // exactly like a real "no polls yet" empty state, with no visible sign
+  // anything had gone wrong. `error` is now tracked separately so a real
+  // failure gets its own distinct UI instead of masquerading as empty.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     fetch(`/api/sub-accounts/${subAccountId}/community-polls`)
-      .then((r) => r.json())
-      .then((d: { polls?: AdminPollSummary[] }) => {
-        if (!cancelled) setPolls(d.polls ?? []);
+      .then(async (r) => {
+        const d = (await r.json().catch(() => ({}))) as { polls?: AdminPollSummary[]; error?: string };
+        if (cancelled) return;
+        if (!r.ok) {
+          setError(d.error ?? "Couldn't load Community polls");
+          return;
+        }
+        setPolls(d.polls ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Couldn't load Community polls");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -66,6 +82,12 @@ export default function CommunityPollsPage() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl border bg-muted/30" />
           ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-10 text-center">
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+          <p className="text-sm font-medium text-destructive">Couldn&apos;t load Community polls</p>
+          <p className="mt-1 text-xs text-muted-foreground">{error}</p>
         </div>
       ) : polls.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
