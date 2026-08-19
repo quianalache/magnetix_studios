@@ -3,6 +3,7 @@ import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { createPostServerSide } from "@/lib/server/community-feed-service";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
+import { normalizePollDraft } from "@/lib/community/normalize-poll";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,28 @@ export async function POST(
     body?: string;
     category?: string | null;
     attachments?: unknown;
+    poll?: unknown;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // Polls (2026-08-20) — moderator/admin-only, enforced HERE (server-side)
+  // regardless of whether the composer's Poll icon was correctly hidden
+  // for this member; hiding the icon is UX, not the security boundary.
+  if (body.poll != null && access.membership.role !== "moderator") {
+    return NextResponse.json({ error: "Only moderators can create a poll" }, { status: 403 });
+  }
+  let poll;
+  try {
+    poll = normalizePollDraft(body.poll);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Invalid poll" },
+      { status: 400 },
+    );
   }
 
   // `body.body` is real HTML from the Community rich-text composer
@@ -43,10 +61,13 @@ export async function POST(
   // Phase C: a post is valid with visible text OR at least one real
   // attachment — image/voice-only posts are real content, not empty
   // posts. Attachments never count toward (or bypass) the text-length
-  // cap; the two are validated independently.
-  if (visibleLength === 0 && attachments.length === 0) {
+  // cap; the two are validated independently. Polls (2026-08-20): a poll
+  // IS the content — the reference Create Poll sheet never asks for a
+  // separate question, so a poll-only post (no title/body typed) is valid
+  // too, same reasoning as an image/voice-only post.
+  if (visibleLength === 0 && attachments.length === 0 && !poll) {
     return NextResponse.json(
-      { error: "Write something, or attach a photo or voice note" },
+      { error: "Write something, attach a photo or voice note, or add a poll" },
       { status: 400 },
     );
   }
@@ -69,6 +90,7 @@ export async function POST(
     body: html,
     attachments,
     category,
+    poll,
   });
 
   return NextResponse.json({ ok: true, post });

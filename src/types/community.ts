@@ -267,8 +267,94 @@ export interface CommunityPost {
    *  existing comments; it only blocks NEW ones (enforced server-side in
    *  the comments POST route, not merely hidden in the UI). */
   commentsDisabled?: boolean;
+  /** Polls (2026-08-20) — moderator/admin-only, created together with the
+   *  post (or added during an edit) via the composer's Poll action. The
+   *  post's own title/body IS the poll's question/context — there is no
+   *  separate `pollQuestion` field, matching both the GoCollab reference
+   *  (its Create Poll sheet collects only options + settings, no question
+   *  field) and this composer's existing model of "one thing being
+   *  composed," not two disconnected forms glued together. Stored directly
+   *  on the post rather than as a `MediaAttachment` — a poll is structured,
+   *  queryable, mutable-with-rules data (vote counts, settings, an
+   *  immutability rule once votes exist), nothing like the write-once
+   *  media kinds `MediaAttachment` represents. `optionCounts`/`voterCount`
+   *  are denormalized here (updated transactionally by
+   *  `voteOnPollServerSide`) so rendering results never requires reading
+   *  the entire `pollVotes` subcollection — but this raw doc is NEVER sent
+   *  to a client directly; every read path funnels it through
+   *  `buildFeedPoll`, which redacts `optionCounts`/`voterCount` per-viewer
+   *  based on `showResults` (see `FeedPoll`). Deleting the parent post
+   *  recursively deletes `pollVotes` along with it (same `recursiveDelete`
+   *  call `deletePostServerSide` already made) — no separate retention
+   *  step needed, and (deliberately, per explicit product instruction) NOT
+   *  the same "outlives its parent" convention `forms/{id}` submissions
+   *  currently have; see the Polls report for that discovered
+   *  inconsistency. */
+  poll?: CommunityPoll;
+  /** Denormalized `!!poll` for cheap querying (e.g. the admin-side
+   *  Community Polls list under Forms & Quizzes) without a nested-field
+   *  inequality filter. Absent/false on every post without a poll. */
+  hasPoll?: boolean;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
+}
+
+export interface CommunityPollOption {
+  id: string;
+  text: string;
+}
+
+export interface CommunityPoll {
+  options: CommunityPollOption[];
+  /** OFF by default — one selection per member. */
+  allowMultiple: boolean;
+  /** "Allow members to see results." OFF by default — only the poll's
+   *  moderator/admin can see aggregate results while this is off; the
+   *  voting member can always see their OWN selection regardless (see
+   *  `FeedPoll.viewerSelection`). */
+  showResults: boolean;
+  /** Optional close time. Null/undefined = never closes on its own.
+   *  Enforced server-side in `voteOnPollServerSide` (a vote after this
+   *  time is rejected), not merely a disabled button. */
+  endsAt: Timestamp | FieldValue | null;
+  /** Distinct members who have voted — NOT total selections (a member
+   *  choosing 3 options in an allowMultiple poll still counts once here). */
+  voterCount: number;
+  /** option id -> selection count, across every voter. */
+  optionCounts: Record<string, number>;
+}
+
+/** The safe, per-viewer poll view every read path (`listFeed`,
+ *  `getFeedPost`) computes via `buildFeedPoll` — never the raw
+ *  `CommunityPoll` doc. `optionCounts`/`voterCount` are present only when
+ *  `resultsVisible` is true for THIS viewer; a member who hasn't voted and
+ *  isn't a moderator on a `showResults: false` poll gets neither, so
+ *  totals/percentages can never leak through the API response even to a
+ *  technically-inspectable network tab. */
+export interface FeedPoll {
+  options: CommunityPollOption[];
+  allowMultiple: boolean;
+  /** The raw "allow members to see results" setting — safe to expose to
+   *  everyone (it's configuration, not the data it gates); distinct from
+   *  `resultsVisible` below, which is THIS viewer's actual computed
+   *  permission right now (always true for a moderator regardless of this
+   *  setting). Needed so a moderator's "Edit poll" sheet can show/change
+   *  the real toggle state instead of the always-true value they'd
+   *  otherwise see for their own results. */
+  showResults: boolean;
+  endsAtMs: number | null;
+  closed: boolean;
+  resultsVisible: boolean;
+  optionCounts: Record<string, number> | null;
+  voterCount: number | null;
+  /** This viewer's own current selection — always populated once they've
+   *  voted, regardless of `resultsVisible` ("show the member's selection
+   *  clearly" is independent of results visibility). Empty array = hasn't
+   *  voted yet. */
+  viewerSelection: string[];
+  /** True for the poll's own moderator/admin group — drives the "Edit
+   *  poll" affordance, which reuses the existing Edit Post flow. */
+  canManage: boolean;
 }
 
 export interface CommunityComment {
@@ -318,9 +404,13 @@ export interface AuthorView {
 }
 
 /** A post hydrated with its author + the viewer's like state, for rendering. */
-export interface FeedPost extends CommunityPost {
+export interface FeedPost extends Omit<CommunityPost, "poll"> {
   author: AuthorView;
   likedByViewer: boolean;
+  /** Computed by `buildFeedPoll` — the safe, per-viewer view of the raw
+   *  `CommunityPost.poll` doc (never sent to the client directly). Present
+   *  only when the post has a poll. */
+  poll?: FeedPoll;
 }
 
 export interface FeedComment extends CommunityComment {

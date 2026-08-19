@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { MessageCircle, Pin, ThumbsUp } from "lucide-react";
-import type { AuthorView } from "@/types/community";
+import type { AuthorView, FeedPoll } from "@/types/community";
 import type { MediaAttachment } from "@/types/media-attachment";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
 import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
+import { CommunityPollCard } from "@/components/community/feed/community-poll-card";
 import { PostComposer } from "@/components/community/feed/post-composer";
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,8 @@ export interface ClientPost {
   createdAtMs: number | null;
   author: AuthorView;
   likedByViewer: boolean;
+  /** Polls (2026-08-20) — the viewer-safe server view; absent = no poll. */
+  poll?: FeedPoll;
 }
 
 interface Viewer {
@@ -151,6 +154,23 @@ export function FeedView({
     } else {
       toast.error("Couldn't update pin");
     }
+  }
+
+  async function submitVote(postId: string, optionIds: string[]) {
+    const res = await fetch(`${base}/posts/${postId}/poll/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionIds }),
+    });
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; poll?: unknown };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't record your vote");
+      throw new Error(d.error ?? "vote failed");
+    }
+    // Replace with the server's own recomputed FeedPoll — never trust a
+    // locally-guessed count, since other members may have voted between
+    // this request and the response.
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, poll: d.poll as ClientPost["poll"] } : p)));
   }
 
   async function deletePost(postId: string) {
@@ -304,6 +324,13 @@ export function FeedView({
                           attachments={p.attachments}
                           brand={brand}
                           className="mt-2"
+                        />
+                      )}
+                      {p.poll && (
+                        <CommunityPollCard
+                          poll={p.poll}
+                          brand={brand}
+                          onVote={(optionIds) => submitVote(p.id, optionIds)}
                         />
                       )}
                       <div className="mt-3 flex items-center gap-4 text-xs text-[#909090]">

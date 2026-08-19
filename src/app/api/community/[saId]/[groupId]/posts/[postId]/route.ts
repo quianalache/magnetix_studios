@@ -9,6 +9,8 @@ import { getGroupById } from "@/lib/server/community-service";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
+import { normalizePollEdit } from "@/lib/community/normalize-poll";
+import type { CommunityPost } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,9 @@ export async function PATCH(
       category?: string | null;
       attachments?: unknown;
       commentsDisabled?: boolean;
+      /** `undefined` = leave the existing poll untouched; `null` = remove
+       *  it; an object = create/replace it. See `normalizePollEdit`. */
+      poll?: unknown;
     };
   };
   try {
@@ -68,13 +73,34 @@ export async function PATCH(
       );
     }
 
+    const existing = snap.data() as CommunityPost;
+
+    // Polls (2026-08-20) — same moderator-only boundary as creation,
+    // checked HERE even though `isAuthor` may already be true: a poll's
+    // existence is a moderator decision, not a plain post-ownership one
+    // (an author editing their OWN post still can't add/change a poll
+    // unless they're also a moderator).
+    if (body.edit.poll !== undefined && access.membership.role !== "moderator") {
+      return NextResponse.json({ error: "Only moderators can change a poll" }, { status: 403 });
+    }
+    let poll: ReturnType<typeof normalizePollEdit>;
+    try {
+      poll = normalizePollEdit(body.edit.poll, existing.poll);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid poll" },
+        { status: 400 },
+      );
+    }
+
     const html = body.edit.body?.trim() ?? "";
     const visibleLength = aboutPlainTextLength(html);
     const attachments = normalizePostAttachments(body.edit.attachments, access.member.id);
+    const effectivePoll = poll === undefined ? existing.poll : poll;
 
-    if (visibleLength === 0 && attachments.length === 0) {
+    if (visibleLength === 0 && attachments.length === 0 && !effectivePoll) {
       return NextResponse.json(
-        { error: "Write something, or attach a photo or voice note" },
+        { error: "Write something, attach a photo or voice note, or add a poll" },
         { status: 400 },
       );
     }
@@ -96,6 +122,7 @@ export async function PATCH(
       attachments,
       category,
       commentsDisabled: body.edit.commentsDisabled === true,
+      poll,
     });
     if (!post) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });

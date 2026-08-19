@@ -8,8 +8,10 @@ import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/c
 import type {
   AuthorView,
   CommunityComment,
+  CommunityPoll,
   CommunityPost,
   FeedComment,
+  FeedPoll,
   FeedPost,
   Member,
 } from "@/types/community";
@@ -29,7 +31,10 @@ function postsCol(saId: string, groupId: string) {
   );
 }
 
-function displayNameFor(member: Pick<Member, "displayName" | "email">): string {
+/** Exported for the poll-vote route, which needs to denormalize the
+ *  voter's display name onto their vote doc — same fallback rule every
+ *  other author-name display in this file already uses. */
+export function displayNameFor(member: Pick<Member, "displayName" | "email">): string {
   if (member.displayName && member.displayName.trim()) {
     return member.displayName.trim();
   }
@@ -105,6 +110,72 @@ async function viewerLikes(
   return liked;
 }
 
+/** millis for a Firestore Timestamp/Date/FieldValue-shaped value, or null. */
+function toMillisOrNull(v: unknown): number | null {
+  if (!v) return null;
+  const m = v as { toMillis?: () => number; toDate?: () => Date; seconds?: number };
+  if (typeof m.toMillis === "function") return m.toMillis();
+  if (typeof m.toDate === "function") return m.toDate().getTime();
+  if (typeof m.seconds === "number") return m.seconds * 1000;
+  return null;
+}
+
+/**
+ * The ONE place a raw {@link CommunityPoll} doc is turned into the
+ * viewer-safe {@link FeedPoll} every read path sends to the client — see
+ * the type's own doc comment for why `optionCounts`/`voterCount` must
+ * never leak here when `resultsVisible` is false. `viewerVote` is this
+ * specific viewer's own vote doc (or null if they haven't voted) — always
+ * read per-request, never cached/denormalized onto the post, so a vote
+ * cast a second ago is reflected immediately.
+ */
+function buildFeedPoll(
+  poll: CommunityPoll,
+  viewerVote: string[] | null,
+  viewerIsModerator: boolean,
+): FeedPoll {
+  const endsAtMs = toMillisOrNull(poll.endsAt);
+  const closed = endsAtMs !== null && endsAtMs <= Date.now();
+  const resultsVisible = poll.showResults || viewerIsModerator;
+  return {
+    options: poll.options,
+    allowMultiple: poll.allowMultiple,
+    showResults: poll.showResults,
+    endsAtMs,
+    closed,
+    resultsVisible,
+    optionCounts: resultsVisible ? poll.optionCounts : null,
+    voterCount: resultsVisible ? poll.voterCount : null,
+    viewerSelection: viewerVote ?? [],
+    canManage: viewerIsModerator,
+  };
+}
+
+/** Batch-read this viewer's own vote (if any) for each post that has a
+ *  poll — mirrors `viewerLikes`'s "one small doc per post per viewer"
+ *  shape, same reasoning: cheap, bounded, no aggregation query needed. */
+async function viewerPollVotes(
+  saId: string,
+  groupId: string,
+  postIdsWithPolls: string[],
+  viewerMemberId: string,
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (postIdsWithPolls.length === 0) return result;
+  const db = getAdminDb();
+  const refs = postIdsWithPolls.map((id) =>
+    db.doc(`subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/pollVotes/${viewerMemberId}`),
+  );
+  const snaps = await db.getAll(...refs);
+  snaps.forEach((s, i) => {
+    if (s.exists) {
+      const optionIds = (s.data()?.optionIds as string[] | undefined) ?? [];
+      result.set(postIdsWithPolls[i], optionIds);
+    }
+  });
+  return result;
+}
+
 export interface CreatePostInput {
   subAccountId: string;
   agencyId: string;
@@ -120,6 +191,10 @@ export interface CreatePostInput {
   /** Phase D — defaults to false (comments allowed), matching
    *  `CommunityPost.commentsDisabled`'s "absent = allowed" convention. */
   commentsDisabled?: boolean;
+  /** Already permission-checked (moderator-only) AND shape-validated
+   *  (`normalizePollDraft`) by the API route — this layer just stores it,
+   *  same convention as `attachments` above. */
+  poll?: CommunityPoll | null;
 }
 
 export async function createPostServerSide(
@@ -148,6 +223,8 @@ export async function createPostServerSide(
     // true, so a plain post costs nothing extra and old-post compatibility
     // needs no special-casing on read (`commentsDisabled` absent === false).
     commentsDisabled: input.commentsDisabled ? true : undefined,
+    poll: input.poll ?? undefined,
+    hasPoll: input.poll ? true : undefined,
     pinned: false,
     likeCount: 0,
     commentCount: 0,
@@ -198,6 +275,11 @@ export async function listFeed(opts: {
   subAccountId: string;
   groupId: string;
   viewerMemberId: string;
+  /** Drives `FeedPoll.resultsVisible`/`canManage` for every poll in this
+   *  feed — defaults to false (safest default: a caller that forgets to
+   *  pass this gets the ordinary-member view, never an accidental
+   *  results/edit leak to someone who isn't actually a moderator). */
+  viewerIsModerator?: boolean;
   category?: string | null;
   limit?: number;
 }): Promise<FeedPost[]> {
@@ -226,6 +308,8 @@ export async function listFeed(opts: {
     posts.map((p) => p.id),
     opts.viewerMemberId,
   );
+  const pollPostIds = posts.filter((p) => p.poll).map((p) => p.id);
+  const votes = await viewerPollVotes(opts.subAccountId, opts.groupId, pollPostIds, opts.viewerMemberId);
 
   return posts.map((p) => ({
     ...p,
@@ -236,6 +320,7 @@ export async function listFeed(opts: {
       level: 1,
     },
     likedByViewer: liked.has(p.id),
+    poll: p.poll ? buildFeedPoll(p.poll, votes.get(p.id) ?? null, opts.viewerIsModerator === true) : undefined,
   }));
 }
 
@@ -244,6 +329,8 @@ export async function getFeedPost(opts: {
   groupId: string;
   postId: string;
   viewerMemberId: string;
+  /** See `listFeed`'s same option — same safe-default reasoning. */
+  viewerIsModerator?: boolean;
 }): Promise<FeedPost | null> {
   const snap = await postsCol(opts.subAccountId, opts.groupId)
     .doc(opts.postId)
@@ -259,6 +346,9 @@ export async function getFeedPost(opts: {
     [post.id],
     opts.viewerMemberId,
   );
+  const votes = post.poll
+    ? await viewerPollVotes(opts.subAccountId, opts.groupId, [post.id], opts.viewerMemberId)
+    : null;
   return {
     ...post,
     author: authors.get(post.authorMemberId) ?? {
@@ -268,6 +358,7 @@ export async function getFeedPost(opts: {
       level: 1,
     },
     likedByViewer: liked.has(post.id),
+    poll: post.poll ? buildFeedPoll(post.poll, votes?.get(post.id) ?? null, opts.viewerIsModerator === true) : undefined,
   };
 }
 
@@ -513,6 +604,12 @@ export interface UpdatePostInput {
   attachments?: MediaAttachment[];
   category: string | null;
   commentsDisabled: boolean;
+  /** Already permission-checked + validated (`normalizePollEdit`, which
+   *  also enforces the "locked after votes exist" rule) by the API route.
+   *  `undefined` = don't touch the existing poll at all; `null` = remove
+   *  it (only reachable when it had zero votes — `normalizePollEdit`
+   *  throws otherwise); an object = replace/update it. */
+  poll?: CommunityPoll | null;
 }
 
 export async function updatePostServerSide(input: UpdatePostInput): Promise<CommunityPost | null> {
@@ -545,6 +642,19 @@ export async function updatePostServerSide(input: UpdatePostInput): Promise<Comm
     // rather than writing `false`.
     commentsDisabled: input.commentsDisabled ? true : FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp(),
+    // `undefined` here correctly means "skip this field" under
+    // ignoreUndefinedProperties — i.e. leave the existing poll (if any)
+    // completely untouched, which is exactly what an edit request that
+    // never mentioned `poll` should do. `null` -> FieldValue.delete()
+    // (only reachable pre-votes; see UpdatePostInput's doc comment) and
+    // an object -> stored as-is (already the full merged poll, INCLUDING
+    // preserved optionCounts/voterCount, per normalizePollEdit).
+    ...(input.poll === undefined
+      ? {}
+      : {
+          poll: input.poll === null ? FieldValue.delete() : input.poll,
+          hasPoll: input.poll === null ? FieldValue.delete() : true,
+        }),
   };
   await ref.update(updates);
   // Best-effort, after the write succeeds — a Storage hiccup here must
@@ -562,7 +672,101 @@ export async function updatePostServerSide(input: UpdatePostInput): Promise<Comm
     attachments: input.attachments?.length ? input.attachments : undefined,
     category: input.category,
     commentsDisabled: input.commentsDisabled,
+    poll: input.poll === undefined ? existing.poll : (input.poll ?? undefined),
+    hasPoll: input.poll === undefined ? existing.hasPoll : !!input.poll,
   } as CommunityPost;
+}
+
+/**
+ * Cast or change a member's vote on a poll — one doc per member at
+ * `posts/{postId}/pollVotes/{memberId}`, so re-voting is a `.set()`
+ * overwrite of the SAME doc (Part 7's "update rather than creating
+ * duplicate submissions"), and the doc id itself is what enforces "one
+ * submission per member" (a second vote can only ever land on the same
+ * doc, never a new one). Denormalizes `subAccountId`/`groupId`/`postId`
+ * onto the vote doc purely so the Forms & Quizzes-side admin views can
+ * query the `pollVotes` collection group directly (by subAccountId, or by
+ * memberId for a future "this member's poll history" view) without
+ * needing the full nested path — same reasoning `FormSubmission.contactId`
+ * is denormalized for its own collectionGroup query.
+ *
+ * Transactional: reads the poll + the member's own prior vote (if any),
+ * computes the optionCounts delta in JS (at most 5 keys — trivial), and
+ * writes the vote doc + the post's denormalized counts together, so a
+ * concurrent double-submit can't corrupt the totals. `endsAt` is
+ * re-checked HERE, not just relied on from a client-side disabled button —
+ * Part 6's "enforce closing server-side."
+ */
+export async function votePollServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  postId: string;
+  memberId: string;
+  memberDisplayName: string;
+  viewerIsModerator: boolean;
+  optionIds: string[];
+}): Promise<{ ok: true; poll: FeedPoll } | { ok: false; error: string }> {
+  const db = getAdminDb();
+  const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
+  const voteRef = postRef.collection("pollVotes").doc(opts.memberId);
+
+  return db.runTransaction(async (tx) => {
+    const [postSnap, voteSnap] = await Promise.all([tx.get(postRef), tx.get(voteRef)]);
+    if (!postSnap.exists) return { ok: false, error: "Post not found" };
+    const poll = (postSnap.data() as CommunityPost).poll;
+    if (!poll) return { ok: false, error: "This post has no poll" };
+
+    const endsAtMs = toMillisOrNull(poll.endsAt);
+    if (endsAtMs !== null && endsAtMs <= Date.now()) {
+      return { ok: false, error: "This poll is closed" };
+    }
+
+    const validIds = new Set(poll.options.map((o) => o.id));
+    const requested = Array.from(new Set(opts.optionIds)).filter((id) => validIds.has(id));
+    if (requested.length === 0) {
+      return { ok: false, error: "Choose at least one option" };
+    }
+    if (!poll.allowMultiple && requested.length > 1) {
+      return { ok: false, error: "This poll only allows one answer" };
+    }
+
+    const previous: string[] = voteSnap.exists
+      ? ((voteSnap.data()?.optionIds as string[] | undefined) ?? [])
+      : [];
+    const optionCounts = { ...poll.optionCounts };
+    for (const id of previous) {
+      if (!requested.includes(id)) {
+        optionCounts[id] = Math.max(0, (optionCounts[id] ?? 0) - 1);
+      }
+    }
+    for (const id of requested) {
+      if (!previous.includes(id)) {
+        optionCounts[id] = (optionCounts[id] ?? 0) + 1;
+      }
+    }
+    const voterCount = poll.voterCount + (voteSnap.exists ? 0 : 1);
+    const now = FieldValue.serverTimestamp();
+
+    tx.set(voteRef, {
+      memberId: opts.memberId,
+      memberDisplayName: opts.memberDisplayName,
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      postId: opts.postId,
+      optionIds: requested,
+      votedAt: voteSnap.exists ? voteSnap.data()!.votedAt : now,
+      updatedAt: now,
+    });
+    tx.update(postRef, {
+      "poll.optionCounts": optionCounts,
+      "poll.voterCount": voterCount,
+    });
+
+    return {
+      ok: true,
+      poll: buildFeedPoll({ ...poll, optionCounts, voterCount }, requested, opts.viewerIsModerator),
+    };
+  });
 }
 
 export async function deletePostServerSide(opts: {
@@ -590,7 +794,14 @@ export async function deletePostServerSide(opts: {
   );
   await deleteAttachmentStorage(commentAttachments);
 
-  // Recursive delete cleans up the comments + likes subcollections.
+  // Recursive delete cleans up the comments + likes + pollVotes
+  // subcollections — no separate poll-response cleanup step needed. This
+  // is a deliberate departure from `forms/{id}` submissions, which
+  // currently OUTLIVE a deleted parent form (`deleteForm` is a plain
+  // single-doc delete, not recursive) — investigated for Part 10 of the
+  // Polls report and NOT changed here (out of scope), but flagged there as
+  // an inconsistency worth a deliberate decision before any future
+  // cross-feature retention/reporting work treats the two as equivalent.
   await getAdminDb().recursiveDelete(ref);
 }
 

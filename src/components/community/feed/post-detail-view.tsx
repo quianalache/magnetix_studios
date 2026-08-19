@@ -11,6 +11,7 @@ import { ActionsMenu, type MenuItem } from "@/components/community/actions-menu"
 import { AuthorLink } from "@/components/community/author-link";
 import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
+import { CommunityPollCard } from "@/components/community/feed/community-poll-card";
 import { PostComposer } from "@/components/community/feed/post-composer";
 import { CommentComposer, type ReplyTarget } from "@/components/community/feed/comment-composer";
 import { communityHomeHref } from "@/lib/community/routes";
@@ -122,6 +123,20 @@ export function PostDetailView({
     } else {
       toast.error("Couldn't delete");
     }
+  }
+
+  async function submitVote(optionIds: string[]) {
+    const res = await fetch(`${base}/posts/${post.id}/poll/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ optionIds }),
+    });
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; poll?: unknown };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't record your vote");
+      throw new Error(d.error ?? "vote failed");
+    }
+    setCurrentPost((p) => ({ ...p, poll: d.poll as ClientPost["poll"] }));
   }
 
   async function toggleCommentLike(id: string) {
@@ -250,6 +265,9 @@ export function PostDetailView({
               groupSlug={groupSlug}
             />
             <CommunityPostAttachments attachments={currentPost.attachments} brand={brand} className="mt-2" />
+            {currentPost.poll && (
+              <CommunityPollCard poll={currentPost.poll} brand={brand} onVote={submitVote} />
+            )}
             <div className="mt-3 flex items-center gap-2 border-t border-[#f0f0f0] pt-3 text-sm">
               <button
                 onClick={togglePostLike}

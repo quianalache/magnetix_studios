@@ -56,6 +56,7 @@ export default async function PostDetailPage({
     groupId: group.id,
     postId,
     viewerMemberId: member.id,
+    viewerIsModerator: membership.role === "moderator",
   });
   if (!feedPost) notFound();
 
@@ -89,6 +90,7 @@ export default async function PostDetailPage({
     createdAtMs: toMillis(feedPost.createdAt),
     author: feedPost.author,
     likedByViewer: feedPost.likedByViewer,
+    poll: feedPost.poll,
   };
 
   const clientComments: ClientComment[] = comments.map((c) => ({

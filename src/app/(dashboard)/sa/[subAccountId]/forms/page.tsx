@@ -12,6 +12,7 @@ import {
   Trash2,
   MessageSquare,
   Inbox,
+  ListChecks,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -120,6 +121,15 @@ export default function FormsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Community Polls (2026-08-20) — a separate, poll-specific
+              response experience, not a LeadForm — see that page's own
+              comment for why. Linked from here so it's discoverable
+              "under Forms & Quizzes" per the explicit product instruction,
+              without merging its data or UI into the forms list below. */}
+          <Button variant="outline" render={<Link href={saPath("/forms/community-polls")} />}>
+            <ListChecks className="mr-1 h-4 w-4" />
+            Community Polls
+          </Button>
           <Button
             variant="outline"
             onClick={handleCreateContact}

@@ -19,10 +19,17 @@ export function AddVideoPopover({
   authorMemberId,
   onAdd,
   disabled,
+  renderTrigger,
 }: {
   authorMemberId: string;
   onAdd: (video: VideoLinkAttachment) => void;
   disabled?: boolean;
+  /** Optional custom trigger content — see `LinkPopover`'s identical prop.
+   *  Composer UX refinement (2026-08-20): lets "Add video" become a `+`
+   *  menu row instead of its own always-visible toolbar icon, same
+   *  consolidation the comment composer's `+` menu already established for
+   *  "Add link." Omitted = unchanged default icon-button look. */
+  renderTrigger?: (active: boolean) => React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -58,9 +65,13 @@ export function AddVideoPopover({
         aria-label="Add video"
         disabled={disabled}
         onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-[#909090] hover:bg-[#F0F0F0] hover:text-[#202124] disabled:opacity-40"
+        className={
+          renderTrigger
+            ? undefined
+            : "flex h-8 w-8 items-center justify-center rounded-full text-[#909090] hover:bg-[#F0F0F0] hover:text-[#202124] disabled:opacity-40"
+        }
       >
-        <Video className="h-4 w-4" />
+        {renderTrigger ? renderTrigger(open) : <Video className="h-4 w-4" />}
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-2.5">
         <p className="text-xs font-medium text-foreground">Add video or media</p>

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { EditorContent, type Editor } from "@tiptap/react";
 import { useRichTextEditor } from "@/components/editor/use-rich-text-editor";
-import { RichTextToolbar, type RichTextToolbarItem } from "@/components/editor/rich-text-toolbar-items";
+import type { RichTextToolbarItem } from "@/components/editor/rich-text-toolbar-items";
 import type { MentionSuggestionItem } from "@/components/editor/mention-suggestion";
 import {
   communityPostLinkColorStyle,
@@ -19,16 +19,25 @@ import { cn } from "@/lib/utils";
  * composer's own attachment tray below the editor, never inline nodes
  * inside it (see the Phase D report for why).
  *
- * Composed directly from `useRichTextEditor` + `RichTextToolbar` (the same
- * shared pieces `RichTextEditorCore` is built from) rather than mounting
+ * Composed directly from `useRichTextEditor` (the same shared core
+ * `RichTextEditorCore` is built from) rather than mounting
  * `RichTextEditorCore` itself — Community wants the editor to sit flush
  * inside its own card (no boxed/bordered editor, matching the plain
- * textarea it replaces) with the toolbar's visibility externally
- * controlled by the composer's "Aa" toggle, which `RichTextEditorCore`'s
- * always-visible-toolbar design doesn't support. Still zero duplicated
- * TipTap setup or toolbar-rendering logic — both come from Phase A as-is.
+ * textarea it replaces). Formatting-menu UX refinement (2026-08-20): the
+ * toolbar used to render INSIDE this component, directly above
+ * `EditorContent` — which sat near the TOP of the composer card while the
+ * "Aa" toggle that revealed it lived in the action row at the BOTTOM,
+ * so tapping it made a new control strip appear far from where the member
+ * was actually looking/tapping ("teleporting," per the explicit product
+ * complaint). The toolbar now renders in `PostComposer` itself, inside a
+ * `Popover` anchored to the SAME "Aa" button that toggles it — this
+ * component only owns the editor content area and hands its `editor`
+ * instance up via `onEditorReady`, same as it already did for the Emoji
+ * button. `COMMUNITY_POST_TOOLBAR` is exported so `PostComposer` builds
+ * its `RichTextToolbar` from the exact same item list, not a second one
+ * that could quietly drift out of sync.
  */
-const COMMUNITY_POST_TOOLBAR: RichTextToolbarItem[] = [
+export const COMMUNITY_POST_TOOLBAR: RichTextToolbarItem[] = [
   "bold",
   "italic",
   "underline",
@@ -45,7 +54,6 @@ const COMMUNITY_POST_TOOLBAR: RichTextToolbarItem[] = [
 export function CommunityPostEditor({
   value,
   onChange,
-  toolbarOpen,
   brand,
   mentions,
   channelRefs,
@@ -53,10 +61,6 @@ export function CommunityPostEditor({
 }: {
   value: string;
   onChange: (html: string) => void;
-  /** Controlled by the parent composer's "Aa" button — see feed-view.tsx.
-   *  Collapsing this does NOT remove any formatting already applied to
-   *  the text; it only hides the button row. */
-  toolbarOpen: boolean;
   /** Same tenant brand color CommunityPostBody renders published links
    *  with — see communityPostLinkColorStyle. */
   brand: string;
@@ -104,11 +108,6 @@ export function CommunityPostEditor({
 
   return (
     <div style={communityPostLinkColorStyle(brand)}>
-      {toolbarOpen && (
-        <div className="mb-2 overflow-x-auto rounded-lg border border-[#E4E4E4]">
-          <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />
-        </div>
-      )}
       <EditorContent editor={editor} />
     </div>
   );

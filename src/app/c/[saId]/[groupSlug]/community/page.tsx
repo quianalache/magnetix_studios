@@ -66,6 +66,7 @@ export default async function CommunityFeedPage({
     subAccountId: saId,
     groupId: group.id,
     viewerMemberId: member.id,
+    viewerIsModerator: membership.role === "moderator",
   });
 
   const posts: ClientPost[] = feed.map((p) => ({
@@ -85,6 +86,9 @@ export default async function CommunityFeedPage({
     createdAtMs: toMillis(p.createdAt),
     author: p.author,
     likedByViewer: p.likedByViewer,
+    // Already the safe, per-viewer FeedPoll view (buildFeedPoll) — see
+    // types/community.ts. Never the raw CommunityPost.poll doc.
+    poll: p.poll,
   }));
 
   void gate;
