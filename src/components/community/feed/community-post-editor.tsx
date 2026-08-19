@@ -58,6 +58,7 @@ export function CommunityPostEditor({
   mentions,
   channelRefs,
   onEditorReady,
+  minHeightClassName = "min-h-[84px]",
 }: {
   value: string;
   onChange: (html: string) => void;
@@ -75,6 +76,11 @@ export function CommunityPostEditor({
    *  content operation, not something the composer can do without a
    *  reference to the SAME editor instance this component owns). */
   onEditorReady?: (editor: Editor | null) => void;
+  /** Composer correction pass — `PostComposer`'s modal now wants a taller
+   *  desktop writing surface ("a real post-composition workspace," not a
+   *  cramped textarea) than this component's own default. Defaults to the
+   *  original 84px so any other consumer's look is unchanged. */
+  minHeightClassName?: string;
 }) {
   const editor = useRichTextEditor({
     toolbar: COMMUNITY_POST_TOOLBAR,
@@ -87,7 +93,7 @@ export function CommunityPostEditor({
     // appearing once the published renderer (which already had these
     // overrides) takes over.
     proseClassName: cn("text-sm text-[#3a3a44]", communityPostTypographyClasses()),
-    minHeightClassName: "min-h-[84px]",
+    minHeightClassName,
     contentPaddingClassName: "px-0 py-0",
     mentions,
     channelRefs,

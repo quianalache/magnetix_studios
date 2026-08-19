@@ -95,6 +95,14 @@ export async function PATCH(
       );
     }
 
+    // Title is REQUIRED (composer correction pass) — same rule/reasoning
+    // as the create route; enforced here too since editing goes through
+    // this separate route, not through createPostServerSide.
+    const title = body.edit.title?.trim() ?? "";
+    if (!title) {
+      return NextResponse.json({ error: "A post needs a title" }, { status: 400 });
+    }
+
     const html = body.edit.body?.trim() ?? "";
     const visibleLength = aboutPlainTextLength(html);
     const attachments = normalizePostAttachments(body.edit.attachments, access.member.id);
@@ -119,7 +127,7 @@ export async function PATCH(
       subAccountId: saId,
       groupId,
       postId,
-      title: body.edit.title?.trim() ?? "",
+      title,
       body: html,
       attachments,
       category,

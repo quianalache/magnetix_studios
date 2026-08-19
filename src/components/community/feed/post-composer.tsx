@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import type { Editor } from "@tiptap/react";
 import type { IGif } from "@giphy/js-types";
 import { Gif } from "@giphy/react-components";
+import { Dialog as ModalPrimitive } from "@base-ui/react/dialog";
 import {
   AtSign,
   Check,
@@ -16,6 +17,7 @@ import {
   Mic,
   Video,
   X,
+  XIcon,
 } from "lucide-react";
 import type {
   FileAttachment,
@@ -35,19 +37,20 @@ import { EmojiPickerButton } from "@/components/community/feed/emoji-picker-butt
 import { ComposerActionIconButton } from "@/components/community/feed/composer-action-icon-button";
 import { GiphyPickerButton } from "@/components/community/feed/giphy-picker-button";
 import {
-  CreatePollSheet,
+  PollDraftFields,
   emptyPollDraft,
   type PollDraftState,
 } from "@/components/community/feed/create-poll-sheet";
 import {
-  Sheet,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogClose,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { getGiphyFetch } from "@/lib/community/giphy-client";
 import {
   deleteCommunityPostImage,
@@ -58,7 +61,9 @@ import { deleteCommunityPostFile, uploadCommunityPostFile } from "@/lib/communit
 import { MAX_IMAGES_PER_POST } from "@/lib/community/community-image-mime";
 import { MAX_FILES_PER_POST, formatFileSize } from "@/lib/community/community-file-mime";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
+import { MIN_POLL_OPTIONS } from "@/lib/community/poll-limits";
 import type { MentionSuggestionItem } from "@/components/editor/mention-suggestion";
+import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
 
 interface Viewer {
@@ -129,33 +134,40 @@ function existingGifAttachment(attachments: MediaAttachment[]) {
  * flow (`mode="create"`) AND by the post-detail page's Edit Post flow
  * (`mode="edit"`, `editingPost` supplied). Not a second EditPost editor.
  *
- * Modal composer (Phase D) — rebuilt from an inline feed card into a real
- * modal: a `Sheet` using the same proven `side="bottom"` + desktop-
- * centering override pattern `CreatePollSheet` already established (full-
- * bleed bottom sheet on mobile, a centered wide panel on desktop — see the
- * className comment below for exactly why the `sm:data-[side=bottom]:*`
- * qualifiers are required, not optional). The caller controls mounting the
- * same way it always did (only rendered while `open`), which is what
- * still gives every field below a clean, freshly-initialized starting
- * state on every open — no separate "reset on reopen" effect needed.
- *
- * Also folds in the GIPHY GIF integration and the Part 4/5 action-system
- * rebuild:
- *  - Formatting is now a PERMANENTLY VISIBLE `RichTextToolbar` rendered
- *    directly above the editor (Part 4) — no more "Aa" popover toggle.
+ * Modal composer — a real modal, not an inline feed card. Also folds in
+ * the GIPHY GIF integration and the action-row rebuild:
+ *  - Formatting is a PERMANENTLY VISIBLE `RichTextToolbar` rendered
+ *    directly above the editor — no "Aa" popover toggle.
  *  - Photo/video/voice/file/GIF/mention/channel-ref/poll are each their
- *    own always-visible, tooltipped icon button (Part 5) — no more
- *    consolidated `+` popover menu. (Comments keep their own `+` menu —
- *    this change is scoped to the full post composer only.)
+ *    own always-visible, tooltipped icon button — no consolidated `+`
+ *    popover menu. (Comments keep their own `+` menu — this is scoped to
+ *    the full post composer only.)
  *  - GIF uses the shared, PostComposer-independent `GiphyPickerButton` /
  *    `GiphyPicker` — see giphy-client.ts for the compliance rationale.
+ *  - Poll EXPANDS INLINE in this same modal (see the dedicated comment on
+ *    the poll section below) — it is not a second modal/popup layered on
+ *    top of this one.
  *
- * Edit-mode attachment lifecycle (the "safe edit transaction") is
- * UNCHANGED by any of this — see the inline comments below, still exactly
- * as before. GIF is the one attachment kind that was never part of that
- * lifecycle to begin with (Part 13): there's no Storage object behind a
- * GIF at all, so removing/replacing one is just a state update, never a
- * cleanup call.
+ * Modal positioning (composer correction pass) — the FIRST version of this
+ * modal reused `Sheet`'s `side="bottom"` variant with a
+ * `sm:data-[side=bottom]:*` override to horizontally center it on desktop,
+ * copying `CreatePollSheet`'s pattern verbatim. That override only ever
+ * touched HORIZONTAL positioning (`left-1/2`/`-translate-x-1/2`) — it
+ * never overrode `SheetContent`'s own `data-[side=bottom]:bottom-0`, so
+ * the modal stayed pinned to the bottom edge of the viewport on desktop
+ * too, just horizontally centered while doing it. That was correct and
+ * intentional for `CreatePollSheet` (a small, deliberately bottom-
+ * anchored panel) but wrong for this modal, which is supposed to be a
+ * true, viewport-centered dialog on desktop. Rather than layering a
+ * second override on top of Sheet's own bottom-anchored base classes
+ * (the same CSS-specificity trap that produced the original bug), this
+ * builds its OWN responsive popup directly on the underlying
+ * `@base-ui/react/dialog` primitive (the SAME primitive both `Sheet` and
+ * `Dialog` in `components/ui` are themselves built on — `Sheet` and
+ * `Dialog` differ only in which Tailwind classes they hard-code onto that
+ * primitive's `Popup`, not in what they render): full-bleed bottom sheet
+ * below the `sm` breakpoint, a true `top-1/2 left-1/2 -translate-*`
+ * centered dialog at `sm` and up. See the className on the Popup below.
  */
 export function PostComposer({
   saId,
@@ -196,6 +208,11 @@ export function PostComposer({
 }) {
   const initialAttachments = editingPost?.attachments ?? [];
   const [title, setTitle] = useState(editingPost?.title ?? "");
+  // Title is REQUIRED (composer correction pass) — this only tracks
+  // whether to SHOW the inline error; the actual gate is in `submit()`
+  // below, and independently re-enforced server-side (see the create/edit
+  // routes) regardless of what this client-side check does.
+  const [titleError, setTitleError] = useState<string | null>(null);
   const [body, setBody] = useState(editingPost?.body ?? "");
   const [category, setCategory] = useState(
     editingPost?.category ?? initialCategory ?? categories[0] ?? "General",
@@ -268,7 +285,6 @@ export function PostComposer({
   const [poll, setPoll] = useState<PollDraftState | null>(
     editingPost?.poll ? feedPollToDraft(editingPost.poll) : null,
   );
-  const [pollSheetOpen, setPollSheetOpen] = useState(false);
   const pollLocked = (editingPost?.poll?.voterCount ?? 0) > 0;
   const canManagePoll = viewer.role === "moderator";
 
@@ -446,6 +462,24 @@ export function PostComposer({
 
   async function submit() {
     const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
+      setTitleError("Title is required");
+      toast.error("Give your post a title");
+      return;
+    }
+    setTitleError(null);
+    // Inline poll (correction pass) no longer has its own separate "Save"
+    // gate the way the old popup sheet did — the outer Post button is now
+    // the only submit action, so this check has to live here instead.
+    // `normalizePollDraft` (server) throws the same rule regardless; this
+    // is just the same feedback without a round-trip.
+    if (poll) {
+      const filledCount = poll.options.filter((o) => o.text.trim()).length;
+      if (filledCount < MIN_POLL_OPTIONS) {
+        toast.error(`A poll needs at least ${MIN_POLL_OPTIONS} options`);
+        return;
+      }
+    }
     const attachments = buildAttachments();
     if (aboutPlainTextLength(body) === 0 && attachments.length === 0 && !poll) {
       toast.error("Write something, attach a photo, file, video, GIF, or voice note, or add a poll");
@@ -560,75 +594,104 @@ export function PostComposer({
   }
 
   return (
-    <Sheet
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) handleCancel();
       }}
     >
-      <SheetContent
-        side="bottom"
-        showCloseButton
-        // Desktop centering — MUST be qualified with `data-[side=bottom]:`
-        // on every override, not just `sm:` (see create-poll-sheet.tsx's
-        // identical comment for exactly why a bare `sm:` rule silently
-        // loses to SheetContent's own compound base-class selectors).
-        // Wider than the Poll sheet (`max-w-2xl` vs `max-w-md`) — this is
-        // a full post editor, not a handful of option rows.
-        className="flex max-h-[92vh] flex-col gap-0 p-0 sm:data-[side=bottom]:inset-x-auto sm:data-[side=bottom]:left-1/2 sm:data-[side=bottom]:right-auto sm:data-[side=bottom]:w-full sm:data-[side=bottom]:max-w-2xl sm:data-[side=bottom]:-translate-x-1/2 sm:data-[side=bottom]:rounded-t-2xl"
-      >
-        <SheetHeader className="shrink-0 border-b border-[#f0f0f0] px-4 py-3 sm:px-5">
-          <SheetTitle>{mode === "create" ? "Create post" : "Edit post"}</SheetTitle>
-          <div className="mt-2 flex items-center gap-3">
-            <MemberAvatar author={viewer} size={40} brand={brand} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-[#202124]">{viewer.displayName}</p>
-              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[#909090]">
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  aria-label="Channel"
-                  className="rounded-md border border-[#E4E4E4] bg-white px-1.5 py-0.5 text-xs text-[#3a3a44]"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <span>for {communityName}</span>
+      <DialogPortal>
+        <DialogOverlay />
+        {/* Purpose-built responsive popup (see the module comment above
+            for why this isn't `SheetContent`/`DialogContent`) — full-bleed
+            bottom sheet below `sm`, a true centered dialog at `sm` and up.
+            `max-h-[*]` + `flex flex-col` on this outer element + `flex-1
+            overflow-y-auto` on the body below is what keeps the header and
+            footer pinned/usable while only the body scrolls when content
+            grows (Part 4's "scroll the modal BODY, not the whole modal"). */}
+        <ModalPrimitive.Popup
+          data-slot="post-composer-content"
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] w-full flex-col gap-0 rounded-t-2xl border-t bg-background text-sm shadow-lg outline-none transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+            "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:right-auto sm:w-full sm:max-w-2xl sm:max-h-[85vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border",
+          )}
+        >
+          <DialogClose
+            data-slot="dialog-close"
+            render={<Button variant="ghost" className="absolute top-3 right-3 z-10" size="icon-sm" />}
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </DialogClose>
+
+          <div className="shrink-0 border-b border-[#f0f0f0] px-4 py-3 sm:px-5">
+            <DialogTitle>{mode === "create" ? "Create post" : "Edit post"}</DialogTitle>
+            <div className="mt-2 flex items-center gap-3">
+              <MemberAvatar author={viewer} size={40} brand={brand} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-[#202124]">{viewer.displayName}</p>
+                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[#909090]">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    aria-label="Channel"
+                    className="rounded-md border border-[#E4E4E4] bg-white px-1.5 py-0.5 text-xs text-[#3a3a44]"
+                  >
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                  <span>for {communityName}</span>
+                </div>
               </div>
             </div>
           </div>
-        </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-5">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Title (optional)"
-            className="w-full border-0 p-0 text-base font-semibold text-[#202124] outline-none placeholder:text-[#b4b4b4]"
-            autoFocus
-          />
-
-          {/* Formatting toolbar — PERMANENTLY visible above the writing
-              surface (Part 4), not behind an "Aa" popover toggle anymore.
-              "Description -> toolbar -> writing surface" hierarchy. */}
-          <div className="mt-2 overflow-hidden rounded-lg border border-[#E4E4E4]">
-            {editor && <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />}
-            <div className="px-3 py-2">
-              <CommunityPostEditor
-                value={body}
-                onChange={setBody}
-                brand={brand}
-                mentions={{ fetchItems: mentionFetchItems }}
-                channelRefs={{ fetchItems: channelRefFetchItems }}
-                onEditorReady={setEditor}
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            <div className="space-y-1">
+              <Label htmlFor="post-composer-title">
+                Title <span className="text-destructive">*</span>
+              </Label>
+              <input
+                id="post-composer-title"
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (titleError) setTitleError(null);
+                }}
+                placeholder="Give your post a title"
+                aria-invalid={!!titleError}
+                className="w-full border-0 p-0 text-base font-semibold text-[#202124] outline-none placeholder:text-[#b4b4b4]"
+                autoFocus
               />
+              {titleError && <p className="text-xs text-destructive">{titleError}</p>}
             </div>
-          </div>
 
-          {(images.length > 0 || imageUploading) && (
+            {/* Formatting toolbar — PERMANENTLY visible above the writing
+                surface, not behind an "Aa" popover toggle. "Description ->
+                toolbar -> writing surface" hierarchy. */}
+            <div className="mt-3 overflow-hidden rounded-lg border border-[#E4E4E4]">
+              {editor && <RichTextToolbar editor={editor} items={COMMUNITY_POST_TOOLBAR} />}
+              <div className="px-3 py-2.5">
+                <CommunityPostEditor
+                  value={body}
+                  onChange={setBody}
+                  brand={brand}
+                  mentions={{ fetchItems: mentionFetchItems }}
+                  channelRefs={{ fetchItems: channelRefFetchItems }}
+                  onEditorReady={setEditor}
+                  // A real composition workspace on desktop, not a cramped
+                  // textarea (Part 4) — mobile stays close to the original
+                  // compact height, since screen real estate there is
+                  // already scarce.
+                  minHeightClassName="min-h-[110px] sm:min-h-[240px]"
+                />
+              </div>
+            </div>
+
+            {(images.length > 0 || imageUploading) && (
             <div className="mt-2 grid grid-cols-4 gap-1.5">
               {images.map((img) => (
                 <div key={img.id} className="group relative">
@@ -746,36 +809,7 @@ export function PostComposer({
             </div>
           )}
 
-          {poll && (
-            <div className="mt-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <ListChecks className="h-4 w-4 shrink-0 text-[#909090]" />
-                <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
-                  Poll attached · {poll.options.filter((o) => o.text.trim()).length} options
-                  {pollLocked && " · has votes"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPollSheetOpen(true)}
-                  className="shrink-0 text-xs font-medium text-[#606060] hover:text-[#202124]"
-                >
-                  Edit
-                </button>
-                {!pollLocked && (
-                  <button
-                    type="button"
-                    onClick={() => setPoll(null)}
-                    title="Remove poll"
-                    className="shrink-0 text-[#909090] hover:text-[#202124]"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          <label className="mt-3 flex items-center gap-2 text-xs text-[#606060]">
+          <label className="mt-4 flex items-center gap-2 text-xs text-[#606060]">
             <input
               type="checkbox"
               checked={!commentsDisabled}
@@ -841,13 +875,48 @@ export function PostComposer({
                 <ComposerActionIconButton
                   icon={ListChecks}
                   label={poll ? "Poll already attached" : "Add poll"}
-                  onClick={() => setPollSheetOpen(true)}
+                  onClick={() => setPoll(emptyPollDraft())}
                   disabled={!!poll}
                 />
               )}
               <EmojiPickerButton editor={editor} />
             </div>
           </TooltipProvider>
+
+          {/* Poll — expands INLINE in this same modal, not a second
+              popup/modal layered over it (composer correction pass). The
+              post's own title/body IS the poll's question/context — no
+              separate "Poll question" field. Uses the SAME poll-editing
+              implementation (`PollDraftFields`) `CreatePollSheet` itself is
+              built from — see that file's module comment. The "X" here
+              only clears `poll` back to `null` (this modal's own draft
+              state); it never touches `open`/closes the Create Post modal
+              itself. Disabled/hidden entirely once the poll has votes,
+              same "no destructive changes after votes exist" rule the
+              server (`normalizePollEdit`) independently enforces. */}
+          {canManagePoll && poll && (
+            <div className="mt-4 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-[#202124]">
+                  <ListChecks className="h-4 w-4" /> Create poll
+                </p>
+                {!pollLocked ? (
+                  <button
+                    type="button"
+                    onClick={() => setPoll(null)}
+                    title="Remove poll"
+                    aria-label="Remove poll"
+                    className="shrink-0 text-[#909090] hover:text-[#202124]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <span className="shrink-0 text-xs text-[#909090]">Has votes</span>
+                )}
+              </div>
+              <PollDraftFields draft={poll} onChange={setPoll} locked={pollLocked} />
+            </div>
+          )}
 
           <input
             ref={imageInputRef}
@@ -870,35 +939,26 @@ export function PostComposer({
               e.target.value = "";
             }}
           />
-        </div>
+          </div>
 
-        <SheetFooter className="shrink-0 flex-row items-center justify-end gap-2 border-t border-[#f0f0f0] px-4 py-3 sm:px-5">
-          <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            style={{ backgroundColor: brand }}
-            className="text-white hover:opacity-90"
-          >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {mode === "create" ? "Post" : "Save changes"}
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-
-      {canManagePoll && (
-        <CreatePollSheet
-          open={pollSheetOpen}
-          onOpenChange={setPollSheetOpen}
-          initial={poll ?? emptyPollDraft()}
-          locked={pollLocked}
-          onSave={setPoll}
-        />
-      )}
-    </Sheet>
+          <div className="shrink-0 flex items-center justify-end gap-2 border-t border-[#f0f0f0] px-4 py-3 sm:px-5">
+            <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={submit}
+              disabled={saving}
+              style={{ backgroundColor: brand }}
+              className="text-white hover:opacity-90"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {mode === "create" ? "Post" : "Save changes"}
+            </Button>
+          </div>
+        </ModalPrimitive.Popup>
+      </DialogPortal>
+    </Dialog>
   );
 }
 

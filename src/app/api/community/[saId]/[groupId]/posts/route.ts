@@ -47,6 +47,17 @@ export async function POST(
     );
   }
 
+  // Title is REQUIRED (composer correction pass) — checked here
+  // independently of the composer's own client-side check, which is UX
+  // only. A post has never been valid without SOME title in the product's
+  // intent; the composer previously labeling it "(optional)" was a client
+  // bug, not a deliberate relaxation of this rule, and this route never
+  // actually enforced it either — both are fixed together here.
+  const title = body.title?.trim() ?? "";
+  if (!title) {
+    return NextResponse.json({ error: "A post needs a title" }, { status: 400 });
+  }
+
   // `body.body` is real HTML from the Community rich-text composer
   // (Phase B), not plain text — the 10,000-char cap must be measured
   // against the VISIBLE text a member actually typed, not the raw HTML
@@ -63,8 +74,10 @@ export async function POST(
   // posts. Attachments never count toward (or bypass) the text-length
   // cap; the two are validated independently. Polls (2026-08-20): a poll
   // IS the content — the reference Create Poll sheet never asks for a
-  // separate question, so a poll-only post (no title/body typed) is valid
-  // too, same reasoning as an image/voice-only post.
+  // separate question, so a poll-only post (no body typed) is valid too,
+  // same reasoning as an image/voice-only post. Title is required
+  // regardless (checked above) — this check is about BODY/attachments/
+  // poll, on top of that.
   if (visibleLength === 0 && attachments.length === 0 && !poll) {
     return NextResponse.json(
       { error: "Write something, attach a photo or voice note, or add a poll" },
@@ -86,7 +99,7 @@ export async function POST(
     agencyId: access.gate.agencyId,
     groupId,
     authorMemberId: access.member.id,
-    title: body.title?.trim() ?? "",
+    title,
     body: html,
     attachments,
     category,
