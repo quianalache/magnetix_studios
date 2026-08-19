@@ -31,6 +31,24 @@ export {
  * ordinary reason to contain `<span>` is impossible from this editor's own
  * schema — but degrading rather than deleting the tag preserves the
  * member's visible text either way).
+ *
+ * Comments & Replies (2026-08-19) add `sanitizeCommunityCommentHtml` —
+ * deliberately a SEPARATE, TIGHTER allowlist, not a reuse of the post one.
+ * Comments intentionally have no formatting toolbar at all (no bold/
+ * italic/underline/strike/lists/blockquote — see the CommentComposer
+ * report), so a comment body legitimately can never contain those tags;
+ * allowing them in the sanitizer would just be dead permission surface,
+ * and would silently let a future comment-composer bug (or a hand-crafted
+ * request bypassing the client entirely) produce formatted comment HTML
+ * the product explicitly doesn't want. `#channelRef` spans are similarly
+ * excluded — comments don't offer that mention kind (see
+ * COMMENT_MENTION_SPAN_DATA_TYPES below) — so a comment can never carry
+ * one even if a request tried to forge it. The actual span-validation
+ * TRANSFORM logic is shared (buildSpanTransform) since that part — "only
+ * a real, well-formed mention/channelRef span with both id and label
+ * survives with attributes, anything else degrades to bare text" — is
+ * identical in spirit for both; only which data-type VALUES are
+ * acceptable differs per allowlist.
  */
 
 const COMMUNITY_POST_ALLOWED_TAGS = [
@@ -48,7 +66,42 @@ const COMMUNITY_POST_ALLOWED_TAGS = [
   "span",
 ];
 
-const MENTION_SPAN_DATA_TYPES = new Set(["mention", "channelRef"]);
+/** Comments: no formatting marks/nodes at all — just paragraphs/line
+ *  breaks, links, and mention spans (never channelRef — see above). */
+const COMMUNITY_COMMENT_ALLOWED_TAGS = ["p", "br", "a", "span"];
+
+const POST_MENTION_SPAN_DATA_TYPES = new Set(["mention", "channelRef"]);
+const COMMENT_MENTION_SPAN_DATA_TYPES = new Set(["mention"]);
+
+function linkTransform() {
+  return (tagName: string, attribs: Record<string, string>) => ({
+    tagName: "a",
+    attribs: {
+      ...attribs,
+      target: "_blank",
+      rel: "noopener noreferrer nofollow",
+    },
+  });
+}
+
+/** Only a recognized data-type (from `allowedDataTypes`), with both id and
+ *  label present, survives with its attributes — anything else (a stray/
+ *  malformed/hand-crafted span, or a data-type this content kind doesn't
+ *  offer — e.g. channelRef inside a comment) loses its attributes but
+ *  keeps its text, never the whole tag+content removed outright. */
+function spanTransform(allowedDataTypes: Set<string>) {
+  return (tagName: string, attribs: Record<string, string>) => {
+    const dataType = attribs["data-type"];
+    const ok =
+      typeof dataType === "string" &&
+      allowedDataTypes.has(dataType) &&
+      typeof attribs["data-id"] === "string" &&
+      attribs["data-id"].length > 0 &&
+      typeof attribs["data-label"] === "string" &&
+      attribs["data-label"].length > 0;
+    return ok ? { tagName: "span", attribs } : { tagName: "span", attribs: {} };
+  };
+}
 
 /** Sanitize a Community post body for rendering (or before storing, as
  *  defense-in-depth on write). Server-side only. */
@@ -61,31 +114,28 @@ export function sanitizeCommunityPostHtml(html: string): string {
       span: ["data-type", "data-id", "data-label"],
     },
     allowedSchemes: ["http", "https", "mailto"],
-    // Harden every surviving link, same convention as sanitizeLessonHtml.
     transformTags: {
-      a: (tagName, attribs) => ({
-        tagName: "a",
-        attribs: {
-          ...attribs,
-          target: "_blank",
-          rel: "noopener noreferrer nofollow",
-        },
-      }),
-      // Only a recognized mention/channelRef data-type, with both id and
-      // label present, survives with its attributes — anything else
-      // (a stray/malformed/hand-crafted span) loses its attributes but
-      // keeps its text, never the whole tag+content removed outright.
-      span: (tagName, attribs) => {
-        const dataType = attribs["data-type"];
-        const ok =
-          typeof dataType === "string" &&
-          MENTION_SPAN_DATA_TYPES.has(dataType) &&
-          typeof attribs["data-id"] === "string" &&
-          attribs["data-id"].length > 0 &&
-          typeof attribs["data-label"] === "string" &&
-          attribs["data-label"].length > 0;
-        return ok ? { tagName: "span", attribs } : { tagName: "span", attribs: {} };
-      },
+      a: linkTransform(),
+      span: spanTransform(POST_MENTION_SPAN_DATA_TYPES),
+    },
+  });
+}
+
+/** Sanitize a Community COMMENT/reply body — see the module comment for
+ *  why this is a distinct, tighter allowlist rather than a reuse of
+ *  `sanitizeCommunityPostHtml`. */
+export function sanitizeCommunityCommentHtml(html: string): string {
+  if (!html) return "";
+  return sanitizeHtml(html, {
+    allowedTags: COMMUNITY_COMMENT_ALLOWED_TAGS,
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+      span: ["data-type", "data-id", "data-label"],
+    },
+    allowedSchemes: ["http", "https", "mailto"],
+    transformTags: {
+      a: linkTransform(),
+      span: spanTransform(COMMENT_MENTION_SPAN_DATA_TYPES),
     },
   });
 }
@@ -96,4 +146,13 @@ export function sanitizeCommunityPostHtml(html: string): string {
  *  — see CommunityPostBody. */
 export function renderCommunityPostHtml(body: string | null | undefined): string {
   return sanitizeCommunityPostHtml(lessonBodyToEditorHtml(body));
+}
+
+/** Same read-path contract as `renderCommunityPostHtml`, for comments —
+ *  every existing plain-text comment (written before this feature existed)
+ *  is still a fully valid comment body: `lessonBodyToEditorHtml` promotes
+ *  plain text to a single `<p>` exactly as it already does for legacy
+ *  post bodies, so no migration is required to render old comments. */
+export function renderCommunityCommentHtml(body: string | null | undefined): string {
+  return sanitizeCommunityCommentHtml(lessonBodyToEditorHtml(body));
 }

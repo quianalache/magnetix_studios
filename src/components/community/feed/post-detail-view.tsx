@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, MessageCircle, ThumbsUp } from "lucide-react";
+import { MessageCircle, ThumbsUp } from "lucide-react";
 import type { AuthorView } from "@/types/community";
+import type { MediaAttachment } from "@/types/media-attachment";
 import { MemberAvatar } from "@/components/community/member-avatar";
 import { ActionsMenu, type MenuItem } from "@/components/community/actions-menu";
 import { AuthorLink } from "@/components/community/author-link";
 import { CommunityPostBody } from "@/components/community/feed/community-post-body";
 import { CommunityPostAttachments } from "@/components/community/feed/community-post-attachments";
 import { PostComposer } from "@/components/community/feed/post-composer";
+import { CommentComposer, type ReplyTarget } from "@/components/community/feed/comment-composer";
 import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
@@ -23,6 +25,11 @@ export interface ClientComment {
   createdAtMs: number | null;
   parentId: string | null;
   author: AuthorView;
+  /** Comments & Replies (2026-08-19) — additive; absent on every comment
+   *  written before this existed, same convention as ClientPost.attachments. */
+  attachments?: MediaAttachment[];
+  /** Drives the "Edited" label — existence only, no exact timestamp shown. */
+  edited?: boolean;
 }
 
 interface Viewer {
@@ -73,11 +80,8 @@ export function PostDetailView({
   const [currentPost, setCurrentPost] = useState(post);
   const [editing, setEditing] = useState(false);
   const [comments, setComments] = useState(initialComments);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const [replyDraft, setReplyDraft] = useState("");
-  const [replySaving, setReplySaving] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const base = `/api/community/${saId}/${groupId}`;
 
   const topLevel = comments.filter((c) => !c.parentId);
@@ -145,8 +149,13 @@ export function PostDetailView({
   async function deleteComment(id: string) {
     if (!confirm("Delete this comment?")) return;
     const prev = comments;
-    // Remove the comment and any replies hanging off it.
+    // Remove the comment and any replies hanging off it. The server now
+    // ACTUALLY cascade-deletes the replies + their attachment Storage
+    // objects too (deleteCommentServerSide, fixed 2026-08-19) — this
+    // client-side filter just keeps the UI in sync with that real delete,
+    // it isn't papering over a server gap the way it used to.
     setComments((c) => c.filter((x) => x.id !== id && x.parentId !== id));
+    if (replyTarget?.parentId === id) setReplyTarget(null);
     try {
       const res = await fetch(`${base}/posts/${post.id}/comments/${id}`, {
         method: "DELETE",
@@ -158,65 +167,16 @@ export function PostDetailView({
     }
   }
 
-  async function postComment(body: string, parentId: string | null) {
-    const res = await fetch(`${base}/posts/${post.id}/comments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, parentId }),
-    });
-    const d = (await res.json().catch(() => ({}))) as {
-      ok?: boolean;
-      error?: string;
-      comment?: { id: string };
-    };
-    if (!res.ok || !d.ok || !d.comment?.id) {
-      throw new Error(d.error ?? "Couldn't comment");
-    }
-    // Optimistic: drop it straight in.
-    setComments((prev) => [
-      ...prev,
-      {
-        id: d.comment!.id,
-        body,
-        likeCount: 0,
-        likedByViewer: false,
-        createdAtMs: Date.now(),
-        parentId,
-        author: {
-          memberId: viewer.memberId,
-          displayName: viewer.displayName,
-          avatarUrl: viewer.avatarUrl,
-          level: viewer.level,
-        },
-      },
-    ]);
-  }
-
-  async function submitComment() {
-    if (!draft.trim()) return;
-    setSaving(true);
-    try {
-      await postComment(draft.trim(), null);
-      setDraft("");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't comment");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function submitReply(parentId: string) {
-    if (!replyDraft.trim()) return;
-    setReplySaving(true);
-    try {
-      await postComment(replyDraft.trim(), parentId);
-      setReplyDraft("");
-      setReplyingTo(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't reply");
-    } finally {
-      setReplySaving(false);
-    }
+  /** Clicking Reply on ANY bubble (top-level or a reply) always targets
+   *  the AUTHOR OF THAT SPECIFIC BUBBLE for the "Replying to @X" banner
+   *  and auto-mention — but the effective parentId mirrors the server's
+   *  own resolveCommentParentId exactly: a reply's OWN parentId (its true
+   *  top-level ancestor) when replying to a reply, or the bubble's own id
+   *  when it's already top-level. This is what keeps a reply-to-a-reply
+   *  rendering at the same second visual level instead of a third. */
+  function startReply(c: ClientComment) {
+    const parentId = c.parentId ?? c.id;
+    setReplyTarget({ parentId, mentionMemberId: c.author.memberId, mentionLabel: c.author.displayName });
   }
 
   const canModerate = viewer.role === "moderator";
@@ -318,98 +278,110 @@ export function PostDetailView({
         </div>
       </article>
 
-      {/* Thread */}
+      {/* Thread — exactly two visual levels (Skool-style), enforced
+          server-side now (createCommentServerSide's resolveCommentParentId,
+          2026-08-19), not merely assumed here. */}
       <div className="space-y-3">
         {topLevel.map((c) => (
           <div key={c.id} className="space-y-2">
-            <CommentBubble
-              saId={saId}
-              pretty={pretty}
-              comment={c}
-              viewer={viewer}
-              brand={brand}
-              canReply={!currentPost.commentsDisabled}
-              onLike={toggleCommentLike}
-              onReply={() => {
-                setReplyingTo(replyingTo === c.id ? null : c.id);
-                setReplyDraft("");
-              }}
-              onDelete={deleteComment}
-            />
-            {repliesOf(c.id).map((r) => (
+            {editingCommentId === c.id ? (
+              <CommentComposer
+                saId={saId}
+                groupId={groupId}
+                postId={post.id}
+                brand={brand}
+                viewer={viewer}
+                mode="edit"
+                editingComment={c}
+                onSaved={(updated) => {
+                  setComments((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+                  setEditingCommentId(null);
+                }}
+                onCancelEdit={() => setEditingCommentId(null)}
+              />
+            ) : (
               <CommentBubble
-                key={r.id}
                 saId={saId}
                 pretty={pretty}
-                comment={r}
+                groupSlug={groupSlug}
+                comment={c}
                 viewer={viewer}
                 brand={brand}
-                indented
                 canReply={!currentPost.commentsDisabled}
                 onLike={toggleCommentLike}
-                onReply={() => {
-                  setReplyingTo(c.id);
-                  setReplyDraft("");
-                }}
+                onReply={() => startReply(c)}
+                onEdit={() => setEditingCommentId(c.id)}
                 onDelete={deleteComment}
               />
-            ))}
-            {replyingTo === c.id && (
-              <div className="ml-11 flex gap-2">
-                <textarea
-                  value={replyDraft}
-                  onChange={(e) => setReplyDraft(e.target.value)}
-                  placeholder="Write a reply…"
-                  rows={1}
-                  autoFocus
-                  className="flex-1 resize-none rounded-md border border-[#E4E4E4] bg-white p-2 text-sm text-[#3a3a44] outline-none placeholder:text-[#909090]"
+            )}
+            {repliesOf(c.id).map((r) =>
+              editingCommentId === r.id ? (
+                <CommentComposer
+                  key={r.id}
+                  saId={saId}
+                  groupId={groupId}
+                  postId={post.id}
+                  brand={brand}
+                  viewer={viewer}
+                  mode="edit"
+                  editingComment={r}
+                  onSaved={(updated) => {
+                    setComments((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+                    setEditingCommentId(null);
+                  }}
+                  onCancelEdit={() => setEditingCommentId(null)}
                 />
-                <button
-                  onClick={() => submitReply(c.id)}
-                  disabled={replySaving}
-                  className="self-end rounded-md px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
-                  style={{ backgroundColor: brand }}
-                >
-                  {replySaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Reply"
-                  )}
-                </button>
-              </div>
+              ) : (
+                <CommentBubble
+                  key={r.id}
+                  saId={saId}
+                  pretty={pretty}
+                  groupSlug={groupSlug}
+                  comment={r}
+                  viewer={viewer}
+                  brand={brand}
+                  indented
+                  canReply={!currentPost.commentsDisabled}
+                  onLike={toggleCommentLike}
+                  onReply={() => startReply(r)}
+                  onEdit={() => setEditingCommentId(r.id)}
+                  onDelete={deleteComment}
+                />
+              ),
             )}
           </div>
         ))}
       </div>
 
-      {/* Comment composer (bottom, Skool-style) — the author's "Allow
+      {/* Comment composer (bottom, always reachable) — the author's "Allow
           comments/replies" toggle is enforced server-side (the comments
           POST route 403s regardless), but hiding the form here too is the
           honest UI per the Phase D instruction: a member should never be
           invited to type a comment that's guaranteed to fail. Existing
-          comments above remain fully visible either way. */}
+          comments above remain fully visible either way.
+
+          ONE composer instance handles both a plain top-level comment and
+          a targeted reply (replyTarget) — not a second inline reply box
+          per comment — so switching which comment you're replying to, or
+          cancelling the targeted-reply state, never loses whatever the
+          member already typed (see CommentComposer's own module comment). */}
       {currentPost.commentsDisabled ? (
         <p className="rounded-xl border border-[#E4E4E4] bg-[#FAFAFA] px-3 py-2.5 text-center text-xs text-[#909090]">
           Comments are turned off for this post
         </p>
       ) : (
-        <div className="flex items-start gap-2">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Write a comment…"
-            rows={1}
-            className="flex-1 resize-none rounded-xl border border-[#E4E4E4] bg-white px-3 py-2.5 text-sm text-[#3a3a44] outline-none placeholder:text-[#909090]"
-          />
-          <button
-            onClick={submitComment}
-            disabled={saving}
-            className="rounded-md px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: brand }}
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Comment"}
-          </button>
-        </div>
+        <CommentComposer
+          saId={saId}
+          groupId={groupId}
+          postId={post.id}
+          brand={brand}
+          viewer={viewer}
+          mode="create"
+          collapsedByDefault
+          replyTarget={replyTarget}
+          onCancelReplyTarget={() => setReplyTarget(null)}
+          onCreated={(c) => setComments((prev) => [...prev, c])}
+        />
       )}
     </div>
   );
@@ -418,6 +390,7 @@ export function PostDetailView({
 function CommentBubble({
   saId,
   pretty = false,
+  groupSlug,
   comment,
   viewer,
   brand,
@@ -425,11 +398,13 @@ function CommentBubble({
   canReply = true,
   onLike,
   onReply,
+  onEdit,
   onDelete,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  groupSlug: string;
   comment: ClientComment;
   viewer: Viewer;
   brand: string;
@@ -441,10 +416,24 @@ function CommentBubble({
   canReply?: boolean;
   onLike: (id: string) => void;
   onReply: () => void;
+  onEdit: () => void;
   onDelete: (id: string) => void;
 }) {
-  const canDelete =
-    viewer.role === "moderator" || comment.author.memberId === viewer.memberId;
+  const isOwn = comment.author.memberId === viewer.memberId;
+  const canModerate = viewer.role === "moderator";
+  // Author may edit their own comment; moderator may NOT edit someone
+  // else's — a moderator can delete another member's content but should
+  // never rewrite what they said (explicit product decision, distinct
+  // from the broader "moderator can act on any post/comment" delete
+  // convention used everywhere else in this codebase). Enforced
+  // server-side too (the PATCH route is author-only, full stop) — this
+  // is only the UI-affordance side of that same rule.
+  const canEditComment = isOwn;
+  const canDelete = canModerate || isOwn;
+  const menuItems: MenuItem[] = [
+    ...(canEditComment ? [{ label: "Edit", onClick: onEdit }] : []),
+    ...(canDelete ? [{ label: "Delete", onClick: () => onDelete(comment.id), destructive: true }] : []),
+  ];
   return (
     <div
       className={cn(
@@ -464,24 +453,25 @@ function CommentBubble({
           />
           <span className="text-xs text-[#909090]">
             {timeAgo(comment.createdAtMs)}
+            {comment.edited && " · Edited"}
           </span>
-          {canDelete && (
+          {menuItems.length > 0 && (
             <div className="ml-auto">
-              <ActionsMenu
-                items={[
-                  {
-                    label: "Delete",
-                    onClick: () => onDelete(comment.id),
-                    destructive: true,
-                  },
-                ]}
-              />
+              <ActionsMenu items={menuItems} />
             </div>
           )}
         </div>
-        <p className="mt-0.5 whitespace-pre-wrap text-sm text-[#3a3a44]">
-          {comment.body}
-        </p>
+        <CommunityPostBody
+          html={comment.body}
+          brand={brand}
+          className="mt-0.5"
+          saId={saId}
+          pretty={pretty}
+          groupSlug={groupSlug}
+        />
+        {comment.attachments && comment.attachments.length > 0 && (
+          <CommunityPostAttachments attachments={comment.attachments} brand={brand} className="mt-1.5" />
+        )}
         <div className="mt-1.5 flex items-center gap-4 text-xs text-[#909090]">
           <button
             onClick={() => onLike(comment.id)}

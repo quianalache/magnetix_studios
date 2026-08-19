@@ -17,7 +17,7 @@ import {
   type ClientComment,
 } from "@/components/community/feed/post-detail-view";
 import type { ClientPost } from "@/components/community/feed/feed-view";
-import { renderCommunityPostHtml } from "@/lib/community/post-html";
+import { renderCommunityPostHtml, renderCommunityCommentHtml } from "@/lib/community/post-html";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -93,12 +93,19 @@ export default async function PostDetailPage({
 
   const clientComments: ClientComment[] = comments.map((c) => ({
     id: c.id,
-    body: c.body,
+    // Sanitized server-side before reaching the client, same as post
+    // bodies — see renderCommunityCommentHtml (post-html.ts), a tighter
+    // allowlist than posts (no formatting, no #channelRef — see the
+    // Comments & Replies report). Handles legacy plain-text comments too
+    // (promoted to a <p>, exactly like legacy post bodies already were).
+    body: renderCommunityCommentHtml(c.body),
     likeCount: c.likeCount,
     likedByViewer: c.likedByViewer,
     createdAtMs: toMillis(c.createdAt),
     parentId: c.parentId ?? null,
     author: c.author,
+    attachments: c.attachments,
+    edited: !!c.editedAt,
   }));
 
   return (

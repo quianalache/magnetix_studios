@@ -29,6 +29,12 @@ export const MAX_COMMUNITY_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_IMAGES_PER_POST = 4;
 export const MAX_VOICE_NOTES_PER_POST = 1;
 
+/** Comments & Replies (2026-08-19) — deliberately smaller than the post
+ *  caps: a comment is a conversational reply, not a gallery post. One of
+ *  each kind keeps a comment from becoming a second post. */
+export const MAX_IMAGES_PER_COMMENT = 1;
+export const MAX_VOICE_NOTES_PER_COMMENT = 1;
+
 export function isAllowedCommunityImageMimeType(mimeType: string): boolean {
   return (COMMUNITY_IMAGE_MIME_ALLOWLIST as readonly string[]).includes(mimeType);
 }

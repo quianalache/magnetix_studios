@@ -276,12 +276,32 @@ export interface CommunityComment {
   groupId: string;
   postId: string;
   authorMemberId: string;
+  /** Sanitized HTML (2026-08-19) — a much tighter allowlist than post
+   *  bodies: no formatting marks/nodes at all, just paragraphs/line
+   *  breaks, links, and @mention spans (never #channelRef — comments
+   *  don't offer that). See sanitizeCommunityCommentHtml (post-html.ts).
+   *  Every comment written before this existed is still valid: plain
+   *  text is promoted to a `<p>` on read, exactly like legacy post
+   *  bodies already were — no migration required. */
   body: string;
   likeCount: number;
   /** Top-level comment id when this is a reply; null for a top-level comment.
-   *  Threads are one level deep (Skool-style) — a reply to a reply attaches to
-   *  the same top-level parent. */
+   *  Threads are exactly two visual levels (Skool-style) — replying to a
+   *  reply is resolved server-side to the SAME top-level parent
+   *  (createCommentServerSide), not merely assumed by the client, so a
+   *  comment whose parentId points at another reply can never actually be
+   *  created. */
   parentId: string | null;
+  /** Comments & Replies (2026-08-19) — additive, same MediaAttachment
+   *  union posts use (image/voice/file/gif; never video-link — comments
+   *  don't offer that kind). Absent on every comment written before this
+   *  existed, same "optional = none" convention as CommunityPost.attachments. */
+  attachments?: MediaAttachment[];
+  /** Set on successful edit; absent on a never-edited comment (including
+   *  every comment written before editing existed). Drives the "Edited"
+   *  label — no exact-timestamp UI, so no separate display formatting
+   *  needed beyond existence-check. */
+  editedAt?: Timestamp | FieldValue | null;
   createdAt: Timestamp | FieldValue | null;
 }
 

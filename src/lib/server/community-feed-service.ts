@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { levelForPoints } from "@/config/community";
-import { sanitizeCommunityPostHtml } from "@/lib/community/post-html";
+import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import type {
   AuthorView,
   CommunityComment,
@@ -311,6 +311,30 @@ export async function listComments(opts: {
   }));
 }
 
+/**
+ * Resolve the EFFECTIVE parentId for a new comment, enforcing the
+ * two-visual-level thread model at the data boundary — not merely a
+ * client-side convention the UI happens to follow. If `requestedParentId`
+ * names a comment that is ITSELF a reply (has its own non-null parentId),
+ * the new comment attaches to that reply's own top-level parent instead —
+ * "replying to a reply" always lands in the same thread as a sibling
+ * reply, never a third indentation level. Throws if the requested parent
+ * doesn't exist (or isn't in this post) rather than silently guessing —
+ * a genuinely different error case than "flatten a too-deep reply".
+ */
+async function resolveCommentParentId(
+  postRef: FirebaseFirestore.DocumentReference,
+  requestedParentId: string | null | undefined,
+): Promise<string | null> {
+  if (!requestedParentId) return null;
+  const targetSnap = await postRef.collection("comments").doc(requestedParentId).get();
+  if (!targetSnap.exists) {
+    throw new Error("Comment not found");
+  }
+  const targetParentId = (targetSnap.data() as Omit<CommunityComment, "id">).parentId;
+  return targetParentId ?? requestedParentId;
+}
+
 export async function createCommentServerSide(opts: {
   subAccountId: string;
   groupId: string;
@@ -318,17 +342,24 @@ export async function createCommentServerSide(opts: {
   authorMemberId: string;
   body: string;
   parentId?: string | null;
+  /** Already validated/normalized by the API route (normalizeCommentAttachments) —
+   *  this layer just stores it, same convention as createPostServerSide. */
+  attachments?: MediaAttachment[];
 }): Promise<CommunityComment> {
   const db = getAdminDb();
   const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
+  const effectiveParentId = await resolveCommentParentId(postRef, opts.parentId);
   const commentRef = postRef.collection("comments").doc();
   const doc = {
     groupId: opts.groupId,
     postId: opts.postId,
     authorMemberId: opts.authorMemberId,
-    body: opts.body.trim(),
+    // Defense-in-depth: sanitize on write too, not just on read — same
+    // reasoning as createPostServerSide's own sanitize-on-write.
+    body: sanitizeCommunityCommentHtml(opts.body.trim()),
     likeCount: 0,
-    parentId: opts.parentId ?? null,
+    parentId: effectiveParentId,
+    attachments: opts.attachments?.length ? opts.attachments : undefined,
     createdAt: FieldValue.serverTimestamp(),
   };
   const batch = db.batch();
@@ -543,6 +574,22 @@ export async function deletePostServerSide(opts: {
   const snap = await ref.get();
   const attachments = (snap.data() as CommunityPost | undefined)?.attachments;
   await deleteAttachmentStorage(attachments);
+
+  // Comments & Replies (2026-08-19) — `recursiveDelete` below correctly
+  // wipes every comment/reply DOCUMENT (it's a Firestore-only operation),
+  // but Storage objects a comment/reply owns are never touched by that —
+  // without this, deleting a post would silently orphan every comment's
+  // image/voice/file attachments forever. Read every comment's
+  // attachments BEFORE the recursive delete removes the docs that
+  // reference them; best-effort cleanup, same as every other Storage
+  // cleanup in this file — a Storage hiccup here must never block
+  // deleting the post itself.
+  const commentsSnap = await ref.collection("comments").get();
+  const commentAttachments = commentsSnap.docs.flatMap(
+    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? [],
+  );
+  await deleteAttachmentStorage(commentAttachments);
+
   // Recursive delete cleans up the comments + likes subcollections.
   await getAdminDb().recursiveDelete(ref);
 }
@@ -562,6 +609,21 @@ export async function getCommentAuthor(opts: {
   return snap.exists ? (snap.data()!.authorMemberId as string) : null;
 }
 
+/**
+ * Delete a comment/reply. FIXED (2026-08-19) — previously deleted only the
+ * one targeted document: deleting a TOP-LEVEL comment left its replies as
+ * orphaned Firestore documents (invisible in the UI, which filters by
+ * parentId client-side, but never actually removed) and only ever
+ * decremented `commentCount` by 1 regardless of how many replies existed.
+ * Now: when the target is a top-level comment, its replies are found
+ * (`where parentId == commentId`) and deleted alongside it — a reply
+ * itself has no descendants under the two-level thread model, so deleting
+ * one is always just itself. Every attachment across everything actually
+ * deleted is cleaned up first (best-effort, same convention as
+ * deletePostServerSide/updatePostServerSide — a Storage hiccup must never
+ * block deleting the comment). `commentCount` is decremented by the real
+ * number of documents removed, not a hardcoded 1.
+ */
 export async function deleteCommentServerSide(opts: {
   subAccountId: string;
   groupId: string;
@@ -571,7 +633,75 @@ export async function deleteCommentServerSide(opts: {
   const db = getAdminDb();
   const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
   const commentRef = postRef.collection("comments").doc(opts.commentId);
-  if (!(await commentRef.get()).exists) return;
-  await db.recursiveDelete(commentRef);
-  await postRef.update({ commentCount: FieldValue.increment(-1) });
+  const commentSnap = await commentRef.get();
+  if (!commentSnap.exists) return;
+
+  const repliesSnap = await postRef
+    .collection("comments")
+    .where("parentId", "==", opts.commentId)
+    .get();
+  const allSnaps = [commentSnap, ...repliesSnap.docs];
+
+  const allAttachments = allSnaps.flatMap(
+    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? [],
+  );
+  await deleteAttachmentStorage(allAttachments);
+
+  await Promise.all(allSnaps.map((d) => db.recursiveDelete(d.ref)));
+  await postRef.update({ commentCount: FieldValue.increment(-allSnaps.length) });
+}
+
+/**
+ * Edit an existing comment/reply — author-only (never moderator; see the
+ * Comments & Replies report for why). Mirrors `updatePostServerSide`'s
+ * attachment-diff pattern exactly: any attachment present in the OLD
+ * stored comment but absent from the NEW submitted list is treated as
+ * "removed during this edit" and has its Storage object deleted
+ * (best-effort, after the write succeeds); newly added attachments need
+ * no action here (already uploaded/validated by the time this runs — the
+ * client is responsible for cleaning up anything uploaded but abandoned
+ * before ever calling this, same as PostComposer's edit-mode session-
+ * upload tracking).
+ */
+export async function updateCommentServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  postId: string;
+  commentId: string;
+  body: string;
+  attachments?: MediaAttachment[];
+}): Promise<{ ok: true; sanitizedBody: string } | { ok: false }> {
+  const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
+  const commentRef = postRef.collection("comments").doc(opts.commentId);
+  const snap = await commentRef.get();
+  if (!snap.exists) return { ok: false };
+  const existing = snap.data() as Omit<CommunityComment, "id">;
+
+  const newPaths = new Set(
+    (opts.attachments ?? []).map(attachmentStoragePath).filter((p): p is string => !!p),
+  );
+  const removed = (existing.attachments ?? []).filter((a) => {
+    const p = attachmentStoragePath(a);
+    return p ? !newPaths.has(p) : false;
+  });
+
+  // Sanitized once, reused for both the write and the response — the
+  // client's ClientComment update is built from ITS OWN local state
+  // (same optimistic-update convention `PostComposer`'s edit mode already
+  // uses for posts), so this route/service pair only needs to hand back
+  // enough to confirm success and the exact sanitized text that was
+  // actually stored, not a fully round-tripped Firestore-shaped object.
+  const sanitizedBody = sanitizeCommunityCommentHtml(opts.body.trim());
+  await commentRef.update({
+    body: sanitizedBody,
+    // Same FieldValue.delete() reasoning as updatePostServerSide — an
+    // `undefined` value on `.update()` is SKIPPED (ignoreUndefinedProperties),
+    // which would silently leave a stale attachments array in place if a
+    // member removes every attachment during an edit.
+    attachments: opts.attachments?.length ? opts.attachments : FieldValue.delete(),
+    editedAt: FieldValue.serverTimestamp(),
+  });
+  await deleteAttachmentStorage(removed);
+
+  return { ok: true, sanitizedBody };
 }

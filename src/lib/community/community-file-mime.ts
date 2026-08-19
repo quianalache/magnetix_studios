@@ -28,6 +28,11 @@ export const MAX_COMMUNITY_FILE_BYTES = 15 * 1024 * 1024;
 
 export const MAX_FILES_PER_POST = 3;
 
+/** Comments & Replies (2026-08-19) — same MIME allowlist/size cap, a
+ *  smaller count: one file per comment, matching the same conversational-
+ *  not-gallery reasoning as MAX_IMAGES_PER_COMMENT. */
+export const MAX_FILES_PER_COMMENT = 1;
+
 export function isAllowedCommunityFileMimeType(mimeType: string): boolean {
   return (COMMUNITY_FILE_MIME_ALLOWLIST as readonly string[]).includes(mimeType);
 }

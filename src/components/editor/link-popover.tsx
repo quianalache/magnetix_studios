@@ -49,6 +49,13 @@ function normalizeUrl(raw: string): { ok: true; url: string } | { ok: false; err
  *  - nothing selected → a required "Link text" field plus URL, inserts new
  *    linked text at the original cursor position.
  *
+ * `renderTrigger` (Comments & Replies, 2026-08-19) lets a caller supply its
+ * OWN trigger element — the comment composer's `+` action menu wants "Add
+ * link" as a plain menu row, not a small toolbar icon — while this
+ * component still owns 100% of the popover state/selection-capture/apply
+ * logic; nothing about the default (toolbar-icon) rendering changes for
+ * any existing consumer that doesn't pass it.
+ *
  * The selection is captured into React state the moment the trigger is
  * pressed (`onMouseDown`, not `onClick` — see the toolbar's own
  * mousedown-preventDefault fix) and re-applied explicitly via
@@ -59,7 +66,20 @@ function normalizeUrl(raw: string): { ok: true; url: string } | { ok: false; err
  * relying on "current selection" the way the old prompt-based flow did
  * would be exactly the fragile pattern this fix exists to remove.
  */
-export function LinkPopover({ editor, title = "Link" }: { editor: Editor; title?: string }) {
+export function LinkPopover({
+  editor,
+  title = "Link",
+  renderTrigger,
+}: {
+  editor: Editor;
+  title?: string;
+  /** Optional custom trigger content — the default toolbar-icon look is
+   *  used when omitted. The trigger element itself (button semantics,
+   *  the mousedown-preventDefault selection capture) is still fully owned
+   *  by this component either way; only what's rendered INSIDE the
+   *  trigger changes. */
+  renderTrigger?: (active: boolean) => React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
   const [text, setText] = useState("");
@@ -162,12 +182,16 @@ export function LinkPopover({ editor, title = "Link" }: { editor: Editor; title?
           e.preventDefault();
           openForCurrentSelection();
         }}
-        className={cn(
-          "flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-          active && "bg-primary/15 text-primary",
-        )}
+        className={
+          renderTrigger
+            ? undefined
+            : cn(
+                "flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                active && "bg-primary/15 text-primary",
+              )
+        }
       >
-        <Link2 className="h-4 w-4" />
+        {renderTrigger ? renderTrigger(active) : <Link2 className="h-4 w-4" />}
       </PopoverTrigger>
       <PopoverContent className="w-72 space-y-2.5">
         <p className="text-xs font-medium text-foreground">{active ? "Edit link" : "Add link"}</p>
