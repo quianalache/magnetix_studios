@@ -29,7 +29,10 @@ export type SettingsSection = "general" | "branding";
  * task.
  */
 const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
-  { key: "navigation", label: "Navigation & Channels", icon: LayoutGrid },
+  // Renamed from "Navigation & Channels" — Channel/Section management now
+  // lives directly in the Community left rail (this task), not a Settings
+  // tab, so the old label no longer described anything this item leads to.
+  { key: "navigation", label: "Navigation", icon: LayoutGrid },
   { key: "access", label: "Access & Membership", icon: Shield },
   { key: "home", label: "Community Home", icon: Layers },
   { key: "gamification", label: "Gamification", icon: Trophy },

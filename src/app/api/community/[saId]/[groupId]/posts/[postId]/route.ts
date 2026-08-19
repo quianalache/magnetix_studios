@@ -12,6 +12,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
 import { normalizePollEdit } from "@/lib/community/normalize-poll";
+import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 import type { CommunityPost } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,23 @@ export async function PATCH(
       body.edit.category && access.group.categories.includes(body.edit.category)
         ? body.edit.category
         : null;
+
+    // Private-channel access — server-side regardless of the composer's
+    // own channel selector. Deliberately NOT checking Read Only here:
+    // that rule is specifically about creating a NEW top-level post
+    // (Part "Read Only Channel"), not about an author continuing to edit
+    // a post they already legitimately created.
+    const isModerator = access.membership.role === "moderator";
+    if (category && !isModerator) {
+      const inaccessible = await getInaccessibleChannelNames({
+        subAccountId: saId,
+        groupId,
+        isModerator,
+      });
+      if (inaccessible.has(category)) {
+        return NextResponse.json({ error: "You don't have access to this channel" }, { status: 403 });
+      }
+    }
 
     const post = await updatePostServerSide({
       subAccountId: saId,

@@ -141,6 +141,83 @@ export interface CommunityTheme {
   dark: CommunityThemeColors;
 }
 
+/**
+ * Left rail Channels/Sections. Live at
+ * `subAccounts/{saId}/communityGroups/{groupId}/channels/{channelId}` and
+ * `.../sections/{sectionId}` — new subcollections, not a redesign of how a
+ * post is stored. `CommunityPost.category` (a plain string) stays the ONE
+ * field that actually associates a post with a channel — a `CommunityChannel`
+ * doc's `name` IS that category string. This is deliberate: it means every
+ * existing post, the whole feed `?c=` filter, and post create/edit
+ * validation keep working completely unchanged; Channels/Sections are a
+ * new, richer LAYER of metadata (icon, description, privacy, read-only,
+ * section, order) on top of the category names that already existed, not a
+ * migration of post data. `CommunityGroup.categories` (the flat name list)
+ * stays in sync as the "source of truth for which category name strings are
+ * currently valid" — every channel create/rename/delete keeps it in step,
+ * and `ensureChannelsForGroup` (community-channels-service.ts) lazily
+ * backfills a real Channel doc for any pre-existing category name that
+ * doesn't have one yet (e.g. "General" on every community created before
+ * this feature existed), so there's no one-time migration script and no
+ * community is ever left with a category that has no Channel metadata.
+ */
+export type ChannelType = "feed" | "chat";
+
+export interface CommunityChannel {
+  id: string;
+  subAccountId: string;
+  groupId: string;
+  /** The exact string every associated post's `category` field holds.
+   *  Renaming a channel cascades a batch rename across those posts' own
+   *  `category` field (see updateChannelServerSide) specifically so this
+   *  invariant never breaks. */
+  name: string;
+  /** A single emoji, same "no raw icon component names" contract the
+   *  picker UI enforces — see channel-icon-picker.tsx. */
+  icon: string;
+  description: string;
+  /** V1 privacy model (see the Channels feature's own report for the full
+   *  rationale): "private" means staff/moderator-only — there is no
+   *  existing per-member channel-invite system to build a finer-grained
+   *  model on top of in this pass, so this reuses the SAME moderator-vs-
+   *  member role check every other admin boundary in this codebase
+   *  already uses, rather than inventing a new one. */
+  private: boolean;
+  /** Only moderators can create TOP-LEVEL posts; members can still view
+   *  and comment/reply (unless that individual post disabled comments). */
+  readOnly: boolean;
+  /** `null` = unsectioned (appears directly under "Channels"). */
+  sectionId: string | null;
+  /** Always "feed" today — see the module comment above. The future Chat
+   *  experience (Future Builds list) adds the user-facing choice and the
+   *  actual chat surface later; this field exists now so that doesn't
+   *  require a schema migration. */
+  channelType: ChannelType;
+  /** Explicit, persisted ordering — see updateChannelServerSide/
+   *  moveChannelServerSide for how it's maintained. */
+  order: number;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
+export interface CommunitySection {
+  id: string;
+  subAccountId: string;
+  groupId: string;
+  name: string;
+  icon: string;
+  /** Private Section is an ADDITIONAL visibility gate layered over channel
+   *  access, not a replacement for it (see the Channels feature report):
+   *  an unauthorized member sees neither the Section heading nor any
+   *  Channel nested inside it, regardless of that Channel's own `private`
+   *  value — but a Channel's own privacy/read-only rules are still
+   *  independently enforced everywhere a moderator's channel IS visible. */
+  private: boolean;
+  order: number;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
 export interface CommunityGroup {
   id: string;
   subAccountId: string;

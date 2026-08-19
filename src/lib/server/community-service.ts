@@ -318,11 +318,19 @@ export async function updateGroupServerSide(opts: {
   if (p.status) updates.status = p.status;
   if (Array.isArray(p.categories)) {
     // Normalize: trim, drop empties, dedupe, always keep "General" first.
+    // Cap raised from the original 10 to 60 (Channels feature) — Channel
+    // creation keeps this array in sync 1:1 with real Channel docs (see
+    // community-channels-service.ts's module comment), and the old 10-cap
+    // would have silently dropped a newly-created channel's name past
+    // that many, leaving a real Channel doc whose posts could never
+    // actually validate against `categories.includes(...)` in the post
+    // create/edit routes — a real, silent-breakage risk, not just an
+    // arbitrary number bump.
     const cleaned = p.categories
       .map((c) => c.trim())
       .filter((c) => c.length > 0);
     const deduped = Array.from(new Set(["General", ...cleaned]));
-    updates.categories = deduped.slice(0, 10);
+    updates.categories = deduped.slice(0, 60);
   }
   if (Array.isArray(p.links)) updates.links = cleanLinks(p.links);
   if (typeof p.guidelinesHtml === "string")

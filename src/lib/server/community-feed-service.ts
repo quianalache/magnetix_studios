@@ -5,6 +5,7 @@ import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { levelForPoints } from "@/config/community";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
+import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 import type {
   AuthorView,
   CommunityComment,
@@ -305,6 +306,20 @@ export async function listFeed(opts: {
   if (opts.category && opts.category !== "All") {
     posts = posts.filter((p) => p.category === opts.category);
   }
+  // Channels (left rail) — a non-moderator viewer must never see a post
+  // from a private channel or one nested in a private section, at the
+  // actual read layer, not just by the left rail hiding the link. Applies
+  // regardless of the `?c=` filter above (also covers "All Posts").
+  if (opts.viewerIsModerator !== true) {
+    const inaccessible = await getInaccessibleChannelNames({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      isModerator: false,
+    });
+    if (inaccessible.size > 0) {
+      posts = posts.filter((p) => !p.category || !inaccessible.has(p.category));
+    }
+  }
   // Pinned float to the top, preserving recency within each band.
   posts.sort((a, b) => Number(b.pinned) - Number(a.pinned));
 
@@ -348,6 +363,18 @@ export async function getFeedPost(opts: {
     .get();
   if (!snap.exists) return null;
   const post = { id: snap.id, ...(snap.data() as Omit<CommunityPost, "id">) };
+  // Same "must not be able to navigate directly to it by URL" enforcement
+  // as listFeed above, applied to a single-post direct fetch — returning
+  // null here reads identically to "post not found" to every existing
+  // caller (both the page and the API route already 404 on null).
+  if (opts.viewerIsModerator !== true && post.category) {
+    const inaccessible = await getInaccessibleChannelNames({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      isModerator: false,
+    });
+    if (inaccessible.has(post.category)) return null;
+  }
   const authors = await hydrateAuthors(opts.subAccountId, opts.groupId, [
     post.authorMemberId,
   ]);

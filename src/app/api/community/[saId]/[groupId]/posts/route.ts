@@ -4,6 +4,7 @@ import { createPostServerSide, buildFeedPoll } from "@/lib/server/community-feed
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
 import { normalizePollDraft } from "@/lib/community/normalize-poll";
+import { getChannelByName, getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,31 @@ export async function POST(
     body.category && access.group.categories.includes(body.category)
       ? body.category
       : null;
+
+  // Channel enforcement (Read Only / Private) — server-side regardless of
+  // whether the composer's own channel selector correctly hid/disabled
+  // this option; UI gating is never the actual security boundary. A
+  // category with no matching Channel doc (shouldn't normally happen once
+  // ensureChannelsForGroup has run, but defensively) is treated as
+  // ordinary/unrestricted, same as before this feature existed.
+  const isModerator = access.membership.role === "moderator";
+  if (category && !isModerator) {
+    const inaccessible = await getInaccessibleChannelNames({
+      subAccountId: saId,
+      groupId,
+      isModerator,
+    });
+    if (inaccessible.has(category)) {
+      return NextResponse.json({ error: "You don't have access to this channel" }, { status: 403 });
+    }
+    const channel = await getChannelByName(saId, groupId, category);
+    if (channel?.readOnly) {
+      return NextResponse.json(
+        { error: "Only moderators can post in this channel" },
+        { status: 403 },
+      );
+    }
+  }
 
   const post = await createPostServerSide({
     subAccountId: saId,

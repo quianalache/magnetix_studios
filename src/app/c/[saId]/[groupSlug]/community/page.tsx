@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { listFeed } from "@/lib/server/community-feed-service";
+import { listChannelsAndSectionsForViewer } from "@/lib/server/community-channels-service";
 import {
   getLeaderboard,
   listMemberDirectory,
@@ -62,11 +63,17 @@ export default async function CommunityFeedPage({
     level: membership.level,
   };
 
+  const viewerIsModerator = membership.role === "moderator";
   const feed = await listFeed({
     subAccountId: saId,
     groupId: group.id,
     viewerMemberId: member.id,
-    viewerIsModerator: membership.role === "moderator",
+    viewerIsModerator,
+  });
+  const { channels, sections } = await listChannelsAndSectionsForViewer({
+    subAccountId: saId,
+    groupId: group.id,
+    isModerator: viewerIsModerator,
   });
 
   const posts: ClientPost[] = feed.map((p) => ({
@@ -123,7 +130,7 @@ export default async function CommunityFeedPage({
       group={group}
       active="community"
       viewer={viewer}
-      viewerIsModerator={membership.role === "moderator"}
+      viewerIsModerator={viewerIsModerator}
       rightRail={
         <>
           <AboutCommunityCard
@@ -154,9 +161,12 @@ export default async function CommunityFeedPage({
             <CommunityLeftNav
               saId={saId}
               pretty={pretty}
+              groupId={group.id}
               groupSlug={group.slug}
               brand={brand}
-              categories={group.categories}
+              viewer={{ memberId: member.id, role: membership.role }}
+              initialChannels={channels}
+              initialSections={sections}
             />
             <FeedView
               saId={saId}
