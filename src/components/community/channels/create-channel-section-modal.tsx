@@ -146,7 +146,16 @@ export function CreateChannelSectionModal({
         <ModalPrimitive.Popup
           data-slot="channel-modal-content"
           className={cn(
-            "fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] w-full flex-col gap-0 rounded-t-2xl border-t bg-background text-sm shadow-lg outline-none transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+            // Explicit `bg-white text-[#202124]` rather than the shared
+            // Dialog's own `bg-background`/theme-token defaults — the rest
+            // of Community (unlike the staff CRM dashboard) is
+            // deliberately hardcoded-light regardless of the app's
+            // global dark/light class, and this modal must be too.
+            // Confirmed live: without this, the modal rendered fully
+            // dark/mismatched whenever a visitor's OS was in dark mode,
+            // even though every surrounding Community surface stayed
+            // correctly light.
+            "fixed inset-x-0 bottom-0 z-50 flex max-h-[90vh] w-full flex-col gap-0 rounded-t-2xl border-t bg-white text-sm text-[#202124] shadow-lg outline-none transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0",
             "sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:right-auto sm:w-full sm:max-w-lg sm:max-h-[85vh] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border",
           )}
         >

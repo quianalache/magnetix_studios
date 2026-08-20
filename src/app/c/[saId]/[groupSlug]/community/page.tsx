@@ -75,6 +75,14 @@ export default async function CommunityFeedPage({
     groupId: group.id,
     isModerator: viewerIsModerator,
   });
+  // Same fix `settings/page.tsx` already needed for `group` — raw Firestore
+  // Admin SDK Timestamp CLASS instances (`createdAt`/`updatedAt`) can't
+  // cross the Server -> Client Component boundary ("Only plain objects...
+  // Classes... are not supported"), confirmed live in production logs.
+  // `CommunityLeftNav` (client) never reads either field, so nulling them
+  // out here is honest, not a lossy workaround.
+  const clientChannels = channels.map((c) => ({ ...c, createdAt: null, updatedAt: null }));
+  const clientSections = sections.map((s) => ({ ...s, createdAt: null, updatedAt: null }));
 
   const posts: ClientPost[] = feed.map((p) => ({
     id: p.id,
@@ -165,8 +173,8 @@ export default async function CommunityFeedPage({
               groupSlug={group.slug}
               brand={brand}
               viewer={{ memberId: member.id, role: membership.role }}
-              initialChannels={channels}
-              initialSections={sections}
+              initialChannels={clientChannels}
+              initialSections={clientSections}
             />
             <FeedView
               saId={saId}
