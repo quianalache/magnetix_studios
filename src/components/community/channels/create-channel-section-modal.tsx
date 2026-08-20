@@ -133,11 +133,20 @@ export function CreateChannelSectionModal({
     }
   }
 
+  // Spec: "switching between Channel/Section swaps the form below and the
+  // modal title" -- only the two SELECTOR CARDS' own text must stay fixed
+  // regardless of selection; the title itself must track `kind`.
   const title = isEdit
     ? kind === "channel"
       ? "Edit Channel"
       : "Edit Section"
-    : "Create Channel/Section";
+    : kind === "channel"
+      ? "Create Channel"
+      : "Create Section";
+  const subtitle =
+    kind === "channel"
+      ? "Set a relatable name and explain the purpose of this channel."
+      : "Set a relatable name and explain the purpose of this section.";
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleCancel()}>
@@ -169,9 +178,7 @@ export function CreateChannelSectionModal({
 
           <div className="shrink-0 border-b border-[#f0f0f0] px-5 py-4">
             <DialogTitle>{title}</DialogTitle>
-            <p className="mt-0.5 text-sm text-[#909090]">
-              Set a relatable name and explain the purpose of this channel.
-            </p>
+            <p className="mt-0.5 text-sm text-[#909090]">{subtitle}</p>
           </div>
 
           <div className="flex-1 overflow-y-auto px-5 py-4">
