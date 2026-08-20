@@ -194,7 +194,11 @@ export function CommunityLeftNav({
                   {s.private && <Lock className="h-3 w-3 shrink-0 text-[#b4b4b4]" />}
                 </button>
                 {isModerator && (
-                  <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100">
+                  // Always visible below `sm` -- touch has no hover state,
+                  // so a hover-only reveal would make this permanently
+                  // untappable for a mobile admin. Desktop keeps the
+                  // hover/focus reveal.
+                  <span className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                     <ActionsMenu
                       items={[
                         { label: "Edit Section", onClick: () => setEditingSection(s) },
@@ -338,9 +342,11 @@ function ChannelRow({
         <Lock className="pointer-events-none absolute right-8 h-3 w-3 shrink-0 text-[#c4c4c4]" />
       )}
       {isModerator && (
+        // Same touch-has-no-hover fix as the section row's ActionsMenu
+        // wrapper above -- always visible below `sm`.
         <span
           className={cn(
-            "absolute right-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+            "absolute right-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
             menuOpen && "opacity-100",
           )}
         >
