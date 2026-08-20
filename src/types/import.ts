@@ -12,9 +12,24 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * index that powers both dedup and relationship resolution.
  */
 
-export type ImportSource = "csv" | "ghl" | "api";
+export type ImportSource = "csv" | "ghl" | "api" | "skool";
 
-export type ImportEntity = "contacts" | "deals" | "tasks" | "events" | "notes";
+export type ImportEntity =
+  | "contacts"
+  | "deals"
+  | "tasks"
+  | "events"
+  | "notes"
+  // Community-side entities used by the Skool importer (src/lib/server/
+  // skool-import/). Not handled by writeImportChunk (bulk-write.ts is
+  // CRM-only) — the Skool importer writes these directly, but reuses this
+  // SAME entity/mapping convention so "where did this record come from" is
+  // answered identically everywhere in the app, not via a second scheme.
+  | "community_members"
+  | "community_posts"
+  | "community_comments"
+  | "community_channels"
+  | "community_memberships";
 
 export const IMPORT_ENTITIES: ImportEntity[] = [
   "contacts",
@@ -22,6 +37,11 @@ export const IMPORT_ENTITIES: ImportEntity[] = [
   "tasks",
   "events",
   "notes",
+  "community_members",
+  "community_posts",
+  "community_comments",
+  "community_channels",
+  "community_memberships",
 ];
 
 export type ImportJobStatus = "queued" | "running" | "completed" | "failed";

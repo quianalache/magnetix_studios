@@ -60,6 +60,18 @@ export interface Member {
   /** Scrypt hash for member password auth. Null/absent for legacy passwordless members. */
   passwordHash?: string | null;
   passwordUpdatedAt?: Timestamp | FieldValue | null;
+  /**
+   * Skool migration, Gap 2 (2026-08-20) — true only for a minimal, non-login
+   * "historical author" identity created to preserve authorship on imported
+   * content from a former/unresolvable platform member (no real email ever
+   * recovered). Such a Member deliberately has `contactId: null`,
+   * `personId: null`, `passwordHash: null`, a reserved non-deliverable
+   * `email` (`*@invalid`), and NO GroupMembership — see
+   * `ensureHistoricalAuthorMember` (skool-import/historical-author.ts) for
+   * the full rationale. Absent/false on every ordinary Member. Small and
+   * additive so a future platform importer can reuse the same convention
+   * instead of inventing a parallel one. */
+  importedHistoricalOnly?: boolean;
   status: MemberStatus;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
