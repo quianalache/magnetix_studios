@@ -80,7 +80,9 @@ export function ChannelMovePopover({
       >
         Move / Organize
       </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-3">
+      {/* Same light override as the parent channel-management PopoverContent
+          -- see that call site's comment for why. */}
+      <PopoverContent className="w-64 space-y-3 border-[#E4E4E4] bg-white text-[#202124]">
         <div>
           <p className="mb-1 text-xs font-medium text-[#202124]">Section</p>
           <select

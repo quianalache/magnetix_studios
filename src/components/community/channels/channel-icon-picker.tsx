@@ -77,7 +77,9 @@ export function ChannelIconPicker({
           >
             <MoreHorizontal className="h-4 w-4" />
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
+          {/* Same light override as the channel-management PopoverContent
+              -- see that call site's comment for why. */}
+          <PopoverContent className="w-auto border-[#E4E4E4] bg-white p-0">
             <EmojiPicker
               onEmojiClick={(data: EmojiClickData) => pick(data.emoji)}
               height={360}

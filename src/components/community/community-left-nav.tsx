@@ -353,7 +353,12 @@ function ChannelRow({
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </PopoverTrigger>
-            <PopoverContent className="w-52 p-1.5">
+            {/* Explicit light override -- PopoverContent's own default is
+                `bg-popover`/`text-popover-foreground`/`border-border`, all
+                next-themes-responsive tokens. Same fix already applied to
+                the Create/Edit modal: Community stays hardcoded-light
+                regardless of the app's global dark/light class. */}
+            <PopoverContent className="w-52 border-[#E4E4E4] bg-white p-1.5 text-[#202124]">
               <button
                 type="button"
                 onClick={() => {
