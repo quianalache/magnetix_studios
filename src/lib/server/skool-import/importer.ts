@@ -182,7 +182,15 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
       : [];
     const existingByName = new Map(existingChannels.map((c) => [c.name, c.id]));
 
-    for (const label of new Set(opts.categories.values())) {
+    // Iterate the id->label map's ENTRIES, not a Set of deduped label
+    // values — a real category id is needed as the mapping ledger's
+    // externalId (see the writeMapping call below), which a plain
+    // Set<string> of labels can't provide. If two distinct Skool category
+    // ids ever produced the same label (not the case for this Community —
+    // 5 ids, 5 distinct labels), the second would just match the
+    // already-created channel by name below and record as matchedExisting,
+    // same as today — never a duplicate channel.
+    for (const [categoryId, label] of opts.categories.entries()) {
       const { icon, name } = splitCategoryLabel(label);
       report.channels.received += 1;
       const existingId = existingByName.get(name);
@@ -204,6 +212,17 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
         });
         channelIdByCategoryLabel.set(label, created.id);
         existingByName.set(name, created.id);
+        // Channels never wrote to the importMappings ledger before this —
+        // added so the Phase 3 checkpoint/rollback manifest has complete,
+        // consistent provenance across every entity type this importer
+        // touches, not just members/posts/comments.
+        await writeMapping({
+          subAccountId: opts.subAccountId,
+          entity: "community_channels",
+          externalId: categoryId,
+          leadstackId: created.id,
+          parentId: groupId,
+        });
         report.channels.created += 1;
       } catch (err) {
         report.channels.failed += 1;
@@ -365,6 +384,17 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
           level: m.level ?? 1,
           tierId: null,
           joinedAt: m.joinedAtIso ? Timestamp.fromDate(new Date(m.joinedAtIso)) : FieldValue.serverTimestamp(),
+        });
+        // Memberships never wrote to the importMappings ledger before this
+        // (idempotency was already covered by the deterministic doc-id-by-
+        // memberId path above) — added purely for Phase 3 checkpoint/
+        // rollback provenance completeness, same reasoning as channels above.
+        await writeMapping({
+          subAccountId: opts.subAccountId,
+          entity: "community_memberships",
+          externalId: m.skoolUserId,
+          leadstackId,
+          parentId: groupId,
         });
         membersAdded += 1;
         report.memberships.created += 1;

@@ -235,6 +235,16 @@ export async function extractAllPosts(
   // 123 raw entries as 3 distinct posts, silently inflating every
   // downstream "would create" count by however many pinned posts exist.
   const byId = new Map<string, SkoolPost>();
+  // A pinned post's SECOND appearance (its natural chronological position,
+  // confirmed live to sit on the SAME page as its pinned "featured" copy —
+  // not just a later page) reports `pinned: undefined`, not `1`. Since
+  // byId.set() below always takes whichever raw occurrence is processed
+  // LAST, a pinned post's flag was silently being overwritten back to
+  // false — found live checking Phase 3's actual written data (0 pinned
+  // posts in Firestore vs. 3 real pinned posts on Skool). Tracked
+  // independently of the Map so pinned-ness from ANY occurrence always
+  // wins, regardless of which occurrence's other fields end up in byId.
+  const pinnedIds = new Set<string>();
   let page = 1;
   let rawCount = 0;
   for (;;) {
@@ -243,11 +253,16 @@ export async function extractAllPosts(
     for (const tree of postTrees as { post?: RawFeedPost }[]) {
       if (!tree.post) continue;
       rawCount += 1;
+      if (parsePinned(tree.post.metadata.pinned)) pinnedIds.add(tree.post.id);
       byId.set(tree.post.id, toSkoolPost(tree.post, categories));
     }
     if (byId.size >= total || rawCount >= total) break;
     page += 1;
     if (page > 200) break; // sanity guard against an infinite loop on unexpected shapes
+  }
+  for (const id of pinnedIds) {
+    const post = byId.get(id);
+    if (post && !post.pinned) post.pinned = true;
   }
   const posts = [...byId.values()];
   return posts;

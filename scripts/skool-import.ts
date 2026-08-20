@@ -42,7 +42,9 @@ import {
   enrichPostImageAttachments,
 } from "@/lib/server/skool-import/skool-extract";
 import { parseSkoolMembersCsv, mergeCsvEmails } from "@/lib/server/skool-import/csv-enrichment";
+import { capturePreImportCheckpoint, rollbackSkoolImportSinceCheckpoint } from "@/lib/server/skool-import/checkpoint";
 import { runSkoolImport } from "@/lib/server/skool-import/importer";
+import { getGroupBySlug } from "@/lib/server/community-service";
 import type { SkoolComment } from "@/lib/server/skool-import/types";
 
 // ── This run's real, live-confirmed source facts ───────────────────────────
@@ -139,6 +141,38 @@ async function main() {
   const totalComments = [...commentsByPost.values()].reduce((sum, arr) => sum + arr.length, 0);
   console.log(`  ${totalComments} total comments extracted across ${commentsByPost.size} posts.`);
 
+  let checkpointId: string | null = null;
+  if (commit) {
+    console.log("\nCapturing pre-import checkpoint (Phase 3 operational safeguard)...");
+    const group = await getGroupBySlug(SUB_ACCOUNT_ID, TARGET_GROUP_SLUG);
+    if (!group) {
+      throw new Error(
+        `Target group "${TARGET_GROUP_SLUG}" does not exist yet — expected it to already exist from the Phase 2 controlled test. Refusing to checkpoint against a group that isn't there.`,
+      );
+    }
+    const checkpoint = await capturePreImportCheckpoint({
+      subAccountId: SUB_ACCOUNT_ID,
+      targetGroupId: group.id,
+      targetGroupSlug: TARGET_GROUP_SLUG,
+    });
+    checkpointId = checkpoint.id;
+    console.log(`  checkpoint captured: ${checkpoint.id}`);
+    console.log(
+      `  pre-existing skool mappings: ${checkpoint.preExistingMappingKeys.length}`,
+      checkpoint.preExistingCountsByEntity,
+    );
+
+    // Self-test: rolling back (dry-run) IMMEDIATELY against a checkpoint
+    // with nothing written since it should propose deleting nothing at
+    // all — proves the rollback logic is scoped correctly BEFORE it is
+    // ever relied on for real, and before any Phase 3 content write happens.
+    const selfTest = await rollbackSkoolImportSinceCheckpoint(SUB_ACCOUNT_ID, checkpoint.id, { commit: false });
+    if (selfTest.toDelete.length !== 0 || selfTest.skippedOutOfScope.length !== 0 || selfTest.errors.length !== 0) {
+      throw new Error(`Rollback self-test did not report a clean zero state — refusing to proceed: ${JSON.stringify(selfTest)}`);
+    }
+    console.log("  rollback self-test: 0 would-delete, 0 out-of-scope, 0 errors — checkpoint verified.\n");
+  }
+
   console.log("\nRunning import...");
   const report = await runSkoolImport({
     subAccountId: SUB_ACCOUNT_ID,
@@ -154,7 +188,7 @@ async function main() {
   });
 
   console.log("\n=== REPORT ===");
-  console.log(JSON.stringify(report, null, 2));
+  console.log(JSON.stringify({ checkpointId, ...report }, null, 2));
 
   process.exit(0);
 }
