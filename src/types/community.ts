@@ -305,8 +305,43 @@ export interface CommunityGroup {
   reviewCount: number;
   /** Denormalized average rating, 1–5. Null until the first active review. */
   averageRating: number | null;
+  /**
+   * Community Settings → Navigation (which top-nav tabs show, their label,
+   * and their order). Absent/empty = never configured — every reader must
+   * treat that as "use the default 6-tab order" (same absent-means-default
+   * convention as {@link CommunityGroup.theme}), via `normalizeNavigation`
+   * in community-navigation.ts, never assume this array is present or
+   * complete on its own.
+   */
+  navigation?: NavItem[];
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
+}
+
+/**
+ * Community Settings → Navigation. The 6 tabs the real top Community nav
+ * can show, in the approved mock-up's order. `community` and `about` are
+ * mandatory (see `MANDATORY_NAV_KEYS` in community-navigation.ts) — their
+ * `visible` is always forced `true` wherever this is read or written, never
+ * trusted as mutable persisted state on its own.
+ */
+export type NavItemKey =
+  | "community"
+  | "classroom"
+  | "events"
+  | "leaderboards"
+  | "members"
+  | "about";
+
+export interface NavItem {
+  key: NavItemKey;
+  /** Admin-customizable display label. The underlying route/feature `key`
+   *  never changes when this is renamed (Part 7). */
+  label: string;
+  visible: boolean;
+  /** Explicit persisted position — never derived from array index alone,
+   *  so a hidden item re-shown later returns to its saved spot (Part 10). */
+  order: number;
 }
 
 /**

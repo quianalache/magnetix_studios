@@ -83,6 +83,12 @@ export function communitySettingsBrandingHref(b: CommunityLinkBase, groupSlug: s
   return `${communitySettingsHref(b, groupSlug)}/branding`;
 }
 
+/** Community Settings → Navigation — same shape as Branding (diverges
+ *  before `/settings`, not after it). */
+export function communitySettingsNavigationHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/navigation`;
+}
+
 /** The group-less "enter your community" entry point — where messages/profile pages' "back" link goes, since they aren't group-scoped. */
 export function communityRootHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities" : `/c/${b.saId}`;

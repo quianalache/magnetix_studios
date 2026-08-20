@@ -18,6 +18,7 @@ import {
   normalizeAboutHtml,
 } from "@/lib/community/about-html";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
   CommunityAboutMediaItem,
   CommunityAboutMediaType,
@@ -31,6 +32,7 @@ import type {
   GroupJoinPolicy,
   GroupMembership,
   GroupStatus,
+  NavItem,
   ResourceLink,
 } from "@/types/community";
 
@@ -252,6 +254,11 @@ export interface UpdateGroupPatch {
   links?: ResourceLink[];
   guidelinesHtml?: string;
   sidebarCards?: CommunitySidebarCard[];
+  /** Community Settings → Navigation. See `normalizeNavigation` — always
+   *  sanitized server-side before it ever reaches Firestore, so a
+   *  malformed or tampered payload (unknown key, mandatory tab hidden,
+   *  oversized label) can never actually persist (Part 5 / Part 15). */
+  navigation?: NavItem[];
 }
 
 export async function updateGroupServerSide(opts: {
@@ -337,6 +344,7 @@ export async function updateGroupServerSide(opts: {
     updates.guidelinesHtml = cleanGuidelinesHtml(p.guidelinesHtml);
   if (Array.isArray(p.sidebarCards))
     updates.sidebarCards = cleanSidebarCards(p.sidebarCards);
+  if (Array.isArray(p.navigation)) updates.navigation = normalizeNavigation(p.navigation);
   if (p.access) {
     updates.access = p.access;
     if (p.access === "paid") {

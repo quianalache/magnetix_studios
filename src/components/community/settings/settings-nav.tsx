@@ -14,25 +14,22 @@ import {
 import {
   communitySettingsBrandingHref,
   communitySettingsHref,
+  communitySettingsNavigationHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding";
+export type SettingsSection = "general" | "branding" | "navigation";
 
 /**
- * Community Settings left nav. General and Branding are real, navigable
- * sections now (this task) — every other item stays exactly as it was
+ * Community Settings left nav. General, Branding, and Navigation are real,
+ * navigable sections now — every other item stays exactly as it was
  * before: intentionally inert (no href, disabled styling, no hidden
  * functionality behind it), per the explicit "do not secretly implement
  * the other sections" instruction, unchanged from the original General-only
  * task.
  */
 const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
-  // Renamed from "Navigation & Channels" — Channel/Section management now
-  // lives directly in the Community left rail (this task), not a Settings
-  // tab, so the old label no longer described anything this item leads to.
-  { key: "navigation", label: "Navigation", icon: LayoutGrid },
   { key: "access", label: "Access & Membership", icon: Shield },
   { key: "home", label: "Community Home", icon: Layers },
   { key: "gamification", label: "Gamification", icon: Trophy },
@@ -59,6 +56,7 @@ export function SettingsNav({
   const sections: { key: SettingsSection; label: string; icon: typeof SettingsIcon; href: string }[] = [
     { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
+    { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
   ];
 
   return (

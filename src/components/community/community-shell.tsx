@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { AuthorView, CommunityGroup } from "@/types/community";
+import type { AuthorView, CommunityGroup, NavItemKey } from "@/types/community";
 import {
   communityAboutHref,
   communityHomeHref,
@@ -12,6 +12,7 @@ import {
   communityProfileHref,
   communitySettingsHref,
 } from "@/lib/community/routes";
+import { getVisibleNavItems, normalizeNavigation } from "@/lib/community/community-navigation";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
 
@@ -64,14 +65,32 @@ export function CommunityShell({
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const linkBase = { saId, pretty };
   const about = communityAboutHref(linkBase, group.slug);
-  const tabs: { key: CommunityTab; label: string; href?: string; disabled?: boolean }[] = [
-    { key: "community", label: "Community", href: communityHomeHref(linkBase, group.slug) },
-    { key: "classroom", label: "Classroom", href: communityLearningHref(linkBase, group.slug) },
-    { key: "events", label: "Events", disabled: true },
-    { key: "members", label: "Members", href: communityMembersHref(linkBase, group.slug) },
-    { key: "leaderboards", label: "Leaderboard", href: communityLeaderboardHref(linkBase, group.slug) },
-    { key: "about", label: "About", href: about },
-  ];
+  // Route builders per key never change based on the admin's custom label
+  // (Part 16 of the Navigation task: "do not turn label customization into
+  // route customization") — only which keys appear, their label, and their
+  // order come from the saved config.
+  const HREF_BY_KEY: Record<NavItemKey, string | undefined> = {
+    community: communityHomeHref(linkBase, group.slug),
+    classroom: communityLearningHref(linkBase, group.slug),
+    // Events has no built page in either route tree yet — stays a
+    // permanently inert tab regardless of its saved visibility/order, same
+    // as before the Navigation settings page existed.
+    events: undefined,
+    members: communityMembersHref(linkBase, group.slug),
+    leaderboards: communityLeaderboardHref(linkBase, group.slug),
+    about,
+  };
+  const navItems = getVisibleNavItems(normalizeNavigation(group.navigation), {
+    isModerator: viewerIsModerator,
+  });
+  const tabs: { key: CommunityTab; label: string; href?: string; disabled?: boolean }[] = navItems.map(
+    (item) => ({
+      key: item.key,
+      label: item.label,
+      href: HREF_BY_KEY[item.key],
+      disabled: HREF_BY_KEY[item.key] === undefined,
+    }),
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={{ backgroundColor: COMMUNITY_BG }}>
