@@ -405,8 +405,15 @@ export async function getMembership(
  * agency owner)? Used to auto-elevate staff who join the community to
  * `moderator`. Community members aren't Firebase users, so a no-match (no
  * Firebase user for the email) cleanly means "not staff".
+ *
+ * Exported (2026-08-21) so the Skool importer's bulk membership-write path
+ * can reuse this EXACT check instead of duplicating it — see the Community
+ * Initialization Repair report: the importer's original direct writes
+ * hardcoded `role: "member"` for every membership, including the
+ * community-owning staff account's own, which is what `joinGroupServerSide`
+ * below has always correctly avoided via this same function.
  */
-async function isStaffEmail(
+export async function isStaffEmail(
   subAccountId: string,
   email: string,
 ): Promise<boolean> {

@@ -7,7 +7,7 @@ import {
   createChannelServerSide,
   ensureChannelsForGroup,
 } from "@/lib/server/community-channels-service";
-import { getGroupBySlug, createGroupServerSide } from "@/lib/server/community-service";
+import { getGroupBySlug, createGroupServerSide, isStaffEmail } from "@/lib/server/community-service";
 import { getExistingMappingsBulk, writeMapping } from "./import-mappings";
 import { ensureHistoricalAuthorMember, findHistoricalAuthorMember } from "./historical-author";
 import {
@@ -373,12 +373,22 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
         continue;
       }
       try {
+        // Community Initialization Repair (2026-08-21): mirror
+        // joinGroupServerSide's own staff-auto-elevation exactly, via the
+        // same isStaffEmail check, instead of hardcoding "member" for
+        // every membership this bulk path creates — including, previously,
+        // the importing owner's own. Every Settings/Channel-admin surface
+        // and server-side authorization check derives from
+        // GroupMembership.role === "moderator" with no second admin
+        // concept, so this is the ONE place that needed to change for a
+        // future imported Community's owner to land as a real admin.
+        const staff = await isStaffEmail(opts.subAccountId, m.resolvedEmail);
         await membershipRef.set({
           subAccountId: opts.subAccountId,
           agencyId: opts.agencyId,
           groupId,
           memberId: leadstackId,
-          role: "member",
+          role: staff ? "moderator" : "member",
           status: "active",
           points: m.points ?? 0,
           level: m.level ?? 1,
