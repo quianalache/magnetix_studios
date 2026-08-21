@@ -18,6 +18,16 @@ import type { CSSProperties } from "react";
  */
 export function communityPostTypographyClasses(): string {
   return [
+    // A long unbroken string (a bare pasted URL with no spaces, most
+    // commonly) never wraps by default -- `overflow-wrap`/`word-break`
+    // aren't implied by `whitespace-pre-wrap` below, which only preserves
+    // whitespace/newlines, not breaks WITHIN one unbroken token. Real risk
+    // surfaced during the mobile-overflow investigation: with the outer
+    // grid now correctly shrinkable (min-w-0), a long word would no
+    // longer force the PAGE wider, but could still visually spill out of
+    // its own post/comment card. Applies to both posts and comments (this
+    // is the one shared renderer both use, per the module comment above).
+    "break-words",
     "[&_p]:whitespace-pre-wrap [&_p+p]:mt-2",
     "[&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5",
     "[&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5",

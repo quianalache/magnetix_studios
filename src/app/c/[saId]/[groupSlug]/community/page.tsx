@@ -166,33 +166,48 @@ export default async function CommunityFeedPage({
         <CommunityBanner group={group} brand={brand} />
         <Suspense fallback={null}>
           <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-            <CommunityLeftNav
-              saId={saId}
-              pretty={pretty}
-              groupId={group.id}
-              groupSlug={group.slug}
-              brand={brand}
-              viewer={{ memberId: member.id, role: membership.role }}
-              initialChannels={clientChannels}
-              initialSections={clientSections}
-            />
-            <FeedView
-              saId={saId}
-              pretty={pretty}
-              groupId={group.id}
-              groupSlug={group.slug}
-              brand={brand}
-              communityName={group.name}
-              categories={group.categories}
-              viewer={{
-                memberId: member.id,
-                role: membership.role,
-                displayName: viewer.displayName,
-                avatarUrl: viewer.avatarUrl,
-                level: viewer.level,
-              }}
-              initialPosts={posts}
-            />
+            {/* min-w-0 on both grid items -- a CSS grid item's default
+                min-width is `auto`, not 0, so without this a track can't
+                shrink below its content's min-content width. Real
+                production data (a channel named "YouTube Glow Up
+                Challenge") exposed this: the left nav's own `truncate`
+                classes (community-left-nav.tsx) were always correct, but
+                had no bounded box to truncate against, so the whole grid
+                (and the page) grew to fit the longest channel name
+                instead of respecting the viewport. Q Test never exposed
+                this because its one channel's name was short enough to
+                fit by coincidence. */}
+            <div className="min-w-0">
+              <CommunityLeftNav
+                saId={saId}
+                pretty={pretty}
+                groupId={group.id}
+                groupSlug={group.slug}
+                brand={brand}
+                viewer={{ memberId: member.id, role: membership.role }}
+                initialChannels={clientChannels}
+                initialSections={clientSections}
+              />
+            </div>
+            <div className="min-w-0">
+              <FeedView
+                saId={saId}
+                pretty={pretty}
+                groupId={group.id}
+                groupSlug={group.slug}
+                brand={brand}
+                communityName={group.name}
+                categories={group.categories}
+                viewer={{
+                  memberId: member.id,
+                  role: membership.role,
+                  displayName: viewer.displayName,
+                  avatarUrl: viewer.avatarUrl,
+                  level: viewer.level,
+                }}
+                initialPosts={posts}
+              />
+            </div>
           </div>
         </Suspense>
       </div>
