@@ -238,6 +238,7 @@ export async function createPostServerSide(
     poll: input.poll ?? undefined,
     hasPoll: input.poll ? true : undefined,
     pinned: false,
+    pinnedToChannel: false,
     likeCount: 0,
     commentCount: 0,
     createdAt: FieldValue.serverTimestamp(),
@@ -565,15 +566,80 @@ export async function toggleLikeServerSide(opts: {
   });
 }
 
-export async function setPinnedServerSide(opts: {
+/** At most this many posts may be pinned to All Posts (the community-wide
+ *  Featured Posts section) at once — the Skool-reference product decision.
+ *  Channel pins have no such cap (each channel manages its own pinned set
+ *  independently, no cross-channel concept to bound). */
+export const MAX_FEATURED_POSTS = 3;
+
+/** Thrown by `setPostPinServerSide` when pinning a 4th post to All Posts —
+ *  the API route surfaces `.message` directly to the client as a clear,
+ *  actionable validation error, never a generic 500. */
+export class MaxFeaturedPostsError extends Error {
+  constructor() {
+    super(`Only ${MAX_FEATURED_POSTS} posts can be featured (pinned to All Posts) at once. Unpin one first.`);
+    this.name = "MaxFeaturedPostsError";
+  }
+}
+
+/**
+ * Pin/unpin a post — to All Posts (the community-wide Featured Posts
+ * section) or to its own channel, two independent boolean states on the
+ * same post (see CommunityPost.pinned/pinnedToChannel doc comments).
+ * Server-side only entry point for both — the API route's moderator check
+ * is the ONLY gate; this function trusts its caller already enforced that,
+ * same convention as every other *ServerSide function in this file.
+ *
+ * The All-Posts cap is enforced INSIDE a transaction (not a plain read-
+ * then-write) so two near-simultaneous pin requests can never both pass
+ * the check and leave more than MAX_FEATURED_POSTS pinned — the exact
+ * failure mode a non-transactional check would allow.
+ */
+export async function setPostPinServerSide(opts: {
   subAccountId: string;
   groupId: string;
   postId: string;
+  target: "allPosts" | "channel";
   pinned: boolean;
+  actorMemberId: string;
 }): Promise<void> {
-  await postsCol(opts.subAccountId, opts.groupId)
-    .doc(opts.postId)
-    .update({ pinned: opts.pinned, updatedAt: FieldValue.serverTimestamp() });
+  const db = getAdminDb();
+  const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(postRef);
+    if (!snap.exists) throw new Error("Post not found");
+    const post = snap.data() as CommunityPost;
+
+    if (opts.target === "channel" && opts.pinned && !post.category) {
+      throw new Error("This post has no channel to pin it to.");
+    }
+
+    if (opts.target === "allPosts" && opts.pinned && !post.pinned) {
+      // Cheap regardless of scale (never more than MAX_FEATURED_POSTS
+      // docs) — .select() with no fields keeps the read minimal.
+      const pinnedSnap = await tx.get(
+        postsCol(opts.subAccountId, opts.groupId).where("pinned", "==", true).select(),
+      );
+      if (pinnedSnap.size >= MAX_FEATURED_POSTS) {
+        throw new MaxFeaturedPostsError();
+      }
+    }
+
+    const patch =
+      opts.target === "allPosts"
+        ? {
+            pinned: opts.pinned,
+            pinnedAt: opts.pinned ? FieldValue.serverTimestamp() : null,
+            pinnedBy: opts.pinned ? opts.actorMemberId : null,
+          }
+        : {
+            pinnedToChannel: opts.pinned,
+            channelPinnedAt: opts.pinned ? FieldValue.serverTimestamp() : null,
+            channelPinnedBy: opts.pinned ? opts.actorMemberId : null,
+          };
+    tx.update(postRef, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+  });
 }
 
 /**

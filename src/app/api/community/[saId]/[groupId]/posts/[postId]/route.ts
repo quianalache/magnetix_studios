@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import {
   deletePostServerSide,
-  setPinnedServerSide,
+  setPostPinServerSide,
   updatePostServerSide,
   buildFeedPoll,
   viewerPollVotes,
+  MaxFeaturedPostsError,
 } from "@/lib/server/community-feed-service";
 import { getGroupById } from "@/lib/server/community-service";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -18,13 +19,15 @@ import type { CommunityPost } from "@/types/community";
 export const dynamic = "force-dynamic";
 
 /**
- * Member (moderator): pin / unpin a post — `{ pinned: boolean }`.
+ * Member (moderator): pin / unpin a post — `{ pinned: boolean, pinTarget?:
+ * "allPosts" | "channel" }`. `pinTarget` defaults to `"allPosts"` so any
+ * older call site that only ever sends `{ pinned }` keeps targeting the
+ * same community-wide Featured Posts state it always did.
  * Member (author or moderator): edit a post — `{ edit: {...} }`. Two
  * distinct request shapes on the same PATCH endpoint (not two routes)
  * because they're both "partial update a post" in REST terms; kept as
  * separate top-level keys specifically so they can never be confused with
- * each other or accidentally merged, and so the existing pin call site
- * (feed-view.tsx/post-detail-view.tsx, unchanged) needed zero changes.
+ * each other or accidentally merged.
  */
 export async function PATCH(
   request: Request,
@@ -38,6 +41,7 @@ export async function PATCH(
 
   let body: {
     pinned?: boolean;
+    pinTarget?: "allPosts" | "channel";
     edit?: {
       title?: string;
       body?: string;
@@ -169,17 +173,29 @@ export async function PATCH(
     return NextResponse.json({ ok: true, post: { ...post, poll: responsePoll } });
   }
 
-  // Pin/unpin — unchanged from Phase C, moderator-only.
+  // Pin/unpin — moderator-only, both targets.
   if (access.membership.role !== "moderator") {
     return NextResponse.json({ error: "Moderators only" }, { status: 403 });
   }
-  await setPinnedServerSide({
-    subAccountId: saId,
-    groupId,
-    postId,
-    pinned: body.pinned === true,
-  });
-  return NextResponse.json({ ok: true, pinned: body.pinned === true });
+  const pinTarget = body.pinTarget === "channel" ? "channel" : "allPosts";
+  try {
+    await setPostPinServerSide({
+      subAccountId: saId,
+      groupId,
+      postId,
+      target: pinTarget,
+      pinned: body.pinned === true,
+      actorMemberId: access.member.id,
+    });
+  } catch (err) {
+    if (err instanceof MaxFeaturedPostsError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    const message = err instanceof Error ? err.message : "Couldn't update pin";
+    const status = message === "Post not found" ? 404 : 400;
+    return NextResponse.json({ error: message }, { status });
+  }
+  return NextResponse.json({ ok: true, pinned: body.pinned === true, pinTarget });
 }
 
 /** Member: delete a post (author) or moderator. */

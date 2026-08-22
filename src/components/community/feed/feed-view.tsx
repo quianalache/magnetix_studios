@@ -28,7 +28,12 @@ export interface ClientPost {
   /** Phase D — absent/false means comments are allowed (matches
    *  CommunityPost.commentsDisabled's convention). */
   commentsDisabled?: boolean;
+  /** Pinned to All Posts — the community-wide Featured Posts section. */
   pinned: boolean;
+  pinnedAtMs: number | null;
+  /** Pinned within its own channel (this post's `category`). */
+  pinnedToChannel: boolean;
+  channelPinnedAtMs: number | null;
   likeCount: number;
   commentCount: number;
   createdAtMs: number | null;
@@ -102,7 +107,8 @@ export function FeedView({
   }
 
   const base = `/api/community/${saId}/${groupId}`;
-  const filtered = filter === "All" ? posts : posts.filter((p) => p.category === filter);
+  const isAllPostsView = filter === "All";
+  const filtered = isAllPostsView ? posts : posts.filter((p) => p.category === filter);
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "top") return b.likeCount - a.likeCount;
     if (sort === "unanswered") {
@@ -111,15 +117,30 @@ export function FeedView({
     }
     return (b.createdAtMs ?? 0) - (a.createdAtMs ?? 0);
   });
-  const visible = sorted;
+  // Featured Posts (All Posts view only) and "Pinned in [Channel]" (a
+  // specific channel view only) are each their own section, never both at
+  // once — a post pinned both ways shows once, in whichever section
+  // matches the CURRENT view's context, never duplicated within one view
+  // (explicit product instruction). `posts` (not `filtered`) is the source
+  // for Featured Posts since it's community-wide, independent of any
+  // channel filter.
+  const featuredPosts = isAllPostsView
+    ? [...posts].filter((p) => p.pinned).sort((a, b) => (b.pinnedAtMs ?? 0) - (a.pinnedAtMs ?? 0))
+    : [];
+  const channelPinnedPosts = !isAllPostsView
+    ? [...filtered].filter((p) => p.pinnedToChannel).sort((a, b) => (b.channelPinnedAtMs ?? 0) - (a.channelPinnedAtMs ?? 0))
+    : [];
+  const sectionedIds = new Set([...featuredPosts, ...channelPinnedPosts].map((p) => p.id));
+  const visible = sorted.filter((p) => !sectionedIds.has(p.id));
   // Editing is ONE modal instance driven by which post's id is currently
   // being edited, not a composer mounted inline in place of every post's
   // card (Phase D: the composer is a modal now, so the card underneath
   // stays exactly as it always looked while the modal is open above it).
   const editingPost = editingPostId ? (posts.find((p) => p.id === editingPostId) ?? null) : null;
-  // Every GIF currently visible in the feed, resolved in ONE batched
-  // request rather than one per post — see gif-resolver-context.tsx.
-  const gifProviderIds = collectGifProviderIds(visible);
+  // Every GIF currently visible ANYWHERE on this page — Featured/pinned
+  // sections included, not just the regular list below them — resolved in
+  // ONE batched request rather than one per post — see gif-resolver-context.tsx.
+  const gifProviderIds = collectGifProviderIds([...featuredPosts, ...channelPinnedPosts, ...visible]);
 
   async function toggleLike(postId: string) {
     setPosts((prev) =>
@@ -153,19 +174,33 @@ export function FeedView({
     }
   }
 
-  async function togglePin(postId: string, pinned: boolean) {
-    const res = await fetch(`${base}/posts/${postId}`, {
+  /** Shared by both pin targets — All Posts (community-wide Featured
+   *  Posts, capped at 3, enforced server-side) and Channel (the post's own
+   *  category, no cap). The server is the source of truth for the new
+   *  pinnedAt/channelPinnedAt timestamps that drive each section's
+   *  ordering, so a successful response always replaces the WHOLE post
+   *  from the server rather than guessing the new timestamp locally. */
+  async function togglePin(post: ClientPost, target: "allPosts" | "channel") {
+    const currentlyPinned = target === "allPosts" ? post.pinned : post.pinnedToChannel;
+    const res = await fetch(`${base}/posts/${post.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: !pinned }),
+      body: JSON.stringify({ pinned: !currentlyPinned, pinTarget: target }),
     });
-    if (res.ok) {
-      setPosts((prev) =>
-        prev.map((p) => (p.id === postId ? { ...p, pinned: !pinned } : p)),
-      );
-    } else {
-      toast.error("Couldn't update pin");
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't update pin");
+      return;
     }
+    const nowMs = Date.now();
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== post.id) return p;
+        return target === "allPosts"
+          ? { ...p, pinned: !currentlyPinned, pinnedAtMs: !currentlyPinned ? nowMs : null }
+          : { ...p, pinnedToChannel: !currentlyPinned, channelPinnedAtMs: !currentlyPinned ? nowMs : null };
+      }),
+    );
   }
 
   async function submitVote(postId: string, optionIds: string[]) {
@@ -194,6 +229,149 @@ export function FeedView({
     } else {
       toast.error("Couldn't delete");
     }
+  }
+
+  /**
+   * ONE shared post-card renderer for all three contexts (the regular
+   * list, the Featured Posts section, a channel's "Pinned in [Channel]"
+   * section) — everything below the pin-state badge/border is identical to
+   * before this feature existed, so a normal post's rendering, comments,
+   * GIFs, and channel display are all untouched. `variant` controls only
+   * the themed accent border/tint + which badge shows — never a second,
+   * divergent post-card implementation.
+   */
+  function renderPostCard(p: ClientPost, variant: "regular" | "featured" | "channelPinned") {
+    const canModerate = viewer.role === "moderator";
+    const canDelete = canModerate || p.authorMemberId === viewer.memberId;
+    // Same broad "moderator can act on any post" convention `canDelete`
+    // already uses — see the Phase D report for why this wasn't a new
+    // permission concept.
+    const canEdit = canModerate || p.authorMemberId === viewer.memberId;
+    const detail = communityPostHref({ saId, pretty }, groupSlug, p.id);
+    // Themed highlight (Part 4): the community's OWN brand color, never a
+    // hardcoded color — "0d"/"33" are hex alpha suffixes for a subtle
+    // tint/border, not a second color needing its own theme plumbing.
+    const highlighted = variant === "featured" || variant === "channelPinned";
+
+    return (
+      <article
+        key={p.id}
+        className={cn("rounded-xl border bg-white p-4", highlighted ? "border-2" : "border-[#E4E4E4]")}
+        style={highlighted ? { borderColor: `${brand}66`, backgroundColor: `${brand}0d` } : undefined}
+      >
+        {variant === "featured" && (
+          <div className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: brand }}>
+            <Pin className="h-3 w-3 fill-current" /> Featured
+          </div>
+        )}
+        {variant === "channelPinned" && (
+          <div className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: brand }}>
+            <Pin className="h-3 w-3 fill-current" /> Pinned in {p.category}
+          </div>
+        )}
+        {variant === "regular" && (p.pinned || p.pinnedToChannel) && (
+          // A post pinned somewhere but not currently shown in ITS OWN
+          // dedicated section (e.g. globally featured while browsing a
+          // DIFFERENT channel's own pinned section, or vice-versa) still
+          // gets a plain, unhighlighted badge here — informative without
+          // implying "this is the featured/pinned copy" (never duplicated;
+          // see the featuredPosts/channelPinnedPosts exclusion above).
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium uppercase tracking-wide text-[#909090]">
+            {p.pinned && (
+              <span className="inline-flex items-center gap-1">
+                <Pin className="h-3 w-3" /> Featured
+              </span>
+            )}
+            {p.pinnedToChannel && (
+              <span className="inline-flex items-center gap-1">
+                <Pin className="h-3 w-3" /> Pinned in {p.category}
+              </span>
+            )}
+          </div>
+        )}
+        <div className="flex items-start gap-3">
+          <MemberAvatar author={p.author} size={40} brand={brand} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-sm">
+              <AuthorLink saId={saId} pretty={pretty} viewerMemberId={viewer.memberId} author={p.author} brand={brand} />
+              {/* Timestamp doubles as a permalink to the post — a small,
+                  explicit, well-understood affordance (same pattern as
+                  Twitter/Reddit/HN) rather than wrapping the whole card
+                  body in one giant <a>, which made member-inserted links
+                  inside the body invalid-nested and unclickable. */}
+              <Link href={detail} className="text-xs text-[#909090] hover:underline">
+                {timeAgo(p.createdAtMs)}
+              </Link>
+              {p.category && <span className="text-xs text-[#909090]">· {p.category}</span>}
+            </div>
+            {p.title && (
+              <Link href={detail} className="mt-1 block hover:underline">
+                <h3 className="font-semibold text-[#202124]">{p.title}</h3>
+              </Link>
+            )}
+            {/* NOT wrapped in a <Link> — the old "wrap the whole title+body
+                in one <a>" pattern made any link a member inserted into
+                their own post text an invalid nested anchor (unpredictable
+                clicks, and Chrome's status bar always showed the
+                post-detail URL no matter what you hovered). The timestamp
+                above and the comment-count link below remain as the
+                card's "open post detail" affordances. */}
+            <CommunityPostBody
+              html={p.body}
+              brand={brand}
+              clamp
+              className={cn(p.title ? "mt-0.5" : "mt-1")}
+              saId={saId}
+              pretty={pretty}
+              groupSlug={groupSlug}
+            />
+            {p.attachments && p.attachments.length > 0 && (
+              <CommunityPostAttachments attachments={p.attachments} brand={brand} className="mt-2" />
+            )}
+            {p.poll && <CommunityPollCard poll={p.poll} brand={brand} onVote={(optionIds) => submitVote(p.id, optionIds)} />}
+            <div className="mt-3 flex items-center gap-4 text-xs text-[#909090]">
+              <button onClick={() => toggleLike(p.id)} className="flex items-center gap-1 hover:text-[#202124]">
+                <ThumbsUp
+                  className={cn("h-4 w-4", p.likedByViewer && "fill-current")}
+                  style={p.likedByViewer ? { color: brand } : undefined}
+                />
+                {p.likeCount}
+              </button>
+              <Link href={detail} className="flex items-center gap-1 hover:text-[#202124]">
+                <MessageCircle className="h-4 w-4" />
+                {p.commentCount}
+              </Link>
+            </div>
+          </div>
+          {(canModerate || canDelete || canEdit) && (
+            <ActionsMenu
+              items={[
+                ...(canEdit ? [{ label: "Edit post", onClick: () => setEditingPostId(p.id) }] : []),
+                ...(canModerate
+                  ? [
+                      {
+                        label: p.pinned ? "Unpin from All Posts" : "Pin to All Posts",
+                        onClick: () => togglePin(p, "allPosts"),
+                      },
+                      // A post with no channel/category can't be pinned to
+                      // one — hidden entirely rather than shown disabled.
+                      ...(p.category
+                        ? [
+                            {
+                              label: p.pinnedToChannel ? "Unpin from Channel" : "Pin to Channel",
+                              onClick: () => togglePin(p, "channel"),
+                            },
+                          ]
+                        : []),
+                    ]
+                  : []),
+                ...(canDelete ? [{ label: "Delete post", onClick: () => deletePost(p.id), destructive: true }] : []),
+              ]}
+            />
+          )}
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -247,150 +425,35 @@ export function FeedView({
       </div>
 
       <GifResolverProvider providerIds={gifProviderIds}>
-      {visible.length === 0 ? (
+      {/* Featured Posts — community-wide, All Posts view only (Part 1). A
+          vertical stack, deliberately never a carousel, matching Skool's
+          own spirit more than GoCollab's here per explicit instruction. */}
+      {featuredPosts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: brand }}>
+            <Pin className="h-3.5 w-3.5 fill-current" /> Featured Posts
+          </div>
+          {featuredPosts.map((p) => renderPostCard(p, "featured"))}
+        </div>
+      )}
+
+      {/* Channel pinned posts — only while viewing that one channel (Part
+          2), a completely separate section from Featured Posts above. */}
+      {channelPinnedPosts.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: brand }}>
+            <Pin className="h-3.5 w-3.5 fill-current" /> Pinned in {filter}
+          </div>
+          {channelPinnedPosts.map((p) => renderPostCard(p, "channelPinned"))}
+        </div>
+      )}
+
+      {visible.length === 0 && featuredPosts.length === 0 && channelPinnedPosts.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
           Nothing here yet. Be the first to post.
         </div>
       ) : (
-        <div className="space-y-3">
-          {[...visible]
-            .sort((a, b) => Number(b.pinned) - Number(a.pinned))
-            .map((p) => {
-              const canModerate = viewer.role === "moderator";
-              const canDelete =
-                canModerate || p.authorMemberId === viewer.memberId;
-              // Same broad "moderator can act on any post" convention
-              // `canDelete` already uses — see the Phase D report for why
-              // this wasn't a new permission concept.
-              const canEdit = canModerate || p.authorMemberId === viewer.memberId;
-              const detail = communityPostHref({ saId, pretty }, groupSlug, p.id);
-
-              return (
-                <article
-                  key={p.id}
-                  className="rounded-xl border border-[#E4E4E4] bg-white p-4"
-                >
-                  {p.pinned && (
-                    <div className="mb-2 flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-[#909090]">
-                      <Pin className="h-3 w-3" /> Pinned
-                    </div>
-                  )}
-                  <div className="flex items-start gap-3">
-                    <MemberAvatar author={p.author} size={40} brand={brand} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <AuthorLink
-                          saId={saId}
-                          pretty={pretty}
-                          viewerMemberId={viewer.memberId}
-                          author={p.author}
-                          brand={brand}
-                        />
-                        {/* Timestamp doubles as a permalink to the post —
-                            a small, explicit, well-understood affordance
-                            (same pattern as Twitter/Reddit/HN) rather than
-                            wrapping the whole card body in one giant <a>,
-                            which made member-inserted links inside the
-                            body invalid-nested and unclickable. */}
-                        <Link
-                          href={detail}
-                          className="text-xs text-[#909090] hover:underline"
-                        >
-                          {timeAgo(p.createdAtMs)}
-                        </Link>
-                        {p.category && (
-                          <span className="text-xs text-[#909090]">
-                            · {p.category}
-                          </span>
-                        )}
-                      </div>
-                      {p.title && (
-                        <Link href={detail} className="mt-1 block hover:underline">
-                          <h3 className="font-semibold text-[#202124]">{p.title}</h3>
-                        </Link>
-                      )}
-                      {/* NOT wrapped in a <Link> — the old "wrap the whole
-                          title+body in one <a>" pattern made any link a
-                          member inserted into their own post text an
-                          invalid nested anchor (unpredictable clicks, and
-                          Chrome's status bar always showed the post-detail
-                          URL no matter what you hovered). The timestamp
-                          above and the comment-count link below remain as
-                          the card's "open post detail" affordances. */}
-                      <CommunityPostBody
-                        html={p.body}
-                        brand={brand}
-                        clamp
-                        className={cn(p.title ? "mt-0.5" : "mt-1")}
-                        saId={saId}
-                        pretty={pretty}
-                        groupSlug={groupSlug}
-                      />
-                      {p.attachments && p.attachments.length > 0 && (
-                        <CommunityPostAttachments
-                          attachments={p.attachments}
-                          brand={brand}
-                          className="mt-2"
-                        />
-                      )}
-                      {p.poll && (
-                        <CommunityPollCard
-                          poll={p.poll}
-                          brand={brand}
-                          onVote={(optionIds) => submitVote(p.id, optionIds)}
-                        />
-                      )}
-                      <div className="mt-3 flex items-center gap-4 text-xs text-[#909090]">
-                        <button
-                          onClick={() => toggleLike(p.id)}
-                          className="flex items-center gap-1 hover:text-[#202124]"
-                        >
-                          <ThumbsUp
-                            className={cn("h-4 w-4", p.likedByViewer && "fill-current")}
-                            style={p.likedByViewer ? { color: brand } : undefined}
-                          />
-                          {p.likeCount}
-                        </button>
-                        <Link
-                          href={detail}
-                          className="flex items-center gap-1 hover:text-[#202124]"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          {p.commentCount}
-                        </Link>
-                      </div>
-                    </div>
-                    {(canModerate || canDelete || canEdit) && (
-                      <ActionsMenu
-                        items={[
-                          ...(canEdit
-                            ? [{ label: "Edit post", onClick: () => setEditingPostId(p.id) }]
-                            : []),
-                          ...(canModerate
-                            ? [
-                                {
-                                  label: p.pinned ? "Unpin post" : "Pin post",
-                                  onClick: () => togglePin(p.id, p.pinned),
-                                },
-                              ]
-                            : []),
-                          ...(canDelete
-                            ? [
-                                {
-                                  label: "Delete post",
-                                  onClick: () => deletePost(p.id),
-                                  destructive: true,
-                                },
-                              ]
-                            : []),
-                        ]}
-                      />
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-        </div>
+        visible.length > 0 && <div className="space-y-3">{visible.map((p) => renderPostCard(p, "regular"))}</div>
       )}
       </GifResolverProvider>
 

@@ -451,7 +451,30 @@ export interface CommunityPost {
    *  `attachments` simply absent. See src/types/media-attachment.ts. */
   attachments?: MediaAttachment[];
   category: string | null;
+  /** Pinned to ALL POSTS — the community-wide "Featured Posts" section
+   *  shown above the regular feed on the All Posts view. At most
+   *  MAX_FEATURED_POSTS (3) posts may hold this at once, enforced
+   *  server-side in a transaction (`setPostPinServerSide`,
+   *  community-feed-service.ts) — never merely a client-side limit.
+   *  Independent of `pinnedToChannel` below; a post can be pinned to
+   *  neither, either, or both. */
   pinned: boolean;
+  /** When `pinned` was last set true — null/absent while unpinned. Drives
+   *  Featured Posts ordering (most-recently-pinned first) and is cleared
+   *  back to null on unpin, never left stale. */
+  pinnedAt?: Timestamp | FieldValue | null;
+  /** The moderator memberId who last pinned this post globally — null/absent
+   *  while unpinned. */
+  pinnedBy?: string | null;
+  /** Pinned within its OWN channel (this post's `category`) — shown in
+   *  that channel's "Pinned in [Channel]" section when viewing that
+   *  channel specifically. A post with no `category` can never be
+   *  channel-pinned (enforced server-side). No cap — unlike `pinned`,
+   *  there is no cross-channel concept here, so a moderator manages each
+   *  channel's own pinned set independently. */
+  pinnedToChannel?: boolean;
+  channelPinnedAt?: Timestamp | FieldValue | null;
+  channelPinnedBy?: string | null;
   likeCount: number;
   commentCount: number;
   /** Phase D — author-controlled "allow comments/replies" toggle. Absent

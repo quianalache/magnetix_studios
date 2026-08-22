@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MessageCircle, ThumbsUp } from "lucide-react";
+import { MessageCircle, Pin, ThumbsUp } from "lucide-react";
 import type { AuthorView } from "@/types/community";
 import type { MediaAttachment } from "@/types/media-attachment";
 import { MemberAvatar } from "@/components/community/member-avatar";
@@ -81,7 +81,6 @@ export function PostDetailView({
   const router = useRouter();
   const [liked, setLiked] = useState(post.likedByViewer);
   const [likeCount, setLikeCount] = useState(post.likeCount);
-  const [pinned, setPinned] = useState(post.pinned);
   const [currentPost, setCurrentPost] = useState(post);
   const [editing, setEditing] = useState(false);
   const [comments, setComments] = useState(initialComments);
@@ -104,18 +103,25 @@ export function PostDetailView({
     }
   }
 
-  async function togglePin() {
-    const next = !pinned;
-    setPinned(next);
+  /** Same shared All-Posts/Channel pin logic as feed-view.tsx's togglePin —
+   *  see that copy's comment for why the server's response (not a locally
+   *  guessed timestamp) doesn't matter here (this page never needs the
+   *  pinnedAt/channelPinnedAt values, only the boolean). */
+  async function togglePin(target: "allPosts" | "channel") {
+    const currentlyPinned = target === "allPosts" ? currentPost.pinned : currentPost.pinnedToChannel;
     const res = await fetch(`${base}/posts/${post.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: next }),
+      body: JSON.stringify({ pinned: !currentlyPinned, pinTarget: target }),
     });
-    if (!res.ok) {
-      setPinned(!next);
-      toast.error("Couldn't update pin");
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't update pin");
+      return;
     }
+    setCurrentPost((prev) =>
+      target === "allPosts" ? { ...prev, pinned: !currentlyPinned } : { ...prev, pinnedToChannel: !currentlyPinned },
+    );
   }
 
   async function deletePost() {
@@ -205,7 +211,21 @@ export function PostDetailView({
   const postMenu: MenuItem[] = [
     ...(canEdit ? [{ label: "Edit post", onClick: () => setEditing(true) }] : []),
     ...(canModerate
-      ? [{ label: pinned ? "Unpin post" : "Pin post", onClick: togglePin }]
+      ? [
+          {
+            label: currentPost.pinned ? "Unpin from All Posts" : "Pin to All Posts",
+            onClick: () => togglePin("allPosts"),
+          },
+          // A post with no channel/category can't be pinned to one.
+          ...(currentPost.category
+            ? [
+                {
+                  label: currentPost.pinnedToChannel ? "Unpin from Channel" : "Pin to Channel",
+                  onClick: () => togglePin("channel"),
+                },
+              ]
+            : []),
+        ]
       : []),
     ...(canModerate || currentPost.author.memberId === viewer.memberId
       ? [{ label: "Delete post", onClick: deletePost, destructive: true }]
@@ -239,8 +259,35 @@ export function PostDetailView({
       {/* Every GIF on this page (the post + every comment/reply),
           resolved in ONE batched request — see gif-resolver-context.tsx. */}
       <GifResolverProvider providerIds={collectGifProviderIds([currentPost, ...comments])}>
-      {/* Post */}
-      <article className="rounded-xl border border-[#E4E4E4] bg-white p-5">
+      {/* Post — same themed highlight treatment as the feed's Featured/
+          channel-pinned cards (Part 4), shown whenever either pin state is
+          true; this single-post page has no separate "section" concept to
+          split badges across, so both can show together here. */}
+      <article
+        className={cn(
+          "rounded-xl border bg-white p-5",
+          (currentPost.pinned || currentPost.pinnedToChannel) && "border-2",
+        )}
+        style={
+          currentPost.pinned || currentPost.pinnedToChannel
+            ? { borderColor: `${brand}66`, backgroundColor: `${brand}0d` }
+            : undefined
+        }
+      >
+        {(currentPost.pinned || currentPost.pinnedToChannel) && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: brand }}>
+            {currentPost.pinned && (
+              <span className="inline-flex items-center gap-1">
+                <Pin className="h-3 w-3 fill-current" /> Featured
+              </span>
+            )}
+            {currentPost.pinnedToChannel && (
+              <span className="inline-flex items-center gap-1">
+                <Pin className="h-3 w-3 fill-current" /> Pinned in {currentPost.category}
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex items-start gap-3">
           <MemberAvatar author={currentPost.author} size={44} brand={brand} />
           <div className="min-w-0 flex-1">
