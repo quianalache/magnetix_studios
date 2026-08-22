@@ -10,6 +10,7 @@ import {
 import { getGroupBySlug, createGroupServerSide, isStaffEmail } from "@/lib/server/community-service";
 import { getExistingMappingsBulk, writeMapping } from "./import-mappings";
 import { ensureHistoricalAuthorMember, findHistoricalAuthorMember } from "./historical-author";
+import { buildMentionResolver } from "./mention-resolver";
 import {
   mapSkoolAttachments,
   mapSkoolPost,
@@ -420,6 +421,13 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
     }
   }
 
+  // Skool @mention resolver (stable Skool user id -> real Magnetix
+  // Member), built AFTER §3 so every member this run touched -- active or
+  // historical, matched or newly created -- already has a real doc to read
+  // a displayName from. Computed unconditionally (dry-run and commit
+  // alike) since posts/comments are mapped either way (see §5/§6 below).
+  const mentionResolver = await buildMentionResolver(opts.subAccountId, memberLeadstackIdBySkoolUserId);
+
   // ── 5. Posts (direct write — createPostServerSide has no historical-
   //      timestamp override, and always attributes to the live session's
   //      own member id, neither of which fits an import) ───────────────────
@@ -472,7 +480,7 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
         continue;
       }
 
-      const mapped = mapSkoolPost(p);
+      const mapped = mapSkoolPost(p, mentionResolver);
       // Computed regardless of commit/dry-run so a zero-write dry run still
       // reports exactly which posts carry deferred video / skipped
       // attachments — Gap 1 must be visible in the report BEFORE any real
@@ -549,7 +557,7 @@ export async function runSkoolImport(opts: RunImportOptions): Promise<ImportRepo
       const postLeadstackId = postLeadstackIdBySkoolId.get(p.skoolPostId);
       const rawComments = opts.commentsByPost.get(p.skoolPostId) ?? [];
       if (rawComments.length === 0) continue;
-      const mapped = flattenSkoolCommentsToTwoLevels(p.skoolPostId, rawComments);
+      const mapped = flattenSkoolCommentsToTwoLevels(p.skoolPostId, rawComments, mentionResolver);
 
       const existingCommentMappings = groupId
         ? await getExistingMappingsBulk(opts.subAccountId, "community_comments", mapped.map((c) => c.skoolCommentId))

@@ -12,26 +12,92 @@ import type { SkoolAttachment, SkoolComment, SkoolPost } from "./types";
  */
 
 /**
+ * A Skool @mention target, resolved to its real Magnetix identity — keyed
+ * by the stable Skool user id (the id inside `obj://user/<id>`, NOT the
+ * display name; never resolved by name, per explicit instruction). Built
+ * by `buildMentionResolver` (mention-resolver.ts) from the SAME
+ * `community_members` importMappings ledger every other entity already
+ * uses — works identically for an active imported Member or a
+ * historical-author-only Member, since both get a real mapping entry.
+ */
+export type SkoolMentionResolver = Map<string, { memberId: string; displayName: string }>;
+
+function escapeHtmlText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeHtmlAttr(s: string): string {
+  return escapeHtmlText(s).replace(/"/g, "&quot;");
+}
+
+/**
+ * Skool's own @mention markdown — `[@Display Name](obj://user/<skoolUserId>)`
+ * — confirmed live against the real imported Magnetic Visibility content
+ * (206 real occurrences across 14 posts + 161 comments, every single one in
+ * exactly this bracketed form; 0 malformed). The generic `[text](url)` link
+ * regex below never touches this: it only matches `https?://`, so an
+ * `obj://` target always fell through untouched, leaving the raw markdown
+ * as broken-looking visible text — the exact bug this closes.
+ *
+ * Matches ANY `[text](obj://...)` shape (not only the exact well-formed
+ * one) so a genuinely malformed/unexpected `obj://` path still gets
+ * neutralized to clean plain text rather than left broken — same fallback
+ * as a mention whose target user id has no known mapping. Resolved via
+ * `mentions` (the stable Skool user id -> real Magnetix Member, NEVER a
+ * display-name match) into the exact HTML the live TipTap mention
+ * extension itself produces (`community-mention-extensions.ts`):
+ * `<span data-type="mention" data-id="{memberId}" data-label="{name}">@{name}</span>` —
+ * so an imported mention is indistinguishable, to both the sanitizer and
+ * the renderer, from one a member typed by hand. No parallel/import-only
+ * mention representation invented.
+ */
+export function convertSkoolMentions(text: string, mentions?: SkoolMentionResolver): string {
+  return text.replace(/\[([^\]]*)\]\(obj:\/\/([^)]*)\)/g, (_full, label: string, objPath: string) => {
+    const idMatch = /^user\/([a-zA-Z0-9]+)$/.exec(objPath);
+    const resolved = idMatch ? mentions?.get(idMatch[1]) : undefined;
+    if (resolved) {
+      const name = escapeHtmlText(resolved.displayName);
+      return `<span data-type="mention" data-id="${escapeHtmlAttr(resolved.memberId)}" data-label="${escapeHtmlAttr(resolved.displayName)}">@${name}</span>`;
+    }
+    // Unresolvable (no mapping for this Skool user id, or a malformed
+    // obj:// path) -- degrade to the clean plain text Skool's own label
+    // already carries ("@Display Name"), per explicit instruction: never
+    // leave the raw [label](obj://...) markup, and never invent a Member
+    // relationship for someone with no safe mapping.
+    return label;
+  });
+}
+
+/**
  * Skool post/comment `content` is plain text with light Markdown-ish
- * conventions (confirmed live: `**bold**`, `[text](url)` links, blank-line
- * paragraphs) — NOT HTML. Magnetix's `CommunityPost.body`/`CommunityComment
- * .body` are sanitized HTML. This is a deliberately small, dependency-free
- * converter (no markdown library exists in this codebase yet) covering
- * exactly what real Skool content in this Community uses: paragraphs,
- * bold, italic, links, line breaks. It is NOT a general Markdown engine —
- * anything it doesn't recognize is passed through as escaped plain text,
- * never silently dropped. The result is always run through the existing
+ * conventions (confirmed live: `**bold**`, `[text](url)` links, `[@Name]
+ * (obj://user/<id>)` mentions, blank-line paragraphs) — NOT HTML.
+ * Magnetix's `CommunityPost.body`/`CommunityComment.body` are sanitized
+ * HTML. This is a deliberately small, dependency-free converter (no
+ * markdown library exists in this codebase yet) covering exactly what real
+ * Skool content in this Community uses: paragraphs, bold, italic, links,
+ * mentions, line breaks. It is NOT a general Markdown engine — anything it
+ * doesn't recognize is passed through as escaped plain text, never
+ * silently dropped. The result is always run through the existing
  * `sanitizeCommunityPostHtml`/`sanitizeCommunityCommentHtml` afterward, so
  * this function does not need to be trusted for safety, only fidelity.
+ *
+ * `mentions` is optional (omitted callers get the pre-existing behavior:
+ * every `obj://user/...` mention degrades to plain text) so nothing else
+ * calling this function needs to change.
  */
-export function skoolContentToHtml(raw: string): string {
+export function skoolContentToHtml(raw: string, mentions?: SkoolMentionResolver): string {
   if (!raw) return "";
-  const escape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const escape = escapeHtmlText;
 
   const paragraphs = raw.split(/\n{2,}/);
   const htmlParagraphs = paragraphs.map((para) => {
     let text = escape(para);
+    // Mentions BEFORE the generic link regex below -- both match escaped
+    // `[...](...)` text, but mentions target `obj://`, links target
+    // `https?://`; resolving mentions first means the two can never
+    // contend over the same bracketed span.
+    text = convertSkoolMentions(text, mentions);
     // Links: [text](url) -- escape() already ran, so match on the escaped form.
     text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
     // Bold / italic.
@@ -53,10 +119,10 @@ export interface MappedPost {
   updatedAtDate: Date | null;
 }
 
-export function mapSkoolPost(post: SkoolPost): MappedPost {
+export function mapSkoolPost(post: SkoolPost, mentions?: SkoolMentionResolver): MappedPost {
   return {
     title: post.title.trim().slice(0, 300),
-    bodyHtml: sanitizeCommunityPostHtml(skoolContentToHtml(post.bodyHtml)),
+    bodyHtml: sanitizeCommunityPostHtml(skoolContentToHtml(post.bodyHtml, mentions)),
     category: post.category,
     pinned: post.pinned,
     createdAtDate: new Date(post.createdAtIso),
@@ -86,6 +152,7 @@ export interface MappedComment {
 export function flattenSkoolCommentsToTwoLevels(
   postId: string,
   comments: SkoolComment[],
+  mentions?: SkoolMentionResolver,
 ): MappedComment[] {
   const byId = new Map(comments.map((c) => [c.skoolCommentId, c]));
 
@@ -106,7 +173,7 @@ export function flattenSkoolCommentsToTwoLevels(
 
   return comments.map((c) => ({
     skoolCommentId: c.skoolCommentId,
-    bodyHtml: sanitizeCommunityCommentHtml(skoolContentToHtml(c.bodyHtml)),
+    bodyHtml: sanitizeCommunityCommentHtml(skoolContentToHtml(c.bodyHtml, mentions)),
     effectiveParentSkoolId: topLevelAncestorId(c),
     createdAtDate: new Date(c.createdAtIso),
   }));
