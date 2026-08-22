@@ -304,6 +304,27 @@ export async function listFeed(opts: {
   let posts = snap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as Omit<CommunityPost, "id">) }),
   );
+
+  // A pinned post (either target) older than the `limit` newest posts
+  // would otherwise silently fall outside the window above and vanish
+  // from its own Featured Posts / "Pinned in [Channel]" section — found
+  // live: a real Community's oldest post (its original welcome message)
+  // is also its most-pinned one. Both queries are cheap regardless of
+  // community size (MAX_FEATURED_POSTS caps the first at 3; channel pins
+  // have no cap but are still a real moderator's deliberate, bounded
+  // selection, never approaching `limit`).
+  const alreadyIncluded = new Set(posts.map((p) => p.id));
+  const [pinnedSnap, channelPinnedSnap] = await Promise.all([
+    postsCol(opts.subAccountId, opts.groupId).where("pinned", "==", true).get(),
+    postsCol(opts.subAccountId, opts.groupId).where("pinnedToChannel", "==", true).get(),
+  ]);
+  for (const d of [...pinnedSnap.docs, ...channelPinnedSnap.docs]) {
+    if (!alreadyIncluded.has(d.id)) {
+      posts.push({ id: d.id, ...(d.data() as Omit<CommunityPost, "id">) });
+      alreadyIncluded.add(d.id);
+    }
+  }
+
   if (opts.category && opts.category !== "All") {
     posts = posts.filter((p) => p.category === opts.category);
   }
