@@ -15,24 +15,28 @@ import {
   communitySettingsBrandingHref,
   communitySettingsHref,
   communitySettingsNavigationHref,
+  communitySettingsPointsRewardsHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding" | "navigation";
+export type SettingsSection = "general" | "branding" | "navigation" | "points-rewards";
 
 /**
- * Community Settings left nav. General, Branding, and Navigation are real,
- * navigable sections now — every other item stays exactly as it was
- * before: intentionally inert (no href, disabled styling, no hidden
- * functionality behind it), per the explicit "do not secretly implement
- * the other sections" instruction, unchanged from the original General-only
- * task.
+ * Community Settings left nav. General, Branding, Navigation, and (as of
+ * the Points & Rewards feature) Points & Rewards are real, navigable
+ * sections now — every other item stays exactly as it was before:
+ * intentionally inert (no href, disabled styling, no hidden functionality
+ * behind it), per the explicit "do not secretly implement the other
+ * sections" instruction. "Gamification" is REMOVED from this inert list
+ * (not renamed in place) — it's promoted to the real "Points & Rewards"
+ * entry above instead, per the explicit "Gamification / Gamification &
+ * Rewards → Points & Rewards" naming instruction, used consistently
+ * throughout Settings.
  */
 const INERT_SECTIONS: { key: string; label: string; icon: typeof SettingsIcon }[] = [
   { key: "access", label: "Access & Membership", icon: Shield },
   { key: "home", label: "Community Home", icon: Layers },
-  { key: "gamification", label: "Gamification", icon: Trophy },
   { key: "notifications", label: "Notifications & Digest", icon: Bell },
   { key: "moderation", label: "Moderation", icon: Gauge },
   { key: "integrations", label: "Integrations", icon: Puzzle },
@@ -57,6 +61,7 @@ export function SettingsNav({
     { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
     { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
+    { key: "points-rewards", label: "Points & Rewards", icon: Trophy, href: communitySettingsPointsRewardsHref(link, groupSlug) },
   ];
 
   return (

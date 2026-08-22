@@ -40,13 +40,14 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let body: { email?: string; password?: string; join?: string; mode?: string };
+  let body: { email?: string; password?: string; join?: string; mode?: string; ref?: string };
   try {
     body = (await request.json()) as {
       email?: string;
       password?: string;
       join?: string;
       mode?: string;
+      ref?: string;
     };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -60,6 +61,12 @@ export async function POST(
     typeof body.join === "string" && body.join.trim()
       ? body.join.trim()
       : undefined;
+  // Points & Rewards — the inviting member's memberId, if this login came
+  // from a personal invite link. Not validated against a real membership
+  // here: `joinGroupServerSide` -> `awardPoints` safely no-ops if it turns
+  // out not to resolve to a real, active member.
+  const invitedByMemberId =
+    typeof body.ref === "string" && body.ref.trim() ? body.ref.trim() : undefined;
 
   const { origin, pretty } = await resolveCommunityRequestOrigin(
     saId,
@@ -105,6 +112,7 @@ export async function POST(
             agencyId: gate.agencyId,
             groupId: group.id,
             memberId: result.member.id,
+            invitedByMemberId,
           });
           if (outcome.status === "active" || outcome.status === "already") {
             return NextResponse.json({
@@ -130,7 +138,7 @@ export async function POST(
 
   try {
     if (emailIsConfigured()) {
-      const token = signMemberMagicLinkToken(saId, email, joinGroupId);
+      const token = signMemberMagicLinkToken(saId, email, joinGroupId, undefined, invitedByMemberId);
       const link = `${origin}/api/community/${saId}/login/verify?token=${encodeURIComponent(token)}`;
       const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
       const sub = subSnap.data() as SubAccountDoc | undefined;

@@ -287,7 +287,7 @@ export interface CommunityGroup {
   priceCents: number | null;
   currency: string | null;
   joinPolicy: GroupJoinPolicy;
-  /** Gamification master switch for the group. */
+  /** Points & Rewards master switch for the group. */
   pointsEnabled: boolean;
   /** Feed categories (the pill row). Always includes at least "General". */
   categories: string[];
@@ -396,13 +396,30 @@ export interface GroupMembership {
   memberId: string;
   role: GroupMembershipRole;
   status: GroupMembershipStatus;
-  /** Gamification points (1 like = 1 point), per-group. */
+  /** Points & Rewards total, per-group. Denormalized from the real
+   *  `pointEvents` ledger (see `types/points-rewards.ts`'s `PointEvent`) by
+   *  `awardPoints`/`revokePoints` for cheap all-time leaderboard reads. */
   points: number;
-  /** Derived 1–9 level from {@link points}; stored for cheap leaderboard reads. */
+  /** Derived level (1–9) from {@link points} against the group's
+   *  configured `PointsRewardsConfig.levels`; stored for cheap leaderboard
+   *  reads. */
   level: number;
   /** Current tier/plan for tier-aware CTAs. Null for legacy/free members. */
   tierId?: string | null;
   joinedAt: Timestamp | FieldValue | null;
+  /**
+   * Points & Rewards — the memberId whose personal invite link this member
+   * joined through, captured once at join time (never edited after).
+   * Absent/null = joined without a referrer (open community URL, magic
+   * link, staff auto-join, etc.) — the overwhelmingly common case before
+   * this field existed, and still normal after. Powers the "Invite a new
+   * member" point rule: `joinGroupServerSide` awards the referrer once,
+   * only on this member's FIRST successful transition to `active`. No
+   * invite/referral concept existed anywhere in Community before this
+   * feature — see the Points & Rewards Implementation Report for why a new
+   * field was necessary here.
+   */
+  invitedByMemberId?: string | null;
 }
 
 /**

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ saId: string }>;
-  searchParams: Promise<{ error?: string; join?: string }>;
+  searchParams: Promise<{ error?: string; join?: string; ref?: string }>;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -43,7 +43,7 @@ export default async function MemberLoginPage({
             {errorMessage}
           </div>
         )}
-        <MemberLoginForm saId={saId} join={sp.join} />
+        <MemberLoginForm saId={saId} join={sp.join} inviteRef={sp.ref} />
       </div>
     </div>
   );

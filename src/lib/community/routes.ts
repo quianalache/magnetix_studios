@@ -89,16 +89,40 @@ export function communitySettingsNavigationHref(b: CommunityLinkBase, groupSlug:
   return `${communitySettingsHref(b, groupSlug)}/navigation`;
 }
 
+/**
+ * Community Settings → Points & Rewards. ONE route (not one per tab) —
+ * Overview/Points System/Levels/Rewards/Winners are client-side tabs
+ * inside a single workspace, per the explicit "should feel like one
+ * Settings area, not five separate routes" instruction. `?tab=` optionally
+ * deep-links to a specific tab.
+ */
+export function communitySettingsPointsRewardsHref(
+  b: CommunityLinkBase,
+  groupSlug: string,
+  tab?: string,
+): string {
+  const base = `${communitySettingsHref(b, groupSlug)}/points-rewards`;
+  return tab ? `${base}?tab=${tab}` : base;
+}
+
 /** The group-less "enter your community" entry point — where messages/profile pages' "back" link goes, since they aren't group-scoped. */
 export function communityRootHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities" : `/c/${b.saId}`;
 }
 
-export function communityLoginHref(b: CommunityLinkBase, opts?: { join?: string; next?: string }): string {
+export function communityLoginHref(
+  b: CommunityLinkBase,
+  opts?: { join?: string; next?: string; ref?: string },
+): string {
   const base = b.pretty ? "/communities/login" : `/c/${b.saId}/login`;
   const qs = new URLSearchParams();
   if (opts?.join) qs.set("join", opts.join);
   if (opts?.next) qs.set("next", opts.next);
+  // Points & Rewards — the inviting member's own memberId, carried through
+  // sign-up so `joinGroupServerSide` can credit their "Invite a new
+  // member" point on this visitor's first successful join. See
+  // `login/route.ts` for where this gets consumed.
+  if (opts?.ref) qs.set("ref", opts.ref);
   const q = qs.toString();
   return q ? `${base}?${q}` : base;
 }

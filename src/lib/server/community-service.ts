@@ -18,6 +18,7 @@ import {
   normalizeAboutHtml,
 } from "@/lib/community/about-html";
 import { parseVideoUrl } from "@/lib/community/video-embed";
+import { awardPoints } from "@/lib/server/community-points-service";
 import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
   CommunityAboutMediaItem,
@@ -471,6 +472,11 @@ export async function joinGroupServerSide(opts: {
   agencyId: string;
   groupId: string;
   memberId: string;
+  /** Points & Rewards — the inviting member's memberId, if this join came
+   *  through a personal invite link. Only ever takes effect on a genuinely
+   *  NEW membership (see below) — an "already" outcome never overwrites an
+   *  existing membership's referrer, and never re-awards a point. */
+  invitedByMemberId?: string;
 }): Promise<JoinOutcome> {
   const db = getAdminDb();
   const groupRef = db.doc(
@@ -488,6 +494,7 @@ export async function joinGroupServerSide(opts: {
       return { status: "already", membershipStatus: data.status };
     }
   }
+  const isNewJoin = !existing.exists;
 
   // Single staff-detection check, reused for role, the approval gate, AND
   // the paid gate below — was previously computed only for role.
@@ -510,6 +517,13 @@ export async function joinGroupServerSide(opts: {
   // Auto-elevate staff admins to moderator so they can moderate inline.
   const role: GroupMembership["role"] = staff ? "moderator" : "member";
 
+  // Points & Rewards — no self-referral (same "no self-like farming" spirit
+  // as toggleLikeServerSide's own self-like exclusion).
+  const invitedByMemberId =
+    opts.invitedByMemberId && opts.invitedByMemberId !== opts.memberId
+      ? opts.invitedByMemberId
+      : undefined;
+
   await memRef.set({
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
@@ -521,7 +535,28 @@ export async function joinGroupServerSide(opts: {
     level: 1,
     joinedAt: FieldValue.serverTimestamp(),
     tierId: null,
+    ...(invitedByMemberId ? { invitedByMemberId } : {}),
   });
+
+  // Points & Rewards — "Invite a new member" awards the REFERRER, only on
+  // this invitee's first successful ACTIVE join. A join that lands
+  // `pending` (approval-gated) is credited later instead, the moment a
+  // moderator actually approves it — see `approveMembershipServerSide`,
+  // which reads this same `invitedByMemberId` off the membership doc.
+  // `sourceEntityId` = the INVITEE's own memberId in both places, so the
+  // deterministic event id is identical either way — exactly one award
+  // per invitee, however they ended up active, never both.
+  if (isNewJoin && becomesActive && invitedByMemberId) {
+    void awardPoints({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: invitedByMemberId,
+      action: "invite_member",
+      sourceEntityId: opts.memberId,
+    }).catch((err) => {
+      console.error("[joinGroupServerSide] invite_member award failed", err);
+    });
+  }
 
   if (becomesActive) {
     await groupRef.update({ memberCount: FieldValue.increment(1) });
@@ -733,8 +768,29 @@ export async function approveMembershipServerSide(opts: {
   const snap = await memRef.get();
   if (!snap.exists || snap.data()!.status === "active") return;
 
+  const invitedByMemberId = snap.data()!.invitedByMemberId as string | undefined;
+
   await memRef.update({ status: "active" });
   await groupRef.update({ memberCount: FieldValue.increment(1) });
+
+  // Points & Rewards — `joinGroupServerSide` only awards "Invite a new
+  // member" for a join that becomes active immediately; an approval-gated
+  // join's referrer is credited HERE instead, on the moment it actually
+  // becomes active. `sourceEntityId` = this invitee's own memberId, same
+  // as the immediate-join path, so the deterministic event id is identical
+  // either way — exactly one award per invitee, however they ended up active.
+  if (invitedByMemberId) {
+    void awardPoints({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: invitedByMemberId,
+      action: "invite_member",
+      sourceEntityId: opts.memberId,
+    }).catch((err) => {
+      console.error("[approveMembershipServerSide] invite_member award failed", err);
+    });
+  }
+
   void emitWebhookEvent({
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,

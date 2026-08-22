@@ -1,6 +1,100 @@
 {
   "indexes": [
     {
+      "collectionGroup": "pointEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "memberId", "order": "ASCENDING" },
+        { "fieldPath": "action", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalBillingCustomers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "contactId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalBillingCustomers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "normalizedEmail", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "contactId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "externalBillingCustomerId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalSubscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "providerAccountId", "order": "ASCENDING" },
+        { "fieldPath": "externalSubscriptionId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalPayments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "contactId", "order": "ASCENDING" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalPayments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "provider", "order": "ASCENDING" },
+        { "fieldPath": "providerAccountId", "order": "ASCENDING" },
+        { "fieldPath": "externalChargeId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalPayments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "externalSubscriptionRecordId", "order": "ASCENDING" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "externalPayments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subAccountId", "order": "ASCENDING" },
+        { "fieldPath": "externalBillingCustomerId", "order": "ASCENDING" },
+        { "fieldPath": "occurredAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
       "fields": [

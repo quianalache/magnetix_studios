@@ -3,7 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { levelForPoints } from "@/config/community";
+import { awardPoints, revokePoints } from "@/lib/server/community-points-service";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 import type {
@@ -245,6 +245,24 @@ export async function createPostServerSide(
     updatedAt: FieldValue.serverTimestamp(),
   };
   const ref = await postsCol(input.subAccountId, input.groupId).add(doc);
+
+  // Points & Rewards — "share_video" OVERRIDES "create_post" (never both):
+  // a qualifying video post earns the video amount total, not video-plus-
+  // post. Video qualification is structural only (a real `video-link`
+  // attachment the product already understands) — never inferred from the
+  // post's text. Best-effort/non-blocking: a rare award failure must never
+  // fail the post itself (see `awardPoints`'s own doc comment).
+  const hasVideo = (input.attachments ?? []).some((a) => a.kind === "video-link");
+  void awardPoints({
+    subAccountId: input.subAccountId,
+    groupId: input.groupId,
+    memberId: input.authorMemberId,
+    action: hasVideo ? "share_video" : "create_post",
+    sourceEntityId: ref.id,
+  }).catch((err) => {
+    console.error("[createPostServerSide] point award failed", err);
+  });
+
   return { id: ref.id, ...doc } as CommunityPost;
 }
 
@@ -517,14 +535,38 @@ export async function createCommentServerSide(opts: {
   batch.set(commentRef, doc);
   batch.update(postRef, { commentCount: FieldValue.increment(1) });
   await batch.commit();
+
+  // Points & Rewards — a top-level comment (no effective parent) earns
+  // "comment_post"; a reply (attaches under an existing comment, per the
+  // two-visual-level thread model above) earns "reply_comment" instead.
+  void awardPoints({
+    subAccountId: opts.subAccountId,
+    groupId: opts.groupId,
+    memberId: opts.authorMemberId,
+    action: effectiveParentId ? "reply_comment" : "comment_post",
+    sourceEntityId: commentRef.id,
+  }).catch((err) => {
+    console.error("[createCommentServerSide] point award failed", err);
+  });
+
   return { id: commentRef.id, ...doc } as CommunityComment;
 }
 
 /**
- * Toggle a like on a post (or comment) and keep the author's per-group points
- * + level in sync. Liking your own content toggles the like but awards no
- * points (matches Skool — points come from OTHERS liking you). Transactional so
- * the like doc, the counter, and the points can't drift.
+ * Toggle a like on a post (or comment). Transactional so the like doc and
+ * the counter can't drift; the like/unlike itself never fails or blocks on
+ * the points side.
+ *
+ * Points & Rewards (2026-08): "like_post" now earns the LIKER the point —
+ * a deliberate behavior change from the original gamification logic this
+ * replaces, which awarded the point to the liked content's AUTHOR instead
+ * ("points come from OTHERS liking you", Skool's model). The new rule's
+ * own "up to 10 per day" cap only makes sense read as a per-liking-member
+ * anti-spam limit, consistent with every other V1 point action being
+ * actor-directed (the person taking the action earns) — see the Points &
+ * Rewards Implementation Report for the full disclosure. Self-likes still
+ * never earn (now blocking the more direct farming vector of liking your
+ * own content for a free point, not just avoiding it as a formality).
  */
 export async function toggleLikeServerSide(opts: {
   subAccountId: string;
@@ -540,51 +582,50 @@ export async function toggleLikeServerSide(opts: {
     : db.doc(`${base}/posts/${opts.postId}`);
   const likeRef = targetRef.collection("likes").doc(opts.viewerMemberId);
 
-  return db.runTransaction(async (tx) => {
+  const { liked, authorId } = await db.runTransaction(async (tx) => {
     const [likeSnap, targetSnap] = await Promise.all([
       tx.get(likeRef),
       tx.get(targetRef),
     ]);
     if (!targetSnap.exists) throw new Error("Not found");
     const authorId = targetSnap.data()!.authorMemberId as string;
-    const authorRef = db.doc(`${base}/memberships/${authorId}`);
-    const selfLike = authorId === opts.viewerMemberId;
-
-    // Read author membership only when points actually change.
-    const authorSnap = selfLike ? null : await tx.get(authorRef);
-
-    // pointEvents is the time-series feed that powers the 7-day / 30-day
-    // leaderboard windows (all-time reads the denormalized membership.points).
-    const pointEventsCol = db.collection(`${base}/pointEvents`);
 
     if (likeSnap.exists) {
       tx.delete(likeRef);
       tx.update(targetRef, { likeCount: FieldValue.increment(-1) });
-      if (authorSnap?.exists) {
-        const points = Math.max(0, ((authorSnap.data()!.points as number) ?? 0) - 1);
-        tx.update(authorRef, { points, level: levelForPoints(points) });
-        tx.set(pointEventsCol.doc(), {
-          memberId: authorId,
-          delta: -1,
-          createdAt: FieldValue.serverTimestamp(),
-        });
-      }
-      return { liked: false };
+      return { liked: false, authorId };
     }
 
     tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
     tx.update(targetRef, { likeCount: FieldValue.increment(1) });
-    if (authorSnap?.exists) {
-      const points = ((authorSnap.data()!.points as number) ?? 0) + 1;
-      tx.update(authorRef, { points, level: levelForPoints(points) });
-      tx.set(pointEventsCol.doc(), {
-        memberId: authorId,
-        delta: 1,
-        createdAt: FieldValue.serverTimestamp(),
+    return { liked: true, authorId };
+  });
+
+  if (opts.viewerMemberId !== authorId) {
+    // The liked post/comment's own id — re-liking the same content after
+    // unliking targets the same deterministic pointEvents doc each time
+    // (award, revoke, award again all resolve cleanly); liking N different
+    // pieces of content in one day is what the daily cap actually counts.
+    const sourceEntityId = opts.commentId ?? opts.postId;
+    const pointsOpts = {
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: opts.viewerMemberId,
+      action: "like_post" as const,
+      sourceEntityId,
+    };
+    if (liked) {
+      void awardPoints(pointsOpts).catch((err) => {
+        console.error("[toggleLikeServerSide] point award failed", err);
+      });
+    } else {
+      void revokePoints(pointsOpts).catch((err) => {
+        console.error("[toggleLikeServerSide] point revoke failed", err);
       });
     }
-    return { liked: true };
-  });
+  }
+
+  return { liked };
 }
 
 /** At most this many posts may be pinned to All Posts (the community-wide

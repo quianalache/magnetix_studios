@@ -80,6 +80,7 @@ export async function GET(
           agencyId: gate.agencyId,
           groupId: group.id,
           memberId,
+          invitedByMemberId: verified.invitedByMemberId,
         });
         if (outcome.status === "active" || outcome.status === "already") {
           return NextResponse.redirect(

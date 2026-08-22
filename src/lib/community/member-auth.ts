@@ -73,6 +73,9 @@ interface TokenPayload {
    * as an explicit follow-up action.
    */
   c?: string;
+  /** Points & Rewards — the inviting member's memberId (magic-link tokens
+   *  only). See `signMemberMagicLinkToken`'s doc comment. */
+  r?: string;
   /** Destination path on the handoff's target domain (handoff tokens only).
    *  Signed into the token itself — not a separate mutable query param —
    *  so the redirect destination can't be altered after the token was
@@ -127,6 +130,11 @@ export function signMemberMagicLinkToken(
   email: string,
   joinGroupId?: string,
   courseId?: string,
+  /** Points & Rewards — the inviting member's memberId (`?ref=` on the
+   *  login URL), carried through the signed link the same way `joinGroupId`
+   *  already is, since the login POST and the eventual `/verify` GET are
+   *  two separate, unrelated requests. */
+  invitedByMemberId?: string,
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -135,6 +143,7 @@ export function signMemberMagicLinkToken(
     k: "ml",
     ...(joinGroupId ? { j: joinGroupId } : {}),
     ...(courseId ? { c: courseId } : {}),
+    ...(invitedByMemberId ? { r: invitedByMemberId } : {}),
   });
 }
 
@@ -159,6 +168,7 @@ export function verifyMemberMagicLinkToken(
   email: string;
   joinGroupId?: string;
   courseId?: string;
+  invitedByMemberId?: string;
 } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
@@ -167,6 +177,7 @@ export function verifyMemberMagicLinkToken(
     email: payload.e,
     joinGroupId: payload.j,
     courseId: payload.c,
+    invitedByMemberId: payload.r,
   };
 }
 

@@ -1,34 +1,38 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityLeaderboardHref } from "@/lib/community/routes";
 import {
   getLeaderboard,
   type LeaderboardWindow,
 } from "@/lib/server/community-leaderboard-service";
 import {
+  getPointsConfig,
+  getMemberPointStats,
+  levelForConfig,
+} from "@/lib/server/community-points-service";
+import { listActiveRewardsServerSide } from "@/lib/server/community-rewards-service";
+import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
-import { MemberAvatar } from "@/components/community/member-avatar";
-import { cn } from "@/lib/utils";
+import { LeaderboardView, type ViewerLevelInfo } from "@/components/community/leaderboard/leaderboard-view";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
-const WINDOWS: { key: LeaderboardWindow; label: string }[] = [
-  { key: "7d", label: "Last 7 days" },
-  { key: "30d", label: "Last 30 days" },
-  { key: "all", label: "All-time" },
-];
-
+/**
+ * Member-facing Leaderboard — the approved mockup's full page (personal
+ * level progress, 7d/30d/all-time rankings, active rewards, "How points
+ * work"). All 3 ranking windows are fetched here, server-side, in one go
+ * — the client view switches between them with no extra request, and
+ * `?window=` is no longer read (kept in the type only so the existing
+ * custom-domain wrapper, which still forwards it, doesn't need touching).
+ */
 export default async function LeaderboardsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ saId: string; groupSlug: string }>;
-  searchParams: Promise<{ window?: string }>;
+  searchParams?: Promise<{ window?: string }>;
 }) {
   const { saId, groupSlug } = await params;
   const access = await requireGroupPageAccess(saId, groupSlug);
@@ -36,11 +40,6 @@ export default async function LeaderboardsPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const pretty = await isCommunityPrettyRequest(saId);
-  const linkBase = { saId, pretty };
-
-  const sp = await searchParams;
-  const win: LeaderboardWindow =
-    sp.window === "30d" || sp.window === "all" ? sp.window : "7d";
 
   const { group, member, membership } = access;
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
@@ -52,75 +51,45 @@ export default async function LeaderboardsPage({
     level: membership.level,
   };
 
-  const rows = await getLeaderboard({
-    subAccountId: saId,
-    groupId: group.id,
-    window: win,
-  });
+  const windows: LeaderboardWindow[] = ["7d", "30d", "all"];
+  const [rows7d, rows30d, rowsAll, config, activeRewards, stats] = await Promise.all([
+    getLeaderboard({ subAccountId: saId, groupId: group.id, window: windows[0], limit: 50 }),
+    getLeaderboard({ subAccountId: saId, groupId: group.id, window: windows[1], limit: 50 }),
+    getLeaderboard({ subAccountId: saId, groupId: group.id, window: windows[2], limit: 50 }),
+    getPointsConfig(saId, group.id),
+    listActiveRewardsServerSide(saId, group.id),
+    getMemberPointStats(saId, group.id, member.id),
+  ]);
+
+  const viewerLevelIndex = config.levels.findIndex((l) => l.level === levelForConfig(config, membership.points ?? 0));
+  const viewerLevel = config.levels[viewerLevelIndex] ?? config.levels[0];
+  const nextLevel = config.levels[viewerLevelIndex + 1] ?? null;
+  const points = membership.points ?? 0;
+
+  const viewerInfo: ViewerLevelInfo = {
+    memberId: member.id,
+    displayName: viewer.displayName,
+    avatarUrl: viewer.avatarUrl,
+    level: viewerLevel.level,
+    levelName: viewerLevel.name,
+    points,
+    nextLevelThreshold: nextLevel ? nextLevel.threshold : null,
+    progress: nextLevel
+      ? Math.max(0, Math.min(1, (points - viewerLevel.threshold) / (nextLevel.threshold - viewerLevel.threshold)))
+      : null,
+  };
 
   return (
     <CommunityShell saId={saId} pretty={pretty} group={group} active="leaderboards" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
-      <div className="mb-4 flex gap-1.5">
-        {WINDOWS.map((w) => (
-          <Link
-            key={w.key}
-            href={`${communityLeaderboardHref(linkBase, groupSlug)}?window=${w.key}`}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium",
-              win === w.key
-                ? "border-transparent text-white"
-                : "border-[#E4E4E4] bg-white text-[#909090] hover:text-[#202124]",
-            )}
-            style={win === w.key ? { backgroundColor: brand } : undefined}
-          >
-            {w.label}
-          </Link>
-        ))}
-      </div>
-
-      {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
-          No points earned in this window yet. Likes on posts and comments earn
-          points.
-        </div>
-      ) : (
-        <div className="divide-y divide-[#f0f0f0] rounded-xl border border-[#E4E4E4] bg-white">
-          {rows.map((r) => (
-            <div
-              key={r.memberId}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3",
-                r.memberId === member.id && "bg-[#F8F7F5]",
-              )}
-            >
-              <span
-                className={cn(
-                  "w-6 text-center text-sm font-semibold",
-                  r.rank <= 3 ? "text-[#202124]" : "text-[#909090]",
-                )}
-              >
-                {r.rank}
-              </span>
-              <MemberAvatar
-                author={{
-                  memberId: r.memberId,
-                  displayName: r.displayName,
-                  avatarUrl: r.avatarUrl,
-                  level: r.level,
-                }}
-                size={36}
-                brand={brand}
-              />
-              <span className="flex-1 truncate text-sm font-medium text-[#202124]">
-                {r.displayName}
-              </span>
-              <span className="text-sm font-semibold text-[#202124]">
-                +{r.points}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      <LeaderboardView
+        brand={brand}
+        viewer={viewerInfo}
+        rowsByWindow={{ "7d": rows7d, "30d": rows30d, all: rowsAll }}
+        activeRewards={activeRewards}
+        levels={config.levels}
+        rules={config.rules}
+        stats={stats}
+      />
     </CommunityShell>
   );
 }
