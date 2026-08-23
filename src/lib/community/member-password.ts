@@ -4,9 +4,11 @@ import { randomBytes, scrypt, timingSafeEqual, createHash } from "crypto";
 import { promisify } from "util";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { verifyFirebaseAuthPassword } from "@/lib/firebase/verify-staff-password";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { signMemberSessionToken } from "@/lib/community/member-auth";
-import { findMemberByEmail } from "@/lib/community/member-account";
+import { findMemberByEmail, ensureMember } from "@/lib/community/member-account";
+import { isStaffEmail } from "@/lib/server/community-service";
 import { ensurePersonLinkForMember } from "@/lib/server/person-identity-service";
 import type { Member } from "@/types/community";
 import type { SubAccountDoc } from "@/types";
@@ -58,6 +60,36 @@ export async function verifyMemberPassword(
   return timingSafeEqual(expected, actual);
 }
 
+/**
+ * Community password login — two credential paths, tried in order:
+ *
+ *  1. The Community-native password (`Member.passwordHash`, this file's
+ *     own scrypt store) — unchanged, the original/default path for
+ *     ordinary external members (imported Skool members, course buyers,
+ *     anyone who set a Community password via the emailed setup/reset
+ *     link).
+ *  2. Unified staff auth (2026-08-24) — if path 1 fails or there's no
+ *     Community password set at all, AND this email belongs to a
+ *     Magnetix staff/admin user for this sub-account (`isStaffEmail`,
+ *     the exact same check the Staff -> Member "Enter Community" bridge
+ *     already uses), verify the SAME password against Firebase
+ *     Authentication itself (`verifyFirebaseAuthPassword`) — the ONE
+ *     credential authority that account already has. On success, resolve
+ *     the Member through `ensureMember` (idempotent find-by-email,
+ *     the exact same identity-resolution call the bridge makes) rather
+ *     than creating a second identity — an existing staff member's
+ *     Community profile/points/memberships/own separate Community
+ *     password (if they'd set one) are read, never overwritten.
+ *
+ * This does NOT copy or store a second password hash anywhere — a staff
+ * user's password stays owned by Firebase Auth alone, so a later CRM
+ * password change is honored here immediately, with nothing to fall out
+ * of sync. Path 2 is gated behind `isStaffEmail` specifically so a
+ * random Community member's mistyped password can never trigger an
+ * unnecessary external Firebase Auth call, and so an ordinary member's
+ * own credential can never be checked against a DIFFERENT auth system by
+ * mistake.
+ */
 export async function authenticateMemberWithPassword({
   subAccountId,
   email,
@@ -72,20 +104,43 @@ export async function authenticateMemberWithPassword({
   const normalizedEmail = normalizeEmail(email);
   if (!isValidEmail(normalizedEmail) || !password) return { ok: false };
   const member = await findMemberByEmail(subAccountId, normalizedEmail);
-  if (!member || member.status !== "active") return { ok: false };
-  const valid = await verifyMemberPassword(password, member.passwordHash);
-  if (!valid) return { ok: false };
-  const sessionToken = signMemberSessionToken(
-    subAccountId,
-    member.id,
-    member.email
-  );
-  // MyMagnetix identity foundation (2026-08-14) — password login is the
-  // one auth path that doesn't go through ensureMember (a member can only
-  // have a password if they already exist), so it needs its own lazy
-  // reconciliation call. No-op once already linked.
-  const personId = await ensurePersonLinkForMember(subAccountId, member);
-  return { ok: true, member: { ...member, personId }, sessionToken };
+
+  if (member && member.status === "active") {
+    const valid = await verifyMemberPassword(password, member.passwordHash);
+    if (valid) {
+      const sessionToken = signMemberSessionToken(subAccountId, member.id, member.email);
+      // MyMagnetix identity foundation (2026-08-14) — password login is
+      // otherwise the one auth path that doesn't go through ensureMember
+      // (a member can only have a password if they already exist), so it
+      // needs its own lazy reconciliation call. No-op once already linked.
+      const personId = await ensurePersonLinkForMember(subAccountId, member);
+      return { ok: true, member: { ...member, personId }, sessionToken };
+    }
+  }
+
+  // Path 2 — unified staff auth. Only attempted for a real staff/admin
+  // email on THIS sub-account; never for an ordinary member whose
+  // Community password simply didn't match.
+  if (await isStaffEmail(subAccountId, normalizedEmail)) {
+    const verified = await verifyFirebaseAuthPassword(normalizedEmail, password);
+    if (verified) {
+      const resolvedMember = await ensureMember({
+        subAccountId,
+        email: normalizedEmail,
+        source: "staff-bridge",
+      });
+      if (resolvedMember.status === "active") {
+        const sessionToken = signMemberSessionToken(
+          subAccountId,
+          resolvedMember.id,
+          resolvedMember.email,
+        );
+        return { ok: true, member: resolvedMember, sessionToken };
+      }
+    }
+  }
+
+  return { ok: false };
 }
 
 function tokenDigest(token: string): string {
