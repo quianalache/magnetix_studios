@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // playwright-core does dynamic/native `require()`s Turbopack can't
+  // statically bundle (confirmed live: bundling it produced "Failed to
+  // load external module playwright-core... Cannot find module
+  // .../browsers.json" in the deployed function even with an explicit
+  // outputFileTracingIncludes entry for that exact file below — the
+  // include alone wasn't enough because the package needs to be excluded
+  // from bundling altogether, not just have one extra file traced in).
+  // This is Next's own documented mechanism for exactly that class of
+  // package: keep it unbundled, require() it from the real node_modules
+  // directory at runtime, which Vercel then traces/deploys as a whole.
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium-min"],
   // The AI "where do I get this key" guide route reads these docs from disk at
   // runtime. They aren't imported by code, so trace them into that function's
   // bundle explicitly — otherwise readFileSync 404s on Vercel.
@@ -44,17 +55,31 @@ const nextConfig: NextConfig = {
       "./node_modules/swisseph-wasm/wasm/*",
       "./node_modules/.pnpm/swisseph-wasm@*/node_modules/swisseph-wasm/wasm/*",
     ],
-    // Skool Import (2026-08-24) — same root-cause class as swisseph-wasm
-    // above: playwright-core's `lib/coreBundle.js` reads its own
-    // `browsers.json` off disk at runtime (not a static import Next's
-    // tracer can see), so it was silently missing from the deployed
-    // function — confirmed live via `vercel logs`: "Cannot find module
-    // '.../playwright-core/browsers.json'". Same dual-path fix (real pnpm
-    // store + symlink) for the same reason. Scoped to the whole
-    // skool-import route family (not just connect) so Scan/Verify/Preview
-    // routes added later inherit this automatically.
-    "/api/community/[saId]/[groupId]/skool-import/**": [
+    // Skool Import (2026-08-24) — same root-cause CLASS as swisseph-wasm
+    // above (playwright-core's `lib/coreBundle.js` reads its own
+    // `browsers.json` off disk at runtime, not via a static import Next's
+    // tracer can see — confirmed live via `vercel logs`: "Cannot find
+    // module '.../playwright-core/browsers.json'"), but a DIFFERENT and
+    // more surprising root cause on the KEY side: a key containing route
+    // params in bracket syntax — e.g. the shape
+    // "/api/community/[saId]/[groupId]/skool-import/**", matching this
+    // exact folder structure — silently matched NOTHING under this
+    // project's Turbopack build (confirmed by inspecting the built
+    // route's own .next/**/route.js.nft.json — zero effect across three
+    // different glob variants). A bracket-free prefix key does work
+    // (verified: browsers.json present in the trace manifest after
+    // switching to this exact key shape) — Turbopack's key matcher
+    // apparently doesn't handle `[param]` segments in
+    // outputFileTracingIncludes keys the way its VALUE globs do. This
+    // means the pre-existing
+    // "/api/sub-accounts/[id]/energetic-decoder/**" key above likely has
+    // the same latent bug and may only be "working" in production because
+    // "/api/decoder/**" already covers the wasm files some other route
+    // needs — NOT verified/fixed here (out of scope for this pass), flagged
+    // for a future look.
+    "/api/community/**": [
       "./node_modules/playwright-core/browsers.json",
+      "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
       "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
     ],
   },
