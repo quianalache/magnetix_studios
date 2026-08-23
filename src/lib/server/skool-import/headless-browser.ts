@@ -88,6 +88,23 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     const context = await browser.newContext();
     const page = await context.newPage();
 
+    // TEMPORARY diagnostic (2026-08-24) — logs ONLY Skool's own generic
+    // response shape (status + its own `code`/`message` strings, e.g.
+    // "AUTH-LG-503") for every request to api2.skool.com/auth/* during
+    // this call, to see exactly what a REAL correct-credential attempt
+    // gets back. Never logs email/password/cookies. Remove once the real
+    // login path is confirmed working end-to-end.
+    page.on("response", async (res) => {
+      if (!res.url().includes("api2.skool.com/auth/")) return;
+      try {
+        const ct = res.headers()["content-type"] ?? "";
+        const body = ct.includes("json") ? await res.json().catch(() => null) : null;
+        console.log("[skool-import][diag] auth response:", res.url(), res.status(), JSON.stringify(body));
+      } catch {
+        /* diagnostic only */
+      }
+    });
+
     await page.goto("https://www.skool.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
 
     // Confirmed live, real selectors — see the Connect report.
@@ -105,6 +122,12 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     } catch {
       bodyJson = null;
     }
+    console.log(
+      "[skool-import][diag] login response status:",
+      response.status(),
+      "bodyJson:",
+      JSON.stringify(bodyJson),
+    );
 
     // Confirmed live: a failed login still returns HTTP 200 with a `code`
     // field (e.g. "AUTH-LG-503") — status code alone can't distinguish
