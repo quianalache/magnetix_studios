@@ -21,6 +21,17 @@ import type { AuthorView } from "@/types/community";
 export const dynamic = "force-dynamic";
 
 /**
+ * A real, live-Firestore `CommunityReward` carries `Timestamp` class
+ * instances (`startAt`/`endAt`/`createdAt`/`updatedAt`) — not plain
+ * objects, which crashes the Server → Client Component boundary (React
+ * Flight rejects non-plain class instances outright). See the identical
+ * fix + full explanation in the Points & Rewards Settings page.tsx.
+ */
+function serializeForClient<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
  * Member-facing Leaderboard — the approved mockup's full page (personal
  * level progress, 7d/30d/all-time rankings, active rewards, "How points
  * work"). All 3 ranking windows are fetched here, server-side, in one go
@@ -85,7 +96,7 @@ export default async function LeaderboardsPage({
         brand={brand}
         viewer={viewerInfo}
         rowsByWindow={{ "7d": rows7d, "30d": rows30d, all: rowsAll }}
-        activeRewards={activeRewards}
+        activeRewards={serializeForClient(activeRewards)}
         levels={config.levels}
         rules={config.rules}
         stats={stats}

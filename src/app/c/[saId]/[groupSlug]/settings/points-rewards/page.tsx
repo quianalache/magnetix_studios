@@ -18,6 +18,26 @@ import type { AuthorView } from "@/types/community";
 export const dynamic = "force-dynamic";
 
 /**
+ * Real bug found live during QA: `PointsRewardsConfig.updatedAt` and
+ * `CommunityReward.createdAt`/`updatedAt`/`startAt`/`endAt` are typed
+ * `Timestamp | FieldValue | null` — a genuine Firestore Admin `Timestamp`
+ * CLASS instance once a document has actually been saved (the default,
+ * never-yet-saved config returns `null` here instead, which is why this
+ * went unnoticed until a real Levels/Rules save happened). Next.js's
+ * Server → Client Component boundary (React Flight) rejects any
+ * non-plain class instance outright — passing one crashes the whole page
+ * with "Only plain objects... can be passed to Client Components".
+ * A JSON round-trip is the smallest safe fix: it turns every Timestamp
+ * into a plain `{_seconds, _nanoseconds}` object (confirmed via
+ * `JSON.stringify` on a real `Timestamp`), which every client-side
+ * `toMillis()` helper in this feature already tolerates as one of its
+ * recognized shapes — so no client component needed any changes.
+ */
+function serializeForClient<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
  * Community Settings → Points & Rewards. Same admin-only re-verification
  * as every other Settings page (a moderator-role check independent of
  * whatever the Settings nav happens to show/hide client-side). One route,
@@ -90,9 +110,9 @@ export default async function CommunityPointsRewardsSettingsPage({
         groupSlug={group.slug}
         brand={brand}
         viewerDisplayName={viewer.displayName}
-        initialConfig={config}
-        initialRewards={rewards}
-        initialWinners={winnersEnriched}
+        initialConfig={serializeForClient(config)}
+        initialRewards={serializeForClient(rewards)}
+        initialWinners={serializeForClient(winnersEnriched)}
         overview={overview}
       />
     </CommunityShell>
