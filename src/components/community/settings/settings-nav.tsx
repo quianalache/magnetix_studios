@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   Bell,
+  Download,
   Gauge,
   Layers,
   LayoutGrid,
@@ -16,11 +17,12 @@ import {
   communitySettingsHref,
   communitySettingsNavigationHref,
   communitySettingsPointsRewardsHref,
+  communitySettingsSkoolImportHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "general" | "branding" | "navigation" | "points-rewards";
+export type SettingsSection = "general" | "branding" | "navigation" | "points-rewards" | "skool-import";
 
 /**
  * Community Settings left nav. General, Branding, Navigation, and (as of
@@ -62,6 +64,7 @@ export function SettingsNav({
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
     { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
     { key: "points-rewards", label: "Points & Rewards", icon: Trophy, href: communitySettingsPointsRewardsHref(link, groupSlug) },
+    { key: "skool-import", label: "Skool Import", icon: Download, href: communitySettingsSkoolImportHref(link, groupSlug) },
   ];
 
   return (
@@ -78,13 +81,25 @@ export function SettingsNav({
             href={s.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
               isActive ? "text-white" : "text-[#3a3a44] hover:bg-[#F5F4F2]",
             )}
             style={isActive ? { backgroundColor: brand } : undefined}
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{s.label}</span>
+            <span className="flex items-center gap-2 truncate">
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{s.label}</span>
+            </span>
+            {s.key === "skool-import" && (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                  isActive ? "bg-white/25 text-white" : "bg-[#7C3AED]/10 text-[#7C3AED]",
+                )}
+              >
+                New
+              </span>
+            )}
           </Link>
         );
       })}

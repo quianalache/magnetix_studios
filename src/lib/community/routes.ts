@@ -135,6 +135,13 @@ export function communitySettingsPointsRewardsHref(
   return tab ? `${base}?tab=${tab}` : base;
 }
 
+/** Community Settings → Skool Import — a real Settings section (not a
+ *  general "Integrations" marketplace entry), matching the approved
+ *  Connect mockup's own top-level nav placement. */
+export function communitySettingsSkoolImportHref(b: CommunityLinkBase, groupSlug: string): string {
+  return `${communitySettingsHref(b, groupSlug)}/skool-import`;
+}
+
 /** The group-less "enter your community" entry point — where messages/profile pages' "back" link goes, since they aren't group-scoped. */
 export function communityRootHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities" : `/c/${b.saId}`;
