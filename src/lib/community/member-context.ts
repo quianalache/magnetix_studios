@@ -15,6 +15,41 @@ import type {
   Member,
 } from "@/types/community";
 
+/**
+ * Staff Community-in-CRM entry point access check (2026-08-24) — used ONLY
+ * by the `/sa/[subAccountId]/community/[groupId]/...` staff route tree,
+ * never by member-facing pages. Group is resolved by its real id (staff
+ * routes are id-keyed, matching every other CRM route's convention), then
+ * delegates to the SAME `requireGroupPageAccess` a member page would use —
+ * this is deliberately the one and only access-check function every
+ * Community page/component reads `member`/`membership` from, staff or not.
+ * The only real difference: an unauthenticated/not-yet-joined redirect
+ * target is the staff same-origin session bridge (`ensure-session`, a
+ * sibling of the existing Staff -> Member `/enter` route that never does
+ * that route's cross-domain custom-domain handoff), never the member
+ * login page — a staff visitor here is already a fully authenticated CRM
+ * user who should never see a Community login screen. `currentPath` is
+ * the calling page's own literal path (it already knows this — Next.js
+ * Server Components have no ambient "current URL" API), used as the
+ * bounce-back target once the bridge sets the session cookie.
+ */
+export async function requireStaffGroupPageAccess(
+  subAccountId: string,
+  groupId: string,
+  currentPath: string,
+): Promise<GroupPageAccess> {
+  const group = await getGroupById(subAccountId, groupId);
+  if (!group) return { kind: "notFound" };
+  const access = await requireGroupPageAccess(subAccountId, group.slug);
+  if (access.kind === "redirect") {
+    return {
+      kind: "redirect",
+      to: `/api/sub-accounts/${subAccountId}/community/${groupId}/ensure-session?next=${encodeURIComponent(currentPath)}`,
+    };
+  }
+  return access;
+}
+
 export interface GroupAccessOk {
   kind: "ok";
   gate: CommunityGate;

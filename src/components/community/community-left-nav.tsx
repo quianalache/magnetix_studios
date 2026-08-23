@@ -38,6 +38,7 @@ interface Viewer {
 export function CommunityLeftNav({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   brand,
@@ -47,6 +48,8 @@ export function CommunityLeftNav({
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -56,7 +59,7 @@ export function CommunityLeftNav({
 }) {
   const searchParams = useSearchParams();
   const active = searchParams.get("c") ?? "All";
-  const base = communityHomeHref({ saId, pretty }, groupSlug);
+  const base = communityHomeHref({ saId, pretty, staffGroupId }, groupSlug);
   const isModerator = viewer.role === "moderator";
 
   const [channels, setChannels] = useState(initialChannels);

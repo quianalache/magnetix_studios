@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Settings } from "lucide-react";
+import { ExternalLink, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup, NavItemKey } from "@/types/community";
 import {
@@ -51,6 +51,7 @@ export function CommunityShell({
   viewerIsModerator = false,
   children,
   rightRail,
+  staffGroupId,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. Defaults to false so every pre-existing opaque call site keeps working unchanged. */
@@ -61,9 +62,25 @@ export function CommunityShell({
   viewerIsModerator?: boolean;
   children: ReactNode;
   rightRail?: ReactNode;
+  /**
+   * Staff Community-in-CRM integration (2026-08-24). When set (the
+   * group's real id), this renders EMBEDDED inside the CRM's own shell
+   * instead of as a full standalone page: no `min-h-screen` background
+   * wrapper (the CRM dashboard layout already provides the page frame),
+   * and no member "Sign out" form (the CRM has its own, signing out of
+   * Community specifically would be a confusing, meaningless action for
+   * a staff visitor mid-CRM-session). Every internal tab/Settings link
+   * automatically resolves to the staff route shape too — see
+   * `CommunityLinkBase.staffGroupId` in routes.ts, the single place that
+   * mapping lives, so no link here needed to change individually. Adds
+   * one staff-only action, "View as Member", opening the real standalone
+   * branded experience in a new tab via the existing Staff -> Member
+   * bridge — the intentional, explicit place to leave the CRM shell.
+   */
+  staffGroupId?: string;
 }) {
   const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
-  const linkBase = { saId, pretty };
+  const linkBase = { saId, pretty, staffGroupId };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label
   // (Part 16 of the Navigation task: "do not turn label customization into
@@ -92,61 +109,75 @@ export function CommunityShell({
     }),
   );
 
-  return (
-    <div className="min-h-screen bg-background text-foreground" style={{ backgroundColor: COMMUNITY_BG }}>
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 md:px-6">
-          <Link
-            href={about}
-            className="truncate text-sm font-semibold text-[#202124]"
-          >
-            {group.name}
-          </Link>
-          <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
-            {tabs.map((t) => {
-              const isActive = t.key === active;
-              return (
-                t.disabled ? (
-                  <span
-                    key={t.key}
-                    aria-disabled="true"
-                    className="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
-                  >
-                    {t.label}
-                  </span>
-                ) : (
-                  <Link
-                    key={t.key}
-                    href={t.href!}
-                    className="border-b-2 px-3 py-2 text-sm font-medium transition-colors"
-                    style={
-                      isActive
-                        ? { borderColor: brand, color: "var(--foreground)" }
-                        : { borderColor: "transparent", color: "var(--muted-foreground)" }
-                    }
-                  >
-                    {t.label}
-                  </Link>
-                )
-              );
-            })}
-          </nav>
-          <div className="flex items-center gap-2">
-            {viewerIsModerator && (
+  const headerRow = (
+    <div className={cn("flex h-14 items-center gap-4 px-4 md:px-6", !staffGroupId && "mx-auto max-w-7xl")}>
+      <Link
+        href={about}
+        className="truncate text-sm font-semibold text-[#202124]"
+      >
+        {group.name}
+      </Link>
+      <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+        {tabs.map((t) => {
+          const isActive = t.key === active;
+          return (
+            t.disabled ? (
+              <span
+                key={t.key}
+                aria-disabled="true"
+                className="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
+              >
+                {t.label}
+              </span>
+            ) : (
               <Link
-                href={communitySettingsHref(linkBase, group.slug)}
-                className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+                key={t.key}
+                href={t.href!}
+                className="border-b-2 px-3 py-2 text-sm font-medium transition-colors"
                 style={
-                  active === "settings"
-                    ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
-                    : { borderColor: "#E4E4E4", color: "#3a3a44" }
+                  isActive
+                    ? { borderColor: brand, color: "var(--foreground)" }
+                    : { borderColor: "transparent", color: "var(--muted-foreground)" }
                 }
               >
-                <Settings className="h-3.5 w-3.5" />
-                Settings
+                {t.label}
               </Link>
-            )}
-            <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
+            )
+          );
+        })}
+      </nav>
+      <div className="flex items-center gap-2">
+        {viewerIsModerator && (
+          <Link
+            href={communitySettingsHref(linkBase, group.slug)}
+            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
+            style={
+              active === "settings"
+                ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
+                : { borderColor: "#E4E4E4", color: "#3a3a44" }
+            }
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Settings
+          </Link>
+        )}
+        <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
+        {staffGroupId ? (
+          // The intentional, explicit place to leave the CRM shell — see
+          // the doc comment above. New tab so the owner keeps their CRM
+          // workspace exactly where they left it.
+          <a
+            href={`/api/sub-accounts/${saId}/community/${staffGroupId}/enter`}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-3 py-1.5 text-sm font-medium text-[#3a3a44] hover:bg-muted"
+            title="Open the standalone member-facing Community in a new tab"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View as Member
+          </a>
+        ) : (
+          <>
             <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile">
               <MemberAvatar author={viewer} size={28} brand={brand} />
             </Link>
@@ -155,23 +186,51 @@ export function CommunityShell({
                 Sign out
               </button>
             </form>
-          </div>
-        </div>
-      </header>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
-      <main
-        className={cn(
-          "mx-auto max-w-7xl gap-6 px-4 py-6 md:px-6",
-          rightRail !== undefined && "grid md:grid-cols-[1fr_320px]",
-        )}
-      >
-        <div className="min-w-0">{children}</div>
-        {rightRail !== undefined && (
-          <aside className="hidden md:block">
-            <div className="space-y-4 md:sticky md:top-6">{rightRail}</div>
-          </aside>
-        )}
-      </main>
+  const mainContent = (
+    <div
+      className={cn(
+        "gap-6",
+        staffGroupId ? "py-4" : "mx-auto max-w-7xl px-4 py-6 md:px-6",
+        rightRail !== undefined && "grid md:grid-cols-[1fr_320px]",
+      )}
+    >
+      <div className="min-w-0">{children}</div>
+      {rightRail !== undefined && (
+        <aside className="hidden md:block">
+          <div className="space-y-4 md:sticky md:top-6">{rightRail}</div>
+        </aside>
+      )}
+    </div>
+  );
+
+  if (staffGroupId) {
+    // Embedded: no min-h-screen page wrapper (the CRM dashboard layout's
+    // own <main> already provides that), no member Sign-out form — just
+    // the Community sub-nav + content, styled to sit inside the CRM's
+    // existing content card. No CSS scoping class needed here (unlike
+    // MomentumOS's Content Library, which overrides shared theme custom
+    // properties) — Community's own components are styled with hardcoded
+    // hex values throughout, not this app's `--background`/`--foreground`
+    // tokens, so they're already visually self-contained regardless of
+    // which CRM theme (light/dark) is active around them.
+    return (
+      <div className="overflow-hidden rounded-xl border border-border" style={{ backgroundColor: COMMUNITY_BG }}>
+        <header className="border-b border-border bg-card">{headerRow}</header>
+        {mainContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground" style={{ backgroundColor: COMMUNITY_BG }}>
+      <header className="border-b border-border bg-card">{headerRow}</header>
+      {mainContent}
     </div>
   );
 }

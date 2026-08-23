@@ -94,6 +94,7 @@ interface WinnerEnriched extends CommunityRewardWinner {
 export function PointsRewardsWorkspace({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   brand,
@@ -105,6 +106,8 @@ export function PointsRewardsWorkspace({
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -319,7 +322,7 @@ export function PointsRewardsWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -328,7 +331,7 @@ export function PointsRewardsWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav brand={brand} active="points-rewards" link={{ saId, pretty }} groupSlug={groupSlug} />
+        <SettingsNav brand={brand} active="points-rewards" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
 
         {/* min-w-0: a CSS Grid item defaults to min-width:auto, which lets
             unwrapped content (the long rule/level/reward description text

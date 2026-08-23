@@ -56,6 +56,7 @@ function timeAgo(ms: number | null): string {
 export function PostDetailView({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   brand,
@@ -68,6 +69,8 @@ export function PostDetailView({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -129,7 +132,7 @@ export function PostDetailView({
     const res = await fetch(`${base}/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Post deleted");
-      router.push(communityHomeHref({ saId, pretty }, groupSlug));
+      router.push(communityHomeHref({ saId, pretty, staffGroupId }, groupSlug));
     } else {
       toast.error("Couldn't delete");
     }
@@ -317,6 +320,7 @@ export function PostDetailView({
               className="mt-1"
               saId={saId}
               pretty={pretty}
+              staffGroupId={staffGroupId}
               groupSlug={groupSlug}
             />
             <CommunityPostAttachments attachments={currentPost.attachments} brand={brand} className="mt-2" />
@@ -376,6 +380,7 @@ export function PostDetailView({
               <CommentBubble
                 saId={saId}
                 pretty={pretty}
+                staffGroupId={staffGroupId}
                 groupSlug={groupSlug}
                 comment={c}
                 viewer={viewer}
@@ -409,6 +414,7 @@ export function PostDetailView({
                   key={r.id}
                   saId={saId}
                   pretty={pretty}
+                  staffGroupId={staffGroupId}
                   groupSlug={groupSlug}
                   comment={r}
                   viewer={viewer}
@@ -464,6 +470,7 @@ export function PostDetailView({
 function CommentBubble({
   saId,
   pretty = false,
+  staffGroupId,
   groupSlug,
   comment,
   viewer,
@@ -478,6 +485,8 @@ function CommentBubble({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupSlug: string;
   comment: ClientComment;
   viewer: Viewer;
@@ -541,6 +550,7 @@ function CommentBubble({
           className="mt-0.5"
           saId={saId}
           pretty={pretty}
+          staffGroupId={staffGroupId}
           groupSlug={groupSlug}
         />
         {comment.attachments && comment.attachments.length > 0 && (

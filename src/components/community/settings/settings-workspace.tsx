@@ -55,6 +55,7 @@ function stateFromGroup(group: CommunityGroup): EditState {
 export function SettingsWorkspace({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   group: initialGroup,
   brand,
@@ -65,6 +66,8 @@ export function SettingsWorkspace({
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   group: CommunityGroup;
   brand: string;
@@ -149,7 +152,7 @@ export function SettingsWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty }, savedGroup.slug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId }, savedGroup.slug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -179,7 +182,7 @@ export function SettingsWorkspace({
         <SettingsNav
           brand={brand}
           active="general"
-          link={{ saId, pretty }}
+          link={{ saId, pretty, staffGroupId }}
           groupSlug={savedGroup.slug}
         />
 

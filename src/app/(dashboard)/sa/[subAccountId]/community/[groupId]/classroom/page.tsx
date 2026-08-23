@@ -1,114 +1,135 @@
-"use client";
-
-import { use, useEffect, useState } from "react";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Loader2, Plus } from "lucide-react";
-import { useSubAccount } from "@/context/sub-account-context";
-import { subscribeToCourses } from "@/lib/firestore/community-classroom";
+import { Lock } from "lucide-react";
+import { requireStaffGroupPageAccess } from "@/lib/community/member-context";
+import { communityLearningLessonHref } from "@/lib/community/routes";
+import { listCoursesForMember } from "@/lib/server/community-classroom-service";
+import {
+  CommunityShell,
+  COMMUNITY_DEFAULT_BRAND,
+} from "@/components/community/community-shell";
+import { PurchaseButton } from "@/components/community/purchase-button";
 import { CourseThumb } from "@/components/community/classroom/course-thumb";
-import { CourseSettingsModal } from "@/components/community/classroom/course-settings-modal";
-import type { Course } from "@/types/community";
+import type { AuthorView } from "@/types/community";
 
-const PLACEHOLDER_BRAND = "#f59e0b";
+export const dynamic = "force-dynamic";
 
-export default function ClassroomBuilderPage({
+/**
+ * Staff Community-in-CRM — Classroom catalog (the real member-facing "watch
+ * courses" experience, not the course/lesson authoring tool — that moved to
+ * `/classroom-builder`, linked from the Manage page). Close mirror of
+ * /c/[saId]/[groupSlug]/classroom/page.tsx — see the Staff Community
+ * Integration report.
+ */
+export default async function StaffClassroomCatalogPage({
   params,
 }: {
   params: Promise<{ subAccountId: string; groupId: string }>;
 }) {
-  const { groupId } = use(params);
-  const { subAccountId, isAdmin } = useSubAccount();
-  const router = useRouter();
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
+  const { subAccountId: saId, groupId } = await params;
+  const access = await requireStaffGroupPageAccess(saId, groupId, `/sa/${saId}/community/${groupId}/classroom`);
+  if (access.kind === "notFound") notFound();
+  if (access.kind === "redirect") redirect(access.to);
 
-  useEffect(() => {
-    return subscribeToCourses(
-      subAccountId,
-      groupId,
-      (list) => {
-        setCourses(list);
-        setLoaded(true);
-      },
-      () => setLoaded(true),
-    );
-  }, [subAccountId, groupId]);
+  const { group, member, membership } = access;
+  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  const viewer: AuthorView = {
+    memberId: member.id,
+    displayName:
+      member.displayName?.trim() || member.email.split("@")[0] || "Member",
+    avatarUrl: member.avatarUrl,
+    level: membership.level,
+  };
+
+  const courses = await listCoursesForMember({
+    subAccountId: saId,
+    groupId: group.id,
+    memberId: member.id,
+    membership,
+  });
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <div>
-        <Link
-          href={`/sa/${subAccountId}/community/${groupId}`}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Group settings
-        </Link>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <BookOpen className="h-6 w-6" /> Classroom
-        </h1>
-      </div>
-
-      {!loaded ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    <CommunityShell
+      saId={saId}
+      group={group}
+      active="classroom"
+      viewer={viewer}
+      viewerIsModerator={membership.role === "moderator"}
+      staffGroupId={groupId}
+    >
+      {courses.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
+          No courses yet.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((c) => (
-            <Link
-              key={c.id}
-              href={`/sa/${subAccountId}/community/${groupId}/classroom/${c.id}`}
-              className="overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-sm"
-            >
-              <div className="relative">
+          {courses.map((c) => {
+            const card = (
+              <div className="overflow-hidden rounded-xl border border-[#E4E4E4] bg-white transition-shadow hover:shadow-sm">
                 <CourseThumb
                   thumbnailUrl={c.thumbnailUrl}
                   title={c.title}
-                  brand={PLACEHOLDER_BRAND}
+                  brand={brand}
                 />
-                <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/90">
-                  {c.published ? "Published" : "Draft"}
-                </span>
+                <div className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-semibold text-[#202124]">{c.title}</h3>
+                    {c.locked && (
+                      <span className="flex items-center gap-1 text-xs text-[#909090]">
+                        <Lock className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-[#909090]">
+                    {c.description || `${c.lessonCount} lessons`}
+                  </p>
+                  {c.locked ? (
+                    c.locked.purchasable ? (
+                      <div className="mt-3">
+                        <PurchaseButton
+                          endpoint={`/api/community/${saId}/${group.id}/purchase`}
+                          body={{ scope: "course", targetId: c.id }}
+                          label={c.locked.reason}
+                          brand={brand}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs font-medium text-[#909090]">
+                        {c.locked.reason}
+                      </p>
+                    )
+                  ) : (
+                    <div className="mt-3">
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#F0F0F0]">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${c.progressPct}%`, backgroundColor: brand }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-[#909090]">
+                        {c.progressPct}% complete
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="p-4">
-                <span className="font-medium">{c.title}</span>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                  {c.description || "No description yet."}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {c.access === "open"
-                    ? "Open"
-                    : c.access === "level"
-                      ? `Unlocks at Level ${c.requiredLevel ?? 2}`
-                      : "One-time purchase"}
-                </p>
+            );
+            return c.locked || !c.firstLessonId ? (
+              <div key={c.id} className="cursor-default opacity-80">
+                {card}
               </div>
-            </Link>
-          ))}
-
-          {isAdmin && (
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex min-h-[240px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-            >
-              <Plus className="h-5 w-5" /> New course
-            </button>
-          )}
+            ) : (
+              <Link
+                key={c.id}
+                href={communityLearningLessonHref({ saId, pretty: false, staffGroupId: groupId }, group.slug, c.id, c.firstLessonId!)}
+              >
+                {card}
+              </Link>
+            );
+          })}
         </div>
       )}
-
-      <CourseSettingsModal
-        mode="create"
-        saId={subAccountId}
-        groupId={groupId}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSaved={(id) =>
-          router.push(`/sa/${subAccountId}/community/${groupId}/classroom/${id}`)
-        }
-      />
-    </div>
+    </CommunityShell>
   );
 }

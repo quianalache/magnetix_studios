@@ -38,6 +38,7 @@ export function CommunityPostBody({
   className,
   saId,
   pretty = false,
+  staffGroupId,
   groupSlug,
 }: {
   html: string;
@@ -48,6 +49,8 @@ export function CommunityPostBody({
   className?: string;
   saId?: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupSlug?: string;
 }) {
   const router = useRouter();
@@ -66,7 +69,7 @@ export function CommunityPostBody({
     if (channelEl && saId && groupSlug) {
       const category = channelEl.getAttribute("data-id");
       if (category) {
-        router.push(`${communityHomeHref({ saId, pretty }, groupSlug)}?c=${encodeURIComponent(category)}`);
+        router.push(`${communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}?c=${encodeURIComponent(category)}`);
       }
       return;
     }

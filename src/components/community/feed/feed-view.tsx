@@ -67,6 +67,7 @@ function timeAgo(ms: number | null): string {
 export function FeedView({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   brand,
@@ -78,6 +79,8 @@ export function FeedView({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -247,7 +250,7 @@ export function FeedView({
     // already uses — see the Phase D report for why this wasn't a new
     // permission concept.
     const canEdit = canModerate || p.authorMemberId === viewer.memberId;
-    const detail = communityPostHref({ saId, pretty }, groupSlug, p.id);
+    const detail = communityPostHref({ saId, pretty, staffGroupId }, groupSlug, p.id);
     // Themed highlight (Part 4): the community's OWN brand color, never a
     // hardcoded color — "0d"/"33" are hex alpha suffixes for a subtle
     // tint/border, not a second color needing its own theme plumbing.
@@ -323,6 +326,7 @@ export function FeedView({
               className={cn(p.title ? "mt-0.5" : "mt-1")}
               saId={saId}
               pretty={pretty}
+              staffGroupId={staffGroupId}
               groupSlug={groupSlug}
             />
             {p.attachments && p.attachments.length > 0 && (

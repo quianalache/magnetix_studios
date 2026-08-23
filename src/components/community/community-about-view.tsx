@@ -259,6 +259,7 @@ function MediaCard({
 function SummaryAction({
   saId,
   pretty,
+  staffGroupId,
   group,
   state,
   priceLabel,
@@ -267,6 +268,8 @@ function SummaryAction({
 }: {
   saId: string;
   pretty: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   group: CommunityGroup;
   state: ViewerState;
   priceLabel: string;
@@ -288,7 +291,7 @@ function SummaryAction({
   if (state === "joined") {
     return (
       <Link
-        href={communityHomeHref({ saId, pretty }, group.slug)}
+        href={communityHomeHref({ saId, pretty, staffGroupId }, group.slug)}
         className="community-about-button community-about-button-primary"
       >
         Enter community
@@ -314,6 +317,7 @@ function SummaryAction({
 export function CommunityAboutView({
   saId,
   pretty,
+  staffGroupId,
   group,
   brand,
   state,
@@ -324,6 +328,8 @@ export function CommunityAboutView({
 }: {
   saId: string;
   pretty: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   group: CommunityGroup;
   brand: string;
   state: ViewerState;
@@ -434,6 +440,7 @@ export function CommunityAboutView({
                   <SummaryAction
                     saId={saId}
                     pretty={pretty}
+                    staffGroupId={staffGroupId}
                     group={group}
                     state={state}
                     priceLabel={priceLabel}

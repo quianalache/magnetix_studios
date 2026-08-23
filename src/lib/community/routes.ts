@@ -24,21 +24,45 @@
 export interface CommunityLinkBase {
   saId: string;
   pretty: boolean;
+  /**
+   * Staff Community-in-CRM integration (2026-08-24) — when set, every
+   * builder below emits a `/sa/[subAccountId]/community/[groupId]/...`
+   * path instead of the member-facing opaque/pretty shape, so the SAME
+   * shared components (FeedView, CommunityLeftNav, PostDetailView,
+   * LeaderboardView, MembersDirectory, CommunityAboutView, SettingsNav,
+   * every Settings workspace, etc. — none of which needed to change)
+   * automatically keep staff navigation inside the CRM shell instead of
+   * leaking back to the member-facing route tree the moment a viewer
+   * clicks a post/tab/link. `pretty` is ignored when this is set — staff
+   * routes have exactly one shape, no custom-domain branching. The
+   * group's real Firestore id (not its slug) is what the staff route tree
+   * is keyed by, matching every other CRM route's convention; every
+   * builder that receives a `groupSlug` param ignores it in staff mode.
+   */
+  staffGroupId?: string;
+}
+
+function staffBase(b: CommunityLinkBase): string {
+  return `/sa/${b.saId}/community/${b.staffGroupId}`;
 }
 
 export function communityAboutHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/about`;
   return b.pretty ? `/communities/${groupSlug}/about` : `/c/${b.saId}/${groupSlug}`;
 }
 
 export function communityHomeHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return staffBase(b);
   return b.pretty ? `/communities/${groupSlug}/home` : `/c/${b.saId}/${groupSlug}/community`;
 }
 
 export function communityPostHref(b: CommunityLinkBase, groupSlug: string, postId: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/post/${postId}`;
   return `${communityHomeHref(b, groupSlug)}/${postId}`;
 }
 
 export function communityLearningHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/classroom`;
   return b.pretty ? `/communities/${groupSlug}/learning` : `/c/${b.saId}/${groupSlug}/classroom`;
 }
 
@@ -60,19 +84,26 @@ export function communityLearningLessonHref(
 }
 
 export function communityMembersHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/members-directory`;
   return b.pretty ? `/communities/${groupSlug}/members` : `/c/${b.saId}/${groupSlug}/members`;
 }
 
 export function communityLeaderboardHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/leaderboard`;
   return b.pretty ? `/communities/${groupSlug}/leaderboard` : `/c/${b.saId}/${groupSlug}/leaderboards`;
 }
 
 export function communityProfileHref(b: CommunityLinkBase, groupSlug: string): string {
+  // No dedicated staff profile page (yet) — send staff to their own real
+  // member profile via the standalone experience rather than a broken
+  // link. A deliberate, disclosed scope cut, not silent dead code.
+  if (b.staffGroupId) return `${staffBase(b)}/about`;
   return b.pretty ? `/communities/${groupSlug}/profile` : `/c/${b.saId}/${groupSlug}/profile`;
 }
 
 /** Moderator-only Community Settings workspace (General today; more sections later). */
 export function communitySettingsHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/settings`;
   return b.pretty ? `/communities/${groupSlug}/settings` : `/c/${b.saId}/${groupSlug}/settings`;
 }
 

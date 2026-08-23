@@ -68,6 +68,7 @@ const MANDATORY_TOOLTIP: Record<string, string> = {
 export function NavigationWorkspace({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   navigation: initialNavigation,
@@ -75,6 +76,8 @@ export function NavigationWorkspace({
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   navigation: NavItem[] | undefined;
@@ -144,7 +147,7 @@ export function NavigationWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -171,7 +174,7 @@ export function NavigationWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav brand={brand} active="navigation" link={{ saId, pretty }} groupSlug={groupSlug} />
+        <SettingsNav brand={brand} active="navigation" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
 
         <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
           <h2 className="text-base font-semibold text-[#202124]">Navigation</h2>

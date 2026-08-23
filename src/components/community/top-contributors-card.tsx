@@ -20,12 +20,15 @@ interface TopMember {
 export function TopContributorsCard({
   saId,
   pretty = false,
+  staffGroupId,
   groupSlug,
   brand,
   members,
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupSlug: string;
   brand: string;
   members: TopMember[];
@@ -37,7 +40,7 @@ export function TopContributorsCard({
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[#202124]">Top Contributors</h2>
         <Link
-          href={communityLeaderboardHref({ saId, pretty }, groupSlug)}
+          href={communityLeaderboardHref({ saId, pretty, staffGroupId }, groupSlug)}
           className="text-xs text-[#909090] hover:text-[#202124]"
         >
           View leaderboard

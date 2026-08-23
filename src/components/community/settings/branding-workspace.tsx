@@ -61,6 +61,7 @@ const COLOR_ROLES: { key: keyof CommunityThemeColors; label: string; hint: strin
 export function BrandingWorkspace({
   saId,
   pretty = false,
+  staffGroupId,
   groupId,
   groupSlug,
   theme: initialTheme,
@@ -68,6 +69,8 @@ export function BrandingWorkspace({
 }: {
   saId: string;
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupId: string;
   groupSlug: string;
   theme: CommunityTheme | undefined;
@@ -140,7 +143,7 @@ export function BrandingWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -167,7 +170,7 @@ export function BrandingWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr_340px]">
-        <SettingsNav brand={brand} active="branding" link={{ saId, pretty }} groupSlug={groupSlug} />
+        <SettingsNav brand={brand} active="branding" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
 
         <div className="space-y-5">
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
