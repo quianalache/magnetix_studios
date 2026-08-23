@@ -72,13 +72,23 @@ export const DEFAULT_POINT_RULES: PointRuleMap = {
     points: 3,
     limit: { type: "none" },
   },
-  like_post: {
-    action: "like_post",
-    label: "Like a post",
-    description: "A member likes a post or comment.",
+  // Product correction (2026-08-23): the CONTENT CREATOR earns points when
+  // someone else likes their post/comment — matching the pre-existing
+  // Skool-model behavior, not the liker (a briefly-shipped liker-earns
+  // version of this rule, under the key `like_post`, never reached real
+  // production data — confirmed via a direct production read before this
+  // change). Default limit is "none": a creator shouldn't arbitrarily stop
+  // earning just because many different members genuinely liked their
+  // content — a moderator can still configure a per-day cap on the
+  // RECIPIENT's awarded events if they want one (the limit architecture
+  // is unchanged, just no longer defaulted on for this rule).
+  receive_like: {
+    action: "receive_like",
+    label: "Receive a like",
+    description: "Earn points when another member likes your post or comment.",
     enabled: true,
     points: 1,
-    limit: { type: "per_day", maxPerDay: 10 },
+    limit: { type: "none" },
   },
   invite_member: {
     action: "invite_member",

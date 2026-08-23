@@ -203,16 +203,27 @@ export async function updateLevelsServerSide(opts: {
   return getPointsConfig(opts.subAccountId, opts.groupId);
 }
 
-/** Deterministic `pointEvents` doc id: the entire idempotency + "once per
- *  related entity" mechanism (Part 3 / Part 12's explicit requirements)
- *  falls out of this single choice — a retried request, or a second
- *  attempt to award the same action for the same entity+member, always
- *  targets the SAME doc, so `tx.get(eventRef).exists` alone tells
- *  `awardPoints` whether this exact award already happened. Doesn't
- *  collide with Firestore's reserved `__...__` doc-id pattern (neither
- *  prefixed nor suffixed with a double underscore). */
-function deterministicEventId(action: PointActionKey, sourceEntityId: string, memberId: string): string {
-  return `${action}::${sourceEntityId}::${memberId}`;
+/**
+ * Deterministic `pointEvents` doc id: the entire idempotency + "once per
+ * related entity" mechanism (Part 3 / Part 12's explicit requirements)
+ * falls out of this single choice — a retried request, or a second
+ * attempt to award the same action for the same entity+actor, always
+ * targets the SAME doc, so `tx.get(eventRef).exists` alone tells
+ * `awardPoints` whether this exact award already happened. Doesn't
+ * collide with Firestore's reserved `__...__` doc-id pattern (neither
+ * prefixed nor suffixed with a double underscore).
+ *
+ * Keyed on the ACTOR, not the recipient — this is what makes
+ * `receive_like` correct: the content (and its creator) is fixed per
+ * `sourceEntityId`, but each of potentially many DIFFERENT likers must be
+ * able to independently earn the creator a fresh award for the same
+ * post/comment. Keying on the recipient instead would collapse every
+ * liker's award into a single id and only the first liker would ever
+ * count. For every other action the actor and recipient are the same
+ * member anyway, so this is a no-op change for them.
+ */
+function deterministicEventId(action: PointActionKey, sourceEntityId: string, actorMemberId: string): string {
+  return `${action}::${sourceEntityId}::${actorMemberId}`;
 }
 
 function startOfTodayUtcMs(): number {
@@ -230,8 +241,8 @@ export type AwardPointsResult =
 
 /**
  * The single, central, idempotent point-award function — every trigger
- * site (post/comment/reply/video-post/like/invite-join) calls this instead
- * of writing to `pointEvents`/`membership.points` directly. Self-
+ * site (post/comment/reply/video-post/receive-like/invite-join) calls this
+ * instead of writing to `pointEvents`/`membership.points` directly. Self-
  * transacting (runs its own `runTransaction`) rather than accepting a
  * caller's in-flight transaction — deliberately, so every call site gets
  * the exact same all-reads-before-writes-safe shape without having to
@@ -242,9 +253,16 @@ export type AwardPointsResult =
  * idempotency means a safe, correct retry is always possible later if this
  * ever needs one.
  *
+ * `memberId` is who the points go to (the recipient); `actorMemberId`
+ * (defaults to `memberId` when omitted) is who performed the action. They
+ * differ only for `receive_like`, where the LIKER is the actor and the
+ * content's creator is the recipient — see `deterministicEventId`'s doc
+ * comment for why the idempotency key is actor-scoped, and
+ * `PointEvent.actorMemberId`'s doc comment for the analytics reasoning.
+ *
  * Enforces, in order: the group's `pointsEnabled` master switch, the
  * rule's own enabled flag, the rule's `per_day` cap (counted from REAL
- * `pointEvents` rows created today for this member+action — not a
+ * `pointEvents` rows created today for this RECIPIENT+action — not a
  * separate mutable counter, so it can't drift and self-corrects if an
  * event is later revoked), then the entity-scoped idempotency check.
  */
@@ -252,12 +270,14 @@ export async function awardPoints(opts: {
   subAccountId: string;
   groupId: string;
   memberId: string;
+  actorMemberId?: string;
   action: PointActionKey;
   /** The post/comment/new-member id this award is about. */
   sourceEntityId: string;
 }): Promise<AwardPointsResult> {
   const db = getAdminDb();
   const base = `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`;
+  const actorMemberId = opts.actorMemberId ?? opts.memberId;
 
   const groupSnap = await db.doc(base).get();
   if (groupSnap.data()?.pointsEnabled === false) {
@@ -271,7 +291,7 @@ export async function awardPoints(opts: {
   }
 
   const eventRef = db.doc(
-    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, opts.memberId)}`,
+    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId)}`,
   );
   const membershipRef = db.doc(`${base}/memberships/${opts.memberId}`);
 
@@ -303,6 +323,7 @@ export async function awardPoints(opts: {
     const nextPoints = currentPoints + rule.points;
     const event: Omit<PointEvent, "id"> = {
       memberId: opts.memberId,
+      actorMemberId,
       action: opts.action,
       sourceEntityId: opts.sourceEntityId,
       delta: rule.points,
@@ -325,23 +346,37 @@ export interface MemberPointStats {
 
 /**
  * The Leaderboard page's "Your Stats (All Time)" panel — a per-action
- * breakdown for ONE member, tallied from their own real `pointEvents`
- * rows (a single `memberId ==` equality query, no composite index needed;
- * grouped by `action` in memory rather than one query per action). Counts
- * EVENTS, not raw actions — an action whose rule was disabled, over a
- * daily cap, or a duplicate never created an event, so this only ever
- * reflects what actually earned points, consistent with "points start
- * accumulating from live use forward" (imported Skool history has no
- * pointEvents at all, so it contributes nothing here either).
+ * breakdown for ONE member. Two separate real `pointEvents` queries
+ * (`memberId ==` and `actorMemberId ==`, each a single-equality query, no
+ * composite index needed), because since the `receive_like` product
+ * correction those are no longer the same thing for this member:
+ *  - `memberId == this member` = events THEY were the RECIPIENT of —
+ *    everything that actually contributed to their points (posts,
+ *    comments, replies, invites, and likes THEY received).
+ *  - `actorMemberId == this member` = events THEY performed as the
+ *    ACTOR — for `receive_like` specifically, this is "how many times
+ *    did I like someone else's content", which earns the liker nothing
+ *    but is still a genuine personal engagement stat worth showing
+ *    ("Likes Given"). For every other action actor === recipient, so
+ *    those rows are simply skipped here to avoid double-counting
+ *    something the first query already counted.
+ * Counts EVENTS, not raw actions — an action whose rule was disabled,
+ * over a daily cap, or a duplicate never created an event, so this only
+ * ever reflects what actually earned points, consistent with "points
+ * start accumulating from live use forward" (imported Skool history has
+ * no pointEvents at all, so it contributes nothing here either).
  */
 export async function getMemberPointStats(
   subAccountId: string,
   groupId: string,
   memberId: string,
 ): Promise<MemberPointStats> {
-  const snap = await pointEventsCol(subAccountId, groupId).where("memberId", "==", memberId).get();
+  const [asRecipientSnap, asActorSnap] = await Promise.all([
+    pointEventsCol(subAccountId, groupId).where("memberId", "==", memberId).get(),
+    pointEventsCol(subAccountId, groupId).where("actorMemberId", "==", memberId).get(),
+  ]);
   const stats: MemberPointStats = { totalPoints: 0, posts: 0, comments: 0, likesGiven: 0, membersInvited: 0 };
-  snap.docs.forEach((d) => {
+  asRecipientSnap.docs.forEach((d) => {
     const { action, delta } = d.data() as { action?: PointActionKey; delta: number };
     stats.totalPoints += delta;
     switch (action) {
@@ -353,14 +388,23 @@ export async function getMemberPointStats(
       case "reply_comment":
         stats.comments++;
         break;
-      case "like_post":
-        stats.likesGiven++;
-        break;
       case "invite_member":
         stats.membersInvited++;
         break;
       default:
+        // "receive_like" contributes to totalPoints above but has no own
+        // bucket in this stats shape (the mockup's 5 rows have no "Likes
+        // Received" row) — see the module comment.
         break;
+    }
+  });
+  asActorSnap.docs.forEach((d) => {
+    const { action, memberId: recipientId } = d.data() as { action?: PointActionKey; memberId: string };
+    // Only "receive_like" can have actor !== recipient; every other
+    // action's actor-side row was already counted above (memberId ===
+    // actorMemberId for those), so counting it again here would double it.
+    if (action === "receive_like" && recipientId !== memberId) {
+      stats.likesGiven++;
     }
   });
   return stats;
@@ -429,24 +473,29 @@ export async function getPointsOverview(opts: {
 }
 
 /**
- * Reverse a previously-awarded event (unlike -> reverse the like_post
+ * Reverse a previously-awarded event (unlike -> reverse the receive_like
  * award). Looks up the SAME deterministic doc id `awardPoints` would have
- * used, so it only ever reverses a real, existing award — a member who
- * never actually earned the point (rule was disabled at the time, daily
- * cap was hit, etc.) has nothing to revoke, safely a no-op.
+ * used (actor-scoped — see that function's doc comment), so it only ever
+ * reverses a real, existing award — a member who never actually earned
+ * the point (rule was disabled at the time, daily cap was hit, etc.) has
+ * nothing to revoke, safely a no-op. `memberId` here is only used to
+ * locate the RECIPIENT's membership doc to decrement — the event itself
+ * is found purely from `action`/`sourceEntityId`/`actorMemberId`.
  */
 export async function revokePoints(opts: {
   subAccountId: string;
   groupId: string;
   memberId: string;
+  actorMemberId?: string;
   action: PointActionKey;
   sourceEntityId: string;
 }): Promise<{ revoked: boolean }> {
   const db = getAdminDb();
   const base = `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`;
   const config = await getPointsConfig(opts.subAccountId, opts.groupId);
+  const actorMemberId = opts.actorMemberId ?? opts.memberId;
   const eventRef = db.doc(
-    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, opts.memberId)}`,
+    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId)}`,
   );
   const membershipRef = db.doc(`${base}/memberships/${opts.memberId}`);
 

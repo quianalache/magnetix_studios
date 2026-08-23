@@ -557,16 +557,16 @@ export async function createCommentServerSide(opts: {
  * the counter can't drift; the like/unlike itself never fails or blocks on
  * the points side.
  *
- * Points & Rewards (2026-08): "like_post" now earns the LIKER the point —
- * a deliberate behavior change from the original gamification logic this
- * replaces, which awarded the point to the liked content's AUTHOR instead
- * ("points come from OTHERS liking you", Skool's model). The new rule's
- * own "up to 10 per day" cap only makes sense read as a per-liking-member
- * anti-spam limit, consistent with every other V1 point action being
- * actor-directed (the person taking the action earns) — see the Points &
- * Rewards Implementation Report for the full disclosure. Self-likes still
- * never earn (now blocking the more direct farming vector of liking your
- * own content for a free point, not just avoiding it as a formality).
+ * Points & Rewards "receive_like" (2026-08-23 product correction): the
+ * content's CREATOR earns the point when someone else likes their post or
+ * comment — matching the pre-existing Skool-model behavior. (A brief
+ * liker-earns version shipped for less than a day and reached zero real
+ * production point events before being corrected back — see the
+ * Implementation Report.) Self-likes never earn, checked by comparing the
+ * liker to the content's own author before awarding/revoking at all.
+ * `awardPoints`/`revokePoints` receive the AUTHOR as `memberId` (who the
+ * points go to) and the LIKER as `actorMemberId` (who clicked Like) — see
+ * `PointEvent.actorMemberId`'s doc comment for why both are recorded.
  */
 export async function toggleLikeServerSide(opts: {
   subAccountId: string;
@@ -602,16 +602,22 @@ export async function toggleLikeServerSide(opts: {
   });
 
   if (opts.viewerMemberId !== authorId) {
-    // The liked post/comment's own id — re-liking the same content after
-    // unliking targets the same deterministic pointEvents doc each time
-    // (award, revoke, award again all resolve cleanly); liking N different
-    // pieces of content in one day is what the daily cap actually counts.
+    // The liked post/comment's own id, combined with the LIKER as actor —
+    // re-liking the SAME content after unliking targets the same
+    // deterministic pointEvents doc each time (award, revoke, award again
+    // all resolve cleanly, never stacking); a DIFFERENT liker on the same
+    // content gets a different actor-scoped id, so the creator can earn a
+    // fresh award from each distinct person who likes it (see
+    // `deterministicEventId`'s doc comment).
     const sourceEntityId = opts.commentId ?? opts.postId;
     const pointsOpts = {
       subAccountId: opts.subAccountId,
       groupId: opts.groupId,
-      memberId: opts.viewerMemberId,
-      action: "like_post" as const,
+      // The content's creator earns the points...
+      memberId: authorId,
+      // ...the person who clicked Like is just the actor, and earns nothing.
+      actorMemberId: opts.viewerMemberId,
+      action: "receive_like" as const,
       sourceEntityId,
     };
     if (liked) {

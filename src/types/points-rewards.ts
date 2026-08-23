@@ -8,8 +8,15 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * this large, self-contained slice doesn't bloat the main community type
  * file. See the Points & Rewards Implementation Report for the full
  * architecture writeup, including what pre-existing gamification code this
- * replaces/extends (`config/community.ts`'s global `LEVEL_THRESHOLDS`, and
- * `toggleLikeServerSide`'s old hardcoded receiver-earns like-point logic).
+ * replaces/extends (`config/community.ts`'s global `LEVEL_THRESHOLDS`).
+ *
+ * `receive_like` (2026-08-23 product correction): the CONTENT CREATOR earns
+ * points when someone else likes their post/comment — matching the
+ * original pre-existing Skool-model behavior, NOT the liker. Renamed from
+ * an earlier, briefly-shipped `like_post` (liker-earns) key — no real
+ * production data ever existed under that key (confirmed via direct
+ * production read before the rename), so this is a clean rename, not a
+ * migration.
  */
 
 // ---------------------------------------------------------------------------
@@ -21,7 +28,7 @@ export type PointActionKey =
   | "comment_post"
   | "reply_comment"
   | "share_video"
-  | "like_post"
+  | "receive_like"
   | "invite_member";
 
 export type PointLimitType = "none" | "per_day" | "per_entity";
@@ -110,12 +117,28 @@ export interface PointsRewardsConfig {
 
 export interface PointEvent {
   id: string;
+  /** Who the points go to (the "recipient") — for every action except
+   *  `receive_like`, this is also whoever performed the action. Used for
+   *  point attribution: leaderboard sums, `membership.points`, and
+   *  per-day limit counts are all scoped to this field. */
   memberId: string;
+  /**
+   * Who actually performed the action (the "actor") — equal to `memberId`
+   * for every action except `receive_like`, where it's the member who
+   * clicked Like (who earns nothing themselves). A small, additive field
+   * (2026-08-23) so point-event analytics can distinguish actor from
+   * recipient rather than flattening them into one ambiguous member field
+   * — see `awardPoints`'s doc comment for how the idempotency key uses
+   * this instead of `memberId` (so the same content can independently
+   * earn its creator a fresh award from each different liker).
+   */
+  actorMemberId: string;
   action: PointActionKey;
   /** The post/comment/membership id this award is about. Combined with
-   *  `action` and `memberId`, this is also what the event's own Firestore
-   *  doc id is deterministically derived from — see `awardPoints`'s doc
-   *  comment for the idempotency strategy this enables. */
+   *  `action` and `actorMemberId`, this is also what the event's own
+   *  Firestore doc id is deterministically derived from — see
+   *  `awardPoints`'s doc comment for the idempotency strategy this
+   *  enables. */
   sourceEntityId: string;
   delta: number;
   configVersion: number;

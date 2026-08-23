@@ -14,7 +14,7 @@ const ACTION_ORDER: PointActionKey[] = [
   "share_video",
   "comment_post",
   "reply_comment",
-  "like_post",
+  "receive_like",
   "invite_member",
 ];
 
@@ -23,7 +23,7 @@ const ACTION_ICON: Record<PointActionKey, typeof FileEdit> = {
   share_video: Video,
   comment_post: MessageCircle,
   reply_comment: MessageSquareReply,
-  like_post: Heart,
+  receive_like: Heart,
   invite_member: UserPlus,
 };
 
