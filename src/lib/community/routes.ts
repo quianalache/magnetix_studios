@@ -94,10 +94,9 @@ export function communityLeaderboardHref(b: CommunityLinkBase, groupSlug: string
 }
 
 export function communityProfileHref(b: CommunityLinkBase, groupSlug: string): string {
-  // No dedicated staff profile page (yet) — send staff to their own real
-  // member profile via the standalone experience rather than a broken
-  // link. A deliberate, disclosed scope cut, not silent dead code.
-  if (b.staffGroupId) return `${staffBase(b)}/about`;
+  // Real staff-shell profile editor (2026-08-24 navigation cleanup pass) —
+  // see /sa/[subAccountId]/community/[groupId]/profile/page.tsx.
+  if (b.staffGroupId) return `${staffBase(b)}/profile`;
   return b.pretty ? `/communities/${groupSlug}/profile` : `/c/${b.saId}/${groupSlug}/profile`;
 }
 

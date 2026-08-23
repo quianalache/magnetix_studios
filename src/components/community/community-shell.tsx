@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ExternalLink, Settings } from "lucide-react";
+import { ExternalLink, LogOut, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup, NavItemKey } from "@/types/community";
 import {
@@ -26,7 +26,11 @@ export type CommunityTab =
   | "members"
   | "leaderboards"
   | "about"
-  | "settings";
+  | "settings"
+  // Not a nav-strip destination (no NavItemKey named "profile"), so no tab
+  // is ever falsely highlighted for it — just a valid `active` value for
+  // the staff-shell profile editor page.
+  | "profile";
 
 /**
  * Skool-style group shell: a thin top bar with the group name + horizontal tab
@@ -109,15 +113,107 @@ export function CommunityShell({
     }),
   );
 
+  // Mobile header layout (root cause of the pre-existing clientWidth:0 tab-
+  // strip bug, found + fixed 2026-08-24): the original markup was a single
+  // flex row of THREE items (name, flex-1 tab nav, trailing actions). Only
+  // the name (`truncate`) and the nav (`overflow-x-auto`) get their CSS
+  // automatic min-width reset to 0 — the actions group had no `overflow`
+  // set, so it kept `min-width: auto` (= its full, unshrinkable content
+  // width). On a ~390px viewport the actions group's own unshrinkable
+  // width (Settings pill + message icon + a wide staff-only "View as
+  // Member" pill) already consumed most of the row, and because the flex-1
+  // nav's flex-basis starts at 0% while the name's starts at its natural
+  // width, the browser's shrink-distribution math forced nearly ALL the
+  // deficit onto the nav — collapsing it to a literal 0px box, not just a
+  // narrow one. Confirmed identical on the untouched member-facing route,
+  // so this predates the staff integration; not introduced by it.
+  //
+  // Fix: a 2-row CSS grid below `md`. Row 1 = name + actions (icon-only on
+  // mobile, text returns at `md:`); row 2 = the tab nav at the row's FULL
+  // width, so it's never negotiating space against the actions group at
+  // all — it gets a real, bounded, always-nonzero track and scrolls
+  // locally within it. At `md:` and up, the same three elements collapse
+  // back into the original single-row layout (name, flex nav, actions) via
+  // explicit column/row placement — desktop is visually unchanged.
   const headerRow = (
-    <div className={cn("flex h-14 items-center gap-4 px-4 md:px-6", !staffGroupId && "mx-auto max-w-7xl")}>
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2",
+        "md:h-14 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4 md:py-0 md:px-4 lg:px-6",
+        !staffGroupId && "md:mx-auto md:max-w-7xl",
+      )}
+    >
       <Link
         href={about}
-        className="truncate text-sm font-semibold text-[#202124]"
+        className="min-w-0 truncate text-sm font-semibold text-[#202124]"
       >
         {group.name}
       </Link>
-      <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+
+      <div className="flex items-center gap-1 md:order-3 md:col-start-3 md:row-start-1 md:gap-2">
+        {viewerIsModerator && (
+          <Link
+            href={communitySettingsHref(linkBase, group.slug)}
+            aria-label="Settings"
+            className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors md:px-3"
+            style={
+              active === "settings"
+                ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
+                : { borderColor: "#E4E4E4", color: "#3a3a44" }
+            }
+          >
+            <Settings className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden md:inline">Settings</span>
+          </Link>
+        )}
+        <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
+        {staffGroupId ? (
+          <>
+            <Link
+              href={communityProfileHref(linkBase, group.slug)}
+              title="Your profile"
+              aria-label="Your profile"
+            >
+              <MemberAvatar author={viewer} size={28} brand={brand} />
+            </Link>
+            {/* The intentional, explicit place to leave the CRM shell — see
+                the doc comment above. New tab so the owner keeps their CRM
+                workspace exactly where they left it. */}
+            <a
+              href={`/api/sub-accounts/${saId}/community/${staffGroupId}/enter`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="View as Member — open the standalone member-facing Community in a new tab"
+              title="Open the standalone member-facing Community in a new tab"
+              className="flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-2 py-1.5 text-sm font-medium text-[#3a3a44] hover:bg-muted md:px-3"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden md:inline">View as Member</span>
+            </a>
+          </>
+        ) : (
+          <>
+            <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile" aria-label="Your profile">
+              <MemberAvatar author={viewer} size={28} brand={brand} />
+            </Link>
+            <form action={`/api/community/${saId}/logout`} method="post">
+              <button
+                type="submit"
+                title="Sign out"
+                aria-label="Sign out"
+                className="flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground hover:bg-[#F0F0F0] hover:text-foreground md:px-2"
+              >
+                <LogOut className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden md:inline">Sign out</span>
+              </button>
+            </form>
+          </>
+        )}
+      </div>
+
+      <nav
+        className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto md:order-2 md:col-span-1 md:col-start-2 md:row-start-1"
+      >
         {tabs.map((t) => {
           const isActive = t.key === active;
           return (
@@ -125,7 +221,7 @@ export function CommunityShell({
               <span
                 key={t.key}
                 aria-disabled="true"
-                className="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
+                className="shrink-0 cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
               >
                 {t.label}
               </span>
@@ -133,7 +229,7 @@ export function CommunityShell({
               <Link
                 key={t.key}
                 href={t.href!}
-                className="border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+                className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors"
                 style={
                   isActive
                     ? { borderColor: brand, color: "var(--foreground)" }
@@ -146,49 +242,6 @@ export function CommunityShell({
           );
         })}
       </nav>
-      <div className="flex items-center gap-2">
-        {viewerIsModerator && (
-          <Link
-            href={communitySettingsHref(linkBase, group.slug)}
-            className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors"
-            style={
-              active === "settings"
-                ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
-                : { borderColor: "#E4E4E4", color: "#3a3a44" }
-            }
-          >
-            <Settings className="h-3.5 w-3.5" />
-            Settings
-          </Link>
-        )}
-        <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
-        {staffGroupId ? (
-          // The intentional, explicit place to leave the CRM shell — see
-          // the doc comment above. New tab so the owner keeps their CRM
-          // workspace exactly where they left it.
-          <a
-            href={`/api/sub-accounts/${saId}/community/${staffGroupId}/enter`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-3 py-1.5 text-sm font-medium text-[#3a3a44] hover:bg-muted"
-            title="Open the standalone member-facing Community in a new tab"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View as Member
-          </a>
-        ) : (
-          <>
-            <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile">
-              <MemberAvatar author={viewer} size={28} brand={brand} />
-            </Link>
-            <form action={`/api/community/${saId}/logout`} method="post">
-              <button type="submit" className="text-xs text-muted-foreground hover:text-foreground">
-                Sign out
-              </button>
-            </form>
-          </>
-        )}
-      </div>
     </div>
   );
 

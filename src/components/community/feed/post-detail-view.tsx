@@ -297,7 +297,6 @@ export function PostDetailView({
             <div className="flex items-center gap-2 text-sm">
               <AuthorLink
                 saId={saId}
-                pretty={pretty}
                 viewerMemberId={viewer.memberId}
                 author={currentPost.author}
                 brand={brand}
@@ -529,7 +528,6 @@ function CommentBubble({
         <div className="flex items-center gap-2 text-sm">
           <AuthorLink
             saId={saId}
-            pretty={pretty}
             viewerMemberId={viewer.memberId}
             author={comment.author}
             brand={brand}

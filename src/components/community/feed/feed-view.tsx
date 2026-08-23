@@ -296,7 +296,7 @@ export function FeedView({
           <MemberAvatar author={p.author} size={40} brand={brand} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-sm">
-              <AuthorLink saId={saId} pretty={pretty} viewerMemberId={viewer.memberId} author={p.author} brand={brand} />
+              <AuthorLink saId={saId} viewerMemberId={viewer.memberId} author={p.author} brand={brand} />
               {/* Timestamp doubles as a permalink to the post — a small,
                   explicit, well-understood affordance (same pattern as
                   Twitter/Reddit/HN) rather than wrapping the whole card

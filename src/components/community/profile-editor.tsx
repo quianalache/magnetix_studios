@@ -13,6 +13,7 @@ const BIO_MAX = 300;
 export function ProfileEditor({
   saId,
   pretty = false,
+  staffGroupId,
   groupSlug,
   initial,
   brand,
@@ -20,6 +21,8 @@ export function ProfileEditor({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
+  staffGroupId?: string;
   groupSlug: string;
   initial: {
     displayName: string;
@@ -87,7 +90,7 @@ export function ProfileEditor({
   return (
     <div className="mx-auto max-w-lg px-4 py-8">
       <Link
-        href={communityHomeHref({ saId, pretty }, groupSlug)}
+        href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
         className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
       >
         <ArrowLeft className="h-4 w-4" /> Back to community

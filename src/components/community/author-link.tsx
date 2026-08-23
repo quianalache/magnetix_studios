@@ -1,38 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import type { AuthorView } from "@/types/community";
 import { MemberAvatar } from "@/components/community/member-avatar";
-import { communityMessageThreadHref } from "@/lib/community/routes";
+import { DmThreadModal } from "@/components/community/dm/dm-thread-modal";
 
 /**
  * Clickable author name that opens a Skool-style profile popover (avatar, name,
  * level, bio) with a Message button. Used on feed posts, comments, etc. Bio is
  * lazy-loaded on first open. Same-group is guaranteed in feed context (both are
  * members of the group), so the Message button shows for anyone but yourself.
+ *
+ * The Message button opens the same inline `DmThreadModal` overlay the header
+ * "Chats" launcher and the Members directory use (2026-08-24) — it used to
+ * navigate to the standalone `/messages/[threadId]` page, which had no staff
+ * route equivalent and dropped the CRM shell entirely when clicked from a
+ * staff Community page. A modal never navigates, so it's shell-agnostic by
+ * construction in both the staff and member shells — no `staffGroupId` (or
+ * `pretty`, now unused) needed here at all. See the Staff Community
+ * Integration report / navigation cleanup pass.
  */
 export function AuthorLink({
   saId,
-  pretty = false,
   viewerMemberId,
   author,
   brand,
   className,
 }: {
   saId: string;
-  /** True when serving `saId`'s own verified custom domain — see domain.ts. */
-  pretty?: boolean;
   viewerMemberId: string;
   author: AuthorView;
   brand: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [dmOpen, setDmOpen] = useState(false);
   const [bio, setBio] = useState<string | null>(null);
   const isSelf = author.memberId === viewerMemberId;
-  const threadId = [viewerMemberId, author.memberId].sort().join("__");
 
   async function load() {
     if (bio !== null) return;
@@ -83,16 +88,33 @@ export function AuthorLink({
               <p className="mt-3 line-clamp-4 text-sm text-[#3a3a44]">{bio}</p>
             ) : null}
             {!isSelf && (
-              <Link
-                href={communityMessageThreadHref({ saId, pretty }, threadId)}
-                className="mt-3 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setDmOpen(true);
+                }}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
                 style={{ backgroundColor: brand }}
               >
                 <MessageSquare className="h-4 w-4" /> Message
-              </Link>
+              </button>
             )}
           </div>
         </>
+      )}
+      {dmOpen && (
+        <DmThreadModal
+          saId={saId}
+          viewerId={viewerMemberId}
+          other={{
+            memberId: author.memberId,
+            displayName: author.displayName,
+            avatarUrl: author.avatarUrl,
+          }}
+          brand={brand}
+          onClose={() => setDmOpen(false)}
+        />
       )}
     </span>
   );
