@@ -330,7 +330,13 @@ export function PointsRewardsWorkspace({
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
         <SettingsNav brand={brand} active="points-rewards" link={{ saId, pretty }} groupSlug={groupSlug} />
 
-        <div className="space-y-5">
+        {/* min-w-0: a CSS Grid item defaults to min-width:auto, which lets
+            unwrapped content (the long rule/level/reward description text
+            below) force this whole column wider than its 1fr track and
+            push everything after it off-screen — found live during QA.
+            This single min-w-0 is what actually lets every `truncate`
+            deeper in the tree take effect. */}
+        <div className="min-w-0 space-y-5">
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
             <h2 className="text-base font-semibold text-[#202124]">Points & Rewards</h2>
             <p className="mt-0.5 text-sm text-[#909090]">

@@ -109,8 +109,11 @@ export function LeaderboardView({
         </button>
       </div>
 
-      {/* Middle: rankings */}
-      <div>
+      {/* Middle: rankings. min-w-0: same CSS Grid min-width:auto fix as the
+          Points & Rewards Settings workspace — without it, a long member
+          display name in the ranked list can force this 1fr column wider
+          than the viewport. */}
+      <div className="min-w-0">
         <div className="mb-3 flex gap-1.5">
           {WINDOWS.map((w) => (
             <button
