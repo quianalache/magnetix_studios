@@ -77,8 +77,15 @@ const nextConfig: NextConfig = {
     // "/api/decoder/**" already covers the wasm files some other route
     // needs — NOT verified/fixed here (out of scope for this pass), flagged
     // for a future look.
+    // Deliberately NOT also including the plain
+    // "./node_modules/playwright-core/browsers.json" symlink path here
+    // (unlike swisseph-wasm above) — including it alongside the real
+    // .pnpm store path made Vercel's deploy step fail outright with "The
+    // framework produced an invalid deployment package for a Serverless
+    // Function... files in symlinked directories", confirmed live. The
+    // real .pnpm store path alone is what the runtime actually needs
+    // (same as swisseph-wasm's own lesson) and packages cleanly.
     "/api/community/**": [
-      "./node_modules/playwright-core/browsers.json",
       "./node_modules/.pnpm/playwright-core@1.62.1/node_modules/playwright-core/browsers.json",
       "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
     ],
