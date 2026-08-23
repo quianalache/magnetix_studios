@@ -200,7 +200,68 @@ export async function updateLevelsServerSide(opts: {
     },
     { merge: false },
   );
-  return getPointsConfig(opts.subAccountId, opts.groupId);
+  const next = await getPointsConfig(opts.subAccountId, opts.groupId);
+  // Level is CURRENT STATUS, not history — unlike points/pointEvents, a
+  // stored `level` must never go stale relative to the Community's
+  // CURRENT thresholds. `GroupMembership.level` is read directly (not
+  // recomputed on the fly) by a real number of other systems — course
+  // level-gating (community-classroom-service.ts), every post/comment
+  // author's level badge, the leaderboard, reach_level reward criteria —
+  // so the safest fix without a sweeping rewrite of every one of those
+  // call sites is to recompute and persist it here, once, the moment
+  // thresholds change (see recomputeMembershipLevels's own doc comment
+  // for exactly what it does and doesn't touch).
+  await recomputeMembershipLevels(opts.subAccountId, opts.groupId, next);
+  return next;
+}
+
+/**
+ * Recompute and persist `GroupMembership.level` for every membership in
+ * this group against a (just-saved) levels config — called only from
+ * `updateLevelsServerSide`, right after a threshold change. Reads each
+ * membership's EXISTING `points` (never modified here) and writes only
+ * `level` when it actually differs from what's already stored — a no-op
+ * write is skipped entirely, so an unrelated points/rules save never
+ * touches `level` at all (this function is never called from there).
+ *
+ * Explicitly does NOT: read or write `points`, touch `pointEvents`,
+ * create/update a `CommunityRewardWinner`, or emit any webhook/email —
+ * it's a single field, `.update()`-only batch write, nothing else in
+ * this codebase hooks Firestore membership writes (confirmed: no Cloud
+ * Functions triggers exist in this repo), so a threshold change can
+ * never accidentally award a reward or fire a notification.
+ */
+export async function recomputeMembershipLevels(
+  subAccountId: string,
+  groupId: string,
+  config: PointsRewardsConfig,
+): Promise<{ updated: number }> {
+  const db = getAdminDb();
+  const membershipsSnap = await db
+    .collection(`subAccounts/${subAccountId}/communityGroups/${groupId}/memberships`)
+    .get();
+
+  let updated = 0;
+  let batch = db.batch();
+  let opsInBatch = 0;
+  for (const doc of membershipsSnap.docs) {
+    const data = doc.data() as { points?: number; level?: number };
+    const correctLevel = levelForConfig(config, data.points ?? 0);
+    if (data.level !== correctLevel) {
+      batch.update(doc.ref, { level: correctLevel });
+      updated++;
+      opsInBatch++;
+      // Firestore batches cap at 500 writes — chunk defensively so this
+      // never breaks on a very large Community.
+      if (opsInBatch >= 450) {
+        await batch.commit();
+        batch = db.batch();
+        opsInBatch = 0;
+      }
+    }
+  }
+  if (opsInBatch > 0) await batch.commit();
+  return { updated };
 }
 
 /**
