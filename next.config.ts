@@ -44,6 +44,19 @@ const nextConfig: NextConfig = {
       "./node_modules/swisseph-wasm/wasm/*",
       "./node_modules/.pnpm/swisseph-wasm@*/node_modules/swisseph-wasm/wasm/*",
     ],
+    // Skool Import (2026-08-24) — same root-cause class as swisseph-wasm
+    // above: playwright-core's `lib/coreBundle.js` reads its own
+    // `browsers.json` off disk at runtime (not a static import Next's
+    // tracer can see), so it was silently missing from the deployed
+    // function — confirmed live via `vercel logs`: "Cannot find module
+    // '.../playwright-core/browsers.json'". Same dual-path fix (real pnpm
+    // store + symlink) for the same reason. Scoped to the whole
+    // skool-import route family (not just connect) so Scan/Verify/Preview
+    // routes added later inherit this automatically.
+    "/api/community/[saId]/[groupId]/skool-import/**": [
+      "./node_modules/playwright-core/browsers.json",
+      "./node_modules/.pnpm/playwright-core@*/node_modules/playwright-core/browsers.json",
+    ],
   },
   async headers() {
     return [
