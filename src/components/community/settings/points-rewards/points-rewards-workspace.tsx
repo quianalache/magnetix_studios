@@ -576,6 +576,10 @@ export function PointsRewardsWorkspace({
         brand={brand}
         awardedByName={viewerDisplayName}
         onAward={awardWinner}
+        onViewWinners={() => {
+          setAwardModalOpen(false);
+          setTab("winners");
+        }}
         awarding={awarding}
         awarded={awarded}
         error={awardError}

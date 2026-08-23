@@ -49,6 +49,7 @@ export function AwardWinnerModal({
   brand,
   awardedByName,
   onAward,
+  onViewWinners,
   awarding,
   awarded,
   error,
@@ -63,6 +64,10 @@ export function AwardWinnerModal({
   brand: string;
   awardedByName: string;
   onAward: (memberId: string, notes: string) => void;
+  /** Closes the modal AND switches the workspace to the Winners tab — found
+   *  live during QA that this button previously only closed the modal,
+   *  leaving the moderator on the Rewards tab despite the label. */
+  onViewWinners: () => void;
   awarding: boolean;
   awarded: { memberId: string; displayName: string } | null;
   error: string | null;
@@ -185,7 +190,7 @@ export function AwardWinnerModal({
           {awarded ? (
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={onViewWinners}
               className="rounded-md px-3 py-1.5 text-sm font-semibold text-white"
               style={{ backgroundColor: brand }}
             >
