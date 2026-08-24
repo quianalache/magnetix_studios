@@ -109,37 +109,52 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     const passwordOk = (await page.inputValue("#password")) === password;
     if (!emailOk) await page.fill("#email", email);
     if (!passwordOk) await page.fill("#password", password);
-    // TEMPORARY diagnostic (2026-08-24, round 2) — three real Connect
-    // attempts with correct credentials have now failed in production;
-    // the "networkidle" + re-verify fix did not resolve it. Logs ONLY
-    // whether the fields matched pre-submit (booleans, never the actual
-    // values) and Skool's own generic response code/message — enough to
-    // tell whether this is a form-fill race or something Skool's backend
-    // itself is doing (e.g. treating repeated headless attempts
-    // differently). Never logs email/password/cookies. Remove once
-    // resolved.
-    console.log("[skool-import][diag2] pre-submit field match — email:", emailOk, "password:", passwordOk);
 
-    const [response] = await Promise.all([
-      page.waitForResponse((res) => res.url().includes("api2.skool.com/auth/login"), { timeout: 30000 }),
-      page.click('button[type="submit"]'),
+    // Real root cause, found via diagnostic logs (not guessed): a correct
+    // login makes Skool's client-side app navigate away almost
+    // immediately, and `await response.text()` called AFTER `click()`
+    // resolves can lose that race — Chrome discards a response's body
+    // once its page has navigated away ("Protocol error... Response body
+    // is not available for a response that was navigated away from"),
+    // confirmed live. Reading the body from inside the `response` event
+    // handler itself — synchronously as the event fires, not after an
+    // intervening `click()`/`waitForResponse()` round trip — reads it
+    // before that navigation has a chance to invalidate it.
+    let capturedStatus: number | null = null;
+    let capturedBody: string | null = null;
+    let captureError: string | null = null;
+    const captured = new Promise<void>((resolve) => {
+      page.on("response", (res) => {
+        if (capturedBody !== null || !res.url().includes("api2.skool.com/auth/login")) return;
+        capturedStatus = res.status();
+        res
+          .text()
+          .then((text) => {
+            capturedBody = text;
+            resolve();
+          })
+          .catch((err) => {
+            captureError = err instanceof Error ? err.message : String(err);
+            capturedBody = "";
+            resolve();
+          });
+      });
+    });
+
+    await page.click('button[type="submit"]');
+    await Promise.race([
+      captured,
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error("login response timeout")), 30000)),
     ]);
-
-    const rawText = await response.text();
-    console.log(
-      "[skool-import][diag2] login response status:",
-      response.status(),
-      "headers:",
-      JSON.stringify(response.headers()),
-      "body:",
-      rawText.slice(0, 500),
-    );
 
     let bodyJson: { code?: string; message?: string } | null = null;
     try {
-      bodyJson = JSON.parse(rawText) as { code?: string; message?: string };
+      bodyJson = capturedBody ? (JSON.parse(capturedBody) as { code?: string; message?: string }) : null;
     } catch {
       bodyJson = null;
+    }
+    if (captureError) {
+      console.error("[skool-import] login response body unreadable:", captureError, "status:", capturedStatus);
     }
 
     // Confirmed live: a failed login still returns HTTP 200 with a `code`
