@@ -106,17 +106,39 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     // Defensive verification, not a guess: if the form's controlled-input
     // state didn't actually catch the fill (the exact class of race this
     // is meant to rule out), re-fill before ever submitting.
-    if ((await page.inputValue("#email")) !== email) await page.fill("#email", email);
-    if ((await page.inputValue("#password")) !== password) await page.fill("#password", password);
+    const emailOk = (await page.inputValue("#email")) === email;
+    const passwordOk = (await page.inputValue("#password")) === password;
+    if (!emailOk) await page.fill("#email", email);
+    if (!passwordOk) await page.fill("#password", password);
+    // TEMPORARY diagnostic (2026-08-24, round 2) — three real Connect
+    // attempts with correct credentials have now failed in production;
+    // the "networkidle" + re-verify fix did not resolve it. Logs ONLY
+    // whether the fields matched pre-submit (booleans, never the actual
+    // values) and Skool's own generic response code/message — enough to
+    // tell whether this is a form-fill race or something Skool's backend
+    // itself is doing (e.g. treating repeated headless attempts
+    // differently). Never logs email/password/cookies. Remove once
+    // resolved.
+    console.log("[skool-import][diag2] pre-submit field match — email:", emailOk, "password:", passwordOk);
 
     const [response] = await Promise.all([
       page.waitForResponse((res) => res.url().includes("api2.skool.com/auth/login"), { timeout: 30000 }),
       page.click('button[type="submit"]'),
     ]);
 
+    const rawText = await response.text();
+    console.log(
+      "[skool-import][diag2] login response status:",
+      response.status(),
+      "headers:",
+      JSON.stringify(response.headers()),
+      "body:",
+      rawText.slice(0, 500),
+    );
+
     let bodyJson: { code?: string; message?: string } | null = null;
     try {
-      bodyJson = (await response.json()) as { code?: string; message?: string };
+      bodyJson = JSON.parse(rawText) as { code?: string; message?: string };
     } catch {
       bodyJson = null;
     }
