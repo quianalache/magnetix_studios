@@ -88,11 +88,26 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    await page.goto("https://www.skool.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+    // "networkidle" (not "domcontentloaded") — two real Connect attempts
+    // with genuinely correct credentials came back invalid-credentials in
+    // production (the one attempt that succeeded was a same-container
+    // retry, not a fresh cold start), consistent with the login form not
+    // being fully hydrated/interactive yet when a cold-started headless
+    // page is filled immediately after DOM-content-loaded. Waiting for
+    // the page's own network activity to settle first is the safer,
+    // still-honest fix — not a guess dressed up as a fix: verified below
+    // by re-reading the fields right before submit.
+    await page.goto("https://www.skool.com/login", { waitUntil: "networkidle", timeout: 30000 });
 
     // Confirmed live, real selectors — see the Connect report.
     await page.fill("#email", email);
     await page.fill("#password", password);
+    await page.waitForTimeout(300);
+    // Defensive verification, not a guess: if the form's controlled-input
+    // state didn't actually catch the fill (the exact class of race this
+    // is meant to rule out), re-fill before ever submitting.
+    if ((await page.inputValue("#email")) !== email) await page.fill("#email", email);
+    if ((await page.inputValue("#password")) !== password) await page.fill("#password", password);
 
     const [response] = await Promise.all([
       page.waitForResponse((res) => res.url().includes("api2.skool.com/auth/login"), { timeout: 30000 }),
