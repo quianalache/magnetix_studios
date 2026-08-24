@@ -1,20 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ArrowLeft,
   Check,
+  Circle,
   Download,
   Eye,
   EyeOff,
   FileSearch,
-  Lock,
+  FolderKanban,
+  GraduationCap,
   Loader2,
+  Lock,
   Mail,
+  Search,
   ShieldCheck,
+  Star,
+  Trophy,
   Users,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { communityHomeHref } from "@/lib/community/routes";
@@ -26,6 +34,104 @@ type ConnectStatus = "idle" | "connecting" | "connected" | "error";
 
 interface ConnectErrorState {
   message: string;
+}
+
+type ScanPhaseKey =
+  | "community"
+  | "categories"
+  | "members"
+  | "posts"
+  | "comments"
+  | "attachments"
+  | "points"
+  | "pinned"
+  | "classroom"
+  | "finalize";
+
+type ScanPhaseStatus = "pending" | "scanning" | "complete" | "warning" | "error";
+
+interface ScanPhase {
+  status: ScanPhaseStatus;
+  detail: string | null;
+  message: string | null;
+}
+
+type ScanStatus = "scanning" | "awaiting_verification" | "complete" | "cancelled" | "failed";
+
+interface ScanResult {
+  id: string;
+  status: ScanStatus;
+  phases: Record<ScanPhaseKey, ScanPhase>;
+  community: { name: string; displayName: string; description: string | null; logoUrl: string | null } | null;
+  categories: { count: number } | null;
+  members: { totalDiscovered: number; emailResolvedCount: number } | null;
+  content: { uniquePostCount: number; commentCount: number } | null;
+  attachments: { imageCount: number; voiceCount: number; fileCount: number; videoDeferredCount: number } | null;
+  points: { membersWithPointData: number } | null;
+  pinned: { count: number } | null;
+  classroom: { detected: boolean; courseCount: number | null } | null;
+  warnings: string[];
+}
+
+const PHASE_ORDER: ScanPhaseKey[] = [
+  "community",
+  "categories",
+  "members",
+  "posts",
+  "comments",
+  "attachments",
+  "points",
+  "pinned",
+  "classroom",
+];
+const PHASE_LABELS: Record<ScanPhaseKey, { title: string; subtitle: string }> = {
+  community: { title: "Community details", subtitle: "Community name, description, image, and settings" },
+  categories: { title: "Channels / Categories", subtitle: "Discovering all categories and their details" },
+  members: { title: "Members", subtitle: "Scanning members and member profiles" },
+  posts: { title: "Posts", subtitle: "Discovering posts across your community" },
+  comments: { title: "Posts & Comments", subtitle: "Scanning posts and all comments" },
+  attachments: { title: "Attachments", subtitle: "Images, files, voice notes, and other attachments" },
+  points: { title: "Points & Levels", subtitle: "Member points, levels, and leaderboard data" },
+  pinned: { title: "Featured / Pinned Posts", subtitle: "Pinned and featured posts" },
+  classroom: { title: "Classroom", subtitle: "Detecting courses and lessons" },
+  finalize: { title: "Finalizing preview", subtitle: "Preparing your scan summary" },
+};
+// Rough relative weight of each phase's real cost, for a determinate
+// (not fabricated) progress percentage — comments dominates because it's
+// one headless-browser round trip per post, by far the slowest phase at
+// any real community size. Not a time estimate, just phase-completion
+// weighting. Sums to 100.
+const PHASE_WEIGHT: Record<ScanPhaseKey, number> = {
+  community: 5,
+  categories: 5,
+  members: 15,
+  posts: 15,
+  comments: 45,
+  attachments: 0,
+  points: 0,
+  pinned: 0,
+  classroom: 5,
+  finalize: 10,
+};
+
+function scanPercent(scan: ScanResult): number {
+  let total = 0;
+  for (const key of Object.keys(PHASE_WEIGHT) as ScanPhaseKey[]) {
+    const weight = PHASE_WEIGHT[key];
+    if (weight === 0) continue;
+    const phase = scan.phases[key];
+    if (phase.status === "complete") {
+      total += weight;
+    } else if (key === "comments" && phase.detail) {
+      const m = phase.detail.match(/^(\d+)\s*\/\s*(\d+)/);
+      if (m) {
+        const done = Number(m[1]);
+        const of = Number(m[2]) || 1;
+        total += weight * Math.min(1, done / of);
+      }
+    }
+  }
+  return Math.round(Math.min(100, total));
 }
 
 const STEPS = [
@@ -61,10 +167,37 @@ export function SkoolImportWorkspace({
   const [importSessionId, setImportSessionId] = useState<string | null>(null);
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [scan, setScan] = useState<ScanResult | null>(null);
+  const [startingScan, setStartingScan] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Recover "Connected" state across a page refresh from a previously
-  // stored session id — never re-reads cookies/credentials, just the
-  // public session fields (see the session route).
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const pollStatus = useCallback(
+    async (sessionId: string) => {
+      try {
+        const res = await fetch(`/api/community/${saId}/${groupId}/skool-import/scan/status?importSessionId=${sessionId}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { scan?: ScanResult };
+        if (data.scan) {
+          setScan(data.scan);
+          if (data.scan.status !== "scanning") stopPolling();
+        }
+      } catch {
+        // transient — next poll tick tries again
+      }
+    },
+    [saId, groupId, stopPolling],
+  );
+
+  // Recover state across a page refresh: session first, then whatever scan
+  // (if any) already exists for it — never re-reads cookies/credentials.
   useEffect(() => {
     const stored = sessionStorage.getItem(`skool-import-session:${groupId}`);
     if (!stored) return;
@@ -76,15 +209,27 @@ export function SkoolImportWorkspace({
           return;
         }
         const data = (await res.json()) as { session?: { skoolCommunityName?: string } };
-        if (data.session?.skoolCommunityName) {
-          setImportSessionId(stored);
-          setCommunityName(data.session.skoolCommunityName);
-          setStatus("connected");
+        if (!data.session?.skoolCommunityName) return;
+        setImportSessionId(stored);
+        setCommunityName(data.session.skoolCommunityName);
+        setStatus("connected");
+
+        const scanRes = await fetch(`/api/community/${saId}/${groupId}/skool-import/scan/status?importSessionId=${stored}`);
+        if (scanRes.ok) {
+          const scanData = (await scanRes.json()) as { scan?: ScanResult };
+          if (scanData.scan) {
+            setScan(scanData.scan);
+            if (scanData.scan.status === "scanning") {
+              pollRef.current = setInterval(() => pollStatus(stored), 3000);
+            }
+          }
         }
       } catch {
         // transient — leave the form usable, no state to restore
       }
     })();
+    return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saId, groupId]);
 
   async function handleConnect() {
@@ -133,14 +278,62 @@ export function SkoolImportWorkspace({
     } catch {
       // best-effort — the session also expires on its own (30 min idle TTL)
     } finally {
+      stopPolling();
       sessionStorage.removeItem(`skool-import-session:${groupId}`);
       setImportSessionId(null);
       setCommunityName(null);
+      setScan(null);
       setStatus("idle");
       setSkoolUrl("");
       setEmail("");
       setDisconnecting(false);
       toast.success("Disconnected from Skool.");
+    }
+  }
+
+  async function handleStartScan() {
+    if (!importSessionId) return;
+    setStartingScan(true);
+    try {
+      const res = await fetch(`/api/community/${saId}/${groupId}/skool-import/scan/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importSessionId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.message ?? "Couldn't start the scan. Please try again.");
+        return;
+      }
+      await pollStatus(importSessionId);
+      pollRef.current = setInterval(() => pollStatus(importSessionId), 3000);
+    } catch {
+      toast.error("Couldn't start the scan. Please try again.");
+    } finally {
+      setStartingScan(false);
+    }
+  }
+
+  async function handleCancelScan() {
+    if (!importSessionId) return;
+    setCancelling(true);
+    stopPolling();
+    try {
+      await fetch(`/api/community/${saId}/${groupId}/skool-import/scan/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importSessionId }),
+      });
+    } catch {
+      // best-effort
+    } finally {
+      sessionStorage.removeItem(`skool-import-session:${groupId}`);
+      setImportSessionId(null);
+      setCommunityName(null);
+      setScan(null);
+      setStatus("idle");
+      setCancelling(false);
+      toast.success("Scan cancelled.");
     }
   }
 
@@ -186,15 +379,25 @@ export function SkoolImportWorkspace({
             </div>
           </div>
 
-          <StepIndicator brand={brand} />
+          <StepIndicator brand={brand} activeIndex={connected ? (scan ? 1 : 1) : 0} connectComplete={connected} />
 
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
             <div className="min-w-0 rounded-xl border border-[#E4E4E4] p-5">
-              {connected ? (
+              {scan ? (
+                <ScanCard
+                  brand={brand}
+                  scan={scan}
+                  communityName={communityName}
+                  cancelling={cancelling}
+                  onCancel={handleCancelScan}
+                />
+              ) : connected ? (
                 <ConnectedState
                   communityName={communityName}
                   disconnecting={disconnecting}
+                  startingScan={startingScan}
                   onDisconnect={handleDisconnect}
+                  onStartScan={handleStartScan}
                 />
               ) : (
                 <ConnectForm
@@ -214,7 +417,7 @@ export function SkoolImportWorkspace({
               )}
             </div>
 
-            <WhatHappensNext />
+            {scan ? <WhatWereLookingFor /> : <WhatHappensNext />}
           </div>
 
           <TrustFooter />
@@ -224,32 +427,48 @@ export function SkoolImportWorkspace({
   );
 }
 
-function StepIndicator({ brand }: { brand: string }) {
+function StepIndicator({
+  brand,
+  activeIndex,
+  connectComplete,
+}: {
+  brand: string;
+  activeIndex: number;
+  connectComplete: boolean;
+}) {
   return (
     <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-3 overflow-x-auto">
-      {STEPS.map((step, i) => (
-        <div key={step.key} className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-2">
-            <span
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
-              style={
-                i === 0
-                  ? { backgroundColor: brand, color: "white" }
-                  : { backgroundColor: "#F0F0F0", color: "#909090" }
-              }
-            >
-              {i + 1}
-            </span>
-            <div className="leading-tight">
-              <p className={cn("text-sm font-medium", i === 0 ? "text-[#202124]" : "text-[#909090]")}>
-                {step.label}
-              </p>
-              <p className="text-[11px] text-[#b4b4b4]">{step.description}</p>
+      {STEPS.map((step, i) => {
+        const isComplete = i === 0 && connectComplete;
+        const isActive = i === activeIndex && !isComplete;
+        return (
+          <div key={step.key} className="flex shrink-0 items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
+                style={
+                  isComplete
+                    ? { backgroundColor: "#dcfce7", color: "#15803d" }
+                    : isActive
+                      ? { backgroundColor: brand, color: "white" }
+                      : { backgroundColor: "#F0F0F0", color: "#909090" }
+                }
+              >
+                {isComplete ? <Check className="h-3.5 w-3.5" /> : i + 1}
+              </span>
+              <div className="leading-tight">
+                <p className={cn("text-sm font-medium", isActive || isComplete ? "text-[#202124]" : "text-[#909090]")}>
+                  {step.label}
+                </p>
+                <p className="text-[11px] text-[#b4b4b4]">
+                  {isComplete ? "Connected to Skool" : step.description}
+                </p>
+              </div>
             </div>
+            {i < STEPS.length - 1 && <div className="h-px w-8 shrink-0 bg-[#E4E4E4]" />}
           </div>
-          {i < STEPS.length - 1 && <div className="h-px w-8 shrink-0 bg-[#E4E4E4]" />}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -397,11 +616,15 @@ function ConnectForm({
 function ConnectedState({
   communityName,
   disconnecting,
+  startingScan,
   onDisconnect,
+  onStartScan,
 }: {
   communityName: string | null;
   disconnecting: boolean;
+  startingScan: boolean;
   onDisconnect: () => void;
+  onStartScan: () => void;
 }) {
   return (
     <div>
@@ -422,10 +645,11 @@ function ConnectedState({
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled
-          title="Scan step coming next"
-          className="flex items-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-2 text-sm font-semibold text-[#909090] opacity-60"
+          onClick={onStartScan}
+          disabled={startingScan}
+          className="flex items-center gap-2 rounded-md bg-[#7C3AED] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
         >
+          {startingScan ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Continue to Scan
         </button>
         <button
@@ -438,7 +662,210 @@ function ConnectedState({
           Disconnect
         </button>
       </div>
-      <p className="mt-2 text-xs text-[#b4b4b4]">Scan step coming next — nothing has been imported yet.</p>
+    </div>
+  );
+}
+
+function phaseIcon(status: ScanPhaseStatus) {
+  if (status === "complete") return <Check className="h-4 w-4 text-emerald-600" />;
+  if (status === "scanning") return <Loader2 className="h-4 w-4 animate-spin text-[#7C3AED]" />;
+  if (status === "warning" || status === "error") return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+  return <Circle className="h-3.5 w-3.5 text-[#d4d4d4]" />;
+}
+
+function ScanCard({
+  brand,
+  scan,
+  communityName,
+  cancelling,
+  onCancel,
+}: {
+  brand: string;
+  scan: ScanResult;
+  communityName: string | null;
+  cancelling: boolean;
+  onCancel: () => void;
+}) {
+  const percent = scanPercent(scan);
+  const name = scan.community?.displayName ?? communityName ?? "your Skool community";
+
+  if (scan.status === "awaiting_verification") {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <Mail className="h-4.5 w-4.5" />
+          </span>
+          <h3 className="text-base font-semibold text-[#202124]">Verification required</h3>
+        </div>
+        <p className="mt-3 text-sm text-[#3a3a44]">
+          Skool sent a verification code to your account email. Continue to verification to complete member
+          email scanning.
+        </p>
+        <PhaseList scan={scan} />
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Verification is the next build pass"
+            className="flex items-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-2 text-sm font-semibold text-[#909090] opacity-60"
+          >
+            Continue to Verification
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={cancelling}
+            className="flex items-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-2 text-sm font-medium text-[#3a3a44] hover:bg-[#F5F4F2] disabled:opacity-60"
+          >
+            {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+            Cancel scan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (scan.status === "complete") {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <Check className="h-4.5 w-4.5" />
+          </span>
+          <h3 className="text-base font-semibold text-[#202124]">Scan complete</h3>
+        </div>
+        <p className="mt-3 text-sm text-[#3a3a44]">
+          We finished scanning {name}. Preview is the next step — nothing has been imported yet.
+        </p>
+        <PhaseList scan={scan} />
+        <div className="mt-5">
+          <button
+            type="button"
+            disabled
+            title="Preview is the next build pass"
+            className="flex items-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-2 text-sm font-semibold text-[#909090] opacity-60"
+          >
+            Continue to Preview
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (scan.status === "failed") {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-700">
+            <AlertTriangle className="h-4.5 w-4.5" />
+          </span>
+          <h3 className="text-base font-semibold text-[#202124]">Scan couldn&apos;t continue</h3>
+        </div>
+        <p className="mt-3 text-sm text-[#3a3a44]">
+          Your Skool connection expired partway through. Reconnect to try again.
+        </p>
+        <PhaseList scan={scan} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${brand}1a`, color: brand }}
+        >
+          <Search className="h-4.5 w-4.5" />
+        </span>
+        <div>
+          <h3 className="text-base font-semibold text-[#202124]">Scanning {name}…</h3>
+          <p className="text-sm text-[#909090]">
+            We&apos;re scanning your Skool community to discover members and content. This may take a few
+            minutes depending on the size of your community.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F0F0F0]">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${percent}%`, backgroundColor: brand }}
+          />
+        </div>
+        <span className="shrink-0 text-sm font-medium text-[#3a3a44]">{percent}%</span>
+      </div>
+
+      <PhaseList scan={scan} />
+
+      <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#E4E4E4] bg-[#F8F7F5] px-3 py-2.5 text-xs text-[#3a3a44]">
+        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        <span>
+          <strong className="font-semibold">You can safely leave this page.</strong> Scanning continues on our
+          servers — come back anytime and we&apos;ll show you where it left off.
+        </span>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-[#E4E4E4] pt-4 text-xs text-[#909090]">
+        <span>This session will expire after 30 minutes of inactivity.</span>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelling}
+          className="flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-3 py-1.5 font-medium text-[#3a3a44] hover:bg-[#F5F4F2] disabled:opacity-60"
+        >
+          {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+          Cancel scan
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PhaseList({ scan }: { scan: ScanResult }) {
+  return (
+    <div className="mt-5 divide-y divide-[#F0F0F0] rounded-lg border border-[#E4E4E4]">
+      {PHASE_ORDER.map((key) => {
+        const phase = scan.phases[key];
+        const label = PHASE_LABELS[key];
+        return (
+          <div key={key} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="shrink-0">{phaseIcon(phase.status)}</span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-[#202124]">{label.title}</p>
+                <p className="truncate text-xs text-[#909090]">
+                  {phase.message ?? label.subtitle}
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 text-xs font-medium text-[#909090]">
+              {phase.detail ?? (phase.status === "pending" ? "Pending" : phase.status === "complete" ? "Complete" : "")}
+            </span>
+          </div>
+        );
+      })}
+      {scan.classroom?.detected && (
+        <div className="bg-[#F8F7F5] px-3.5 py-2.5 text-xs text-[#3a3a44]">
+          <GraduationCap className="mr-1.5 inline h-3.5 w-3.5 text-[#7C3AED]" />
+          Classroom detected — courses and lessons are not imported in this version yet.
+        </div>
+      )}
+      {scan.attachments && scan.attachments.videoDeferredCount > 0 && (
+        <div className="bg-[#F8F7F5] px-3.5 py-2.5 text-xs text-[#3a3a44]">
+          {scan.attachments.videoDeferredCount} Skool-hosted video
+          {scan.attachments.videoDeferredCount === 1 ? "" : "s"} detected — requires video rehosting, not yet
+          importable.
+        </div>
+      )}
+      {scan.warnings.length > 0 &&
+        scan.warnings.map((w, i) => (
+          <div key={i} className="bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800">
+            {w}
+          </div>
+        ))}
     </div>
   );
 }
@@ -495,11 +922,48 @@ function WhatHappensNext() {
   );
 }
 
+function WhatWereLookingFor() {
+  const items = [
+    { icon: Users, title: "Members", body: "Names, profiles, roles, points, levels, and activity status." },
+    { icon: FileSearch, title: "Content", body: "Posts, comments, replies, mentions, and timestamps." },
+    { icon: FolderKanban, title: "Attachments", body: "Images, files, voice notes, and other supported media." },
+    { icon: Star, title: "Community data", body: "Channels, pinned posts, and community information." },
+    { icon: Trophy, title: "Points & Levels", body: "Point totals, levels, and leaderboard data." },
+    {
+      icon: GraduationCap,
+      title: "Classroom",
+      body: "Detects whether courses/classroom content exists — not imported in this version.",
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border border-[#E4E4E4] bg-[#F8F7F5] p-4">
+      <h3 className="text-sm font-semibold text-[#202124]">What we&apos;re looking for</h3>
+      <div className="mt-3 space-y-3.5">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.title} className="flex gap-2.5">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#7C3AED]">
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-[#202124]">{item.title}</p>
+                <p className="text-xs text-[#909090]">{item.body}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TrustFooter() {
   const items = [
     { icon: Lock, label: "Password never stored or logged" },
     { icon: ShieldCheck, label: "Credentials used only for this import session" },
-    { icon: Check, label: "No import happens during Connect" },
+    { icon: Check, label: "No import happens during Connect or Scan" },
   ];
   return (
     <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 rounded-xl border border-[#E4E4E4] bg-[#F8F7F5] p-4 text-xs text-[#3a3a44]">

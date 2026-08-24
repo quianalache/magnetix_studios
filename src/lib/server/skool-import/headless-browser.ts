@@ -231,3 +231,74 @@ export class CookieSeededHeadlessTransport implements SkoolTransport {
     }
   }
 }
+
+export interface TriggerVerificationResult {
+  ok: boolean;
+  /** True when Skool's own UI reported the email as already verified for
+   *  this session (no code was sent) — distinct from a real failure. */
+  alreadyVerified: boolean;
+}
+
+/**
+ * Fires Skool's real "Export" action on the Members page — the same
+ * interaction proven live during the Members Export investigation — which
+ * is what actually triggers `POST /auth/email-verify-init` (Skool emails a
+ * numeric code). Deliberately reuses the real button click rather than
+ * calling that endpoint directly with a guessed request body: the click
+ * path is verified; the raw API contract was never fully confirmed.
+ *
+ * Called from scan-runner.ts's finalize phase EXACTLY ONCE per scan (an
+ * idempotency guard at the call site checks `verificationInitiatedAt`
+ * first) — re-triggering this invalidates whatever code Skool already
+ * sent, confirmed live during Connect's own QA.
+ */
+export async function triggerSkoolEmailVerification(
+  cookies: Cookie[],
+  groupSlug: string,
+): Promise<TriggerVerificationResult> {
+  let browser: Browser | null = null;
+  try {
+    browser = await launchHeadless();
+    const context = await browser.newContext();
+    await context.addCookies(cookies);
+    const page = await context.newPage();
+
+    await page.goto(`https://www.skool.com/${groupSlug}/-/members`, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+
+    const exportButton = page.getByRole("button", { name: /export/i });
+    if (!(await exportButton.count())) {
+      return { ok: false, alreadyVerified: false };
+    }
+
+    const [response] = await Promise.all([
+      page
+        .waitForResponse((res) => res.url().includes("api2.skool.com/auth/email-verify-init"), { timeout: 15000 })
+        .catch(() => null),
+      exportButton.first().click(),
+    ]);
+    if (!response) {
+      // No verification prompt appeared at all — some accounts/exports may
+      // not require it. Not a failure; Preview's future export step can
+      // detect and handle this directly.
+      return { ok: true, alreadyVerified: true };
+    }
+    let body: { verified?: boolean } | null = null;
+    try {
+      body = (await response.json()) as { verified?: boolean };
+    } catch {
+      body = null;
+    }
+    return { ok: true, alreadyVerified: body?.verified === true };
+  } catch (err) {
+    console.error(
+      "[skool-import] triggerSkoolEmailVerification failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return { ok: false, alreadyVerified: false };
+  } finally {
+    await browser?.close().catch(() => {});
+  }
+}
