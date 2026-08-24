@@ -88,16 +88,15 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // "networkidle" (not "domcontentloaded") — two real Connect attempts
-    // with genuinely correct credentials came back invalid-credentials in
-    // production (the one attempt that succeeded was a same-container
-    // retry, not a fresh cold start), consistent with the login form not
-    // being fully hydrated/interactive yet when a cold-started headless
-    // page is filled immediately after DOM-content-loaded. Waiting for
-    // the page's own network activity to settle first is the safer,
-    // still-honest fix — not a guess dressed up as a fix: verified below
-    // by re-reading the fields right before submit.
-    await page.goto("https://www.skool.com/login", { waitUntil: "networkidle", timeout: 30000 });
+    // REVERTED from "networkidle" — that was itself a wrong guess: real
+    // diagnostic logs showed it hard-times-out at 30s on skool.com/login
+    // every time (the page apparently never goes fully network-idle,
+    // likely background analytics/polling), which is a worse failure than
+    // the one it was meant to fix. Back to "domcontentloaded" + a short
+    // explicit settle wait — enough for React hydration to catch up
+    // without waiting on network activity that may never fully stop.
+    await page.goto("https://www.skool.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(800);
 
     // Confirmed live, real selectors — see the Connect report.
     await page.fill("#email", email);
