@@ -161,6 +161,13 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     // field (e.g. "AUTH-LG-503") — status code alone can't distinguish
     // success from failure here, the response body must be inspected.
     if (bodyJson?.code) {
+      // TEMPORARY diagnostic (round 3) — every real Connect attempt with
+      // confirmed-correct credentials has returned invalid-credentials
+      // cleanly (no exception), even hours apart. Logs Skool's own
+      // generic code/message for THIS specific rejection — the one piece
+      // of evidence not yet seen. Never logs email/password/cookies.
+      // Remove once resolved.
+      console.log("[skool-import][diag3] rejected with code:", bodyJson.code, "message:", bodyJson.message);
       return { ok: false, cookies: null, errorKind: "invalid-credentials" };
     }
 
@@ -168,6 +175,12 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     // cookies, so we capture the fully-settled authenticated session.
     await page.waitForTimeout(1500);
     const cookies = await context.cookies("https://www.skool.com");
+    console.log(
+      "[skool-import][diag3] no rejection code — bodyJson was:",
+      JSON.stringify(bodyJson),
+      "cookies found:",
+      cookies.length,
+    );
     if (cookies.length === 0) {
       return { ok: false, cookies: null, errorKind: "browser-failure" };
     }
