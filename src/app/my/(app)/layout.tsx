@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { Sparkles } from "lucide-react";
@@ -10,19 +9,12 @@ import { countUnreadForPerson } from "@/lib/server/notification-service";
 import { MEMBER_SESSION_COOKIE } from "@/lib/community/member-auth";
 import { MyMagnetixHeader } from "@/components/mymagnetix/header";
 import { MyMagnetixSidebarNav } from "@/components/mymagnetix/sidebar-nav";
-import { LANDING_VARIANT } from "@/config/landing";
 
 export const dynamic = "force-dynamic";
 
-// First-time-access/PWA audit finding: the root layout links
-// `/manifest.webmanifest` (start_url: /dashboard, the STAFF CRM) site-wide
-// on custom-branded deployments. Overriding it here — same convention the
-// root layout itself uses — makes every page under `/my` advertise the
-// MyMagnetix-specific manifest instead, so "Add to Home Screen" from here
-// installs an app that actually opens back into MyMagnetix. See
-// `src/app/my/manifest.webmanifest/route.ts`.
-export const metadata: Metadata =
-  LANDING_VARIANT === "custom" ? { manifest: "/my/manifest.webmanifest" } : {};
+// The MyMagnetix manifest override (start_url: /my) lives at the segment
+// root — src/app/my/layout.tsx — so it covers /my/login and /my/gateway
+// too, not just this authenticated group. Nothing to add here.
 
 /**
  * MyMagnetix application shell — left navigation + header, applied to every
