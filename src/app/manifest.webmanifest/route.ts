@@ -1,149 +1,24 @@
 import { NextResponse } from "next/server";
-import { resolveCustomBrand } from "@/lib/landing/resolve-brand";
-import { getPwaIconVersion } from "@/lib/pwa/icons-server";
-import { ICON_STATIC_FALLBACKS } from "@/lib/pwa/icon-variants";
-import { LANDING_VARIANT } from "@/config/landing";
+import { buildManifest } from "@/lib/pwa/build-manifest";
 
 /**
- * PWA web-app manifest — served as a dynamic route (not the static
- * `app/manifest.ts` convention) so branding reflects live state.
- *
- * Identity is per deployment mode:
- *   - "custom" (buyer): app name/description merge the agency doc over
- *     CUSTOM_BRAND (resolveCustomBrand), and the manifest is linked
- *     site-wide from root-layout metadata.
- *   - "leadstack" (demo/template): fixed LeadStack identity, and the
- *     manifest is only ever LINKED from auth surfaces (pwa-links.tsx) —
- *     public pages carry no PWA references at all.
- *
- * Icons are shared logic in both modes: an owner-uploaded icon (Agency →
- * Settings → Mobile app icon) serves from /api/pwa/icon/* with the upload
- * timestamp as cache-buster; otherwise the mode's static defaults apply —
- * green "my CRM" for buyers, the chevron set for the demo (both via the
- * variant-aware ICON_STATIC_FALLBACKS).
+ * PWA web-app manifest for the STAFF CRM — served as a dynamic route (not
+ * the static `app/manifest.ts` convention) so branding reflects live
+ * state. Linked site-wide from root-layout metadata (custom-branded
+ * deployments only; see layout.tsx).
  *
  * `start_url: /dashboard` — the legacy flat route redirects authenticated
  * users to their first-membership sub-account; unauthenticated opens land
  * on /login via middleware.
+ *
+ * MyMagnetix has its OWN manifest at `/my/manifest.webmanifest` (linked
+ * from `src/app/my/(app)/layout.tsx`) rather than branching this one on
+ * Referer — see `build-manifest.ts` for why that was tried and reverted.
  */
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const isCustom = LANDING_VARIANT === "custom";
-  // First-time-access/PWA audit finding: this ONE manifest is linked
-  // site-wide (root layout), so installing "the app" from a MyMagnetix
-  // page previously always produced `start_url: "/dashboard"` — the STAFF
-  // CRM dashboard, meaningless (and inaccessible) to a Person/customer.
-  // The browser sends this route's own Referer when fetching a linked
-  // manifest, so a MyMagnetix page (`/my*`) gets a MyMagnetix start_url
-  // instead — same manifest, same scope, no separate PWA/second app.
-  const referer = request.headers.get("referer") ?? "";
-  const isMyMagnetixContext = (() => {
-    try {
-      return new URL(referer).pathname.startsWith("/my");
-    } catch {
-      return false;
-    }
-  })();
-  const [brand, iconVersion] = await Promise.all([
-    isCustom ? resolveCustomBrand() : Promise.resolve(null),
-    getPwaIconVersion(),
-  ]);
-
-  const name = brand?.name ?? "LeadStack";
-  const description =
-    brand?.shortDescription ??
-    "The all-in-one CRM for teams that actually close.";
-
-  const icons = iconVersion
-    ? [
-        {
-          src: `/api/pwa/icon/192?v=${iconVersion}`,
-          sizes: "192x192",
-          type: "image/png",
-        },
-        {
-          src: `/api/pwa/icon/512?v=${iconVersion}`,
-          sizes: "512x512",
-          type: "image/png",
-        },
-        {
-          src: `/api/pwa/icon/maskable?v=${iconVersion}`,
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "maskable",
-        },
-      ]
-    : [
-        {
-          src: ICON_STATIC_FALLBACKS["192"],
-          sizes: "192x192",
-          type: "image/png",
-        },
-        {
-          src: ICON_STATIC_FALLBACKS["512"],
-          sizes: "512x512",
-          type: "image/png",
-        },
-        {
-          src: ICON_STATIC_FALLBACKS.maskable,
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "maskable",
-        },
-      ];
-
-  const manifest = {
-    name,
-    short_name: name.length > 12 ? name.slice(0, 12) : name,
-    description,
-    id: "/",
-    start_url: isMyMagnetixContext ? "/my" : "/dashboard",
-    scope: "/",
-    display: "standalone",
-    background_color: "#18181b",
-    theme_color: "#18181b",
-    icons,
-    // Long-press-the-app-icon shortcuts. Static URLs by spec, so they use
-    // the legacy flat routes, which redirect into the user's
-    // first-membership sub-account.
-    shortcuts: [
-      {
-        name: "Conversations",
-        url: "/conversations",
-        icons: [
-          {
-            src: ICON_STATIC_FALLBACKS["192"],
-            sizes: "192x192",
-            type: "image/png",
-          },
-        ],
-      },
-      {
-        name: "Contacts",
-        url: "/contacts",
-        icons: [
-          {
-            src: ICON_STATIC_FALLBACKS["192"],
-            sizes: "192x192",
-            type: "image/png",
-          },
-        ],
-      },
-      {
-        name: "Pipeline",
-        url: "/pipeline",
-        icons: [
-          {
-            src: ICON_STATIC_FALLBACKS["192"],
-            sizes: "192x192",
-            type: "image/png",
-          },
-        ],
-      },
-    ],
-  };
-
+export async function GET() {
+  const manifest = await buildManifest("/dashboard");
   return NextResponse.json(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
