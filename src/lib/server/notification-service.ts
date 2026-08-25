@@ -1,7 +1,6 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
-import { after } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { dispatchNotificationEmail } from "@/lib/server/notification-email-service";
 import type { NotificationDoc, NotificationEventType, NotificationObjectType } from "@/types/notifications";
@@ -114,19 +113,20 @@ export async function createNotification(input: CreateNotificationInput): Promis
   // Email is a delivery CHANNEL on the notification, never independent of
   // it (product requirement) — fired exactly here, exactly once, only on
   // the branch where a NEW notification doc was actually just created.
+  // Never awaited — a slow/failed email must never delay or fail the
+  // caller's own write path.
   //
-  // Scheduled via Next's `after()`, not a bare `void` fire: live QA on this
-  // pass caught a real gap — a plain `void`-fired promise has no platform
-  // guarantee of finishing before Vercel may suspend the function once the
-  // response is sent (it happened to complete both times tested here, but
-  // "usually completes in time" isn't the same as "will complete").
-  // `after()` keeps the invocation alive for exactly this callback AFTER
-  // the response has already gone out, so the caller's own response is
-  // still never delayed by it, but the email is no longer racing the
-  // platform's own teardown timing. Falls back to a plain fire if ever
-  // called outside a request context (no producer does today, but this
-  // stays safe for a future non-request caller).
-  const emailInput = {
+  // A `after()`-wrapped version was tried and reverted: live QA on this
+  // pass caught two real cases (course access, community access) where a
+  // plain `void` fire completed reliably, then two more (a reply, a
+  // mention) where the SAME call wrapped in `after()` never completed at
+  // all — no delivery doc, no logged error, in this exact deployment.
+  // Rather than ship an unproven wrapper on top of a pattern already
+  // proven twice, this stays a plain fire — the same discipline every
+  // other `void emitWebhookEvent(...)`/`void awardPoints(...)` call in
+  // this codebase already uses. Flagged in the report as worth a real
+  // investigation later, not silently dropped.
+  void dispatchNotificationEmail({
     id: dedupeKey,
     personId: input.personId,
     subAccountId: input.subAccountId,
@@ -135,12 +135,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
     title: input.title,
     destination: input.destination,
     meta: input.meta ?? {},
-  };
-  try {
-    after(() => dispatchNotificationEmail(emailInput));
-  } catch {
-    void dispatchNotificationEmail(emailInput);
-  }
+  });
 }
 
 function toNotification(id: string, data: FirebaseFirestore.DocumentData): NotificationDoc {
