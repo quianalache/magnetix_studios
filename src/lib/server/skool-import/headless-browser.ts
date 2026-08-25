@@ -161,13 +161,34 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     // field (e.g. "AUTH-LG-503") — status code alone can't distinguish
     // success from failure here, the response body must be inspected.
     if (bodyJson?.code) {
-      // TEMPORARY diagnostic (round 3) — every real Connect attempt with
-      // confirmed-correct credentials has returned invalid-credentials
-      // cleanly (no exception), even hours apart. Logs Skool's own
-      // generic code/message for THIS specific rejection — the one piece
-      // of evidence not yet seen. Never logs email/password/cookies.
-      // Remove once resolved.
-      console.log("[skool-import][diag3] rejected with code:", bodyJson.code, "message:", bodyJson.message);
+      // TEMPORARY diagnostic (round 4) — AUTH-LG-002 confirmed live with
+      // real correct credentials, but a genuinely fresh incognito window
+      // (real residential IP, real browser fingerprint) logged in with NO
+      // challenge at all — ruling out "unrecognized device" as the cause.
+      // Captures what Skool's own frontend actually renders in response
+      // (visible text + any new input fields + any new network activity)
+      // instead of guessing further. Never logs email/password/cookies —
+      // page text/network URLs only, truncated. Remove once resolved.
+      console.log("[skool-import][diag4] rejected with code:", bodyJson.code, "message:", bodyJson.message);
+      try {
+        const postRejectionUrls: string[] = [];
+        page.on("request", (req) => postRejectionUrls.push(`${req.method()} ${req.url()}`));
+        await page.waitForTimeout(2000);
+        console.log("[skool-import][diag4] requests after rejection:", JSON.stringify(postRejectionUrls));
+        const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1500));
+        const inputs = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("input")).map((i) => ({
+            type: i.type,
+            id: i.id,
+            name: i.name,
+            placeholder: i.placeholder,
+          })),
+        );
+        console.log("[skool-import][diag4] page text after rejection:", JSON.stringify(bodyText));
+        console.log("[skool-import][diag4] input fields after rejection:", JSON.stringify(inputs));
+      } catch (diagErr) {
+        console.log("[skool-import][diag4] post-rejection capture failed:", diagErr instanceof Error ? diagErr.message : String(diagErr));
+      }
       return { ok: false, cookies: null, errorKind: "invalid-credentials" };
     }
 
