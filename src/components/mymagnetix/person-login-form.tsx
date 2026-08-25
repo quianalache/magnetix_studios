@@ -9,7 +9,17 @@ import { Loader2 } from "lucide-react";
  * owner already approved for the Client Portal), pointed at the global
  * `/api/my/*` endpoints instead of a sub-account-scoped one.
  */
-export function PersonLoginForm({ accentColor = "#5E2574" }: { accentColor?: string }) {
+export function PersonLoginForm({
+  accentColor = "#5E2574",
+  next,
+}: {
+  accentColor?: string;
+  /** Where to land after sign-in — a specific course/community/etc. from a
+   *  deep link, already validated server-side by the page that rendered
+   *  this form. Threaded into both the password and magic-link paths so
+   *  neither one ever strands the person on the generic gateway. */
+  next?: string | null;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"password" | "link" | "reset">("password");
@@ -56,6 +66,7 @@ export function PersonLoginForm({ accentColor = "#5E2574" }: { accentColor?: str
       const data = await postJson("/api/my/login", {
         email: email.trim(),
         ...(mode === "password" ? { password, mode: "password" } : {}),
+        ...(next ? { next } : {}),
       });
       if (mode === "password" && data.redirectTo) {
         window.location.href = data.redirectTo;

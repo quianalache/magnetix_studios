@@ -30,13 +30,23 @@ export const dynamic = "force-dynamic";
  * never tenant/staff authorization. That boundary is unchanged; only the
  * set of credentials MyMagnetix will accept as proof of identity grew.
  */
+/** Same relative-path-only validation every other `next` consumer in this
+ *  auth chain already uses (`/api/my/enter`, the bridge routes) — kept
+ *  local rather than imported since this is the only server-side spot that
+ *  needs to validate a CLIENT-supplied `next` (every other route only ever
+ *  forwards one it already validated itself). */
+function safeNext(next: unknown): string | null {
+  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : null;
+}
+
 export async function POST(request: Request) {
-  let body: { email?: string; password?: string; mode?: string };
+  let body: { email?: string; password?: string; mode?: string; next?: string };
   try {
     body = (await request.json()) as {
       email?: string;
       password?: string;
       mode?: string;
+      next?: string;
     };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -46,6 +56,11 @@ export async function POST(request: Request) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
   }
+  // First-time-access loop fix: where to land after this sign-in — a
+  // specific course/community/etc. from a deep link. Threaded through
+  // both credential paths below so neither one stands the destination on
+  // the generic gateway.
+  const next = safeNext(body.next) ?? "/my/gateway";
 
   if (body.mode === "password") {
     const allowed = checkMemberAuthRateLimit({
@@ -67,7 +82,7 @@ export async function POST(request: Request) {
     const personResult = await authenticatePersonWithPassword({ email, password });
     if (personResult.ok) {
       await setPersonSessionCookie(personResult.sessionToken);
-      return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
+      return NextResponse.json({ ok: true, redirectTo: next });
     }
 
     // Authority 2: existing Business Center Firebase credential. Only
@@ -89,7 +104,7 @@ export async function POST(request: Request) {
         if (personId) {
           const sessionToken = signPersonSessionToken(personId, email);
           await setPersonSessionCookie(sessionToken);
-          return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
+          return NextResponse.json({ ok: true, redirectTo: next });
         }
       }
     }
@@ -110,7 +125,7 @@ export async function POST(request: Request) {
     if (emailIsConfigured()) {
       const token = signPersonMagicLinkToken(email);
       const origin = new URL(request.url).origin;
-      const link = `${origin}/api/my/login/verify?token=${encodeURIComponent(token)}`;
+      const link = `${origin}/api/my/login/verify?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
       await sendEmail({
         to: email,
         subject: "Your MyMagnetix sign-in link",

@@ -23,6 +23,13 @@ export async function GET(request: Request) {
   const verified = verifyPersonMagicLinkToken(token);
   if (!verified) return loginUrl("expired");
 
+  // First-time-access loop fix: `/api/my/login` embedded this — already
+  // validated as a relative path there, but re-validated here too since
+  // this URL is the one that actually goes out in an email and could in
+  // principle be hand-edited before being clicked.
+  const nextParam = url.searchParams.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/my/gateway";
+
   try {
     const { sessionToken } = await establishPersonSessionForEmail(verified.email);
     await setPersonSessionCookie(sessionToken);
@@ -31,5 +38,5 @@ export async function GET(request: Request) {
     return loginUrl("error");
   }
 
-  return NextResponse.redirect(new URL("/my/gateway", url));
+  return NextResponse.redirect(new URL(next, url));
 }

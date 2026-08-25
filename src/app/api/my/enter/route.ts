@@ -48,7 +48,16 @@ export async function GET(request: Request) {
 
   const person = await getCurrentPerson();
   if (!person) {
-    return NextResponse.redirect(new URL("/my/login", url));
+    // First-time-access loop fix: preserve THIS ENTIRE bridge URL (not just
+    // `next`) as the destination to resume once signed in — re-entering
+    // here after auth re-runs the exact same real relationship/entitlement
+    // check below, nothing is granted early. Without this, an unauthenticated
+    // click on a deep link (e.g. a transactional notification email's "View
+    // in MyMagnetix") silently lost its destination and dumped the person
+    // on the generic login screen with no way back to what they clicked.
+    const loginUrl = new URL("/my/login", url);
+    loginUrl.searchParams.set("next", `${url.pathname}${url.search}`);
+    return NextResponse.redirect(loginUrl);
   }
 
   const memberSnap = await getAdminDb()
