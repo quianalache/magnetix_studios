@@ -43,6 +43,18 @@ export interface ScanPhase {
 
 export type ScanStatus = "scanning" | "awaiting_verification" | "complete" | "cancelled" | "failed";
 
+/** Why a scan stopped with `status: "failed"` — kept distinct so the UI can
+ *  offer the right recovery action (Retry scan vs. Reconnect to Skool)
+ *  instead of one generic dead end. `message` is always sanitized/user-safe
+ *  — never a raw Playwright error, ETXTBSY, stack trace, or anything that
+ *  could reveal cookies/internal endpoints. */
+export interface ScanFailure {
+  phase: ScanPhaseKey | null;
+  reason: "session-expired" | "phase-error";
+  message: string;
+  retryable: boolean;
+}
+
 export interface ScanCommunityResult {
   name: string;
   displayName: string;
@@ -114,6 +126,8 @@ export interface SkoolScanResult {
   classroom: ScanClassroomResult | null;
   warnings: string[];
   verificationInitiatedAt: Timestamp | null;
+  /** Set only when `status === "failed"`. */
+  failure: ScanFailure | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   /** Not exposed to the client — see `toPublic`. */
@@ -123,6 +137,30 @@ export interface SkoolScanResult {
     categoriesById: Record<string, string>;
     commentQueue: { postId: string; shortId: string }[];
     commentsCursorIndex: number;
+    /** Consecutive failures of the CURRENTLY in-flight phase — reset to 0
+     *  every time a phase successfully advances. Lets scan/step give up on
+     *  a genuinely broken phase (writing a real `failed` status) instead of
+     *  retrying forever with QStash, while still tolerating ordinary
+     *  transient hiccups. */
+    phaseRetryCount: number;
+    /** Members — batched/checkpointed per membership tab so an arbitrarily
+     *  large community's member list never has to be fetched in one
+     *  all-or-nothing QStash step. `memberRecords` is deliberately lean
+     *  (no name/bio/etc — just what's needed to compute the final public
+     *  summary counts + dedupe a member appearing in more than one tab,
+     *  "active" winning on collision, matching the pre-batching behavior). */
+    memberTabsState: Record<
+      "active" | "churned" | "cancelling" | "banned",
+      { nextPage: number; totalPages: number | null; done: boolean }
+    > | null;
+    memberRecords: Record<string, { status: "active" | "churned"; hasEmail: boolean; hasPointData: boolean }>;
+    /** Posts — same batching idea, one page-cursor instead of per-tab
+     *  cursors. `postsById` stays lean for the same reason: enough to
+     *  finalize aggregate counts AND build the comment queue, not full
+     *  post bodies. */
+    postsNextPage: number;
+    postsTotal: number | null;
+    postsById: Record<string, { pinned: boolean; hasImage: boolean; hasVideo: boolean; shortId: string }>;
   };
 }
 
@@ -169,6 +207,7 @@ function toPublic(doc: SkoolScanResult): PublicSkoolScanResult {
     classroom: doc.classroom,
     warnings: doc.warnings,
     verificationInitiatedAt: doc.verificationInitiatedAt,
+    failure: doc.failure,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -201,6 +240,7 @@ export async function createScanResult(opts: {
     classroom: null,
     warnings: [],
     verificationInitiatedAt: null,
+    failure: null,
     createdAt: now,
     updatedAt: now,
     _internal: {
@@ -209,6 +249,12 @@ export async function createScanResult(opts: {
       categoriesById: {},
       commentQueue: [],
       commentsCursorIndex: 0,
+      phaseRetryCount: 0,
+      memberTabsState: null,
+      memberRecords: {},
+      postsNextPage: 1,
+      postsTotal: null,
+      postsById: {},
     },
   };
   await ref.set(doc);

@@ -58,6 +58,13 @@ interface ScanPhase {
 
 type ScanStatus = "scanning" | "awaiting_verification" | "complete" | "cancelled" | "failed";
 
+interface ScanFailure {
+  phase: ScanPhaseKey | null;
+  reason: "session-expired" | "phase-error";
+  message: string;
+  retryable: boolean;
+}
+
 interface ScanResult {
   id: string;
   status: ScanStatus;
@@ -71,6 +78,7 @@ interface ScanResult {
   pinned: { count: number } | null;
   classroom: { detected: boolean; courseCount: number | null } | null;
   warnings: string[];
+  failure: ScanFailure | null;
 }
 
 const PHASE_ORDER: ScanPhaseKey[] = [
@@ -170,6 +178,7 @@ export function SkoolImportWorkspace({
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [startingScan, setStartingScan] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopPolling = useCallback(() => {
@@ -314,6 +323,29 @@ export function SkoolImportWorkspace({
     }
   }
 
+  async function handleRetryScan() {
+    if (!importSessionId) return;
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/community/${saId}/${groupId}/skool-import/scan/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ importSessionId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.message ?? "Couldn't retry the scan. Please try again.");
+        return;
+      }
+      await pollStatus(importSessionId);
+      pollRef.current = setInterval(() => pollStatus(importSessionId), 3000);
+    } catch {
+      toast.error("Couldn't retry the scan. Please try again.");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   async function handleCancelScan() {
     if (!importSessionId) return;
     setCancelling(true);
@@ -390,6 +422,8 @@ export function SkoolImportWorkspace({
                   communityName={communityName}
                   cancelling={cancelling}
                   onCancel={handleCancelScan}
+                  retrying={retrying}
+                  onRetry={handleRetryScan}
                 />
               ) : connected ? (
                 <ConnectedState
@@ -679,12 +713,16 @@ function ScanCard({
   communityName,
   cancelling,
   onCancel,
+  retrying,
+  onRetry,
 }: {
   brand: string;
   scan: ScanResult;
   communityName: string | null;
   cancelling: boolean;
   onCancel: () => void;
+  retrying: boolean;
+  onRetry: () => void;
 }) {
   const percent = scanPercent(scan);
   const name = scan.community?.displayName ?? communityName ?? "your Skool community";
@@ -754,18 +792,48 @@ function ScanCard({
   }
 
   if (scan.status === "failed") {
+    const sessionExpired = scan.failure?.reason === "session-expired";
+    const canRetry = !sessionExpired && !!scan.failure?.retryable;
     return (
       <div>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-700">
             <AlertTriangle className="h-4.5 w-4.5" />
           </span>
-          <h3 className="text-base font-semibold text-[#202124]">Scan couldn&apos;t continue</h3>
+          <h3 className="text-base font-semibold text-[#202124]">
+            {sessionExpired ? "Connection expired" : "Scan couldn't continue"}
+          </h3>
         </div>
         <p className="mt-3 text-sm text-[#3a3a44]">
-          Your Skool connection expired partway through. Reconnect to try again.
+          {scan.failure?.message ??
+            (sessionExpired
+              ? "Your Skool connection expired partway through. Reconnect to try again."
+              : "We couldn't finish this scan. You can retry from where it left off.")}
         </p>
         <PhaseList scan={scan} />
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          {canRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={retrying}
+              className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+              style={{ backgroundColor: brand }}
+            >
+              {retrying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Retry scan
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={cancelling}
+            className="flex items-center gap-2 rounded-md border border-[#E4E4E4] px-4 py-2 text-sm font-medium text-[#3a3a44] hover:bg-[#F5F4F2] disabled:opacity-60"
+          >
+            {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+            {sessionExpired ? "Reconnect to Skool" : "Start over"}
+          </button>
+        </div>
       </div>
     );
   }

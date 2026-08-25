@@ -1,6 +1,6 @@
 import "server-only";
 
-import { chromium, type Browser, type Cookie } from "playwright-core";
+import { chromium, type Browser, type BrowserContext, type Cookie } from "playwright-core";
 import type { SkoolTransport } from "./cdp-browser-transport";
 
 /**
@@ -235,25 +235,62 @@ export async function connectToSkool(
 }
 
 /**
- * The reusable transport future Scan/Verify/Preview steps will consume —
+ * The reusable transport Scan (and future Verify/Preview steps) consumes —
  * implements the SAME `SkoolTransport` interface `CdpBrowserTransport`
  * does, so `skool-client.ts`/`skool-extract.ts` need zero changes to work
  * against a self-service session instead of a manually-bridged dev tab.
- * Launches a fresh headless browser per `fetchText` call (see this
- * module's header comment for why that's the correct, not a compromised,
- * design for this hosting environment), seeded with the session's stored
- * cookies. NOT used by the Connect step itself — exported here as the
- * foundation Step 2 (Scan) will build on.
+ *
+ * ONE Chromium process per transport INSTANCE, reused across every
+ * `fetchText` call made through it — NOT one process per call. That used
+ * to be the design (launch, use once, close, repeat), and real production
+ * evidence proved it unsafe the moment a phase needed more than a couple
+ * of fetches: `extractAllMembers` fetches four membership tabs
+ * CONCURRENTLY (`Promise.all`), each internally paginated — with a fresh
+ * Chromium launch per fetch, that meant multiple `chromium.launch()` calls
+ * racing to spawn/extract the SAME cached binary at the SAME time, which
+ * is exactly what `browserType.launch: spawn ETXTBSY` ("text file busy")
+ * means: two launches contending for the same executable file. A separate
+ * failure, `page.goto: Target page, context or browser has been closed`,
+ * came from the same root cause — a browser torn down by one in-flight
+ * call while another call sharing timing assumptions was still using it.
+ *
+ * The fix: launch the browser+context ONCE, lazily, memoized so concurrent
+ * callers racing in before it's ready all await the SAME launch instead of
+ * triggering their own. Every `fetchText` call then just opens (and
+ * closes) its own `page` within that ALREADY-RUNNING browser — Playwright
+ * fully supports many concurrent pages in one context, so the existing
+ * concurrent-fetch call patterns in skool-extract.ts need no changes at
+ * all. Callers own the transport's lifecycle explicitly via `close()` —
+ * this class never closes itself between calls, and the caller (see
+ * scan-runner.ts) is responsible for exactly one `close()` per QStash
+ * step, in a `finally`, matching Part 1's "one browser lifecycle per
+ * scan-step request" requirement.
  */
 export class CookieSeededHeadlessTransport implements SkoolTransport {
+  private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private ready: Promise<void> | null = null;
+
   constructor(private readonly cookies: Cookie[]) {}
 
+  private async ensureReady(): Promise<void> {
+    if (this.context) return;
+    if (!this.ready) {
+      this.ready = (async () => {
+        const browser = await launchHeadless();
+        const context = await browser.newContext();
+        await context.addCookies(this.cookies);
+        this.browser = browser;
+        this.context = context;
+      })();
+    }
+    await this.ready;
+  }
+
   async fetchText(url: string): Promise<string> {
-    const browser = await launchHeadless();
+    await this.ensureReady();
+    const page = await this.context!.newPage();
     try {
-      const context = await browser.newContext();
-      await context.addCookies(this.cookies);
-      const page = await context.newPage();
       // Land on skool.com first so an in-page `fetch` below has a real
       // same-origin document to run from — then fetch the ACTUAL target
       // through the page's own `fetch`, same as CdpBrowserTransport. This
@@ -272,8 +309,19 @@ export class CookieSeededHeadlessTransport implements SkoolTransport {
       }
       return result.text;
     } finally {
-      await browser.close().catch(() => {});
+      await page.close().catch(() => {});
     }
+  }
+
+  /** Closes the ONE underlying Chromium process. Safe to call even if
+   *  `fetchText` was never called (no-op) or already failed. Must be
+   *  called exactly once per transport instance, in the caller's
+   *  `finally`, so no browser process ever outlives its scan-step. */
+  async close(): Promise<void> {
+    await this.browser?.close().catch(() => {});
+    this.browser = null;
+    this.context = null;
+    this.ready = null;
   }
 }
 
