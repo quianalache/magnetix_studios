@@ -157,41 +157,38 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
       console.error("[skool-import] login response body unreadable:", captureError, "status:", capturedStatus);
     }
 
-    // Confirmed live: a failed login still returns HTTP 200 with a `code`
-    // field — status code alone can't distinguish success from failure
-    // here, the response body must be inspected. BUT: only a known
-    // hard-failure code actually blocks login. "AUTH-LG-503" is the one
-    // confirmed-real rejection (wrong email/password) — it comes with a
-    // real human-readable `message` and Skool's own login form stays put
-    // with an inline error, no session is ever created.
-    //
-    // "AUTH-LG-002" was investigated live (round 4 diagnostic, see the
-    // login-verification report) and is NOT a rejection: with confirmed-
-    // correct credentials, the response body carried that code with an
-    // EMPTY message, and — captured in the same request — Skool's own
-    // frontend went on to make normal authenticated calls (self/groups,
-    // login_timezone, sync-unread-notification-count) and navigate into a
-    // real logged-in group page. No error banner, no code-entry form, no
-    // second verification step ever appeared; the login form had already
-    // unmounted. So this code accompanies a login that still succeeds —
-    // treating "any `code` present" as a rejection (the previous bug) bailed
-    // out before ever checking for real session cookies. Only bail early
-    // for codes actually proven to block login; anything else falls through
-    // to the same cookie-based success check the no-code path always used.
-    const KNOWN_FAILURE_CODES = new Set(["AUTH-LG-503"]);
-    if (bodyJson?.code && KNOWN_FAILURE_CODES.has(bodyJson.code)) {
-      return { ok: false, cookies: null, errorKind: "invalid-credentials" };
-    }
+    // The response body's `code` field is NOT a trustworthy success/failure
+    // signal on its own — confirmed live across multiple real attempts,
+    // Skool returns several different opaque codes ("AUTH-LG-503",
+    // "AUTH-LG-002", "AUTH-LG-502", ...) that don't map 1:1 to real outcome:
+    // "AUTH-LG-503" (wrong password) carries a real human-readable message
+    // and blocks login; "AUTH-LG-002" was seen on a CORRECT-password
+    // attempt that went on to fully authenticate; "AUTH-LG-502" was then
+    // seen on a DELIBERATELY WRONG password during regression testing —
+    // proving a permissive "unknown code = probably fine" rule (this
+    // module's previous approach) is unsafe: it let a wrong password
+    // through as "connected". `code` is logged for diagnostics only and
+    // never used to decide success or failure.
     if (bodyJson?.code) {
-      console.log(
-        "[skool-import] login response included a non-fatal code, continuing:",
-        bodyJson.code,
-      );
+      console.log("[skool-import] login response included code:", bodyJson.code);
     }
 
-    // Give the client-side redirect a moment to land before harvesting
-    // cookies, so we capture the fully-settled authenticated session.
-    await page.waitForTimeout(2000);
+    // The one signal confirmed reliable across every real attempt so far:
+    // whether Skool's own client app actually navigates away from /login.
+    // A rejected login (wrong password, confirmed live) leaves the user on
+    // /login with an inline error and creates no real session. A login that
+    // truly succeeds (confirmed live, both with and without a `code` in the
+    // response body) redirects into the app within ~2s and starts firing
+    // authenticated requests (self/groups, sync-unread-notification-count,
+    // etc.). Give that redirect time to land, then check the URL first —
+    // before ever trusting cookies, since Skool sets baseline WAF/analytics
+    // cookies regardless of whether login succeeded.
+    await page.waitForTimeout(2500);
+
+    if (page.url().includes("/login")) {
+      return { ok: false, cookies: null, errorKind: "invalid-credentials" };
+    }
+
     const cookies = await context.cookies("https://www.skool.com");
     if (cookies.length === 0) {
       return { ok: false, cookies: null, errorKind: "browser-failure" };
