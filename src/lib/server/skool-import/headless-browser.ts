@@ -158,50 +158,41 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     }
 
     // Confirmed live: a failed login still returns HTTP 200 with a `code`
-    // field (e.g. "AUTH-LG-503") — status code alone can't distinguish
-    // success from failure here, the response body must be inspected.
-    if (bodyJson?.code) {
-      // TEMPORARY diagnostic (round 4) — AUTH-LG-002 confirmed live with
-      // real correct credentials, but a genuinely fresh incognito window
-      // (real residential IP, real browser fingerprint) logged in with NO
-      // challenge at all — ruling out "unrecognized device" as the cause.
-      // Captures what Skool's own frontend actually renders in response
-      // (visible text + any new input fields + any new network activity)
-      // instead of guessing further. Never logs email/password/cookies —
-      // page text/network URLs only, truncated. Remove once resolved.
-      console.log("[skool-import][diag4] rejected with code:", bodyJson.code, "message:", bodyJson.message);
-      try {
-        const postRejectionUrls: string[] = [];
-        page.on("request", (req) => postRejectionUrls.push(`${req.method()} ${req.url()}`));
-        await page.waitForTimeout(2000);
-        console.log("[skool-import][diag4] requests after rejection:", JSON.stringify(postRejectionUrls));
-        const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 1500));
-        const inputs = await page.evaluate(() =>
-          Array.from(document.querySelectorAll("input")).map((i) => ({
-            type: i.type,
-            id: i.id,
-            name: i.name,
-            placeholder: i.placeholder,
-          })),
-        );
-        console.log("[skool-import][diag4] page text after rejection:", JSON.stringify(bodyText));
-        console.log("[skool-import][diag4] input fields after rejection:", JSON.stringify(inputs));
-      } catch (diagErr) {
-        console.log("[skool-import][diag4] post-rejection capture failed:", diagErr instanceof Error ? diagErr.message : String(diagErr));
-      }
+    // field — status code alone can't distinguish success from failure
+    // here, the response body must be inspected. BUT: only a known
+    // hard-failure code actually blocks login. "AUTH-LG-503" is the one
+    // confirmed-real rejection (wrong email/password) — it comes with a
+    // real human-readable `message` and Skool's own login form stays put
+    // with an inline error, no session is ever created.
+    //
+    // "AUTH-LG-002" was investigated live (round 4 diagnostic, see the
+    // login-verification report) and is NOT a rejection: with confirmed-
+    // correct credentials, the response body carried that code with an
+    // EMPTY message, and — captured in the same request — Skool's own
+    // frontend went on to make normal authenticated calls (self/groups,
+    // login_timezone, sync-unread-notification-count) and navigate into a
+    // real logged-in group page. No error banner, no code-entry form, no
+    // second verification step ever appeared; the login form had already
+    // unmounted. So this code accompanies a login that still succeeds —
+    // treating "any `code` present" as a rejection (the previous bug) bailed
+    // out before ever checking for real session cookies. Only bail early
+    // for codes actually proven to block login; anything else falls through
+    // to the same cookie-based success check the no-code path always used.
+    const KNOWN_FAILURE_CODES = new Set(["AUTH-LG-503"]);
+    if (bodyJson?.code && KNOWN_FAILURE_CODES.has(bodyJson.code)) {
       return { ok: false, cookies: null, errorKind: "invalid-credentials" };
+    }
+    if (bodyJson?.code) {
+      console.log(
+        "[skool-import] login response included a non-fatal code, continuing:",
+        bodyJson.code,
+      );
     }
 
     // Give the client-side redirect a moment to land before harvesting
     // cookies, so we capture the fully-settled authenticated session.
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
     const cookies = await context.cookies("https://www.skool.com");
-    console.log(
-      "[skool-import][diag3] no rejection code — bodyJson was:",
-      JSON.stringify(bodyJson),
-      "cookies found:",
-      cookies.length,
-    );
     if (cookies.length === 0) {
       return { ok: false, cookies: null, errorKind: "browser-failure" };
     }
