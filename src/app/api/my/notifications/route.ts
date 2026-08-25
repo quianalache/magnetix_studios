@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
+import type { Timestamp } from "firebase-admin/firestore";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { listRecentNotificationsForPerson, countUnreadForPerson } from "@/lib/server/notification-service";
 
 export const dynamic = "force-dynamic";
+
+/** Firestore Timestamps serialize over `NextResponse.json()` as a raw
+ *  `{_seconds, _nanoseconds}` object, not something `new Date()` can parse
+ *  — the client needs a real ISO string. */
+function toIso(ts: Timestamp | null): string | null {
+  return ts ? ts.toDate().toISOString() : null;
+}
 
 /**
  * The notification panel's real data source — `personId` is resolved from
@@ -20,5 +28,11 @@ export async function GET() {
     countUnreadForPerson(person.id),
   ]);
 
-  return NextResponse.json({ ok: true, notifications, unreadCount });
+  const serialized = notifications.map((n) => ({
+    ...n,
+    createdAt: toIso(n.createdAt),
+    readAt: toIso(n.readAt),
+  }));
+
+  return NextResponse.json({ ok: true, notifications: serialized, unreadCount });
 }
