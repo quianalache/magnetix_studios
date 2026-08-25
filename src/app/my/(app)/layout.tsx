@@ -5,6 +5,7 @@ import { Sparkles } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { personHasStaffAccess } from "@/lib/server/person-identity-service";
 import { listPersonMemberships, listAttentionForPerson } from "@/lib/server/mymagnetix-service";
+import { countUnreadForPerson } from "@/lib/server/notification-service";
 import { MEMBER_SESSION_COOKIE } from "@/lib/community/member-auth";
 import { MyMagnetixHeader } from "@/components/mymagnetix/header";
 import { MyMagnetixSidebarNav } from "@/components/mymagnetix/sidebar-nav";
@@ -37,14 +38,18 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
     if (hasMemberCookie) redirect("/api/my/bridge-from-member?next=%2Fmy");
     redirect("/my/login");
   }
-  // Bell badge count — the header is shared by every /my/* page, so this
-  // small extra read (reused exactly by the Home page's own richer fetch)
-  // happens once per navigation. A real, non-fabricated number.
+  // Bell state — the header is shared by every /my/* page, so these small
+  // extra reads (attention items reused exactly by the Home page's own
+  // richer fetch; unread notification count a single Firestore aggregate
+  // query) happen once per navigation. Real, non-fabricated numbers.
   const [hasStaffAccess, memberships] = await Promise.all([
     personHasStaffAccess(person.id),
     listPersonMemberships(person.id),
   ]);
-  const attentionCount = (await listAttentionForPerson(memberships)).length;
+  const [attentionItems, unreadNotificationCount] = await Promise.all([
+    listAttentionForPerson(memberships),
+    countUnreadForPerson(person.id),
+  ]);
 
   return (
     <div className="min-h-screen bg-[#F5F4FB]">
@@ -92,7 +97,8 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
           <MyMagnetixHeader
             primaryEmail={person.primaryEmail}
             hasStaffAccess={hasStaffAccess}
-            attentionCount={attentionCount}
+            attentionItems={attentionItems}
+            unreadNotificationCount={unreadNotificationCount}
           />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         </div>

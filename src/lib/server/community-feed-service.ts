@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { awardPoints, revokePoints } from "@/lib/server/community-points-service";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
+import { extractMentionedMemberIds, notifyCommunityMentions, notifyCommunityReply } from "@/lib/server/notification-producers";
 import type {
   AuthorView,
   CommunityComment,
@@ -262,6 +263,18 @@ export async function createPostServerSide(
   }).catch((err) => {
     console.error("[createPostServerSide] point award failed", err);
   });
+
+  const mentionedMemberIds = extractMentionedMemberIds(doc.body);
+  if (mentionedMemberIds.length > 0) {
+    void notifyCommunityMentions({
+      subAccountId: input.subAccountId,
+      groupId: input.groupId,
+      postId: ref.id,
+      contentObjectId: ref.id,
+      authorMemberId: input.authorMemberId,
+      mentionedMemberIds,
+    }).catch((err) => console.error("[createPostServerSide] mention notification failed", err));
+  }
 
   return { id: ref.id, ...doc } as CommunityPost;
 }
@@ -548,6 +561,40 @@ export async function createCommentServerSide(opts: {
   }).catch((err) => {
     console.error("[createCommentServerSide] point award failed", err);
   });
+
+  // A reply notifies whoever this comment is actually replying TO: the
+  // parent comment's author for a nested reply, otherwise the post's own
+  // author — see notifyCommunityReply's doc comment for the copy split.
+  const [postSnapForNotify, parentCommentSnapForNotify] = await Promise.all([
+    effectiveParentId ? null : postRef.get(),
+    effectiveParentId ? postRef.collection("comments").doc(effectiveParentId).get() : null,
+  ]);
+  const recipientMemberId = effectiveParentId
+    ? (parentCommentSnapForNotify?.data()?.authorMemberId as string | undefined)
+    : (postSnapForNotify?.data()?.authorMemberId as string | undefined);
+  if (recipientMemberId) {
+    void notifyCommunityReply({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      postId: opts.postId,
+      commentId: commentRef.id,
+      commenterMemberId: opts.authorMemberId,
+      recipientMemberId,
+      isReplyToComment: !!effectiveParentId,
+    }).catch((err) => console.error("[createCommentServerSide] reply notification failed", err));
+  }
+
+  const mentionedMemberIds = extractMentionedMemberIds(doc.body);
+  if (mentionedMemberIds.length > 0) {
+    void notifyCommunityMentions({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      postId: opts.postId,
+      contentObjectId: commentRef.id,
+      authorMemberId: opts.authorMemberId,
+      mentionedMemberIds,
+    }).catch((err) => console.error("[createCommentServerSide] mention notification failed", err));
+  }
 
   return { id: commentRef.id, ...doc } as CommunityComment;
 }

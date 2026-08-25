@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import {
   ABOUT_MAX_CHARS,
   GUIDELINES_MAX_CHARS,
@@ -567,6 +568,11 @@ export async function joinGroupServerSide(opts: {
       type: "community.member.joined",
       payload: { groupId: opts.groupId, memberId: opts.memberId, via: staff ? "staff" : "open" },
     });
+    void notifyCommunityAccessGranted({
+      subAccountId: opts.subAccountId,
+      groupId: opts.groupId,
+      memberId: opts.memberId,
+    }).catch((err) => console.error("[joinGroupServerSide] notification failed", err));
   }
 
   return becomesActive ? { status: "active" } : { status: "pending" };
@@ -798,6 +804,11 @@ export async function approveMembershipServerSide(opts: {
     type: "community.member.approved",
     payload: { groupId: opts.groupId, memberId: opts.memberId },
   });
+  void notifyCommunityAccessGranted({
+    subAccountId: opts.subAccountId,
+    groupId: opts.groupId,
+    memberId: opts.memberId,
+  }).catch((err) => console.error("[approveMembershipServerSide] notification failed", err));
 }
 
 /** Staff: promote a member to moderator (inline pin/delete rights) or demote. */

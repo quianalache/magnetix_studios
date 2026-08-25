@@ -2,27 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, MessageCircle, Menu, X, Search, LogOut, ArrowLeftRight } from "lucide-react";
+import { MessageCircle, Menu, X, Search, LogOut, ArrowLeftRight } from "lucide-react";
 import { MyMagnetixSidebarNav } from "./sidebar-nav";
+import { NotificationBell, type BellAttentionItem } from "./notification-bell";
 
 /**
- * MyMagnetix header — search treatment, notification/message icon slots
- * (Messages stays an honest disabled placeholder — no unified messaging
- * exists yet; the bell's badge, when shown, is the REAL "Needs Your
- * Attention" item count computed server-side, never a fabricated number),
- * profile menu with logout and, only for a confirmed dual-role person, a
- * "Switch to Business Center" control. Also renders the mobile nav
- * drawer, reusing the exact same MyMagnetixSidebarNav the desktop
+ * MyMagnetix header — search treatment, notification bell (real: Notifications
+ * V1 events + the pre-existing "Needs Your Attention" surface, both
+ * server-computed, never a fabricated count — see NotificationBell), message
+ * icon slot (stays an honest disabled placeholder — no unified messaging
+ * exists yet), profile menu with logout and, only for a confirmed dual-role
+ * person, a "Switch to Business Center" control. Also renders the mobile
+ * nav drawer, reusing the exact same MyMagnetixSidebarNav the desktop
  * sidebar uses — one nav list, two places it's shown.
  */
 export function MyMagnetixHeader({
   primaryEmail,
   hasStaffAccess,
-  attentionCount = 0,
+  attentionItems = [],
+  unreadNotificationCount = 0,
 }: {
   primaryEmail: string;
   hasStaffAccess: boolean;
-  attentionCount?: number;
+  attentionItems?: BellAttentionItem[];
+  unreadNotificationCount?: number;
 }) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -73,18 +76,7 @@ export function MyMagnetixHeader({
         >
           <Search className="h-[18px] w-[18px]" />
         </button>
-        <button
-          type="button"
-          title={attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention` : "Nothing needs attention right now"}
-          className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#5B5B62] hover:bg-[#F3F2EF]"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {attentionCount > 0 && (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EF4444] px-1 text-[9px] font-bold text-white">
-              {attentionCount > 9 ? "9+" : attentionCount}
-            </span>
-          )}
-        </button>
+        <NotificationBell attentionItems={attentionItems} initialUnreadCount={attentionItems.length + unreadNotificationCount} />
         <button
           type="button"
           disabled

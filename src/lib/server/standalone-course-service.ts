@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { notifyCourseAccessGranted, notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
@@ -439,6 +440,11 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
           courseId: opts.courseId,
         },
       });
+      void notifyCommunityAccessGranted({
+        subAccountId: opts.subAccountId,
+        groupId,
+        memberId: opts.memberId,
+      }).catch((err) => console.error("[grantLinkedCommunityGroupsServerSide] notification failed", err));
     }
   }
 }
@@ -781,6 +787,11 @@ export async function enrollInStandaloneCourseServerSide(opts: {
       type: "course.enrolled",
       payload: { courseId: opts.courseId, memberId: opts.memberId },
     });
+    void notifyCourseAccessGranted({
+      subAccountId: opts.subAccountId,
+      courseId: opts.courseId,
+      memberId: opts.memberId,
+    }).catch((err) => console.error("[enrollInStandaloneCourseServerSide] notification failed", err));
   }
   // Runs even on a repeat call — idempotent, and covers a group being
   // linked to the course after this member had already enrolled.

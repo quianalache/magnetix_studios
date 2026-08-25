@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import { getGroupById } from "@/lib/server/community-service";
 import { getCourse } from "@/lib/server/community-classroom-service";
 import type { Purchase, PurchaseScope } from "@/types/community";
@@ -180,6 +181,11 @@ export async function markPurchasePaidServerSide(opts: {
           via: "purchase",
         },
       });
+      void notifyCommunityAccessGranted({
+        subAccountId: opts.subAccountId,
+        groupId: opts.groupId,
+        memberId: purchase.memberId,
+      }).catch((err) => console.error("[markPurchasePaidServerSide] notification failed", err));
     }
   }
   // scope "course": access is read live from this paid purchase — no extra
