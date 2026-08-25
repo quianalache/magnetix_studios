@@ -89,3 +89,59 @@ export interface NotificationDoc {
 }
 
 export type PublicNotification = NotificationDoc;
+
+/**
+ * Transactional Notification Emails V1 — the delivery-attempt record for
+ * sending a real MyMagnetix Notification out as email, on top of the
+ * originating sub-account's own verified sending domain (never a shared
+ * platform sender for these — see notification-email-service.ts). Doc id
+ * IS `notificationId` — the canonical idempotency source the product spec
+ * calls for: a genuinely new Notification can only ever be created once
+ * (see createNotification's own `.create()` dedupe), so a dispatch fired
+ * exactly once per notification-creation is naturally at-most-once too.
+ * `status: "failed"` is the one state a future retry pass is meant to
+ * revisit (not built in V1) — every other terminal state is final.
+ */
+export type NotificationEmailStatus = "pending" | "sent" | "skipped" | "failed";
+
+export interface NotificationEmailDelivery {
+  /** Equal to the source NotificationDoc's own id. */
+  id: string;
+  notificationId: string;
+  personId: string;
+  subAccountId: string | null;
+  channel: "email";
+  status: NotificationEmailStatus;
+  /** Distinguishes this from a future "optional activity" or "marketing"
+   *  category once real preferences ship — V1 only ever writes this one. */
+  emailCategory: "transactional_notification";
+  eventType: NotificationEventType;
+  provider: "resend";
+  providerMessageId: string | null;
+  /** Never trusted from a client — resolved server-side from the
+   *  canonical Person doc at send time. Null while pending/skipped for a
+   *  no-email reason. */
+  recipientEmail: string | null;
+  senderEmail: string | null;
+  sentAt: Timestamp | null;
+  /** Always sanitized/user-safe — never a raw provider error body. */
+  failureReason: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * One row per successful send — observational usage metering only (no
+ * wallet, no billing, no customer-facing surface in V1). A future report
+ * aggregates these however it needs; this file doesn't pre-decide the
+ * aggregation dimension.
+ */
+export interface NotificationEmailUsageEntry {
+  id: string;
+  subAccountId: string;
+  category: "transactional_notification";
+  eventType: NotificationEventType;
+  quantity: 1;
+  provider: "resend";
+  sentAt: Timestamp;
+}

@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { dispatchNotificationEmail } from "@/lib/server/notification-email-service";
 import type { NotificationDoc, NotificationEventType, NotificationObjectType } from "@/types/notifications";
 
 /**
@@ -106,7 +107,25 @@ export async function createNotification(input: CreateNotificationInput): Promis
     if (code !== 6) {
       console.error("[notification-service] createNotification failed:", err instanceof Error ? err.message : String(err));
     }
+    return; // duplicate OR failed write — either way, no email dispatch
   }
+
+  // Email is a delivery CHANNEL on the notification, never independent of
+  // it (product requirement) — fired exactly here, exactly once, only on
+  // the branch where a NEW notification doc was actually just created.
+  // Never awaited — a slow/failed email must never delay or fail the
+  // caller's own write path (every producer call site is already a
+  // `void`/best-effort fire itself).
+  void dispatchNotificationEmail({
+    id: dedupeKey,
+    personId: input.personId,
+    subAccountId: input.subAccountId,
+    eventType: input.eventType,
+    objectType: input.objectType,
+    title: input.title,
+    destination: input.destination,
+    meta: input.meta ?? {},
+  });
 }
 
 function toNotification(id: string, data: FirebaseFirestore.DocumentData): NotificationDoc {
