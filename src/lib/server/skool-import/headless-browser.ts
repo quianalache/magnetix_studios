@@ -67,34 +67,52 @@ async function launchHeadless(): Promise<Browser> {
   return chromium.launch({ executablePath, headless: true });
 }
 
-export interface SkoolLoginResult {
+export interface ConnectToSkoolResult {
   ok: boolean;
   cookies: Cookie[] | null;
+  communityName: string | null;
   /** Product-facing, never a raw Skool/browser error string — see the
    *  Connect route for how this maps to the approved copy. */
-  errorKind: "invalid-credentials" | "browser-failure" | null;
+  errorKind: "invalid-credentials" | "not-found-or-inaccessible" | "browser-failure" | null;
 }
 
 /**
- * Performs the real login against Skool's own login form, in a fresh
- * headless browser instance. The password is read once, used once, and
- * never leaves this function's stack — never logged, never written
- * anywhere, never returned to the caller.
+ * Performs the real login against Skool's own login form AND confirms the
+ * authenticated account can see the requested community — in ONE Chromium
+ * lifecycle. Previously these were two separate functions, each launching
+ * its own headless browser (`loginToSkool` then `validateSkoolCommunityAccess`
+ * on a second, freshly-launched instance). Real production evidence (see
+ * docs/debug/skool-connect-diagnostic.md) showed that second launch is the
+ * actual failure point — `page.goto` throwing "Target page, context or
+ * browser has been closed" on a real attempt where login itself had
+ * already succeeded. There's no architectural reason Connect needs two
+ * browsers: the same authenticated context that just logged in can
+ * navigate straight to the community page before ever closing. (Scan,
+ * later, legitimately launches its OWN fresh cookie-seeded browser in a
+ * SEPARATE request via `CookieSeededHeadlessTransport` — that's a
+ * different call, at a different time, and is unaffected by this change.)
+ *
+ * The password is read once, used once, and never leaves this function's
+ * stack — never logged, never written anywhere, never returned to the
+ * caller. Cookies are only returned once BOTH login and community access
+ * are confirmed — the caller only ever persists a session that's already
+ * fully proven, never a partial one.
  */
-export async function loginToSkool(email: string, password: string): Promise<SkoolLoginResult> {
+export async function connectToSkool(
+  email: string,
+  password: string,
+  groupSlug: string,
+): Promise<ConnectToSkoolResult> {
   let browser: Browser | null = null;
   try {
     browser = await launchHeadless();
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // REVERTED from "networkidle" — that was itself a wrong guess: real
-    // diagnostic logs showed it hard-times-out at 30s on skool.com/login
-    // every time (the page apparently never goes fully network-idle,
-    // likely background analytics/polling), which is a worse failure than
-    // the one it was meant to fix. Back to "domcontentloaded" + a short
-    // explicit settle wait — enough for React hydration to catch up
-    // without waiting on network activity that may never fully stop.
+    // "domcontentloaded" + a short explicit settle wait — enough for React
+    // hydration to catch up without waiting on network activity that may
+    // never fully stop ("networkidle" was tried and hard-times-out at 30s
+    // on this page every time, confirmed live — see the diagnostic report).
     await page.goto("https://www.skool.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
     await page.waitForTimeout(800);
 
@@ -103,8 +121,7 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     await page.fill("#password", password);
     await page.waitForTimeout(300);
     // Defensive verification, not a guess: if the form's controlled-input
-    // state didn't actually catch the fill (the exact class of race this
-    // is meant to rule out), re-fill before ever submitting.
+    // state didn't actually catch the fill, re-fill before ever submitting.
     const emailOk = (await page.inputValue("#email")) === email;
     const passwordOk = (await page.inputValue("#password")) === password;
     if (!emailOk) await page.fill("#email", email);
@@ -114,27 +131,20 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
     // login makes Skool's client-side app navigate away almost
     // immediately, and `await response.text()` called AFTER `click()`
     // resolves can lose that race — Chrome discards a response's body
-    // once its page has navigated away ("Protocol error... Response body
-    // is not available for a response that was navigated away from"),
-    // confirmed live. Reading the body from inside the `response` event
-    // handler itself — synchronously as the event fires, not after an
-    // intervening `click()`/`waitForResponse()` round trip — reads it
-    // before that navigation has a chance to invalidate it.
-    let capturedStatus: number | null = null;
+    // once its page has navigated away. Reading the body from inside the
+    // `response` event handler itself, registered before the click, reads
+    // it before that navigation can invalidate it.
     let capturedBody: string | null = null;
-    let captureError: string | null = null;
     const captured = new Promise<void>((resolve) => {
       page.on("response", (res) => {
         if (capturedBody !== null || !res.url().includes("api2.skool.com/auth/login")) return;
-        capturedStatus = res.status();
         res
           .text()
           .then((text) => {
             capturedBody = text;
             resolve();
           })
-          .catch((err) => {
-            captureError = err instanceof Error ? err.message : String(err);
+          .catch(() => {
             capturedBody = "";
             resolve();
           });
@@ -147,116 +157,78 @@ export async function loginToSkool(email: string, password: string): Promise<Sko
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error("login response timeout")), 30000)),
     ]);
 
-    let bodyJson: { code?: string; message?: string } | null = null;
+    // The response body's `code` field is NOT a trustworthy success/failure
+    // signal on its own — confirmed live, Skool returns opaque codes
+    // ("AUTH-LG-503", "AUTH-LG-002", "AUTH-LG-502", ...) that don't map 1:1
+    // to real outcome. Most notably, "AUTH-LG-002" has been confirmed live
+    // to appear on logins that go on to fully authenticate (normal
+    // authenticated requests fire and the app navigates in, unprompted, no
+    // verification UI of any kind ever appears) — see the diagnostic
+    // report. So `code` is logged for ops visibility only and is NEVER used
+    // to decide success or failure, and is never shown to the user or
+    // interpreted as a verification challenge.
+    let bodyJson: { code?: string } | null = null;
     try {
-      bodyJson = capturedBody ? (JSON.parse(capturedBody) as { code?: string; message?: string }) : null;
+      bodyJson = capturedBody ? (JSON.parse(capturedBody) as { code?: string }) : null;
     } catch {
       bodyJson = null;
     }
-    if (captureError) {
-      console.error("[skool-import] login response body unreadable:", captureError, "status:", capturedStatus);
-    }
-
-    // The response body's `code` field is NOT a trustworthy success/failure
-    // signal on its own — confirmed live across multiple real attempts,
-    // Skool returns several different opaque codes ("AUTH-LG-503",
-    // "AUTH-LG-002", "AUTH-LG-502", ...) that don't map 1:1 to real outcome:
-    // "AUTH-LG-503" (wrong password) carries a real human-readable message
-    // and blocks login; "AUTH-LG-002" was seen on a CORRECT-password
-    // attempt that went on to fully authenticate; "AUTH-LG-502" was then
-    // seen on a DELIBERATELY WRONG password during regression testing —
-    // proving a permissive "unknown code = probably fine" rule (this
-    // module's previous approach) is unsafe: it let a wrong password
-    // through as "connected". `code` is logged for diagnostics only and
-    // never used to decide success or failure.
     if (bodyJson?.code) {
-      console.log("[skool-import] login response included code:", bodyJson.code);
+      console.log("[skool-import] login response included code (informational only):", bodyJson.code);
     }
 
-    // The one signal confirmed reliable across every real attempt so far:
-    // whether Skool's own client app actually navigates away from /login.
-    // A rejected login (wrong password, confirmed live) leaves the user on
-    // /login with an inline error and creates no real session. A login that
-    // truly succeeds (confirmed live, both with and without a `code` in the
-    // response body) redirects into the app within ~2s and starts firing
-    // authenticated requests (self/groups, sync-unread-notification-count,
-    // etc.). Give that redirect time to land, then check the URL first —
-    // before ever trusting cookies, since Skool sets baseline WAF/analytics
-    // cookies regardless of whether login succeeded.
+    // The one signal confirmed reliable across every real attempt: whether
+    // Skool's own client app actually navigates away from /login. A
+    // rejected login (wrong password, confirmed live) leaves the user on
+    // /login with an inline error and creates no real session. A login
+    // that truly succeeds redirects into the app within ~2s regardless of
+    // whether a `code` was present. Check the URL first — before ever
+    // trusting cookies, since Skool sets baseline WAF/analytics cookies
+    // regardless of whether login succeeded.
     await page.waitForTimeout(2500);
 
     if (page.url().includes("/login")) {
-      return { ok: false, cookies: null, errorKind: "invalid-credentials" };
+      return { ok: false, cookies: null, communityName: null, errorKind: "invalid-credentials" };
     }
 
     const cookies = await context.cookies("https://www.skool.com");
     if (cookies.length === 0) {
-      return { ok: false, cookies: null, errorKind: "browser-failure" };
+      return { ok: false, cookies: null, communityName: null, errorKind: "browser-failure" };
     }
-    return { ok: true, cookies, errorKind: null };
-  } catch (err) {
-    // Sanitized ops log only — Playwright's own errors (timeouts, nav
-    // failures) never embed form field VALUES, only selectors/URLs/status
-    // codes, so this is safe. Never logs `email`/`password` themselves.
-    console.error("[skool-import] loginToSkool failed:", err instanceof Error ? err.message : String(err));
-    return { ok: false, cookies: null, errorKind: "browser-failure" };
-  } finally {
-    await browser?.close().catch(() => {});
-  }
-}
 
-export interface CommunityAccessResult {
-  ok: boolean;
-  communityName: string | null;
-  errorKind: "not-found-or-inaccessible" | "browser-failure" | null;
-}
-
-/**
- * Confirms the just-authenticated account can actually see the requested
- * Skool community (not just that login succeeded) — a fresh headless
- * browser, seeded with the cookies from `loginToSkool`, fetching the
- * community's own feed page and reading its real `__NEXT_DATA__`
- * (`currentGroup.name`), the same structured source the rest of the
- * importer already relies on (skool-client.ts).
- */
-export async function validateSkoolCommunityAccess(
-  cookies: Cookie[],
-  groupSlug: string,
-): Promise<CommunityAccessResult> {
-  let browser: Browser | null = null;
-  try {
-    browser = await launchHeadless();
-    const context = await browser.newContext();
-    await context.addCookies(cookies);
-    const page = await context.newPage();
-
-    const response = await page.goto(`https://www.skool.com/${groupSlug}`, {
+    // Authenticated — now confirm the SAME account can actually see the
+    // requested community, in the SAME browser/context, before it ever
+    // closes. Reads the community's own feed page's real `__NEXT_DATA__`
+    // (`currentGroup.name`), the same structured source the rest of the
+    // importer already relies on (skool-client.ts).
+    const communityResponse = await page.goto(`https://www.skool.com/${groupSlug}`, {
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
-    if (!response || !response.ok()) {
-      return { ok: false, communityName: null, errorKind: "not-found-or-inaccessible" };
+    if (!communityResponse || !communityResponse.ok()) {
+      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
     }
 
     const html = await page.content();
     const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
     if (!match) {
-      return { ok: false, communityName: null, errorKind: "not-found-or-inaccessible" };
+      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
     }
     const parsed = JSON.parse(match[1]) as {
       props?: { pageProps?: { currentGroup?: { name?: string } } };
     };
     const name = parsed.props?.pageProps?.currentGroup?.name?.trim();
     if (!name) {
-      return { ok: false, communityName: null, errorKind: "not-found-or-inaccessible" };
+      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
     }
-    return { ok: true, communityName: name, errorKind: null };
+
+    return { ok: true, cookies, communityName: name, errorKind: null };
   } catch (err) {
-    console.error(
-      "[skool-import] validateSkoolCommunityAccess failed:",
-      err instanceof Error ? err.message : String(err),
-    );
-    return { ok: false, communityName: null, errorKind: "browser-failure" };
+    // Sanitized ops log only — Playwright's own errors (timeouts, nav
+    // failures) never embed form field VALUES, only selectors/URLs/status
+    // codes, so this is safe. Never logs `email`/`password` themselves.
+    console.error("[skool-import] connectToSkool failed:", err instanceof Error ? err.message : String(err));
+    return { ok: false, cookies: null, communityName: null, errorKind: "browser-failure" };
   } finally {
     await browser?.close().catch(() => {});
   }

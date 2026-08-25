@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { validateAndNormalizeSkoolUrl } from "@/lib/server/skool-import/skool-url";
 import { checkRateLimit, recordFailedAttempt, clearRateLimit } from "@/lib/server/skool-import/rate-limit";
-import { loginToSkool, validateSkoolCommunityAccess } from "@/lib/server/skool-import/headless-browser";
+import { connectToSkool } from "@/lib/server/skool-import/headless-browser";
 import { createImportSession } from "@/lib/server/skool-import/session-store";
 
 export const dynamic = "force-dynamic";
@@ -82,24 +82,24 @@ export async function POST(
     );
   }
 
-  const loginResult = await loginToSkool(email, password);
-  if (!loginResult.ok || !loginResult.cookies) {
+  // ONE Chromium lifecycle for the whole Connect request — login and
+  // community-access validation happen in the same authenticated
+  // browser/context before it ever closes. Previously these were two
+  // separate headless-browser launches; real production evidence showed
+  // the second launch was the actual failure point. See
+  // docs/debug/skool-connect-diagnostic.md and headless-browser.ts's
+  // connectToSkool doc comment.
+  const result = await connectToSkool(email, password, urlResult.slug);
+  if (!result.ok || !result.cookies || !result.communityName) {
     await recordFailedAttempt(saId, groupId, memberId);
     const message =
-      loginResult.errorKind === "invalid-credentials"
+      result.errorKind === "invalid-credentials"
         ? "We couldn't sign in to Skool with those credentials."
-        : "We couldn't connect to Skool right now. Please try again.";
-    return NextResponse.json({ error: loginResult.errorKind ?? "browser-failure", message }, { status: 401 });
-  }
-
-  const access2 = await validateSkoolCommunityAccess(loginResult.cookies, urlResult.slug);
-  if (!access2.ok || !access2.communityName) {
-    await recordFailedAttempt(saId, groupId, memberId);
-    const message =
-      access2.errorKind === "not-found-or-inaccessible"
-        ? "This Skool account doesn't appear to have access to that community."
-        : "We couldn't connect to Skool right now. Please try again.";
-    return NextResponse.json({ error: access2.errorKind ?? "browser-failure", message }, { status: 403 });
+        : result.errorKind === "not-found-or-inaccessible"
+          ? "This Skool account doesn't appear to have access to that community."
+          : "We couldn't connect to Skool right now. Please try again.";
+    const status = result.errorKind === "not-found-or-inaccessible" ? 403 : 401;
+    return NextResponse.json({ error: result.errorKind ?? "browser-failure", message }, { status });
   }
 
   await clearRateLimit(saId, groupId, memberId);
@@ -109,8 +109,8 @@ export async function POST(
     groupId,
     createdByMemberId: memberId,
     skoolGroupSlug: urlResult.slug,
-    skoolCommunityName: access2.communityName,
-    cookies: loginResult.cookies,
+    skoolCommunityName: result.communityName,
+    cookies: result.cookies,
   });
 
   return NextResponse.json({
