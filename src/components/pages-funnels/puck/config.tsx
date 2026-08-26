@@ -113,6 +113,9 @@ export function createPuckConfig(
           "Accordion",
         ],
       },
+      // Category order matches master spec §6's approved customer-facing
+      // taxonomy exactly: Layout, Elements, Prebuilt Sections, Business.
+      prebuiltSections: { title: "Prebuilt Sections", components: ["Hero"] },
       business: { title: "Business", components: ["Form"] },
     },
     components: {
@@ -157,6 +160,145 @@ export function createPuckConfig(
           paddingTop: 64,
           paddingBottom: 64,
           rows: [],
+        },
+        render: ({ background, maxWidth, paddingTop, paddingBottom, rows }) => (
+          <SectionRender
+            background={background}
+            maxWidth={maxWidth}
+            paddingTop={paddingTop}
+            paddingBottom={paddingBottom}
+            rows={rows}
+          />
+        ),
+      },
+
+      // PREBUILT SECTIONS category (master spec §5/§15, Phase 2A task §7):
+      // a REAL library drag-item, not the header-button demo Phase 1 used
+      // (`buildHeroSection()`, still used separately for the migration
+      // converter's Hero decomposition — see migrate-v1.ts). Registered as
+      // its own component (not reusing the literal "Section" type) so it
+      // shows as "Hero" in the Outline and is a genuine one-drag insert from
+      // the library, matching the exact behavior every other library item
+      // has (Puck's `components` registry is what makes an entry draggable
+      // from the drawer at all — there's no separate "insert a multi-node
+      // template" primitive to reach for). It reuses `SectionRender` and
+      // Section's own fields verbatim (same background/maxWidth/spacing
+      // controls) and its `defaultProps` are real nested Column/Heading/
+      // Text/Button/Image data — per master spec §5, "Hero must NOT be an
+      // indivisible component": every primitive inside is independently
+      // selectable/editable/deletable immediately after the drag, exactly
+      // like a hand-built Section. Static string ids in defaultProps (not
+      // `newPuckNodeId()`) match the same precedent Row's own defaultProps
+      // already established just above — Puck assigns real ids to
+      // defaultProps-sourced slot content at insertion time.
+      Hero: {
+        label: "Hero",
+        fields: {
+          background: {
+            type: "select",
+            label: "Background",
+            options: [
+              { label: "None", value: "none" },
+              { label: "Solid", value: "solid" },
+              { label: "Gradient", value: "gradient" },
+            ],
+          },
+          maxWidth: {
+            type: "select",
+            label: "Max Width",
+            options: [
+              { label: "Contained", value: "contained" },
+              { label: "Wide", value: "wide" },
+              { label: "Full", value: "full" },
+            ],
+          },
+          paddingTop: {
+            type: "number",
+            label: "Padding Top (px)",
+            min: 0,
+            max: 200,
+          },
+          paddingBottom: {
+            type: "number",
+            label: "Padding Bottom (px)",
+            min: 0,
+            max: 200,
+          },
+          rows: { type: "slot", allow: ["Row"] },
+        },
+        defaultProps: {
+          background: "gradient",
+          maxWidth: "contained",
+          paddingTop: 96,
+          paddingBottom: 96,
+          rows: [
+            {
+              type: "Row",
+              props: {
+                id: "hero-row",
+                gap: 32,
+                verticalAlign: "center",
+                columns: [
+                  {
+                    type: "Column",
+                    props: {
+                      id: "hero-col-1",
+                      width: "1/2",
+                      alignment: "left",
+                      elements: [
+                        {
+                          type: "Heading",
+                          props: {
+                            id: "hero-heading",
+                            text: "Grow your list with a page that converts",
+                            level: "h1",
+                            alignment: "left",
+                          },
+                        },
+                        {
+                          type: "Text",
+                          props: {
+                            id: "hero-text",
+                            text: "Magnetix helps you build native pages made of the same blocks you can click and edit individually.",
+                            alignment: "left",
+                          },
+                        },
+                        {
+                          type: "Button",
+                          props: {
+                            id: "hero-button",
+                            text: "Get Started",
+                            action: { type: "none" },
+                            style: "primary",
+                            alignment: "left",
+                          },
+                        },
+                      ],
+                    },
+                  },
+                  {
+                    type: "Column",
+                    props: {
+                      id: "hero-col-2",
+                      width: "1/2",
+                      alignment: "left",
+                      elements: [
+                        {
+                          type: "Image",
+                          props: {
+                            id: "hero-image",
+                            src: "",
+                            alt: "Product screenshot",
+                            action: { type: "none" },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
         },
         render: ({ background, maxWidth, paddingTop, paddingBottom, rows }) => (
           <SectionRender

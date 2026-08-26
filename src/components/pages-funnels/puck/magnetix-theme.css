@@ -1,0 +1,174 @@
+/**
+ * Magnetix visual reskin for Puck's editor chrome — Phase 2A (master spec
+ * §6/§13, Phase 2A task §2/§3). CSS-first, per the master spec's explicit
+ * preference: overrides Puck's OWN documented design-token layer
+ * (`--puck-*` custom properties shipped in @puckeditor/core/puck.css,
+ * confirmed present via the installed 0.23.0 package — 318 tokens across a
+ * primitive palette -> semantic layer -> component layer). This is Puck's
+ * real, intentional theming surface, not a hashed-classname hack and not
+ * DOM mutation — every rule below is a plain CSS custom-property
+ * assignment. `overrides` (the React-level API) is reserved for the one
+ * thing CSS variables can't do: rearranging the header's actual DOM
+ * structure (see editor-shell.tsx's `overrides.header`).
+ *
+ * Scoped to `:root`, NOT a wrapper class — deliberately. Puck's drag
+ * overlay, ActionBar, and selection/drop indicators render INSIDE the
+ * canvas iframe, which is a separate document; `iframe={{syncHostStyles:
+ * true}}` copies this stylesheet into that document too (the same
+ * mechanism that already made plain Tailwind classes like `bg-primary`
+ * work inside the canvas), but a class-scoped selector (`.magnetix-puck-
+ * shell { ... }`) can never match there, because the wrapper element
+ * carrying that class lives only in the PARENT document — confirmed via
+ * live inspection during this task (drawer/fields/outline picked up a
+ * class-scoped override fine since they're parent-document chrome;
+ * ActionBar/selection borders, which render inside the iframe, did not,
+ * until switched to `:root`). This file is only ever imported by
+ * editor-shell.tsx, so it's still effectively scoped to routes that render
+ * THIS editor — the Phase 1 harness and puck-poc/ import their own
+ * separate bundles and never load this file, so they keep stock Puck
+ * styling untouched exactly as built in those earlier phases.
+ *
+ * Values are pulled straight from the CRM's own live theme tokens
+ * (`--primary`, `--border`, `--muted`, `--card`, `--background`,
+ * `--foreground`, `--muted-foreground`, `--accent`, `--radius`,
+ * `--font-sans` — defined in src/app/globals.css's `.theme-magnetix`
+ * block) via `var()`, not hardcoded hex — so this file automatically
+ * tracks the CRM's real theme rather than drifting into a second,
+ * hand-maintained copy of the same colors.
+ */
+
+:root {
+  /* ---------- surfaces ---------- */
+  --puck-color-surface: var(--card);
+  --puck-color-surface-muted: var(--muted);
+  --puck-color-surface-subtle: var(--muted);
+  --puck-header-color-bg: var(--card);
+  --puck-sidebar-left-color-bg: var(--card);
+  --puck-sidebar-right-color-bg: var(--card);
+  --puck-canvas-color-bg: var(--muted);
+  --puck-canvas-preview-color-bg: var(--background);
+
+  /* ---------- borders ---------- */
+  --puck-color-border: var(--border);
+  --puck-color-border-hover: var(--primary);
+  --puck-color-border-muted: var(--border);
+
+  /* ---------- text ---------- */
+  --puck-color-text: var(--foreground);
+  --puck-color-text-secondary: var(--muted-foreground);
+  --puck-color-text-muted: var(--muted-foreground);
+  --puck-color-text-subtle: var(--muted-foreground);
+  --puck-font-family: var(--font-sans);
+
+  /* ---------- interactive (accent) — Magnetix purple/lavender,
+     replacing Puck's default "azure" blue at every semantic use site:
+     buttons, selection, focus rings, drag placeholders, outline
+     highlights all key off these few variables. ---------- */
+  --puck-color-interactive: var(--primary);
+  --puck-color-interactive-hover: color-mix(in srgb, var(--primary) 85%, black);
+  --puck-color-interactive-active: color-mix(
+    in srgb,
+    var(--primary) 70%,
+    black
+  );
+  --puck-color-interactive-subtle: var(--accent);
+  --puck-color-interactive-soft: color-mix(
+    in srgb,
+    var(--primary) 8%,
+    var(--card)
+  );
+  --puck-color-interactive-soft-hover: color-mix(
+    in srgb,
+    var(--primary) 14%,
+    var(--card)
+  );
+  --puck-color-interactive-neutral-hover: var(--muted);
+  --puck-color-focus-ring: var(--ring);
+  --puck-color-selection-bg: color-mix(
+    in srgb,
+    var(--primary) 16%,
+    transparent
+  );
+  --puck-color-selection-border: var(--primary);
+  --puck-color-line-placeholder: var(--primary);
+  --puck-color-highlight: var(--primary);
+
+  /* ---------- radius — matches the CRM's own rounded-card language
+     (BlocksPanel/SettingsPanel already use rounded-lg == var(--radius)) --- */
+  --puck-radius-xs: calc(var(--radius) * 0.3);
+  --puck-radius-s: calc(var(--radius) * 0.5);
+  --puck-radius-m: calc(var(--radius) * 0.6);
+  --puck-radius-l: var(--radius);
+  --puck-radius-pill: 999px;
+
+  /* ---------- drawer (left library) — matches BlocksPanel's existing
+     "rounded-lg border-border bg-card, hover:border-primary/40
+     hover:bg-primary/5" button treatment (blocks-panel.tsx) ---------- */
+  --puck-drawer-item-color-bg: var(--card);
+  --puck-drawer-item-color-border: var(--border);
+  --puck-drawer-item-color-text: var(--foreground);
+  --puck-drawer-item-color-bg-hover: color-mix(
+    in srgb,
+    var(--primary) 5%,
+    var(--card)
+  );
+  --puck-drawer-item-color-text-hover: var(--foreground);
+  --puck-drawer-item-radius: var(--radius);
+  --puck-drawer-category-color-text: var(--muted-foreground);
+  --puck-drawer-category-color-text-hover: var(--foreground);
+
+  /* ---------- fields (right settings panel) ---------- */
+  --puck-field-color-bg: var(--background);
+  --puck-field-color-border: var(--input, var(--border));
+  --puck-field-color-border-hover: var(--primary);
+  --puck-field-color-border-focus: var(--primary);
+  --puck-field-color-text: var(--foreground);
+  --puck-field-radius: calc(var(--radius) * 0.6);
+  --puck-field-label-color-text: var(--foreground);
+  --puck-field-label-color-icon: var(--muted-foreground);
+
+  /* ---------- icon buttons (undo/redo, toolbar icons) ---------- */
+  --puck-iconbutton-color-icon: var(--muted-foreground);
+  --puck-iconbutton-color-icon-hover: var(--foreground);
+  --puck-iconbutton-color-icon-active: var(--primary);
+  --puck-iconbutton-color-bg-hover: var(--muted);
+  --puck-iconbutton-color-bg-active: var(--accent);
+  --puck-iconbutton-radius: calc(var(--radius) * 0.5);
+
+  /* ---------- action bar (the floating label over a selected component) --- */
+  --puck-actionbar-color-bg: var(--primary);
+  --puck-actionbar-color-text: var(--primary-foreground);
+  --puck-actionbar-radius: calc(var(--radius) * 0.6);
+
+  /* ---------- outline (Layers panel) ---------- */
+  --puck-outline-color-bg-selected: var(--accent);
+  --puck-outline-color-border-selected: var(--primary);
+  --puck-outline-color-bg-hover: var(--muted);
+  --puck-outline-color-text: var(--foreground);
+  --puck-outline-color-text-helper: var(--muted-foreground);
+  --puck-outline-color-icon: var(--muted-foreground);
+  --puck-outline-radius: calc(var(--radius) * 0.5);
+
+  /* ---------- slot / drag-drop indicators on canvas ---------- */
+  --puck-slot-color-border: var(--primary);
+  --puck-slot-component-color-border-selected: var(--primary);
+  --puck-slot-component-color-border-dragging: var(--primary);
+  --puck-slot-component-color-overlay: color-mix(
+    in srgb,
+    var(--primary) 10%,
+    transparent
+  );
+  --puck-slot-component-color-overlay-border: var(--primary);
+  --puck-slot-component-color-placeholder: var(--primary);
+
+  /* ---------- primary button (used by a couple of Puck's own internal
+     controls, e.g. some field "add" affordances) ---------- */
+  --puck-button-primary-color-bg: var(--primary);
+  --puck-button-primary-color-bg-hover: color-mix(
+    in srgb,
+    var(--primary) 85%,
+    black
+  );
+  --puck-button-primary-color-text: var(--primary-foreground);
+  --puck-button-radius: calc(var(--radius) * 0.6);
+}
