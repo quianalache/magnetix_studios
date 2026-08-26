@@ -24,14 +24,18 @@ export type NotificationEventType =
   | "community.access.granted"
   | "community.reply"
   | "community.mention"
+  // Booking loop (2026-08-26): the public booking flow now emits reliable
+  // internal events for all three lifecycle transitions — see
+  // notification-producers.ts's notifyBookingCreated/Rescheduled/Cancelled
+  // and booking/lifecycle.ts's emitBookingWebhook. Real producers, wired.
+  | "booking.created"
+  | "booking.rescheduled"
+  | "booking.cancelled"
   // Defined now so the schema/service is ready — no live producer wired in
   // V1 (see the Notifications V1 report for why: reading.ready has a real
-  // trigger event but no client-facing destination page exists yet;
-  // booking.created/updated has no reliable event-emission point in the
-  // live public booking flow). Never created by any code path today.
-  | "reading.ready"
-  | "booking.created"
-  | "booking.updated";
+  // trigger event but no client-facing destination page exists yet).
+  // Never created by any code path today.
+  | "reading.ready";
 
 export type NotificationObjectType =
   | "course"
@@ -85,6 +89,7 @@ export interface NotificationDoc {
     communityName?: string;
     courseName?: string;
     actorName?: string;
+    bookingName?: string;
   };
 }
 

@@ -56,6 +56,7 @@ export const WEBHOOK_EVENT_TYPES = [
   "quote.paid",
   "booking.created",
   "booking.cancelled",
+  "booking.rescheduled",
   // AI + member lifecycle events. Wired from existing dashboard write
   // paths (not the public API routes), so subscribers receive them
   // regardless of whether the source action was API-driven or operator-

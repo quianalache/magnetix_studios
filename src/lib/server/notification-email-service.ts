@@ -31,6 +31,18 @@ import type { ResendConfig } from "@/types/tenancy";
  * confirmed by inspection before writing this file, not assumed.
  */
 
+/**
+ * Booking loop (2026-08-26) — deliberately NOT added here. Audited the
+ * booking flow before wiring notifyBookingCreated/Rescheduled/Cancelled:
+ * booking.created, booking.rescheduled, AND booking.cancelled each already
+ * have a real, working, tenant-branded legacy email
+ * (renderBookingConfirmationEmail / renderBookingCancelledEmail in
+ * booking/email.ts, sent directly from the booking routes — the created
+ * one even carries an ICS calendar attachment this generic template
+ * doesn't produce). Adding these types here would send the customer TWO
+ * emails for one event. The MyMagnetix notification (in-app bell) is
+ * still created for all three — this set only gates the EMAIL channel.
+ */
 const EMAIL_ELIGIBLE_EVENT_TYPES: ReadonlySet<NotificationEventType> = new Set([
   "course.access.granted",
   "community.access.granted",
@@ -188,6 +200,12 @@ function pendingDoc(n: DispatchInput): Omit<NotificationEmailDelivery, "id" | "c
 // already-decided copy rather than re-deciding it.
 // ---------------------------------------------------------------------------
 
+// Booking entries below are unreachable in V1 (not in
+// EMAIL_ELIGIBLE_EVENT_TYPES — see that set's own comment) but kept
+// complete/accurate rather than omitted: CTA_LABELS is a total map over
+// every NotificationEventType, and having a correct-but-unused entry here
+// is harmless and future-proofs the day the legacy booking emails are
+// ever retired in favor of this pipeline.
 const CTA_LABELS: Record<NotificationEventType, string> = {
   "course.access.granted": "View in MyMagnetix",
   "community.access.granted": "View in MyMagnetix",
@@ -195,12 +213,16 @@ const CTA_LABELS: Record<NotificationEventType, string> = {
   "community.mention": "View mention",
   "reading.ready": "View in MyMagnetix",
   "booking.created": "View booking",
-  "booking.updated": "View booking",
+  "booking.rescheduled": "View booking",
+  "booking.cancelled": "View details",
 };
 
 const SUBJECT_BY_CATEGORY: Partial<Record<NotificationEventType, (businessName: string) => string>> = {
   "course.access.granted": (b) => `You have something new from ${b}`,
   "community.access.granted": (b) => `You have something new from ${b}`,
+  "booking.created": () => "Your booking is confirmed",
+  "booking.rescheduled": () => "Your booking was rescheduled",
+  "booking.cancelled": () => "Your booking was cancelled",
   "community.reply": (b) => `New activity in ${b}`,
   "community.mention": (b) => `New activity in ${b}`,
 };

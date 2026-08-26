@@ -9,11 +9,13 @@ import {
   sendTenantEmail,
 } from "@/lib/comms/resend";
 import { verifyQStashSignature } from "@/lib/automations/qstash";
+import { issueEventToken } from "@/lib/booking/event-token";
 import {
   emitBookingWebhook,
   fireBookingTrigger,
   recordBookingActivity,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingCancelled } from "@/lib/server/notification-producers";
 import { renderBookingCancelledEmail } from "@/lib/booking/email";
 import { eventStatus } from "@/types/events";
 import type { BookingPage } from "@/types/booking";
@@ -190,11 +192,44 @@ async function runExpireSideEffects(event: CalendarEvent): Promise<void> {
     },
     "event_cancelled",
   );
-  void emitBookingWebhook({
+  // Reliability fix (2026-08-26): AWAITED, not void-fired — see
+  // lifecycle.ts's emitBookingWebhook doc comment for the live evidence.
+  await emitBookingWebhook({
     eventId: event.id,
     agencyId: event.agencyId,
     subAccountId: event.subAccountId,
     type: "booking_cancelled",
     cancelReason: "payment hold expired",
   });
+
+  // Same gap as the operator-cancel route: no raw public token in scope
+  // here (only the hash is ever persisted), so mint a fresh one purely to
+  // give this notification a real destination — safe for the same reason
+  // documented on mark-status's cancel branch (the legacy cancellation
+  // email never linked anywhere, so there's no existing link to break).
+  // This callback only reaches here once per real expiry (see the
+  // transaction above — a retry finds status no longer awaiting_payment
+  // and returns null before any side effects run), so no extra
+  // idempotency concern beyond createNotification's own dedupe.
+  try {
+    const db = getAdminDb();
+    const { token: freshToken, hash } = issueEventToken(event.id);
+    await db.doc(`events/${event.id}`).update({
+      publicTokenHash: hash,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const pageSnap = event.bookingPageSlug
+      ? await db.doc(`subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`).get()
+      : null;
+    const bookingName = (pageSnap?.data()?.name as string | undefined) ?? event.title ?? "Meeting";
+    await notifyBookingCancelled({
+      subAccountId: event.subAccountId,
+      bookingId: event.id,
+      contactId: event.contactId,
+      bookingName,
+      token: freshToken,
+    }).catch((err) => console.warn("[events/payment/expire] notification failed", err));
+  } catch (err) {
+    console.warn("[events/payment/expire] token mint / notification setup failed", err);
+  }
 }

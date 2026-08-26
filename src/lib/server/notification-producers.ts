@@ -2,22 +2,35 @@ import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createNotification } from "@/lib/server/notification-service";
+import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { communityPostHref, communityHomeHref } from "@/lib/community/routes";
+import { formatStartLocal } from "@/lib/booking/email";
 
 /**
  * MyMagnetix Notifications V1 — real producers, called directly from the
  * existing write paths that already know the moment access/activity
  * genuinely happened (same call-site convention `emitWebhookEvent`/
- * `awardPoints` already use throughout this codebase — a `void`-fired,
- * best-effort call right after the real state change, never blocking the
- * caller's own response). See the Notifications V1 report for exactly
- * which event types are wired here vs. intentionally left pending.
+ * `awardPoints` already use throughout this codebase). Reliability
+ * (2026-08-26): every call site AWAITS these now, not `void`-fires them —
+ * a void-fired call was confirmed live to sometimes lose the race against
+ * the calling serverless function being frozen right after the response
+ * is sent, silently dropping the notification. See notification-service.ts
+ * for the full history (a plain `void` fire, then a failed `after()`
+ * attempt, then this).
  *
- * Every producer resolves a Member -> Person via the SAME field
- * `listPersonMemberships` reads in reverse (`Member.personId`, only ever
- * set by a real login/reconciliation event) — a Member who has never
+ * Every COMMUNITY/COURSE producer resolves a Member -> Person via the SAME
+ * field `listPersonMemberships` reads in reverse (`Member.personId`, only
+ * ever set by a real login/reconciliation event) — a Member who has never
  * logged into MyMagnetix has no Person to notify, so these silently no-op
  * for them rather than inventing an identity.
+ *
+ * The BOOKING producers below are different: a booking customer is a CRM
+ * Contact, never a community Member, so there's no `personId` field to
+ * read. They resolve the Person directly via `ensurePersonIdentity(email)`
+ * — the SAME canonical find-or-create every other identity path in this
+ * codebase already uses (see person-identity-service.ts) — not a second
+ * identity flow, just this codebase's one real one, entered from a
+ * different starting record.
  */
 
 function enterHref(subAccountId: string, next: string): string {
@@ -224,4 +237,156 @@ export async function notifyCommunityMentions(opts: {
       });
     }),
   );
+}
+
+/* ----------------------------------- Booking ----------------------------------- */
+
+/**
+ * Destination for every booking notification is the real, already-shipped
+ * public event page (`/e/{token}`) — the SAME page the legacy confirmation/
+ * reschedule emails already link to ("Manage your booking"). Deliberately
+ * NOT the `/api/my/enter` bridge every other producer above uses: that
+ * bridge's entire security model requires a real, active tenant MEMBER
+ * relationship, and a booking-only customer (the common case for a
+ * booking-first business) never has one — they're a Contact, not a
+ * Member. `/e/{token}` has its own, already-proven, no-login-required
+ * security model (possession of the mailed token), which works for every
+ * booking customer regardless of whether they've ever used MyMagnetix —
+ * so it's used verbatim, not wrapped.
+ */
+function bookingDestination(token: string): string {
+  // Same-origin relative path, exactly like every other producer's
+  // `destination` (see enterHref above) — `router.push` in the bell and
+  // this codebase's routing throughout only ever needs the path, never an
+  // absolute URL. Unlike `buildEventPublicUrl` (which the OUTBOUND EMAIL
+  // uses, and does need a full URL to be clickable outside the app).
+  return `/e/${token}`;
+}
+
+async function getBookingContact(contactId: string): Promise<{ email: string } | null> {
+  const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
+  const email = (snap.data()?.email as string | undefined)?.trim();
+  if (!email) return null;
+  return { email };
+}
+
+export async function notifyBookingCreated(opts: {
+  subAccountId: string;
+  bookingId: string;
+  contactId: string;
+  bookingName: string;
+  startAt: Date;
+  timezone: string;
+  /** Raw public token — the route that creates the booking already mints
+   *  one (issueEventToken); pass it straight through, never re-derived
+   *  here (this file never mints tokens). */
+  token: string;
+}): Promise<void> {
+  const destination = bookingDestination(opts.token);
+  const contact = await getBookingContact(opts.contactId);
+  if (!contact) return;
+
+  const [personId, businessName] = await Promise.all([
+    ensurePersonIdentity(contact.email),
+    getBusinessName(opts.subAccountId),
+  ]);
+  const when = formatStartLocal(opts.startAt, opts.timezone);
+
+  await createNotification({
+    personId,
+    subAccountId: opts.subAccountId,
+    eventType: "booking.created",
+    objectType: "booking",
+    objectId: opts.bookingId,
+    title: `Your ${opts.bookingName} is booked for ${when}.`,
+    destination,
+    meta: { bookingName: opts.bookingName, businessName },
+    // A booking is only ever created once — bookingId alone is the
+    // recurring unit, matching "booking.created: bookingId + created event".
+    sourceObjectId: opts.bookingId,
+  });
+}
+
+export async function notifyBookingRescheduled(opts: {
+  subAccountId: string;
+  bookingId: string;
+  contactId: string;
+  bookingName: string;
+  startAt: Date;
+  timezone: string;
+  /** The NEW token minted by this reschedule — also doubles as the
+   *  per-occurrence dedupe disambiguator below, since it's a fresh,
+   *  guaranteed-unique value every single reschedule mints regardless of
+   *  how close together two reschedules happen. */
+  token: string;
+}): Promise<void> {
+  const destination = bookingDestination(opts.token);
+  const contact = await getBookingContact(opts.contactId);
+  if (!contact) return;
+
+  const [personId, businessName] = await Promise.all([
+    ensurePersonIdentity(contact.email),
+    getBusinessName(opts.subAccountId),
+  ]);
+  const when = formatStartLocal(opts.startAt, opts.timezone);
+
+  await createNotification({
+    personId,
+    subAccountId: opts.subAccountId,
+    eventType: "booking.rescheduled",
+    objectType: "booking",
+    objectId: opts.bookingId,
+    title: `Your ${opts.bookingName} was rescheduled to ${when}.`,
+    destination,
+    meta: { bookingName: opts.bookingName, businessName },
+    // A booking can be rescheduled more than once — bookingId alone would
+    // collapse every reschedule onto the FIRST one's dedupeKey. The new
+    // token's own nonce (its middle segment — see event-token.ts's format)
+    // is a cheap, always-available, guaranteed-unique-per-occurrence
+    // disambiguator (matches "booking.rescheduled: bookingId + reschedule
+    // occurrence... identity").
+    sourceObjectId: `${opts.bookingId}:${opts.token.split(".")[1] ?? opts.token.slice(0, 24)}`,
+  });
+}
+
+export async function notifyBookingCancelled(opts: {
+  subAccountId: string;
+  bookingId: string;
+  contactId: string;
+  bookingName: string;
+  /** Raw public token valid for this booking at cancellation time. The
+   *  visitor-initiated cancel route already has one in scope (cancelling
+   *  doesn't rotate it). Staff-initiated cancel and the payment-hold
+   *  auto-expire path have no raw token in scope at all (only the event's
+   *  publicTokenHash is ever persisted — the SAME reason the legacy
+   *  cancellation email has never linked anywhere) — those two callers
+   *  mint a fresh one via issueEventToken specifically to give this
+   *  notification a real, working destination; see their route files. */
+  token: string;
+}): Promise<void> {
+  const destination = bookingDestination(opts.token);
+  const contact = await getBookingContact(opts.contactId);
+  if (!contact) return;
+
+  const [personId, businessName] = await Promise.all([
+    ensurePersonIdentity(contact.email),
+    getBusinessName(opts.subAccountId),
+  ]);
+
+  await createNotification({
+    personId,
+    subAccountId: opts.subAccountId,
+    eventType: "booking.cancelled",
+    objectType: "booking",
+    objectId: opts.bookingId,
+    title: `Your ${opts.bookingName} was cancelled.`,
+    destination,
+    meta: { bookingName: opts.bookingName, businessName },
+    // A booking is only ever cancelled once (terminal state) — bookingId
+    // alone is the recurring unit. Safe to call this from a retried
+    // cancel/expire attempt: createNotification's own .create() dedupe
+    // collapses it to a no-op, so this function needs no retry-awareness
+    // of its own.
+    sourceObjectId: opts.bookingId,
+  });
 }

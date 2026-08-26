@@ -128,6 +128,7 @@ const BOOKING_WEBHOOK_MAP: Partial<
 > = {
   booking_page_booked: "booking.created",
   booking_cancelled: "booking.cancelled",
+  booking_rescheduled: "booking.rescheduled",
 };
 
 function tsToIsoOrNull(v: unknown): string | null {
@@ -143,10 +144,14 @@ function tsToIsoOrNull(v: unknown): string | null {
 
 /**
  * Emit the outbound webhook for a booking lifecycle event. No-ops for
- * events without a matching webhook type (reschedule / no-show / completed /
+ * events without a matching webhook type (no-show / completed /
  * payment-received). Reads the event doc back so the payload reflects the
- * post-write state (e.g. cancelledAt on a cancel). Self-guarded — safe to
- * `void`. Bookings are always live (no test mode on this surface).
+ * post-write state (e.g. cancelledAt on a cancel). Self-guarded — errors
+ * never throw into the caller. Reliability fix (2026-08-26): every call
+ * site now AWAITS this instead of void-firing it — the same reliability
+ * class already fixed for MyMagnetix notification producers (see
+ * notification-service.ts's history). Bookings are always live (no test
+ * mode on this surface).
  */
 export async function emitBookingWebhook(opts: {
   eventId: string;
@@ -154,6 +159,10 @@ export async function emitBookingWebhook(opts: {
   subAccountId: string;
   type: BookingLifecycleEvent;
   cancelReason?: string | null;
+  /** Reschedule only — the slot BEFORE this change, for consumers that
+   *  want to show "moved from X to Y." Omitted for every other type. */
+  previousStartAt?: Date | null;
+  previousEndAt?: Date | null;
 }): Promise<void> {
   const webhookType = BOOKING_WEBHOOK_MAP[opts.type];
   if (!webhookType) return;
@@ -161,6 +170,7 @@ export async function emitBookingWebhook(opts: {
     const snap = await getAdminDb().doc(`events/${opts.eventId}`).get();
     const data = snap.exists ? snap.data()! : {};
     const cancelled = webhookType === "booking.cancelled";
+    const rescheduled = webhookType === "booking.rescheduled";
     // Resolve the booking page's timezone so downstream consumers (push
     // notifications especially) can render `start_at` in the booking's real
     // zone instead of the server's (UTC on Vercel/Railway). Best-effort — a
@@ -194,6 +204,8 @@ export async function emitBookingWebhook(opts: {
           timezone,
           status: (data.status as string | null) ?? "scheduled",
           created_at: tsToIsoOrNull(data.createdAt),
+          previous_start_at: rescheduled ? tsToIsoOrNull(opts.previousStartAt) : null,
+          previous_end_at: rescheduled ? tsToIsoOrNull(opts.previousEndAt) : null,
           cancelled_at: cancelled
             ? (tsToIsoOrNull(data.cancelledAt) ?? new Date().toISOString())
             : null,

@@ -222,6 +222,18 @@ export const SAMPLE_PAYLOADS: Record<WebhookEventType, () => unknown> = {
       cancel_reason: "Test cancellation",
     },
   }),
+  "booking.rescheduled": () => ({
+    booking: {
+      id: sampleId("booking"),
+      object: "booking",
+      slug: "discovery-call",
+      contact_id: sampleId("contact"),
+      start_at: new Date(Date.now() + 172800000).toISOString(),
+      end_at: new Date(Date.now() + 172800000 + 1800000).toISOString(),
+      previous_start_at: new Date(Date.now() + 86400000).toISOString(),
+      previous_end_at: new Date(Date.now() + 86400000 + 1800000).toISOString(),
+    },
+  }),
   "voice.call.completed": () => ({
     call: {
       id: sampleId("call"),

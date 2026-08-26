@@ -17,6 +17,7 @@ import {
   fireBookingTrigger,
   recordBookingActivity,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingCancelled } from "@/lib/server/notification-producers";
 import { renderBookingCancelledEmail } from "@/lib/booking/email";
 import { eventStatus } from "@/types/events";
 import type { BookingPage } from "@/types/booking";
@@ -90,7 +91,7 @@ export async function POST(
   }
 
   if (cancelledEvent) {
-    await runSideEffects(cancelledEvent);
+    await runSideEffects(cancelledEvent, token);
   }
 
   return NextResponse.json({ ok: true });
@@ -99,7 +100,7 @@ export async function POST(
 class TokenInvalid extends Error {}
 class BadState extends Error {}
 
-async function runSideEffects(event: CalendarEvent): Promise<void> {
+async function runSideEffects(event: CalendarEvent, token: string): Promise<void> {
   if (!event.contactId) return;
   const db = getAdminDb();
   try {
@@ -185,11 +186,31 @@ async function runSideEffects(event: CalendarEvent): Promise<void> {
     },
     "event_cancelled",
   );
-  void emitBookingWebhook({
+  // Reliability fix (2026-08-26): AWAITED, not void-fired — see
+  // lifecycle.ts's emitBookingWebhook doc comment for the live evidence.
+  await emitBookingWebhook({
     eventId: event.id,
     agencyId: event.agencyId,
     subAccountId: event.subAccountId,
     type: "booking_cancelled",
     cancelReason: "by attendee",
   });
+
+  // Safe to call unconditionally, including on a retried cancel of an
+  // already-cancelled booking (this function runs either way — see the
+  // route's idempotent-cancel branch above): createNotification's own
+  // .create() dedupe on bookingId collapses a repeat call to a no-op, so
+  // this needs no retry-awareness of its own. Cancelling doesn't rotate
+  // the token, so the one the visitor just presented is still valid.
+  const pageSnap = event.bookingPageSlug
+    ? await db.doc(`subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`).get()
+    : null;
+  const bookingName = (pageSnap?.data()?.name as string | undefined) ?? event.title ?? "Meeting";
+  await notifyBookingCancelled({
+    subAccountId: event.subAccountId,
+    bookingId: event.id,
+    contactId: event.contactId,
+    bookingName,
+    token,
+  }).catch((err) => console.warn("[events/cancel] notification failed", err));
 }

@@ -54,7 +54,12 @@ export interface RenderedEmail {
 }
 
 /** Format a UTC instant in the page's timezone, e.g. "Tue, 30 May 2026 · 14:00 AEST". */
-function formatStartLocal(startAt: Date, tz: string): string {
+/** Exported for reuse by the booking notification producers
+ *  (notification-producers.ts) — the SAME timezone-aware formatting the
+ *  legacy confirmation/cancellation emails already use, so a MyMagnetix
+ *  notification never renders a bare UTC/server time for a booking that
+ *  has its own real timezone. */
+export function formatStartLocal(startAt: Date, tz: string): string {
   const fmt = new Intl.DateTimeFormat(undefined, {
     timeZone: tz,
     weekday: "short",

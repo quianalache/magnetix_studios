@@ -32,6 +32,7 @@ import {
   schedulePaymentAutoExpire,
   scheduleEventReminders,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingCreated } from "@/lib/server/notification-producers";
 import {
   renderBookingConfirmationEmail,
   renderBookingPaymentPendingEmail,
@@ -587,12 +588,33 @@ export async function POST(
     },
     "event_booked",
   );
-  void emitBookingWebhook({
+  // Reliability fix (2026-08-26): AWAITED, not void-fired — same
+  // request-vs-teardown race already fixed for the community/course
+  // notification producers. Failure is caught and logged, never
+  // propagated — the booking itself is already committed above.
+  await emitBookingWebhook({
     eventId: created.eventDocRef.id,
     agencyId,
     subAccountId: saId,
     type: "booking_page_booked",
   });
+  // Only a genuinely CONFIRMED booking gets "You're booked" — an
+  // awaiting_payment hold hasn't actually happened yet (same distinction
+  // the legacy email already makes: renderBookingPaymentPendingEmail vs.
+  // renderBookingConfirmationEmail). No MyMagnetix notification for a
+  // payment-pending hold in this pass — mark-paid isn't one of the three
+  // events in scope here.
+  if (!paymentRequired) {
+    await notifyBookingCreated({
+      subAccountId: saId,
+      bookingId: created.eventDocRef.id,
+      contactId: created.contactId,
+      bookingName: page.name,
+      startAt: slotStart,
+      timezone: page.timezone,
+      token: created.rawToken,
+    }).catch((err) => console.warn("[booking/book] notification failed", err));
+  }
 
   // Post-booking redirect — confirmed (free) bookings only. Paid holds
   // stay on the in-app confirmation so the PayPal CTA is always shown.

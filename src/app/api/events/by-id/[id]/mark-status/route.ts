@@ -9,10 +9,13 @@ import {
   emailIsConfigured,
   sendTenantEmail,
 } from "@/lib/comms/resend";
+import { issueEventToken } from "@/lib/booking/event-token";
 import {
+  emitBookingWebhook,
   fireBookingTrigger,
   recordBookingActivity,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingCancelled } from "@/lib/server/notification-producers";
 import { renderBookingCancelledEmail } from "@/lib/booking/email";
 import { eventStatus } from "@/types/events";
 import type { ActivityType } from "@/types/contacts";
@@ -204,6 +207,50 @@ async function runStatusSideEffects(
       },
       triggerType,
     );
+  }
+
+  if (next === "cancelled" && event.contactId) {
+    const db = getAdminDb();
+    // Reliability fix (2026-08-26): AWAITED, not void-fired — see
+    // lifecycle.ts's emitBookingWebhook doc comment for the live evidence.
+    // Also newly WIRED here — an operator-initiated cancel never emitted
+    // this webhook at all before this pass.
+    await emitBookingWebhook({
+      eventId: event.id,
+      agencyId: event.agencyId,
+      subAccountId: event.subAccountId,
+      type: "booking_cancelled",
+      cancelReason: reason || "by_operator",
+    });
+    // Staff has no raw public token in scope (only publicTokenHash is ever
+    // persisted — see event-token.ts's own storage-discipline comment), so
+    // a fresh one is minted here specifically to give this notification a
+    // real, working /e/{token} destination. This DOES rotate the token —
+    // acceptable for a booking that just became terminal: the legacy
+    // cancellation email has never linked anywhere at all (confirmed by
+    // inspection — renderBookingCancelledEmail never reads
+    // publicEventUrl), so there is no existing outbound link this could
+    // invalidate.
+    try {
+      const { token: freshToken, hash } = issueEventToken(event.id);
+      await db.doc(`events/${event.id}`).update({
+        publicTokenHash: hash,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const pageSnap = event.bookingPageSlug
+        ? await db.doc(`subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`).get()
+        : null;
+      const bookingName = (pageSnap?.data()?.name as string | undefined) ?? event.title ?? "Meeting";
+      await notifyBookingCancelled({
+        subAccountId: event.subAccountId,
+        bookingId: event.id,
+        contactId: event.contactId,
+        bookingName,
+        token: freshToken,
+      }).catch((err) => console.warn("[events/mark-status] notification failed", err));
+    } catch (err) {
+      console.warn("[events/mark-status] token mint / notification setup failed", err);
+    }
   }
 
   // Operator-cancelled bookings notify the visitor via email.

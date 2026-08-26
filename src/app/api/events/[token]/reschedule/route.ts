@@ -21,10 +21,12 @@ import {
 } from "@/lib/booking/event-token";
 import { generateIcs } from "@/lib/booking/ics";
 import {
+  emitBookingWebhook,
   fireBookingTrigger,
   recordBookingActivity,
   scheduleEventReminders,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingRescheduled } from "@/lib/server/notification-producers";
 import { renderBookingConfirmationEmail } from "@/lib/booking/email";
 import { eventStatus } from "@/types/events";
 import type { BookingPage } from "@/types/booking";
@@ -270,7 +272,7 @@ async function runRescheduleSideEffects(args: {
     });
   }
 
-  // Activity + automation trigger.
+  // Activity + automation trigger + internal event + MyMagnetix notification.
   if (event.contactId) {
     await recordBookingActivity(
       {
@@ -289,6 +291,34 @@ async function runRescheduleSideEffects(args: {
       },
       "event_rescheduled",
     );
+    // `event` here still carries the PRE-reschedule startAt/endAt — the
+    // transaction returned it before applying its own txn.update, only
+    // publicTokenHash was overridden on the way out (see the route above).
+    // That's exactly the "previous time" this webhook payload wants.
+    const previousStartAt =
+      (event.startAt as { toDate?: () => Date } | null)?.toDate?.() ?? null;
+    const previousEndAt =
+      (event.endAt as { toDate?: () => Date } | null)?.toDate?.() ?? null;
+    // Reliability fix (2026-08-26): AWAITED, not void-fired — this webhook
+    // wasn't even wired for reschedule before this pass (booking.rescheduled
+    // had no webhook mapping at all). See lifecycle.ts's emitBookingWebhook.
+    await emitBookingWebhook({
+      eventId: event.id,
+      agencyId: event.agencyId,
+      subAccountId: event.subAccountId,
+      type: "booking_rescheduled",
+      previousStartAt,
+      previousEndAt,
+    });
+    await notifyBookingRescheduled({
+      subAccountId: event.subAccountId,
+      bookingId: event.id,
+      contactId: event.contactId,
+      bookingName: page?.name ?? event.title ?? "Meeting",
+      startAt,
+      timezone: page?.timezone ?? "UTC",
+      token: newRawToken,
+    }).catch((err) => console.warn("[events/reschedule] notification failed", err));
   }
 
   // Visitor confirmation email + ICS (UPDATE, sequence+1 so calendar

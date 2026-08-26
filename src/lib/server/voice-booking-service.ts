@@ -22,6 +22,7 @@ import {
   fireBookingTrigger,
   recordBookingActivity,
 } from "@/lib/booking/lifecycle";
+import { notifyBookingCreated } from "@/lib/server/notification-producers";
 import {
   emitContactCreatedById,
   findExistingContactId,
@@ -267,9 +268,9 @@ export async function bookVoiceSlot(input: {
       )
     : new Map<string, number>();
 
-  let createdTitle: string;
+  let created: { title: string; token: string };
   try {
-    createdTitle = await db.runTransaction(async (txn) => {
+    created = await db.runTransaction(async (txn) => {
       const busySnap = await txn.get(
         eventsRef
           .where("subAccountId", "==", subAccountId)
@@ -338,7 +339,11 @@ export async function bookVoiceSlot(input: {
       }
 
       const title = `${page.name} — ${callerName || callerPhone || "Phone booking"}`;
-      const { hash } = issueEventToken(eventDocRef.id);
+      // Booking loop (2026-08-26): raw token no longer discarded — earlier
+      // this only kept `hash` since v1 waived the confirmation email
+      // (which is the raw token's only prior use). notifyBookingCreated
+      // below needs it to build a real /e/{token} destination.
+      const { token, hash } = issueEventToken(eventDocRef.id);
 
       txn.set(eventDocRef, {
         id: eventDocRef.id,
@@ -372,7 +377,7 @@ export async function bookVoiceSlot(input: {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return title;
+      return { title, token };
     });
   } catch (err) {
     if (err instanceof SlotConflict) return { ok: false, code: "slot_taken" };
@@ -384,12 +389,15 @@ export async function bookVoiceSlot(input: {
   }
 
   // ── Post-write side effects (best-effort, same set as the route minus
-  //    the email + reminder schedule — both email-based, waived in v1) ──
+  //    the email + reminder schedule — both email-based, waived in v1;
+  //    the MyMagnetix notification below is NOT email-based — the legacy
+  //    booking email was the thing waived, not the notification/event
+  //    loop — so it's wired here same as the public route) ──
   try {
     await recordBookingActivity(
       {
         id: eventDocRef.id,
-        title: createdTitle,
+        title: created.title,
         contactId: contactId!,
         bookingPageSlug: page.slug,
       },
@@ -399,12 +407,23 @@ export async function bookVoiceSlot(input: {
       { agencyId, subAccountId, contactId: contactId! },
       "event_booked",
     );
-    void emitBookingWebhook({
+    // Reliability fix (2026-08-26): AWAITED, not void-fired — see
+    // lifecycle.ts's emitBookingWebhook doc comment for the live evidence.
+    await emitBookingWebhook({
       eventId: eventDocRef.id,
       agencyId,
       subAccountId,
       type: "booking_page_booked",
     });
+    await notifyBookingCreated({
+      subAccountId,
+      bookingId: eventDocRef.id,
+      contactId: contactId!,
+      bookingName: page.name,
+      startAt: slotStart,
+      timezone: page.timezone,
+      token: created.token,
+    }).catch((err) => console.warn("[voice-booking] notification failed", err));
   } catch (err) {
     console.warn("[voice-booking] side effects failed", err);
   }
