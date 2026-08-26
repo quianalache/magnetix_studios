@@ -237,6 +237,21 @@ const PUBLIC_PATHS = [
  * verification inside the route, not from session auth.
  */
 const PUBLIC_PATH_PATTERNS: RegExp[] = [
+  // Booking loop audit (2026-08-26) — public reschedule/cancel:
+  // /api/events/{token}/reschedule and /api/events/{token}/cancel.
+  // Real, live-confirmed bug found while wiring the booking notification
+  // loop: the "/e" public path above covers the /e/[token] VIEW page, but
+  // these two ACTION endpoints live under /api/events/[token]/*, a
+  // different root the PUBLIC_PATHS array never listed — every visitor
+  // clicking "reschedule" or "cancel" from a real confirmation email was
+  // being 307-redirected to the staff /login page instead of reaching the
+  // route's own HMAC-token verification. Same failure class already
+  // documented on /api/cron/google-calendar-sync above. Both routes are
+  // token-gated inside themselves (verifyEventToken + a hash match against
+  // the stored event doc) — this pattern only stops the blanket
+  // session-auth redirect from intercepting them first.
+  /^\/api\/events\/[^/]+\/reschedule$/,
+  /^\/api\/events\/[^/]+\/cancel$/,
   // Bulk outbound-call step — QStash callback, signature-verified inside
   // the route (same security model as /api/broadcasts/email/step).
   /^\/api\/comms\/voice\/campaign\/step$/,
