@@ -280,6 +280,24 @@ function PageCard({
       <p className="text-muted-foreground mt-3 text-xs">
         Edited {updated ? updated.toLocaleDateString() : "just now"}
       </p>
+
+      {/* Always-visible (not hidden in the ⋮ menu) temporary QA entry point
+          for the Phase 2A Puck editor — the hidden dropdown-only version
+          shipped in the prior task was confirmed, via real user QA, to be
+          too easy to miss: a user naturally clicked the page title above
+          (which correctly goes to V1's "Edit") and never discovered the
+          new builder existed. This button is a second, clearly distinct
+          entry alongside — not instead of — V1's own "Edit"; the dropdown
+          item (below) is kept too, per this task's explicit instruction.
+          Remove this whole block (and only this block) once Puck is
+          approved for production cutover and "Edit" itself becomes the
+          Puck editor. */}
+      <a
+        href={newBuilderHref}
+        className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 mt-3 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-colors"
+      >
+        <FlaskConical className="h-3.5 w-3.5" /> Try New Builder
+      </a>
     </div>
   );
 }

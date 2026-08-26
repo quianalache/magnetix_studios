@@ -116,6 +116,20 @@ export function MagnetixPuckEditorShell({
                 >
                   {pageStatus === "published" ? "Published" : "Draft"}
                 </Badge>
+                {/* Self-identifying QA badge (added after real user QA
+                    confirmed a user could land in V1 and not realize it —
+                    this makes which editor is on screen unambiguous at a
+                    glance, without reading anything else). "New Builder
+                    Preview" per this task's explicit naming guidance —
+                    not "Puck", which isn't customer-facing product naming.
+                    Remove once Puck is the only editor and this distinction
+                    no longer needs calling out. */}
+                <Badge
+                  variant="outline"
+                  className="border-primary/40 text-primary shrink-0 border-dashed"
+                >
+                  New Builder Preview
+                </Badge>
                 <div className="min-w-0 flex-1">{children}</div>
               </div>
             ),
