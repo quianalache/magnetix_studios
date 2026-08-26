@@ -138,16 +138,25 @@ const config: Config = {
           { type: "Column", props: { id: `Column-${Math.random().toString(36).slice(2, 8)}`, width: "1/2", alignment: "left", elements: [] } },
         ],
       },
+      // IMPORTANT, found by actually rendering this: Puck wraps each slot
+      // item in its own internal DOM node for drag-and-drop tracking, so a
+      // flex/grid container className belongs on the <Columns> slot
+      // component ITSELF (className/style are real DropZoneProps), NOT on
+      // a separate wrapping <div> one level up -- flexbox only sizes DIRECT
+      // children, and that wrapping <div> approach put my flex-basis
+      // classes one level too deep, leaving both columns full-width
+      // regardless of viewport (confirmed via computed-style inspection:
+      // the row's actual children had no className and the intended sizing
+      // never reached them). This is the fix, not a workaround.
       render: ({ gap, verticalAlign, columns: Columns }) => (
-        <div
+        <Columns
+          allow={["Column"]}
           className="flex flex-col flex-wrap sm:flex-row"
           style={{
             gap,
             alignItems: verticalAlign === "center" ? "center" : verticalAlign === "bottom" ? "flex-end" : "flex-start",
           }}
-        >
-          <Columns allow={["Column"]} />
-        </div>
+        />
       ),
     },
 
