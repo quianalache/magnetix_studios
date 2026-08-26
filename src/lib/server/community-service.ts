@@ -568,7 +568,17 @@ export async function joinGroupServerSide(opts: {
       type: "community.member.joined",
       payload: { groupId: opts.groupId, memberId: opts.memberId, via: staff ? "staff" : "open" },
     });
-    void notifyCommunityAccessGranted({
+    // Reliability fix (2026-08-26): AWAITED, not void-fired. Confirmed live
+    // that the void-fired form intermittently produced ZERO notification
+    // docs — the serverless function can be frozen/torn down the instant
+    // this route's response is sent, killing the still-in-flight Firestore
+    // write with no error logged. Awaiting costs this response one more
+    // write's latency; a failure is caught and logged here, never
+    // propagated — the join itself is already committed above and stays
+    // committed either way. (emitWebhookEvent above is intentionally left
+    // void-fired — out of scope for this pass, which is specifically about
+    // notification creation.)
+    await notifyCommunityAccessGranted({
       subAccountId: opts.subAccountId,
       groupId: opts.groupId,
       memberId: opts.memberId,
@@ -804,7 +814,11 @@ export async function approveMembershipServerSide(opts: {
     type: "community.member.approved",
     payload: { groupId: opts.groupId, memberId: opts.memberId },
   });
-  void notifyCommunityAccessGranted({
+  // Reliability fix (2026-08-26): AWAITED, not void-fired — same
+  // request-vs-teardown race as joinGroupServerSide's call above; see that
+  // comment for the live evidence. The approval itself is already
+  // committed above and stays committed regardless of notification outcome.
+  await notifyCommunityAccessGranted({
     subAccountId: opts.subAccountId,
     groupId: opts.groupId,
     memberId: opts.memberId,

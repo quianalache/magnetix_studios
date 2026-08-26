@@ -266,7 +266,15 @@ export async function createPostServerSide(
 
   const mentionedMemberIds = extractMentionedMemberIds(doc.body);
   if (mentionedMemberIds.length > 0) {
-    void notifyCommunityMentions({
+    // Reliability fix (2026-08-26): AWAITED, not void-fired. A void-fired
+    // call here raced the response — on a serverless platform the function
+    // can be frozen/torn down the instant the response is sent, which
+    // intermittently killed this call before its internal Firestore write
+    // completed (confirmed live: a real event produced zero notification
+    // docs with zero logged errors). Awaiting costs this response one more
+    // Firestore write's latency; failure is caught and logged, never
+    // propagated — the post itself is already created and stays created.
+    await notifyCommunityMentions({
       subAccountId: input.subAccountId,
       groupId: input.groupId,
       postId: ref.id,
@@ -572,8 +580,12 @@ export async function createCommentServerSide(opts: {
   const recipientMemberId = effectiveParentId
     ? (parentCommentSnapForNotify?.data()?.authorMemberId as string | undefined)
     : (postSnapForNotify?.data()?.authorMemberId as string | undefined);
+  // Reliability fix (2026-08-26): AWAITED, not void-fired — same
+  // request-vs-teardown race as createPostServerSide's mention notifier
+  // above; see that comment for the live evidence. Failure is caught and
+  // logged, never propagated — the comment itself is already committed.
   if (recipientMemberId) {
-    void notifyCommunityReply({
+    await notifyCommunityReply({
       subAccountId: opts.subAccountId,
       groupId: opts.groupId,
       postId: opts.postId,
@@ -586,7 +598,7 @@ export async function createCommentServerSide(opts: {
 
   const mentionedMemberIds = extractMentionedMemberIds(doc.body);
   if (mentionedMemberIds.length > 0) {
-    void notifyCommunityMentions({
+    await notifyCommunityMentions({
       subAccountId: opts.subAccountId,
       groupId: opts.groupId,
       postId: opts.postId,

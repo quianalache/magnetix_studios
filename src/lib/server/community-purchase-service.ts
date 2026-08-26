@@ -181,7 +181,13 @@ export async function markPurchasePaidServerSide(opts: {
           via: "purchase",
         },
       });
-      void notifyCommunityAccessGranted({
+      // Reliability fix (2026-08-26): AWAITED, not void-fired — same
+      // request-vs-teardown race as the other access-grant call sites; see
+      // joinGroupServerSide's comment for the live evidence. This is a
+      // Stripe webhook handler, which tolerates the extra latency easily.
+      // The purchase/membership write above is already committed and
+      // stays committed regardless of notification outcome.
+      await notifyCommunityAccessGranted({
         subAccountId: opts.subAccountId,
         groupId: opts.groupId,
         memberId: purchase.memberId,

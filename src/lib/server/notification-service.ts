@@ -113,20 +113,27 @@ export async function createNotification(input: CreateNotificationInput): Promis
   // Email is a delivery CHANNEL on the notification, never independent of
   // it (product requirement) — fired exactly here, exactly once, only on
   // the branch where a NEW notification doc was actually just created.
-  // Never awaited — a slow/failed email must never delay or fail the
-  // caller's own write path.
   //
-  // A `after()`-wrapped version was tried and reverted: live QA on this
-  // pass caught two real cases (course access, community access) where a
-  // plain `void` fire completed reliably, then two more (a reply, a
-  // mention) where the SAME call wrapped in `after()` never completed at
-  // all — no delivery doc, no logged error, in this exact deployment.
-  // Rather than ship an unproven wrapper on top of a pattern already
-  // proven twice, this stays a plain fire — the same discipline every
-  // other `void emitWebhookEvent(...)`/`void awardPoints(...)` call in
-  // this codebase already uses. Flagged in the report as worth a real
-  // investigation later, not silently dropped.
-  void dispatchNotificationEmail({
+  // Reliability fix (2026-08-26), superseding two earlier attempts:
+  //   1. A plain `void` fire (original V1) intermittently lost the race
+  //      against the calling serverless function being frozen/torn down
+  //      right after the response was sent — live QA caught two real
+  //      cases (a reply, a mention) with zero delivery doc and zero
+  //      logged error.
+  //   2. Wrapping that same call in Next's `after()` was tried next and
+  //      ALSO failed live (two different real cases, same zero-evidence
+  //      outcome) — `after()`'s own post-response scheduling turned out
+  //      to be exactly as vulnerable in this deployment, not a fix.
+  // This is now a plain `await`, the same mechanism that fixed every
+  // producer call site above it in the chain (createNotification itself
+  // is awaited by all 8 of them as of this pass) — it keeps the function
+  // alive by construction rather than depending on any post-response
+  // scheduling guarantee. `dispatchNotificationEmail` has its own
+  // top-level try/catch and is documented to never throw, so this can
+  // never fail the caller's write path — it only adds one email-send's
+  // latency, which is the accepted tradeoff for actually reliable
+  // delivery, exactly as accepted for notification-doc creation itself.
+  await dispatchNotificationEmail({
     id: dedupeKey,
     personId: input.personId,
     subAccountId: input.subAccountId,

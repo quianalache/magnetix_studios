@@ -440,7 +440,12 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
           courseId: opts.courseId,
         },
       });
-      void notifyCommunityAccessGranted({
+      // Reliability fix (2026-08-26): AWAITED, not void-fired — same
+      // request-vs-teardown race as the other access-grant call sites; see
+      // joinGroupServerSide's comment for the live evidence. The
+      // membership write above is already committed and stays committed
+      // regardless of notification outcome.
+      await notifyCommunityAccessGranted({
         subAccountId: opts.subAccountId,
         groupId,
         memberId: opts.memberId,
@@ -787,7 +792,14 @@ export async function enrollInStandaloneCourseServerSide(opts: {
       type: "course.enrolled",
       payload: { courseId: opts.courseId, memberId: opts.memberId },
     });
-    void notifyCourseAccessGranted({
+    // Reliability fix (2026-08-26): AWAITED, not void-fired. Confirmed live
+    // (on the community-access sibling producer, same shape) that a
+    // void-fired call here can lose the race against the serverless
+    // function being frozen/torn down right after the response is sent,
+    // silently dropping the notification with no error logged. The
+    // enrollment write above is already committed and stays committed
+    // regardless of notification outcome.
+    await notifyCourseAccessGranted({
       subAccountId: opts.subAccountId,
       courseId: opts.courseId,
       memberId: opts.memberId,
