@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   Receipt,
   Bookmark,
+  Sparkles,
 } from "lucide-react";
 import { MYMAGNETIX_NAV_ITEMS, type MyMagnetixNavItem } from "@/lib/mymagnetix/nav";
 
@@ -23,6 +24,7 @@ const ICONS: Record<MyMagnetixNavItem["icon"], typeof Home> = {
   spaces: LayoutGrid,
   purchases: Receipt,
   saved: Bookmark,
+  readings: Sparkles,
 };
 
 /** Client component so it can highlight the active item via usePathname — a Server Component layout has no reliable equivalent. */

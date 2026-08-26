@@ -14,7 +14,7 @@
 export interface MyMagnetixNavItem {
   href: string;
   label: string;
-  icon: "home" | "courses" | "communities" | "messages" | "projects" | "spaces" | "purchases" | "saved";
+  icon: "home" | "courses" | "communities" | "messages" | "projects" | "spaces" | "purchases" | "saved" | "readings";
   disabled?: boolean;
 }
 
@@ -22,6 +22,11 @@ export const MYMAGNETIX_NAV_ITEMS: MyMagnetixNavItem[] = [
   { href: "/my", label: "Home", icon: "home" },
   { href: "/my/courses", label: "Courses", icon: "courses" },
   { href: "/my/communities", label: "Communities", icon: "communities" },
+  // Reading Ready loop (2026-08-27) — a real, working page
+  // (src/app/my/(app)/readings/page.tsx), not a "soon" stub; placed right
+  // after the other two real content destinations rather than at the end
+  // next to the disabled rows, so it reads as equally real.
+  { href: "/my/readings", label: "Readings", icon: "readings" },
   { href: "/my#messages", label: "Messages", icon: "messages", disabled: true },
   { href: "/my#projects", label: "Projects", icon: "projects", disabled: true },
   { href: "/my#spaces", label: "My Spaces", icon: "spaces" },
