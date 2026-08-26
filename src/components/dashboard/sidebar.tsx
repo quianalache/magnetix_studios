@@ -43,6 +43,7 @@ import {
   Orbit,
   TrendingUp,
   LayoutPanelTop,
+  LayoutTemplate,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -139,6 +140,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
     label: "Marketing",
     items: [
       { href: "/forms", label: "Forms", icon: FileText, enabled: true },
+      { href: "/pages-funnels", label: "Pages & Funnels", icon: LayoutTemplate, enabled: true },
       { href: "/website", label: "Website", icon: Globe, enabled: true },
       { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
       { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
