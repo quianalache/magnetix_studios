@@ -481,7 +481,15 @@ export async function POST(
       ?.toLowerCase() ?? "leadstack.dev";
 
   // Confirmation / payment-pending email.
-  if (emailIsConfigured()) {
+  // Marketing-vs-transactional audit (2026-08-27) follow-up, found live in
+  // QA: this route never checked emailOptedOut (correct — it's not a
+  // marketing send) but ALSO never checked the new deliverabilitySuppressed
+  // flag, so a hard-bounced/complained address could still get sent a
+  // brand-new booking confirmation. Every other booking email call site
+  // gates on this; this was the one gap.
+  const contactSuppressedSnap = await db.doc(`contacts/${created.contactId}`).get();
+  const contactDeliverabilitySuppressed = contactSuppressedSnap.data()?.deliverabilitySuppressed === true;
+  if (emailIsConfigured() && !contactDeliverabilitySuppressed) {
     try {
       const rendered = paymentRequired
         ? renderBookingPaymentPendingEmail({
