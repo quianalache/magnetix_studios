@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { PublicForm } from "@/components/forms/public-form";
 import { defaultFormFields, defaultFormSettings } from "@/types/forms";
 import type { LeadForm } from "@/types/forms";
@@ -26,13 +26,20 @@ const BUTTON_STYLE_CLASS: Record<ButtonStyle, string> = {
   outline: "border border-[#5E2574] text-[#5E2574] hover:bg-[#5E2574]/10",
 };
 
-export function HeadingRender({ text, level, alignment }: { text: string; level: "h1" | "h2" | "h3"; alignment: Alignment }) {
+// `text` is typed `ReactNode`, not `string` -- required once the field has
+// `contentEditable: true` (config.tsx). Confirmed via Puck's own docs: "Enabling
+// inline text editing changes the field value in the render function from a
+// string to a React node" -- Puck owns the contentEditable<->Data sync
+// internally, this component just needs to stop assuming a string (no
+// .toUpperCase()/string concatenation on `text`) and render it as children,
+// which JSX already does for any ReactNode with zero other changes.
+export function HeadingRender({ text, level, alignment }: { text: ReactNode; level: "h1" | "h2" | "h3"; alignment: Alignment }) {
   const Tag = level;
   const size = level === "h1" ? "text-4xl font-bold" : level === "h2" ? "text-3xl font-bold" : "text-2xl font-semibold";
   return <Tag className={`${size} tracking-tight ${ALIGN_CLASS[alignment]}`}>{text}</Tag>;
 }
 
-export function TextRender({ text, alignment }: { text: string; alignment: Alignment }) {
+export function TextRender({ text, alignment }: { text: ReactNode; alignment: Alignment }) {
   return <p className={`whitespace-pre-wrap text-base text-gray-700 ${ALIGN_CLASS[alignment]}`}>{text}</p>;
 }
 

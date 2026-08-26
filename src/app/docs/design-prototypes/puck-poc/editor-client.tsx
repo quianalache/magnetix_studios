@@ -214,11 +214,21 @@ export default function PuckPocEditor() {
             // own action types (confirmed in the installed package's
             // types) — this is the real, working mechanism a production
             // "prebuilt section" insertion would use, not a hack.
+            //
+            // `recordHistory: true` -- found via source-level investigation
+            // of Puck's reducer (packages/core/reducer/index.ts on GitHub):
+            // "setData" is in that reducer's default NON-history-recording
+            // action list (alongside registerZone/unregisterZone/setUi/set),
+            // so a prebuilt-section insertion via setData would silently be
+            // un-undoable unless explicitly opted back in. `recordHistory`
+            // is a real, typed, top-level field on every PuckAction
+            // (confirmed in the installed 0.23.0 types) precisely for this.
             <button
               type="button"
               onClick={() =>
                 dispatch({
                   type: "setData",
+                  recordHistory: true,
                   data: (prev) => ({ content: [buildHeroSection(), ...prev.content] }),
                 })
               }

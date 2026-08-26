@@ -215,7 +215,13 @@ const config: Config = {
     Heading: {
       label: "Heading",
       fields: {
-        text: { type: "textarea", label: "Text" },
+        // `contentEditable: true` is Puck's own native inline-canvas-editing
+        // mechanism (shipped in 0.20, confirmed present in the installed
+        // 0.23.0 types) -- clicking into the rendered Heading on the canvas
+        // edits it directly, no custom implementation, no parallel state.
+        // The Fields-panel textarea (below, in the sidebar) keeps working
+        // as a second, always-available way to edit the same field.
+        text: { type: "textarea", label: "Text", contentEditable: true },
         level: {
           type: "select",
           label: "Level",
@@ -234,7 +240,7 @@ const config: Config = {
     Text: {
       label: "Text",
       fields: {
-        text: { type: "textarea", label: "Text" },
+        text: { type: "textarea", label: "Text", contentEditable: true },
         alignment: { type: "radio", label: "Alignment", options: ALIGN_OPTIONS },
       },
       defaultProps: { text: "Add your copy here.", alignment: "left" },
