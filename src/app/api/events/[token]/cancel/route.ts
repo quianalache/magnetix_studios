@@ -50,9 +50,9 @@ export async function POST(
   const ref = db.collection("events").doc(verified.eventId);
 
   // Transactional read + flip so concurrent cancels collapse.
-  let cancelledEvent: CalendarEvent | null = null;
+  let result: { event: CalendarEvent; alreadyCancelled: boolean } | null = null;
   try {
-    cancelledEvent = await db.runTransaction(async (txn) => {
+    result = await db.runTransaction(async (txn) => {
       const eventSnap = await txn.get(ref);
       if (!eventSnap.exists) throw new TokenInvalid();
       const event = eventSnap.data() as CalendarEvent;
@@ -61,8 +61,16 @@ export async function POST(
       }
       const status = eventStatus(event);
       if (status === "cancelled") {
-        // Idempotent — second cancel returns success.
-        return event;
+        // Idempotent — second cancel still returns success to the client
+        // (the booking genuinely IS cancelled), but flagged so the caller
+        // skips re-running side effects below. Booking loop audit
+        // (2026-08-26): confirmed LIVE that skipping this flag here
+        // produced two real duplicate "Cancelled" emails (and would have
+        // duplicated the activity row, automation trigger, and webhook
+        // too) for one retried cancel — pre-existing, unrelated to the
+        // new notification producer, which is separately idempotent by
+        // its own dedupeKey regardless.
+        return { event, alreadyCancelled: true };
       }
       if (status === "completed" || status === "no_show") {
         throw new BadState("This meeting has already taken place.");
@@ -74,7 +82,7 @@ export async function POST(
         cancelReason: "by_visitor",
         updatedAt: FieldValue.serverTimestamp(),
       });
-      return event;
+      return { event, alreadyCancelled: false };
     });
   } catch (err) {
     if (err instanceof TokenInvalid) {
@@ -90,8 +98,8 @@ export async function POST(
     );
   }
 
-  if (cancelledEvent) {
-    await runSideEffects(cancelledEvent, token);
+  if (result && !result.alreadyCancelled) {
+    await runSideEffects(result.event, token);
   }
 
   return NextResponse.json({ ok: true });
