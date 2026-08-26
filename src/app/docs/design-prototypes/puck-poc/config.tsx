@@ -35,13 +35,23 @@ const ALIGN_OPTIONS = [
   { label: "Right", value: "right" },
 ];
 
-const SM_BASIS_CLASS: Record<"auto" | "1/4" | "1/3" | "1/2" | "2/3" | "3/4", string> = {
-  auto: "sm:flex-1",
-  "1/4": "sm:basis-1/4",
-  "1/3": "sm:basis-1/3",
-  "1/2": "sm:basis-1/2",
-  "2/3": "sm:basis-2/3",
-  "3/4": "sm:basis-3/4",
+/**
+ * 12-column grid span per Column width value. Every entry is `col-span-12`
+ * below `sm:` (mobile: always full-width, i.e. stacked) and only takes its
+ * real fraction at `sm:` and up — same mobile-safe pattern as everywhere
+ * else in this repo's responsive CSS, just expressed as a grid span instead
+ * of a flex-basis. "auto" has no natural grid-span meaning (it's a
+ * flex-only concept — "share remaining space") so it falls back to half
+ * width; it isn't part of the required Column-width acceptance matrix.
+ */
+const COLUMN_SPAN_CLASS: Record<"auto" | "1/4" | "1/3" | "1/2" | "2/3" | "3/4" | "full", string> = {
+  auto: "col-span-12 sm:col-span-6",
+  "1/4": "col-span-12 sm:col-span-3",
+  "1/3": "col-span-12 sm:col-span-4",
+  "1/2": "col-span-12 sm:col-span-6",
+  "2/3": "col-span-12 sm:col-span-8",
+  "3/4": "col-span-12 sm:col-span-9",
+  full: "col-span-12",
 };
 
 const config: Config = {
@@ -138,23 +148,31 @@ const config: Config = {
           { type: "Column", props: { id: `Column-${Math.random().toString(36).slice(2, 8)}`, width: "1/2", alignment: "left", elements: [] } },
         ],
       },
-      // IMPORTANT, found by actually rendering this: Puck wraps each slot
-      // item in its own internal DOM node for drag-and-drop tracking, so a
-      // flex/grid container className belongs on the <Columns> slot
-      // component ITSELF (className/style are real DropZoneProps), NOT on
-      // a separate wrapping <div> one level up -- flexbox only sizes DIRECT
-      // children, and that wrapping <div> approach put my flex-basis
-      // classes one level too deep, leaving both columns full-width
-      // regardless of viewport (confirmed via computed-style inspection:
-      // the row's actual children had no className and the intended sizing
-      // never reached them). This is the fix, not a workaround.
+      // The Row->Column relationship needs BOTH fixes found in this repo's
+      // Puck testing, for two DIFFERENT reasons:
+      //  1. The container (this Row): className/style go on the <Columns>
+      //     slot component call itself, not a separate wrapping <div> --
+      //     Puck wraps each slot item in its own DOM node, so a wrapping
+      //     div here would put "display:grid" one level too deep to
+      //     actually contain those per-item wrapper nodes as grid children.
+      //  2. Per-item WIDTH (Column, below): the container fix alone isn't
+      //     enough for sizing that depends on each item's OWN field value
+      //     (width), because Puck's per-item wrapper -- not Column's own
+      //     rendered <div> -- is what the grid actually sizes. That needs
+      //     `inline: true` + `puck.dragRef` on Column itself; see there.
+      // CSS Grid (not flexbox) here specifically because grid-column spans
+      // give each Column a clean, independent way to declare its own size
+      // as a class on itself, once dragRef makes that div the real grid
+      // child -- flexbox's flex-basis needs the same fix but grid spans map
+      // more directly onto "1/4, 1/3, 1/2, 2/3, 3/4" as documented in the
+      // task and are simpler to reason about.
       render: ({ gap, verticalAlign, columns: Columns }) => (
         <Columns
           allow={["Column"]}
-          className="flex flex-col flex-wrap sm:flex-row"
+          className="grid grid-cols-12"
           style={{
             gap,
-            alignItems: verticalAlign === "center" ? "center" : verticalAlign === "bottom" ? "flex-end" : "flex-start",
+            alignItems: verticalAlign === "center" ? "center" : verticalAlign === "bottom" ? "flex-end" : "start",
           }}
         />
       ),
@@ -162,17 +180,30 @@ const config: Config = {
 
     Column: {
       label: "Column",
+      // `inline: true` tells Puck NOT to wrap this component's rendered
+      // output in its own internal positioning wrapper when it's a slot
+      // item -- instead Puck hands the component `puck.dragRef` (a ref
+      // callback) to attach to whichever DOM node should be treated as the
+      // real slot item for drag/selection/layout purposes. Without this,
+      // Column's own width-bearing <div> sits one level BELOW the actual
+      // grid child Puck creates, so `col-span-*` classes on it are inert --
+      // confirmed via computed-style inspection in the prior POC pass (both
+      // columns landed at the same `top`, full width, regardless of their
+      // width field). With `inline` + `dragRef` on Column's own root <div>,
+      // that div IS the real grid child, and its `col-span-*` class
+      // (COLUMN_SPAN_CLASS[width]) genuinely controls the grid layout.
+      inline: true,
       fields: {
         width: { type: "select", label: "Width", options: WIDTH_OPTIONS },
         alignment: { type: "radio", label: "Content Alignment", options: ALIGN_OPTIONS },
         elements: { type: "slot", allow: ["Heading", "Text", "Button", "Image", "Form"] },
       },
       defaultProps: { width: "auto", alignment: "left", elements: [] },
-      render: ({ width, alignment, elements: Elements }) => (
+      render: ({ width, alignment, elements: Elements, puck }) => (
         <div
+          ref={puck.dragRef}
           className={
-            "flex min-w-0 flex-col gap-4 " +
-            (width === "full" ? "w-full" : `w-full sm:w-auto ${SM_BASIS_CLASS[width as keyof typeof SM_BASIS_CLASS]}`) +
+            `min-w-0 flex flex-col gap-4 ${COLUMN_SPAN_CLASS[width as keyof typeof COLUMN_SPAN_CLASS]}` +
             (alignment === "center" ? " items-center text-center" : alignment === "right" ? " items-end text-right" : "")
           }
         >
