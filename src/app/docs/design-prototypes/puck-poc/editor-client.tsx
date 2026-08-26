@@ -27,6 +27,23 @@ const VIEWPORTS = [
   { width: 390, height: "auto" as const, label: "Mobile", icon: "Smartphone" as const },
 ];
 
+// Hoisted to stable module-level references -- ROOT CAUSE FIX for the
+// Insert Undo Blocker (see the task's audit report). `<Puck>` is a
+// CONTROLLED component here (data/onChange round-trips through React
+// state), so a re-created inline object literal for `iframe`/`metadata`
+// gets a brand-new identity on every single render, including the
+// re-render triggered by the very insert action being tested. A minimal
+// stock-Puck repro (puck-poc/minimal-repro) isolated this exact object-
+// identity churn as the trigger: with a fresh `iframe={{...}}` literal,
+// Undo silently no-ops on the FIRST insert of a session (index/hasPast()
+// bookkeeping flips correctly, but the restored state doesn't change --
+// consistent with a shared/mutated array reference rather than an
+// immutable clone, the same class of bug as puckeditor/puck#1736).
+// Hoisting these props to stable references eliminates the churn and
+// fixed it in the isolated repro across 3 repeated runs; see the report.
+const IFRAME_CONFIG = { enabled: true, waitForStyles: true, syncHostStyles: true };
+const PUCK_METADATA = { subAccountId: "poc-subaccount" };
+
 /** Seeded so the canvas is immediately taller than the viewport (scrolling
  *  test, §13) and already contains a real two-column layout (§5) without
  *  requiring manual setup first. */
@@ -199,8 +216,8 @@ export default function PuckPocEditor() {
           data={data}
           onChange={setData}
           viewports={VIEWPORTS}
-          iframe={{ enabled: true, waitForStyles: true, syncHostStyles: true }}
-          metadata={{ subAccountId: "poc-subaccount" }}
+          iframe={IFRAME_CONFIG}
+          metadata={PUCK_METADATA}
           height="calc(100vh - 60px)"
           renderHeaderActions={({ dispatch }) => (
             // IMPORTANT finding from actually running this: the `data` prop
@@ -223,6 +240,10 @@ export default function PuckPocEditor() {
             // un-undoable unless explicitly opted back in. `recordHistory`
             // is a real, typed, top-level field on every PuckAction
             // (confirmed in the installed 0.23.0 types) precisely for this.
+            // NOTE: this flag alone did NOT fix Undo in live testing until
+            // the `iframe`/`metadata` props above were also hoisted to
+            // stable module-level references -- see IFRAME_CONFIG's doc
+            // comment for the actual root cause this fixes.
             <button
               type="button"
               onClick={() =>
