@@ -24,6 +24,7 @@
     "@giphy/js-fetch-api": "^5.8.0",
     "@giphy/js-types": "^5.1.0",
     "@giphy/react-components": "^10.1.2",
+    "@puckeditor/core": "^0.23.0",
     "@react-pdf/renderer": "^4.5.1",
     "@sparticuz/chromium-min": "^149.0.0",
     "@stripe/react-stripe-js": "^6.8.0",
