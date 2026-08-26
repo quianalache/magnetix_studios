@@ -331,31 +331,32 @@ function introRow(blockId: string, eyebrow: string, headline: string): RowNode {
 // FaqBlockContent (verified directly): { eyebrow, headline, items: { id,
 // question, answer }[] }. V1 renders items as a VERTICAL STACK of native
 // <details><summary> accordion elements ("mt-8 space-y-3 text-left" wrapping
-// individual <details> blocks) -- NOT a grid like Features/Testimonials.
-// Migrating this as N columns in one row (matching Features' shape) would
-// misrepresent the actual V1 layout as side-by-side instead of stacked, so
-// FAQ gets one Row per item instead -- see report for why this matters.
+// individual <details> blocks) -- real, zero-JS expand/collapse behavior.
 //
-// INTERACTION LOSS (see report §9/§15): the browser's native <details>
-// element gives V1 real, zero-JS expand/collapse accordion behavior. V2's
-// current leaf union has no accordion-capable element -- `heading` and
-// `text` are both always-visible/static. The migrated representation below
-// preserves every question and every answer's full text, in order, but
-// renders them as an always-expanded static list: the collapse/expand
-// interaction itself does not survive this migration. Per the task's
-// explicit instruction, no new Element type is invented here to paper over
-// this -- it is reported as a real gap instead.
+// This previously migrated to static stacked Heading/Text rows, which lost
+// that interactivity entirely (a documented gap in the Phase B report).
+// Resolved now that V2 has a general-purpose `accordion` element: FAQ
+// migrates to intro Row (eyebrow/headline, unchanged) + one content Row
+// whose single Column holds ONE Accordion element containing every FAQ
+// item -- restoring real expand/collapse in migrated V2 rendering.
+// `allowMultiple: true` matches V1's actual behavior (plain <details> per
+// item, never grouped to single-open) exactly -- not a new default choice.
 
 function migrateFaq(block: FaqBlock): SectionNode {
   const c = block.content;
   const rows: RowNode[] = [introRow(block.id, c.eyebrow, c.headline)];
 
-  for (const item of c.items) {
-    const col = column(deriveId(item.id, "col"), "full", "left", [
-      element(deriveId(item.id, "question"), "heading", { text: item.question, level: "h3", alignment: "left" }),
-      element(deriveId(item.id, "answer"), "text", { text: item.answer, alignment: "left" }),
-    ]);
-    rows.push(row(deriveId(item.id, "row"), oneColumnLayout(), [col]));
+  if (c.items.length > 0) {
+    const accordion = element(deriveId(block.id, "accordion"), "accordion", {
+      items: c.items.map((item) => ({
+        id: deriveId(item.id, "accordion-item"),
+        title: item.question,
+        content: item.answer,
+      })),
+      allowMultiple: true,
+    });
+    const col = column(deriveId(block.id, "content-col"), "full", "left", [accordion]);
+    rows.push(row(deriveId(block.id, "content-row"), oneColumnLayout(), [col]));
   }
 
   return section(deriveId(block.id, "section"), "none", block.spacing, rows);

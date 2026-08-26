@@ -141,11 +141,50 @@ export interface FormElement extends ElementBase {
   content: FormElementContent;
 }
 
+/** One expand/collapse row inside an Accordion element. Plain-text
+ *  `title`/`content` only — no rich text/nested elements in this phase,
+ *  matching how V1's FaqItem (`question`/`answer`, both plain strings) was
+ *  already shaped. `id` is stable per item (mirrors `FeatureItem`/
+ *  `TestimonialItem`/`FaqItem`'s own `id` field in V1) so a future
+ *  add/remove/reorder editor UI can key each row without relying on array
+ *  position. */
+export interface AccordionItem {
+  id: NodeId;
+  title: string;
+  content: string;
+}
+
+/** General-purpose expand/collapse list — deliberately NOT named "faq" and
+ *  not FAQ-specific: the same element works for FAQs, policies, expandable
+ *  product details, or any other collapsible content. FAQ itself becomes a
+ *  Section *template* that happens to insert one of these (a later phase),
+ *  not a dedicated element type. See ElementView's "accordion" case for the
+ *  rendering/interactivity contract this content shape supports. */
+export interface AccordionElementContent {
+  items: AccordionItem[];
+  /** Whether more than one item can be expanded at the same time. Defaults
+   *  to `true` when omitted (see ElementView) — matches how V1's FAQ block
+   *  itself behaved (plain `<details>` per item, no single-open grouping),
+   *  so migrating existing FAQ content changes nothing about this behavior.
+   *  `false` is supported by the type/renderer now (native `<details
+   *  name="...">` grouping — no client-side state needed) even though no
+   *  editor control sets it yet. */
+  allowMultiple?: boolean;
+}
+export interface AccordionElement extends ElementBase {
+  type: "accordion";
+  content: AccordionElementContent;
+}
+
 /** Phase A leaf types — matches the V1 primitives that map 1:1 onto a
  *  future Element (heading/text/button/image/divider/spacer/form) plus the
- *  new Video element. Hero/Features/Testimonials/FAQ/CTA are deliberately
- *  NOT here — per the audit, those become Section *templates* (compositions
- *  of these primitives) in a later phase, not element types of their own. */
+ *  new Video element — extended here with the general-purpose Accordion
+ *  element (added to close the FAQ migration's interaction-loss gap; see
+ *  migrate.ts). Hero/Features/Testimonials/CTA are deliberately NOT here —
+ *  per the audit, those become Section *templates* (compositions of these
+ *  primitives) in a later phase, not element types of their own; FAQ
+ *  follows the same rule once a "FAQ" Section template is built — the
+ *  Accordion element itself stays generic. */
 export type ElementNode =
   | HeadingElement
   | TextElement
@@ -154,7 +193,8 @@ export type ElementNode =
   | VideoElement
   | DividerElement
   | SpacerElement
-  | FormElement;
+  | FormElement
+  | AccordionElement;
 
 export type ElementType = ElementNode["type"];
 

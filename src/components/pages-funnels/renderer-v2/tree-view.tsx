@@ -177,6 +177,33 @@ export function ElementView({
         </div>
       );
     }
+
+    case "accordion": {
+      const c = element.content;
+      // Native <details>/<summary> — zero-JS, keyboard-accessible by
+      // default (Enter/Space toggle a focused <summary>, Tab moves between
+      // items), and the same primitive V1's FAQ block already used, so
+      // published behavior for existing FAQ content doesn't regress.
+      //
+      // Single-open-at-a-time (`allowMultiple: false`) is implemented via
+      // the HTML `name` attribute — giving every <details> in this element
+      // the same `name` makes the browser itself close the others when one
+      // opens, with no client-side state and no stateful complexity in this
+      // otherwise-pure renderer. `allowMultiple` defaults to true (multiple
+      // open at once) when unset, matching V1's FAQ block's actual
+      // behavior — it never had single-open grouping either.
+      const groupName = c.allowMultiple === false ? element.id : undefined;
+      return (
+        <div className="space-y-3">
+          {c.items.map((item) => (
+            <details key={item.id} name={groupName} className="group rounded-xl border border-border bg-card p-4">
+              <summary className="cursor-pointer text-sm font-semibold marker:content-none group-open:mb-2">{item.title}</summary>
+              <p className="text-sm text-muted-foreground">{item.content}</p>
+            </details>
+          ))}
+        </div>
+      );
+    }
   }
 }
 

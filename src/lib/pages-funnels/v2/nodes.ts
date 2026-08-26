@@ -44,6 +44,8 @@ export function defaultElementContent(type: ElementType): ElementNode["content"]
       return { height: 48 };
     case "form":
       return { formId: null, formName: null };
+    case "accordion":
+      return { items: [{ id: newNodeId(), title: "Question", content: "Answer" }], allowMultiple: true };
   }
 }
 
