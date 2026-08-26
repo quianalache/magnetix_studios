@@ -630,6 +630,24 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // External billing identities and subscriptions are server-only. They
+    // contain provider identifiers and are accessed through server services
+    // that re-apply sub-account tenancy checks.
+    match /externalBillingCustomers/{customerId} {
+      allow read, write: if false;
+    }
+
+    match /externalSubscriptions/{subscriptionId} {
+      allow read, write: if false;
+    }
+
+    // Provider-neutral payment ledger records are server-only. They retain
+    // provider references and are only projected to customer/admin views by
+    // authenticated server services.
+    match /externalPayments/{paymentId} {
+      allow read, write: if false;
+    }
+
     // ---------- purchaser email blocklist ----------
     // Suppression list for the agency "Email purchasers" tool. Written by the
     // manual add/remove routes + the Stripe dispute handler (Admin SDK); read
@@ -1131,6 +1149,30 @@ service cloud.firestore {
         );
         allow write: if false;
       }
+    }
+
+    // ---------- pages & funnels (native page builder) ----------
+    // Draft/library reads and all writes are restricted to active
+    // sub-account members, same tenancy shape as /forms above. A page with
+    // status "published" is ADDITIONALLY readable by anyone (including
+    // unauthenticated visitors) so the isolated /p/[pageId] public preview
+    // route can render it client-side without a server round-trip; a draft
+    // stays member-only so a guessed id can't leak unfinished content.
+    match /pages/{pageId} {
+      allow read: if resource.data.status == "published" ||
+        canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
     }
 
     // ---------- energetic decoder readings ----------
