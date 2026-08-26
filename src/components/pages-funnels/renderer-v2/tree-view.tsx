@@ -63,14 +63,26 @@ const MAX_WIDTH_CLASS: Record<SectionNode["style"]["maxWidth"], string> = {
   full: "max-w-none",
 };
 
+/**
+ * `RowView` below stacks columns vertically (`flex-col`) under the `sm:`
+ * breakpoint and only switches to a horizontal row (`sm:flex-row`) at
+ * `sm:` and up. `flex-basis` is a MAIN-AXIS size — in a `flex-col`
+ * container that's *height*, not width — so an un-prefixed `basis-1/2`
+ * would size a 2-column row's columns to half the row's height on mobile
+ * instead of leaving them full-width, visibly squishing/clipping migrated
+ * multi-column content (Features/Testimonials) on narrow screens. Every
+ * width below is prefixed `sm:` so it only takes effect once the row is
+ * actually horizontal, with a bare `w-full` for the stacked (mobile) case
+ * — the smallest fix that prevents that breakage without building a real
+ * per-breakpoint override system. */
 const COLUMN_WIDTH_CLASS: Record<ColumnNode["width"], string> = {
-  auto: "flex-1",
-  "1/4": "basis-1/4",
-  "1/3": "basis-1/3",
-  "1/2": "basis-1/2",
-  "2/3": "basis-2/3",
-  "3/4": "basis-3/4",
-  full: "basis-full",
+  auto: "w-full sm:w-auto sm:flex-1",
+  "1/4": "w-full sm:w-auto sm:basis-1/4",
+  "1/3": "w-full sm:w-auto sm:basis-1/3",
+  "1/2": "w-full sm:w-auto sm:basis-1/2",
+  "2/3": "w-full sm:w-auto sm:basis-2/3",
+  "3/4": "w-full sm:w-auto sm:basis-3/4",
+  full: "w-full",
 };
 
 const VERTICAL_ALIGN_CLASS: Record<RowNode["layout"]["verticalAlign"], string> = {
