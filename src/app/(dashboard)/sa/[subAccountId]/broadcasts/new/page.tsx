@@ -49,12 +49,12 @@ import {
   newBlockId,
 } from "@/components/broadcasts/block-editors";
 import {
-  AudienceFilterPicker,
+  AudienceConditionBuilder,
   audienceFilterToApiShape,
   defaultAudienceFilterState,
   useAudiencePreview,
   type AudienceFilterState,
-} from "@/components/broadcasts/audience-filter-picker";
+} from "@/components/broadcasts/audience-condition-builder";
 import { TemplatePickerDialog } from "@/components/broadcasts/template-picker-dialog";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
@@ -326,8 +326,13 @@ export default function NewBroadcastPage() {
           </div>
 
           <div className="rounded-xl border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Audience</h2>
-            <AudienceFilterPicker contacts={contacts} value={audience} onChange={setAudience} />
+            <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
+            <AudienceConditionBuilder
+              contacts={contacts}
+              value={audience}
+              onChange={setAudience}
+              subAccountId={subAccountId}
+            />
           </div>
 
           <div className="space-y-3">

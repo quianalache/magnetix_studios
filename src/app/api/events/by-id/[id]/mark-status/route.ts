@@ -150,7 +150,10 @@ interface SideEffectResult {
    *   - `no_contact`            event has no linked contact
    *   - `email_not_configured`  RESEND_API_KEY / EMAIL_FROM missing
    *   - `no_contact_email`      contact record has no email field
-   *   - `contact_opted_out`     contact.emailOptedOut === true
+   *   - `deliverability_suppressed` contact.deliverabilitySuppressed === true
+   *                              (hard bounce / spam complaint — NOT a
+   *                              marketing emailOptedOut, see the
+   *                              marketing-vs-transactional audit)
    *   - `missing_records`       contact / sub-account doc not found
    *   - `bad_timestamps`        event's startAt/endAt unreadable
    *   - `send_failed`           Resend returned an error
@@ -160,7 +163,7 @@ interface SideEffectResult {
     | "no_contact"
     | "email_not_configured"
     | "no_contact_email"
-    | "contact_opted_out"
+    | "deliverability_suppressed"
     | "missing_records"
     | "bad_timestamps"
     | "send_failed";
@@ -286,8 +289,12 @@ async function runStatusSideEffects(
     if (!contact.email) {
       return { emailSent: false, emailSkipReason: "no_contact_email" };
     }
-    if (contact.emailOptedOut) {
-      return { emailSent: false, emailSkipReason: "contact_opted_out" };
+    // Marketing-vs-transactional audit (2026-08-27): an operator-cancelled
+    // booking notice is transactional — gated on deliverabilitySuppressed
+    // (hard bounce / spam complaint), never on emailOptedOut (marketing
+    // consent).
+    if (contact.deliverabilitySuppressed) {
+      return { emailSent: false, emailSkipReason: "deliverability_suppressed" };
     }
     const startAt = (
       event.startAt as { toDate?: () => Date } | null

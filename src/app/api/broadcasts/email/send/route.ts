@@ -90,10 +90,20 @@ export async function POST(request: Request) {
   if (
     audienceFilter.kind !== "all" &&
     audienceFilter.kind !== "tag" &&
-    audienceFilter.kind !== "pipeline_stage"
+    audienceFilter.kind !== "pipeline_stage" &&
+    audienceFilter.kind !== "conditions"
   ) {
     return NextResponse.json(
-      { error: "audienceFilter.kind must be 'all', 'tag', or 'pipeline_stage'" },
+      { error: "audienceFilter.kind must be 'all', 'tag', 'pipeline_stage', or 'conditions'" },
+      { status: 400 },
+    );
+  }
+  if (
+    audienceFilter.kind === "conditions" &&
+    (!audienceFilter.group || !Array.isArray(audienceFilter.group.all))
+  ) {
+    return NextResponse.json(
+      { error: "audienceFilter.group.all must be an array" },
       { status: 400 },
     );
   }

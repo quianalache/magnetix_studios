@@ -126,8 +126,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: "tenancy_missing" });
   }
   const contact = contactSnap.data() as Contact;
-  if (!contact.email || contact.emailOptedOut) {
-    return NextResponse.json({ ok: true, skipped: "opt_out_or_no_email" });
+  // Marketing-vs-transactional audit (2026-08-27): a booking reminder is
+  // transactional — it must NOT be gated on emailOptedOut (marketing
+  // consent). Only deliverabilitySuppressed (hard bounce / spam complaint —
+  // an address genuinely unsafe to send anything to) stops it.
+  if (!contact.email || contact.deliverabilitySuppressed) {
+    return NextResponse.json({ ok: true, skipped: "suppressed_or_no_email" });
   }
   const sub = subSnap.data() as SubAccountDoc;
   // Booking-page may have been deleted since the schedule landed. Fall

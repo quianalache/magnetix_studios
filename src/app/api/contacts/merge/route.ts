@@ -142,6 +142,10 @@ export async function POST(request: Request) {
     // email/number — an opt-out on EITHER record sticks on the survivor.
     emailOptedOut: survivor.emailOptedOut || loser.emailOptedOut,
     smsOptedOut: survivor.smsOptedOut || loser.smsOptedOut,
+    // Marketing-vs-transactional audit (2026-08-27): same "sticks on either
+    // record" rule — a hard-bounced/complained address stays suppressed for
+    // transactional mail after a merge too, same reasoning as opt-out above.
+    deliverabilitySuppressed: !!(survivor.deliverabilitySuppressed || loser.deliverabilitySuppressed),
   };
 
   await performContactMerge({

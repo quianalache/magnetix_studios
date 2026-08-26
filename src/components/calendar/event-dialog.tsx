@@ -546,7 +546,7 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
           | "no_contact"
           | "email_not_configured"
           | "no_contact_email"
-          | "contact_opted_out"
+          | "deliverability_suppressed"
           | "missing_records"
           | "bad_timestamps"
           | "send_failed";
@@ -567,8 +567,8 @@ function BookingActionsPanel({ event }: { event: CalendarEvent }) {
               ? "Resend isn't configured on this deployment"
               : reason === "no_contact_email"
                 ? "the visitor's contact record has no email address"
-                : reason === "contact_opted_out"
-                  ? "the visitor opted out of email"
+                : reason === "deliverability_suppressed"
+                  ? "the visitor's email address bounced or complained previously"
                   : reason === "send_failed"
                     ? "the email send failed (check Vercel logs)"
                     : "couldn't reach the visitor by email";

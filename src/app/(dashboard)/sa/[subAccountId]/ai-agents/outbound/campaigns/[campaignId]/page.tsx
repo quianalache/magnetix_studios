@@ -16,9 +16,8 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
-import { PIPELINE_STAGES } from "@/types/deals";
+import { audienceLabel } from "@/lib/broadcasts/audience-label";
 import type {
-  BroadcastAudienceFilter,
   VoiceCampaignDoc,
   VoiceCampaignOutcome,
   VoiceCampaignRecipientDoc,
@@ -358,12 +357,6 @@ export default function VoiceCampaignDetailPage() {
   );
 }
 
-function audienceLabel(filter: BroadcastAudienceFilter): string {
-  if (filter.kind === "all") return "All contacts";
-  if (filter.kind === "tag") return `Tag: ${filter.tag}`;
-  const stage = PIPELINE_STAGES.find((s) => s.id === filter.stage);
-  return `Stage: ${stage?.label ?? filter.stage}`;
-}
 
 const SKIP_LABELS: Record<VoiceCampaignSkipReason, string> = {
   opted_out: "Opted out",

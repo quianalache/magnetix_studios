@@ -180,7 +180,10 @@ async function runMarkPaidSideEffects(args: {
   );
 
   if (!contact || !sub || !emailIsConfigured()) return;
-  if (!contact.email || contact.emailOptedOut) return;
+  // Marketing-vs-transactional audit (2026-08-27): payment confirmation is
+  // transactional — gated on deliverabilitySuppressed (hard bounce / spam
+  // complaint), never on emailOptedOut (marketing consent).
+  if (!contact.email || contact.deliverabilitySuppressed) return;
 
   const publicEventUrl = buildEventPublicUrl(rawToken);
   const rendered = renderBookingConfirmationEmail({

@@ -36,9 +36,14 @@ export type ConditionOp =
   | "equals"
   | "not_equals"
   | "contains"
+  // Broadcast Segmentation V1 (2026-08-27) — added for negation coverage
+  // ("does not contain" / tag exclusion). Purely additive: every existing
+  // condition doc using the ops above is unaffected.
+  | "not_contains"
   | "is_set"
   | "not_set"
   | "has_tag"
+  | "not_has_tag"
   | "in_stage"
   | "source_is";
 

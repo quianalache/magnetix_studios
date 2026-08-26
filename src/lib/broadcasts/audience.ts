@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
+import { evalConditionGroup } from "@/lib/segmentation/eval-condition-group";
 import type { BroadcastAudienceFilter } from "@/types";
 import type { Contact } from "@/types/contacts";
 
@@ -13,13 +14,24 @@ import type { Contact } from "@/types/contacts";
  * dialog without a second round-trip — and so the parent broadcast doc's
  * totals.audienceSize matches what we actually queue, never wider.
  *
- * v1 supports three filter shapes:
- *   - { kind: "all" }                            — every contact in the sub-account
- *   - { kind: "tag", tag }                       — contacts whose tags array contains tag
- *   - { kind: "pipeline_stage", stage }          — contacts whose pipelineStage matches
+ * Filter shapes:
+ *   - { kind: "all" }                        — every contact in the sub-account
+ *   - { kind: "tag", tag }                   — legacy — contacts whose tags array contains tag
+ *   - { kind: "pipeline_stage", stage }      — legacy — contacts whose pipelineStage matches
+ *   - { kind: "conditions", group }          — Segmentation V1 (2026-08-27):
+ *     arbitrary AND/OR condition group, evaluated with the SAME engine the
+ *     Workflow Builder uses (lib/segmentation/eval-condition-group.ts).
+ *     Firestore can't express arbitrary field/operator combinations as a
+ *     compound query, so this fetches the same subAccountId-scoped
+ *     candidate set "all" already fetches today, then evaluates the group
+ *     in server memory per contact — no new Firestore query shape, no
+ *     client-computed id list ever trusted, same bounded-candidate-set
+ *     pattern this function already used before this change.
  *
- * v2 will replace this with a saved Smart List doc reference and stack
- * filters (tag AND stage AND source AND ...).
+ * This IS the send-time-authoritative resolver — /api/broadcasts/email/send
+ * calls this directly (never trusts a client-supplied recipient list), and
+ * the per-recipient step route re-checks opt-out/suppression live again at
+ * actual send time on top of this.
  */
 export interface ResolvedAudience {
   /** Contacts that will receive a send (passed all pre-flight checks). */
@@ -68,6 +80,13 @@ export async function resolveAudience(
     if (territoryFilter) {
       const tId = contact.territoryId ?? null;
       if (!tId || !territoryFilter.includes(tId)) continue;
+    }
+    // Segmentation V1 — condition-group contacts that don't match are
+    // simply not in this audience at all, same as a Firestore query
+    // excluding them; not surfaced in `skipped` (that list is specifically
+    // "would have matched, but can't be sent to" — opt-out / no email).
+    if (filter.kind === "conditions" && !evalConditionGroup(filter.group, contact)) {
+      continue;
     }
     if (contact.emailOptedOut) {
       skipped.push({ contact, reason: "opt_out" });

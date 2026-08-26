@@ -97,8 +97,33 @@ export interface Contact {
   // Compliance flags. Flipped by the unsubscribe page (email) and the
   // Twilio inbound webhook (sms STOP). The automation step executor
   // checks these before sending and logs `automation_step_skipped`.
+  //
+  // `emailOptedOut` means "don't send OWNER-CREATED marketing/promotional
+  // email" (Broadcast, Workflow Send Email) — it is a MARKETING consent
+  // flag, not a channel kill-switch. It must never gate legitimate
+  // transactional/system email (booking confirmations, receipts, access
+  // notices, security mail) — see `deliverabilitySuppressed` below for the
+  // flag that actually should.
   emailOptedOut: boolean;
   smsOptedOut: boolean;
+  /**
+   * Marketing-vs-transactional audit (2026-08-27) — deliverability
+   * suppression, DISTINCT from `emailOptedOut`. Set only by the Resend
+   * engagement webhook on a hard bounce or spam complaint
+   * (engagement-webhook.ts) — never by the unsubscribe link, which only
+   * ever sets `emailOptedOut`. The address itself is provably broken or
+   * actively harmful to send to, so this is checked by TRANSACTIONAL email
+   * (booking confirmations/reminders/cancellations) as well as marketing —
+   * unlike `emailOptedOut`, which transactional email must ignore. A hard
+   * bounce/complaint also still sets `emailOptedOut: true` alongside this
+   * (unchanged behavior) so marketing exclusion continues to work off that
+   * one field with no extra check needed there.
+   */
+  deliverabilitySuppressed?: boolean;
+  /** Why deliverabilitySuppressed was set — audit only, never read for
+   *  gating logic. Null/undefined on every contact where it's unset. */
+  deliverabilitySuppressedReason?: "hard_bounce" | "complaint" | null;
+  deliverabilitySuppressedAt?: Timestamp | FieldValue | null;
   /**
    * A2P 10DLC proof-of-consent audit record, written when a contact opts in
    * to SMS via a form's `sms_consent` field. Carriers / The Campaign Registry

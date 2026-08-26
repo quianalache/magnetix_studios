@@ -159,8 +159,23 @@ export async function handleBroadcastEngagementEvent(event: {
 
   if (contactIdToSuppress && suppressReason) {
     const contactRef = db.collection("contacts").doc(contactIdToSuppress);
+    // Marketing-vs-transactional audit (2026-08-27): a hard bounce or spam
+    // complaint means the address is provably broken or actively harmful to
+    // keep sending to — so, unlike a manual unsubscribe-link click, this
+    // sets BOTH flags. `emailOptedOut` keeps the existing marketing-exclusion
+    // behavior working with no changes needed at the Broadcast/Workflow call
+    // sites. `deliverabilitySuppressed` is the NEW flag transactional email
+    // now checks instead of `emailOptedOut` — this is the one real case
+    // where transactional mail SHOULD still be suppressed.
+    const deliverabilitySuppressedReason =
+      suppressReason === "hard bounce" ? "hard_bounce" : "complaint";
     await contactRef
-      .update({ emailOptedOut: true })
+      .update({
+        emailOptedOut: true,
+        deliverabilitySuppressed: true,
+        deliverabilitySuppressedReason,
+        deliverabilitySuppressedAt: FieldValue.serverTimestamp(),
+      })
       .catch((err) =>
         console.warn("[broadcasts/engagement] opt-out write failed", err),
       );

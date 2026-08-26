@@ -1,54 +1,11 @@
 import "server-only";
 
-import type { Condition, ConditionGroup } from "@/types/workflows";
-import type { Contact } from "@/types/contacts";
-
 /**
- * Evaluate a workflow ConditionGroup against a contact. `match: "all"` (the
- * default) requires every condition; `match: "any"` requires at least one.
- * Used for both trigger filters and `if_else` branch nodes. An empty group
- * is always true (no filter).
+ * Re-exports the pure evaluator from lib/segmentation/eval-condition-group.ts
+ * (Broadcast Segmentation V1, 2026-08-27) — extracted there so the exact
+ * same logic can also run client-side for Broadcast's live audience-count
+ * preview. This file keeps its `server-only` marker and its existing import
+ * path/name unchanged for `workflows/engine.ts` (trigger filters, if/else
+ * branch nodes) — nothing about that call site needed to change.
  */
-function getField(contact: Contact, path: string): unknown {
-  if (path.startsWith("customFields.")) {
-    const key = path.slice("customFields.".length);
-    return contact.customFields?.[key] ?? null;
-  }
-  return (contact as unknown as Record<string, unknown>)[path] ?? null;
-}
-
-function evalOne(contact: Contact, c: Condition): boolean {
-  const raw = getField(contact, c.field);
-  const val = (c.value ?? "").trim();
-  switch (c.op) {
-    case "is_set":
-      return raw !== null && raw !== undefined && raw !== "";
-    case "not_set":
-      return raw === null || raw === undefined || raw === "";
-    case "has_tag":
-      return Array.isArray(contact.tags) && contact.tags.includes(val);
-    case "in_stage":
-      return (contact.pipelineStage ?? "") === val;
-    case "source_is":
-      return (contact.source ?? "") === val;
-    case "equals":
-      return String(raw ?? "") === val;
-    case "not_equals":
-      return String(raw ?? "") !== val;
-    case "contains":
-      return String(raw ?? "").toLowerCase().includes(val.toLowerCase());
-    default:
-      return false;
-  }
-}
-
-export function evalConditionGroup(
-  group: ConditionGroup | undefined,
-  contact: Contact,
-): boolean {
-  const all = group?.all ?? [];
-  if (all.length === 0) return true;
-  return group?.match === "any"
-    ? all.some((c) => evalOne(contact, c))
-    : all.every((c) => evalOne(contact, c));
-}
+export { evalConditionGroup } from "@/lib/segmentation/eval-condition-group";

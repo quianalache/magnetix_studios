@@ -14,8 +14,8 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime, toDate } from "@/lib/format";
-import { PIPELINE_STAGES } from "@/types/deals";
-import type { BroadcastAudienceFilter, BroadcastDoc } from "@/types";
+import { audienceLabel } from "@/lib/broadcasts/audience-label";
+import type { BroadcastDoc } from "@/types";
 
 /**
  * Broadcasts list — every bulk-email batch fired from this sub-account,
@@ -131,13 +131,6 @@ export default function BroadcastsListPage() {
       )}
     </div>
   );
-}
-
-function audienceLabel(filter: BroadcastAudienceFilter): string {
-  if (filter.kind === "all") return "All contacts";
-  if (filter.kind === "tag") return `Tag: ${filter.tag}`;
-  const stage = PIPELINE_STAGES.find((s) => s.id === filter.stage);
-  return `Stage: ${stage?.label ?? filter.stage}`;
 }
 
 function StatusBadge({ status }: { status: BroadcastDoc["status"] }) {

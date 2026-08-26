@@ -133,9 +133,12 @@ async function runSideEffects(event: CalendarEvent, token: string): Promise<void
       const endAt = (
         event.endAt as { toDate?: () => Date } | null
       )?.toDate?.();
+      // Marketing-vs-transactional audit (2026-08-27): a cancellation
+      // notice is transactional — gated on deliverabilitySuppressed (hard
+      // bounce / spam complaint), never on emailOptedOut (marketing consent).
       if (
         contact.email &&
-        !contact.emailOptedOut &&
+        !contact.deliverabilitySuppressed &&
         startAt instanceof Date &&
         endAt instanceof Date
       ) {

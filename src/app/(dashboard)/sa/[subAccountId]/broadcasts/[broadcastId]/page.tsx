@@ -13,9 +13,8 @@ import { ArrowLeft, Mail, MailCheck, Eye, MousePointerClick, TriangleAlert, Ban 
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
-import { PIPELINE_STAGES } from "@/types/deals";
+import { audienceLabel } from "@/lib/broadcasts/audience-label";
 import type {
-  BroadcastAudienceFilter,
   BroadcastDoc,
   BroadcastSendDoc,
 } from "@/types";
@@ -219,12 +218,6 @@ export default function BroadcastDetailPage() {
   );
 }
 
-function audienceLabel(filter: BroadcastAudienceFilter): string {
-  if (filter.kind === "all") return "All contacts";
-  if (filter.kind === "tag") return `Tag: ${filter.tag}`;
-  const stage = PIPELINE_STAGES.find((s) => s.id === filter.stage);
-  return `Stage: ${stage?.label ?? filter.stage}`;
-}
 
 function SendStatus({ send }: { send: BroadcastSendDoc }) {
   if (send.status === "sent") {

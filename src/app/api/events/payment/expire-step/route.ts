@@ -131,9 +131,12 @@ async function runExpireSideEffects(event: CalendarEvent): Promise<void> {
       const endAt = (
         event.endAt as { toDate?: () => Date } | null
       )?.toDate?.();
+      // Marketing-vs-transactional audit (2026-08-27): the "slot released"
+      // notice is transactional — gated on deliverabilitySuppressed (hard
+      // bounce / spam complaint), never on emailOptedOut (marketing consent).
       if (
         contact.email &&
-        !contact.emailOptedOut &&
+        !contact.deliverabilitySuppressed &&
         startAt instanceof Date &&
         endAt instanceof Date
       ) {

@@ -332,7 +332,12 @@ async function runRescheduleSideEffects(args: {
     if (!contactSnap.exists || !subSnap.exists) return;
     const contact = contactSnap.data() as Contact;
     const sub = subSnap.data() as SubAccountDoc;
-    if (!contact.email || contact.emailOptedOut) return;
+    // Marketing-vs-transactional audit (2026-08-27): a reschedule
+    // confirmation is transactional — gated on deliverabilitySuppressed
+    // (hard bounce / spam complaint), never on emailOptedOut (marketing
+    // consent). Someone who unsubscribed from newsletters still needs to
+    // know their own appointment moved.
+    if (!contact.email || contact.deliverabilitySuppressed) return;
 
     const rendered = renderBookingConfirmationEmail({
       recipientName: contact.name ?? "",

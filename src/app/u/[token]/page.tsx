@@ -61,7 +61,9 @@ export default function UnsubscribePage() {
             <h1 className="text-lg font-semibold">You&apos;re unsubscribed</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               We won&apos;t send you any more marketing emails from this
-              workspace. If this was a mistake, reply to a previous email and
+              workspace. You&apos;ll still receive messages tied to things
+              you&apos;ve booked or purchased, like confirmations and
+              reminders. If this was a mistake, reply to a previous email and
               we&apos;ll add you back manually.
             </p>
           </>

@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { ConditionGroup } from "./workflows";
 
 /**
  * Bulk email broadcasts.
@@ -30,14 +31,28 @@ export type BroadcastStatus =
   | "failed";
 
 /**
- * Audience filter applied at fan-out time. v1 supports three modes — full
- * sub-account contacts, a single tag, or a single pipeline stage. v2 will
- * stack filters and add saved Smart Lists.
+ * Audience filter applied at fan-out time.
+ *
+ * `"all"` / `"tag"` / `"pipeline_stage"` are the original v1 shapes —
+ * PRESERVED for backward compatibility. Every sent broadcast in history
+ * used one of these three, and the list/detail pages + `resolveAudience`
+ * must keep rendering and (if ever re-resolved) evaluating them exactly as
+ * before. Never migrated/rewritten in place — no need to, since a sent
+ * broadcast's audience is fixed at send time anyway (the `sends`
+ * subcollection is the durable record).
+ *
+ * `"conditions"` is Segmentation V1 (2026-08-27) — reuses the SAME
+ * ConditionGroup/Condition model the Workflow Builder already uses for
+ * trigger filters and if/else branches (see
+ * lib/segmentation/eval-condition-group.ts), not a second segmentation
+ * language. The New Broadcast composer only ever WRITES this new shape
+ * going forward; the three legacy shapes are read-path-only from here on.
  */
 export type BroadcastAudienceFilter =
   | { kind: "all" }
   | { kind: "tag"; tag: string }
-  | { kind: "pipeline_stage"; stage: string };
+  | { kind: "pipeline_stage"; stage: string }
+  | { kind: "conditions"; group: ConditionGroup };
 
 export interface BroadcastTotals {
   /** Total contacts the audience query returned (before opt-out / missing-email skip). */
