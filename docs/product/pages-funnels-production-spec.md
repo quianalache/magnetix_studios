@@ -19,7 +19,7 @@ If this document and the current codebase ever disagree, that's a signal to stop
 
 *Update this block whenever a meaningful milestone changes. Keep it short and current — it is the first thing a future session reads.*
 
-**CURRENT PHASE:** Phase 0 — this spec. Phase 1 (production Puck foundation) not yet started.
+**CURRENT PHASE:** Phase 1 — production Puck foundation. Foundation built and QA'd this task; Phase 2 (core page-editor experience/primitives) not yet started or approved.
 
 **COMPLETED:**
 - Custom V1 page builder (flat `PageBlock[]` model) — in production.
@@ -29,16 +29,24 @@ If this document and the current codebase ever disagree, that's a signal to stop
 - Puck UX feasibility audit — custom Magnetix shell approach, native inline text editing (`contentEditable`), Undo/Redo source-level investigation.
 - Puck Insert Undo Blocker — root-caused and fixed (unstable `iframe`/`metadata` prop identity on a controlled `<Puck>`; see §3). Insert/Move/Field-edit Undo/Redo all confirmed working after the fix.
 - GoHighLevel and ClickFunnels builder research (informs this spec's feature scope; not reproduced here in detail).
+- **Phase 1 — production Puck foundation**, built alongside the untouched V1 builder, none of it wired into production yet:
+  - `src/types/pages-funnels-puck.ts` — shared alignment/button/width/background vocabulary (reused from V1/V2, not redefined), the `PageAction`/`PageActionType` Shared Action System foundation type (only `url` resolves today; every other Action System vocabulary entry from §8 is a real reserved case), and `PuckPageMetadata` (the `subAccountId`/`resolvedForms` contract).
+  - `src/lib/pages-funnels/puck/` — `ids.ts` (id generation, incl. deterministic migration ids), `constants.ts` (stable `VIEWPORTS`/`IFRAME_CONFIG`/`WIDTH_OPTIONS`/`COLUMN_SPAN_CLASS`), `action.ts` (`resolveActionHref`, exhaustively switched), `resolve.ts` (`collectPuckFormIds`, the Puck-Data equivalent of V2's `collectFormIds`), `migrate-v1.ts` (direct, deterministic `PageBlock[] → Puck Data` converter, exhaustive over all 12 V1 block types including decomposing Hero/Features/Testimonials/FAQ/CTA into real primitives — NOT persisted or wired anywhere yet), `presets/hero.ts` (production Hero factory).
+  - `src/components/pages-funnels/puck/` — `layout.tsx` (Section/Row/Column, the `inline`+`dragRef` pattern), `elements.tsx` (Heading/Text/Button/Image/Video/Divider/Spacer/Accordion, hook-free/shared), `form-client.tsx` + `form-server.tsx` (the one component that genuinely differs between the two configs), `config.tsx` (the shared `createPuckConfig` factory — LAYOUT + core ELEMENTS + BUSINESS(Form) registry, per §6 scope: no Booking/Checkout/Funnel logic yet), `client-config.tsx` / `server-config.tsx` (the two thin exports).
+  - `src/app/api/pages-funnels/puck/resolve-form/route.ts` — production Admin-SDK form resolver for the client/editor path (mirrors `/p/[pageId]`'s established pattern).
+  - `src/app/docs/design-prototypes/pages-funnels-puck-foundation/` — the internal production-fidelity harness (editor + server `<Render>` halves), unlinked from nav, no Firestore writes. Exercises the real production config/registry, not the POC's.
+  - Full 20-point QA checklist (§19 of the Phase 1 task) passed against this harness — see that task's report for the detailed results, including two real, live-tested confirmations: Undo/Redo on a first-of-session insert (the Insert Undo Blocker fix carried into production code, not just the POC) and the Shared Action System's `Action` object field rendering/editing correctly in the real Fields panel.
 
-**IN PROGRESS:** Nothing — awaiting user approval to begin Phase 1.
+**IN PROGRESS:** Nothing — Phase 1 foundation complete pending manual user QA of the harness; Phase 2 not started or approved.
 
 **KNOWN BUGS:**
-- None currently blocking. The Insert Undo Blocker (Puck 0.23.0 corrupting `history[0]` when a controlled `<Puck>`'s `iframe`/`metadata` props are inline object literals) has a confirmed, supported-API-only fix: hoist those props to stable references. This must be treated as a standing implementation rule for production (§3), not a one-time POC fix.
-- Puck's own `overrides` API is documented by Puck itself as "highly experimental." Not a bug, but a standing constraint on how much of the visual shell can safely be custom-built via that path (§3, §6).
+- None found in the Phase 1 foundation itself (0 browser console errors across the full QA pass).
+- The Insert Undo Blocker (Puck 0.23.0 corrupting `history[0]` when a controlled `<Puck>`'s `iframe`/`metadata` props are inline object literals) has a confirmed, supported-API-only fix: hoist those props to stable references. Carried into production code as `constants.ts`'s `IFRAME_CONFIG`/`VIEWPORTS` and the harness's `useMemo`'d `metadata` — this must remain a standing implementation rule (§3), enforced in review, for every future controlled `<Puck>` usage.
+- Puck's own `overrides` API is documented by Puck itself as "highly experimental." Not a bug, but a standing constraint on how much of the visual shell can safely be custom-built via that path (§3, §6) — not exercised at all in Phase 1 (the harness uses Puck's default composition, unmodified).
 
-**AWAITING USER TEST:** Nothing currently.
+**AWAITING USER TEST:** Manual QA of the production-fidelity harness at `/docs/design-prototypes/pages-funnels-puck-foundation` (editor) and `/docs/design-prototypes/pages-funnels-puck-foundation/render` (server `<Render>`) — automated QA passed 20/20 (see COMPLETED above), but per this repo's standing practice, real manual verification is still expected before treating Phase 1 as fully closed.
 
-**AWAITING USER DECISION:** Formal go-ahead to begin Phase 1 (production Puck foundation, built alongside the existing V1 builder — not replacing it yet).
+**AWAITING USER DECISION:** Approval to begin Phase 2 (core page-editor experience and primitives — the Magnetix visual reskin, remaining Launch-scope polish) once the harness is manually verified.
 
 **NEXT APPROVED TASK:** None yet. See §23 below once the user authorizes it.
 
