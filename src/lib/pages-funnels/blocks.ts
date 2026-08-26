@@ -49,6 +49,7 @@ export function defaultBlockContent(type: BlockType): PageBlock["content"] {
         buttonText: "Get Started",
         buttonLink: "#",
         buttonOpenInNewTab: false,
+        buttonStyle: "primary",
         secondaryLinkText: "",
         secondaryLinkLink: "",
         alignment: "left",

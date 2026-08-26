@@ -77,7 +77,15 @@ export function Canvas({
   }
 
   return (
-    <div className="flex h-full justify-center overflow-y-auto bg-muted/30 py-8">
+    // `items-start` is load-bearing: this row's default `align-items:
+    // stretch` would otherwise force the page-card child to exactly this
+    // container's (viewport-bounded) height, and since that child also has
+    // `overflow-hidden` (for rounded corners), anything past that height —
+    // i.e. any page longer than one screen — got silently clipped instead
+    // of triggering this div's own `overflow-y-auto`. `items-start` lets
+    // the card size to its actual (often taller) content so the scrollbar
+    // has something real to scroll through.
+    <div className="flex h-full items-start justify-center overflow-y-auto bg-muted/30 py-8">
       <div
         className="min-h-full overflow-hidden rounded-xl border border-border bg-background shadow-[var(--mx-shadow-card,0_1px_3px_rgba(0,0,0,0.08))] transition-[width] duration-150"
         style={{ width: DEVICE_WIDTH[device], maxWidth: "100%" }}
@@ -157,7 +165,7 @@ function SortableBlock({
         isDragging && "z-10 opacity-70",
       )}
     >
-      <BlockView block={block} resolvedForm={resolvedForm} />
+      <BlockView block={block} resolvedForm={resolvedForm} editing />
 
       <div
         className={cn(

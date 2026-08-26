@@ -35,10 +35,15 @@ const BLOCK_ICONS: Record<BlockType, typeof HeadingIcon> = {
   form: FileText,
 };
 
+// Internal category key stays `magnetix` (matches BLOCK_LIBRARY entries and
+// the BlockCategory type) — only the customer-facing label changed, per
+// product decision: "Magnetix" read as confusing internal branding, renamed
+// to "Business" for the blocks that compose other native Magnetix features
+// (Form, Booking, Offer/Checkout, Course, Community CTA).
 const CATEGORY_LABELS: Record<BlockCategory, string> = {
   basic: "Basic",
   sections: "Sections",
-  magnetix: "Magnetix",
+  magnetix: "Business",
 };
 
 const CATEGORY_ORDER: BlockCategory[] = ["basic", "sections", "magnetix"];

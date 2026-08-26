@@ -86,6 +86,13 @@ export interface HeroBlockContent {
   buttonText: string;
   buttonLink: string;
   buttonOpenInNewTab: boolean;
+  /** Visual treatment for the primary button — same `ButtonStyle` union the
+   *  standalone Button block uses, so Hero's CTA styles from one shared
+   *  vocabulary rather than a parallel one. Optional on the type because
+   *  pages saved before this field existed won't have it on disk; every
+   *  reader falls back to "primary" (`content.buttonStyle ?? "primary"`)
+   *  rather than requiring a data migration. */
+  buttonStyle?: ButtonStyle;
   secondaryLinkText: string;
   secondaryLinkLink: string;
   alignment: BlockAlignment;

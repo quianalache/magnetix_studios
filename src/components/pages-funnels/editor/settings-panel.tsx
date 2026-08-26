@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -121,12 +122,17 @@ export function SettingsPanel({ block, onChange, onClose }: SettingsPanelProps) 
                   options={ALIGN_OPTIONS}
                 />
               </Field>
+              {block.type === "hero" && (
+                <p className="text-[11px] text-muted-foreground">
+                  Applies to the whole block — headline, subheadline, and button together.
+                </p>
+              )}
             </TabsContent>
           )}
 
           {showStyle && (
             <TabsContent value="Style" className="space-y-4">
-              {block.type === "button" ? (
+              {block.type === "button" && (
                 <Field label="Button Style">
                   <SegmentedControl
                     value={block.content.style}
@@ -134,10 +140,29 @@ export function SettingsPanel({ block, onChange, onClose }: SettingsPanelProps) 
                     options={BUTTON_STYLE_OPTIONS}
                   />
                 </Field>
-              ) : (
+              )}
+              {block.type === "hero" && (
+                <>
+                  <Field label="Background Style">
+                    <SegmentedControl
+                      value={block.content.backgroundStyle}
+                      onChange={(v) => patchContent({ backgroundStyle: v })}
+                      options={BACKGROUND_OPTIONS}
+                    />
+                  </Field>
+                  <Field label="Button Style">
+                    <SegmentedControl
+                      value={block.content.buttonStyle ?? "primary"}
+                      onChange={(v) => patchContent({ buttonStyle: v })}
+                      options={BUTTON_STYLE_OPTIONS}
+                    />
+                  </Field>
+                </>
+              )}
+              {block.type === "cta" && (
                 <Field label="Background Style">
                   <SegmentedControl
-                    value={(block.content as { backgroundStyle: BackgroundStyle }).backgroundStyle}
+                    value={block.content.backgroundStyle}
                     onChange={(v) => patchContent({ backgroundStyle: v })}
                     options={BACKGROUND_OPTIONS}
                   />
@@ -177,6 +202,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+/** Groups a block's fields into named sub-sections (e.g. Hero's "Primary
+ *  Button" vs. its headline copy) — a block like Hero owns several distinct
+ *  page elements internally, and a bare list of inputs reads as one
+ *  undifferentiated blob. This doesn't make the button independently
+ *  selectable on the canvas; it just makes clear, in the panel, which
+ *  fields belong to which visible element. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-xs font-semibold text-foreground">{children}</p>;
 }
 
 function CharCount({ value, max }: { value: string; max: number }) {
@@ -233,16 +268,25 @@ function ContentFields({
             <Textarea value={c.subheadline} onChange={(e) => patchContent({ subheadline: e.target.value })} maxLength={240} rows={3} />
             <CharCount value={c.subheadline} max={240} />
           </Field>
+
+          <Separator />
+          <SectionLabel>Primary Button</SectionLabel>
           <Field label="Button Text">
             <Input value={c.buttonText} onChange={(e) => patchContent({ buttonText: e.target.value })} />
           </Field>
-          <Field label="Button Link">
-            <Input value={c.buttonLink} onChange={(e) => patchContent({ buttonLink: e.target.value })} />
+          <Field label="Button Link / Destination">
+            <Input value={c.buttonLink} onChange={(e) => patchContent({ buttonLink: e.target.value })} placeholder="https://..." />
           </Field>
           <div className="flex items-center justify-between">
             <Label className="text-sm">Open in new tab</Label>
             <Switch checked={c.buttonOpenInNewTab} onCheckedChange={(v) => patchContent({ buttonOpenInNewTab: v })} />
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            Alignment is under the Layout tab; button color is under Style.
+          </p>
+
+          <Separator />
+          <SectionLabel>Secondary Link (optional)</SectionLabel>
           <Field label="Secondary Link Text">
             <Input value={c.secondaryLinkText} onChange={(e) => patchContent({ secondaryLinkText: e.target.value })} />
           </Field>

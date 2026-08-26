@@ -24,6 +24,26 @@ const ALIGN_CLASS: Record<BlockAlignment, string> = {
   right: "text-right items-end",
 };
 
+/** Shared by every button-shaped link (Hero's primary CTA, the standalone
+ *  Button block, CTA block) so "button style" means one visual vocabulary
+ *  across blocks rather than each block inventing its own. */
+const BUTTON_STYLE_CLASS: Record<ButtonStyle, string> = {
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  outline: "border border-border bg-transparent hover:bg-muted",
+};
+
+/** In the editor canvas, every rendered `<a href>` is a REAL anchor — that's
+ *  correct for the public page, but inside the editor it means clicking a
+ *  button/link navigates the browser away (losing unsaved edits) instead of
+ *  just selecting the block. `href` stays put either way (so hovering still
+ *  previews the destination in the browser's status bar); this only stops
+ *  the click's default navigation. It deliberately does NOT stopPropagation
+ *  — the click still bubbles up to the canvas's block-select handler. */
+function editorLinkClickGuard(editing: boolean | undefined) {
+  return editing ? (e: React.MouseEvent) => e.preventDefault() : undefined;
+}
+
 function backgroundClass(style: BackgroundStyle, variant: "hero" | "cta" = "hero") {
   if (style === "gradient") {
     return variant === "hero"
@@ -65,9 +85,16 @@ interface BlockViewProps {
    *  been fetched by the caller — the renderer never reaches into Firestore
    *  itself, keeping it usable in server contexts too. */
   resolvedForm?: LeadForm | null;
+  /** True only when rendering inside the editor canvas — neutralizes link
+   *  clicks (see `editorLinkClickGuard`) so buttons/links are inert while
+   *  editing instead of navigating the browser away. Left undefined (falsy)
+   *  everywhere else — the public `/p/[pageId]` route and the editor's own
+   *  "Preview" tab both render via the same `PageRenderer` without this
+   *  flag, so real navigation is unaffected there. */
+  editing?: boolean;
 }
 
-export function BlockView({ block, resolvedForm }: BlockViewProps) {
+export function BlockView({ block, resolvedForm, editing }: BlockViewProps) {
   switch (block.type) {
     case "hero": {
       const c = block.content;
@@ -84,13 +111,21 @@ export function BlockView({ block, resolvedForm }: BlockViewProps) {
                   href={c.buttonLink || "#"}
                   target={c.buttonOpenInNewTab ? "_blank" : undefined}
                   rel={c.buttonOpenInNewTab ? "noreferrer" : undefined}
-                  className="rounded-full bg-[var(--mx-purple,theme(colors.primary.DEFAULT))] px-6 py-3 text-sm font-semibold text-white shadow-sm transition-transform hover:scale-[1.02]"
+                  onClick={editorLinkClickGuard(editing)}
+                  className={cn(
+                    "rounded-full px-6 py-3 text-sm font-semibold shadow-sm transition-transform hover:scale-[1.02]",
+                    BUTTON_STYLE_CLASS[c.buttonStyle ?? "primary"],
+                  )}
                 >
                   {c.buttonText}
                 </a>
               )}
               {c.secondaryLinkText && (
-                <a href={c.secondaryLinkLink || "#"} className="text-sm font-medium underline underline-offset-4">
+                <a
+                  href={c.secondaryLinkLink || "#"}
+                  onClick={editorLinkClickGuard(editing)}
+                  className="text-sm font-medium underline underline-offset-4"
+                >
                   {c.secondaryLinkText}
                 </a>
               )}
@@ -127,11 +162,6 @@ export function BlockView({ block, resolvedForm }: BlockViewProps) {
 
     case "button": {
       const c = block.content;
-      const styleClass: Record<ButtonStyle, string> = {
-        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline: "border border-border bg-transparent hover:bg-muted",
-      };
       return (
         <Section block={block}>
           <div className={cn("flex", c.alignment === "center" ? "justify-center" : c.alignment === "right" ? "justify-end" : "justify-start")}>
@@ -139,7 +169,8 @@ export function BlockView({ block, resolvedForm }: BlockViewProps) {
               href={c.link || "#"}
               target={c.openInNewTab ? "_blank" : undefined}
               rel={c.openInNewTab ? "noreferrer" : undefined}
-              className={cn("rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm transition-colors", styleClass[c.style])}
+              onClick={editorLinkClickGuard(editing)}
+              className={cn("rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm transition-colors", BUTTON_STYLE_CLASS[c.style])}
             >
               {c.text}
             </a>
@@ -164,7 +195,17 @@ export function BlockView({ block, resolvedForm }: BlockViewProps) {
           No image set
         </div>
       );
-      return <Section block={block}>{c.link ? <a href={c.link}>{img}</a> : img}</Section>;
+      return (
+        <Section block={block}>
+          {c.link ? (
+            <a href={c.link} onClick={editorLinkClickGuard(editing)}>
+              {img}
+            </a>
+          ) : (
+            img
+          )}
+        </Section>
+      );
     }
 
     case "features": {
@@ -237,6 +278,7 @@ export function BlockView({ block, resolvedForm }: BlockViewProps) {
             {c.buttonText && (
               <a
                 href={c.buttonLink || "#"}
+                onClick={editorLinkClickGuard(editing)}
                 className="mt-2 rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-foreground shadow-sm hover:bg-white/90"
               >
                 {c.buttonText}
