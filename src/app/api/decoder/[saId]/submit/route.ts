@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createEnergeticDecoderReading } from "@/lib/server/energetic-decoder-service";
+import { notifyReadingReady } from "@/lib/server/notification-producers";
 import type { EnergeticDecoderRequest } from "@/types/energetic-decoder";
 
 export const dynamic = "force-dynamic";
@@ -46,5 +47,20 @@ export async function POST(
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
+
+  // Reading Ready loop (2026-08-26): reliably AWAITED, not void-fired —
+  // same reliability class already fixed for every other notification
+  // producer. Generation is synchronous (see notifyReadingReady's own doc
+  // comment) — reaching here IS the real "ready" transition, exactly
+  // once, for a brand-new reading id every call.
+  await notifyReadingReady({
+    subAccountId: saId,
+    readingId: result.reading.id,
+    contactId: result.contactId,
+    hasGeneKeys: result.reading.spheres.length > 0,
+    hasHumanDesign: !!result.reading.humanDesign,
+    hasAstrology: !!result.reading.astrology,
+  }).catch((err) => console.warn("[decoder/submit] notification failed", err));
+
   return NextResponse.json({ ok: true, reading: result.reading });
 }

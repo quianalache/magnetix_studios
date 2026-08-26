@@ -43,11 +43,21 @@ import type { ResendConfig } from "@/types/tenancy";
  * emails for one event. The MyMagnetix notification (in-app bell) is
  * still created for all three — this set only gates the EMAIL channel.
  */
+/**
+ * Reading Ready loop (2026-08-26) — reading.ready IS added here, unlike
+ * booking. Audited first: the public Energetic Decoder embed's submit
+ * route (the only path this event fires from) sends NO email of its own
+ * today — confirmed by inspection, zero email-sending code in
+ * /api/decoder/[saId]/submit/route.ts. This is a genuinely new
+ * transactional email, not a second one on top of an existing customer
+ * email.
+ */
 const EMAIL_ELIGIBLE_EVENT_TYPES: ReadonlySet<NotificationEventType> = new Set([
   "course.access.granted",
   "community.access.granted",
   "community.reply",
   "community.mention",
+  "reading.ready",
 ]);
 
 function deliveryCol() {
@@ -211,13 +221,19 @@ const CTA_LABELS: Record<NotificationEventType, string> = {
   "community.access.granted": "View in MyMagnetix",
   "community.reply": "View reply",
   "community.mention": "View mention",
-  "reading.ready": "View in MyMagnetix",
+  "reading.ready": "View your reading",
   "booking.created": "View booking",
   "booking.rescheduled": "View booking",
   "booking.cancelled": "View details",
 };
 
-const SUBJECT_BY_CATEGORY: Partial<Record<NotificationEventType, (businessName: string) => string>> = {
+// Reading Ready's subject needs the reading's own name ("Your Human
+// Design Reading is ready"), not just the business name every other
+// category uses — so the builder also receives `meta` (every existing
+// entry ignores the second param, harmless).
+const SUBJECT_BY_CATEGORY: Partial<
+  Record<NotificationEventType, (businessName: string, meta: NotificationDoc["meta"]) => string>
+> = {
   "course.access.granted": (b) => `You have something new from ${b}`,
   "community.access.granted": (b) => `You have something new from ${b}`,
   "booking.created": () => "Your booking is confirmed",
@@ -225,13 +241,14 @@ const SUBJECT_BY_CATEGORY: Partial<Record<NotificationEventType, (businessName: 
   "booking.cancelled": () => "Your booking was cancelled",
   "community.reply": (b) => `New activity in ${b}`,
   "community.mention": (b) => `New activity in ${b}`,
+  "reading.ready": (_b, meta) => `Your ${meta.readingName ?? "reading"} is ready`,
 };
 
 function renderNotificationEmail(
   n: DispatchInput,
   businessName: string,
 ): { subject: string; text: string; html: string } {
-  const subject = (SUBJECT_BY_CATEGORY[n.eventType] ?? ((b: string) => `Update from ${b}`))(businessName);
+  const subject = (SUBJECT_BY_CATEGORY[n.eventType] ?? ((b: string) => `Update from ${b}`))(businessName, n.meta);
   const ctaLabel = CTA_LABELS[n.eventType] ?? "View in MyMagnetix";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
   const ctaHref = `${appUrl}${n.destination}`;

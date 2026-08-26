@@ -24,13 +24,13 @@ import { formatStartLocal } from "@/lib/booking/email";
  * logged into MyMagnetix has no Person to notify, so these silently no-op
  * for them rather than inventing an identity.
  *
- * The BOOKING producers below are different: a booking customer is a CRM
- * Contact, never a community Member, so there's no `personId` field to
- * read. They resolve the Person directly via `ensurePersonIdentity(email)`
- * — the SAME canonical find-or-create every other identity path in this
- * codebase already uses (see person-identity-service.ts) — not a second
- * identity flow, just this codebase's one real one, entered from a
- * different starting record.
+ * The BOOKING and READING producers below are different: both customer
+ * types are CRM Contacts, never a community Member, so there's no
+ * `personId` field to read. They resolve the Person directly via
+ * `ensurePersonIdentity(email)` — the SAME canonical find-or-create every
+ * other identity path in this codebase already uses (see
+ * person-identity-service.ts) — not a second identity flow, just this
+ * codebase's one real one, entered from a different starting record.
  */
 
 function enterHref(subAccountId: string, next: string): string {
@@ -263,7 +263,10 @@ function bookingDestination(token: string): string {
   return `/e/${token}`;
 }
 
-async function getBookingContact(contactId: string): Promise<{ email: string } | null> {
+/** Shared by every producer whose source object is a CRM Contact rather
+ *  than a community Member (booking, reading) — reads just the one field
+ *  each needs to resolve a Person. */
+async function getContactEmail(contactId: string): Promise<{ email: string } | null> {
   const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
   const email = (snap.data()?.email as string | undefined)?.trim();
   if (!email) return null;
@@ -283,7 +286,7 @@ export async function notifyBookingCreated(opts: {
   token: string;
 }): Promise<void> {
   const destination = bookingDestination(opts.token);
-  const contact = await getBookingContact(opts.contactId);
+  const contact = await getContactEmail(opts.contactId);
   if (!contact) return;
 
   const [personId, businessName] = await Promise.all([
@@ -321,7 +324,7 @@ export async function notifyBookingRescheduled(opts: {
   token: string;
 }): Promise<void> {
   const destination = bookingDestination(opts.token);
-  const contact = await getBookingContact(opts.contactId);
+  const contact = await getContactEmail(opts.contactId);
   if (!contact) return;
 
   const [personId, businessName] = await Promise.all([
@@ -365,7 +368,7 @@ export async function notifyBookingCancelled(opts: {
   token: string;
 }): Promise<void> {
   const destination = bookingDestination(opts.token);
-  const contact = await getBookingContact(opts.contactId);
+  const contact = await getContactEmail(opts.contactId);
   if (!contact) return;
 
   const [personId, businessName] = await Promise.all([
@@ -389,4 +392,84 @@ export async function notifyBookingCancelled(opts: {
     // of its own.
     sourceObjectId: opts.bookingId,
   });
+}
+
+/* -------------------------------- Reading Ready ------------------------------- */
+
+/**
+ * Audited before wiring (2026-08-26): a reading (EnergeticDecoderReading)
+ * has NO status field and NO async generation step — createEnergeticDecoderReading
+ * calculates AND writes the doc in one call, so "ready" IS "successfully
+ * created," not a later transition to watch for. Each call also mints a
+ * brand-new Firestore doc id, so there's no "same reading, retried" case
+ * at the storage layer — every created reading is a genuinely new, real
+ * completion, matching this codebase's existing "readings are immutable
+ * once created" convention.
+ *
+ * Deliberately wired ONLY from the PUBLIC embeddable decoder's submit
+ * route (/api/decoder/[saId]/submit) — the one path where the CUSTOMER
+ * THEMSELVES triggered generation and unambiguously wants to see their own
+ * result immediately. NOT wired from the staff "New Reading" tool
+ * (POST /api/sub-accounts/{id}/energetic-decoder/readings) or from
+ * GeneratedReport creation (also always staff-only): both already have a
+ * real, deliberate, MANUAL "Share report" step (a pure clipboard-copy
+ * action in human-design-reading-workspace.tsx — no server call at all) a
+ * practitioner uses only once they've reviewed the output. Auto-notifying
+ * at staff-creation time would silently bypass that existing review gate
+ * and could email a client about a reading the practitioner hasn't
+ * actually decided to share yet (test data, a birth-detail correction in
+ * progress, etc.). If staff-generated readings should also notify, that
+ * needs a real "mark as shared" server action to hook, not a guess here.
+ */
+export async function notifyReadingReady(opts: {
+  subAccountId: string;
+  readingId: string;
+  contactId: string;
+  /** Which systems this reading actually includes — same presence check
+   *  the report page itself already uses (hasAnySystem), passed in rather
+   *  than re-read so this stays a pure function of what the caller just
+   *  wrote. */
+  hasGeneKeys: boolean;
+  hasHumanDesign: boolean;
+  hasAstrology: boolean;
+}): Promise<void> {
+  const contact = await getContactEmail(opts.contactId);
+  if (!contact) return;
+
+  const personId = await ensurePersonIdentity(contact.email);
+
+  // Lazy link-back for the MyMagnetix Readings list query (see the type's
+  // own doc comment) — best-effort, never blocks the notification itself.
+  getAdminDb()
+    .doc(`energeticDecoderReadings/${opts.readingId}`)
+    .set({ personId }, { merge: true })
+    .catch((err) => console.warn("[notifyReadingReady] personId link-back failed", err));
+
+  const businessName = await getBusinessName(opts.subAccountId);
+  const readingName = deriveReadingName(opts);
+  const destination = `/decoder/${opts.subAccountId}/report/${opts.readingId}`;
+
+  await createNotification({
+    personId,
+    subAccountId: opts.subAccountId,
+    eventType: "reading.ready",
+    objectType: "reading",
+    objectId: opts.readingId,
+    title: `Your ${readingName} is ready.`,
+    destination,
+    meta: { readingName, businessName },
+    // One reading = one completion, ever (see the module comment above) —
+    // the reading's own id is already the recurring unit, no disambiguator
+    // needed.
+    sourceObjectId: opts.readingId,
+  });
+}
+
+function deriveReadingName(sys: { hasGeneKeys: boolean; hasHumanDesign: boolean; hasAstrology: boolean }): string {
+  const count = [sys.hasGeneKeys, sys.hasHumanDesign, sys.hasAstrology].filter(Boolean).length;
+  if (count >= 3) return "Energetic Blueprint";
+  if (sys.hasHumanDesign && count === 1) return "Human Design Reading";
+  if (sys.hasAstrology && count === 1) return "Astrology Reading";
+  if (sys.hasGeneKeys && count === 1) return "Gene Keys Reading";
+  return "Energetic Reading";
 }

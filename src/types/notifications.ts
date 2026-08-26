@@ -31,10 +31,14 @@ export type NotificationEventType =
   | "booking.created"
   | "booking.rescheduled"
   | "booking.cancelled"
-  // Defined now so the schema/service is ready — no live producer wired in
-  // V1 (see the Notifications V1 report for why: reading.ready has a real
-  // trigger event but no client-facing destination page exists yet).
-  // Never created by any code path today.
+  // Reading Ready loop (2026-08-26): wired to the ONE real "customer
+  // generated their own reading" moment — the public Energetic Decoder
+  // embed's submit endpoint — which already has a real, durable,
+  // client-facing destination (the existing /decoder/[saId]/report/[readingId]
+  // page). NOT fired for staff-generated readings (an existing, deliberate
+  // manual "Share report" step there has no server event to hook — see
+  // notification-producers.ts's notifyReadingReady doc comment) or for
+  // GeneratedReport creation (always staff-only, same reasoning).
   | "reading.ready";
 
 export type NotificationObjectType =
@@ -90,6 +94,7 @@ export interface NotificationDoc {
     courseName?: string;
     actorName?: string;
     bookingName?: string;
+    readingName?: string;
   };
 }
 

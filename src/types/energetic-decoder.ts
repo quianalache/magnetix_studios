@@ -107,6 +107,15 @@ export interface EnergeticDecoderReading {
   contactId: string;
   /** Phase 3 Task 2 (2026-08-13) — the EnergeticProfile this reading was generated against. Optional/nullable: every reading created before this shipped has no profileId and remains fully valid; nothing may assume it's present until the (not-yet-run) migration backfills it. Purely a link — the birth-data fields below stay the reading's own frozen snapshot regardless, so a later edit to the Profile never changes what an existing reading says it was calculated from. */
   profileId?: string | null;
+  /** Reading Ready loop (2026-08-26) — the canonical MyMagnetix Person this
+   *  reading's Contact resolves to, written once at notification time via
+   *  notifyReadingReady (ensurePersonIdentity), same "lazy link-back"
+   *  convention as Member.personId. Powers the MyMagnetix Readings list
+   *  query; absent on every reading created before this shipped and on any
+   *  reading created via the staff tool (not wired — see notification-
+   *  producers.ts). Never trust this for access control — it's a display/
+   *  discovery index only, not a security boundary. */
+  personId?: string | null;
   /** Legacy discriminator — kept for existing docs; a reading can now hold both systems at once (see `spheres`/`humanDesign` below), so this is no longer exhaustive. */
   system: "geneKeys";
   name: string;
