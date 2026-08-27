@@ -1,9 +1,14 @@
 import type {
   PuckColumnWidth,
   BackgroundConfig,
+  StyleConfig,
 } from "@/types/pages-funnels-puck";
 import { COLUMN_SPAN_CLASS } from "@/lib/pages-funnels/puck/constants";
 import { BackgroundLayer } from "@/components/pages-funnels/puck/background-layer";
+import {
+  resolveBaseStyleProps,
+  resolveResponsiveCss,
+} from "@/lib/pages-funnels/puck/style";
 import { cn } from "@/lib/utils";
 
 /**
@@ -41,6 +46,16 @@ import { cn } from "@/lib/utils";
  * direct reasoning through the CSS painting-order spec during this phase —
  * do not remove `relative z-10` from content as "unnecessary," it is load-
  * bearing for background visibility to not invert.
+ *
+ * System A (master spec §24.3/§24.20): all three also now accept an
+ * optional `style: StyleConfig` and their own stable `id` — spacing/
+ * border/radius/box-shadow apply as additional inline style layered onto
+ * the ROOT container (never replacing `maxWidth`/`paddingTop`/`gap`/etc.,
+ * see `style.ts`'s own doc comment on why this is additive-only), and a
+ * sibling `<style>` tag (only rendered when there's actually something to
+ * emit — `resolveResponsiveCss` returns `null` for a component that never
+ * touched System A) carries the real `@media`-query responsive-override
+ * and per-device-visibility CSS, scoped to that same `id`.
  */
 
 export type SectionMaxWidthOption = "contained" | "wide" | "full";
@@ -68,23 +83,32 @@ const SECTION_MAX_WIDTH_PX: Record<SectionMaxWidthOption, number | undefined> =
  * classNames, never moved to a wrapper, for exactly this reason.
  */
 export function SectionRender({
+  id,
   background,
+  style,
   maxWidth,
   paddingTop,
   paddingBottom,
   rows: Rows,
 }: {
+  id: string;
   background: BackgroundConfig;
+  style?: StyleConfig;
   maxWidth: SectionMaxWidthOption;
   paddingTop: number;
   paddingBottom: number;
   rows: React.ComponentType<{ allow?: string[] }>;
 }) {
+  const responsiveCss = resolveResponsiveCss(id, style);
   return (
     <section
-      style={{ paddingTop, paddingBottom }}
+      id={id}
+      style={{ paddingTop, paddingBottom, ...resolveBaseStyleProps(style) }}
       className="relative overflow-hidden px-6"
     >
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
       <BackgroundLayer background={background} />
       <div
         className="relative z-10 mx-auto flex flex-col gap-8"
@@ -97,12 +121,16 @@ export function SectionRender({
 }
 
 export function RowRender({
+  id,
   background,
+  style,
   gap,
   verticalAlign,
   columns: Columns,
 }: {
+  id: string;
   background: BackgroundConfig;
+  style?: StyleConfig;
   gap: number;
   verticalAlign: RowVerticalAlign;
   columns: React.ComponentType<{
@@ -111,11 +139,20 @@ export function RowRender({
     style?: React.CSSProperties;
   }>;
 }) {
+  const responsiveCss = resolveResponsiveCss(id, style);
   return (
-    // This outer div carries ONLY relative/overflow-hidden for the
-    // background layer — never grid/gap CSS, which must stay directly on
-    // the Columns slot call below per this file's slot-styling rule.
-    <div className="relative overflow-hidden">
+    // This outer div carries ONLY relative/overflow-hidden (+ System A's
+    // base style) for the background layer — never grid/gap CSS, which
+    // must stay directly on the Columns slot call below per this file's
+    // slot-styling rule.
+    <div
+      id={id}
+      className="relative overflow-hidden"
+      style={resolveBaseStyleProps(style)}
+    >
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
       <BackgroundLayer background={background} />
       <Columns
         allow={["Column"]}
@@ -157,13 +194,17 @@ export function RowRender({
  * `BackgroundLayer`) and otherwise just a sizing/positioning box.
  */
 export function ColumnRender({
+  id,
   background,
+  style,
   width,
   alignment,
   elements: Elements,
   dragRef,
 }: {
+  id: string;
   background: BackgroundConfig;
+  style?: StyleConfig;
   width: PuckColumnWidth;
   alignment: ColumnContentAlignment;
   elements: React.ComponentType<{
@@ -172,14 +213,20 @@ export function ColumnRender({
   }>;
   dragRef: ((element: Element | null) => void) | null;
 }) {
+  const responsiveCss = resolveResponsiveCss(id, style);
   return (
     <div
+      id={id}
       ref={dragRef}
       className={cn(
         "relative min-w-0 overflow-hidden",
         COLUMN_SPAN_CLASS[width]
       )}
+      style={resolveBaseStyleProps(style)}
     >
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
       <BackgroundLayer background={background} />
       <Elements
         allow={[

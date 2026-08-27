@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { PublicForm } from "@/components/forms/public-form";
 import { defaultFormFields, defaultFormSettings } from "@/types/forms";
 import type { LeadForm } from "@/types/forms";
-import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
+import type { PuckPageMetadata, StyleConfig } from "@/types/pages-funnels-puck";
+import {
+  resolveBaseStyleProps,
+  resolveResponsiveCss,
+} from "@/lib/pages-funnels/puck/style";
 
 /**
  * CLIENT/EDITOR variant of the Form element (master spec §10/§11) — used
@@ -19,13 +23,22 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * References the real Magnetix Form — no duplicated field schema, no
  * duplicated submission logic. `PublicForm` (the real submission engine)
  * is rendered as-is.
+ *
+ * System A (master spec §24.8, "Form container" spacing/border/radius
+ * target): `id`/`style` wrap EVERY render state (loading/not-found/
+ * error/loaded), not just the loaded card, so per-device visibility hides
+ * the whole element regardless of its current fetch state.
  */
 export function FormElementClientRender({
+  id,
   formId,
   formName,
+  style,
 }: {
+  id: string;
   formId: string;
   formName: string;
+  style?: StyleConfig;
   // Accepted (not read) purely so this component's prop shape matches
   // `form-server.tsx`'s `FormElementServerRender` — `config.tsx`'s shared
   // factory passes `metadata` to whichever Form variant it's given without
@@ -62,21 +75,35 @@ export function FormElementClientRender({
     };
   }, [formId]);
 
+  const responsiveCss = resolveResponsiveCss(id, style);
+  const baseStyle = resolveBaseStyleProps(style);
+
+  let body: React.ReactNode;
   if (!formId) {
-    return <FormNotConfigured />;
+    body = <FormNotConfigured />;
+  } else if (status === "loading" || status === "idle") {
+    body = <FormLoading />;
+  } else if (status === "not-found") {
+    body = <FormNotFound label={formName || formId} />;
+  } else if (status === "error" || !form) {
+    body = <FormError />;
+  } else {
+    body = (
+      <div
+        className="border-border bg-card rounded-2xl border p-4 shadow-sm"
+        style={baseStyle}
+      >
+        <PublicForm form={form} />
+      </div>
+    );
   }
-  if (status === "loading" || status === "idle") {
-    return <FormLoading />;
-  }
-  if (status === "not-found") {
-    return <FormNotFound label={formName || formId} />;
-  }
-  if (status === "error" || !form) {
-    return <FormError />;
-  }
+
   return (
-    <div className="border-border bg-card rounded-2xl border p-4 shadow-sm">
-      <PublicForm form={form} />
+    <div id={id}>
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
+      {body}
     </div>
   );
 }

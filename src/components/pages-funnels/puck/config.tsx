@@ -3,8 +3,11 @@ import type {
   PuckPageMetadata,
   PageAction,
   BackgroundConfig,
+  StyleConfig,
+  StyleCompatibility,
 } from "@/types/pages-funnels-puck";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
+import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
 import {
   WIDTH_OPTIONS,
   ALIGN_OPTIONS,
@@ -14,6 +17,7 @@ import {
   HERO_DEFAULT_BACKGROUND,
 } from "@/lib/pages-funnels/puck/background";
 import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/background-field";
+import { StyleFieldEditor } from "@/components/pages-funnels/puck/style-field";
 import {
   SectionRender,
   RowRender,
@@ -47,8 +51,10 @@ import {
  */
 
 export interface FormComponentProps {
+  id: string;
   formId: string;
   formName: string;
+  style?: StyleConfig;
   metadata?: PuckPageMetadata;
 }
 
@@ -126,11 +132,115 @@ const backgroundField: CustomField<BackgroundConfig> = {
   ),
 };
 
+// ---------- Shared Style field (System A — master spec §24.3/§24.20) ----------
+
+/**
+ * The literal, in-code component-compatibility matrix master spec §24
+ * asks for ("define which shared style groups apply to which
+ * components"). One `StyleCompatibility` object per component, passed to
+ * `makeStyleField()` once at registration below — this IS the source of
+ * truth for which groups each component's Settings panel shows; nothing
+ * else needs to be kept in sync with it by hand. Matches the master spec's
+ * own §24.20/§15 worked examples (Heading gets typography but not border;
+ * Section gets border but not typography; Button gets everything relevant
+ * to a clickable label).
+ */
+const LAYOUT_CONTAINER_STYLE: StyleCompatibility = {
+  spacing: true,
+  border: true,
+  radius: true,
+  boxShadow: true,
+  responsive: true,
+  visibility: true,
+};
+const TEXT_ELEMENT_STYLE: StyleCompatibility = {
+  typography: true,
+  spacing: true,
+  textShadow: true,
+  responsive: true,
+  visibility: true,
+};
+const BUTTON_STYLE_COMPAT: StyleCompatibility = {
+  typography: true,
+  spacing: true,
+  border: true,
+  radius: true,
+  boxShadow: true,
+  textShadow: true,
+  responsive: true,
+  visibility: true,
+};
+const MEDIA_ELEMENT_STYLE: StyleCompatibility = {
+  spacing: true,
+  border: true,
+  radius: true,
+  boxShadow: true,
+  responsive: true,
+  visibility: true,
+};
+const DIVIDER_STYLE: StyleCompatibility = {
+  spacing: true,
+  responsive: true,
+  visibility: true,
+};
+const ACCORDION_STYLE: StyleCompatibility = {
+  typography: true,
+  spacing: true,
+  border: true,
+  radius: true,
+  responsive: true,
+  visibility: true,
+};
+const FORM_CONTAINER_STYLE: StyleCompatibility = {
+  spacing: true,
+  border: true,
+  radius: true,
+  responsive: true,
+  visibility: true,
+};
+
+/**
+ * Builds one `CustomField<StyleConfig>` — defined and CALLED entirely
+ * within this module (never imported from a "use client" file and invoked
+ * as a function), matching exactly how `backgroundField` below safely
+ * renders `BackgroundFieldEditor` via JSX from a module that must stay
+ * importable from the server config. See `StyleFieldEditor`'s own doc
+ * comment in style-field.tsx for the full "why" (a real `next build`
+ * failure this was fixed in response to, not a hypothetical concern).
+ */
+function makeStyleField(
+  compatibility: StyleCompatibility
+): CustomField<StyleConfig> {
+  return {
+    type: "custom",
+    label: "Styles",
+    render: ({ value, onChange }) => (
+      <StyleFieldEditor
+        value={value}
+        onChange={onChange}
+        compatibility={compatibility}
+      />
+    ),
+  };
+}
+
+// Section/Hero/Row/Column all share the exact same compatibility (they're
+// all plain containers, not text/media elements) — one field instance,
+// referenced by all four, exactly like `backgroundField` above.
+const layoutStyleField = makeStyleField(LAYOUT_CONTAINER_STYLE);
+const textStyleField = makeStyleField(TEXT_ELEMENT_STYLE);
+const buttonStyleField = makeStyleField(BUTTON_STYLE_COMPAT);
+const mediaStyleField = makeStyleField(MEDIA_ELEMENT_STYLE);
+const dividerStyleField = makeStyleField(DIVIDER_STYLE);
+const accordionStyleField = makeStyleField(ACCORDION_STYLE);
+const formStyleField = makeStyleField(FORM_CONTAINER_STYLE);
+
 /** The fields every Section/Hero shares besides `background` — factored out
  *  once so Section and Hero's field sets can never drift from each other
  *  (they already share `SectionRender` and its whole prop shape). */
 const SECTION_SHARED_FIELDS = {
   background: backgroundField,
+  style: layoutStyleField,
   maxWidth: {
     type: "select" as const,
     label: "Max Width",
@@ -185,14 +295,25 @@ export function createPuckConfig(
         fields: SECTION_SHARED_FIELDS,
         defaultProps: {
           background: DEFAULT_BACKGROUND,
+          style: DEFAULT_STYLE_CONFIG,
           maxWidth: "contained",
           paddingTop: 64,
           paddingBottom: 64,
           rows: [],
         },
-        render: ({ background, maxWidth, paddingTop, paddingBottom, rows }) => (
+        render: ({
+          id,
+          background,
+          style,
+          maxWidth,
+          paddingTop,
+          paddingBottom,
+          rows,
+        }) => (
           <SectionRender
+            id={id}
             background={background}
+            style={style}
             maxWidth={maxWidth}
             paddingTop={paddingTop}
             paddingBottom={paddingBottom}
@@ -225,6 +346,7 @@ export function createPuckConfig(
         fields: SECTION_SHARED_FIELDS,
         defaultProps: {
           background: HERO_DEFAULT_BACKGROUND,
+          style: DEFAULT_STYLE_CONFIG,
           maxWidth: "contained",
           paddingTop: 96,
           paddingBottom: 96,
@@ -300,9 +422,19 @@ export function createPuckConfig(
             },
           ],
         },
-        render: ({ background, maxWidth, paddingTop, paddingBottom, rows }) => (
+        render: ({
+          id,
+          background,
+          style,
+          maxWidth,
+          paddingTop,
+          paddingBottom,
+          rows,
+        }) => (
           <SectionRender
+            id={id}
             background={background}
+            style={style}
             maxWidth={maxWidth}
             paddingTop={paddingTop}
             paddingBottom={paddingBottom}
@@ -315,6 +447,7 @@ export function createPuckConfig(
         label: "Row",
         fields: {
           background: backgroundField,
+          style: layoutStyleField,
           gap: { type: "number", label: "Gap (px)", min: 0, max: 96 },
           verticalAlign: {
             type: "select",
@@ -329,6 +462,7 @@ export function createPuckConfig(
         },
         defaultProps: {
           background: DEFAULT_BACKGROUND,
+          style: DEFAULT_STYLE_CONFIG,
           gap: 24,
           verticalAlign: "top",
           // Seeded with two empty Columns so a freshly-dropped Row is
@@ -360,9 +494,11 @@ export function createPuckConfig(
             },
           ],
         },
-        render: ({ background, gap, verticalAlign, columns }) => (
+        render: ({ id, background, style, gap, verticalAlign, columns }) => (
           <RowRender
+            id={id}
             background={background}
+            style={style}
             gap={gap}
             verticalAlign={verticalAlign}
             columns={columns}
@@ -380,6 +516,7 @@ export function createPuckConfig(
         inline: true,
         fields: {
           background: backgroundField,
+          style: layoutStyleField,
           width: { type: "select", label: "Width", options: WIDTH_OPTIONS },
           alignment: {
             type: "radio",
@@ -403,13 +540,24 @@ export function createPuckConfig(
         },
         defaultProps: {
           background: DEFAULT_BACKGROUND,
+          style: DEFAULT_STYLE_CONFIG,
           width: "auto",
           alignment: "left",
           elements: [],
         },
-        render: ({ background, width, alignment, elements, puck }) => (
+        render: ({
+          id,
+          background,
+          style,
+          width,
+          alignment,
+          elements,
+          puck,
+        }) => (
           <ColumnRender
+            id={id}
             background={background}
+            style={style}
             width={width}
             alignment={alignment}
             elements={elements}
@@ -441,10 +589,22 @@ export function createPuckConfig(
             label: "Alignment",
             options: ALIGN_OPTIONS,
           },
+          style: textStyleField,
         },
-        defaultProps: { text: "Heading", level: "h2", alignment: "left" },
-        render: ({ text, level, alignment }) => (
-          <HeadingRender text={text} level={level} alignment={alignment} />
+        defaultProps: {
+          text: "Heading",
+          level: "h2",
+          alignment: "left",
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, text, level, alignment, style }) => (
+          <HeadingRender
+            id={id}
+            text={text}
+            level={level}
+            alignment={alignment}
+            style={style}
+          />
         ),
       },
 
@@ -457,10 +617,15 @@ export function createPuckConfig(
             label: "Alignment",
             options: ALIGN_OPTIONS,
           },
+          style: textStyleField,
         },
-        defaultProps: { text: "Add your copy here.", alignment: "left" },
-        render: ({ text, alignment }) => (
-          <TextRender text={text} alignment={alignment} />
+        defaultProps: {
+          text: "Add your copy here.",
+          alignment: "left",
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, text, alignment, style }) => (
+          <TextRender id={id} text={text} alignment={alignment} style={style} />
         ),
       },
 
@@ -483,19 +648,42 @@ export function createPuckConfig(
             label: "Alignment",
             options: ALIGN_OPTIONS,
           },
+          // Button already had a field literally named `style` (the
+          // primary/secondary/outline preset above, unchanged) before
+          // System A — the shared styling field is `styleConfig` here
+          // instead, and `background` reuses the exact same Phase 2D
+          // `backgroundField`/`BackgroundConfig` Section/Row/Column use
+          // (master spec §24, "Button: ...background/color..."), layered
+          // behind the label so it shows only when explicitly set — see
+          // `ButtonRender`'s own doc comment in elements.tsx.
+          background: backgroundField,
+          styleConfig: buttonStyleField,
         },
         defaultProps: {
           text: "Click here",
           action: { ...DEFAULT_PAGE_ACTION },
           style: "primary",
           alignment: "left",
+          background: DEFAULT_BACKGROUND,
+          styleConfig: DEFAULT_STYLE_CONFIG,
         },
-        render: ({ text, action, style, alignment }) => (
+        render: ({
+          id,
+          text,
+          action,
+          style,
+          alignment,
+          background,
+          styleConfig,
+        }) => (
           <ButtonRender
+            id={id}
             text={text}
             action={toPageAction(action)}
             style={style}
             alignment={alignment}
+            background={background}
+            styleConfig={styleConfig}
           />
         ),
       },
@@ -506,10 +694,22 @@ export function createPuckConfig(
           src: { type: "text", label: "Image URL" },
           alt: { type: "text", label: "Alt Text" },
           action: actionField,
+          style: mediaStyleField,
         },
-        defaultProps: { src: "", alt: "", action: { ...DEFAULT_PAGE_ACTION } },
-        render: ({ src, alt, action }) => (
-          <ImageRender src={src} alt={alt} action={toPageAction(action)} />
+        defaultProps: {
+          src: "",
+          alt: "",
+          action: { ...DEFAULT_PAGE_ACTION },
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, src, alt, action, style }) => (
+          <ImageRender
+            id={id}
+            src={src}
+            alt={alt}
+            action={toPageAction(action)}
+            style={style}
+          />
         ),
       },
 
@@ -518,10 +718,11 @@ export function createPuckConfig(
         fields: {
           url: { type: "text", label: "Video URL" },
           caption: { type: "text", label: "Caption (optional)" },
+          style: mediaStyleField,
         },
-        defaultProps: { url: "", caption: "" },
-        render: ({ url, caption }) => (
-          <VideoRender url={url} caption={caption} />
+        defaultProps: { url: "", caption: "", style: DEFAULT_STYLE_CONFIG },
+        render: ({ id, url, caption, style }) => (
+          <VideoRender id={id} url={url} caption={caption} style={style} />
         ),
       },
 
@@ -536,9 +737,14 @@ export function createPuckConfig(
               { label: "Space", value: "space" },
             ],
           },
+          // Same `style`-name collision as Button — see DividerRender's
+          // own doc comment in elements.tsx.
+          styleConfig: dividerStyleField,
         },
-        defaultProps: { style: "line" },
-        render: ({ style }) => <DividerRender style={style} />,
+        defaultProps: { style: "line", styleConfig: DEFAULT_STYLE_CONFIG },
+        render: ({ id, style, styleConfig }) => (
+          <DividerRender id={id} style={style} styleConfig={styleConfig} />
+        ),
       },
 
       Spacer: {
@@ -571,19 +777,22 @@ export function createPuckConfig(
               { label: "No", value: false },
             ],
           },
+          style: accordionStyleField,
         },
         defaultProps: {
           items: [{ title: "Question", content: "Answer" }],
           allowMultiple: true,
+          style: DEFAULT_STYLE_CONFIG,
         },
         // Puck's `array` field manages each item's own stable `id` — passed
         // straight through to AccordionRender, which needs real per-item
         // ids anyway (React keys, and the single-open `name` grouping).
-        render: ({ id, items, allowMultiple }) => (
+        render: ({ id, items, allowMultiple, style }) => (
           <AccordionRender
             id={id}
             items={items}
             allowMultiple={allowMultiple}
+            style={style}
           />
         ),
       },
@@ -593,15 +802,18 @@ export function createPuckConfig(
         fields: {
           formId: { type: "text", label: "Magnetix Form ID" },
           formName: { type: "text", label: "Display Name (optional)" },
+          style: formStyleField,
         },
-        defaultProps: { formId: "", formName: "" },
+        defaultProps: { formId: "", formName: "", style: DEFAULT_STYLE_CONFIG },
         // `puck.metadata` — the tenant-scoping/pre-resolved-data channel
         // proven in the POC (master spec §11). Cast is safe: both configs
         // below always construct `metadata` as a real `PuckPageMetadata`.
-        render: ({ formId, formName, puck }) => (
+        render: ({ id, formId, formName, style, puck }) => (
           <FormComponent
+            id={id}
             formId={formId}
             formName={formName}
+            style={style}
             metadata={puck.metadata as PuckPageMetadata}
           />
         ),

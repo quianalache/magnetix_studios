@@ -1,5 +1,9 @@
 import { PublicForm } from "@/components/forms/public-form";
-import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
+import type { PuckPageMetadata, StyleConfig } from "@/types/pages-funnels-puck";
+import {
+  resolveBaseStyleProps,
+  resolveResponsiveCss,
+} from "@/lib/pages-funnels/puck/style";
 
 /**
  * SERVER/PUBLIC variant of the Form element (master spec §10/§11) — used
@@ -19,49 +23,71 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * Renders the real, unmodified `PublicForm` — no duplicated field schema,
  * no duplicated submission logic (master spec §9/§11).
  */
+/** System A (master spec §24.8): `id`/`style` wrap every render state here
+ *  too, for the exact same reason as `form-client.tsx`'s own copy of this
+ *  note — per-device visibility must hide the whole element regardless of
+ *  which of these states it's currently in. */
 export function FormElementServerRender({
+  id,
   formId,
   formName,
+  style,
   metadata,
 }: {
+  id: string;
   formId: string;
   formName: string;
+  style?: StyleConfig;
   metadata?: PuckPageMetadata;
 }) {
+  const responsiveCss = resolveResponsiveCss(id, style);
+  const baseStyle = resolveBaseStyleProps(style);
+
+  let body: React.ReactNode;
   if (!formId) {
-    return (
+    body = (
       <div className="border-border bg-muted text-muted-foreground flex h-24 items-center justify-center rounded-2xl border border-dashed text-sm">
         No form selected
       </div>
     );
-  }
-
-  const resolved = metadata?.resolvedForms?.[formId];
-
-  if (resolved === undefined) {
-    // The calling route never resolved this formId at all — a real
-    // integration gap (the route's `collectPuckFormIds` walk should have
-    // found it), distinct from "resolved to null" (form legitimately
-    // doesn't exist). Rendered as a visibly-different placeholder so the
-    // two failure modes aren't silently confused with each other.
-    return (
-      <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-amber-500/50 bg-amber-500/10 text-sm text-amber-700">
-        Form &ldquo;{formName || formId}&rdquo; was not resolved by the server.
-      </div>
-    );
-  }
-
-  if (resolved === null) {
-    return (
-      <div className="border-destructive/50 bg-destructive/10 text-destructive flex h-24 items-center justify-center rounded-2xl border border-dashed text-sm">
-        Form &ldquo;{formName || formId}&rdquo; not found.
-      </div>
-    );
+  } else {
+    const resolved = metadata?.resolvedForms?.[formId];
+    if (resolved === undefined) {
+      // The calling route never resolved this formId at all — a real
+      // integration gap (the route's `collectPuckFormIds` walk should have
+      // found it), distinct from "resolved to null" (form legitimately
+      // doesn't exist). Rendered as a visibly-different placeholder so the
+      // two failure modes aren't silently confused with each other.
+      body = (
+        <div className="flex h-24 items-center justify-center rounded-2xl border border-dashed border-amber-500/50 bg-amber-500/10 text-sm text-amber-700">
+          Form &ldquo;{formName || formId}&rdquo; was not resolved by the
+          server.
+        </div>
+      );
+    } else if (resolved === null) {
+      body = (
+        <div className="border-destructive/50 bg-destructive/10 text-destructive flex h-24 items-center justify-center rounded-2xl border border-dashed text-sm">
+          Form &ldquo;{formName || formId}&rdquo; not found.
+        </div>
+      );
+    } else {
+      body = (
+        <div
+          className="border-border bg-card rounded-2xl border p-4 shadow-sm"
+          style={baseStyle}
+        >
+          <PublicForm form={resolved} />
+        </div>
+      );
+    }
   }
 
   return (
-    <div className="border-border bg-card rounded-2xl border p-4 shadow-sm">
-      <PublicForm form={resolved} />
+    <div id={id}>
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
+      {body}
     </div>
   );
 }

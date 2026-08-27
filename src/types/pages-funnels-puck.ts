@@ -1,4 +1,5 @@
 import type { LeadForm } from "@/types/forms";
+import type { BlockAlignment } from "@/types/pages-funnels";
 
 /**
  * Pages & Funnels — Puck production foundation, shared prop/action types.
@@ -18,6 +19,11 @@ export type {
   ButtonStyle as PuckButtonStyle,
   BackgroundStyle as PuckBackgroundStyle,
 } from "@/types/pages-funnels";
+/** `export type {X as Y} from "..."` re-exports Y for OTHER files but does
+ *  NOT bind it locally — this local alias lets the rest of THIS file (the
+ *  System A types below) reference `PuckAlignment` too, matching every
+ *  other file in this codebase that already imports the same re-export. */
+type PuckAlignment = BlockAlignment;
 export type {
   ColumnWidth as PuckColumnWidth,
   SectionMaxWidth as PuckSectionMaxWidth,
@@ -182,4 +188,203 @@ export interface BackgroundConfig {
   image?: { url: string };
   video?: { url: string };
   blur: BackgroundBlurConfig;
+}
+
+// ---------- Shared Style System (Phase "System A" — launch-scope) ----------
+
+/**
+ * The shared cross-component style architecture (master spec §24.3/§24.20:
+ * Typography, Spacing, Border, Radius, Shadow, Responsive overrides, Device
+ * visibility). One `StyleConfig` type, one `styleField` custom-field family
+ * (`components/pages-funnels/puck/style-field.tsx`), one set of pure
+ * `resolve*` helpers (`lib/pages-funnels/puck/style.ts`) — consumed
+ * identically by every compatible component's render function, exactly the
+ * "one shared data model + one shared renderer" pattern Phase 2D already
+ * proved for `BackgroundConfig`/`BackgroundLayer`. This is deliberately a
+ * SEPARATE prop from each component's existing content/layout fields (e.g.
+ * Heading keeps its own `text`/`level`/`alignment`, Section keeps its own
+ * `maxWidth`/`paddingTop`/`paddingBottom`) — every `StyleConfig` group is
+ * additive and OPTIONAL-shaped (see each sub-type's own doc comment): an
+ * unset group resolves to no CSS output at all, so existing/migrated
+ * content that has never touched System A renders byte-identically to
+ * before this system existed. New capability layers on top via inline
+ * style (which always wins over a Tailwind class in the CSS cascade), it
+ * never replaces or renames an existing field. This is a deliberate safety
+ * choice, not an oversight — removing/renaming `alignment`, `paddingTop`,
+ * etc. would be a breaking prop-shape change touching every defaultProps
+ * blob, every render signature, and the V1 migration mapping, for a
+ * capability that inline-style layering already delivers without any of
+ * that risk.
+ *
+ * `StyleCompatibility` (below) is the literal, inspectable "which shared
+ * style groups does this component expose" matrix master spec §24 asks
+ * for (§15 of the System A task) — passed once per component registration
+ * in `config.tsx` via `createStyleField(compatibility)`, not hardcoded
+ * separately per component's field editor.
+ */
+
+/** Reuses Magnetix Forms' own curated, web-safe font-stack vocabulary
+ *  (`FONT_FAMILY_STACKS`, `src/types/forms.ts`) rather than inventing a
+ *  second one — same "shared vocabulary, not redefined" convention this
+ *  file's own header establishes for `PuckAlignment`/`PuckButtonStyle`/etc.
+ *  No web-font loading (no extra network request, no FOUT) — matches the
+ *  System A task's explicit instruction not to introduce a font-loading
+ *  system this task; the data model stays extensible for one later.
+ *  Derived from `FormAppearance["fontFamily"]` (no standalone exported
+ *  alias exists in forms.ts) rather than duplicating the literal union. */
+export type FontFamilyKey = NonNullable<
+  import("@/types/forms").FormAppearance["fontFamily"]
+>;
+
+/**
+ * Every field optional — `undefined` means "inherit/unset," not "reset to
+ * zero/none." `resolveTypographyStyles` (style.ts) only emits a CSS
+ * property for fields actually set, so an empty `{}` config produces no
+ * inline style at all and existing Tailwind-class-driven sizing (e.g.
+ * Heading's h1/h2/h3 Tailwind size classes) keeps working untouched.
+ * `textAlign` reuses `PuckAlignment` (left/center/right) — the same
+ * vocabulary the legacy per-element `alignment` field already used, so a
+ * user setting Typography's alignment sees the identical option set.
+ * Deliberately does NOT include rotation/skew (System A task §4: "not
+ * Launch blockers unless trivial and already supported cleanly" — they
+ * are not, so out of scope this task).
+ */
+export interface TypographyConfig {
+  fontFamily?: FontFamilyKey;
+  fontSize?: number; // px
+  fontWeight?: 300 | 400 | 500 | 600 | 700 | 800;
+  fontStyle?: "normal" | "italic";
+  lineHeight?: number; // unitless multiplier
+  letterSpacing?: number; // px
+  textAlign?: PuckAlignment;
+  color?: string; // hex
+  opacity?: number; // 0-100
+  textTransform?: "none" | "uppercase" | "lowercase" | "capitalize";
+  /** Only meaningful where the element renders a link/icon of its own
+   *  (Button, Image-as-link) — harmless/unused elsewhere. */
+  linkColor?: string;
+  iconColor?: string;
+}
+
+/** All four sides optional for the same "unset = no CSS emitted" reason as
+ *  `TypographyConfig`. `linked` is UI-only state (whether the editor's four
+ *  inputs are currently kept in sync) — resolution never reads it, only
+ *  the four numeric values matter for rendering. */
+export interface SpacingSides {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
+export interface SpacingConfig {
+  margin: SpacingSides;
+  marginLinked: boolean;
+  padding: SpacingSides;
+  paddingLinked: boolean;
+}
+
+export type BorderLineStyle = "none" | "solid" | "dashed" | "dotted";
+export interface BorderConfig {
+  style: BorderLineStyle;
+  color: string; // hex, empty string = unset
+  width: SpacingSides; // reuses the same four-side shape as Spacing
+  widthLinked: boolean;
+}
+
+export interface RadiusCorners {
+  topLeft?: number;
+  topRight?: number;
+  bottomRight?: number;
+  bottomLeft?: number;
+}
+export interface RadiusConfig {
+  linked: boolean;
+  corners: RadiusCorners;
+}
+
+/** Launch scope is exactly one box shadow and one text shadow (master spec
+ *  §24.3.4) — multiple layered shadows and inset shadow are Very Soon, not
+ *  modeled here. `enabled` is stored separately from the numeric fields so
+ *  a user can dial in X/Y/blur/spread and then toggle the effect on/off
+ *  without losing their values (same pattern `BackgroundBlurConfig`
+ *  already established in Phase 2D). */
+export interface BoxShadowConfig {
+  enabled: boolean;
+  x: number;
+  y: number;
+  blur: number;
+  spread: number;
+  color: string;
+}
+export interface TextShadowConfig {
+  enabled: boolean;
+  x: number;
+  y: number;
+  blur: number;
+  color: string;
+}
+
+/**
+ * A per-breakpoint STYLE OVERRIDE, not a full duplicate of every style
+ * group — System A task §10: "do NOT duplicate entire component props per
+ * device." Launch scope covers exactly what the task's own QA checklist
+ * exercises: font size, text alignment, and spacing overrides per
+ * breakpoint. Resolved to real CSS `@media` rules (`resolveResponsiveCss`,
+ * style.ts), not JS viewport-detection — a real site visitor's browser
+ * determines the breakpoint, so the SAME rendering path Preview and a
+ * future public page both use must express this as actual media-query CSS,
+ * not a runtime "which Puck viewport is selected" check (that concept only
+ * exists inside the editor).
+ */
+export interface ResponsiveStyleOverride {
+  typography?: Pick<TypographyConfig, "fontSize" | "textAlign">;
+  spacing?: Partial<SpacingConfig>;
+}
+export interface ResponsiveConfig {
+  tablet?: ResponsiveStyleOverride;
+  mobile?: ResponsiveStyleOverride;
+}
+
+/** Defaults to visible everywhere — the one group in this file that is
+ *  NOT "unset by default," because an all-false default would silently
+ *  hide every existing/migrated component the moment System A shipped. */
+export interface DeviceVisibilityConfig {
+  desktop: boolean;
+  tablet: boolean;
+  mobile: boolean;
+}
+
+export interface StyleConfig {
+  typography: TypographyConfig;
+  spacing: SpacingConfig;
+  border: BorderConfig;
+  radius: RadiusConfig;
+  boxShadow: BoxShadowConfig;
+  textShadow: TextShadowConfig;
+  responsive: ResponsiveConfig;
+  visibility: DeviceVisibilityConfig;
+}
+
+/**
+ * Which `StyleConfig` groups a given component exposes in its Settings
+ * field editor (master spec §24's per-component compatibility examples —
+ * e.g. Heading gets typography/spacing/textShadow/responsive/visibility
+ * but not border/radius/boxShadow; Section gets the reverse). Passed once
+ * per component registration in `config.tsx` via
+ * `createStyleField(compatibility)` — this object IS the compatibility
+ * matrix, in code, not a separate document to keep in sync by hand.
+ * Resolution (`style.ts`'s `resolve*` helpers) is UNCONDITIONAL on every
+ * group regardless of compatibility — compatibility only gates which
+ * controls the EDITOR shows; if a group's data is present, it always
+ * renders, so nothing here can silently disagree with what's on screen.
+ */
+export interface StyleCompatibility {
+  typography?: boolean;
+  spacing?: boolean;
+  border?: boolean;
+  radius?: boolean;
+  boxShadow?: boolean;
+  textShadow?: boolean;
+  responsive?: boolean;
+  visibility?: boolean;
 }

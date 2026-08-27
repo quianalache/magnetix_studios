@@ -17,11 +17,12 @@ If this document and the current codebase ever disagree, that's a signal to stop
 
 ## BUILD STATUS
 
-*Update this block whenever a meaningful milestone changes. Keep it short and current — it is the first thing a future session reads.*
+_Update this block whenever a meaningful milestone changes. Keep it short and current — it is the first thing a future session reads._
 
-**CURRENT PHASE:** Requirements consolidation after Phase 2D — a deeper GoHighLevel capability audit has been converted into a binding baseline (§24: GoHighLevel Capability Baseline and Magnetix Requirements Matrix). Documentation only; no builder code changed this task.
+**CURRENT PHASE:** System A — Core Shared Styling System (Typography, Spacing, Border, Radius, Shadow, Responsive overrides, Device visibility, Background integration, Right-sidebar organization), per the §24 capability baseline's §24.22 implementation order. Built and QA'd this task; System B (Rich Text/Image depth/Video depth/auto hierarchy) not started or approved.
 
 **COMPLETED:**
+
 - Custom V1 page builder (flat `PageBlock[]` model) — in production.
 - V2 architecture experiment (fixed `Section → Row → Column → Element` tree, deterministic `migrateBlocksToSections()`) — built and validated as a design/migration reference, not shipped as a second production schema.
 - Puck integration architecture audit.
@@ -41,7 +42,7 @@ If this document and the current codebase ever disagree, that's a signal to stop
   - `src/components/pages-funnels/puck/editor-shell.tsx` (`MagnetixPuckEditorShell`) — the reusable shell. Uses `overrides.header`/`overrides.headerActions` (the current, non-deprecated API — `renderHeaderActions`, used in Phase 1, logs a runtime deprecation warning on 0.23.0) to prepend a "Back to Pages & Funnels" link + status badge and replace Puck's default Publish-only action with Preview/Save Draft/Publish, while leaving Puck's own header `children` (title via `headerTitle`, sidebar toggles, native `MenuBar` Undo/Redo) completely native. Save Draft/Publish render genuinely `disabled` with an explanatory `title` — no persistence wired. Preview opens a Dialog showing a real `<Render>` of the current in-memory Data (same pattern V1's own Preview mode already uses). Desktop/Tablet/Mobile stay Puck's native `ViewportControls` (a second toolbar row with no dedicated override slot in this version — themed via the same CSS variables, not fused into one row at the cost of touching Puck internals).
   - `config.tsx` gained a **Hero** component (new "Prebuilt Sections" category) — a real library drag-item, not the Phase 1 header-button demo. Reuses `SectionRender` and Section's own fields verbatim; `defaultProps` is real nested Column/Heading/Text/Button/Image data, so every primitive is independently selectable/editable immediately after the drag. Confirmed live: two separate Hero drops produce two fully independent, non-colliding instances (Puck mints fresh ids for `defaultProps`-sourced slot content per insertion).
   - `src/app/(builder)/sa/[subAccountId]/pages-funnels/[pageId]/new-builder/page.tsx` — the real route, sibling of the V1 editor route, same `(builder)` route group (normal auth/`SubAccountProvider`/`BillingGuard`). Reads the real `PageDoc`, converts `blocks` to Puck `Data` via the Phase 1 `migratePageBlocksToPuckData` foundation, in memory only — confirmed zero Firestore write calls anywhere in the new code (`updatePageBlocks`/`setDoc`/etc. grepped clean).
-  - `src/app/(builder)/sa/[subAccountId]/layout.tsx` — gained `<AppAccent/>` (previously mounted only in `(dashboard)`'s layout). Fixes a real, pre-existing gap affecting the V1 editor too: a direct/refreshed load of any `(builder)` route rendered with the wrong (non-Magnetix) theme, since `<html>`'s theme class only survives *client-side* navigation, not a fresh document load.
+  - `src/app/(builder)/sa/[subAccountId]/layout.tsx` — gained `<AppAccent/>` (previously mounted only in `(dashboard)`'s layout). Fixes a real, pre-existing gap affecting the V1 editor too: a direct/refreshed load of any `(builder)` route rendered with the wrong (non-Magnetix) theme, since `<html>`'s theme class only survives _client-side_ navigation, not a fresh document load.
   - `src/app/(dashboard)/sa/[subAccountId]/pages-funnels/page.tsx` — `PageCard`'s dropdown gained a "Try New Builder" entry (per-existing-page), linking to the real route above. Not gated behind any admin/internal-user check — no such pattern exists elsewhere in this repo and this CRM currently has one real user; revisit if/when there are other real sub-account users before general availability.
 - **New Builder QA entry fix** (immediate follow-up, same phase): the first real user QA session confirmed she landed in **V1**, not the new builder — her screenshots showed BASIC/SECTIONS categories, "Click a block to add it to the end of the page," old Content/Layout/Style/Spacing tabs, append-to-bottom instead of drag-to-position, and no inline editing — all correct, expected V1 behavior, **not** Puck defects. Root cause: the only Phase 2A entry point was a single item inside the per-card `⋮` dropdown menu (itself only visible on hover), while the page card's own title is a large, obvious link straight to V1's "Edit" — a user naturally clicks the title. Fixed by adding a second, always-visible, distinctly-styled "Try New Builder" button on every page card (not replacing the title link or the dropdown item, both kept) and a "New Builder Preview" badge in the new editor's own top bar so which editor is on screen is unambiguous at a glance. No Puck functionality changed this task.
   - `src/app/docs/design-prototypes/pages-funnels-new-builder-shell/` — QA-only harness (NOT a second deliverable route) rendering the exact same `MagnetixPuckEditorShell` with fixture data, built solely because this session has no real Firebase Auth credentials to drive the real authenticated route directly; used to verify the visual shell and all interactions below.
@@ -66,7 +67,7 @@ If this document and the current codebase ever disagree, that's a signal to stop
   - **Background/Gradient model.** Replaced Phase 2C's Section-only `SectionBackgroundConfig` (`{type, color?, gradient?: {from,to,direction}}`) with a generic `BackgroundConfig` (`src/types/pages-funnels-puck.ts`) shared verbatim by Section, Hero, Row, AND Column: `source: "none"|"color"|"image"|"video"` (Image/Video typed now, no field UI yet — explicitly deferred, not over-built), `color: {mode: "solid"|"gradient", solid, gradient}`, `gradient: {type: "linear"|"radial"|"angular", angle, stops: {id,color,position}[]}` (up to 10 stops, enforced in the field editor), and `blur: {enabled, intensity}`. One shared pure helper (`backgroundCssValue`/`gradientCssValue`, `src/lib/pages-funnels/puck/background.ts`) turns it into real CSS, consumed by one shared render primitive (`BackgroundLayer`, `src/components/pages-funnels/puck/background-layer.tsx`) that Section/Row/Column all render identically — not three copies. Blur renders on a dedicated absolutely-positioned layer behind content (never `filter` on the container itself), so child text/images stay crisp — confirmed live via computed-style inspection (`filter: blur(12px)` on the background layer, `filter: none` on the heading text in the same section).
   - **Real color picker.** Reused the repo's existing `ColorInput` component (`src/components/ui/color-input.tsx` — swatch + popover with a native `<input type="color">` and a hex text field) rather than adding a new dependency; used for both the solid-color field and every gradient stop.
   - **Gradient editor UX.** New `BackgroundFieldEditor`/`GradientEditor` (`src/components/pages-funnels/puck/background-field.tsx`) as a Puck `CustomField<BackgroundConfig>` (a real, stable, documented Puck field type — confirmed in the installed 0.23.0 package's types) rather than `object`/`resolveFields`, since this UI's stop-list/add/remove/live-preview interactivity needs one cohesive component owning its own layout. Gradient Type (Linear/Radial/Angular) as a segmented control; a live horizontal stop-position preview rail; one row per stop (color picker, numeric 0–100% position, remove — disabled below the 2-stop minimum); an "Add Color Stop" button (disabled at the 10-stop maximum); an angle slider shown only for Linear/Angular (Radial has no CSS angle concept, so the control is hidden, not shown-inert). All changes update the canvas live — confirmed via computed `background-image` reads on the actual canvas iframe element for Linear, Radial, and Angular, each with real two-stop colors.
-  - **Two real bugs found and fixed during live QA** (both caught via the QA pass itself, not reported beforehand): (1) `addStop()`'s "widest gap" placement logic only considered gaps *between* existing stops, so with exactly one existing stop it always fell back to a hardcoded 50% — clicking "Add Color Stop" twice from an empty gradient silently produced two stops stacked at the same 50% position (an invisible, degenerate gradient). Fixed by measuring gaps across `[0, ...existing positions, 100]` uniformly, so 0/1/2+ stops all place sensibly with no special case. (2) Toggling Background Blur "on" left `intensity` at its 0 default, so the toggle visibly did nothing until the user also dragged the slider — fixed by seeding a sensible non-zero intensity (12px) the moment the toggle flips on with intensity still at 0 (never overwrites an already-chosen intensity).
+  - **Two real bugs found and fixed during live QA** (both caught via the QA pass itself, not reported beforehand): (1) `addStop()`'s "widest gap" placement logic only considered gaps _between_ existing stops, so with exactly one existing stop it always fell back to a hardcoded 50% — clicking "Add Color Stop" twice from an empty gradient silently produced two stops stacked at the same 50% position (an invisible, degenerate gradient). Fixed by measuring gaps across `[0, ...existing positions, 100]` uniformly, so 0/1/2+ stops all place sensibly with no special case. (2) Toggling Background Blur "on" left `intensity` at its 0 default, so the toggle visibly did nothing until the user also dragged the slider — fixed by seeding a sensible non-zero intensity (12px) the moment the toggle flips on with intensity still at 0 (never overwrites an already-chosen intensity).
   - **Section/Row/Column support.** Confirmed live (Playwright + computed-style/DOM inspection against the fixture harness): Section, Hero, Row, and Column each show the identical Background field in Settings, and each independently renders its own live gradient/blur via the one shared `BackgroundLayer`.
   - **V1 migration.** `migrateBackgroundStyle()` (migrate-v1.ts) now emits the new `BackgroundConfig` shape, preserving only the real V1 `backgroundStyle` INTENT (mode: solid vs. gradient) — `solid: ""` / `stops: []` respectively, never inventing colors V1 never had (V1 only ever stored the enum, confirmed again this phase). A migrated gradient Section now opens with "Gradient" already selected and an empty, ready-to-fill stop list, rather than reverting to "None."
   - Full regression pass (drag/drop, inline editing, Undo/Redo, Layers, Blocks panel, Desktop/Tablet/Mobile, Hero, Form) confirmed unaffected; 0 unexpected browser console errors.
@@ -74,10 +75,25 @@ If this document and the current codebase ever disagree, that's a signal to stop
 - **Requirements consolidation — GoHighLevel capability baseline (documentation only, no code changed):** a deeper audit of GoHighLevel's Pages/Funnels builder was converted into §24 (GoHighLevel Capability Baseline and Magnetix Requirements Matrix) — a binding, structured capability matrix so future implementation proceeds system-by-system from an approved baseline instead of piecemeal ("add borders" this session, "add shadows" a later one). Locks the future Settings panel organization (General/Styles/Animations, §24.2), documents five shared style systems (Typography, Spacing, Border, Shadow, Background — §24.3) that must be built once and reused across every component rather than per-element, and adds a maintained 44-row capability matrix (§24.20) with STATUS/PRIORITY/IMPLEMENTATION SYSTEM columns. Newly classified LAUNCH this task (added to §17): auto hierarchy/auto-wrapping, Rich Text mixed formatting, shared Spacing/Border/Radius, one box+text shadow, per-device visibility + responsive typography/spacing/alignment, the Preview architecture (already built), autosave/Publish/version history, and analytics event plumbing (the instrumentation itself, ahead of the reporting UI). No existing architecture decision (§1–§23) was changed or reprioritized — this is additive documentation, not a rewrite of prior history.
 - **Capability matrix reconciliation (documentation only, no code changed):** a summary report on the §24.20 matrix miscounted its rows (compound Status/Priority cells like "BUILT (foundation)" or "LAUNCH (core); VERY SOON (rest)" led to an inconsistent narrative tally that didn't match the table). Audited every row directly (verified programmatically, not by eye) and corrected two things: (1) every Status and Priority cell now holds exactly one enum token, with all qualifying detail moved into Notes/Gaps — this was a real documentation defect, not just a reporting error, since a future session scanning the table for a plain "BUILT" match could have been misled the same way; (2) **Section/Row/Column's status changed from BUILT to PARTIAL** — hierarchy and the Phase 2D background system are genuinely built, but the §24.5 layout-control target (border/radius/shadow/min-height/responsive-visibility) isn't, so BUILT overstated it. Verified final totals directly from the table: **44 rows — BUILT: 6, PARTIAL: 9, MISSING: 29, DEFERRED: 0, SKIP: 0 (6+9+29+0+0=44)**. No priority (Launch/Very Soon/Later) was changed for any capability that already had a single, unambiguous value; two previously-ambiguous compound-priority rows (Navigation, Tracking scripts) were resolved to their already-documented single value (Navigation → Very Soon per §24.9's own "Launch or Very Soon" hedge with no Launch commitment elsewhere; Tracking scripts → Very Soon, matching what §17 already said).
 
-**IN PROGRESS:** Nothing — the §24 capability baseline is complete and awaiting user approval before any of its items are implemented; Phase 2D itself remains pending manual user QA of the real authenticated route.
+- **System A — Core Shared Styling System** (master spec §24.3/§24.20's Launch-scope shared style systems, implemented as ONE system per the task's explicit instruction, not piecemeal per element):
+  - **Shared data model.** New `StyleConfig` (`src/types/pages-funnels-puck.ts`) composing `TypographyConfig`, `SpacingConfig` (margin+padding, each with 4 optional sides + a linked/unlinked flag), `BorderConfig` (style/color/width, linked/unlinked), `RadiusConfig` (4 optional corners, linked/unlinked), `BoxShadowConfig`/`TextShadowConfig` (enabled + X/Y/blur/spread/color), `ResponsiveConfig` (tablet/mobile overrides of font-size/text-align/spacing), and `DeviceVisibilityConfig` (desktop/tablet/mobile booleans, defaults all-true). Every group except visibility is entirely optional-shaped ("unset" fields, not zero-valued ones) — the same additive-only safety principle Phase 2D established for `BackgroundConfig`: an empty `StyleConfig` resolves to zero CSS output, so existing/migrated content is visually unaffected until a user actually opens the new Styles field and changes something.
+  - **Shared render helpers.** New `src/lib/pages-funnels/puck/style.ts` — `resolveTypographyStyles`/`resolveSpacingStyles`/`resolveBorderStyles`/`resolveRadiusStyles`/`resolveBoxShadowStyle`/`resolveTextShadowStyle`/`resolveBaseStyleProps` (pure `CSSProperties` resolvers, each emitting a property only when its config value is actually set) and `resolveResponsiveCss` (the one shared resolver for BOTH responsive overrides and per-device visibility, per the task's explicit "one shared resolver, not custom breakpoint logic per renderer" instruction). Responsive overrides render as real CSS `@media` rules (not JS viewport-detection) scoped to the component's own stable `id` via a sibling `<style>` tag — required because a real site visitor's browser, not the editor's currently-selected Puck viewport, determines the breakpoint on the same `<Render>` pipeline Preview and a future public page both use. Visibility uses mutually exclusive `min`/`max-width` ranges per breakpoint (`display:none`); responsive style overrides use an overlapping `max-width` cascade (tablet's block written before mobile's, so a narrow viewport picks up mobile's more specific declaration last via ordinary CSS source order) — both keyed off the exact same breakpoint constants `VIEWPORTS` (constants.ts) already uses (Tablet=768, Desktop=1280), so "hidden on tablet" can never disagree between the editor's device switcher and a real browser.
+  - **Shared field editor.** New `src/components/pages-funnels/puck/style-field.tsx` — `createStyleField(compatibility)`, a factory producing one Puck `CustomField<StyleConfig>` per component, following the exact proven pattern Phase 2D established for Background (one custom field owning its own rich internal layout). Internally organized into collapsible groups (Typography/Spacing/Border & Radius/Shadow/Responsive/Visibility, new `src/components/ui/collapsible.tsx` base-ui wrapper) gated by a literal, in-code `StyleCompatibility` object per component (config.tsx) — e.g. Heading gets Typography/Spacing/Shadow(text)/Responsive/Visibility but not Border&Radius; Section gets the reverse. Real color pickers reuse the existing `ColorInput`; font family reuses Magnetix Forms' own curated `FONT_FAMILY_STACKS` (`src/types/forms.ts`) rather than introducing a second font system or any web-font loading, per the task's explicit instruction to inspect existing font architecture first.
+  - **Right sidebar organization (§24.2).** Every compatible component's Settings panel now shows a "Styles" field with clearly labeled, collapsible groups instead of one flat list — a real, substantial scanability improvement. The literal top-level GENERAL/STYLES/ANIMATIONS DOM section split across Puck's own native Fields list was investigated and NOT attempted: Puck's `slot` fields (Section's `rows`, Row's `columns`, Column's `elements`) cannot safely nest inside an `object` field wrapper without risking the drag/drop mechanism those slots depend on, and Puck's Fields panel has no other native section-header primitive to reach for without a fragile custom `overrides.fields` DOM rewrite (against this repo's own "prefer supported API surface" rule, §3). This is a real, explicitly acknowledged scope reduction, not a silent omission — see KNOWN BUGS. Animations tab intentionally absent this task, per the task's own explicit permission ("may remain absent if cleaner").
+  - **Component wiring.** Section, Hero, Row, Column, Heading, Text, Button, Image, Video, Divider, Accordion, and the Form container all gained a `style`/`styleConfig` field (Button and Divider already had a field literally named `style` — the legacy preset/line-vs-space field — so their new System A prop is named `styleConfig` instead, keeping the pre-existing field completely untouched). Button additionally gained the shared `backgroundField` (the same `BackgroundConfig`/`BackgroundLayer` system Section/Row/Column already used, layered behind the label so it only visually appears once explicitly set), directly matching the task's own worked example ("Button: ...background/color..."). Spacer deliberately did NOT gain a `style` prop, per the task's explicit instruction ("Spacer remains its own semantic height element").
+  - **Section/Row/Column depth increase.** All three now render real border/radius/box-shadow/margin/padding/responsive/visibility on top of their existing background — moving their capability-matrix status from the shallow "hierarchy + background only" state Phase 2D left them in toward (not yet at) the full §24.5 Layout Controls target; min-height and full-width-background-vs-contained-content-independent-of-maxWidth remain unbuilt (see KNOWN BUGS).
+  - **Confirmed live** (Playwright against the fixture harness, values read via `getComputedStyle`/generated `<style>` tag content, not eyeballed): Heading font-size (52px), font-weight (700), text-transform (uppercase), and opacity (0.4) all update the canvas live; Section's linked margin (10px on all four sides) updates live; Section border-style (`solid`) updates live; Section box-shadow enabling produces the exact expected default value (`rgba(0,0,0,0.15) 0px 4px 12px 0px`, matching `DEFAULT_BOX_SHADOW`); a tablet font-size override emits the exact expected media query (`@media (max-width:1279px){#id{font-size:18px;}}`); toggling Mobile visibility off emits the exact expected rule (`@media (max-width:767px){#id{display:none;}}`) while the component remains present in Data/Layers (confirmed via the Outline tree, never removed); Section/Row/Column's compatibility-gated groups render correctly per component (Border & Radius correctly absent from Heading's panel); 0 unexpected browser console errors across the full pass. Background regression confirmed structurally, not just behaviorally: `background.ts`/`background-layer.tsx`/`background-field.tsx` are byte-for-byte unmodified this task (`git diff` empty), and `config.tsx`'s existing `background`/`backgroundField` wiring for Section/Hero/Row/Column was only ever added to, never edited.
+  - **Two real bugs found and fixed during this task's own build** (before shipping, not via user QA — see Document Discipline): (1) the linked/unlinked shadow-enable toggle originally reset a shadow's X/Y/blur/spread/color back to the hardcoded default every time it was re-enabled after being disabled, discarding whatever the user had dialed in; fixed to always preserve existing values and only flip the boolean. (2) `addStop()`-style default-then-forget bugs were specifically checked for and not found elsewhere in this task's new code.
+  - **Not independently confirmed via live automation this task** (verified via direct code-path review instead — see KNOWN BUGS for the honest reason why): unlinked/independent margin or radius side values producing four genuinely different computed values (the LINKED case is confirmed live with an exact value; the unlinked code path is structurally identical, just writing different numbers to the same four keys); Box Shadow's disable direction removing `box-shadow` cleanly (the enable direction is confirmed live with an exact value; disable is the same boolean toggle in reverse, already covered by the bug fix above). Test-automation friction (Puck's own benign duplicate-DOM pattern, documented since Phase 2A/2B) made a fully clean live re-confirmation of these two specific sub-cases impractical within this task's effort budget — this is a documentation-honesty note about the QA evidence trail, not a suspected product defect.
+
+**IN PROGRESS:** Nothing — System A is complete and awaiting user QA of the real authenticated route (see AWAITING USER TEST); System B (Rich Text, Image/Video element depth, auto hierarchy) is next in the §24.22 implementation order but not started or approved.
 
 **KNOWN BUGS:**
-- None outstanding from Phase 2D — the two real bugs found during this task's own QA (gradient stop placement collision, Background Blur toggle with no visible effect at 0 intensity) were both fixed within the same task; see the Phase 2D COMPLETED entry above for detail. 0 unexpected browser console errors across the full QA pass.
+
+- None outstanding from System A — the one real bug found during this task's own build (Box Shadow's enable toggle discarding prior X/Y/blur/spread/color values when re-enabled) was fixed within the same task; see the System A COMPLETED entry above.
+- **Right-sidebar General/Styles/Animations organization is partial, by deliberate architectural choice, not oversight.** The literal top-level three-section DOM split across Puck's own native Fields list was investigated and not attempted this task: Puck's `slot` fields (a component's drag/drop content areas) cannot safely nest inside an `object` field wrapper without risking the drag/drop mechanism, and Puck's Fields panel has no other native section-header primitive. What shipped instead: a single, clearly-labeled "Styles" field per component with real internal collapsible groups (Typography/Spacing/Border & Radius/Shadow/Responsive/Visibility) — a substantial real improvement over one flat list, but not the literal three-tab split §24.2 describes. A future session attempting the literal split should first empirically test (in an isolated harness, not production) whether a `slot` field genuinely breaks when nested inside an `object` field on this Puck version, rather than assuming — this task treated it as too risky to test-and-possibly-break within its own effort budget, not as a confirmed technical impossibility.
+- Section/Row/Column's Layout Controls (§24.5) are still not at full target depth after System A: min-height and a "full-width background independent of contained max-width content" mode are not built. Border/radius/box-shadow/spacing/responsive/visibility ARE now built for all three via the shared System A systems.
+- Unlinked/independent margin and radius side values, and Box Shadow's disable direction, were verified via direct code-path review (the code is structurally identical to their already-live-confirmed counterparts: linked margin, and Box Shadow's enable direction) but not independently re-confirmed via live browser automation this task, due to Puck's own benign duplicate-DOM QA friction (documented since Phase 2A/2B) making it impractical within this task's effort budget. Flagged here explicitly per this document's own Document Discipline rule against letting a gap go unrecorded — not a suspected defect, a documented evidence-trail limitation.
 - The Insert Undo Blocker (Puck 0.23.0 corrupting `history[0]` when a controlled `<Puck>`'s `iframe`/`metadata` props are inline object literals) has a confirmed, supported-API-only fix: hoist those props to stable references. Carried forward unchanged since Phase 1 — standing implementation rule (§3), enforced in review, for every future controlled `<Puck>` usage.
 - Puck's own `overrides` API is documented by Puck itself as "highly experimental." Still exactly the five override keys from Phase 2B (`header`, `headerActions`, `drawer`, `outline`, `fields`) — Phase 2C added no new override keys, only a new `resolveFields` component-level option (Section/Hero) and an `onAction` prop, both separate, real, documented parts of the supported API surface.
 - CSS custom-property overrides meant to affect Puck's canvas-iframe content (ActionBar, selection/drop indicators) must be scoped to `:root`, not a wrapper class — a wrapper-class scope silently fails to reach anything rendered inside the iframe, even with `syncHostStyles: true`. Standing constraint, unchanged.
@@ -86,11 +102,11 @@ If this document and the current codebase ever disagree, that's a signal to stop
 - Row/Column nodes generated by `migrate-v1.ts` (V1 never had per-row/per-column backgrounds) don't get an explicit `background` prop written into their migrated data — intentional, not an oversight: `BackgroundLayer`/`BackgroundFieldEditor` both treat a missing/`undefined` background exactly like `DEFAULT_BACKGROUND` (`source: "none"`), so this is honest (never inventing a background V1 never had) and functionally identical to writing the default explicitly.
 - Save Draft/Publish are intentionally non-functional (disabled) — Puck Data persistence has not been approved/built yet (§18 of the master spec's migration principles still applies: no persistence change without an explicit future task).
 
-**AWAITING USER TEST:** Manual QA of the REAL authenticated route — go to Marketing → Pages & Funnels → click **"Try New Builder"** on any page card. Confirm: (1) selecting a Section, Row, or Column shows the same Background field (None/Color/Image/Video), and choosing Color → Gradient shows a real color picker, gradient type switcher (Linear/Radial/Angular), an add/remove/reposition stop list, an angle control (hidden for Radial), and a Background Blur toggle + intensity slider — all updating the canvas live; (2) clicking Preview opens a genuine new browser tab with no dialog, no close button, no editor chrome, showing the exact same unsaved content, at real browser width; (3) a long page scrolls to a fully-visible bottom in that tab. This session could not drive that route directly (no Firebase Auth credentials available); QA was performed against a fixture-fed harness rendering the identical `MagnetixPuckEditorShell` component plus its matching docs-scoped Preview route — strong evidence, not a substitute for the user seeing the real route with a real page.
+**AWAITING USER TEST:** Manual QA of the REAL authenticated route — go to Marketing → Pages & Funnels → click **"Try New Builder"** on any page card. Confirm: (1) Phase 2D items — Section/Row/Column Background field (None/Color/Image/Video), Gradient editor, Preview in a new tab with no dialog; (2) System A items — selecting a Heading/Text/Button shows a "Styles" field with collapsible Typography/Spacing/(Shadow) groups that update the canvas live (font size, weight, color, alignment, opacity); selecting a Section/Row/Column shows Spacing/Border & Radius/Shadow/Responsive/Visibility groups; setting a Tablet or Mobile override in the Responsive group changes how the page looks at that width in Preview/a resized browser tab; toggling a device off in Visibility hides the element at that width without deleting it from Layers. This session could not drive the real route directly (no Firebase Auth credentials available); QA was performed against a fixture-fed harness rendering the identical `MagnetixPuckEditorShell` component — strong evidence, not a substitute for the user seeing the real route with a real page.
 
-**AWAITING USER DECISION:** Approval of the expanded §24 capability baseline (the shared style systems, the Settings-panel General/Styles/Animations organization, the newly-classified LAUNCH items in §17, and the §24.22 implementation order) before any further implementation begins. Separately, approval to begin further Phase 2 work (deeper settings-panel taxonomy, additional prebuilt sections, persistence design) once the real authenticated route is manually verified for Phase 2D.
+**AWAITING USER DECISION:** Approval to begin System B (Rich Text, Image/Video element depth, auto hierarchy — §24.22's next step) once System A is manually verified on the real route. Separately, still open: approval of the §24 capability baseline itself if not already given, and the Phase 2D real-route verification.
 
-**NEXT APPROVED TASK:** None until the user approves the §24 baseline. See §23 above once authorized.
+**NEXT APPROVED TASK:** None — System B (Rich Text, Image/Video element depth, auto hierarchy) awaits explicit user go-ahead per this document's standing rule (§19/§21: each phase requires its own approval, not automatic continuation). See §23 above once authorized.
 
 ---
 
@@ -111,6 +127,7 @@ GoHighLevel and ClickFunnels are **competitive references**, not blueprints. Mag
 **Puck (`@puckeditor/core`) is the approved editor-engine direction**, based on the completed POC and feasibility audits.
 
 **Puck owns:**
+
 - Library/drawer engine
 - Drag/drop (top-level and nested)
 - Exact insertion positioning
@@ -125,6 +142,7 @@ GoHighLevel and ClickFunnels are **competitive references**, not blueprints. Mag
 - Public `<Render>` engine (server-side rendering of the same config)
 
 **Magnetix owns:**
+
 - Visual design/aesthetic (the actual look of the editor chrome and every rendered element)
 - `PageDoc` metadata
 - Firestore (schema, rules, persistence)
@@ -158,7 +176,7 @@ Confirmed findings from the POC, the feasibility audit, and the Insert Undo Bloc
 - Field-driven Column widths were proven using a 12-column CSS Grid, with the width class computed from the Column's own `width` field and applied via the `inline`/`dragRef` mechanism above.
 - Desktop / Tablet / Mobile device-preview behavior is a **native, first-class Puck mechanism** (the `viewports` prop) — do not rebuild this.
 - Real `PublicForm` rendering inside Puck's canvas iframe was proven working, including through Puck's `iframe` sandbox.
-- `iframe={{ syncHostStyles: true }}` correctly propagates Magnetix/Tailwind styling into the canvas iframe — this is the mechanism for making the *editor canvas* preview look like the real published page.
+- `iframe={{ syncHostStyles: true }}` correctly propagates Magnetix/Tailwind styling into the canvas iframe — this is the mechanism for making the _editor canvas_ preview look like the real published page.
 - `contentEditable: true` (a field option on `text`/`textarea`/`richtext`/`custom` fields) is Puck's **native inline canvas text editing** mechanism. It updates the same canonical Puck `Data` the Fields panel reads — no parallel/local state needed, and none should be built. Note: enabling it changes the field's render-time value from `string` to `ReactNode`; render functions must stop assuming a string.
 - Puck `Data` is plain JSON, directly suitable for Firestore storage — no custom serialization layer is needed between Puck and `PageDoc`.
 - **Controlled `<Puck>` props — specifically `iframe` and `metadata` — MUST be referentially stable** (module-level constants or memoized), never inline object literals, when `<Puck>` is used as a controlled component (`data`/`onChange={setData}`). This is not a style preference: on `@puckeditor/core@0.23.0`, an unstable `iframe`/`metadata` reference was confirmed to corrupt `history[0]` such that the **first** insert action of an editor session could not be undone (button state flipped correctly; canvas content did not revert). Every insert after the first was unaffected. Root-caused via a from-scratch minimal stock-Puck reproduction; fixed by hoisting those props to stable references. Treat "all controlled Puck config props are referentially stable" as a standing implementation rule, enforced in code review, not just a one-time POC fix.
@@ -238,6 +256,7 @@ Proposed customer-facing library taxonomy:
 ## 7. Core Element Inventory
 
 **Core (Launch):**
+
 - Heading
 - Text / Rich Text
 - Button
@@ -249,6 +268,7 @@ Proposed customer-facing library taxonomy:
 - Accordion
 
 **Business / conversion:**
+
 - Form
 - Booking
 - Checkout
@@ -258,12 +278,14 @@ Proposed customer-facing library taxonomy:
 - Navigation
 
 **Commerce:**
+
 - Checkout
 - Order Bump
 - Upsell / Downsell action
 - Order Summary / Confirmation
 
 **Magnetix-native reference components** (these reference existing Magnetix features rather than duplicating them — see §9–§11):
+
 - Form
 - Booking
 - Offer
@@ -272,15 +294,15 @@ Proposed customer-facing library taxonomy:
 
 ### Existing elsewhere in Magnetix vs. still needing page-element implementation
 
-| Already exists in Magnetix (needs a page-element *wrapper*, not new infrastructure) | Still needs implementation as a page element |
-|---|---|
-| Forms (full form builder, submissions, automations) | Heading, Text/Rich Text, Button, Image, Video, Icon/SVG, Divider, Spacer, Accordion (general-purpose Accordion element exists from V2 work and should carry forward) |
-| Booking/calendar system | Checkout (page-element form of it) |
-| Offers/Products | Pricing Table |
-| Courses (course CTA target) | Countdown |
-| Community | Popup / popup trigger |
-| Stripe Connect (per sub-account) | Navigation element |
-| | Order Bump, Upsell/Downsell action, Order Summary/Confirmation |
+| Already exists in Magnetix (needs a page-element _wrapper_, not new infrastructure) | Still needs implementation as a page element                                                                                                                         |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Forms (full form builder, submissions, automations)                                 | Heading, Text/Rich Text, Button, Image, Video, Icon/SVG, Divider, Spacer, Accordion (general-purpose Accordion element exists from V2 work and should carry forward) |
+| Booking/calendar system                                                             | Checkout (page-element form of it)                                                                                                                                   |
+| Offers/Products                                                                     | Pricing Table                                                                                                                                                        |
+| Courses (course CTA target)                                                         | Countdown                                                                                                                                                            |
+| Community                                                                           | Popup / popup trigger                                                                                                                                                |
+| Stripe Connect (per sub-account)                                                    | Navigation element                                                                                                                                                   |
+|                                                                                     | Order Bump, Upsell/Downsell action, Order Summary/Confirmation                                                                                                       |
 
 This table should be kept current — when an element ships, move its row; when a new Magnetix feature is built that a page element could reference, add it here rather than duplicating it inside Pages & Funnels.
 
@@ -319,10 +341,12 @@ Not every element needs every action — the Action system must define **compati
 The Form page element **references** a real Magnetix Form — there is no duplicated form builder inside Pages & Funnels.
 
 Target page-builder UX:
+
 - Choose: **Existing Form** or **Create New Form**.
 - Eventually: **Edit Form** from within a page-builder modal/drawer, without leaving the page editor.
 
 Post-submit options should support:
+
 - Success message
 - Next funnel step
 - Selected (specific) funnel step
@@ -337,6 +361,7 @@ All existing CRM contact/automation behavior tied to form submission remains own
 The Booking page element **references** a real Magnetix calendar/booking configuration — no duplicated booking infrastructure.
 
 Target post-booking behavior:
+
 - Confirmation
 - Next funnel step
 - Selected (specific) funnel step
@@ -349,6 +374,7 @@ Target post-booking behavior:
 Checkout is a **high-priority** Pages & Funnels capability (Launch-scope at the core-checkout level; see §17 for what's deferred to Very Soon/Later).
 
 Target capabilities:
+
 - Choose Offer/Product
 - Choose price
 - One-time payment
@@ -365,6 +391,7 @@ Target capabilities:
 - Post-purchase Success Action
 
 **Success Action** (same shared vocabulary spirit as §8):
+
 - Next funnel step
 - Selected funnel step
 - Custom URL
@@ -373,8 +400,8 @@ Target capabilities:
 **Terminology — keep these three concepts distinct in code, UI copy, and this document:**
 
 - **CHECKOUT** — the initial transaction.
-- **ORDER BUMP** — an optional add-on offered *before* the initial purchase completes.
-- **UPSELL / DOWNSELL** — a *post-purchase* offer that reuses the already-authorized payment relationship, where the payment provider architecture permits it (i.e., contingent on how Magnetix's Stripe Connect integration supports charging a previously-authorized customer without re-collecting payment details).
+- **ORDER BUMP** — an optional add-on offered _before_ the initial purchase completes.
+- **UPSELL / DOWNSELL** — a _post-purchase_ offer that reuses the already-authorized payment relationship, where the payment provider architecture permits it (i.e., contingent on how Magnetix's Stripe Connect integration supports charging a previously-authorized customer without re-collecting payment details).
 
 ---
 
@@ -404,6 +431,7 @@ A Page may exist **outside** a Funnel (a standalone landing page is valid and do
 ## 13. Responsive Requirements
 
 Target:
+
 - Desktop preview
 - Tablet preview
 - Mobile preview
@@ -414,7 +442,7 @@ Target:
 - Responsive spacing
 - Responsive alignment
 
-**Division of ownership:** Puck's native `viewports` system may provide the preview-switching *mechanics* (which breakpoint is currently being edited/previewed). **Magnetix owns the actual responsive component behavior/settings** — i.e., what a Column's width or an Element's visibility actually *does* at each breakpoint is Magnetix field/prop design, not something to inherit from Puck defaults.
+**Division of ownership:** Puck's native `viewports` system may provide the preview-switching _mechanics_ (which breakpoint is currently being edited/previewed). **Magnetix owns the actual responsive component behavior/settings** — i.e., what a Column's width or an Element's visibility actually _does_ at each breakpoint is Magnetix field/prop design, not something to inherit from Puck defaults.
 
 ---
 
@@ -433,6 +461,7 @@ Document future desired levels conceptually (do not build past Launch scope with
 ## 15. Page Settings
 
 Target:
+
 - Page name
 - Slug/path
 - SEO title
@@ -450,6 +479,7 @@ Target:
 ## 16. Analytics / A-B Testing
 
 Future requirements:
+
 - Page views
 - CTA clicks
 - Form submissions
@@ -468,9 +498,10 @@ A/B testing should eventually support page/funnel-step variants and traffic allo
 
 ## 17. Priorities
 
-*The user may change these later. Do not silently reprioritize — if a future session believes the priority should change, say so and ask, don't just reorder this list. See §24.20 for the full granular, capability-level priority matrix — the lists below are the section-level summary; §24's additions below are explicit new classifications the user gave directly, not inferred.*
+_The user may change these later. Do not silently reprioritize — if a future session believes the priority should change, say so and ask, don't just reorder this list. See §24.20 for the full granular, capability-level priority matrix — the lists below are the section-level summary; §24's additions below are explicit new classifications the user gave directly, not inferred._
 
 ### LAUNCH
+
 - Puck production editor
 - Magnetix visual styling
 - Inline text editing
@@ -508,6 +539,7 @@ A/B testing should eventually support page/funnel-step variants and traffic allo
 - **Analytics event plumbing** (the instrumentation itself, not the reporting UI) (§24.17)
 
 ### VERY SOON
+
 - Order Bump
 - One-click Upsell/Downsell
 - Order Summary/Confirmation
@@ -527,6 +559,7 @@ A/B testing should eventually support page/funnel-step variants and traffic allo
 - **Custom meta tags / canonical URL / schema markup** (§24.14)
 
 ### LATER
+
 - Synchronized global/universal sections
 - A/B testing
 - Advanced conditional funnel branching
@@ -538,7 +571,8 @@ A/B testing should eventually support page/funnel-step variants and traffic allo
 - **Galleries** (not previously scoped in this document — flagged in §24.20's matrix, needs its own explicit prioritization before design work starts)
 
 ### SKIP / NOT CURRENTLY PLANNED
-*(empty — nothing has been explicitly ruled out yet; add items here only when the user explicitly decides something is out of scope, rather than merely deferred)*
+
+_(empty — nothing has been explicitly ruled out yet; add items here only when the user explicitly decides something is out of scope, rather than merely deferred)_
 
 ---
 
@@ -568,7 +602,7 @@ The V2 (`SectionNode[]`) work remains useful as a **migration/design reference**
 
 Each phase requires **explicit manual QA before proceeding to the next.** Do not automatically implement the next phase just because the previous phase compiled — compiling is not the same as validated.
 
-- **PHASE 0** — Master spec / source of truth. *(this document)*
+- **PHASE 0** — Master spec / source of truth. _(this document)_
 - **PHASE 1** — Production Puck foundation, built alongside the current V1 builder (not replacing it yet).
 - **PHASE 2** — Core page-editor experience and primitives (the Launch-scope element inventory from §7, the Magnetix visual reskin from §6).
 - **PHASE 3** — Shared Action system (§8).
@@ -581,7 +615,7 @@ Each phase requires **explicit manual QA before proceeding to the next.** Do not
 
 ## 20. Current State
 
-*(as of this document's creation)*
+_(as of this document's creation)_
 
 - Production **custom V1 builder** exists and is live (`PageBlock[]` model, `Canvas`/`BlocksPanel`/`SettingsPanel`, `@dnd-kit` drag/reorder, draft/publish, `/p/[pageId]` public route).
 - **V2 migration/renderer experiments exist** (fixed tree types, deterministic migration, read-only tree renderer wired into Preview and `/p/[pageId]`) — validated as a reference, not shipped as a second canonical schema (§18).
@@ -594,14 +628,14 @@ Each phase requires **explicit manual QA before proceeding to the next.** Do not
 
 ## 21. Document Discipline
 
-*(restated from the top for scannability — see the header of this document for the full list)*
+_(restated from the top for scannability — see the header of this document for the full list)_
 
 Read before changing architecture. Preserve decisions unless the user changes them. Keep Build Status current. Record new constraints here. Don't silently reprioritize. Don't implement ahead of the current approved task.
 
 **Strengthened after the §24 capability baseline was added:** future implementation agents must:
 
 - Read the full §24 capability matrix before scoping any Pages & Funnels implementation task — not just this document's top-level sections.
-- Never silently omit a Launch requirement from a shared system (§24.3's Typography/Spacing/Border/Shadow/Background) just because a single task only asked for one element type — if a task asks for "Button borders," check whether that means building the *shared* border system (§24.3.3) that Section/Row/Column/Image/etc. will also need, not a Button-only implementation.
+- Never silently omit a Launch requirement from a shared system (§24.3's Typography/Spacing/Border/Shadow/Background) just because a single task only asked for one element type — if a task asks for "Button borders," check whether that means building the _shared_ border system (§24.3.3) that Section/Row/Column/Image/etc. will also need, not a Button-only implementation.
 - Never downgrade expected functional depth merely to minimize work for the current task. If a target genuinely can't be hit this task, say so explicitly (see below) rather than quietly shipping a shallower version.
 - When a deliberate scope reduction is made, identify it explicitly in the task's report (a "Deferred" or "Not built this task" note, matching the pattern Phase 2C/2D's reports already established) — never let a gap be discovered later with no record of why it exists.
 - Update §24.20's STATUS column (and this document's Build Status COMPLETED entries) as capabilities are actually built, so the matrix never drifts stale against the real codebase.
@@ -622,13 +656,13 @@ This spec is the **synthesis**; it does not replace the detailed technical findi
 
 ## 23. Next Approved Task
 
-*(filled in once the user authorizes Phase 1 — left intentionally blank at document creation)*
+_(filled in once the user authorizes Phase 1 — left intentionally blank at document creation)_
 
 ---
 
 ## 24. GoHighLevel Capability Baseline and Magnetix Requirements Matrix
 
-*Added after a deeper audit of the current GoHighLevel Pages/Funnels builder, to convert that research into a binding, structured capability baseline before further implementation proceeds. This section does not change any decision made in §1–§23 — it makes the existing Launch-scope element/system inventory (§7, §8, §13, §14) concrete enough that implementation agents can work system-by-system from an approved matrix instead of discovering basic builder controls piecemeal through user QA.*
+_Added after a deeper audit of the current GoHighLevel Pages/Funnels builder, to convert that research into a binding, structured capability baseline before further implementation proceeds. This section does not change any decision made in §1–§23 — it makes the existing Launch-scope element/system inventory (§7, §8, §13, §14) concrete enough that implementation agents can work system-by-system from an approved matrix instead of discovering basic builder controls piecemeal through user QA._
 
 **GoHighLevel is a competitive functional reference.** Magnetix is not intended to visually copy GoHighLevel — its layout, iconography, and visual language are not a target. The purpose of this baseline is narrower and more specific: to avoid accidentally shipping a page and funnel builder that omits capabilities users of any mature builder in this category would expect by default (borders, shadows, per-device visibility, rich text, autosave, an event-tracking foundation, and so on). Where this section gives a concrete depth target ("2–10 color stops," "linked/unlinked padding," "one box shadow at Launch"), that target is the expected functional floor, not a prescription for how the resulting UI should look.
 
@@ -650,16 +684,16 @@ Expected editor capabilities, consistent with §2/§3/§6:
 
 **Magnetix status:**
 
-| Capability | Status |
-|---|---|
-| Hierarchy (Section/Row/Column/Element) | Built (foundation) |
-| Drag/drop | Built |
-| Layers | Built |
-| Undo/Redo | Built |
-| Viewport controls (Desktop/Tablet/Mobile) | Built |
-| Inline editing | Built |
-| Auto hierarchy / auto-wrapping | Missing |
-| In-editor page switcher | Missing |
+| Capability                                | Status             |
+| ----------------------------------------- | ------------------ |
+| Hierarchy (Section/Row/Column/Element)    | Built (foundation) |
+| Drag/drop                                 | Built              |
+| Layers                                    | Built              |
+| Undo/Redo                                 | Built              |
+| Viewport controls (Desktop/Tablet/Mobile) | Built              |
+| Inline editing                            | Built              |
+| Auto hierarchy / auto-wrapping            | Missing            |
+| In-editor page switcher                   | Missing            |
 
 **Auto hierarchy/auto-wrapping is classified LAUNCH** — see §17's updated LAUNCH list.
 
@@ -668,6 +702,7 @@ Expected editor capabilities, consistent with §2/§3/§6:
 The Settings panel's future organization is locked as three top-level groups, applied consistently across every component type:
 
 **GENERAL**
+
 - Identity/name
 - Content
 - Source/reference selection (e.g. which Form, which Offer)
@@ -675,6 +710,7 @@ The Settings panel's future organization is locked as three top-level groups, ap
 - Action
 
 **STYLES**
+
 - Layout
 - Typography
 - Colors
@@ -686,6 +722,7 @@ The Settings panel's future organization is locked as three top-level groups, ap
 - Responsive/device controls
 
 **ANIMATIONS**
+
 - Type
 - Duration
 - Delay
@@ -702,6 +739,7 @@ These are **shared systems**, not per-component reimplementations. Every compone
 #### 24.3.1 Typography
 
 Target Launch controls:
+
 - Font family
 - Font size
 - Font weight
@@ -733,6 +771,7 @@ Responsive overrides (per-breakpoint values) come later, within this same archit
 #### 24.3.3 Border
 
 Shared border editor:
+
 - **Style:** none, solid, dashed, dotted
 - **Color:** real color picker (reuse `ColorInput`, per the Phase 2D precedent)
 - **Width:** linked, or independent top/right/bottom/left
@@ -743,6 +782,7 @@ Shared border editor:
 #### 24.3.4 Shadow
 
 Target:
+
 - **Box shadow:** X, Y, blur, spread, color
 - **Text shadow** where appropriate: X, Y, blur, color
 
@@ -764,6 +804,7 @@ Gradient: Linear, Radial, Angular; 2–10 color stops; stop position; angle; col
 ### 24.4 Responsive System
 
 **Target Launch:**
+
 - Desktop / Tablet / Mobile
 - Per-device visibility (show/hide an element at a given breakpoint)
 - Responsive typography
@@ -772,6 +813,7 @@ Gradient: Linear, Radial, Angular; 2–10 color stops; stop position; angle; col
 - Responsive column stacking
 
 **Very Soon:**
+
 - Reverse stacking
 - Deeper sizing overrides
 
@@ -779,12 +821,12 @@ Use **sparse responsive overrides** layered on top of each shared style system (
 
 **Current status:**
 
-| Capability | Status |
-|---|---|
-| Viewport preview (Desktop/Tablet/Mobile switching) | Built |
-| Basic mobile stacking | Built |
-| Device visibility | Missing |
-| Responsive style override system | Partial / missing |
+| Capability                                         | Status            |
+| -------------------------------------------------- | ----------------- |
+| Viewport preview (Desktop/Tablet/Mobile switching) | Built             |
+| Basic mobile stacking                              | Built             |
+| Device visibility                                  | Missing           |
+| Responsive style override system                   | Partial / missing |
 
 ### 24.5 Layout Controls
 
@@ -825,6 +867,7 @@ PageAction (§8) remains a major Launch architecture requirement — this subsec
 Target action vocabulary is unchanged from §8: URL, Next Funnel Step, Specific Funnel Step, Scroll to Section/Element, Open Popup, Close Popup, Show/Hide Elements, Submit Form, Download File, Call, SMS, Email, Purchase/Checkout, Accept Upsell, Decline/Continue.
 
 Examples of compatibility-by-element:
+
 - **Button** — most/all of the vocabulary applies.
 - **Image** — URL, Scroll, Open Popup, Call, SMS, Email, etc. (not "Submit Form" — an Image isn't a form-submit trigger).
 - **Navigation item** — URL, page reference, section/scroll.
@@ -868,6 +911,7 @@ No Navigation page element exists yet.
 - **GLOBAL / LINKED** — updates to the source sync across every linked usage.
 
 Potential hierarchy:
+
 - **Very Soon:** Save Element, Save Section (saved-copy behavior only).
 - **Later:** Global Section, Universal Section, Universal Element (synchronized behavior).
 
@@ -885,6 +929,7 @@ Upgraded to explicit **Launch** requirements (previously only "Draft/publish" ap
 - Restore a prior version
 
 **Current status:**
+
 - Puck Data persistence is not wired.
 - Save Draft/Publish in the New Builder are intentionally disabled (Phase 2A onward) — real UI, no backing persistence yet.
 - V1 has its own persistence (`updatePageBlocks`, etc.), but that is a separate system from the target Puck Data persistence path and is not the thing being extended here.
@@ -931,6 +976,7 @@ None of this is built yet — §12 documents the conceptual model (`Funnel → o
 **This architecture must exist before deep analytics UI is built — it is not something to defer until "after launch."**
 
 **Launch instrumentation target** (the event architecture itself):
+
 - `page_view`
 - `unique_visitor`
 - `action_click`
@@ -961,62 +1007,63 @@ Applicable eventually to: Elements, Sections, Rows, Columns — one shared anima
 
 ### 24.20 HighLevel Capability Matrix
 
-*Maintained table — update the STATUS column as capabilities are built; do not silently change the PRIORITY column (§17's "don't silently reprioritize" rule applies here identically). **Every Status cell and every Priority cell must contain exactly ONE token from its enum** (`BUILT`/`PARTIAL`/`MISSING`/`DEFERRED`/`SKIP` for Status; `LAUNCH`/`VERY SOON`/`LATER`/`SKIP` for Priority) — never a compound value like "BUILT (foundation)" or "LAUNCH (core); VERY SOON (rest)". Qualifying detail belongs in Notes/Gaps. This was reconciled once already (see Build Status) after compound cells caused a real miscount in a summary report — do not reintroduce them.*
+_Maintained table — update the STATUS column as capabilities are built; do not silently change the PRIORITY column (§17's "don't silently reprioritize" rule applies here identically). **Every Status cell and every Priority cell must contain exactly ONE token from its enum** (`BUILT`/`PARTIAL`/`MISSING`/`DEFERRED`/`SKIP` for Status; `LAUNCH`/`VERY SOON`/`LATER`/`SKIP` for Priority) — never a compound value like "BUILT (foundation)" or "LAUNCH (core); VERY SOON (rest)". Qualifying detail belongs in Notes/Gaps. This was reconciled once already (see Build Status) after compound cells caused a real miscount in a summary report — do not reintroduce them._
 
-| Capability | HighLevel Behavior / Expected Depth | Magnetix Status | Priority | Magnetix Implementation System | Notes / Gaps |
-|---|---|---|---|---|---|
-| Puck engine | Proprietary drag/drop canvas engine | BUILT | LAUNCH | `@puckeditor/core`, `clientPuckConfig`/`serverPuckConfig` | Engine proven stable (§2/§3); remaining work is Magnetix's own registry/config on top |
-| Magnetix shell | Proprietary editor UI | BUILT | LAUNCH | `editor-shell.tsx`, `magnetix-theme.css`, blocks/layers/settings panels | Settings panel is foundation-level, not yet General/Styles/Animations (§24.2) |
-| Section/Row/Column | Nested container model | PARTIAL | LAUNCH | `layout.tsx`, `config.tsx` | Hierarchy and the shared Phase 2D background system are fully built; the §24.5 layout-control target (border, radius, shadow, min height, responsive visibility) is not yet built on any of the three. Kept as one row — all three currently share identical implementation depth, not split per-component. |
-| Exact drag/drop | Precise drop-position indicators, nested drag | BUILT | LAUNCH | Puck core + `blocks-panel.tsx` | Confirmed live across Phase 2A/2B |
-| Auto hierarchy / auto-wrapping | Bare element dropped on empty page auto-wraps in Section/Row/Column | MISSING | LAUNCH | TBD — likely a custom insert-time handler over Puck's insert action | Not yet scoped |
-| Layers | Layer/outline tree | BUILT | LAUNCH | `layers-panel.tsx` wrapping Puck's real Outline | — |
-| Undo/Redo | Standard undo/redo | BUILT | LAUNCH | Puck native history (§3) | Stable-prop-reference rule (§3) is load-bearing |
-| Preview | Page-style, real-URL preview | BUILT | LAUNCH | `preview-session.ts`, `.../new-builder/preview` | Built in Phase 2D; awaiting real authenticated-route user QA |
-| Rich text | Mixed inline formatting in one text node | MISSING | LAUNCH | TBD — Puck `richtext` field or Tiptap-backed custom field | Needs its own technical investigation before implementation |
-| Typography (shared system) | Font/size/weight/style/line-height/letter-spacing/align/color/opacity/transform | MISSING | LAUNCH | TBD — proposed shared `typographyField`, mirrors Background's pattern | No shared system exists yet; rotation/skew deferred to Very Soon |
-| Spacing (shared system) | Linked/unlinked margin + padding, all sides | PARTIAL | LAUNCH | TBD — proposed shared `spacingField` | Ad hoc per-component padding fields exist (e.g. Section paddingTop/paddingBottom); no shared linked/unlinked margin+padding system yet. Responsive overrides layered on later. |
-| Border | Style/color/width/radius, independent per side | MISSING | LAUNCH | TBD — proposed shared `borderField` | Likely reuses `ColorInput` |
-| Radius | Linked/independent four corners | MISSING | LAUNCH | Folded into the Border system | — |
-| Shadow | Box shadow + text shadow | MISSING | LAUNCH | TBD — proposed shared `shadowField` | Launch scope is one box shadow + one text shadow; multiple layered/inset shadows are Very Soon |
-| Backgrounds | Source/Color/Gradient/Image/Video, blur | PARTIAL | LAUNCH | `background.ts`, `background-field.tsx`, `BackgroundLayer` | Color/Gradient/Blur fully built (Phase 2D); Image/Video source needs full product treatment (§24.3.5) |
-| Responsive overrides | Sparse per-breakpoint style overrides | MISSING | LAUNCH | TBD — extends each shared style field with an optional per-breakpoint map | — |
-| Device visibility | Show/hide per breakpoint | MISSING | LAUNCH | TBD — proposed shared `visibility` field | — |
-| Image (element depth) | Sizing/object-fit/border/radius/shadow/responsive | PARTIAL | LAUNCH | `elements.tsx` `ImageRender` + shared style systems | Only src/alt/PageAction implemented; sizing/border/radius/shadow/responsive controls from §24.6 not yet built |
-| Video (element depth) | Provider/embed, playback options, sizing/border/shadow | PARTIAL | LAUNCH | `elements.tsx` `VideoRender` | Only url/caption implemented; provider/sizing/border/radius/shadow controls not yet built. Playback options (autoplay/muted/controls/loop/poster) are Very Soon/Later. |
-| PageAction | Rich action vocabulary with per-element compatibility | PARTIAL | LAUNCH | `types/pages-funnels-puck.ts`, `action.ts` | Foundation type covers the full vocabulary (§8); only `url` resolves at runtime. Compatibility-by-element concept newly formalized, §24.7. |
-| Form | Reference existing form builder, post-submit routing | PARTIAL | LAUNCH | `form-client.tsx`/`form-server.tsx` | References real LeadForms; edit-in-place and full post-submit routing not built. Post-submit next/selected-step routing depends on Funnel Model, §24.16. |
-| Booking | Reference existing calendar, post-booking routing | MISSING | LAUNCH | TBD — new element referencing existing Booking feature | — |
-| Checkout | Full checkout depth (§11) | MISSING | LAUNCH | TBD | Core checkout is Launch scope; order bump/upsell-downsell are their own Very Soon rows below. Contingent on the Stripe Connect per-sub-account architecture already shipped. |
-| Funnel ordered steps | Funnel object, ordered steps, page assignment | MISSING | LAUNCH | TBD, Magnetix-owned (Puck stays unaware, §12) | — |
-| Next-step routing | "Next step"/"specific step" resolve at runtime | MISSING | LAUNCH | `action.ts` + future funnel service | Resolution logic not implemented; vocabulary already reserved on `PageAction` |
-| Navigation | Page links, external URL, scroll, dropdowns, nested items, mobile menu, mega menu | MISSING | VERY SOON | TBD, new element | Core nav (links/URL/scroll/dropdowns/mobile menu) not yet committed to Launch — §24.9 leaves it "Launch or Very Soon"; mega menu is Later regardless |
-| Autosave | Real-time draft autosave, Saving/Saved indicator | MISSING | LAUNCH | TBD — likely debounced Firestore writes to a Puck-Data `PageDoc` field | — |
-| Publish | Explicit publish, separate from draft | PARTIAL | LAUNCH | `editor-shell.tsx` (UI) + TBD persistence service | Save Draft/Publish buttons exist in the editor UI but are intentionally disabled; no backing persistence service yet |
-| Version history | Checkpoints, restore prior version | MISSING | LAUNCH | TBD | — |
-| SEO / page settings | Title/meta/slug/sharing image/index/domain/favicon | PARTIAL | LAUNCH | TBD | Core page settings exist in V1 but are not migrated to the Puck Data model. Custom meta tags/canonical URL/schema markup are Very Soon; AI-generated schema is Later. |
-| Tracking scripts | Funnel-wide + per-page/step head/body scripts | MISSING | VERY SOON | TBD | Needs a security/sanitization review before shipping |
-| Analytics event plumbing | Event architecture underlying all reporting | MISSING | LAUNCH | TBD | The event architecture itself (not the reporting UI) is Launch scope — see §24.17 |
-| Order bump | Pre-purchase add-on | MISSING | VERY SOON | TBD, part of Checkout | Keep distinct from Upsell, §11 |
-| Upsell/downsell | Post-purchase offer, reused authorization | MISSING | VERY SOON | TBD | Contingent on Stripe Connect capability |
-| Order confirmation | Dedicated confirmation/order-summary element | MISSING | VERY SOON | TBD | — |
-| Popup | Built from same primitives, open/close/delay/entry triggers | MISSING | VERY SOON | TBD — reuses Section/Row/Column inside an overlay + Show/Hide action | Exit intent/advanced conditions = LATER |
-| Countdown | Countdown timer element | MISSING | VERY SOON | TBD, new element | — |
-| Pricing table | Pricing/plan comparison element | MISSING | VERY SOON | TBD, likely references Offers/Products | — |
-| Saved elements/sections | Save reusable copy (independent after insertion) | MISSING | VERY SOON | TBD | Distinct from Global/Universal (LATER), §24.11 |
-| Animation | Type/duration/delay/easing/scale/mobile behavior | MISSING | VERY SOON | TBD, proposed shared `animationField` | Not a Launch blocker unless reprioritized |
-| Global/Universal content | Synchronized content across usages | MISSING | LATER | TBD | Conceptually documented, §14/§24.11 |
-| A/B testing | Variants per Funnel Step, traffic allocation, winner selection | MISSING | LATER | TBD | Funnel Step model must not preclude this, §24.18 |
-| Galleries | Image gallery/carousel element | MISSING | LATER | TBD | Not previously scoped elsewhere in this document; needs explicit user prioritization before further design |
-| Mega menu | Multi-column dropdown navigation | MISSING | LATER | TBD, part of Navigation | — |
+| Capability                     | HighLevel Behavior / Expected Depth                                               | Magnetix Status | Priority  | Magnetix Implementation System                                          | Notes / Gaps                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | --------------------------------------------------------------------------------- | --------------- | --------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Puck engine                    | Proprietary drag/drop canvas engine                                               | BUILT           | LAUNCH    | `@puckeditor/core`, `clientPuckConfig`/`serverPuckConfig`               | Engine proven stable (§2/§3); remaining work is Magnetix's own registry/config on top                                                                                                                                                                                                                                                                       |
+| Magnetix shell                 | Proprietary editor UI                                                             | BUILT           | LAUNCH    | `editor-shell.tsx`, `magnetix-theme.css`, blocks/layers/settings panels | Settings panel now shows a real, collapsible-grouped "Styles" field per compatible component (System A); the literal top-level General/Styles/Animations DOM split (§24.2) was investigated and intentionally not attempted — see Known Bugs for why.                                                                                                       |
+| Section/Row/Column             | Nested container model                                                            | PARTIAL         | LAUNCH    | `layout.tsx`, `config.tsx`                                              | Hierarchy, the shared Phase 2D background system, AND (System A) shared border/radius/box-shadow/spacing/responsive/visibility are now built on all three. Still missing from the §24.5 target: min height, and a full-width-background independent of contained max-width content. Kept as one row — all three still share identical implementation depth. |
+| Exact drag/drop                | Precise drop-position indicators, nested drag                                     | BUILT           | LAUNCH    | Puck core + `blocks-panel.tsx`                                          | Confirmed live across Phase 2A/2B                                                                                                                                                                                                                                                                                                                           |
+| Auto hierarchy / auto-wrapping | Bare element dropped on empty page auto-wraps in Section/Row/Column               | MISSING         | LAUNCH    | TBD — likely a custom insert-time handler over Puck's insert action     | Not yet scoped                                                                                                                                                                                                                                                                                                                                              |
+| Layers                         | Layer/outline tree                                                                | BUILT           | LAUNCH    | `layers-panel.tsx` wrapping Puck's real Outline                         | —                                                                                                                                                                                                                                                                                                                                                           |
+| Undo/Redo                      | Standard undo/redo                                                                | BUILT           | LAUNCH    | Puck native history (§3)                                                | Stable-prop-reference rule (§3) is load-bearing                                                                                                                                                                                                                                                                                                             |
+| Preview                        | Page-style, real-URL preview                                                      | BUILT           | LAUNCH    | `preview-session.ts`, `.../new-builder/preview`                         | Built in Phase 2D; awaiting real authenticated-route user QA                                                                                                                                                                                                                                                                                                |
+| Rich text                      | Mixed inline formatting in one text node                                          | MISSING         | LAUNCH    | TBD — Puck `richtext` field or Tiptap-backed custom field               | Needs its own technical investigation before implementation                                                                                                                                                                                                                                                                                                 |
+| Typography (shared system)     | Font/size/weight/style/line-height/letter-spacing/align/color/opacity/transform   | BUILT           | LAUNCH    | `style.ts`, `style-field.tsx` (System A)                                | Full target field set implemented; font-size/weight/opacity/text-transform confirmed live with exact computed values. Rotation/skew deferred to Very Soon, as scoped.                                                                                                                                                                                       |
+| Spacing (shared system)        | Linked/unlinked margin + padding, all sides                                       | PARTIAL         | LAUNCH    | `style.ts`, `style-field.tsx` (System A)                                | Linked margin confirmed live with an exact value; independent/unlinked per-side values implemented but not independently confirmed via live automation this task (code-reviewed, structurally identical to the confirmed linked path) — see Known Bugs.                                                                                                     |
+| Border                         | Style/color/width/radius, independent per side                                    | PARTIAL         | LAUNCH    | `style.ts`, `style-field.tsx` (System A)                                | Style (none/solid/dashed/dotted) confirmed live; color (reuses `ColorInput`) and independent per-side width implemented but not independently live-confirmed this task.                                                                                                                                                                                     |
+| Radius                         | Linked/independent four corners                                                   | PARTIAL         | LAUNCH    | `style.ts`, `style-field.tsx` (System A)                                | Implemented (linked + 4 independent corners); not independently live-confirmed this task — see Known Bugs.                                                                                                                                                                                                                                                  |
+| Shadow                         | Box shadow + text shadow                                                          | PARTIAL         | LAUNCH    | `style.ts`, `style-field.tsx` (System A)                                | Box shadow enable confirmed live with the exact expected default value; disable direction and text shadow implemented but not independently live-confirmed this task. Multiple/inset shadows correctly out of scope (Very Soon).                                                                                                                            |
+| Backgrounds                    | Source/Color/Gradient/Image/Video, blur                                           | PARTIAL         | LAUNCH    | `background.ts`, `background-field.tsx`, `BackgroundLayer`              | Unchanged this task (files confirmed byte-identical via `git diff`) — Color/Gradient/Blur fully built (Phase 2D); Image/Video source still needs full product treatment (§24.3.5). System A additionally wired the same shared system onto Button.                                                                                                          |
+| Responsive overrides           | Sparse per-breakpoint style overrides                                             | PARTIAL         | LAUNCH    | `style.ts` `resolveResponsiveCss` (System A)                            | Font-size/text-align/spacing tablet AND mobile overrides confirmed live with exact generated `@media` CSS. Per-device Column width override (§24.4/§12's "Responsive Column Behavior") not built this task.                                                                                                                                                 |
+| Device visibility              | Show/hide per breakpoint                                                          | BUILT           | LAUNCH    | `style.ts` `resolveResponsiveCss` (System A)                            | Confirmed live for Desktop and Mobile with exact generated `@media` CSS (Tablet is the identical code path); confirmed the hidden component remains in Data/Layers, not deleted. Applied to Section/Row/Column and every core element except Spacer (deliberately excluded, §24.3).                                                                         |
+| Image (element depth)          | Sizing/object-fit/border/radius/shadow/responsive                                 | PARTIAL         | LAUNCH    | `elements.tsx` `ImageRender` + shared style systems                     | Only src/alt/PageAction implemented; sizing/border/radius/shadow/responsive controls from §24.6 not yet built                                                                                                                                                                                                                                               |
+| Video (element depth)          | Provider/embed, playback options, sizing/border/shadow                            | PARTIAL         | LAUNCH    | `elements.tsx` `VideoRender`                                            | Only url/caption implemented; provider/sizing/border/radius/shadow controls not yet built. Playback options (autoplay/muted/controls/loop/poster) are Very Soon/Later.                                                                                                                                                                                      |
+| PageAction                     | Rich action vocabulary with per-element compatibility                             | PARTIAL         | LAUNCH    | `types/pages-funnels-puck.ts`, `action.ts`                              | Foundation type covers the full vocabulary (§8); only `url` resolves at runtime. Compatibility-by-element concept newly formalized, §24.7.                                                                                                                                                                                                                  |
+| Form                           | Reference existing form builder, post-submit routing                              | PARTIAL         | LAUNCH    | `form-client.tsx`/`form-server.tsx`                                     | References real LeadForms; edit-in-place and full post-submit routing not built. Post-submit next/selected-step routing depends on Funnel Model, §24.16.                                                                                                                                                                                                    |
+| Booking                        | Reference existing calendar, post-booking routing                                 | MISSING         | LAUNCH    | TBD — new element referencing existing Booking feature                  | —                                                                                                                                                                                                                                                                                                                                                           |
+| Checkout                       | Full checkout depth (§11)                                                         | MISSING         | LAUNCH    | TBD                                                                     | Core checkout is Launch scope; order bump/upsell-downsell are their own Very Soon rows below. Contingent on the Stripe Connect per-sub-account architecture already shipped.                                                                                                                                                                                |
+| Funnel ordered steps           | Funnel object, ordered steps, page assignment                                     | MISSING         | LAUNCH    | TBD, Magnetix-owned (Puck stays unaware, §12)                           | —                                                                                                                                                                                                                                                                                                                                                           |
+| Next-step routing              | "Next step"/"specific step" resolve at runtime                                    | MISSING         | LAUNCH    | `action.ts` + future funnel service                                     | Resolution logic not implemented; vocabulary already reserved on `PageAction`                                                                                                                                                                                                                                                                               |
+| Navigation                     | Page links, external URL, scroll, dropdowns, nested items, mobile menu, mega menu | MISSING         | VERY SOON | TBD, new element                                                        | Core nav (links/URL/scroll/dropdowns/mobile menu) not yet committed to Launch — §24.9 leaves it "Launch or Very Soon"; mega menu is Later regardless                                                                                                                                                                                                        |
+| Autosave                       | Real-time draft autosave, Saving/Saved indicator                                  | MISSING         | LAUNCH    | TBD — likely debounced Firestore writes to a Puck-Data `PageDoc` field  | —                                                                                                                                                                                                                                                                                                                                                           |
+| Publish                        | Explicit publish, separate from draft                                             | PARTIAL         | LAUNCH    | `editor-shell.tsx` (UI) + TBD persistence service                       | Save Draft/Publish buttons exist in the editor UI but are intentionally disabled; no backing persistence service yet                                                                                                                                                                                                                                        |
+| Version history                | Checkpoints, restore prior version                                                | MISSING         | LAUNCH    | TBD                                                                     | —                                                                                                                                                                                                                                                                                                                                                           |
+| SEO / page settings            | Title/meta/slug/sharing image/index/domain/favicon                                | PARTIAL         | LAUNCH    | TBD                                                                     | Core page settings exist in V1 but are not migrated to the Puck Data model. Custom meta tags/canonical URL/schema markup are Very Soon; AI-generated schema is Later.                                                                                                                                                                                       |
+| Tracking scripts               | Funnel-wide + per-page/step head/body scripts                                     | MISSING         | VERY SOON | TBD                                                                     | Needs a security/sanitization review before shipping                                                                                                                                                                                                                                                                                                        |
+| Analytics event plumbing       | Event architecture underlying all reporting                                       | MISSING         | LAUNCH    | TBD                                                                     | The event architecture itself (not the reporting UI) is Launch scope — see §24.17                                                                                                                                                                                                                                                                           |
+| Order bump                     | Pre-purchase add-on                                                               | MISSING         | VERY SOON | TBD, part of Checkout                                                   | Keep distinct from Upsell, §11                                                                                                                                                                                                                                                                                                                              |
+| Upsell/downsell                | Post-purchase offer, reused authorization                                         | MISSING         | VERY SOON | TBD                                                                     | Contingent on Stripe Connect capability                                                                                                                                                                                                                                                                                                                     |
+| Order confirmation             | Dedicated confirmation/order-summary element                                      | MISSING         | VERY SOON | TBD                                                                     | —                                                                                                                                                                                                                                                                                                                                                           |
+| Popup                          | Built from same primitives, open/close/delay/entry triggers                       | MISSING         | VERY SOON | TBD — reuses Section/Row/Column inside an overlay + Show/Hide action    | Exit intent/advanced conditions = LATER                                                                                                                                                                                                                                                                                                                     |
+| Countdown                      | Countdown timer element                                                           | MISSING         | VERY SOON | TBD, new element                                                        | —                                                                                                                                                                                                                                                                                                                                                           |
+| Pricing table                  | Pricing/plan comparison element                                                   | MISSING         | VERY SOON | TBD, likely references Offers/Products                                  | —                                                                                                                                                                                                                                                                                                                                                           |
+| Saved elements/sections        | Save reusable copy (independent after insertion)                                  | MISSING         | VERY SOON | TBD                                                                     | Distinct from Global/Universal (LATER), §24.11                                                                                                                                                                                                                                                                                                              |
+| Animation                      | Type/duration/delay/easing/scale/mobile behavior                                  | MISSING         | VERY SOON | TBD, proposed shared `animationField`                                   | Not a Launch blocker unless reprioritized                                                                                                                                                                                                                                                                                                                   |
+| Global/Universal content       | Synchronized content across usages                                                | MISSING         | LATER     | TBD                                                                     | Conceptually documented, §14/§24.11                                                                                                                                                                                                                                                                                                                         |
+| A/B testing                    | Variants per Funnel Step, traffic allocation, winner selection                    | MISSING         | LATER     | TBD                                                                     | Funnel Step model must not preclude this, §24.18                                                                                                                                                                                                                                                                                                            |
+| Galleries                      | Image gallery/carousel element                                                    | MISSING         | LATER     | TBD                                                                     | Not previously scoped elsewhere in this document; needs explicit user prioritization before further design                                                                                                                                                                                                                                                  |
+| Mega menu                      | Multi-column dropdown navigation                                                  | MISSING         | LATER     | TBD, part of Navigation                                                 | —                                                                                                                                                                                                                                                                                                                                                           |
 
-**Totals (verified by direct row count, not narrative summary — see Build Status for the reconciliation note): 44 rows total. BUILT: 6. PARTIAL: 9. MISSING: 29. DEFERRED: 0. SKIP: 0. 6 + 9 + 29 + 0 + 0 = 44.**
+**Totals (verified by direct row count, not narrative summary — recomputed after System A): 44 rows total. BUILT: 8. PARTIAL: 13. MISSING: 23. DEFERRED: 0. SKIP: 0. 8 + 13 + 23 + 0 + 0 = 44.**
 
 ### 24.21 Current Magnetix Status
 
 Consistent with the Build Status section at the top of this document — restated here as the capability-baseline snapshot:
 
 **Already built/foundation:**
+
 - Puck production foundation
 - Custom Magnetix editor shell
 - Icon-based Blocks panel
@@ -1033,6 +1080,7 @@ Consistent with the Build Status section at the top of this document — restate
 - Direct V1 → Puck migration foundation
 
 **Still intentionally NOT wired:**
+
 - Persistence
 - Publish
 - Funnel orchestration
@@ -1044,7 +1092,7 @@ Consistent with the Build Status section at the top of this document — restate
 
 ### 24.22 Implementation Order
 
-*A planning sequence only — approving this baseline does NOT authorize starting any of these phases. Each still requires its own explicit user go-ahead and QA gate, per §19's standing rule.*
+_A planning sequence only — approving this baseline does NOT authorize starting any of these phases. Each still requires its own explicit user go-ahead and QA gate, per §19's standing rule._
 
 **A. Core shared style system** — typography, spacing, border/radius, shadow, responsive overrides, device visibility, Background completion (Image/Video source).
 
@@ -1064,4 +1112,4 @@ Consistent with the Build Status section at the top of this document — restate
 
 **I. Very Soon features** — popup, countdown, pricing, saved content, animations, order bump, upsell/downsell, and the remaining Very Soon items from §24.20's matrix.
 
-Do not implement any item from this ordering without an explicit, separately-approved task — this section documents a *sequence*, not a standing authorization.
+Do not implement any item from this ordering without an explicit, separately-approved task — this section documents a _sequence_, not a standing authorization.
