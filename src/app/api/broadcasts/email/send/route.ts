@@ -39,6 +39,15 @@ interface SendBody {
    * stale preview. See the "hard audience count consistency check" below.
    */
   confirmedAudienceSize?: number;
+  /**
+   * Persistent Broadcast Drafts V1 (2026-08-27) — when the operator is
+   * sending a broadcast that started life as a saved draft, this is that
+   * draft's own Firestore doc id. The send route reuses the SAME doc
+   * (status draft → queued in place) instead of creating a second one —
+   * see the "Send from draft" handling below. Omitted entirely for a
+   * broadcast sent without ever going through the draft-autosave path.
+   */
+  draftId?: string;
 }
 
 /**
@@ -90,6 +99,7 @@ export async function POST(request: Request) {
     ? payload.testRecipientIds.filter((id): id is string => typeof id === "string" && id.length > 0)
     : [];
   const confirmedAudienceSize = payload.confirmedAudienceSize;
+  const draftId = payload.draftId?.trim() || null;
 
   if (!subAccountId || !content || !subject || !audienceFilter) {
     return NextResponse.json(
@@ -262,7 +272,35 @@ export async function POST(request: Request) {
   }
 
   const agencyId = subSnap.data()?.agencyId as string;
-  const broadcastRef = db.collection("broadcasts").doc();
+
+  // Persistent Broadcast Drafts V1 (2026-08-27) — "Send from draft" reuses
+  // the SAME Firestore doc (status draft → queued in place) instead of
+  // creating a second one, so the draft's own images/uploads (scoped by
+  // this same id — see upload-image.ts) never need to move, and the
+  // Broadcasts list never shows a stray leftover draft next to the real
+  // send. Falls back to a brand-new doc (today's behavior, unchanged) if
+  // no draftId was given, the draft vanished, or it's already been
+  // launched by another tab — never blocks the send over it.
+  let broadcastRef = db.collection("broadcasts").doc();
+  let originalCreatedAt: BroadcastDoc["createdAt"] = FieldValue.serverTimestamp() as unknown as null;
+  let originalCreatedByUid = access.uid;
+  let originalCreatedBy = { displayName: createdByName, email: access.email };
+  if (draftId) {
+    const draftSnap = await db.collection("broadcasts").doc(draftId).get();
+    if (draftSnap.exists) {
+      const draft = draftSnap.data() as BroadcastDoc;
+      if (draft.subAccountId === subAccountId && draft.status === "draft") {
+        broadcastRef = draftSnap.ref;
+        originalCreatedAt = draft.createdAt;
+        originalCreatedByUid = draft.createdByUid || access.uid;
+        originalCreatedBy = draft.createdBy || originalCreatedBy;
+      }
+      // If it exists but isn't a draft (or belongs to a different
+      // sub-account), silently fall through to a fresh doc rather than
+      // erroring the send — the operator's content is still in `content`/
+      // `subject` from the composer either way.
+    }
+  }
 
   const broadcast: Omit<BroadcastDoc, "id"> = {
     agencyId,
@@ -287,9 +325,10 @@ export async function POST(request: Request) {
       bounced: 0,
       complained: 0,
     },
-    createdByUid: access.uid,
-    createdBy: { displayName: createdByName, email: access.email },
-    createdAt: FieldValue.serverTimestamp() as unknown as null,
+    createdByUid: originalCreatedByUid,
+    createdBy: originalCreatedBy,
+    createdAt: originalCreatedAt,
+    updatedAt: FieldValue.serverTimestamp() as unknown as null,
     startedAt: null,
     completedAt: null,
     errorMessage: null,

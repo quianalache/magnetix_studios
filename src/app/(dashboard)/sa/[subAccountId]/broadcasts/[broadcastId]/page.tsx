@@ -91,6 +91,33 @@ export default function BroadcastDetailPage() {
       </div>
     );
   }
+  // Persistent Broadcast Drafts V1 (2026-08-27) — a draft has no totals or
+  // recipients yet, so this read-only detail page doesn't make sense for
+  // it. Send here from an old bookmark / the list race and land on the
+  // composer instead, where the content is actually editable.
+  if (broadcast?.status === "draft") {
+    return (
+      <div className="mx-auto w-full max-w-5xl space-y-4">
+        <Link
+          href={saPath("/broadcasts")}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3 w-3" />
+          Back to broadcasts
+        </Link>
+        <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
+          <h3 className="text-base font-semibold">This is still a draft</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            It hasn&apos;t been sent yet — continue editing it in the composer.
+          </p>
+          <Button className="mt-4" render={<Link href={saPath(`/broadcasts/${id}/edit`)} />}>
+            Continue editing
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!broadcast) {
     return (
       <div className="mx-auto w-full max-w-5xl space-y-4">
@@ -355,6 +382,8 @@ function StatusBadge({ status }: { status: BroadcastDoc["status"] }) {
       "bg-rose-500/15 text-rose-700 ring-1 ring-rose-500/30 dark:text-rose-300",
     cancelled:
       "bg-orange-500/15 text-orange-700 ring-1 ring-orange-500/30 dark:text-orange-300",
+    draft:
+      "bg-muted text-muted-foreground ring-1 ring-border",
   };
   return (
     <span

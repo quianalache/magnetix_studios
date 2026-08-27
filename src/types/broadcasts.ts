@@ -21,6 +21,17 @@ import type { ConditionGroup } from "./workflows";
 export type BroadcastChannel = "email";
 
 export type BroadcastStatus =
+  /**
+   * Persistent Broadcast Drafts V1 (2026-08-27) — never launched. A draft
+   * is created at "first meaningful edit" (subject/content/audience
+   * becomes non-empty) and autosaved from then on. The SAME doc is reused
+   * when the operator eventually sends it (status flips draft → queued in
+   * place, never a second doc) — see /api/broadcasts/email/send's optional
+   * `draftId`. A draft is the only status a broadcast can be DELETED from
+   * (see DELETE /api/broadcasts/[broadcastId]) — every other status is a
+   * launched send and keeps its full audit trail forever.
+   */
+  | "draft"
   /** Audience computed, sends queued, QStash messages published. */
   | "queued"
   /** First send has fired; at least one row has flipped from queued. */
@@ -123,10 +134,34 @@ export interface BroadcastDoc {
     email: string;
   };
   createdAt: Timestamp | FieldValue | null;
+  /**
+   * Persistent Broadcast Drafts V1 (2026-08-27) — bumped on every autosave
+   * and every status transition. Absent on broadcasts sent before this
+   * pass (legacy docs never had a reason to track it); the list/detail
+   * pages fall back to `createdAt` when it's missing. Drives the "last
+   * edited" timestamp on Draft rows in the Broadcasts list.
+   */
+  updatedAt?: Timestamp | FieldValue | null;
   startedAt: Timestamp | FieldValue | null;
   completedAt: Timestamp | FieldValue | null;
   /** Populated when status === "failed". */
   errorMessage: string | null;
+  /**
+   * Persistent Broadcast Drafts V1 (2026-08-27) — stale-write guard for
+   * autosave. `lastSaveSessionId` identifies one composer-tab-load
+   * (`crypto.randomUUID()`, generated once per mount); `lastSaveSeq` is
+   * that session's own monotonically increasing autosave counter. The
+   * draft-save route only accepts a write when the incoming
+   * (sessionId, seq) is newer than what's stored — same session, higher
+   * seq, OR a different session entirely (last-write-wins across tabs is
+   * an accepted V1 tradeoff, see the route's own doc comment). This is
+   * ONLY to stop a single tab's own debounced requests from applying out
+   * of network-arrival-order; it is not real multi-tab conflict
+   * resolution. Undefined/absent on every non-draft-flow doc (never set
+   * by the send route, engagement webhook, etc.).
+   */
+  lastSaveSessionId?: string | null;
+  lastSaveSeq?: number | null;
   /**
    * Production safety controls (2026-08-26). When true, /api/broadcasts/
    * email/send intersected the resolved audience with

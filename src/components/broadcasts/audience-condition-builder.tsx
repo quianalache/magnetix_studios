@@ -187,6 +187,42 @@ export function audienceFilterToApiShape(
 }
 
 /**
+ * Persistent Broadcast Drafts V1 (2026-08-27) — the reverse of
+ * `audienceFilterToApiShape`, used to hydrate the condition-builder rows
+ * when reopening a saved draft. Handles all four `BroadcastAudienceFilter`
+ * shapes, including the two legacy ones (`tag` / `pipeline_stage`) even
+ * though the composer itself never WRITES those — only defensive, in case
+ * a draft doc ever ends up holding one (e.g. duplicated from other
+ * tooling in the future).
+ */
+export function audienceFilterFromApiShape(
+  filter: BroadcastAudienceFilter | null | undefined,
+): AudienceFilterState {
+  if (!filter || filter.kind === "all") return defaultAudienceFilterState();
+  if (filter.kind === "tag") {
+    return {
+      match: "all",
+      conditions: [{ id: newRowId(), field: "tags", op: "has_tag", value: filter.tag }],
+    };
+  }
+  if (filter.kind === "pipeline_stage") {
+    return {
+      match: "all",
+      conditions: [{ id: newRowId(), field: "pipelineStage", op: "equals", value: filter.stage }],
+    };
+  }
+  return {
+    match: filter.group.match === "any" ? "any" : "all",
+    conditions: filter.group.all.map((c) => ({
+      id: newRowId(),
+      field: c.field,
+      op: c.op,
+      value: c.value ?? "",
+    })),
+  };
+}
+
+/**
  * Live preview — evaluated entirely client-side against the already-loaded
  * contact list (the composer's existing architecture; unchanged by this
  * pass — see new/page.tsx's `subscribeToContacts`). Send-time is
