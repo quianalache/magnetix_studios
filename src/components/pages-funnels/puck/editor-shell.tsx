@@ -17,22 +17,33 @@ import {
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";
+import { MagnetixBlocksPanel } from "@/components/pages-funnels/puck/blocks-panel";
+import { MagnetixLayersPanel } from "@/components/pages-funnels/puck/layers-panel";
+import { MagnetixSettingsPanel } from "@/components/pages-funnels/puck/settings-panel";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
 /**
- * Phase 2A — the first REAL, CRM-integrated, Magnetix-styled Puck editor
- * shell (master spec §6/§13, Phase 2A task §2/§3). Reusable so the actual
- * new-builder route stays a thin data-loading wrapper around this.
+ * The REAL, CRM-integrated, Magnetix-styled Puck editor shell (master spec
+ * §6/§13). Reusable so the actual new-builder route stays a thin
+ * data-loading wrapper around this.
  *
- * VISUAL STRATEGY (CSS-first, per master spec §3 and this task's §3):
- * `./magnetix-theme.css` retargets Puck's own shipped `--puck-*` design
- * tokens (a real, documented theming surface — 318 custom properties,
- * confirmed present in the installed 0.23.0 package) to the CRM's live
- * theme variables. `overrides.header`/`overrides.headerActions` are the
- * ONE piece of the React-level `overrides` API actually needed here —
- * everything else (drag/drop, nested selection, Outline, Fields, history,
- * device viewports) is 100% native, unmodified Puck, per the hard
- * requirement to preserve all of it.
+ * Phase 2A shipped a CSS-only reskin (colors/radius/spacing via
+ * `--puck-*` tokens) plus a custom header, but kept Puck's own stock
+ * drawer/Outline/Fields panels — real user QA confirmed that still read
+ * as "Puck UI with Magnetix colors," not the approved Magnetix builder UX.
+ * Phase 2B (this version) goes further: the left library, Layers, and
+ * Settings panels are now genuinely custom Magnetix components
+ * (blocks-panel.tsx, layers-panel.tsx, settings-panel.tsx), wired in via
+ * `overrides.drawer`/`overrides.outline`/`overrides.fields`. Each wrapper
+ * renders Puck's OWN real content/mechanics unmodified (the drawer is
+ * built on the public `Drawer`/`Drawer.Item` components — real drag
+ * source, not click-to-append; Outline/Fields `children` are Puck's
+ * actual tree/field-input rendering) — only the surrounding visual chrome
+ * is custom. `./magnetix-theme.css` still retargets Puck's own shipped
+ * `--puck-*` design tokens (a real, documented theming surface — 318
+ * custom properties, confirmed present in the installed 0.23.0 package)
+ * for everything these three overrides don't reach (canvas background,
+ * selection/drag indicators, native ViewportControls).
  *
  * `overrides.header` wraps Puck's own default header `children` (which
  * still contains, unmodified: the sidebar toggles, the native title —
@@ -45,7 +56,7 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * buttons: Preview (real, opens a read-only `<Render>` of the current
  * in-memory Data — same "preview current unsaved edits" pattern the V1
  * editor already uses), and Save Draft / Publish, both disabled with an
- * explanatory title — per this task's §15, "if Save/Publish are not yet
+ * explanatory title — per the master spec, "if Save/Publish are not yet
  * wired for Puck Data, clearly mark or disable rather than pretending they
  * work." `renderHeaderActions` (used in Phase 1) is deprecated as of the
  * installed 0.23.0 (confirmed via the package's own runtime deprecation
@@ -158,6 +169,22 @@ export function MagnetixPuckEditorShell({
                   Publish
                 </Button>
               </div>
+            ),
+            // Phase 2B (master spec §6/§13, this task's §4/§7/§8): the
+            // stock text-heavy drawer and plain Outline/Fields panels are
+            // replaced with the Magnetix visual system below. Each wrapper
+            // renders Puck's OWN real content (drag mechanics, tree,
+            // fields) unmodified — only the surrounding chrome is custom.
+            // `drawer` fully replaces Puck's default library listing (not
+            // just wraps it) with MagnetixBlocksPanel, which itself is
+            // built on the public `Drawer`/`Drawer.Item` components, so the
+            // real Puck insertion/drag system is what actually runs.
+            drawer: () => <MagnetixBlocksPanel config={clientPuckConfig} />,
+            outline: ({ children }) => (
+              <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
+            ),
+            fields: ({ children }) => (
+              <MagnetixSettingsPanel>{children}</MagnetixSettingsPanel>
             ),
           }}
         />
