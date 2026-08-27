@@ -1,10 +1,18 @@
-import type { Config } from "@puckeditor/core";
-import type { PuckPageMetadata, PageAction } from "@/types/pages-funnels-puck";
+import type { Config, Fields } from "@puckeditor/core";
+import type {
+  PuckPageMetadata,
+  PageAction,
+  SectionBackgroundConfig,
+} from "@/types/pages-funnels-puck";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
 import {
   WIDTH_OPTIONS,
   ALIGN_OPTIONS,
 } from "@/lib/pages-funnels/puck/constants";
+import {
+  GRADIENT_DIRECTION_OPTIONS,
+  HERO_DEFAULT_BACKGROUND,
+} from "@/lib/pages-funnels/puck/background";
 import {
   SectionRender,
   RowRender,
@@ -94,6 +102,98 @@ function toPageAction(raw: {
   return { type: "none" };
 }
 
+// ---------- Section/Hero background (Phase 2C task §2/§11) ----------
+
+const BACKGROUND_TYPE_OPTIONS = [
+  { label: "None", value: "none" },
+  { label: "Solid", value: "solid" },
+  { label: "Gradient", value: "gradient" },
+] as const;
+
+/** The fields every Section/Hero shares besides `background` — factored out
+ *  once so Section and Hero's field sets can never drift from each other
+ *  (they already share `SectionRender` and its whole prop shape). */
+const SECTION_SHARED_FIELDS = {
+  maxWidth: {
+    type: "select" as const,
+    label: "Max Width",
+    options: [
+      { label: "Contained", value: "contained" },
+      { label: "Wide", value: "wide" },
+      { label: "Full", value: "full" },
+    ],
+  },
+  paddingTop: {
+    type: "number" as const,
+    label: "Padding Top (px)",
+    min: 0,
+    max: 200,
+  },
+  paddingBottom: {
+    type: "number" as const,
+    label: "Padding Bottom (px)",
+    min: 0,
+    max: 200,
+  },
+  rows: { type: "slot" as const, allow: ["Row"] },
+};
+
+/**
+ * Conditional background fields (Phase 2C task §11: "do not expose
+ * irrelevant controls when the selected type does not use them... if Puck
+ * field conditional rendering is supported cleanly, use it"). Puck's
+ * `object` field can't itself show/hide sub-fields based on a sibling
+ * value (established already for the Action field above), but
+ * `resolveFields` — a real, documented, component-level Config option — can
+ * return a DIFFERENT fields object based on the component's current data,
+ * which is exactly this: the `color` sub-field only appears once `type` is
+ * "solid"; the `gradient` sub-field (itself a nested object: start/end
+ * color + direction) only appears once `type` is "gradient". Shared by
+ * Section and Hero so both stay in lockstep with zero duplication.
+ */
+function resolveSectionFields(data: {
+  props?: { background?: SectionBackgroundConfig };
+}): Fields {
+  const backgroundType = data.props?.background?.type ?? "none";
+
+  const backgroundObjectFields: Record<string, unknown> = {
+    type: {
+      type: "select" as const,
+      label: "Type",
+      options: BACKGROUND_TYPE_OPTIONS,
+    },
+  };
+  if (backgroundType === "solid") {
+    backgroundObjectFields.color = { type: "text" as const, label: "Color" };
+  }
+  if (backgroundType === "gradient") {
+    backgroundObjectFields.gradient = {
+      type: "object" as const,
+      label: "Gradient",
+      objectFields: {
+        from: { type: "text" as const, label: "Start Color" },
+        to: { type: "text" as const, label: "End Color" },
+        direction: {
+          type: "select" as const,
+          label: "Direction",
+          options: GRADIENT_DIRECTION_OPTIONS,
+        },
+      },
+    };
+  }
+
+  return {
+    background: {
+      type: "object" as const,
+      label: "Background",
+      objectFields: backgroundObjectFields,
+    },
+    ...SECTION_SHARED_FIELDS,
+  } as Fields;
+}
+
+const SECTION_DEFAULT_BACKGROUND: SectionBackgroundConfig = { type: "none" };
+
 export function createPuckConfig(
   FormComponent: React.ComponentType<FormComponentProps>
 ): Config {
@@ -121,41 +221,12 @@ export function createPuckConfig(
     components: {
       Section: {
         label: "Section",
-        fields: {
-          background: {
-            type: "select",
-            label: "Background",
-            options: [
-              { label: "None", value: "none" },
-              { label: "Solid", value: "solid" },
-              { label: "Gradient", value: "gradient" },
-            ],
-          },
-          maxWidth: {
-            type: "select",
-            label: "Max Width",
-            options: [
-              { label: "Contained", value: "contained" },
-              { label: "Wide", value: "wide" },
-              { label: "Full", value: "full" },
-            ],
-          },
-          paddingTop: {
-            type: "number",
-            label: "Padding Top (px)",
-            min: 0,
-            max: 200,
-          },
-          paddingBottom: {
-            type: "number",
-            label: "Padding Bottom (px)",
-            min: 0,
-            max: 200,
-          },
-          rows: { type: "slot", allow: ["Row"] },
-        },
+        fields: resolveSectionFields({
+          props: { background: SECTION_DEFAULT_BACKGROUND },
+        }),
+        resolveFields: (data) => resolveSectionFields(data),
         defaultProps: {
-          background: "none",
+          background: SECTION_DEFAULT_BACKGROUND,
           maxWidth: "contained",
           paddingTop: 64,
           paddingBottom: 64,
@@ -193,41 +264,12 @@ export function createPuckConfig(
       // defaultProps-sourced slot content at insertion time.
       Hero: {
         label: "Hero",
-        fields: {
-          background: {
-            type: "select",
-            label: "Background",
-            options: [
-              { label: "None", value: "none" },
-              { label: "Solid", value: "solid" },
-              { label: "Gradient", value: "gradient" },
-            ],
-          },
-          maxWidth: {
-            type: "select",
-            label: "Max Width",
-            options: [
-              { label: "Contained", value: "contained" },
-              { label: "Wide", value: "wide" },
-              { label: "Full", value: "full" },
-            ],
-          },
-          paddingTop: {
-            type: "number",
-            label: "Padding Top (px)",
-            min: 0,
-            max: 200,
-          },
-          paddingBottom: {
-            type: "number",
-            label: "Padding Bottom (px)",
-            min: 0,
-            max: 200,
-          },
-          rows: { type: "slot", allow: ["Row"] },
-        },
+        fields: resolveSectionFields({
+          props: { background: HERO_DEFAULT_BACKGROUND },
+        }),
+        resolveFields: (data) => resolveSectionFields(data),
         defaultProps: {
-          background: "gradient",
+          background: HERO_DEFAULT_BACKGROUND,
           maxWidth: "contained",
           paddingTop: 96,
           paddingBottom: 96,

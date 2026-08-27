@@ -1,6 +1,7 @@
 import type { ComponentData } from "@puckeditor/core";
 import { newPuckNodeId } from "@/lib/pages-funnels/puck/ids";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
+import { HERO_DEFAULT_BACKGROUND } from "@/lib/pages-funnels/puck/background";
 
 /**
  * Production Hero prebuilt-section factory — master spec §5/§15's reference
@@ -22,7 +23,7 @@ export function buildHeroSection(): ComponentData {
     type: "Section",
     props: {
       id: newPuckNodeId(),
-      background: "gradient",
+      background: HERO_DEFAULT_BACKGROUND,
       maxWidth: "contained",
       paddingTop: 96,
       paddingBottom: 96,

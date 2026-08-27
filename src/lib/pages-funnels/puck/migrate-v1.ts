@@ -1,5 +1,6 @@
 import type { Data, ComponentData } from "@puckeditor/core";
 import type { PageBlock } from "@/types/pages-funnels";
+import type { SectionBackgroundConfig } from "@/types/pages-funnels-puck";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
 import { migratedNodeId } from "@/lib/pages-funnels/puck/ids";
 
@@ -49,13 +50,51 @@ function migrateBlockToSection(block: PageBlock): ComponentData {
     type: "Section",
     props: {
       id: migratedNodeId(block.id, "section"),
-      background: "none",
+      background: migrateBackgroundStyle(block),
       maxWidth: "contained",
       paddingTop: block.spacing.paddingTop,
       paddingBottom: block.spacing.paddingBottom,
       rows: migrateBlockToRows(block),
     },
   } as ComponentData;
+}
+
+/**
+ * Phase 2C task §3 ("gradient migration"): only V1's `hero` and `cta` block
+ * types ever carried a `backgroundStyle` field at all (`HeroBlockContent`/
+ * `CtaBlockContent`, src/types/pages-funnels.ts) — every other block type
+ * has no background concept in V1, so those always migrate to `{type:
+ * "none"}`. Crucially, V1's `backgroundStyle` was ALWAYS just the enum
+ * (`"none" | "solid" | "gradient" | "image"`) with no color/direction data
+ * anywhere alongside it (confirmed: V1's own renderer,
+ * block-view.tsx/tree-view.tsx, hardcodes one fixed Tailwind gradient class
+ * for `"gradient"` — there is no per-page color to read). So this function
+ * preserves the TYPE only — exactly what real data exists — and never
+ * invents a `color`/`gradient` value V1 never had. A migrated Section with
+ * `background.type === "gradient"` and no `gradient` sub-object renders as
+ * transparent (`sectionBackgroundStyle` returns `undefined` without real
+ * `from`/`to` colors) until the user opens Background settings and picks
+ * real colors — which is the honest, correct behavior per this task's
+ * explicit instruction, not a bug.
+ *
+ * V1's `"image"` option has no equivalent in the new background shape yet
+ * (Puck Section only supports none/solid/gradient) — maps to `{type:
+ * "none"}` rather than silently dropping the block's content; a real
+ * image-background option is future scope, not part of this fix.
+ */
+function migrateBackgroundStyle(block: PageBlock): SectionBackgroundConfig {
+  if (block.type !== "hero" && block.type !== "cta") return { type: "none" };
+
+  switch (block.content.backgroundStyle) {
+    case "solid":
+      return { type: "solid" };
+    case "gradient":
+      return { type: "gradient" };
+    case "image":
+    case "none":
+    case undefined:
+      return { type: "none" };
+  }
 }
 
 function oneColumnRow(

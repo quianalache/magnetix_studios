@@ -5,15 +5,10 @@ import { ArrowLeft, Eye, X } from "lucide-react";
 import { Puck, Render } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "./magnetix-theme.css";
-import type { Data } from "@puckeditor/core";
+import type { Data, AppState } from "@puckeditor/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
 import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";
@@ -89,6 +84,19 @@ export function MagnetixPuckEditorShell({
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // Phase 2C task §9 ("Preview should respect the currently selected page
+  // viewport where practical"). `usePuck()`/`createUsePuck()` only work
+  // for components rendered INSIDE `<Puck>`'s own subtree — the Preview
+  // dialog is a sibling, not a child, of `<Puck>` below, so it can't call
+  // either hook directly. `onAction` is the supported way to observe Puck's
+  // state from outside that subtree without restructuring the whole shell
+  // into full custom composition (a much larger, riskier change than this
+  // task's scope) — it fires on every dispatched action, recorded or not,
+  // with the resulting `appState`, so this just mirrors the current
+  // viewport width into local state whenever it changes.
+  const [viewportWidth, setViewportWidth] = useState<number | "100%">(
+    VIEWPORTS[0].width
+  );
 
   // Context-dependent, so useMemo (not a fresh literal) — same referential-
   // stability rule as VIEWPORTS/IFRAME_CONFIG below, per the Insert Undo
@@ -108,6 +116,9 @@ export function MagnetixPuckEditorShell({
           config={clientPuckConfig}
           data={data}
           onChange={setData}
+          onAction={(_action, appState: AppState) =>
+            setViewportWidth(appState.ui.viewports.current.width)
+          }
           headerTitle={pageName}
           viewports={VIEWPORTS}
           iframe={IFRAME_CONFIG}
@@ -192,13 +203,38 @@ export function MagnetixPuckEditorShell({
 
       {/* Preview — read-only <Render> of the SAME in-memory `data`, same
           "preview current unsaved edits without persisting" pattern the V1
-          editor's own Preview mode already uses (page.tsx's `mode` state).
-          A dialog rather than swapping the whole body: keeps <Puck> mounted
-          continuously so its own undo/redo history is never at risk of
-          being reset by an unmount/remount. */}
+          editor's own Preview mode already uses. A dialog rather than
+          swapping the whole body: keeps <Puck> mounted continuously so its
+          own undo/redo history is never at risk of being reset by an
+          unmount/remount.
+
+          Phase 2C task §8: the previous small-modal version clipped long
+          pages at the bottom. Root cause: its scroll container was
+          `flex-1 overflow-y-auto` with no `min-h-0` — a classic flexbox
+          trap where a flex child's default `min-height: auto` refuses to
+          shrink below its content's natural height, so instead of THAT
+          child scrolling, the fixed-height Dialog around it just clipped
+          whatever didn't fit (the outer container had `overflow-hidden`,
+          not `overflow-y-auto`). Two changes fix this robustly: `min-h-0`
+          on the scroll container (so it actually shrinks and its own
+          overflow-y-auto activates), and — per this task's explicit
+          permission to use "the strongest UX that fits" — a genuine
+          full-screen takeover instead of a small fixed-height modal, which
+          removes the fragile height math almost entirely (`h-dvh` on the
+          outermost flex column is the only height constraint in the whole
+          chain now).
+
+          Width matches whichever Desktop/Tablet/Mobile viewport is
+          currently selected in the editor (`viewportWidth`, captured via
+          `onAction` above) — Phase 2C task §9 ("respect the currently
+          selected page viewport"), not a second device-preview system:
+          this only ever reads Puck's own real viewport state. */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="flex h-[90vh] w-[95vw] max-w-5xl flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
-          <DialogHeader className="border-border flex-row items-center justify-between space-y-0 border-b px-4 py-3">
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-dvh w-dvw max-w-none flex-col gap-0 rounded-none p-0 sm:max-w-none"
+        >
+          <div className="border-border bg-card flex shrink-0 items-center justify-between border-b px-4 py-3">
             <DialogTitle className="text-sm font-semibold">
               Preview — {pageName}
             </DialogTitle>
@@ -209,14 +245,22 @@ export function MagnetixPuckEditorShell({
             >
               <X className="h-4 w-4" />
             </button>
-          </DialogHeader>
-          <div className="bg-muted/30 flex-1 overflow-y-auto">
+          </div>
+          <div className="bg-muted/30 min-h-0 flex-1 overflow-y-auto">
             {previewOpen && (
-              <Render
-                config={serverPuckConfig}
-                data={data}
-                metadata={metadata}
-              />
+              <div
+                className="bg-background mx-auto min-h-full"
+                style={{
+                  width: viewportWidth === "100%" ? "100%" : viewportWidth,
+                  maxWidth: "100%",
+                }}
+              >
+                <Render
+                  config={serverPuckConfig}
+                  data={data}
+                  metadata={metadata}
+                />
+              </div>
             )}
           </div>
         </DialogContent>

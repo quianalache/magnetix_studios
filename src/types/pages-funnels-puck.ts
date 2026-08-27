@@ -105,3 +105,56 @@ export interface PuckPageMetadata {
   subAccountId: string;
   resolvedForms?: Record<string, LeadForm | null>;
 }
+
+// ---------- Section background (Phase 2C — real, editable gradient/solid controls) ----------
+
+/**
+ * Structured Section/Hero background configuration. Replaces the earlier
+ * `background: "none" | "solid" | "gradient"` enum-only field (still V1's
+ * own shape too — `BackgroundStyle`, `src/types/pages-funnels.ts` — neither
+ * V1 nor the pre-Phase-2C Puck Section ever stored real color/direction
+ * data; "gradient" only ever selected one hardcoded, non-editable CSS
+ * gradient). This is a genuinely stronger shape, not a reuse of an
+ * existing one — the task that introduced it explicitly allowed that
+ * ("do not blindly use [the suggested shape] if current production types
+ * already define something stronger," and nothing stronger existed).
+ *
+ * `color`/`gradient` are optional so a `type: "solid"` node with no color
+ * chosen yet, or a migrated node with no source color data, still
+ * type-checks and renders a sensible fallback (see
+ * `sectionBackgroundStyle()`, lib/pages-funnels/puck/background.ts) rather
+ * than requiring invented values.
+ */
+export type SectionBackgroundType = "none" | "solid" | "gradient";
+
+/** Named CSS `linear-gradient()` direction keywords — a closed, structured
+ *  set (matching the master spec's "constrained fraction presets, not
+ *  arbitrary input" convention already used for Column width) rather than
+ *  a free-form angle number, per this feature's own instruction: "direction
+ *  / angle" — either satisfies it; named keywords are simpler to present as
+ *  a `select` field than a numeric angle input. */
+export type GradientDirection =
+  | "to-r"
+  | "to-l"
+  | "to-t"
+  | "to-b"
+  | "to-tr"
+  | "to-tl"
+  | "to-br"
+  | "to-bl";
+
+export interface SectionBackgroundConfig {
+  type: SectionBackgroundType;
+  /** Hex (or any valid CSS color string) — only meaningful when `type === "solid"`. */
+  color?: string;
+  /** Only meaningful when `type === "gradient"`. */
+  gradient?: {
+    from: string;
+    to: string;
+    direction: GradientDirection;
+  };
+}
+
+export const DEFAULT_SECTION_BACKGROUND: SectionBackgroundConfig = {
+  type: "none",
+};

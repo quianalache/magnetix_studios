@@ -1,5 +1,9 @@
-import type { PuckColumnWidth } from "@/types/pages-funnels-puck";
+import type {
+  PuckColumnWidth,
+  SectionBackgroundConfig,
+} from "@/types/pages-funnels-puck";
 import { COLUMN_SPAN_CLASS } from "@/lib/pages-funnels/puck/constants";
+import { sectionBackgroundStyle } from "@/lib/pages-funnels/puck/background";
 
 /**
  * Production Section/Row/Column layout primitives — the approved Puck
@@ -18,7 +22,6 @@ import { COLUMN_SPAN_CLASS } from "@/lib/pages-funnels/puck/constants";
  * block-view.tsx, and the POC's elements.tsx vs. config.tsx).
  */
 
-export type SectionBackground = "none" | "solid" | "gradient";
 export type SectionMaxWidthOption = "contained" | "wide" | "full";
 export type RowVerticalAlign = "top" | "center" | "bottom";
 export type ColumnContentAlignment = "left" | "center" | "right";
@@ -48,7 +51,7 @@ export function SectionRender({
   paddingBottom,
   rows: Rows,
 }: {
-  background: SectionBackground;
+  background: SectionBackgroundConfig;
   maxWidth: SectionMaxWidthOption;
   paddingTop: number;
   paddingBottom: number;
@@ -59,12 +62,7 @@ export function SectionRender({
       style={{
         paddingTop,
         paddingBottom,
-        background:
-          background === "gradient"
-            ? "linear-gradient(120deg, var(--accent) 0%, var(--primary) 100%)"
-            : background === "solid"
-              ? "var(--muted)"
-              : undefined,
+        background: sectionBackgroundStyle(background),
       }}
       className="px-6"
     >
