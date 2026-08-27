@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   Mail,
+  MailX,
+  MailCheck,
   Phone,
   Building2,
   Pencil,
@@ -13,6 +15,7 @@ import {
   MapPinned,
   MessageSquare,
   PhoneOutgoing,
+  ShieldAlert,
   Star,
   Trash2,
 } from "lucide-react";
@@ -71,6 +74,11 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
   // review link configured (Settings → Google reviews).
   const reviewConfigured = !!subAccount?.googleReviewConfig?.reviewUrl;
   const [reviewSending, setReviewSending] = useState(false);
+  // Staff marketing-email control (2026-08-28).
+  const [marketingAction, setMarketingAction] = useState<
+    "unsubscribe" | "resubscribe" | null
+  >(null);
+  const [marketingActionSaving, setMarketingActionSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<
@@ -99,6 +107,48 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
       ? `${match.name} (archived)`
       : match.name;
   })();
+
+  // Staff marketing-email control (2026-08-28) — never infer "consented"
+  // merely from emailOptedOut being false/absent; a legacy contact with no
+  // structured emailConsent stays "unknown" regardless. emailOptedOut:true
+  // DOES unambiguously mean unsubscribed even without a structured record
+  // (that's the pre-existing, unchanged live send-gate), so it's the one
+  // fallback allowed here.
+  const marketingStatus: "consented" | "unsubscribed" | "unknown" =
+    contact.emailConsent?.status === "consented"
+      ? "consented"
+      : contact.emailConsent?.status === "unsubscribed"
+        ? "unsubscribed"
+        : contact.emailOptedOut
+          ? "unsubscribed"
+          : "unknown";
+  const deliverabilitySuppressed = !!contact.deliverabilitySuppressed;
+
+  async function handleMarketingAction(action: "unsubscribe" | "resubscribe") {
+    setMarketingActionSaving(true);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}/marketing-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        toast.error(data.error ?? "Couldn't update marketing email status.");
+        return;
+      }
+      toast.success(
+        action === "resubscribe"
+          ? "Marked as consented to marketing email."
+          : "Marked as unsubscribed from marketing email.",
+      );
+      setMarketingAction(null);
+    } catch {
+      toast.error("Network error. Try again.");
+    } finally {
+      setMarketingActionSaving(false);
+    }
+  }
 
   async function handleSave(data: ContactFormData) {
     // Territory is owned by the contact and fanned out to its
@@ -345,6 +395,71 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
               </a>
             </Row>
           )}
+          {contact.email && (
+            <Row
+              icon={<MailCheck className="h-4 w-4 text-muted-foreground" />}
+              label="Email Marketing"
+            >
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge
+                  variant="outline"
+                  className={
+                    marketingStatus === "consented"
+                      ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
+                      : marketingStatus === "unsubscribed"
+                        ? "border-muted-foreground/30 text-muted-foreground"
+                        : "border-muted-foreground/20 text-muted-foreground"
+                  }
+                >
+                  {marketingStatus === "consented"
+                    ? "Consented"
+                    : marketingStatus === "unsubscribed"
+                      ? "Unsubscribed"
+                      : "Unknown"}
+                </Badge>
+                {deliverabilitySuppressed && (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-destructive/40 text-destructive"
+                    title={
+                      contact.deliverabilitySuppressedReason === "complaint"
+                        ? "Marked as spam by this address"
+                        : contact.deliverabilitySuppressedReason === "hard_bounce"
+                          ? "This address hard-bounced"
+                          : "Deliverability-suppressed"
+                    }
+                  >
+                    <ShieldAlert className="h-3 w-3" />
+                    Deliverability suppressed
+                  </Badge>
+                )}
+                {marketingStatus !== "unsubscribed" && (
+                  <button
+                    type="button"
+                    onClick={() => setMarketingAction("unsubscribe")}
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <MailX className="h-3 w-3" /> Mark unsubscribed
+                  </button>
+                )}
+                {marketingStatus !== "consented" && (
+                  <button
+                    type="button"
+                    onClick={() => setMarketingAction("resubscribe")}
+                    disabled={deliverabilitySuppressed}
+                    title={
+                      deliverabilitySuppressed
+                        ? "Can't resubscribe — this address is deliverability-suppressed"
+                        : undefined
+                    }
+                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <MailCheck className="h-3 w-3" /> Resubscribe
+                  </button>
+                )}
+              </div>
+            </Row>
+          )}
           {contact.phone && (
             <Row icon={<Phone className="h-4 w-4 text-muted-foreground" />} label="Phone">
               <a
@@ -434,6 +549,48 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
           onOpenChange={setCallOpen}
         />
       )}
+
+      {/* Staff marketing-email control (2026-08-28). */}
+      <Dialog
+        open={marketingAction !== null}
+        onOpenChange={(o) => {
+          if (!o && !marketingActionSaving) setMarketingAction(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {marketingAction === "resubscribe"
+                ? "Resubscribe to marketing email?"
+                : "Mark unsubscribed from marketing email?"}
+            </DialogTitle>
+            <DialogDescription>
+              {marketingAction === "resubscribe"
+                ? `Confirm this contact has permission to receive marketing email. This will be recorded as a manual staff action, not as the contact's own opt-in.`
+                : `${contactName} will no longer receive Broadcast or Workflow marketing email. Their booking confirmations and other transactional email are unaffected.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setMarketingAction(null)}
+              disabled={marketingActionSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => marketingAction && handleMarketingAction(marketingAction)}
+              disabled={marketingActionSaving}
+            >
+              {marketingActionSaving
+                ? "Saving…"
+                : marketingAction === "resubscribe"
+                  ? "Confirm & resubscribe"
+                  : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleteOpen}

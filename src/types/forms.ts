@@ -15,6 +15,18 @@ export type FormFieldType =
   // created `smsOptedOut: true` (no consent → never SMS them). Forms without
   // a consent field keep the existing default behaviour.
   | "sms_consent"
+  // Explicit email-marketing opt-in checkbox (2026-08-28) — the email
+  // equivalent of `sms_consent` above, same rendering/required/consentText
+  // pattern. Deliberately NOT symmetric with sms_consent's write behavior
+  // though: unlike SMS consent (create-time-only, existing contacts are
+  // never touched), an EXISTING contact who explicitly checks this box on
+  // a later submission DOES get updated — `emailOptedOut: false` +
+  // `emailConsent.status: "consented"` with fresh metadata, a genuine
+  // resubscribe even from a previously-unsubscribed state. Leaving the box
+  // unchecked (when optional) NEVER writes anything — it is not an opt-out
+  // signal, just "no new consent granted this time." See
+  // src/app/api/forms/[id]/submit/route.ts for the exact write rules.
+  | "email_consent"
   // A link field — a Loom/Descript/video/portfolio URL the submitter pastes
   // in. Stored and validated like `text` but rendered with a link icon and
   // browser URL-format validation (type="url").
@@ -90,10 +102,14 @@ export interface FormField {
    */
   content?: string;
   /**
-   * Only used by the `sms_consent` field type — the disclosure paragraph
-   * rendered next to the checkbox (and stored verbatim as the proof-of-consent
-   * text). Must carry the CTIA-required elements: sender identity, message
-   * frequency, "message & data rates may apply", and STOP/HELP instructions.
+   * Used by the `sms_consent` and `email_consent` field types — the
+   * disclosure paragraph rendered next to the checkbox (and stored
+   * verbatim as the proof-of-consent text, i.e. Contact.smsConsent.textShown
+   * / Contact.emailConsent.textShown). For sms_consent, must carry the
+   * CTIA-required elements: sender identity, message frequency, "message
+   * and data rates may apply", and STOP/HELP instructions. For
+   * email_consent, should name the business and make clear this is for
+   * marketing/promotional email specifically.
    */
   consentText?: string;
   /**
@@ -171,6 +187,17 @@ export function evaluateCondition(
 export function defaultSmsConsentText(businessName?: string): string {
   const biz = (businessName && businessName.trim()) || "us";
   return `By checking this box, you agree to receive SMS messages from ${biz}. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.`;
+}
+
+/**
+ * Default email-marketing-consent disclosure (2026-08-28) — the email
+ * equivalent of {@link defaultSmsConsentText}. The operator edits this in
+ * the builder; the business name is injected at field-creation time, same
+ * pattern as SMS consent.
+ */
+export function defaultEmailConsentText(businessName?: string): string {
+  const biz = (businessName && businessName.trim()) || "us";
+  return `I agree to receive marketing emails from ${biz}. You can unsubscribe at any time.`;
 }
 
 /**

@@ -14,7 +14,7 @@ import {
   locationFromPhone,
   mergeLocation,
 } from "@/lib/contacts/location";
-import { defaultSmsConsentText, evaluateCondition } from "@/types/forms";
+import { defaultEmailConsentText, defaultSmsConsentText, evaluateCondition } from "@/types/forms";
 import type { FormField, LeadForm } from "@/types/forms";
 import type { Contact, ContactAttribution } from "@/types/contacts";
 import { normalizeAttribution } from "@/lib/attribution";
@@ -135,12 +135,17 @@ async function handleSubmit(
   for (const field of form.fields) {
     if (!field.required) continue;
     if (!evaluateCondition(field.visibleIf, body.values)) continue;
-    if (field.type === "sms_consent") {
+    if (field.type === "sms_consent" || field.type === "email_consent") {
       // Consent is satisfied only by an explicit "true" — guard against a
       // direct API POST sending "false"/"on" past the generic check below.
       if (body.values[field.id] !== "true") {
         return jsonWithCors(
-          { error: "SMS consent is required to submit this form." },
+          {
+            error:
+              field.type === "sms_consent"
+                ? "SMS consent is required to submit this form."
+                : "Email consent is required to submit this form.",
+          },
           { status: 400 },
         );
       }
@@ -162,6 +167,16 @@ async function handleSubmit(
   const consentField = form.fields.find((f) => f.type === "sms_consent");
   const consentChecked = consentField
     ? body.values[consentField.id] === "true"
+    : false;
+
+  // Structured Email Consent V1 (2026-08-28) — an email_consent checkbox is
+  // a real, explicit consent EVENT, deliberately NOT symmetric with
+  // sms_consent's create-time-only semantics. See the write logic below
+  // (after `ip`/`attribution` resolve) for exactly how this differs for a
+  // brand-new vs. an already-existing contact.
+  const emailConsentField = form.fields.find((f) => f.type === "email_consent");
+  const emailConsentChecked = emailConsentField
+    ? body.values[emailConsentField.id] === "true"
     : false;
 
   const mapped = contactFieldsFromSubmission(form.fields, body.values);
@@ -187,6 +202,30 @@ async function handleSubmit(
     Promise.resolve(locationFromPhone(mapped.phone)),
   ]);
   const location = mergeLocation(ipLoc, phoneLoc);
+
+  // Structured Email Consent V1 (2026-08-28) — only ever built when the box
+  // was actually checked. Leaving an optional email_consent box unchecked
+  // must NEVER write anything: not "unsubscribed" (not checking isn't an
+  // opt-out signal), and not "consented" (nothing was fabricated). `null`
+  // here means "don't touch emailOptedOut/emailConsent at all" for both the
+  // new-contact and existing-contact write paths below.
+  const emailConsentWrite = emailConsentChecked
+    ? {
+        emailOptedOut: false,
+        emailConsent: {
+          status: "consented" as const,
+          consentedAt: FieldValue.serverTimestamp(),
+          // Clear any stale unsubscribedAt from a prior state — a fresh
+          // "consented" status must never leave ambiguous old
+          // unsubscribe metadata sitting alongside it.
+          unsubscribedAt: null,
+          source: "form",
+          sourceUrl: attribution?.landingPage ?? null,
+          textShown: emailConsentField!.consentText?.trim() || defaultEmailConsentText(),
+          ip: ip ?? null,
+        },
+      }
+    : null;
 
   // Deduplicate before creating. Forms historically created a fresh
   // contact on EVERY submit, so a returning lead (or anyone filling out
@@ -230,9 +269,19 @@ async function handleSubmit(
     // Reuse + enrich: fill only BLANK identity fields and merge new tags
     // so we never clobber operator-curated data. First-touch attribution
     // is preserved — a later submission only sets it when the contact had
-    // none. SMS consent + opt-out flags are intentionally left untouched
-    // on an existing contact (flipping them from a form would be a
-    // compliance footgun); consent is only stamped at create time.
+    // none. SMS consent + opt-out flags are intentionally left untouched on
+    // an existing contact (flipping them from a form would be a compliance
+    // footgun); SMS consent is only ever stamped at create time.
+    //
+    // Email marketing consent is DIFFERENT on purpose (2026-08-28): when
+    // `emailConsentWrite` is non-null, the visitor just explicitly checked
+    // a real consent box THIS submission — that's a genuine resubscribe
+    // event even if this contact was previously unsubscribed, so it DOES
+    // update an existing contact. When the box wasn't checked (absent,
+    // optional-and-unchecked, or no such field on this form),
+    // `emailConsentWrite` is null and nothing here touches
+    // emailOptedOut/emailConsent at all — existing consent state is never
+    // silently revoked by an unrelated form submission.
     contactRef = existingContact.ref;
     contactCreated = false;
     const data = existingContact.data() as Partial<Contact>;
@@ -248,6 +297,10 @@ async function handleSubmit(
       if (mergedTags.length !== existingTags.length) patch.tags = mergedTags;
     }
     if (attribution && !data.attribution) patch.attribution = attribution;
+    if (emailConsentWrite) {
+      patch.emailOptedOut = emailConsentWrite.emailOptedOut;
+      patch.emailConsent = emailConsentWrite.emailConsent;
+    }
     if (Object.keys(patch).length > 0) {
       patch.updatedAt = FieldValue.serverTimestamp();
       try {
@@ -277,6 +330,10 @@ async function handleSubmit(
       subAccountId,
       createdByUid: submissionCreatedBy,
       emailOptedOut: false,
+      // Structured Email Consent V1 (2026-08-28) — only present when the box
+      // was actually checked; otherwise the new contact is created exactly
+      // as before (emailOptedOut:false, no emailConsent field — "unknown").
+      ...(emailConsentWrite ?? {}),
       // No consent field → legacy default (opted in). Consent field present →
       // the checkbox decides: checked opts in, unchecked opts out.
       smsOptedOut: consentField ? !consentChecked : false,
@@ -363,7 +420,11 @@ async function handleSubmit(
           ? consentChecked
             ? "Yes"
             : "No"
-          : (body.values[f.id] ?? "").toString(),
+          : f.type === "email_consent"
+            ? emailConsentChecked
+              ? "Yes"
+              : "No"
+            : (body.values[f.id] ?? "").toString(),
     }));
 
   // Store submission record (admin-side only; rules deny client writes).

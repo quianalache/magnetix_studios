@@ -130,22 +130,23 @@ export interface Contact {
    * ADDITIVE ONLY: `emailOptedOut` remains the one live, authoritative
    * send-gate every eligibility check reads (Broadcast, Workflow Send
    * Email) — unchanged, zero regression risk. This field is audit
-   * metadata layered on top, kept in sync at the one place a real
-   * consent-relevant event happens today (the unsubscribe link — see
-   * /api/u/[token]/route.ts) plus, going forward, any future explicit
-   * marketing-consent capture UI (none exists yet — see
-   * FormFieldType, no `email_consent` field type today, unlike
-   * `sms_consent`).
+   * metadata, kept in sync by: the unsubscribe link (status:"unsubscribed",
+   * see /api/u/[token]/route.ts), a real `email_consent` Form field
+   * (status:"consented" — see FormFieldType and
+   * /api/forms/[id]/submit/route.ts, 2026-08-28), and a staff-facing
+   * Contact control (mark unsubscribed / resubscribe — see
+   * /api/contacts/[id]/marketing-email/route.ts, 2026-08-28).
    *
    * `"unknown"` is the correct read for EVERY contact created before this
-   * field existed, and for every contact created today by a flow that
-   * never asked about marketing consent (which is every current
-   * contact-creation path — forms, booking, checkout, manual staff
-   * create, CSV/GHL import, web chat, voice). Undefined/absent means the
-   * exact same thing as `"unknown"` — this field is never backfilled or
-   * migrated onto existing docs; absence is a valid, permanent state, not
-   * a signal to go stamp one in. Never infer `"consented"` merely because
-   * an email address exists on the contact.
+   * field existed, and for every contact created by a flow that never
+   * asked about marketing consent — most contact-creation paths (booking,
+   * checkout, manual staff create, CSV/GHL import, web chat, voice) still
+   * never touch this field; only the specific writers named above do.
+   * Undefined/absent means the exact same thing as `"unknown"` — this
+   * field is never backfilled or migrated onto existing docs in bulk;
+   * absence is a valid, permanent state, not a signal to go stamp one in.
+   * Never infer `"consented"` merely because an email address exists on
+   * the contact.
    *
    * Deliberately does NOT represent hard bounce / spam complaint / invalid
    * address — those are deliverability states (`deliverabilitySuppressed`

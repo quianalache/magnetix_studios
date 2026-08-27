@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  defaultEmailConsentText,
   defaultFormAppearance,
   defaultSmsConsentText,
   evaluateCondition,
@@ -211,7 +212,7 @@ export function PublicForm({ form }: PublicFormProps) {
     for (const f of fields) {
       if (f.type === "text_block" || f.type === "hidden") continue; // Never answerable by the visitor.
       if (!evaluateCondition(f.visibleIf, values)) continue; // Conditionally hidden right now.
-      if (f.type === "sms_consent") {
+      if (f.type === "sms_consent" || f.type === "email_consent") {
         // Consent is opt-in: a value of "true" means checked. Only blocks
         // submission when the operator marked the consent field required.
         if (f.required && values[f.id] !== "true") {
@@ -333,7 +334,8 @@ export function PublicForm({ form }: PublicFormProps) {
         </div>
       );
     }
-    if (f.type === "sms_consent") {
+    if (f.type === "sms_consent" || f.type === "email_consent") {
+      const defaultText = f.type === "sms_consent" ? defaultSmsConsentText() : defaultEmailConsentText();
       return (
         <div key={f.id} style={fieldGapStyle}>
           <label className="flex cursor-pointer items-start gap-2 text-[0.875em] leading-snug text-muted-foreground">
@@ -345,7 +347,7 @@ export function PublicForm({ form }: PublicFormProps) {
               aria-invalid={!!errors[f.id]}
             />
             <span>
-              {f.consentText?.trim() || defaultSmsConsentText()}
+              {f.consentText?.trim() || defaultText}
               {f.required && <span className="text-destructive"> *</span>}
             </span>
           </label>

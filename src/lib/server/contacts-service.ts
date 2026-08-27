@@ -8,7 +8,7 @@ import {
   serializeContactForApi,
   type ContactApiObject,
 } from "@/lib/api/serializers/contacts";
-import type { ContactAttribution } from "@/types/contacts";
+import type { Contact, ContactAttribution } from "@/types/contacts";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 /**
@@ -145,6 +145,11 @@ export interface UpdateContactPatch {
   /** First-touch backfill only — callers should check the contact has no
    *  existing attribution before including this in a patch. */
   attribution?: ContactAttribution | null;
+  /** Staff marketing-email control (2026-08-28) — see
+   *  /api/contacts/[id]/marketing-email/route.ts, the only caller that
+   *  should ever set these two together. */
+  emailOptedOut?: boolean;
+  emailConsent?: Contact["emailConsent"];
 }
 
 /**

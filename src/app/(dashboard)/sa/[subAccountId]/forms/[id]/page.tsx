@@ -24,6 +24,7 @@ import {
   Link2,
   List,
   ListChecks,
+  MailCheck,
   Phone as PhoneIcon,
   Palette,
   Plus,
@@ -57,6 +58,7 @@ import { PIPELINE_STAGES, type PipelineStageId } from "@/types/deals";
 import { appearanceStyle, cardStyle, LABEL_FONT_WEIGHT_CSS } from "@/lib/forms/appearance";
 import {
   CONDITION_OPERATOR_LABELS,
+  defaultEmailConsentText,
   defaultFormAppearance,
   defaultSmsConsentText,
   FIELD_SPACING_MAX_PX,
@@ -182,7 +184,7 @@ function buildHtmlSnippet(form: LeadForm, origin: string): string {
         // before the form is read into FormData.
         return `  <input type="hidden" id="${id}" name="${escAttr(f.id)}" data-leadstack-query-param="${escAttr(f.queryParam ?? "")}" />`;
       }
-      if (f.type === "sms_consent") {
+      if (f.type === "sms_consent" || f.type === "email_consent") {
         // Checkbox with value="true" so FormData yields "true" when ticked
         // and omits it when not — matching the submit route's `=== "true"`.
         const consent = escText(f.consentText?.trim() || "");
@@ -418,6 +420,16 @@ const FIELD_TYPES: {
     },
   },
   {
+    value: "email_consent",
+    label: "Email consent",
+    icon: MailCheck,
+    tone: {
+      border: "border-blue-400/30 hover:border-blue-400/60",
+      iconBg: "bg-blue-500/10",
+      iconText: "text-blue-600 dark:text-blue-300",
+    },
+  },
+  {
     value: "url",
     label: "Link (URL)",
     icon: Link2,
@@ -530,7 +542,7 @@ const FIELD_TYPE_GROUPS: { label: string; types: FormFieldType[] }[] = [
     ],
   },
   { label: "Choice", types: ["select", "radio", "checkboxes", "multiselect"] },
-  { label: "Advanced", types: ["sms_consent", "hidden"] },
+  { label: "Advanced", types: ["sms_consent", "email_consent", "hidden"] },
   { label: "Layout", types: ["text_block", "page_break"] },
 ];
 
@@ -556,6 +568,7 @@ const DEFAULTS_BY_TYPE: Record<
   radio: { label: "Multiple choice", placeholder: "", mapsTo: null },
   checkboxes: { label: "Checkboxes", placeholder: "", mapsTo: null },
   sms_consent: { label: "SMS consent", placeholder: "", mapsTo: null },
+  email_consent: { label: "Email consent", placeholder: "", mapsTo: null },
   url: { label: "Link", placeholder: "https://loom.com/share/…", mapsTo: null },
   text_block: { label: "", placeholder: "", mapsTo: null },
   hidden: { label: "UTM source", placeholder: "", mapsTo: null },
@@ -572,7 +585,9 @@ function newField(type: FormFieldType = "text"): FormField {
   return {
     ...(type === "sms_consent"
       ? { consentText: defaultSmsConsentText() }
-      : {}),
+      : type === "email_consent"
+        ? { consentText: defaultEmailConsentText() }
+        : {}),
     ...(type === "text_block"
       ? { content: "Add your instructions here…" }
       : {}),
@@ -647,11 +662,12 @@ function CanvasFieldPreview({ field: f }: { field: FormField }) {
             </div>
           ))}
         </div>
-      ) : f.type === "sms_consent" ? (
+      ) : f.type === "sms_consent" || f.type === "email_consent" ? (
         <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
           <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-muted-foreground/40" />
           <span className="line-clamp-2">
-            {f.consentText?.trim() || defaultSmsConsentText()}
+            {f.consentText?.trim() ||
+              (f.type === "sms_consent" ? defaultSmsConsentText() : defaultEmailConsentText())}
           </span>
         </div>
       ) : (
@@ -1538,7 +1554,10 @@ function FieldSettingsPanel({
               </select>
             </div>
 
-            {f.type !== "text_block" && f.type !== "hidden" && f.type !== "sms_consent" && (
+            {f.type !== "text_block" &&
+              f.type !== "hidden" &&
+              f.type !== "sms_consent" &&
+              f.type !== "email_consent" && (
               <>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Placeholder</Label>
@@ -1590,23 +1609,42 @@ function FieldSettingsPanel({
               </div>
             )}
 
-            {f.type === "sms_consent" && (
+            {(f.type === "sms_consent" || f.type === "email_consent") && (
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1 text-xs">
-                  <ShieldCheck className="h-3 w-3" /> Consent text
+                  {f.type === "sms_consent" ? (
+                    <ShieldCheck className="h-3 w-3" />
+                  ) : (
+                    <MailCheck className="h-3 w-3" />
+                  )}{" "}
+                  Consent text
                 </Label>
                 <Textarea
                   rows={4}
                   value={f.consentText ?? ""}
                   onChange={(e) => onUpdateField({ consentText: e.target.value })}
                   className="text-sm"
-                  placeholder={defaultSmsConsentText()}
+                  placeholder={
+                    f.type === "sms_consent" ? defaultSmsConsentText() : defaultEmailConsentText()
+                  }
                 />
                 <p className="text-[10px] leading-snug text-muted-foreground">
-                  For A2P 10DLC compliance the text must name your business and
-                  include message frequency, &ldquo;message &amp; data rates may
-                  apply,&rdquo; and STOP/HELP instructions. Add your Privacy
-                  Policy + Terms links on the surrounding page.
+                  {f.type === "sms_consent" ? (
+                    <>
+                      For A2P 10DLC compliance the text must name your business and
+                      include message frequency, &ldquo;message &amp; data rates may
+                      apply,&rdquo; and STOP/HELP instructions. Add your Privacy
+                      Policy + Terms links on the surrounding page.
+                    </>
+                  ) : (
+                    <>
+                      Shown as a checkbox the visitor must explicitly tick — name your
+                      business and make clear this is for marketing/promotional email,
+                      not required to submit the form or receive anything they&apos;re
+                      here for. If checked, this is stored as the visitor&apos;s exact
+                      proof-of-consent text.
+                    </>
+                  )}
                 </p>
               </div>
             )}
@@ -1862,6 +1900,8 @@ export default function FormBuilderPage() {
     // operator starts from compliant, branded copy (still fully editable).
     if (type === "sms_consent") {
       field.consentText = defaultSmsConsentText(subAccount?.name);
+    } else if (type === "email_consent") {
+      field.consentText = defaultEmailConsentText(subAccount?.name);
     }
     const fields = [...form!.fields];
     const insertAt = atIndex === undefined ? fields.length : atIndex;
