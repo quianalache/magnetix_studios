@@ -9,11 +9,24 @@ import {
   onSnapshot,
   query,
 } from "firebase/firestore";
-import { ArrowLeft, Mail, MailCheck, Eye, MousePointerClick, TriangleAlert, Ban } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  Ban,
+  CircleX,
+  Eye,
+  FlaskConical,
+  Loader2,
+  Mail,
+  MailCheck,
+  MousePointerClick,
+  TriangleAlert,
+} from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
 import { audienceLabel } from "@/lib/broadcasts/audience-label";
+import { Button } from "@/components/ui/button";
 import type {
   BroadcastDoc,
   BroadcastSendDoc,
@@ -31,6 +44,7 @@ export default function BroadcastDetailPage() {
   const [broadcast, setBroadcast] = useState<BroadcastDoc | null>(null);
   const [sends, setSends] = useState<BroadcastSendDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -102,6 +116,32 @@ export default function BroadcastDetailPage() {
     t.audienceSize > 0
       ? Math.round(((t.sent + t.skipped + t.failed) / t.audienceSize) * 100)
       : 0;
+  const cancellable = broadcast.status === "queued" || broadcast.status === "sending";
+
+  async function handleCancel() {
+    if (!cancellable) return;
+    if (
+      !window.confirm(
+        `Cancel this broadcast? ${t.queued} recipient(s) still queued will NOT be sent. Already-sent emails (${t.sent}) can't be recalled.`,
+      )
+    ) {
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/broadcasts/${id}/cancel`, { method: "POST" });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast.error(data.error ?? "Couldn't cancel. Try again.");
+        return;
+      }
+      toast.success("Broadcast cancelled — remaining queued sends will not go out.");
+    } catch {
+      toast.error("Network error. Try again.");
+    } finally {
+      setCancelling(false);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
@@ -120,6 +160,18 @@ export default function BroadcastDetailPage() {
                 <Mail className="h-4 w-4" />
               </span>
               {broadcast.subject || broadcast.templateName || "(untitled broadcast)"}
+              {broadcast.testMode && (
+                <span
+                  title={
+                    broadcast.testRecipientContactIds
+                      ? `Test Mode — restricted to ${broadcast.testRecipientContactIds.length} allowlisted recipient(s)`
+                      : "Test Mode"
+                  }
+                  className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 ring-1 ring-violet-500/30 dark:text-violet-300"
+                >
+                  <FlaskConical className="h-3 w-3" /> Test
+                </span>
+              )}
             </h1>
             {broadcast.subjectPreview && (
               <p className="mt-1 text-sm text-muted-foreground">
@@ -134,7 +186,26 @@ export default function BroadcastDetailPage() {
                 "—"}
             </p>
           </div>
-          <StatusBadge status={broadcast.status} />
+          <div className="flex items-center gap-2">
+            {cancellable && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="text-destructive hover:text-destructive"
+              >
+                {cancelling ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <CircleX className="mr-1 h-3.5 w-3.5" />
+                )}
+                Cancel send
+              </Button>
+            )}
+            <StatusBadge status={broadcast.status} />
+          </div>
         </div>
       </div>
 
@@ -155,23 +226,34 @@ export default function BroadcastDetailPage() {
         </div>
       )}
 
-      {broadcast.status !== "completed" && broadcast.status !== "failed" && (
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Progress</span>
-            <span className="font-mono">{progress}%</span>
+      {broadcast.status !== "completed" &&
+        broadcast.status !== "failed" &&
+        broadcast.status !== "cancelled" && (
+          <div className="rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Progress</span>
+              <span className="font-mono">{progress}%</span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            {t.queued > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t.queued} still queued — sending at ~5/sec via QStash.
+              </p>
+            )}
           </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-blue-500 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          {t.queued > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t.queued} still queued — sending at ~5/sec via QStash.
-            </p>
-          )}
+        )}
+
+      {broadcast.status === "cancelled" && (
+        <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-3 text-sm text-orange-800 dark:text-orange-300">
+          Cancelled{broadcast.cancelledBy ? ` by ${broadcast.cancelledBy.displayName}` : ""}
+          {broadcast.cancelledAt ? ` ${formatRelativeTime(broadcast.cancelledAt)}` : ""}. Any
+          rows still shown as &quot;Queued&quot; below will settle to &quot;Cancelled&quot; on their own —
+          they will not send.
         </div>
       )}
 
@@ -242,7 +324,9 @@ function SendStatus({ send }: { send: BroadcastSendDoc }) {
           ? "No email"
           : send.skippedReason === "contact_missing"
             ? "Contact deleted"
-            : "Skipped";
+            : send.skippedReason === "cancelled"
+              ? "Cancelled"
+              : "Skipped";
     return (
       <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-300">
         {reason}
@@ -269,6 +353,8 @@ function StatusBadge({ status }: { status: BroadcastDoc["status"] }) {
       "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300",
     failed:
       "bg-rose-500/15 text-rose-700 ring-1 ring-rose-500/30 dark:text-rose-300",
+    cancelled:
+      "bg-orange-500/15 text-orange-700 ring-1 ring-orange-500/30 dark:text-orange-300",
   };
   return (
     <span

@@ -143,6 +143,8 @@ function StatusBadge({ status }: { status: BroadcastDoc["status"] }) {
       "bg-emerald-500/15 text-emerald-700 ring-1 ring-emerald-500/30 dark:text-emerald-300",
     failed:
       "bg-rose-500/15 text-rose-700 ring-1 ring-rose-500/30 dark:text-rose-300",
+    cancelled:
+      "bg-orange-500/15 text-orange-700 ring-1 ring-orange-500/30 dark:text-orange-300",
   };
   return (
     <span

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { PIPELINE_STAGES } from "@/types/deals";
 import { evalConditionGroup } from "@/lib/segmentation/eval-condition-group";
+import { conditionGroupHasNegation } from "@/lib/segmentation/audience-warnings";
 import type { Contact } from "@/types/contacts";
 import type { CustomFieldDef } from "@/types/custom-fields";
 import type { Condition, ConditionGroup, ConditionOp } from "@/types/workflows";
@@ -135,6 +136,18 @@ function stateToGroup(state: AudienceFilterState): ConditionGroup | undefined {
 }
 
 /**
+ * Negation/broad-filter warning (2026-08-26 production safety controls) —
+ * true when any completed condition uses a negation operator (doesn't have
+ * tag / is not / does not contain / does not exist). Advisory only, shown
+ * in the composer and the send-confirmation dialog; never blocks sending.
+ * See lib/segmentation/audience-warnings.ts for why "any negation, anywhere"
+ * is the deliberately broad trigger for this warning.
+ */
+export function audienceStateHasNegation(state: AudienceFilterState): boolean {
+  return conditionGroupHasNegation(stateToGroup(state));
+}
+
+/**
  * `null` when any added row is still incomplete (field/op picked but no
  * value yet, for an operator that needs one) — same "invalid blocks
  * sending" contract the old tag/stage picker had, so `new/page.tsx`'s
@@ -166,12 +179,20 @@ export function audienceFilterToApiShape(
 export function useAudiencePreview(
   contacts: Contact[],
   state: AudienceFilterState,
-): { recipients: number; skipped: number; matching: number } {
+): {
+  recipients: number;
+  skipped: number;
+  matching: number;
+  /** The actual would-receive-email contacts — not just the count. Used by
+   *  the composer to intersect with a Test Mode allowlist and to drive the
+   *  send confirmation dialog (2026-08-26 production safety controls). */
+  recipientContacts: Contact[];
+} {
   return useMemo(() => {
     const group = stateToGroup(state);
     const matching = contacts.filter((c) => evalConditionGroup(group, c));
-    let recipients = 0;
     let skipped = 0;
+    const recipientContacts: Contact[] = [];
     for (const c of matching) {
       if (c.emailOptedOut) {
         skipped += 1;
@@ -181,9 +202,14 @@ export function useAudiencePreview(
         skipped += 1;
         continue;
       }
-      recipients += 1;
+      recipientContacts.push(c);
     }
-    return { recipients, skipped, matching: matching.length };
+    return {
+      recipients: recipientContacts.length,
+      skipped,
+      matching: matching.length,
+      recipientContacts,
+    };
   }, [contacts, state]);
 }
 
@@ -355,6 +381,14 @@ export function AudienceConditionBuilder({
       >
         <Plus className="h-3 w-3" /> Add condition
       </button>
+
+      {audienceStateHasNegation(value) && (
+        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+          This condition uses a &quot;not&quot;/&quot;doesn&apos;t have&quot; rule, which
+          can match most contacts in your CRM (everyone except the
+          exception). Review the count below before sending.
+        </p>
+      )}
 
       <div className="rounded-lg border bg-muted/30 p-3 text-sm">
         <div className="flex items-center justify-between">

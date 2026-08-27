@@ -32,6 +32,12 @@ import type { Contact } from "@/types/contacts";
  * calls this directly (never trusts a client-supplied recipient list), and
  * the per-recipient step route re-checks opt-out/suppression live again at
  * actual send time on top of this.
+ *
+ * Test Mode (2026-08-26): the optional `testRecipientIds` param intersects
+ * the resolved audience with an explicit allowlist SERVER-SIDE, inside this
+ * function — the one place every caller's audience passes through. A
+ * segment that would otherwise resolve to thousands of contacts still only
+ * ever returns the allowlisted ones. See the param's own doc comment.
  */
 export interface ResolvedAudience {
   /** Contacts that will receive a send (passed all pre-flight checks). */
@@ -56,6 +62,18 @@ export async function resolveAudience(
    * `skipped`) so the collaborator never learns they exist.
    */
   territoryFilter: string[] | null = null,
+  /**
+   * Production safety controls (2026-08-26) — Broadcast Test Mode. `null`
+   * (default) = no restriction. A `string[]` of contact ids restricts the
+   * resolved audience to ONLY those ids, no matter how broad `filter`
+   * resolves — this is the server-side enforcement the send route relies
+   * on; it is NOT optional/advisory and cannot be bypassed by a caller
+   * that only trims the client-side preview. An empty array yields an
+   * empty audience (mirrors territoryFilter's contract). Applied first,
+   * before segmentation/opt-out evaluation, so a testMode broadcast never
+   * even considers a non-allowlisted contact.
+   */
+  testRecipientIds: string[] | null = null,
 ): Promise<ResolvedAudience> {
   const db = getAdminDb();
   let query: FirebaseFirestore.Query = db
@@ -70,12 +88,18 @@ export async function resolveAudience(
 
   const snap = await query.get();
 
+  const testAllowlist = testRecipientIds ? new Set(testRecipientIds) : null;
+
   const recipients: Contact[] = [];
   const skipped: ResolvedAudience["skipped"] = [];
 
   for (const doc of snap.docs) {
     const contact = { id: doc.id, ...(doc.data() as Omit<Contact, "id">) };
-    // Territory gate first — excluded contacts are invisible to this
+    // Test Mode allowlist gate — strictest filter, applied first. A
+    // non-allowlisted contact is invisible to this resolution entirely,
+    // same "doesn't even count as skipped" treatment as territoryFilter.
+    if (testAllowlist && !testAllowlist.has(contact.id)) continue;
+    // Territory gate — excluded contacts are invisible to this
     // caller, so they don't even count as "skipped".
     if (territoryFilter) {
       const tId = contact.territoryId ?? null;

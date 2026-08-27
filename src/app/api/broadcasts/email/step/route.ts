@@ -115,6 +115,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: "already_settled" });
   }
 
+  // Production safety control (2026-08-26) — check the PARENT broadcast's
+  // CURRENT status before doing anything else. This is what makes Cancel
+  // Broadcast a real kill switch rather than the manual "delete the queued
+  // rows" emergency procedure we had to fall back on during a live
+  // incident: every callback re-reads the broadcast doc fresh (this is a
+  // brand new HTTP request each time), so a cancellation that happened
+  // AFTER this callback was already published to QStash is still honored
+  // here — mandatory, not best-effort. A cancelled/failed broadcast never
+  // reaches the Resend call; the row settles to "skipped" instead.
+  if (broadcast.status === "cancelled" || broadcast.status === "failed") {
+    await markSkipped(sendRef, broadcastRef, "cancelled");
+    // Deliberately NOT calling maybeMarkBroadcastCompleted here — a
+    // cancelled/failed broadcast must stay cancelled/failed forever, never
+    // flip to "completed" just because its remaining rows finished
+    // draining. (maybeMarkBroadcastCompleted also bails on both statuses
+    // itself, as a second, independent guard — see its own comment.)
+    return NextResponse.json({ ok: true, ignored: broadcast.status });
+  }
+
   // Load the contact (live read — opt-out may have flipped since fan-out)
   // along with the sub-account.
   const contactRef = db.collection("contacts").doc(contactId);
@@ -260,7 +279,7 @@ export async function POST(request: Request) {
 async function markSkipped(
   sendRef: FirebaseFirestore.DocumentReference,
   broadcastRef: FirebaseFirestore.DocumentReference,
-  reason: "opt_out" | "no_email" | "contact_missing",
+  reason: "opt_out" | "no_email" | "contact_missing" | "cancelled",
 ): Promise<void> {
   await sendRef.update({
     status: "skipped",
@@ -304,7 +323,15 @@ async function maybeMarkBroadcastCompleted(
     const snap = await tx.get(broadcastRef);
     if (!snap.exists) return;
     const data = snap.data() as BroadcastDoc;
-    if (data.status === "completed" || data.status === "failed") return;
+    // "cancelled" is terminal same as "completed"/"failed" — never flip a
+    // cancelled broadcast back to "completed" just because its remaining
+    // rows finished draining to "skipped".
+    if (
+      data.status === "completed" ||
+      data.status === "failed" ||
+      data.status === "cancelled"
+    )
+      return;
     if ((data.totals?.queued ?? 0) <= 0) {
       tx.update(broadcastRef, {
         status: "completed",

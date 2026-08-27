@@ -28,7 +28,20 @@ export type BroadcastStatus =
   /** Every row has settled (sent / skipped / failed). */
   | "completed"
   /** Hard-failed during creation (e.g. QStash misconfigured). */
-  | "failed";
+  | "failed"
+  /**
+   * Production safety controls (2026-08-26, added after a live incident —
+   * see docs/debug notes on broadcast nf4y6KBytpIAwzO0l17d): an operator
+   * cancelled the send while rows were still queued/sending. Every
+   * still-queued QStash callback checks this status before calling Resend
+   * (see /api/broadcasts/email/step) and safely no-ops instead of sending —
+   * this replaces the manual "delete the queued rows" emergency procedure
+   * with a real, idempotent kill switch. Already-`sent` rows are untouched;
+   * rows still `queued` at cancel time settle to `skipped` (reason
+   * "cancelled") lazily, as their callback fires, rather than in one giant
+   * synchronous batch update.
+   */
+  | "cancelled";
 
 /**
  * Audience filter applied at fan-out time.
@@ -114,6 +127,32 @@ export interface BroadcastDoc {
   completedAt: Timestamp | FieldValue | null;
   /** Populated when status === "failed". */
   errorMessage: string | null;
+  /**
+   * Production safety controls (2026-08-26). When true, /api/broadcasts/
+   * email/send intersected the resolved audience with
+   * `testRecipientContactIds` SERVER-SIDE before any row was ever written —
+   * no contact outside the allowlist could have been queued, regardless of
+   * how broad `audienceFilter` resolves. Kept on the doc as a permanent,
+   * visible audit marker (the detail page badges it "TEST") — never
+   * inferred from totals, since a real broadcast can also happen to have a
+   * small audience.
+   */
+  testMode?: boolean;
+  /** The allowlist a testMode broadcast was intersected against. Verified
+   *  server-side at send time to belong to this subAccountId — see send/route.ts. */
+  testRecipientContactIds?: string[] | null;
+  /**
+   * The audience size the operator saw and confirmed in the UI immediately
+   * before clicking Send. /api/broadcasts/email/send recomputes the
+   * audience from scratch server-side and rejects the request (409) if the
+   * two counts don't match, forcing a fresh preview + re-confirmation
+   * rather than ever queuing against a stale client-side count. Stored here
+   * purely as an audit trail of what was confirmed.
+   */
+  confirmedAudienceSize?: number | null;
+  /** Set when an operator cancels a queued/sending broadcast. */
+  cancelledAt?: Timestamp | FieldValue | null;
+  cancelledBy?: { displayName: string; email: string } | null;
 }
 
 /** Reasons the step executor skips a recipient WITHOUT calling Resend. */
@@ -125,7 +164,9 @@ export type BroadcastSkipReason =
   /** Send window outside the sub-account's configured hours (will defer + retry). */
   | "send_window_deferred"
   /** Contact was deleted between fan-out and send. */
-  | "contact_missing";
+  | "contact_missing"
+  /** Broadcast was cancelled by an operator before this row's callback fired. */
+  | "cancelled";
 
 export type BroadcastSendStatus =
   | "queued"

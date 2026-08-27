@@ -28,6 +28,17 @@ interface SendBody {
   preheader?: string | null;
   audienceFilter?: BroadcastAudienceFilter;
   sourceTemplateId?: string | null;
+  /** Production safety controls (2026-08-26) — Broadcast Test Mode. */
+  testMode?: boolean;
+  testRecipientIds?: string[];
+  /**
+   * The recipient count the operator saw and confirmed in the UI
+   * immediately before clicking Send. Required on every request — the
+   * server recomputes the audience from scratch and rejects (409) if it
+   * doesn't match, rather than ever queuing against a client's possibly
+   * stale preview. See the "hard audience count consistency check" below.
+   */
+  confirmedAudienceSize?: number;
 }
 
 /**
@@ -74,10 +85,30 @@ export async function POST(request: Request) {
   const preheader = payload.preheader?.trim() || null;
   const audienceFilter = payload.audienceFilter;
   const sourceTemplateId = payload.sourceTemplateId?.trim() || null;
+  const testMode = payload.testMode === true;
+  const requestedTestRecipientIds = Array.isArray(payload.testRecipientIds)
+    ? payload.testRecipientIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+  const confirmedAudienceSize = payload.confirmedAudienceSize;
 
   if (!subAccountId || !content || !subject || !audienceFilter) {
     return NextResponse.json(
       { error: "subAccountId, content, subject, and audienceFilter are required" },
+      { status: 400 },
+    );
+  }
+  if (typeof confirmedAudienceSize !== "number") {
+    return NextResponse.json(
+      {
+        error:
+          "confirmedAudienceSize is required — review the audience count in the UI before sending.",
+      },
+      { status: 400 },
+    );
+  }
+  if (testMode && requestedTestRecipientIds.length === 0) {
+    return NextResponse.json(
+      { error: "Test Mode requires at least one test recipient." },
       { status: 400 },
     );
   }
@@ -146,19 +177,49 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  // Test Mode allowlist — verify every requested id is a real contact that
+  // actually belongs to THIS sub-account before it's trusted as the
+  // allowlist. Never trust client-supplied ids blindly, even for a
+  // safety feature: a stale/forged id list should just narrow the
+  // audience further, not silently include something out of scope.
+  let verifiedTestRecipientIds: string[] | null = null;
+  if (testMode) {
+    const snaps = await Promise.all(
+      requestedTestRecipientIds.map((id) => db.doc(`contacts/${id}`).get()),
+    );
+    verifiedTestRecipientIds = snaps
+      .filter((s) => s.exists && s.data()?.subAccountId === subAccountId)
+      .map((s) => s.id);
+    if (verifiedTestRecipientIds.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "None of the requested test recipients are valid contacts in this sub-account.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
   // Resolve audience. A scoped collaborator only reaches contacts in
   // their assigned territories; admins / owners / scoping-off pass null.
+  // In Test Mode, resolveAudience ALSO intersects with the verified
+  // allowlist server-side — see its own doc comment — so no recipient
+  // outside the allowlist can ever be queued, regardless of how broad
+  // audienceFilter resolves.
   const scope = await loadEffectiveTerritoryScope(access);
   const audience = await resolveAudience(
     subAccountId,
     audienceFilter,
     scope.enforce ? (scope.ids ?? []) : null,
+    verifiedTestRecipientIds,
   );
   if (audience.recipients.length === 0) {
     return NextResponse.json(
       {
-        error:
-          "Audience is empty after pre-flight (no contacts match, or all are opted-out / missing email).",
+        error: testMode
+          ? "No test recipients match this audience filter (or they're opted out / missing an email)."
+          : "Audience is empty after pre-flight (no contacts match, or all are opted-out / missing email).",
         skipped: audience.skipped.length,
       },
       { status: 400 },
@@ -170,6 +231,24 @@ export async function POST(request: Request) {
         error: `Audience size ${audience.recipients.length} exceeds the per-broadcast cap of ${MAX_AUDIENCE_SIZE}. Narrow the filter and try again.`,
       },
       { status: 400 },
+    );
+  }
+
+  // Hard audience count consistency check (2026-08-26) — the count the
+  // operator confirmed in the UI must match what we just computed
+  // server-side, or we refuse to queue anything. Catches both a stale
+  // client preview (contacts changed between preview and click) and any
+  // future UI bug that could show one number and send to another. The
+  // operator has to re-preview and re-confirm rather than the send
+  // silently going out against a number nobody actually reviewed.
+  if (audience.recipients.length !== confirmedAudienceSize) {
+    return NextResponse.json(
+      {
+        error: `Audience changed since you reviewed it (you confirmed ${confirmedAudienceSize}, it's now ${audience.recipients.length}). Refresh the preview and confirm again.`,
+        code: "AUDIENCE_CHANGED",
+        currentAudienceSize: audience.recipients.length,
+      },
+      { status: 409 },
     );
   }
 
@@ -214,6 +293,9 @@ export async function POST(request: Request) {
     startedAt: null,
     completedAt: null,
     errorMessage: null,
+    testMode,
+    testRecipientContactIds: verifiedTestRecipientIds,
+    confirmedAudienceSize,
   };
   await broadcastRef.set({ id: broadcastRef.id, ...broadcast });
 
