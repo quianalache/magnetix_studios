@@ -249,7 +249,7 @@ async function findContactBlockers(
       .count()
       .get();
 
-  const [deals, tasks, events, quotes, energeticProfiles, submissions, webChats, voiceCalls] =
+  const [deals, tasks, events, quotes, energeticProfiles, submissions, webChats, voiceCalls, members] =
     await Promise.all([
       inSub("deals"),
       inSub("tasks"),
@@ -284,6 +284,23 @@ async function findContactBlockers(
         .where("contactId", "==", contactId)
         .count()
         .get(),
+      // Community/Course blockers (2026-08-27) — Community Membership and
+      // Course Enrollment do NOT reference contactId directly; they
+      // reference memberId (Member is the tenant-scoped login identity a
+      // Contact reconciles to at community-join time — see Member's own
+      // doc comment). So the real relationship is Contact -> Member (via
+      // Member.contactId) -> GroupMembership/Enrollment (via memberId), a
+      // two-hop lookup, not a direct query. Deliberately does NOT touch
+      // the global `people` collection — a MyMagnetix Person identity
+      // existing is not itself a business relationship this Contact's
+      // deletion would sever; only a real, tenant-scoped Member with real
+      // Community/Course records is.
+      db
+        .collection("subAccounts")
+        .doc(subAccountId)
+        .collection("members")
+        .where("contactId", "==", contactId)
+        .get(),
     ]);
 
   const out: ContactBlocker[] = [];
@@ -298,5 +315,33 @@ async function findContactBlockers(
   add(submissions.data().count, "form_submissions", "form submission");
   add(webChats.data().count, "web_chat_sessions", "web-chat conversation");
   add(voiceCalls.data().count, "voice_calls", "voice call");
+
+  // This Contact has no linked community/course identity at all — skip the
+  // two collection-group lookups entirely rather than issue queries that
+  // can only ever come back empty.
+  const memberIds = members.docs.map((d) => d.id);
+  if (memberIds.length > 0) {
+    const [memberships, enrollments] = await Promise.all([
+      db
+        .collectionGroup("memberships")
+        .where("subAccountId", "==", subAccountId)
+        .where("memberId", "in", memberIds)
+        .count()
+        .get(),
+      // Enrollment docs (courses/{courseId}/enrollments/{memberId}) don't
+      // carry a subAccountId field — memberId alone is already a
+      // globally-unique Firestore doc id belonging to exactly one Member
+      // in exactly one sub-account, so this filter can't leak across
+      // tenants even without an extra subAccountId check.
+      db
+        .collectionGroup("enrollments")
+        .where("memberId", "in", memberIds)
+        .count()
+        .get(),
+    ]);
+    add(memberships.data().count, "community_memberships", "Community Membership");
+    add(enrollments.data().count, "course_enrollments", "Course Enrollment");
+  }
+
   return out;
 }

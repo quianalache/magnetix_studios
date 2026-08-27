@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { verifyUnsubscribeToken } from "@/lib/automations/unsubscribe-token";
+import { ipFromRequest } from "@/lib/contacts/location";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,16 @@ export const dynamic = "force-dynamic";
  * link previewers don't accidentally opt people out by fetching the URL.
  *
  * Token format: `{contactId}.{HMAC}` — see lib/automations/unsubscribe-token.ts.
+ *
+ * Structured Email Consent V1 (2026-08-27): also stamps `emailConsent` —
+ * this is the ONE place in the current architecture where a genuine,
+ * capturable marketing-consent event happens (a real explicit opt-in
+ * capture UI doesn't exist yet — see Contact.emailConsent's own doc
+ * comment). `emailOptedOut` stays the live, unchanged send-gate;
+ * `emailConsent` is the durable audit trail layered on top.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   ctx: { params: Promise<{ token: string }> },
 ) {
   const { token } = await ctx.params;
@@ -37,6 +45,12 @@ export async function POST(
 
   await ref.update({
     emailOptedOut: true,
+    emailConsent: {
+      status: "unsubscribed",
+      unsubscribedAt: FieldValue.serverTimestamp(),
+      source: "unsubscribe_link",
+      ip: ipFromRequest(request),
+    },
     updatedAt: FieldValue.serverTimestamp(),
   });
 

@@ -36,6 +36,24 @@ function mergeCustomFields(
   return out;
 }
 
+/**
+ * Structured Email Consent V1 (2026-08-27) — merge two contacts'
+ * `emailConsent` audit records. An `"unsubscribed"` status on EITHER side
+ * always wins (matches the `emailOptedOut` boolean's own "sticks" rule
+ * just above — a merge must never look like it erased a real unsubscribe
+ * event). Otherwise prefers whichever record actually has consent history
+ * over one with none. Returns `undefined` (never a fabricated record) when
+ * neither contact has any — the caller omits the key entirely in that case.
+ */
+function mergeEmailConsent(
+  survivor?: Contact["emailConsent"],
+  loser?: Contact["emailConsent"],
+): Contact["emailConsent"] | undefined {
+  if (survivor?.status === "unsubscribed") return survivor;
+  if (loser?.status === "unsubscribed") return loser;
+  return survivor ?? loser ?? undefined;
+}
+
 export async function POST(request: Request) {
   let body: {
     survivorId?: string;
@@ -128,6 +146,11 @@ export async function POST(request: Request) {
 
   const mergedName = survivor.name || loser.name;
   const mergedPhone = primaryPhone ?? (survivor.phone || loser.phone);
+  // Structured Email Consent V1 (2026-08-27): built separately since it may
+  // legitimately be absent (Firestore's admin SDK rejects `undefined`
+  // values in a write payload — omit the key entirely rather than set it
+  // to undefined when neither record has any consent history).
+  const mergedEmailConsent = mergeEmailConsent(survivor.emailConsent, loser.emailConsent);
   const survivorPatch: Record<string, unknown> = {
     name: mergedName,
     email: primaryEmail ?? (survivor.email || loser.email),
@@ -146,6 +169,11 @@ export async function POST(request: Request) {
     // record" rule — a hard-bounced/complained address stays suppressed for
     // transactional mail after a merge too, same reasoning as opt-out above.
     deliverabilitySuppressed: !!(survivor.deliverabilitySuppressed || loser.deliverabilitySuppressed),
+    // Structured Email Consent V1 (2026-08-27): same "sticks" rule as the
+    // boolean above — an unsubscribed status on EITHER record wins, so a
+    // merge can never silently erase a real unsubscribe event from the
+    // audit trail.
+    ...(mergedEmailConsent ? { emailConsent: mergedEmailConsent } : {}),
   };
 
   await performContactMerge({

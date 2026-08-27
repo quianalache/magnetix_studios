@@ -125,6 +125,48 @@ export interface Contact {
   deliverabilitySuppressedReason?: "hard_bounce" | "complaint" | null;
   deliverabilitySuppressedAt?: Timestamp | FieldValue | null;
   /**
+   * Structured Email Consent V1 (2026-08-27) — a durable consent/audit
+   * trail for marketing email, the email equivalent of `smsConsent` below.
+   * ADDITIVE ONLY: `emailOptedOut` remains the one live, authoritative
+   * send-gate every eligibility check reads (Broadcast, Workflow Send
+   * Email) — unchanged, zero regression risk. This field is audit
+   * metadata layered on top, kept in sync at the one place a real
+   * consent-relevant event happens today (the unsubscribe link — see
+   * /api/u/[token]/route.ts) plus, going forward, any future explicit
+   * marketing-consent capture UI (none exists yet — see
+   * FormFieldType, no `email_consent` field type today, unlike
+   * `sms_consent`).
+   *
+   * `"unknown"` is the correct read for EVERY contact created before this
+   * field existed, and for every contact created today by a flow that
+   * never asked about marketing consent (which is every current
+   * contact-creation path — forms, booking, checkout, manual staff
+   * create, CSV/GHL import, web chat, voice). Undefined/absent means the
+   * exact same thing as `"unknown"` — this field is never backfilled or
+   * migrated onto existing docs; absence is a valid, permanent state, not
+   * a signal to go stamp one in. Never infer `"consented"` merely because
+   * an email address exists on the contact.
+   *
+   * Deliberately does NOT represent hard bounce / spam complaint / invalid
+   * address — those are deliverability states (`deliverabilitySuppressed`
+   * above), not consent states, and must never be written here.
+   */
+  emailConsent?: {
+    status: "unknown" | "consented" | "unsubscribed";
+    consentedAt?: Timestamp | FieldValue | null;
+    unsubscribedAt?: Timestamp | FieldValue | null;
+    /** Short machine-readable origin, e.g. "unsubscribe_link", "form:{formId}". */
+    source?: string | null;
+    /** Page the consent/unsubscribe action happened on, when known. */
+    sourceUrl?: string | null;
+    /** The exact disclosure text shown at opt-in time, when a real consent
+     *  checkbox captured it. Null for the unsubscribe path (nothing was
+     *  "shown" to disclose — the contact clicked a link, they didn't
+     *  affirm a disclosure). */
+    textShown?: string | null;
+    ip?: string | null;
+  } | null;
+  /**
    * A2P 10DLC proof-of-consent audit record, written when a contact opts in
    * to SMS via a form's `sms_consent` field. Carriers / The Campaign Registry
    * expect a retrievable record of WHO consented, to WHAT exact text, and
