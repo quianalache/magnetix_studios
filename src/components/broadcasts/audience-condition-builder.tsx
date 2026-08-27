@@ -72,6 +72,21 @@ const TEXT_OPS: FieldOption["ops"] = [
   { op: "not_set", label: "does not exist" },
 ];
 
+/**
+ * Segmentation V1 closeout (2026-08-27) — standard Contact fields beyond
+ * Tag/Stage/Source/Company. Every field here is a real field on the
+ * `Contact` type (src/types/contacts.ts) — deliberately NOT adding
+ * "First Name"/"Last Name" (the schema only has one combined `name`
+ * field, no split), "State/Region" or "Postal Code" (no such fields
+ * exist on Contact — `address` is a single free-form string, not
+ * structured), or "Created Date" (the shared evaluator has no date
+ * comparison operators — see eval-condition-group.ts — so exposing a
+ * date field here would mean silently falling back to string equality,
+ * which is exactly the "fake date filtering" this closeout was told not
+ * to do). `city` and `country` ARE real fields (best-effort,
+ * geolocation-derived at contact creation — see Contact's own doc
+ * comment) so they're included as plain text fields like Company.
+ */
 function staticFieldOptions(): FieldOption[] {
   return [
     { field: "tags", label: "Tag", kind: "tags", ops: TAG_OPS },
@@ -89,7 +104,12 @@ function staticFieldOptions(): FieldOption[] {
       choices: KNOWN_SOURCES,
       ops: SELECT_EQ_OPS,
     },
+    { field: "name", label: "Name", kind: "text", ops: TEXT_OPS },
+    { field: "email", label: "Email", kind: "text", ops: TEXT_OPS },
+    { field: "phone", label: "Phone", kind: "text", ops: TEXT_OPS },
     { field: "company", label: "Company", kind: "text", ops: TEXT_OPS },
+    { field: "city", label: "City", kind: "text", ops: TEXT_OPS },
+    { field: "country", label: "Country", kind: "text", ops: TEXT_OPS },
   ];
 }
 
