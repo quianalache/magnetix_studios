@@ -1,9 +1,10 @@
 import type {
   PuckColumnWidth,
-  SectionBackgroundConfig,
+  BackgroundConfig,
 } from "@/types/pages-funnels-puck";
 import { COLUMN_SPAN_CLASS } from "@/lib/pages-funnels/puck/constants";
-import { sectionBackgroundStyle } from "@/lib/pages-funnels/puck/background";
+import { BackgroundLayer } from "@/components/pages-funnels/puck/background-layer";
+import { cn } from "@/lib/utils";
 
 /**
  * Production Section/Row/Column layout primitives — the approved Puck
@@ -20,6 +21,26 @@ import { sectionBackgroundStyle } from "@/lib/pages-funnels/puck/background";
  * wiring, matching this repo's existing convention of separating renderer
  * components from their registry entry (see V1's blocks.ts vs.
  * block-view.tsx, and the POC's elements.tsx vs. config.tsx).
+ *
+ * Phase 2D: Section, Row, AND Column now all accept a `background` prop and
+ * all render the exact same `<BackgroundLayer/>` (task §6: "use the same
+ * shared data model and renderer helper for Section, Row, and Column
+ * backgrounds... do not implement three unrelated copies"). Each of the
+ * three root containers below is `relative overflow-hidden`:
+ * `overflow-hidden` clips `BackgroundLayer`'s blur overscan (see that
+ * component's own doc comment) and `relative` establishes the positioning
+ * context `BackgroundLayer`'s `absolute` positioning resolves against.
+ * Every container's actual content is then given `relative z-10` (not just
+ * left as plain normal-flow content) — this is NOT decorative: per CSS 2.1
+ * §E's stacking/painting order, a `position:absolute` layer paints AFTER
+ * ordinary non-positioned in-flow content within the same stacking context,
+ * meaning an unstacked background div would silently paint ON TOP of,
+ * hiding, the section/row/column's real content. Giving content its own
+ * `relative` (positioned) stacking context + `z-10` guarantees it paints
+ * after (above) the background layer regardless of DOM order. Confirmed by
+ * direct reasoning through the CSS painting-order spec during this phase —
+ * do not remove `relative z-10` from content as "unnecessary," it is load-
+ * bearing for background visibility to not invert.
  */
 
 export type SectionMaxWidthOption = "contained" | "wide" | "full";
@@ -42,7 +63,9 @@ const SECTION_MAX_WIDTH_PX: Record<SectionMaxWidthOption, number | undefined> =
  * would put layout CSS (e.g. `display:grid`) one level too deep to actually
  * contain those wrapper nodes as its children. Proven in the POC (master
  * spec §3's Section→Row→Column note) — do not "simplify" this back to a
- * wrapping div, it silently breaks Row's column grid.
+ * wrapping div, it silently breaks Row's column grid. Phase 2D's added
+ * `relative z-10` classes are appended to those SAME direct slot-call
+ * classNames, never moved to a wrapper, for exactly this reason.
  */
 export function SectionRender({
   background,
@@ -51,7 +74,7 @@ export function SectionRender({
   paddingBottom,
   rows: Rows,
 }: {
-  background: SectionBackgroundConfig;
+  background: BackgroundConfig;
   maxWidth: SectionMaxWidthOption;
   paddingTop: number;
   paddingBottom: number;
@@ -59,15 +82,12 @@ export function SectionRender({
 }) {
   return (
     <section
-      style={{
-        paddingTop,
-        paddingBottom,
-        background: sectionBackgroundStyle(background),
-      }}
-      className="px-6"
+      style={{ paddingTop, paddingBottom }}
+      className="relative overflow-hidden px-6"
     >
+      <BackgroundLayer background={background} />
       <div
-        className="mx-auto flex flex-col gap-8"
+        className="relative z-10 mx-auto flex flex-col gap-8"
         style={{ maxWidth: SECTION_MAX_WIDTH_PX[maxWidth] }}
       >
         <Rows allow={["Row"]} />
@@ -77,10 +97,12 @@ export function SectionRender({
 }
 
 export function RowRender({
+  background,
   gap,
   verticalAlign,
   columns: Columns,
 }: {
+  background: BackgroundConfig;
   gap: number;
   verticalAlign: RowVerticalAlign;
   columns: React.ComponentType<{
@@ -90,19 +112,25 @@ export function RowRender({
   }>;
 }) {
   return (
-    <Columns
-      allow={["Column"]}
-      className="grid grid-cols-12"
-      style={{
-        gap,
-        alignItems:
-          verticalAlign === "center"
-            ? "center"
-            : verticalAlign === "bottom"
-              ? "flex-end"
-              : "start",
-      }}
-    />
+    // This outer div carries ONLY relative/overflow-hidden for the
+    // background layer — never grid/gap CSS, which must stay directly on
+    // the Columns slot call below per this file's slot-styling rule.
+    <div className="relative overflow-hidden">
+      <BackgroundLayer background={background} />
+      <Columns
+        allow={["Column"]}
+        className="relative z-10 grid grid-cols-12"
+        style={{
+          gap,
+          alignItems:
+            verticalAlign === "center"
+              ? "center"
+              : verticalAlign === "bottom"
+                ? "flex-end"
+                : "start",
+        }}
+      />
+    </div>
   );
 }
 
@@ -119,30 +147,40 @@ export function RowRender({
  * needs it — without it, width classes are silently inert (both columns
  * render full-width regardless of their `width` field), a real, once-
  * confirmed regression, not a hypothetical one.
+ *
+ * Phase 2D: `COLUMN_SPAN_CLASS[width]` (the grid-sizing class Row's grid
+ * depends on) stays on this dragRef'd root div exactly as before — the
+ * flex/gap/alignment classes that used to live here too have moved onto
+ * the `Elements` slot call itself instead, alongside a new `relative z-10`,
+ * matching the same direct-slot-styling pattern Row/Columns already uses.
+ * The root div itself becomes `relative overflow-hidden` (for
+ * `BackgroundLayer`) and otherwise just a sizing/positioning box.
  */
 export function ColumnRender({
+  background,
   width,
   alignment,
   elements: Elements,
   dragRef,
 }: {
+  background: BackgroundConfig;
   width: PuckColumnWidth;
   alignment: ColumnContentAlignment;
-  elements: React.ComponentType<{ allow?: string[] }>;
+  elements: React.ComponentType<{
+    allow?: string[];
+    className?: string;
+  }>;
   dragRef: ((element: Element | null) => void) | null;
 }) {
   return (
     <div
       ref={dragRef}
-      className={
-        `flex min-w-0 flex-col gap-4 ${COLUMN_SPAN_CLASS[width]}` +
-        (alignment === "center"
-          ? " items-center text-center"
-          : alignment === "right"
-            ? " items-end text-right"
-            : "")
-      }
+      className={cn(
+        "relative min-w-0 overflow-hidden",
+        COLUMN_SPAN_CLASS[width]
+      )}
     >
+      <BackgroundLayer background={background} />
       <Elements
         allow={[
           "Heading",
@@ -155,6 +193,14 @@ export function ColumnRender({
           "Accordion",
           "Form",
         ]}
+        className={cn(
+          "relative z-10 flex flex-col gap-4",
+          alignment === "center"
+            ? "items-center text-center"
+            : alignment === "right"
+              ? "items-end text-right"
+              : ""
+        )}
       />
     </div>
   );

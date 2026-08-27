@@ -106,55 +106,80 @@ export interface PuckPageMetadata {
   resolvedForms?: Record<string, LeadForm | null>;
 }
 
-// ---------- Section background (Phase 2C — real, editable gradient/solid controls) ----------
+// ---------- Background (Phase 2D — production-grade color/gradient/blur) ----------
 
 /**
- * Structured Section/Hero background configuration. Replaces the earlier
- * `background: "none" | "solid" | "gradient"` enum-only field (still V1's
- * own shape too — `BackgroundStyle`, `src/types/pages-funnels.ts` — neither
- * V1 nor the pre-Phase-2C Puck Section ever stored real color/direction
- * data; "gradient" only ever selected one hardcoded, non-editable CSS
- * gradient). This is a genuinely stronger shape, not a reuse of an
- * existing one — the task that introduced it explicitly allowed that
- * ("do not blindly use [the suggested shape] if current production types
- * already define something stronger," and nothing stronger existed).
+ * Production background model — Phase 2D. Replaces Phase 2C's
+ * `SectionBackgroundConfig` (`{type: "none"|"solid"|"gradient", color?,
+ * gradient?: {from,to,direction}}`), which real user QA found "materially
+ * too shallow" against the researched HighLevel capability reference
+ * (Phase 2D task §1): only 2 gradient stops, no radial/angular gradient
+ * types, no stop add/remove, no blur, and — critically — Row/Column had no
+ * background field at all. This shape is deliberately generic (not
+ * `SectionBackgroundConfig`) because Phase 2D task §6 requires Section,
+ * Row, AND Column to share the exact same model and rendering helper, not
+ * three unrelated copies.
  *
- * `color`/`gradient` are optional so a `type: "solid"` node with no color
- * chosen yet, or a migrated node with no source color data, still
- * type-checks and renders a sensible fallback (see
- * `sectionBackgroundStyle()`, lib/pages-funnels/puck/background.ts) rather
- * than requiring invented values.
+ * `source` is the top-level mental model the task asked for (§8: "Color |
+ * Image | Video", not the old flat None/Solid/Gradient) — `image`/`video`
+ * are typed now (so the shape won't need a breaking rewrite once real
+ * media-background editing is built) but have no field UI yet in this
+ * phase, per the task's explicit "do not build an elaborate media-
+ * management feature in this task."
  */
-export type SectionBackgroundType = "none" | "solid" | "gradient";
+export type BackgroundSource = "none" | "color" | "image" | "video";
+export type ColorMode = "solid" | "gradient";
+export type GradientType = "linear" | "radial" | "angular";
 
-/** Named CSS `linear-gradient()` direction keywords — a closed, structured
- *  set (matching the master spec's "constrained fraction presets, not
- *  arbitrary input" convention already used for Column width) rather than
- *  a free-form angle number, per this feature's own instruction: "direction
- *  / angle" — either satisfies it; named keywords are simpler to present as
- *  a `select` field than a numeric angle input. */
-export type GradientDirection =
-  | "to-r"
-  | "to-l"
-  | "to-t"
-  | "to-b"
-  | "to-tr"
-  | "to-tl"
-  | "to-br"
-  | "to-bl";
-
-export interface SectionBackgroundConfig {
-  type: SectionBackgroundType;
-  /** Hex (or any valid CSS color string) — only meaningful when `type === "solid"`. */
-  color?: string;
-  /** Only meaningful when `type === "gradient"`. */
-  gradient?: {
-    from: string;
-    to: string;
-    direction: GradientDirection;
-  };
+/** One color stop in a gradient. `id` is stable per-stop (not derived from
+ *  array index) so the gradient editor's add/remove/reorder never confuses
+ *  React or loses focus mid-edit — same reasoning V2's `AccordionItem`/
+ *  `FeatureItem` etc. already established for array-of-object content in
+ *  this codebase. `position` is a 0–100 percentage along the gradient
+ *  axis, matching CSS gradient stop syntax directly (`color position%`). */
+export interface GradientStop {
+  id: string;
+  color: string;
+  position: number;
 }
 
-export const DEFAULT_SECTION_BACKGROUND: SectionBackgroundConfig = {
-  type: "none",
-};
+/** `angle` is only meaningful for `linear` (direction) and `angular`
+ *  (rotation of the conic gradient's start) — `radial` gradients don't
+ *  have a CSS angle concept, so the field UI hides angle entirely for
+ *  that type (§5/§8: "appropriate radial configuration," not a dead
+ *  control). Capped at 10 stops (§5) by the field editor, not this type —
+ *  the type itself doesn't need to enforce that, matching how Column width
+ *  is a closed value set but Row's column *count* isn't type-enforced. */
+export interface GradientConfig {
+  type: GradientType;
+  angle: number;
+  stops: GradientStop[];
+}
+
+export interface ColorBackgroundConfig {
+  mode: ColorMode;
+  /** Empty string, not undefined, when unset — keeps the color field editor
+   *  a plain controlled input with no `value ?? ""` scattered through it. */
+  solid: string;
+  gradient: GradientConfig;
+}
+
+/** §7: "Implement as backdrop/background blur appropriate to the rendered
+ *  container. Ensure child content itself remains crisp." `intensity` is a
+ *  blur radius in px — rendered on a dedicated background LAYER (see
+ *  `BackgroundLayer`, components/pages-funnels/puck/background-layer.tsx),
+ *  never as a `filter` on the container itself, which would blur children
+ *  too. */
+export interface BackgroundBlurConfig {
+  enabled: boolean;
+  intensity: number;
+}
+
+export interface BackgroundConfig {
+  source: BackgroundSource;
+  color: ColorBackgroundConfig;
+  /** Typed now, no field UI yet — see file doc comment. */
+  image?: { url: string };
+  video?: { url: string };
+  blur: BackgroundBlurConfig;
+}

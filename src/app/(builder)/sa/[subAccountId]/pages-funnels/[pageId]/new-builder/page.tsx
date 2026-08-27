@@ -90,6 +90,7 @@ export default function NewBuilderPage({
       pageStatus={page.status}
       subAccountId={subAccountId}
       backHref={saPath("/pages-funnels")}
+      previewHref={saPath(`/pages-funnels/${page.id}/new-builder/preview`)}
       initialData={initialData}
     />
   );

@@ -1,8 +1,8 @@
-import type { Config, Fields } from "@puckeditor/core";
+import type { Config, CustomField } from "@puckeditor/core";
 import type {
   PuckPageMetadata,
   PageAction,
-  SectionBackgroundConfig,
+  BackgroundConfig,
 } from "@/types/pages-funnels-puck";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
 import {
@@ -10,9 +10,10 @@ import {
   ALIGN_OPTIONS,
 } from "@/lib/pages-funnels/puck/constants";
 import {
-  GRADIENT_DIRECTION_OPTIONS,
+  DEFAULT_BACKGROUND,
   HERO_DEFAULT_BACKGROUND,
 } from "@/lib/pages-funnels/puck/background";
+import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/background-field";
 import {
   SectionRender,
   RowRender,
@@ -102,18 +103,34 @@ function toPageAction(raw: {
   return { type: "none" };
 }
 
-// ---------- Section/Hero background (Phase 2C task §2/§11) ----------
+// ---------- Shared Background field (Phase 2D task §3/§4/§5/§6/§7) ----------
 
-const BACKGROUND_TYPE_OPTIONS = [
-  { label: "None", value: "none" },
-  { label: "Solid", value: "solid" },
-  { label: "Gradient", value: "gradient" },
-] as const;
+/**
+ * ONE `CustomField<BackgroundConfig>` used verbatim by Section, Hero, Row,
+ * AND Column (task §6: "use the same shared data model and renderer
+ * helper... do not implement three unrelated copies") — replaces Phase
+ * 2C's per-component `resolveSectionFields`/`resolveFields` approach, which
+ * only ever needed to toggle one flat 3-way enum. This phase's UI (source
+ * tabs, solid/gradient, 3 gradient types, up to 10 stops, blur) is
+ * cohesive enough that a single custom field owning its own render layout
+ * is the right tool — see background-field.tsx's own doc comment for the
+ * full reasoning on `custom` vs `object`/`resolveFields`. Because it's one
+ * field definition object (not a function producing per-component fields),
+ * Section/Hero/Row/Column referencing it can never drift from each other.
+ */
+const backgroundField: CustomField<BackgroundConfig> = {
+  type: "custom",
+  label: "Background",
+  render: ({ value, onChange }) => (
+    <BackgroundFieldEditor value={value} onChange={onChange} />
+  ),
+};
 
 /** The fields every Section/Hero shares besides `background` — factored out
  *  once so Section and Hero's field sets can never drift from each other
  *  (they already share `SectionRender` and its whole prop shape). */
 const SECTION_SHARED_FIELDS = {
+  background: backgroundField,
   maxWidth: {
     type: "select" as const,
     label: "Max Width",
@@ -137,62 +154,6 @@ const SECTION_SHARED_FIELDS = {
   },
   rows: { type: "slot" as const, allow: ["Row"] },
 };
-
-/**
- * Conditional background fields (Phase 2C task §11: "do not expose
- * irrelevant controls when the selected type does not use them... if Puck
- * field conditional rendering is supported cleanly, use it"). Puck's
- * `object` field can't itself show/hide sub-fields based on a sibling
- * value (established already for the Action field above), but
- * `resolveFields` — a real, documented, component-level Config option — can
- * return a DIFFERENT fields object based on the component's current data,
- * which is exactly this: the `color` sub-field only appears once `type` is
- * "solid"; the `gradient` sub-field (itself a nested object: start/end
- * color + direction) only appears once `type` is "gradient". Shared by
- * Section and Hero so both stay in lockstep with zero duplication.
- */
-function resolveSectionFields(data: {
-  props?: { background?: SectionBackgroundConfig };
-}): Fields {
-  const backgroundType = data.props?.background?.type ?? "none";
-
-  const backgroundObjectFields: Record<string, unknown> = {
-    type: {
-      type: "select" as const,
-      label: "Type",
-      options: BACKGROUND_TYPE_OPTIONS,
-    },
-  };
-  if (backgroundType === "solid") {
-    backgroundObjectFields.color = { type: "text" as const, label: "Color" };
-  }
-  if (backgroundType === "gradient") {
-    backgroundObjectFields.gradient = {
-      type: "object" as const,
-      label: "Gradient",
-      objectFields: {
-        from: { type: "text" as const, label: "Start Color" },
-        to: { type: "text" as const, label: "End Color" },
-        direction: {
-          type: "select" as const,
-          label: "Direction",
-          options: GRADIENT_DIRECTION_OPTIONS,
-        },
-      },
-    };
-  }
-
-  return {
-    background: {
-      type: "object" as const,
-      label: "Background",
-      objectFields: backgroundObjectFields,
-    },
-    ...SECTION_SHARED_FIELDS,
-  } as Fields;
-}
-
-const SECTION_DEFAULT_BACKGROUND: SectionBackgroundConfig = { type: "none" };
 
 export function createPuckConfig(
   FormComponent: React.ComponentType<FormComponentProps>
@@ -221,12 +182,9 @@ export function createPuckConfig(
     components: {
       Section: {
         label: "Section",
-        fields: resolveSectionFields({
-          props: { background: SECTION_DEFAULT_BACKGROUND },
-        }),
-        resolveFields: (data) => resolveSectionFields(data),
+        fields: SECTION_SHARED_FIELDS,
         defaultProps: {
-          background: SECTION_DEFAULT_BACKGROUND,
+          background: DEFAULT_BACKGROUND,
           maxWidth: "contained",
           paddingTop: 64,
           paddingBottom: 64,
@@ -264,10 +222,7 @@ export function createPuckConfig(
       // defaultProps-sourced slot content at insertion time.
       Hero: {
         label: "Hero",
-        fields: resolveSectionFields({
-          props: { background: HERO_DEFAULT_BACKGROUND },
-        }),
-        resolveFields: (data) => resolveSectionFields(data),
+        fields: SECTION_SHARED_FIELDS,
         defaultProps: {
           background: HERO_DEFAULT_BACKGROUND,
           maxWidth: "contained",
@@ -278,6 +233,7 @@ export function createPuckConfig(
               type: "Row",
               props: {
                 id: "hero-row",
+                background: DEFAULT_BACKGROUND,
                 gap: 32,
                 verticalAlign: "center",
                 columns: [
@@ -285,6 +241,7 @@ export function createPuckConfig(
                     type: "Column",
                     props: {
                       id: "hero-col-1",
+                      background: DEFAULT_BACKGROUND,
                       width: "1/2",
                       alignment: "left",
                       elements: [
@@ -322,6 +279,7 @@ export function createPuckConfig(
                     type: "Column",
                     props: {
                       id: "hero-col-2",
+                      background: DEFAULT_BACKGROUND,
                       width: "1/2",
                       alignment: "left",
                       elements: [
@@ -356,6 +314,7 @@ export function createPuckConfig(
       Row: {
         label: "Row",
         fields: {
+          background: backgroundField,
           gap: { type: "number", label: "Gap (px)", min: 0, max: 96 },
           verticalAlign: {
             type: "select",
@@ -369,6 +328,7 @@ export function createPuckConfig(
           columns: { type: "slot", allow: ["Column"] },
         },
         defaultProps: {
+          background: DEFAULT_BACKGROUND,
           gap: 24,
           verticalAlign: "top",
           // Seeded with two empty Columns so a freshly-dropped Row is
@@ -382,6 +342,7 @@ export function createPuckConfig(
               type: "Column",
               props: {
                 id: "column-a",
+                background: DEFAULT_BACKGROUND,
                 width: "1/2",
                 alignment: "left",
                 elements: [],
@@ -391,6 +352,7 @@ export function createPuckConfig(
               type: "Column",
               props: {
                 id: "column-b",
+                background: DEFAULT_BACKGROUND,
                 width: "1/2",
                 alignment: "left",
                 elements: [],
@@ -398,8 +360,9 @@ export function createPuckConfig(
             },
           ],
         },
-        render: ({ gap, verticalAlign, columns }) => (
+        render: ({ background, gap, verticalAlign, columns }) => (
           <RowRender
+            background={background}
             gap={gap}
             verticalAlign={verticalAlign}
             columns={columns}
@@ -416,6 +379,7 @@ export function createPuckConfig(
         label: "Column",
         inline: true,
         fields: {
+          background: backgroundField,
           width: { type: "select", label: "Width", options: WIDTH_OPTIONS },
           alignment: {
             type: "radio",
@@ -437,9 +401,15 @@ export function createPuckConfig(
             ],
           },
         },
-        defaultProps: { width: "auto", alignment: "left", elements: [] },
-        render: ({ width, alignment, elements, puck }) => (
+        defaultProps: {
+          background: DEFAULT_BACKGROUND,
+          width: "auto",
+          alignment: "left",
+          elements: [],
+        },
+        render: ({ background, width, alignment, elements, puck }) => (
           <ColumnRender
+            background={background}
             width={width}
             alignment={alignment}
             elements={elements}

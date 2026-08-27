@@ -1,7 +1,8 @@
 import type { Data, ComponentData } from "@puckeditor/core";
 import type { PageBlock } from "@/types/pages-funnels";
-import type { SectionBackgroundConfig } from "@/types/pages-funnels-puck";
+import type { BackgroundConfig } from "@/types/pages-funnels-puck";
 import { DEFAULT_PAGE_ACTION } from "@/types/pages-funnels-puck";
+import { DEFAULT_BACKGROUND } from "@/lib/pages-funnels/puck/background";
 import { migratedNodeId } from "@/lib/pages-funnels/puck/ids";
 
 /**
@@ -60,40 +61,64 @@ function migrateBlockToSection(block: PageBlock): ComponentData {
 }
 
 /**
- * Phase 2C task §3 ("gradient migration"): only V1's `hero` and `cta` block
- * types ever carried a `backgroundStyle` field at all (`HeroBlockContent`/
- * `CtaBlockContent`, src/types/pages-funnels.ts) — every other block type
- * has no background concept in V1, so those always migrate to `{type:
- * "none"}`. Crucially, V1's `backgroundStyle` was ALWAYS just the enum
- * (`"none" | "solid" | "gradient" | "image"`) with no color/direction data
- * anywhere alongside it (confirmed: V1's own renderer,
- * block-view.tsx/tree-view.tsx, hardcodes one fixed Tailwind gradient class
- * for `"gradient"` — there is no per-page color to read). So this function
- * preserves the TYPE only — exactly what real data exists — and never
- * invents a `color`/`gradient` value V1 never had. A migrated Section with
- * `background.type === "gradient"` and no `gradient` sub-object renders as
- * transparent (`sectionBackgroundStyle` returns `undefined` without real
- * `from`/`to` colors) until the user opens Background settings and picks
- * real colors — which is the honest, correct behavior per this task's
- * explicit instruction, not a bug.
+ * Phase 2C task §3 / Phase 2D task §9 ("preserve gradient/color INTENT,
+ * never invent historic color data that never existed in V1"): only V1's
+ * `hero` and `cta` block types ever carried a `backgroundStyle` field at
+ * all (`HeroBlockContent`/`CtaBlockContent`, src/types/pages-funnels.ts) —
+ * every other block type has no background concept in V1, so those always
+ * migrate to `DEFAULT_BACKGROUND` (`source: "none"`). Crucially, V1's
+ * `backgroundStyle` was ALWAYS just the enum (`"none" | "solid" |
+ * "gradient" | "image"`) with no color/direction data anywhere alongside it
+ * (confirmed: V1's own renderer, block-view.tsx/tree-view.tsx, hardcodes
+ * one fixed Tailwind gradient class for `"gradient"` — there is no per-page
+ * color to read). So this function preserves the TYPE/MODE only — exactly
+ * what real data exists — and never invents a `solid`/`stops` value V1
+ * never had:
+ *
+ * - `"solid"` migrates to `color.mode: "solid"` with `solid: ""` (empty,
+ *   not a guessed color) — `backgroundCssValue` treats an empty solid as
+ *   unset, so it renders transparent until the user picks a real color.
+ * - `"gradient"` migrates to `color.mode: "gradient"` with `stops: []`
+ *   (zero real stops, not invented ones) — `gradientCssValue` treats an
+ *   empty stop list as unset for the exact same honest-transparency reason.
+ *
+ * Both cases leave the Background field editor open and ready — the user
+ * sees "Color" + the right Solid/Gradient toggle already selected, and just
+ * needs to add real color(s), rather than starting over from "None."
  *
  * V1's `"image"` option has no equivalent in the new background shape yet
- * (Puck Section only supports none/solid/gradient) — maps to `{type:
- * "none"}` rather than silently dropping the block's content; a real
- * image-background option is future scope, not part of this fix.
+ * (§8: image backgrounds have no field UI this phase either) — maps to
+ * `DEFAULT_BACKGROUND` rather than silently dropping the block's content;
+ * a real image-background migration is future scope, not part of this fix.
  */
-function migrateBackgroundStyle(block: PageBlock): SectionBackgroundConfig {
-  if (block.type !== "hero" && block.type !== "cta") return { type: "none" };
+function migrateBackgroundStyle(block: PageBlock): BackgroundConfig {
+  if (block.type !== "hero" && block.type !== "cta") return DEFAULT_BACKGROUND;
 
   switch (block.content.backgroundStyle) {
     case "solid":
-      return { type: "solid" };
+      return {
+        source: "color",
+        color: {
+          mode: "solid",
+          solid: "",
+          gradient: { type: "linear", angle: 135, stops: [] },
+        },
+        blur: { enabled: false, intensity: 0 },
+      };
     case "gradient":
-      return { type: "gradient" };
+      return {
+        source: "color",
+        color: {
+          mode: "gradient",
+          solid: "",
+          gradient: { type: "linear", angle: 135, stops: [] },
+        },
+        blur: { enabled: false, intensity: 0 },
+      };
     case "image":
     case "none":
     case undefined:
-      return { type: "none" };
+      return DEFAULT_BACKGROUND;
   }
 }
 

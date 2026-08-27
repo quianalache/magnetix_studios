@@ -62,6 +62,7 @@ export default function NewBuilderShellQaPage() {
       pageStatus="draft"
       subAccountId="qa-fixture-subaccount"
       backHref="/docs/design-prototypes/pages-funnels-new-builder-shell"
+      previewHref="/docs/design-prototypes/pages-funnels-new-builder-shell/preview"
       initialData={fixtureData}
     />
   );

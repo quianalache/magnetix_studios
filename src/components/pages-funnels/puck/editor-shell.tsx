@@ -1,20 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, Eye, X } from "lucide-react";
-import { Puck, Render } from "@puckeditor/core";
+import { ArrowLeft, Eye } from "lucide-react";
+import { Puck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "./magnetix-theme.css";
-import type { Data, AppState } from "@puckeditor/core";
+import type { Data } from "@puckeditor/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
-import { serverPuckConfig } from "@/components/pages-funnels/puck/server-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";
 import { MagnetixBlocksPanel } from "@/components/pages-funnels/puck/blocks-panel";
 import { MagnetixLayersPanel } from "@/components/pages-funnels/puck/layers-panel";
 import { MagnetixSettingsPanel } from "@/components/pages-funnels/puck/settings-panel";
+import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
 /**
@@ -26,9 +25,9 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * `--puck-*` tokens) plus a custom header, but kept Puck's own stock
  * drawer/Outline/Fields panels — real user QA confirmed that still read
  * as "Puck UI with Magnetix colors," not the approved Magnetix builder UX.
- * Phase 2B (this version) goes further: the left library, Layers, and
- * Settings panels are now genuinely custom Magnetix components
- * (blocks-panel.tsx, layers-panel.tsx, settings-panel.tsx), wired in via
+ * Phase 2B went further: the left library, Layers, and Settings panels are
+ * genuinely custom Magnetix components (blocks-panel.tsx, layers-panel.tsx,
+ * settings-panel.tsx), wired in via
  * `overrides.drawer`/`overrides.outline`/`overrides.fields`. Each wrapper
  * renders Puck's OWN real content/mechanics unmodified (the drawer is
  * built on the public `Drawer`/`Drawer.Item` components — real drag
@@ -48,15 +47,30 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * Funnels" link and a status badge. `overrides.headerActions` replaces
  * Puck's default (a single hardcoded "Publish" button wired to an
  * `onPublish` prop this shell deliberately never sets) with three explicit
- * buttons: Preview (real, opens a read-only `<Render>` of the current
- * in-memory Data — same "preview current unsaved edits" pattern the V1
- * editor already uses), and Save Draft / Publish, both disabled with an
- * explanatory title — per the master spec, "if Save/Publish are not yet
- * wired for Puck Data, clearly mark or disable rather than pretending they
- * work." `renderHeaderActions` (used in Phase 1) is deprecated as of the
- * installed 0.23.0 (confirmed via the package's own runtime deprecation
- * warning) in favor of exactly this `overrides.headerActions` + native
- * render-prop pattern — this shell uses the current, non-deprecated API.
+ * buttons: Preview (real — see below), and Save Draft / Publish, both
+ * disabled with an explanatory title — per the master spec, "if
+ * Save/Publish are not yet wired for Puck Data, clearly mark or disable
+ * rather than pretending they work." `renderHeaderActions` (used in Phase
+ * 1) is deprecated as of the installed 0.23.0 (confirmed via the package's
+ * own runtime deprecation warning) in favor of exactly this
+ * `overrides.headerActions` + native render-prop pattern — this shell uses
+ * the current, non-deprecated API.
+ *
+ * PHASE 2D PREVIEW REWRITE (task §10/§11/§12/§13/§14): real user QA
+ * rejected Phase 2C's full-screen Dialog Preview — it read as a modal, not
+ * "viewing the actual page," and its close button duplicated visually.
+ * Preview now opens the SAME in-memory, unsaved `data` in a genuine NEW
+ * BROWSER TAB at `previewHref` — a dedicated route
+ * (`.../new-builder/preview`) that renders ONLY page content via the exact
+ * same production `<Render config={serverPuckConfig} .../>` real published
+ * pages will eventually use, zero editor chrome, real browser-tab width
+ * driving responsiveness. `<Puck>` itself never unmounts when Preview
+ * opens (it's a separate tab, not a dialog swapped in over this one), so
+ * its own undo/redo history is never at risk either way. The unsaved
+ * hand-off itself is `sessionStorage`-based (see preview-session.ts's own
+ * doc comment for the full mechanism and why it's the right, clean,
+ * session-scoped tool for this) — no Dialog, no close button, no duplicate
+ * anything, because there is no modal at all anymore.
  *
  * The Desktop/Tablet/Mobile switcher and its zoom controls are Puck's own
  * `ViewportControls`, a second native toolbar row beneath the header with
@@ -72,42 +86,58 @@ export interface MagnetixPuckEditorShellProps {
   pageStatus: "draft" | "published";
   subAccountId: string;
   backHref: string;
+  /** Route Preview opens in a new tab — `.../new-builder/preview` (see
+   *  that route's own doc comment). Built by the caller (new-builder's
+   *  `page.tsx`) via the same `saPath()` helper every other in-app link
+   *  already uses, so this shell stays route-path-agnostic. */
+  previewHref: string;
   initialData: Data;
 }
 
 export function MagnetixPuckEditorShell({
+  pageId,
   pageName,
   pageStatus,
   subAccountId,
   backHref,
+  previewHref,
   initialData,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  // Phase 2C task §9 ("Preview should respect the currently selected page
-  // viewport where practical"). `usePuck()`/`createUsePuck()` only work
-  // for components rendered INSIDE `<Puck>`'s own subtree — the Preview
-  // dialog is a sibling, not a child, of `<Puck>` below, so it can't call
-  // either hook directly. `onAction` is the supported way to observe Puck's
-  // state from outside that subtree without restructuring the whole shell
-  // into full custom composition (a much larger, riskier change than this
-  // task's scope) — it fires on every dispatched action, recorded or not,
-  // with the resulting `appState`, so this just mirrors the current
-  // viewport width into local state whenever it changes.
-  const [viewportWidth, setViewportWidth] = useState<number | "100%">(
-    VIEWPORTS[0].width
-  );
 
   // Context-dependent, so useMemo (not a fresh literal) — same referential-
   // stability rule as VIEWPORTS/IFRAME_CONFIG below, per the Insert Undo
-  // Blocker fix (master spec §3/§12, this task's §14). resolvedForms is
-  // intentionally omitted: the CLIENT Form element fetches on demand (see
+  // Blocker fix (master spec §3/§12). resolvedForms is intentionally
+  // omitted: the CLIENT Form element fetches on demand (see
   // form-client.tsx) rather than depending on pre-resolved metadata, which
-  // is the server/<Render>-only path.
+  // is the server/<Render>-only path (used by the Preview route instead).
   const metadata: PuckPageMetadata = useMemo(
     () => ({ subAccountId }),
     [subAccountId]
   );
+
+  /**
+   * Writes the CURRENT in-memory `data` into this page's session-scoped
+   * preview slot, then opens the dedicated Preview route in a new tab.
+   * Deliberately does NOT pass `"noopener"` to `window.open` — that flag
+   * disowns the new tab's `opener` reference, which is specifically what
+   * removes it from the "unit of related similar-origin browsing
+   * contexts" that `sessionStorage` sharing depends on (see
+   * preview-session.ts). Both tabs are same-origin, first-party Magnetix
+   * routes, so the reverse-tabnabbing risk `noopener` normally guards
+   * against doesn't apply here.
+   */
+  function openPreview() {
+    try {
+      sessionStorage.setItem(previewStorageKey(pageId), JSON.stringify(data));
+    } catch {
+      // sessionStorage can throw (private-browsing storage caps, quota,
+      // etc.) — Preview still opens; the new tab's own "no preview data
+      // found" empty state explains what to do next rather than this
+      // failing with no feedback at all.
+    }
+    window.open(previewHref, "_blank");
+  }
 
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
@@ -116,9 +146,6 @@ export function MagnetixPuckEditorShell({
           config={clientPuckConfig}
           data={data}
           onChange={setData}
-          onAction={(_action, appState: AppState) =>
-            setViewportWidth(appState.ui.viewports.current.width)
-          }
           headerTitle={pageName}
           viewports={VIEWPORTS}
           iframe={IFRAME_CONFIG}
@@ -157,11 +184,7 @@ export function MagnetixPuckEditorShell({
             ),
             headerActions: () => (
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPreviewOpen(true)}
-                >
+                <Button variant="outline" size="sm" onClick={openPreview}>
                   <Eye className="h-4 w-4" /> Preview
                 </Button>
                 <Button
@@ -181,15 +204,15 @@ export function MagnetixPuckEditorShell({
                 </Button>
               </div>
             ),
-            // Phase 2B (master spec §6/§13, this task's §4/§7/§8): the
-            // stock text-heavy drawer and plain Outline/Fields panels are
-            // replaced with the Magnetix visual system below. Each wrapper
-            // renders Puck's OWN real content (drag mechanics, tree,
-            // fields) unmodified — only the surrounding chrome is custom.
-            // `drawer` fully replaces Puck's default library listing (not
-            // just wraps it) with MagnetixBlocksPanel, which itself is
-            // built on the public `Drawer`/`Drawer.Item` components, so the
-            // real Puck insertion/drag system is what actually runs.
+            // Phase 2B (master spec §6/§13): the stock text-heavy drawer
+            // and plain Outline/Fields panels are replaced with the
+            // Magnetix visual system below. Each wrapper renders Puck's
+            // OWN real content (drag mechanics, tree, fields) unmodified —
+            // only the surrounding chrome is custom. `drawer` fully
+            // replaces Puck's default library listing (not just wraps it)
+            // with MagnetixBlocksPanel, which itself is built on the
+            // public `Drawer`/`Drawer.Item` components, so the real Puck
+            // insertion/drag system is what actually runs.
             drawer: () => <MagnetixBlocksPanel config={clientPuckConfig} />,
             outline: ({ children }) => (
               <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
@@ -200,71 +223,6 @@ export function MagnetixPuckEditorShell({
           }}
         />
       </div>
-
-      {/* Preview — read-only <Render> of the SAME in-memory `data`, same
-          "preview current unsaved edits without persisting" pattern the V1
-          editor's own Preview mode already uses. A dialog rather than
-          swapping the whole body: keeps <Puck> mounted continuously so its
-          own undo/redo history is never at risk of being reset by an
-          unmount/remount.
-
-          Phase 2C task §8: the previous small-modal version clipped long
-          pages at the bottom. Root cause: its scroll container was
-          `flex-1 overflow-y-auto` with no `min-h-0` — a classic flexbox
-          trap where a flex child's default `min-height: auto` refuses to
-          shrink below its content's natural height, so instead of THAT
-          child scrolling, the fixed-height Dialog around it just clipped
-          whatever didn't fit (the outer container had `overflow-hidden`,
-          not `overflow-y-auto`). Two changes fix this robustly: `min-h-0`
-          on the scroll container (so it actually shrinks and its own
-          overflow-y-auto activates), and — per this task's explicit
-          permission to use "the strongest UX that fits" — a genuine
-          full-screen takeover instead of a small fixed-height modal, which
-          removes the fragile height math almost entirely (`h-dvh` on the
-          outermost flex column is the only height constraint in the whole
-          chain now).
-
-          Width matches whichever Desktop/Tablet/Mobile viewport is
-          currently selected in the editor (`viewportWidth`, captured via
-          `onAction` above) — Phase 2C task §9 ("respect the currently
-          selected page viewport"), not a second device-preview system:
-          this only ever reads Puck's own real viewport state. */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="flex h-dvh w-dvw max-w-none flex-col gap-0 rounded-none p-0 sm:max-w-none"
-        >
-          <div className="border-border bg-card flex shrink-0 items-center justify-between border-b px-4 py-3">
-            <DialogTitle className="text-sm font-semibold">
-              Preview — {pageName}
-            </DialogTitle>
-            <button
-              type="button"
-              onClick={() => setPreviewOpen(false)}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground rounded-md p-1"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="bg-muted/30 min-h-0 flex-1 overflow-y-auto">
-            {previewOpen && (
-              <div
-                className="bg-background mx-auto min-h-full"
-                style={{
-                  width: viewportWidth === "100%" ? "100%" : viewportWidth,
-                  maxWidth: "100%",
-                }}
-              >
-                <Render
-                  config={serverPuckConfig}
-                  data={data}
-                  metadata={metadata}
-                />
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
