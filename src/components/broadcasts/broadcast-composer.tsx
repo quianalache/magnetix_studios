@@ -393,6 +393,17 @@ export function BroadcastComposer({
       if (data.ignored === "stale") return; // a newer request already won; leave saveState as-is
       setHasPersistedDraft(true);
       setSaveState("saved");
+      // The FIRST time a brand-new composer (no existingBroadcastId, i.e.
+      // /broadcasts/new) actually persists a draft, silently swap the
+      // visible URL to /broadcasts/{draftId}/edit — a raw History API
+      // call, not a Next.js navigation, so the component never remounts
+      // and no in-progress state is lost. This is what makes "hard
+      // refresh restores the exact draft" true even for a draft that
+      // started life on the plain /new URL: refreshing now reloads at
+      // the /edit URL, which hydrates from this same persisted doc.
+      if (data.created && !existingBroadcastId) {
+        window.history.replaceState(null, "", saPath(`/broadcasts/${draftId}/edit`));
+      }
     } catch {
       setSaveState("error");
     }
@@ -400,6 +411,8 @@ export function BroadcastComposer({
     hasPersistedDraft,
     hasMeaningfulContent,
     draftId,
+    existingBroadcastId,
+    saPath,
     subAccountId,
     subject,
     preheader,
