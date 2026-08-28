@@ -303,6 +303,29 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PATTERNS.some((re) => re.test(pathname));
 }
 
+// Root-level Community slugs are resolved by `src/app/[groupSlug]/page.tsx`.
+// Keep the existing CRM legacy roots behind Firebase auth before allowing an
+// otherwise-unmatched single-segment path to reach Next.js routing.
+const FIREBASE_PROTECTED_ROOT_PATHS = new Set([
+  "/agency",
+  "/calendar",
+  "/contacts",
+  "/conversations",
+  "/dashboard",
+  "/forms",
+  "/pipeline",
+  "/reports",
+  "/tasks",
+]);
+
+function isPublicOrCommunityRootPath(pathname: string): boolean {
+  if (isPublicPath(pathname)) return true;
+  return (
+    /^\/[^/]+$/.test(pathname) &&
+    !FIREBASE_PROTECTED_ROOT_PATHS.has(pathname)
+  );
+}
+
 /**
  * A handful of routes are one-shot ACTIONS, not real pages: visiting them
  * (with a valid session) immediately 30x-redirects somewhere else — most
@@ -391,7 +414,7 @@ export default function middleware(request: NextRequest) {
       const pathname = request.nextUrl.pathname;
 
       // Allow public paths without authentication
-      if (isPublicPath(pathname)) {
+      if (isPublicOrCommunityRootPath(pathname)) {
         return NextResponse.next();
       }
 
@@ -405,7 +428,7 @@ export default function middleware(request: NextRequest) {
       const pathname = request.nextUrl.pathname;
 
       // On error, allow public paths and redirect protected paths
-      if (isPublicPath(pathname)) {
+      if (isPublicOrCommunityRootPath(pathname)) {
         return NextResponse.next();
       }
 
