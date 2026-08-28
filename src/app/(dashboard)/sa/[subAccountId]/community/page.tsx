@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
+import {
+  staffCommunityFeedHref,
+  staffCommunityManageHref,
+} from "@/lib/community/staff-routes";
 import { ABOUT_MAX_CHARS } from "@/config/community";
 import { subscribeToCommunityGroups } from "@/lib/firestore/community-groups";
 import { Button } from "@/components/ui/button";
@@ -33,8 +37,10 @@ import type { SubAccountDoc } from "@/types";
 
 /**
  * Community groups — staff list + create. Gated by `communityEnabledByAgency`;
- * renders a locked state when the agency hasn't enabled it. Each group links
- * to its settings + its public `/c/[saId]/[slug]` landing page.
+ * renders a locked state when the agency hasn't enabled it. A draft group's
+ * card opens straight to Manage (its feed page 404s until published); a
+ * published group's card opens its feed, with Manage and the public View
+ * link both always available too.
  */
 export default function CommunityPage() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
@@ -152,13 +158,21 @@ function GroupCard({
         : "Paid"
       : "Free";
 
+  // A group's feed page (staffCommunityFeedHref) and its public page both
+  // 404 for anything that isn't status:"published" — the feed page gates
+  // through the SAME requireGroupPageAccess() a member-facing page uses,
+  // with no staff bypass for draft. A brand-new group is always a draft
+  // (see the create route), so the card's primary open-action has to route
+  // to Manage instead until it's published, or a freshly created group
+  // would be unreachable from this list entirely. See staff-routes.ts.
+  const isPublished = g.status === "published";
+  const openHref = isPublished
+    ? staffCommunityFeedHref(subAccountId, g.id)
+    : staffCommunityManageHref(subAccountId, g.id);
+
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
-      <Link
-        href={`/sa/${subAccountId}/community/${g.id}`}
-        className="block"
-        aria-label={`Open ${g.name}`}
-      >
+      <Link href={openHref} className="block" aria-label={`Open ${g.name}`}>
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -178,16 +192,13 @@ function GroupCard({
 
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
-          <Link
-            href={`/sa/${subAccountId}/community/${g.id}`}
-            className="font-medium hover:underline"
-          >
+          <Link href={openHref} className="font-medium hover:underline">
             {g.name}
           </Link>
           <span
             className={cn(
               "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-              g.status === "published"
+              isPublished
                 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
                 : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
             )}
@@ -204,18 +215,33 @@ function GroupCard({
             {g.memberCount}
           </span>
           <span>{price}</span>
-          <a
-            href={buildCommunityGroupUrl({
-              subAccount,
-              subAccountId,
-              groupSlug: g.slug,
-            })}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-auto flex items-center gap-1 hover:text-foreground"
+          <Link
+            href={staffCommunityManageHref(subAccountId, g.id)}
+            className="ml-auto hover:text-foreground"
           >
-            View <ExternalLink className="h-3 w-3" />
-          </a>
+            Manage
+          </Link>
+          {isPublished ? (
+            <a
+              href={buildCommunityGroupUrl({
+                subAccount,
+                subAccountId,
+                groupSlug: g.slug,
+              })}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 hover:text-foreground"
+            >
+              View <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <span
+              className="flex cursor-not-allowed items-center gap-1 opacity-40"
+              title="Publish this group first — the public page isn't reachable while it's a draft"
+            >
+              View <ExternalLink className="h-3 w-3" />
+            </span>
+          )}
         </div>
       </div>
     </div>
