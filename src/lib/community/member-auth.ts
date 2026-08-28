@@ -23,7 +23,7 @@ function getSecret(): string {
   const secret = process.env.AUTOMATIONS_TOKEN_SECRET;
   if (!secret) {
     throw new Error(
-      "AUTOMATIONS_TOKEN_SECRET is not set — required to sign community member tokens.",
+      "AUTOMATIONS_TOKEN_SECRET is not set — required to sign community member tokens."
     );
   }
   return secret;
@@ -45,7 +45,7 @@ function base64UrlDecode(str: string): Buffer {
 
 function sign(payload: string): string {
   return base64UrlEncode(
-    createHmac("sha256", getSecret()).update(payload).digest(),
+    createHmac("sha256", getSecret()).update(payload).digest()
   );
 }
 
@@ -76,6 +76,8 @@ interface TokenPayload {
   /** Points & Rewards — the inviting member's memberId (magic-link tokens
    *  only). See `signMemberMagicLinkToken`'s doc comment. */
   r?: string;
+  /** Optional display name captured during Community registration. */
+  n?: string;
   /** Destination path on the handoff's target domain (handoff tokens only).
    *  Signed into the token itself — not a separate mutable query param —
    *  so the redirect destination can't be altered after the token was
@@ -99,7 +101,10 @@ function decodeToken(token: string): TokenPayload | null {
   if (expected.length !== sig.length) return null;
   try {
     if (
-      !timingSafeEqual(Buffer.from(expected, "utf-8"), Buffer.from(sig, "utf-8"))
+      !timingSafeEqual(
+        Buffer.from(expected, "utf-8"),
+        Buffer.from(sig, "utf-8")
+      )
     ) {
       return null;
     }
@@ -135,6 +140,7 @@ export function signMemberMagicLinkToken(
    *  already is, since the login POST and the eventual `/verify` GET are
    *  two separate, unrelated requests. */
   invitedByMemberId?: string,
+  displayName?: string
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -144,13 +150,14 @@ export function signMemberMagicLinkToken(
     ...(joinGroupId ? { j: joinGroupId } : {}),
     ...(courseId ? { c: courseId } : {}),
     ...(invitedByMemberId ? { r: invitedByMemberId } : {}),
+    ...(displayName?.trim() ? { n: displayName.trim() } : {}),
   });
 }
 
 export function signMemberSessionToken(
   subAccountId: string,
   memberId: string,
-  email: string,
+  email: string
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -161,14 +168,13 @@ export function signMemberSessionToken(
   });
 }
 
-export function verifyMemberMagicLinkToken(
-  token: string,
-): {
+export function verifyMemberMagicLinkToken(token: string): {
   subAccountId: string;
   email: string;
   joinGroupId?: string;
   courseId?: string;
   invitedByMemberId?: string;
+  displayName?: string;
 } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
@@ -178,11 +184,12 @@ export function verifyMemberMagicLinkToken(
     joinGroupId: payload.j,
     courseId: payload.c,
     invitedByMemberId: payload.r,
+    displayName: payload.n,
   };
 }
 
 export function verifyMemberSessionToken(
-  token: string,
+  token: string
 ): { subAccountId: string; memberId: string; email: string } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ses" || !payload.mid) return null;
@@ -215,7 +222,7 @@ export function signMemberHandoffToken(
   subAccountId: string,
   memberId: string,
   email: string,
-  next: string,
+  next: string
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -227,11 +234,15 @@ export function signMemberHandoffToken(
   });
 }
 
-export function verifyMemberHandoffToken(
-  token: string,
-): { subAccountId: string; memberId: string; email: string; next: string } | null {
+export function verifyMemberHandoffToken(token: string): {
+  subAccountId: string;
+  memberId: string;
+  email: string;
+  next: string;
+} | null {
   const payload = decodeToken(token);
-  if (!payload || payload.k !== "ho" || !payload.mid || !payload.next) return null;
+  if (!payload || payload.k !== "ho" || !payload.mid || !payload.next)
+    return null;
   return {
     subAccountId: payload.sa,
     memberId: payload.mid,

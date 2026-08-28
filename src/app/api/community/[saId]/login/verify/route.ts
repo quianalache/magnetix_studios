@@ -28,18 +28,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ saId: string }> },
+  { params }: { params: Promise<{ saId: string }> }
 ) {
   const { saId } = await params;
   const url = new URL(request.url);
   const { pretty } = await resolveCommunityRequestOrigin(
     saId,
-    request.headers.get("host"),
+    request.headers.get("host")
   );
   const linkBase = { saId, pretty };
   const loginUrl = (error: string) =>
     NextResponse.redirect(
-      new URL(`${communityLoginHref(linkBase)}?error=${error}`, url),
+      new URL(`${communityLoginHref(linkBase)}?error=${error}`, url)
     );
 
   const gate = await getCommunityGate(saId);
@@ -58,6 +58,7 @@ export async function GET(
     const member = await ensureMember({
       subAccountId: saId,
       email: verified.email,
+      displayName: verified.displayName,
     });
     if (member.status !== "active") return loginUrl("inactive");
     memberId = member.id;
@@ -84,7 +85,7 @@ export async function GET(
         });
         if (outcome.status === "active" || outcome.status === "already") {
           return NextResponse.redirect(
-            new URL(communityHomeHref(linkBase, group.slug), url),
+            new URL(communityHomeHref(linkBase, group.slug), url)
           );
         }
       } catch (err) {
@@ -92,7 +93,7 @@ export async function GET(
       }
       // Approval / paid / error → land on the group's About to finish there.
       return NextResponse.redirect(
-        new URL(communityAboutHref(linkBase, group.slug), url),
+        new URL(communityAboutHref(linkBase, group.slug), url)
       );
     }
   }

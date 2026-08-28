@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { PurchaseButton } from "@/components/community/purchase-button";
-import { communityHomeHref, communityLoginHref } from "@/lib/community/routes";
+import { communityHomeHref, communitySignupHref } from "@/lib/community/routes";
 
 type MemberState = "guest" | "member" | "joined" | "pending";
 
 /**
  * Public group About-page CTA. Behavior depends on the viewer:
- *  - guest (no session) → links to the member login
+ *  - guest (no session) → links to the Community member signup
  *  - member (signed in, not joined) → POSTs the join endpoint
  *  - joined → enters the group
  *  - pending → shows awaiting-approval state
@@ -46,7 +46,11 @@ export function JoinButton({
 
   if (state === "joined") {
     return (
-      <a href={communityHomeHref(linkBase, groupSlug)} className={base} style={style}>
+      <a
+        href={communityHomeHref(linkBase, groupSlug)}
+        className={base}
+        style={style}
+      >
         Enter group
       </a>
     );
@@ -63,7 +67,7 @@ export function JoinButton({
   if (state === "guest") {
     return (
       <a
-        href={communityLoginHref(linkBase, { join: groupId })}
+        href={communitySignupHref(linkBase, { join: groupId })}
         className={base}
         style={style}
       >
@@ -116,7 +120,12 @@ export function JoinButton({
 
   return (
     <div className="space-y-2">
-      <button onClick={handleJoin} disabled={busy} className={base} style={style}>
+      <button
+        onClick={handleJoin}
+        disabled={busy}
+        className={base}
+        style={style}
+      >
         {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" /> Joining…
@@ -125,7 +134,7 @@ export function JoinButton({
           "Join group"
         )}
       </button>
-      {error && <p className="text-center text-xs text-destructive">{error}</p>}
+      {error && <p className="text-destructive text-center text-xs">{error}</p>}
     </div>
   );
 }

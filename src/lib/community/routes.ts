@@ -46,9 +46,14 @@ function staffBase(b: CommunityLinkBase): string {
   return `/sa/${b.saId}/community/${b.staffGroupId}`;
 }
 
-export function communityAboutHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityAboutHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/about`;
-  return b.pretty ? `/communities/${groupSlug}/about` : `/c/${b.saId}/${groupSlug}`;
+  return b.pretty
+    ? `/communities/${groupSlug}/about`
+    : `/c/${b.saId}/${groupSlug}`;
 }
 
 /**
@@ -65,23 +70,34 @@ export function communityAboutEditHref(b: CommunityLinkBase, groupSlug: string):
 
 export function communityHomeHref(b: CommunityLinkBase, groupSlug: string): string {
   if (b.staffGroupId) return staffBase(b);
-  return b.pretty ? `/communities/${groupSlug}/home` : `/c/${b.saId}/${groupSlug}/community`;
+  return b.pretty
+    ? `/communities/${groupSlug}/home`
+    : `/c/${b.saId}/${groupSlug}/community`;
 }
 
-export function communityPostHref(b: CommunityLinkBase, groupSlug: string, postId: string): string {
+export function communityPostHref(
+  b: CommunityLinkBase,
+  groupSlug: string,
+  postId: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/post/${postId}`;
   return `${communityHomeHref(b, groupSlug)}/${postId}`;
 }
 
-export function communityLearningHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityLearningHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/classroom`;
-  return b.pretty ? `/communities/${groupSlug}/learning` : `/c/${b.saId}/${groupSlug}/classroom`;
+  return b.pretty
+    ? `/communities/${groupSlug}/learning`
+    : `/c/${b.saId}/${groupSlug}/classroom`;
 }
 
 export function communityLearningCourseHref(
   b: CommunityLinkBase,
   groupSlug: string,
-  courseId: string,
+  courseId: string
 ): string {
   return `${communityLearningHref(b, groupSlug)}/${courseId}`;
 }
@@ -90,44 +106,70 @@ export function communityLearningLessonHref(
   b: CommunityLinkBase,
   groupSlug: string,
   courseId: string,
-  lessonId: string,
+  lessonId: string
 ): string {
   return `${communityLearningCourseHref(b, groupSlug, courseId)}/${lessonId}`;
 }
 
-export function communityMembersHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityMembersHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/members-directory`;
-  return b.pretty ? `/communities/${groupSlug}/members` : `/c/${b.saId}/${groupSlug}/members`;
+  return b.pretty
+    ? `/communities/${groupSlug}/members`
+    : `/c/${b.saId}/${groupSlug}/members`;
 }
 
-export function communityLeaderboardHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityLeaderboardHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/leaderboard`;
-  return b.pretty ? `/communities/${groupSlug}/leaderboard` : `/c/${b.saId}/${groupSlug}/leaderboards`;
+  return b.pretty
+    ? `/communities/${groupSlug}/leaderboard`
+    : `/c/${b.saId}/${groupSlug}/leaderboards`;
 }
 
-export function communityProfileHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityProfileHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   // Real staff-shell profile editor (2026-08-24 navigation cleanup pass) —
   // see /sa/[subAccountId]/community/[groupId]/profile/page.tsx.
   if (b.staffGroupId) return `${staffBase(b)}/profile`;
-  return b.pretty ? `/communities/${groupSlug}/profile` : `/c/${b.saId}/${groupSlug}/profile`;
+  return b.pretty
+    ? `/communities/${groupSlug}/profile`
+    : `/c/${b.saId}/${groupSlug}/profile`;
 }
 
 /** Moderator-only Community Settings workspace (General today; more sections later). */
-export function communitySettingsHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communitySettingsHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/settings`;
-  return b.pretty ? `/communities/${groupSlug}/settings` : `/c/${b.saId}/${groupSlug}/settings`;
+  return b.pretty
+    ? `/communities/${groupSlug}/settings`
+    : `/c/${b.saId}/${groupSlug}/settings`;
 }
 
 /** Community Settings → Branding — same shape as General with `/branding`
  *  appended for both route families (they diverge on the segment BEFORE
  *  `/settings`, not after it), so no separate pretty/opaque branch needed. */
-export function communitySettingsBrandingHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communitySettingsBrandingHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   return `${communitySettingsHref(b, groupSlug)}/branding`;
 }
 
 /** Community Settings → Navigation — same shape as Branding (diverges
  *  before `/settings`, not after it). */
-export function communitySettingsNavigationHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communitySettingsNavigationHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   return `${communitySettingsHref(b, groupSlug)}/navigation`;
 }
 
@@ -141,7 +183,7 @@ export function communitySettingsNavigationHref(b: CommunityLinkBase, groupSlug:
 export function communitySettingsPointsRewardsHref(
   b: CommunityLinkBase,
   groupSlug: string,
-  tab?: string,
+  tab?: string
 ): string {
   const base = `${communitySettingsHref(b, groupSlug)}/points-rewards`;
   return tab ? `${base}?tab=${tab}` : base;
@@ -150,7 +192,10 @@ export function communitySettingsPointsRewardsHref(
 /** Community Settings → Skool Import — a real Settings section (not a
  *  general "Integrations" marketplace entry), matching the approved
  *  Connect mockup's own top-level nav placement. */
-export function communitySettingsSkoolImportHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communitySettingsSkoolImportHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   return `${communitySettingsHref(b, groupSlug)}/skool-import`;
 }
 
@@ -161,7 +206,7 @@ export function communityRootHref(b: CommunityLinkBase): string {
 
 export function communityLoginHref(
   b: CommunityLinkBase,
-  opts?: { join?: string; next?: string; ref?: string },
+  opts?: { join?: string; next?: string; ref?: string }
 ): string {
   const base = b.pretty ? "/communities/login" : `/c/${b.saId}/login`;
   const qs = new URLSearchParams();
@@ -176,10 +221,25 @@ export function communityLoginHref(
   return q ? `${base}?${q}` : base;
 }
 
+export function communitySignupHref(
+  b: CommunityLinkBase,
+  opts?: { join?: string; ref?: string }
+): string {
+  const base = b.pretty ? "/communities/signup" : `/c/${b.saId}/signup`;
+  const qs = new URLSearchParams();
+  if (opts?.join) qs.set("join", opts.join);
+  if (opts?.ref) qs.set("ref", opts.ref);
+  const q = qs.toString();
+  return q ? `${base}?${q}` : base;
+}
+
 export function communityMessagesHref(b: CommunityLinkBase): string {
   return b.pretty ? "/communities/messages" : `/c/${b.saId}/messages`;
 }
 
-export function communityMessageThreadHref(b: CommunityLinkBase, threadId: string): string {
+export function communityMessageThreadHref(
+  b: CommunityLinkBase,
+  threadId: string
+): string {
   return `${communityMessagesHref(b)}/${threadId}`;
 }
