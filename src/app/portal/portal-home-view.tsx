@@ -568,13 +568,14 @@ export async function PortalHomeView({
  */
 function BackToMyMagnetixLink() {
   return (
-    <a
+    <Link
       href="/api/my/bridge-from-member"
+      prefetch={false}
       className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] transition-colors hover:text-[#111827]"
     >
       <ArrowLeft className="h-3.5 w-3.5" />
       Back to MyMagnetix
-    </a>
+    </Link>
   );
 }
 

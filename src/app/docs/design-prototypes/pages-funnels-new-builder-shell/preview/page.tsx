@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Render } from "@puckeditor/core";
 import type { Data } from "@puckeditor/core";
@@ -102,12 +103,12 @@ export default function NewBuilderShellPreviewQaPage() {
           Open Preview from the QA harness editor — this tab only shows whatever
           was on the canvas the moment you clicked it.
         </p>
-        <a
+        <Link
           href="/docs/design-prototypes/pages-funnels-new-builder-shell"
           className="text-primary text-sm font-medium underline"
         >
           Go to the QA harness editor
-        </a>
+        </Link>
       </div>
     );
   }
