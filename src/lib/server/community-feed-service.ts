@@ -3,10 +3,20 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { awardPoints, revokePoints } from "@/lib/server/community-points-service";
-import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
+import {
+  awardPoints,
+  revokePoints,
+} from "@/lib/server/community-points-service";
+import {
+  sanitizeCommunityPostHtml,
+  sanitizeCommunityCommentHtml,
+} from "@/lib/community/post-html";
 import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
-import { extractMentionedMemberIds, notifyCommunityMentions, notifyCommunityReply } from "@/lib/server/notification-producers";
+import {
+  extractMentionedMemberIds,
+  notifyCommunityMentions,
+  notifyCommunityReply,
+} from "@/lib/server/notification-producers";
 import type {
   AuthorView,
   CommunityComment,
@@ -29,14 +39,16 @@ import type { MediaAttachment } from "@/types/media-attachment";
 
 function postsCol(saId: string, groupId: string) {
   return getAdminDb().collection(
-    `subAccounts/${saId}/communityGroups/${groupId}/posts`,
+    `subAccounts/${saId}/communityGroups/${groupId}/posts`
   );
 }
 
 /** Exported for the poll-vote route, which needs to denormalize the
  *  voter's display name onto their vote doc — same fallback rule every
  *  other author-name display in this file already uses. */
-export function displayNameFor(member: Pick<Member, "displayName" | "email">): string {
+export function displayNameFor(
+  member: Pick<Member, "displayName" | "email">
+): string {
   if (member.displayName && member.displayName.trim()) {
     return member.displayName.trim();
   }
@@ -51,7 +63,7 @@ export function displayNameFor(member: Pick<Member, "displayName" | "email">): s
 async function hydrateAuthors(
   saId: string,
   groupId: string,
-  memberIds: string[],
+  memberIds: string[]
 ): Promise<Map<string, AuthorView>> {
   const db = getAdminDb();
   const unique = Array.from(new Set(memberIds));
@@ -59,10 +71,10 @@ async function hydrateAuthors(
   if (unique.length === 0) return result;
 
   const memberRefs = unique.map((id) =>
-    db.doc(`subAccounts/${saId}/members/${id}`),
+    db.doc(`subAccounts/${saId}/members/${id}`)
   );
   const membershipRefs = unique.map((id) =>
-    db.doc(`subAccounts/${saId}/communityGroups/${groupId}/memberships/${id}`),
+    db.doc(`subAccounts/${saId}/communityGroups/${groupId}/memberships/${id}`)
   );
   const [memberSnaps, membershipSnaps] = await Promise.all([
     db.getAll(...memberRefs),
@@ -71,12 +83,12 @@ async function hydrateAuthors(
 
   unique.forEach((id, i) => {
     const m = memberSnaps[i].data() as Member | undefined;
-    const membership = membershipSnaps[i].data() as { level?: number } | undefined;
+    const membership = membershipSnaps[i].data() as
+      | { level?: number }
+      | undefined;
     result.set(id, {
       memberId: id,
-      displayName: m
-        ? displayNameFor(m)
-        : "Former member",
+      displayName: m ? displayNameFor(m) : "Former member",
       avatarUrl: m?.avatarUrl ?? null,
       level: membership?.level ?? 1,
     });
@@ -91,18 +103,18 @@ async function viewerLikes(
   postIds: string[],
   viewerMemberId: string,
   sub: "posts" | "comments" = "posts",
-  parentPostId?: string,
+  parentPostId?: string
 ): Promise<Set<string>> {
   const db = getAdminDb();
   if (postIds.length === 0) return new Set();
   const refs = postIds.map((id) =>
     sub === "posts"
       ? db.doc(
-          `subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/likes/${viewerMemberId}`,
+          `subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/likes/${viewerMemberId}`
         )
       : db.doc(
-          `subAccounts/${saId}/communityGroups/${groupId}/posts/${parentPostId}/comments/${id}/likes/${viewerMemberId}`,
-        ),
+          `subAccounts/${saId}/communityGroups/${groupId}/posts/${parentPostId}/comments/${id}/likes/${viewerMemberId}`
+        )
   );
   const snaps = await db.getAll(...refs);
   const liked = new Set<string>();
@@ -115,7 +127,11 @@ async function viewerLikes(
 /** millis for a Firestore Timestamp/Date/FieldValue-shaped value, or null. */
 function toMillisOrNull(v: unknown): number | null {
   if (!v) return null;
-  const m = v as { toMillis?: () => number; toDate?: () => Date; seconds?: number };
+  const m = v as {
+    toMillis?: () => number;
+    toDate?: () => Date;
+    seconds?: number;
+  };
   if (typeof m.toMillis === "function") return m.toMillis();
   if (typeof m.toDate === "function") return m.toDate().getTime();
   if (typeof m.seconds === "number") return m.seconds * 1000;
@@ -143,7 +159,7 @@ function toMillisOrNull(v: unknown): number | null {
 export function buildFeedPoll(
   poll: CommunityPoll,
   viewerVote: string[] | null,
-  viewerIsModerator: boolean,
+  viewerIsModerator: boolean
 ): FeedPoll {
   const endsAtMs = toMillisOrNull(poll.endsAt);
   const closed = endsAtMs !== null && endsAtMs <= Date.now();
@@ -171,13 +187,15 @@ export async function viewerPollVotes(
   saId: string,
   groupId: string,
   postIdsWithPolls: string[],
-  viewerMemberId: string,
+  viewerMemberId: string
 ): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>();
   if (postIdsWithPolls.length === 0) return result;
   const db = getAdminDb();
   const refs = postIdsWithPolls.map((id) =>
-    db.doc(`subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/pollVotes/${viewerMemberId}`),
+    db.doc(
+      `subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/pollVotes/${viewerMemberId}`
+    )
   );
   const snaps = await db.getAll(...refs);
   snaps.forEach((s, i) => {
@@ -208,10 +226,15 @@ export interface CreatePostInput {
    *  (`normalizePollDraft`) by the API route — this layer just stores it,
    *  same convention as `attachments` above. */
   poll?: CommunityPoll | null;
+  postType?: "live";
+  liveSessionId?: string | null;
+  liveRoomId?: string | null;
+  liveMode?: "meeting" | "broadcast";
+  liveStatus?: "live" | "ended";
 }
 
 export async function createPostServerSide(
-  input: CreatePostInput,
+  input: CreatePostInput
 ): Promise<CommunityPost> {
   const doc = {
     subAccountId: input.subAccountId,
@@ -238,6 +261,11 @@ export async function createPostServerSide(
     commentsDisabled: input.commentsDisabled ? true : undefined,
     poll: input.poll ?? undefined,
     hasPoll: input.poll ? true : undefined,
+    postType: input.postType,
+    liveSessionId: input.liveSessionId,
+    liveRoomId: input.liveRoomId,
+    liveMode: input.liveMode,
+    liveStatus: input.liveStatus,
     pinned: false,
     pinnedToChannel: false,
     likeCount: 0,
@@ -253,7 +281,9 @@ export async function createPostServerSide(
   // attachment the product already understands) — never inferred from the
   // post's text. Best-effort/non-blocking: a rare award failure must never
   // fail the post itself (see `awardPoints`'s own doc comment).
-  const hasVideo = (input.attachments ?? []).some((a) => a.kind === "video-link");
+  const hasVideo = (input.attachments ?? []).some(
+    (a) => a.kind === "video-link"
+  );
   void awardPoints({
     subAccountId: input.subAccountId,
     groupId: input.groupId,
@@ -281,7 +311,9 @@ export async function createPostServerSide(
       contentObjectId: ref.id,
       authorMemberId: input.authorMemberId,
       mentionedMemberIds,
-    }).catch((err) => console.error("[createPostServerSide] mention notification failed", err));
+    }).catch((err) =>
+      console.error("[createPostServerSide] mention notification failed", err)
+    );
   }
 
   return { id: ref.id, ...doc } as CommunityPost;
@@ -304,7 +336,9 @@ export async function searchGroupMembersServerSide(opts: {
 }): Promise<{ id: string; label: string; avatarUrl: string | null }[]> {
   const db = getAdminDb();
   const membershipsSnap = await db
-    .collection(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`)
+    .collection(
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`
+    )
     .where("status", "==", "active")
     .limit(500)
     .get();
@@ -319,7 +353,11 @@ export async function searchGroupMembersServerSide(opts: {
     .filter((a) => !q || a.displayName.toLowerCase().includes(q))
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
     .slice(0, opts.limit ?? 8)
-    .map((a) => ({ id: a.memberId, label: a.displayName, avatarUrl: a.avatarUrl }));
+    .map((a) => ({
+      id: a.memberId,
+      label: a.displayName,
+      avatarUrl: a.avatarUrl,
+    }));
 }
 
 /** List the feed: pinned first, then newest. Optional category filter. */
@@ -340,9 +378,10 @@ export async function listFeed(opts: {
     .limit(opts.limit ?? 100)
     .get();
 
-  let posts = snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CommunityPost, "id">) }),
-  );
+  let posts = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<CommunityPost, "id">),
+  }));
 
   // A pinned post (either target) older than the `limit` newest posts
   // would otherwise silently fall outside the window above and vanish
@@ -355,7 +394,9 @@ export async function listFeed(opts: {
   const alreadyIncluded = new Set(posts.map((p) => p.id));
   const [pinnedSnap, channelPinnedSnap] = await Promise.all([
     postsCol(opts.subAccountId, opts.groupId).where("pinned", "==", true).get(),
-    postsCol(opts.subAccountId, opts.groupId).where("pinnedToChannel", "==", true).get(),
+    postsCol(opts.subAccountId, opts.groupId)
+      .where("pinnedToChannel", "==", true)
+      .get(),
   ]);
   for (const d of [...pinnedSnap.docs, ...channelPinnedSnap.docs]) {
     if (!alreadyIncluded.has(d.id)) {
@@ -387,16 +428,21 @@ export async function listFeed(opts: {
   const authors = await hydrateAuthors(
     opts.subAccountId,
     opts.groupId,
-    posts.map((p) => p.authorMemberId),
+    posts.map((p) => p.authorMemberId)
   );
   const liked = await viewerLikes(
     opts.subAccountId,
     opts.groupId,
     posts.map((p) => p.id),
-    opts.viewerMemberId,
+    opts.viewerMemberId
   );
   const pollPostIds = posts.filter((p) => p.poll).map((p) => p.id);
-  const votes = await viewerPollVotes(opts.subAccountId, opts.groupId, pollPostIds, opts.viewerMemberId);
+  const votes = await viewerPollVotes(
+    opts.subAccountId,
+    opts.groupId,
+    pollPostIds,
+    opts.viewerMemberId
+  );
 
   return posts.map((p) => ({
     ...p,
@@ -407,7 +453,13 @@ export async function listFeed(opts: {
       level: 1,
     },
     likedByViewer: liked.has(p.id),
-    poll: p.poll ? buildFeedPoll(p.poll, votes.get(p.id) ?? null, opts.viewerIsModerator === true) : undefined,
+    poll: p.poll
+      ? buildFeedPoll(
+          p.poll,
+          votes.get(p.id) ?? null,
+          opts.viewerIsModerator === true
+        )
+      : undefined,
   }));
 }
 
@@ -443,10 +495,15 @@ export async function getFeedPost(opts: {
     opts.subAccountId,
     opts.groupId,
     [post.id],
-    opts.viewerMemberId,
+    opts.viewerMemberId
   );
   const votes = post.poll
-    ? await viewerPollVotes(opts.subAccountId, opts.groupId, [post.id], opts.viewerMemberId)
+    ? await viewerPollVotes(
+        opts.subAccountId,
+        opts.groupId,
+        [post.id],
+        opts.viewerMemberId
+      )
     : null;
   return {
     ...post,
@@ -457,7 +514,13 @@ export async function getFeedPost(opts: {
       level: 1,
     },
     likedByViewer: liked.has(post.id),
-    poll: post.poll ? buildFeedPoll(post.poll, votes?.get(post.id) ?? null, opts.viewerIsModerator === true) : undefined,
+    poll: post.poll
+      ? buildFeedPoll(
+          post.poll,
+          votes?.get(post.id) ?? null,
+          opts.viewerIsModerator === true
+        )
+      : undefined,
   };
 }
 
@@ -473,13 +536,14 @@ export async function listComments(opts: {
     .orderBy("createdAt", "asc")
     .limit(200)
     .get();
-  const comments = snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CommunityComment, "id">) }),
-  );
+  const comments = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<CommunityComment, "id">),
+  }));
   const authors = await hydrateAuthors(
     opts.subAccountId,
     opts.groupId,
-    comments.map((c) => c.authorMemberId),
+    comments.map((c) => c.authorMemberId)
   );
   const liked = await viewerLikes(
     opts.subAccountId,
@@ -487,7 +551,7 @@ export async function listComments(opts: {
     comments.map((c) => c.id),
     opts.viewerMemberId,
     "comments",
-    opts.postId,
+    opts.postId
   );
   return comments.map((c) => ({
     ...c,
@@ -514,14 +578,18 @@ export async function listComments(opts: {
  */
 async function resolveCommentParentId(
   postRef: FirebaseFirestore.DocumentReference,
-  requestedParentId: string | null | undefined,
+  requestedParentId: string | null | undefined
 ): Promise<string | null> {
   if (!requestedParentId) return null;
-  const targetSnap = await postRef.collection("comments").doc(requestedParentId).get();
+  const targetSnap = await postRef
+    .collection("comments")
+    .doc(requestedParentId)
+    .get();
   if (!targetSnap.exists) {
     throw new Error("Comment not found");
   }
-  const targetParentId = (targetSnap.data() as Omit<CommunityComment, "id">).parentId;
+  const targetParentId = (targetSnap.data() as Omit<CommunityComment, "id">)
+    .parentId;
   return targetParentId ?? requestedParentId;
 }
 
@@ -538,7 +606,10 @@ export async function createCommentServerSide(opts: {
 }): Promise<CommunityComment> {
   const db = getAdminDb();
   const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
-  const effectiveParentId = await resolveCommentParentId(postRef, opts.parentId);
+  const effectiveParentId = await resolveCommentParentId(
+    postRef,
+    opts.parentId
+  );
   const commentRef = postRef.collection("comments").doc();
   const doc = {
     groupId: opts.groupId,
@@ -575,7 +646,9 @@ export async function createCommentServerSide(opts: {
   // author — see notifyCommunityReply's doc comment for the copy split.
   const [postSnapForNotify, parentCommentSnapForNotify] = await Promise.all([
     effectiveParentId ? null : postRef.get(),
-    effectiveParentId ? postRef.collection("comments").doc(effectiveParentId).get() : null,
+    effectiveParentId
+      ? postRef.collection("comments").doc(effectiveParentId).get()
+      : null,
   ]);
   const recipientMemberId = effectiveParentId
     ? (parentCommentSnapForNotify?.data()?.authorMemberId as string | undefined)
@@ -593,7 +666,9 @@ export async function createCommentServerSide(opts: {
       commenterMemberId: opts.authorMemberId,
       recipientMemberId,
       isReplyToComment: !!effectiveParentId,
-    }).catch((err) => console.error("[createCommentServerSide] reply notification failed", err));
+    }).catch((err) =>
+      console.error("[createCommentServerSide] reply notification failed", err)
+    );
   }
 
   const mentionedMemberIds = extractMentionedMemberIds(doc.body);
@@ -605,7 +680,12 @@ export async function createCommentServerSide(opts: {
       contentObjectId: commentRef.id,
       authorMemberId: opts.authorMemberId,
       mentionedMemberIds,
-    }).catch((err) => console.error("[createCommentServerSide] mention notification failed", err));
+    }).catch((err) =>
+      console.error(
+        "[createCommentServerSide] mention notification failed",
+        err
+      )
+    );
   }
 
   return { id: commentRef.id, ...doc } as CommunityComment;
@@ -704,7 +784,9 @@ export const MAX_FEATURED_POSTS = 3;
  *  actionable validation error, never a generic 500. */
 export class MaxFeaturedPostsError extends Error {
   constructor() {
-    super(`Only ${MAX_FEATURED_POSTS} posts can be featured (pinned to All Posts) at once. Unpin one first.`);
+    super(
+      `Only ${MAX_FEATURED_POSTS} posts can be featured (pinned to All Posts) at once. Unpin one first.`
+    );
     this.name = "MaxFeaturedPostsError";
   }
 }
@@ -746,7 +828,9 @@ export async function setPostPinServerSide(opts: {
       // Cheap regardless of scale (never more than MAX_FEATURED_POSTS
       // docs) — .select() with no fields keeps the read minimal.
       const pinnedSnap = await tx.get(
-        postsCol(opts.subAccountId, opts.groupId).where("pinned", "==", true).select(),
+        postsCol(opts.subAccountId, opts.groupId)
+          .where("pinned", "==", true)
+          .select()
       );
       if (pinnedSnap.size >= MAX_FEATURED_POSTS) {
         throw new MaxFeaturedPostsError();
@@ -795,7 +879,9 @@ function attachmentStoragePath(a: MediaAttachment): string | null {
   }
 }
 
-async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefined) {
+async function deleteAttachmentStorage(
+  attachments: MediaAttachment[] | undefined
+) {
   if (!attachments?.length) return;
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) return;
@@ -807,9 +893,12 @@ async function deleteAttachmentStorage(attachments: MediaAttachment[] | undefine
       try {
         await bucket.file(storagePath).delete();
       } catch (err) {
-        console.warn("[community-feed] attachment cleanup: object missing or already removed", err);
+        console.warn(
+          "[community-feed] attachment cleanup: object missing or already removed",
+          err
+        );
       }
-    }),
+    })
   );
 }
 
@@ -843,14 +932,18 @@ export interface UpdatePostInput {
   poll?: CommunityPoll | null;
 }
 
-export async function updatePostServerSide(input: UpdatePostInput): Promise<CommunityPost | null> {
+export async function updatePostServerSide(
+  input: UpdatePostInput
+): Promise<CommunityPost | null> {
   const ref = postsCol(input.subAccountId, input.groupId).doc(input.postId);
   const snap = await ref.get();
   if (!snap.exists) return null;
   const existing = snap.data() as Omit<CommunityPost, "id">;
 
   const newPaths = new Set(
-    (input.attachments ?? []).map(attachmentStoragePath).filter((p): p is string => !!p),
+    (input.attachments ?? [])
+      .map(attachmentStoragePath)
+      .filter((p): p is string => !!p)
   );
   const removed = (existing.attachments ?? []).filter((a) => {
     const p = attachmentStoragePath(a);
@@ -866,7 +959,9 @@ export async function updatePostServerSide(input: UpdatePostInput): Promise<Comm
     // here it would silently leave a stale `attachments` array in place
     // when a member removes every attachment during an edit. FieldValue
     // .delete() is the explicit "actually clear this field" instruction.
-    attachments: input.attachments?.length ? input.attachments : FieldValue.delete(),
+    attachments: input.attachments?.length
+      ? input.attachments
+      : FieldValue.delete(),
     category: input.category,
     // Same "only stored when true" convention as createPostServerSide —
     // re-enabling comments during an edit clears the field entirely
@@ -942,7 +1037,10 @@ export async function votePollServerSide(opts: {
   const voteRef = postRef.collection("pollVotes").doc(opts.memberId);
 
   return db.runTransaction(async (tx) => {
-    const [postSnap, voteSnap] = await Promise.all([tx.get(postRef), tx.get(voteRef)]);
+    const [postSnap, voteSnap] = await Promise.all([
+      tx.get(postRef),
+      tx.get(voteRef),
+    ]);
     if (!postSnap.exists) return { ok: false, error: "Post not found" };
     const poll = (postSnap.data() as CommunityPost).poll;
     if (!poll) return { ok: false, error: "This post has no poll" };
@@ -953,7 +1051,9 @@ export async function votePollServerSide(opts: {
     }
 
     const validIds = new Set(poll.options.map((o) => o.id));
-    const requested = Array.from(new Set(opts.optionIds)).filter((id) => validIds.has(id));
+    const requested = Array.from(new Set(opts.optionIds)).filter((id) =>
+      validIds.has(id)
+    );
     if (requested.length === 0) {
       return { ok: false, error: "Choose at least one option" };
     }
@@ -995,7 +1095,11 @@ export async function votePollServerSide(opts: {
 
     return {
       ok: true,
-      poll: buildFeedPoll({ ...poll, optionCounts, voterCount }, requested, opts.viewerIsModerator),
+      poll: buildFeedPoll(
+        { ...poll, optionCounts, voterCount },
+        requested,
+        opts.viewerIsModerator
+      ),
     };
   });
 }
@@ -1021,7 +1125,7 @@ export async function deletePostServerSide(opts: {
   // deleting the post itself.
   const commentsSnap = await ref.collection("comments").get();
   const commentAttachments = commentsSnap.docs.flatMap(
-    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? [],
+    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? []
   );
   await deleteAttachmentStorage(commentAttachments);
 
@@ -1085,12 +1189,14 @@ export async function deleteCommentServerSide(opts: {
   const allSnaps = [commentSnap, ...repliesSnap.docs];
 
   const allAttachments = allSnaps.flatMap(
-    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? [],
+    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? []
   );
   await deleteAttachmentStorage(allAttachments);
 
   await Promise.all(allSnaps.map((d) => db.recursiveDelete(d.ref)));
-  await postRef.update({ commentCount: FieldValue.increment(-allSnaps.length) });
+  await postRef.update({
+    commentCount: FieldValue.increment(-allSnaps.length),
+  });
 }
 
 /**
@@ -1120,7 +1226,9 @@ export async function updateCommentServerSide(opts: {
   const existing = snap.data() as Omit<CommunityComment, "id">;
 
   const newPaths = new Set(
-    (opts.attachments ?? []).map(attachmentStoragePath).filter((p): p is string => !!p),
+    (opts.attachments ?? [])
+      .map(attachmentStoragePath)
+      .filter((p): p is string => !!p)
   );
   const removed = (existing.attachments ?? []).filter((a) => {
     const p = attachmentStoragePath(a);
@@ -1140,7 +1248,9 @@ export async function updateCommentServerSide(opts: {
     // `undefined` value on `.update()` is SKIPPED (ignoreUndefinedProperties),
     // which would silently leave a stale attachments array in place if a
     // member removes every attachment during an edit.
-    attachments: opts.attachments?.length ? opts.attachments : FieldValue.delete(),
+    attachments: opts.attachments?.length
+      ? opts.attachments
+      : FieldValue.delete(),
     editedAt: FieldValue.serverTimestamp(),
   });
   await deleteAttachmentStorage(removed);

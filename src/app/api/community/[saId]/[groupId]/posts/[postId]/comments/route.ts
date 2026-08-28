@@ -1,23 +1,62 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
-import { createCommentServerSide } from "@/lib/server/community-feed-service";
+import {
+  createCommentServerSide,
+  listComments,
+} from "@/lib/server/community-feed-service";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizeCommentAttachments } from "@/lib/community/normalize-post-attachments";
+import { renderCommunityCommentHtml } from "@/lib/community/post-html";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(
+  _: Request,
+  {
+    params,
+  }: { params: Promise<{ saId: string; groupId: string; postId: string }> }
+) {
+  const { saId, groupId, postId } = await params;
+  const access = await requireGroupApiAccess(saId, groupId);
+  if (access.kind === "error") {
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
+  }
+  const comments = await listComments({
+    subAccountId: saId,
+    groupId,
+    postId,
+    viewerMemberId: access.member.id,
+  });
+  return NextResponse.json({
+    comments: comments.map((comment) => ({
+      id: comment.id,
+      body: renderCommunityCommentHtml(comment.body),
+      parentId: comment.parentId,
+      author: comment.author,
+    })),
+  });
+}
 
 /** Member: comment on a post (or reply to a comment/reply — see
  *  createCommentServerSide's resolveCommentParentId for how a reply-to-a-
  *  reply is flattened server-side to the same top-level thread). */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string; groupId: string; postId: string }> },
+  {
+    params,
+  }: { params: Promise<{ saId: string; groupId: string; postId: string }> }
 ) {
   const { saId, groupId, postId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
   // Phase D — the author's "allow comments/replies" toggle is enforced
@@ -34,7 +73,7 @@ export async function POST(
   if (postSnap.data()!.commentsDisabled === true) {
     return NextResponse.json(
       { error: "Comments are turned off for this post" },
-      { status: 403 },
+      { status: 403 }
     );
   }
 
@@ -53,12 +92,15 @@ export async function POST(
   // attachment-only post.
   const html = body.body?.trim() ?? "";
   const visibleLength = aboutPlainTextLength(html);
-  const attachments = normalizeCommentAttachments(body.attachments, access.member.id);
+  const attachments = normalizeCommentAttachments(
+    body.attachments,
+    access.member.id
+  );
 
   if (visibleLength === 0 && attachments.length === 0) {
     return NextResponse.json(
       { error: "Write something, or attach a photo, voice note, or file" },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (visibleLength > 5000) {

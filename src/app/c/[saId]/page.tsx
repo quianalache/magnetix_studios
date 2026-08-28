@@ -19,8 +19,8 @@ interface PageProps {
 }
 
 /**
- * Community root for a signed-in member. Sends them into the first published
- * group; falls back to a "nothing here yet" card when none are live.
+ * Community root. Guests are sent to the first published group's public About
+ * page; only member content requires the signed member session.
  */
 export default async function CommunityHomePage({ params }: PageProps) {
   const { saId } = await params;
@@ -31,16 +31,21 @@ export default async function CommunityHomePage({ params }: PageProps) {
   const pretty = await isCommunityPrettyRequest(saId);
   const linkBase = { saId, pretty };
 
-  const member = await getCurrentMember(saId);
-  if (!member) redirect(communityLoginHref(linkBase));
-
   const snap = await getAdminDb()
     .collection(`subAccounts/${saId}/communityGroups`)
     .where("status", "==", "published")
     .get();
-  const groups = snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CommunityGroup, "id">) }),
-  );
+  const groups = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<CommunityGroup, "id">),
+  }));
+
+  const member = await getCurrentMember(saId);
+  if (!member) {
+    if (groups.length > 0)
+      redirect(communityAboutHref(linkBase, groups[0].slug));
+    redirect(communityLoginHref(linkBase));
+  }
 
   if (groups.length > 0) {
     // Prefer a group the member already belongs to — drop them in its feed.
