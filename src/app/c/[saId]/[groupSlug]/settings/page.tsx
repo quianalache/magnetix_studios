@@ -94,7 +94,7 @@ export default async function CommunitySettingsPage({
         onlineCount={onlineCount}
         adminCount={adminCount}
         domainPrefix={domainPrefix}
-        canonicalUrl={`${origin}${pretty ? `/communities/${group.slug}/about` : `/c/${saId}/${group.slug}`}`}
+        canonicalUrl={`${origin}${pretty ? `/communities/${group.slug}/about` : `/${group.slug}`}`}
       />
     </CommunityShell>
   );

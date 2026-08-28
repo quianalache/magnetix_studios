@@ -92,7 +92,7 @@ export default async function StaffCommunitySettingsPage({
         onlineCount={onlineCount}
         adminCount={adminCount}
         domainPrefix={domainPrefix}
-        canonicalUrl={`${origin}/c/${saId}/${group.slug}`}
+        canonicalUrl={`${origin}/${group.slug}`}
       />
     </CommunityShell>
   );
