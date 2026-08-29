@@ -15,6 +15,7 @@ import {
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { LeaderboardView, type ViewerLevelInfo } from "@/components/community/leaderboard/leaderboard-view";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,10 @@ export default async function StaffLeaderboardPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { group, member, membership } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
+  // Home; see that page's identical comment for the full rationale.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = {
     memberId: member.id,
     displayName:
@@ -78,6 +82,7 @@ export default async function StaffLeaderboardPage({
     <CommunityShell saId={saId} group={group} active="leaderboards" viewer={viewer} viewerIsModerator={membership.role === "moderator"} staffGroupId={groupId}>
       <LeaderboardView
         brand={brand}
+        accent={resolvedTheme.accent}
         viewer={viewerInfo}
         rowsByWindow={{ "7d": rows7d, "30d": rows30d, all: rowsAll }}
         activeRewards={serializeForClient(activeRewards)}

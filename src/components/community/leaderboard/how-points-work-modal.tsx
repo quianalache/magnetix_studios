@@ -52,12 +52,18 @@ export function HowPointsWorkModal({
   rules,
   levels,
   brand,
+  accent,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rules: PointRuleMap;
   levels: CommunityLevel[];
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the "how you earn points" action
+   *  icons are a badge/icon-accent role; the Level circles below stay on
+   *  `brand` (identity marker, same as the Leaderboard's own Level badge).
+   *  Optional, falls back to `brand`. */
+  accent?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -78,9 +84,9 @@ export function HowPointsWorkModal({
                   <div key={action} className="flex items-center gap-3">
                     <div
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                      style={{ backgroundColor: `${brand}1a` }}
+                      style={{ backgroundColor: `${accent || brand}1a` }}
                     >
-                      <Icon className="h-4 w-4" style={{ color: brand }} />
+                      <Icon className="h-4 w-4" style={{ color: accent || brand }} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-[#202124]">{rule.label}</p>

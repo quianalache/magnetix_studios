@@ -26,12 +26,16 @@ export function AuthorLink({
   viewerMemberId,
   author,
   brand,
+  primaryAction,
   className,
 }: {
   saId: string;
   viewerMemberId: string;
   author: AuthorView;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the "Message" button is a genuine
+   *  CTA. Optional, falls back to `brand`. */
+  primaryAction?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -95,7 +99,7 @@ export function AuthorLink({
                   setDmOpen(true);
                 }}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white"
-                style={{ backgroundColor: brand }}
+                style={{ backgroundColor: primaryAction || brand }}
               >
                 <MessageSquare className="h-4 w-4" /> Message
               </button>

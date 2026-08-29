@@ -18,6 +18,7 @@ export function DmThread({
   viewerId,
   other,
   brand,
+  primaryAction,
   initialMessages,
   blockedByMe: initialBlocked,
 }: {
@@ -28,6 +29,9 @@ export function DmThread({
   viewerId: string;
   other: DmMemberView;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the Send button is a genuine
+   *  CTA. Optional, falls back to `brand`. */
+  primaryAction?: string;
   initialMessages: DmMessageView[];
   blockedByMe: boolean;
 }) {
@@ -185,7 +189,7 @@ export function DmThread({
                 onClick={send}
                 disabled={sending}
                 className="rounded-md px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
-                style={{ backgroundColor: brand }}
+                style={{ backgroundColor: primaryAction || brand }}
               >
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
               </button>

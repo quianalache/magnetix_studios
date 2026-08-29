@@ -12,11 +12,17 @@ export function CommunityReviewForm({
   saId,
   groupId,
   brand,
+  accent,
   currentReview,
 }: {
   saId: string;
   groupId: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — star rating matches the read-only
+   *  `RatingStars`/`.community-about-stars` treatment elsewhere on this same
+   *  page, both now the theme's accent role. Optional, falls back to
+   *  `brand` for any caller not yet updated. */
+  accent?: string;
   currentReview: CommunityReviewView | null;
 }) {
   const [rating, setRating] = useState(currentReview?.rating ?? 5);
@@ -82,7 +88,7 @@ export function CommunityReviewForm({
             >
               <Star
                 className={cn("h-5 w-5", n <= rating ? "fill-current" : "")}
-                style={{ color: n <= rating ? brand : "#c7c7c7" }}
+                style={{ color: n <= rating ? accent || brand : "#c7c7c7" }}
               />
             </button>
           ))}

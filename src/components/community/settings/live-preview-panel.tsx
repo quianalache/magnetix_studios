@@ -1,5 +1,6 @@
 import { CommunityBanner } from "@/components/community/community-banner";
 import { AboutCommunityCard } from "@/components/community/about-community-card";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { CommunityGroup } from "@/types/community";
 
 /**
@@ -47,6 +48,11 @@ export function LivePreviewPanel({
     logoUrl,
     showBanner,
   };
+  // Theme parity (2026-08-29 closeout) — this General-tab preview doesn't
+  // edit colors itself (that's Branding's own separate preview), so it
+  // reads whatever theme is already saved on the group, same source real
+  // Community Home reads from.
+  const accent = resolveCommunityTheme(group).accent;
 
   return (
     <div className="space-y-4">
@@ -71,6 +77,7 @@ export function LivePreviewPanel({
         <AboutCommunityCard
           group={previewGroup}
           brand={brand}
+          accent={accent}
           memberCount={memberCount}
           onlineCount={onlineCount}
           adminCount={adminCount}

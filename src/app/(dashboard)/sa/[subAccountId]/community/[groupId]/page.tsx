@@ -173,6 +173,7 @@ export default async function StaffCommunityFeedPage({
           <AboutCommunityCard
             group={group}
             brand={brand}
+            accent={resolvedTheme.accent}
             memberCount={memberCount}
             onlineCount={onlineCount}
             adminCount={adminCount}

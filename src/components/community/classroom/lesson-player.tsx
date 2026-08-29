@@ -25,6 +25,8 @@ export function LessonPlayer({
   completeEndpoint,
   lessonHrefBase,
   brand,
+  primaryAction,
+  accent,
   sections,
   lessons,
   currentLessonId,
@@ -40,6 +42,12 @@ export function LessonPlayer({
    */
   lessonHrefBase: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — "Mark complete" is a genuine CTA.
+   *  Optional, falls back to `brand`. */
+  primaryAction?: string;
+  /** Completed-checkmark badge + lesson-body/resource links. Optional,
+   *  falls back to `brand`. */
+  accent?: string;
   sections: PlayerSection[];
   lessons: PlayerLesson[];
   currentLessonId: string;
@@ -105,7 +113,7 @@ export function LessonPlayer({
         )}
       >
         {completed.has(l.id) ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: brand }} />
+          <CheckCircle2 className="h-4 w-4 shrink-0" style={{ color: accent || brand }} />
         ) : (
           <Circle className="h-4 w-4 shrink-0 text-[#c4c4c4]" />
         )}
@@ -160,7 +168,7 @@ export function LessonPlayer({
         {current.body && (
           <div
             className="prose prose-sm max-w-none leading-relaxed prose-headings:text-[#202124] prose-p:text-[#3a3a44] prose-li:text-[#3a3a44] prose-strong:text-[#202124] prose-a:text-[color:var(--brand)]"
-            style={{ ["--brand" as string]: brand }}
+            style={{ ["--brand" as string]: accent || brand }}
             dangerouslySetInnerHTML={{ __html: current.body }}
           />
         )}
@@ -178,7 +186,7 @@ export function LessonPlayer({
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1 text-sm hover:underline"
-                    style={{ color: brand }}
+                    style={{ color: accent || brand }}
                   >
                     {r.label} <ExternalLink className="h-3 w-3" />
                   </a>
@@ -192,7 +200,7 @@ export function LessonPlayer({
           onClick={completeAndContinue}
           disabled={saving}
           className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-          style={{ backgroundColor: brand }}
+          style={{ backgroundColor: primaryAction || brand }}
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" />}
           {completed.has(current.id)

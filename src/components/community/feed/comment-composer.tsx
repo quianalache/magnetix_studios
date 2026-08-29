@@ -93,6 +93,8 @@ export function CommentComposer({
   groupId,
   postId,
   brand,
+  primaryAction,
+  accent,
   viewer,
   mode,
   placeholder = "Write a comment…",
@@ -108,6 +110,12 @@ export function CommentComposer({
   groupId: string;
   postId: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the submit ("Comment"/"Reply"/
+   *  "Save") button is a genuine CTA. Optional, falls back to `brand`. */
+  primaryAction?: string;
+  /** Link color inside the composer's rich text. Optional, falls back to
+   *  `brand`. */
+  accent?: string;
   viewer: Viewer;
   mode: "create" | "edit";
   placeholder?: string;
@@ -460,7 +468,7 @@ export function CommentComposer({
     <div
       ref={rootRef}
       className="space-y-1.5"
-      style={{ ["--comment-link-color" as string]: brand } as React.CSSProperties}
+      style={{ ["--comment-link-color" as string]: accent || brand } as React.CSSProperties}
     >
       {mode === "create" && replyTarget && (
         <div className="flex items-center gap-1.5 rounded-md bg-[#F5F4F2] px-2.5 py-1 text-xs text-[#606060]">
@@ -725,7 +733,7 @@ export function CommentComposer({
                 onClick={submit}
                 disabled={saving}
                 className="flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                style={{ backgroundColor: brand }}
+                style={{ backgroundColor: primaryAction || brand }}
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {mode === "edit" ? "Save" : replyTarget ? "Reply" : "Comment"}

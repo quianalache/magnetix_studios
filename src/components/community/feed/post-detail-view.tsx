@@ -60,6 +60,8 @@ export function PostDetailView({
   groupId,
   groupSlug,
   brand,
+  primaryAction,
+  accent,
   communityName,
   categories,
   post,
@@ -74,6 +76,12 @@ export function PostDetailView({
   groupId: string;
   groupSlug: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — Vote/Post/Comment submit buttons.
+   *  Optional, falls back to `brand`. */
+  primaryAction?: string;
+  /** Liked-icon, post/comment links, channel-pin label. Optional, falls
+   *  back to `brand`. */
+  accent?: string;
   /** Part 3's "for [Community Name]" composer header line. */
   communityName: string;
   categories: string[];
@@ -300,6 +308,7 @@ export function PostDetailView({
                 viewerMemberId={viewer.memberId}
                 author={currentPost.author}
                 brand={brand}
+                primaryAction={primaryAction}
               />
               <span className="text-xs text-[#909090]">
                 {timeAgo(currentPost.createdAtMs)}
@@ -315,7 +324,7 @@ export function PostDetailView({
             )}
             <CommunityPostBody
               html={currentPost.body}
-              brand={brand}
+              brand={accent || brand}
               className="mt-1"
               saId={saId}
               pretty={pretty}
@@ -324,7 +333,7 @@ export function PostDetailView({
             />
             <CommunityPostAttachments attachments={currentPost.attachments} brand={brand} className="mt-2" />
             {currentPost.poll && (
-              <CommunityPollCard poll={currentPost.poll} brand={brand} onVote={submitVote} />
+              <CommunityPollCard poll={currentPost.poll} brand={brand} primaryAction={primaryAction} onVote={submitVote} />
             )}
             <div className="mt-3 flex items-center gap-2 border-t border-[#f0f0f0] pt-3 text-sm">
               <button
@@ -336,7 +345,7 @@ export function PostDetailView({
               >
                 <ThumbsUp
                   className={cn("h-4 w-4", liked && "fill-current")}
-                  style={liked ? { color: brand } : undefined}
+                  style={liked ? { color: accent || brand } : undefined}
                 />
                 {liked ? "Liked" : "Like"}
                 {likeCount > 0 && (
@@ -366,6 +375,8 @@ export function PostDetailView({
                 groupId={groupId}
                 postId={post.id}
                 brand={brand}
+                primaryAction={primaryAction}
+                accent={accent}
                 viewer={viewer}
                 mode="edit"
                 editingComment={c}
@@ -384,6 +395,8 @@ export function PostDetailView({
                 comment={c}
                 viewer={viewer}
                 brand={brand}
+                primaryAction={primaryAction}
+                accent={accent}
                 canReply={!currentPost.commentsDisabled}
                 onLike={toggleCommentLike}
                 onReply={() => startReply(c)}
@@ -399,6 +412,8 @@ export function PostDetailView({
                   groupId={groupId}
                   postId={post.id}
                   brand={brand}
+                  primaryAction={primaryAction}
+                  accent={accent}
                   viewer={viewer}
                   mode="edit"
                   editingComment={r}
@@ -418,6 +433,8 @@ export function PostDetailView({
                   comment={r}
                   viewer={viewer}
                   brand={brand}
+                  primaryAction={primaryAction}
+                  accent={accent}
                   indented
                   canReply={!currentPost.commentsDisabled}
                   onLike={toggleCommentLike}
@@ -454,6 +471,8 @@ export function PostDetailView({
           groupId={groupId}
           postId={post.id}
           brand={brand}
+          primaryAction={primaryAction}
+          accent={accent}
           viewer={viewer}
           mode="create"
           collapsedByDefault
@@ -474,6 +493,8 @@ function CommentBubble({
   comment,
   viewer,
   brand,
+  primaryAction,
+  accent,
   indented,
   canReply = true,
   onLike,
@@ -490,6 +511,11 @@ function CommentBubble({
   comment: ClientComment;
   viewer: Viewer;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — passed through to AuthorLink's
+   *  Message button. Optional, falls back to `brand`. */
+  primaryAction?: string;
+  /** Liked-icon + comment-body links. Optional, falls back to `brand`. */
+  accent?: string;
   indented?: boolean;
   /** Phase D — false when the post's author turned comments/replies off.
    *  Existing comments (this bubble) stay fully visible either way; this
@@ -531,6 +557,7 @@ function CommentBubble({
             viewerMemberId={viewer.memberId}
             author={comment.author}
             brand={brand}
+            primaryAction={primaryAction}
           />
           <span className="text-xs text-[#909090]">
             {timeAgo(comment.createdAtMs)}
@@ -544,7 +571,7 @@ function CommentBubble({
         </div>
         <CommunityPostBody
           html={comment.body}
-          brand={brand}
+          brand={accent || brand}
           className="mt-0.5"
           saId={saId}
           pretty={pretty}
@@ -561,7 +588,7 @@ function CommentBubble({
           >
             <ThumbsUp
               className={cn("h-3.5 w-3.5", comment.likedByViewer && "fill-current")}
-              style={comment.likedByViewer ? { color: brand } : undefined}
+              style={comment.likedByViewer ? { color: accent || brand } : undefined}
             />
             {comment.likeCount}
           </button>

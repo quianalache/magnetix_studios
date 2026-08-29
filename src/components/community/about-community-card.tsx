@@ -13,12 +13,18 @@ import type { CommunityGroup, ResourceLink } from "@/types/community";
 export function AboutCommunityCard({
   group,
   brand,
+  accent,
   memberCount,
   onlineCount,
   adminCount,
 }: {
   group: CommunityGroup;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the resource links below are
+   *  genuine links, matching the theme's "accent" role wherever the
+   *  Branding preview colors a link/highlight. Optional, falls back to
+   *  `brand` for any caller not yet updated. */
+  accent?: string;
   memberCount: number;
   onlineCount: number;
   adminCount: number;
@@ -49,7 +55,7 @@ export function AboutCommunityCard({
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 text-sm hover:underline"
-              style={{ color: brand }}
+              style={{ color: accent || brand }}
             >
               <Link2 className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{l.label}</span>

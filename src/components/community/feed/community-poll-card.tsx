@@ -17,11 +17,17 @@ import { cn } from "@/lib/utils";
 export function CommunityPollCard({
   poll,
   brand,
+  primaryAction,
   onVote,
   className,
 }: {
   poll: FeedPoll;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the Vote/Update vote button is a
+   *  genuine CTA; the selected-option highlight stays on `brand` (matches
+   *  every other "selected state" in Community). Optional, falls back to
+   *  `brand` — `feed-view.tsx`'s own feed-card usage doesn't pass this yet. */
+  primaryAction?: string;
   /** Resolves/rejects based on the actual server response — the parent
    *  owns the optimistic-update + revert-on-failure state (same convention
    *  `toggleLike` already uses in feed-view.tsx), this component just
@@ -142,7 +148,7 @@ export function CommunityPollCard({
             onClick={submit}
             disabled={pending}
             className="rounded-md px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: brand }}
+            style={{ backgroundColor: primaryAction || brand }}
           >
             {pending ? "Saving…" : hasVoted ? "Update vote" : "Vote"}
           </button>

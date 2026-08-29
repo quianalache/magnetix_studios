@@ -20,6 +20,7 @@ import {
   type PlayerLesson,
   type PlayerSection,
 } from "@/components/community/classroom/lesson-player";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,10 @@ export default async function LessonPlayerPage({
 
   const enrollment = await getEnrollment(saId, group.id, courseId, member.id);
 
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
+  // Home; see that page's identical comment for the full rationale.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = {
     memberId: member.id,
     displayName:
@@ -103,6 +107,8 @@ export default async function LessonPlayerPage({
         completeEndpoint={`/api/community/${saId}/${group.id}/courses/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={communityLearningCourseHref(linkBase, groupSlug, courseId)}
         brand={brand}
+        primaryAction={resolvedTheme.primaryAction}
+        accent={resolvedTheme.accent}
         sections={sections}
         lessons={lessons}
         currentLessonId={lessonId}

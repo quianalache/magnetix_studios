@@ -17,6 +17,7 @@ export function ProfileEditor({
   groupSlug,
   initial,
   brand,
+  primaryAction,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
@@ -32,6 +33,9 @@ export function ProfileEditor({
     hasPassword: boolean;
   };
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the "Save profile" button is a
+   *  genuine CTA. Optional, falls back to `brand`. */
+  primaryAction?: string;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -189,7 +193,7 @@ export function ProfileEditor({
             onClick={save}
             disabled={saving || uploading}
             className="rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: brand }}
+            style={{ backgroundColor: primaryAction || brand }}
           >
             {saving ? "Saving…" : "Save profile"}
           </button>

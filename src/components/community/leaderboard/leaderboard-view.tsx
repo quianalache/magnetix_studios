@@ -48,6 +48,7 @@ export interface ViewerLevelInfo {
  */
 export function LeaderboardView({
   brand,
+  accent,
   viewer,
   rowsByWindow,
   activeRewards,
@@ -56,6 +57,9 @@ export function LeaderboardView({
   stats,
 }: {
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — reward/stat icons and the "View
+   *  all levels" link. Optional, falls back to `brand`. */
+  accent?: string;
   viewer: ViewerLevelInfo;
   rowsByWindow: Record<LeaderboardWindow, LeaderboardRow[]>;
   activeRewards: RewardWithEffectiveStatus[];
@@ -172,7 +176,7 @@ export function LeaderboardView({
               {activeRewards.map((r) => (
                 <div key={r.id} className="rounded-lg border border-[#E4E4E4] p-3">
                   <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 shrink-0" style={{ color: brand }} />
+                    <Gift className="h-4 w-4 shrink-0" style={{ color: accent || brand }} />
                     <p className="truncate text-sm font-semibold text-[#202124]">{r.title}</p>
                   </div>
                   <p className="mt-1 text-xs text-[#909090]">{r.description}</p>
@@ -200,7 +204,7 @@ export function LeaderboardView({
               <p className="text-xs text-[#909090]">You have {viewer.points.toLocaleString()} points</p>
             </div>
           </div>
-          <button onClick={() => setHowOpen(true)} className="mt-2 text-xs font-medium" style={{ color: brand }}>
+          <button onClick={() => setHowOpen(true)} className="mt-2 text-xs font-medium" style={{ color: accent || brand }}>
             View all levels
           </button>
         </div>
@@ -208,16 +212,16 @@ export function LeaderboardView({
         <div className="rounded-xl border border-[#E4E4E4] bg-white p-4">
           <h3 className="mb-3 text-sm font-semibold text-[#202124]">Your Stats (All Time)</h3>
           <div className="space-y-2 text-sm">
-            <StatRow icon={Trophy} label="Total Points" value={stats.totalPoints.toLocaleString()} brand={brand} />
-            <StatRow icon={MessageCircle} label="Posts" value={stats.posts.toLocaleString()} brand={brand} />
-            <StatRow icon={MessageCircle} label="Comments" value={stats.comments.toLocaleString()} brand={brand} />
-            <StatRow icon={ThumbsUp} label="Likes Given" value={stats.likesGiven.toLocaleString()} brand={brand} />
-            <StatRow icon={UserPlus} label="Members Invited" value={stats.membersInvited.toLocaleString()} brand={brand} />
+            <StatRow icon={Trophy} label="Total Points" value={stats.totalPoints.toLocaleString()} brand={accent || brand} />
+            <StatRow icon={MessageCircle} label="Posts" value={stats.posts.toLocaleString()} brand={accent || brand} />
+            <StatRow icon={MessageCircle} label="Comments" value={stats.comments.toLocaleString()} brand={accent || brand} />
+            <StatRow icon={ThumbsUp} label="Likes Given" value={stats.likesGiven.toLocaleString()} brand={accent || brand} />
+            <StatRow icon={UserPlus} label="Members Invited" value={stats.membersInvited.toLocaleString()} brand={accent || brand} />
           </div>
         </div>
       </div>
 
-      <HowPointsWorkModal open={howOpen} onOpenChange={setHowOpen} rules={rules} levels={levels} brand={brand} />
+      <HowPointsWorkModal open={howOpen} onOpenChange={setHowOpen} rules={rules} levels={levels} brand={brand} accent={accent} />
     </div>
   );
 }

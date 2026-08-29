@@ -91,7 +91,8 @@ export function CommunityShell({
   // for a group WITH a saved theme, `primary` here is now guaranteed to be
   // byte-identical to what the preview showed for Primary/Brand when it
   // was saved — see resolveCommunityTheme's own doc comment.
-  const brand = resolveCommunityTheme(group).primary || COMMUNITY_DEFAULT_BRAND;
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const linkBase = { saId, pretty, staffGroupId };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label
@@ -174,7 +175,13 @@ export function CommunityShell({
             <span className="hidden md:inline">Settings</span>
           </Link>
         )}
-        <DmLauncher saId={saId} viewerId={viewer.memberId} brand={brand} />
+        <DmLauncher
+          saId={saId}
+          viewerId={viewer.memberId}
+          brand={brand}
+          primaryAction={resolvedTheme.primaryAction}
+          accent={resolvedTheme.accent}
+        />
         {staffGroupId ? (
           <>
             <Link

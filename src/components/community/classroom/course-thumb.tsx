@@ -10,11 +10,16 @@ export function CourseThumb({
   thumbnailUrl,
   title,
   brand,
+  accent,
   rounded = "rounded-t-xl",
 }: {
   thumbnailUrl: string | null;
   title: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the placeholder icon matches the
+   *  "icon accent" role. Optional, falls back to `brand` for any caller
+   *  not yet updated. */
+  accent?: string;
   rounded?: string;
 }) {
   return (
@@ -30,7 +35,7 @@ export function CourseThumb({
         />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
-          <GraduationCap className="h-8 w-8" style={{ color: brand }} />
+          <GraduationCap className="h-8 w-8" style={{ color: accent || brand }} />
           <span className="text-sm font-semibold uppercase tracking-wide text-white/90">
             {title}
           </span>

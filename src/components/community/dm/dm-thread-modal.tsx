@@ -21,6 +21,7 @@ export function DmThreadModal({
   viewerId,
   other,
   brand,
+  primaryAction,
   onClose,
   onBack,
 }: {
@@ -28,6 +29,9 @@ export function DmThreadModal({
   viewerId: string;
   other: DmMemberView;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the Send button is a genuine
+   *  CTA. Optional, falls back to `brand`. */
+  primaryAction?: string;
   onClose: () => void;
   /** Optional: render a back arrow that returns to the Chats panel. */
   onBack?: () => void;
@@ -131,6 +135,7 @@ export function DmThreadModal({
             viewerId={viewerId}
             other={other}
             brand={brand}
+            primaryAction={primaryAction}
             initialMessages={initial}
             initialBlocked={initialBlocked}
           />
@@ -196,6 +201,7 @@ function ThreadBody({
   viewerId,
   other,
   brand,
+  primaryAction,
   initialMessages,
   initialBlocked,
 }: {
@@ -204,6 +210,7 @@ function ThreadBody({
   viewerId: string;
   other: DmMemberView;
   brand: string;
+  primaryAction?: string;
   initialMessages: DmMessageView[];
   initialBlocked: boolean;
 }) {
@@ -311,7 +318,7 @@ function ThreadBody({
               onClick={send}
               disabled={sending || !draft.trim()}
               className="rounded-md px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
-              style={{ backgroundColor: brand }}
+              style={{ backgroundColor: primaryAction || brand }}
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
             </button>

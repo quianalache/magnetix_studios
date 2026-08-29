@@ -10,6 +10,7 @@ import {
 } from "@/components/community/community-shell";
 import { PurchaseButton } from "@/components/community/purchase-button";
 import { CourseThumb } from "@/components/community/classroom/course-thumb";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,10 @@ export default async function StaffClassroomCatalogPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { group, member, membership } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
+  // Home; see that page's identical comment for the full rationale.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const viewer: AuthorView = {
     memberId: member.id,
     displayName:
@@ -70,6 +74,7 @@ export default async function StaffClassroomCatalogPage({
                   thumbnailUrl={c.thumbnailUrl}
                   title={c.title}
                   brand={brand}
+                  accent={resolvedTheme.accent}
                 />
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -90,7 +95,7 @@ export default async function StaffClassroomCatalogPage({
                           endpoint={`/api/community/${saId}/${group.id}/purchase`}
                           body={{ scope: "course", targetId: c.id }}
                           label={c.locked.reason}
-                          brand={brand}
+                          brand={resolvedTheme.primaryAction}
                           className="inline-flex w-full items-center justify-center gap-2 rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
                         />
                       </div>

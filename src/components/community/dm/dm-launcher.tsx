@@ -29,10 +29,17 @@ export function DmLauncher({
   saId,
   viewerId,
   brand,
+  primaryAction,
+  accent,
 }: {
   saId: string;
   viewerId: string;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the thread modal's Send button.
+   *  Optional, falls back to `brand`. */
+  primaryAction?: string;
+  /** Unread-count badge + unread dot. Optional, falls back to `brand`. */
+  accent?: string;
 }) {
   const count = useUnreadCount(saId, 0);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -114,7 +121,7 @@ export function DmLauncher({
         {count > 0 && (
           <span
             className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white"
-            style={{ backgroundColor: brand }}
+            style={{ backgroundColor: accent || brand }}
           >
             {count > 9 ? "9+" : count}
           </span>
@@ -157,6 +164,7 @@ export function DmLauncher({
                   loading={inboxLoading}
                   items={inbox}
                   brand={brand}
+                  accent={accent}
                   onPick={openThread}
                 />
               )}
@@ -171,6 +179,7 @@ export function DmLauncher({
           viewerId={viewerId}
           other={active}
           brand={brand}
+          primaryAction={primaryAction}
           onClose={() => setActive(null)}
           onBack={() => {
             setActive(null);
@@ -186,11 +195,13 @@ function RecentList({
   loading,
   items,
   brand,
+  accent,
   onPick,
 }: {
   loading: boolean;
   items: DmInboxItem[];
   brand: string;
+  accent?: string;
   onPick: (m: DmMemberView) => void;
 }) {
   if (loading && items.length === 0) {
@@ -249,7 +260,7 @@ function RecentList({
           {t.unread && (
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: brand }}
+              style={{ backgroundColor: accent || brand }}
             />
           )}
         </button>

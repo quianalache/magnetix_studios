@@ -10,6 +10,7 @@ import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
 import { CommunityReviewForm } from "@/components/community/review-form";
 import { communityHomeHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type {
   CommunityAboutMediaItem,
   CommunityGroup,
@@ -127,7 +128,7 @@ function CommunityAboutStyles() {
 .community-about-media-featured .community-about-media-copy h3 { font-size: 28px; }
 .community-about-copy-section { max-width: 820px; }
 .community-about-copy { max-width: 780px; }
-.community-about-pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ca-primary) 12%, var(--ca-card)); color: var(--ca-primary); padding: 6px 12px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.community-about-pill { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ca-accent) 12%, var(--ca-card)); color: var(--ca-accent); padding: 6px 12px; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .community-about-title { margin: 8px 0 0; color: var(--ca-text); font-size: clamp(32px, 5vw, 52px); line-height: 1.04; font-weight: 760; letter-spacing: 0; max-width: 820px; }
 .community-about-description { margin: 16px 0 0; max-width: 700px; color: var(--ca-muted); font-size: 16px; line-height: 1.75; }
 .community-about-rich { max-width: 760px; }
@@ -142,7 +143,7 @@ function CommunityAboutStyles() {
 .community-about-powered { margin: 2px 0 0; color: var(--ca-muted); font-size: 12px; font-weight: 650; letter-spacing: .02em; text-align: center; }
 .community-about-cta { display: grid; gap: 9px; }
 .community-about-button { min-height: 44px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--ca-border); background: var(--ca-card); color: var(--ca-text); font-size: 14px; font-weight: 760; text-decoration: none; }
-.community-about-button-primary { border-color: var(--ca-primary); background: var(--ca-primary); color: var(--ca-primary-text); box-shadow: 0 10px 22px rgba(32,33,36,.16); }
+.community-about-button-primary { border-color: var(--ca-primary-action); background: var(--ca-primary-action); color: var(--ca-primary-text); box-shadow: 0 10px 22px rgba(32,33,36,.16); }
 .community-about-tier-list { border-top: 1px solid var(--ca-border); padding-top: 12px; display: grid; gap: 10px; }
 .community-about-tier { border-left: 3px solid var(--ca-border); padding: 2px 0 2px 12px; }
 .community-about-tier-current { border-color: var(--ca-primary); }
@@ -163,7 +164,7 @@ function CommunityAboutStyles() {
 .community-about-review h3 { margin: 0; color: var(--ca-text); font-size: 14px; }
 .community-about-review-date { margin: 2px 0 0; color: var(--ca-muted); font-size: 12px; }
 .community-about-review-body { margin: 14px 0 0; white-space: pre-wrap; color: var(--ca-muted); font-size: 14px; line-height: 1.65; }
-.community-about-stars { display: inline-flex; align-items: center; gap: 2px; color: var(--ca-primary); flex: 0 0 auto; }
+.community-about-stars { display: inline-flex; align-items: center; gap: 2px; color: var(--ca-accent); flex: 0 0 auto; }
 .community-about-stars svg { width: 16px; height: 16px; fill: currentColor; }
 .community-about-see-more { justify-self: start; cursor: pointer; }
 .community-about-details { display: grid; gap: 12px; }
@@ -264,7 +265,6 @@ function SummaryAction({
   state,
   priceLabel,
   canShowUpgrade,
-  brand,
 }: {
   saId: string;
   pretty: boolean;
@@ -274,7 +274,6 @@ function SummaryAction({
   state: ViewerState;
   priceLabel: string;
   canShowUpgrade: boolean;
-  brand: string;
 }) {
   if (state === "joined" && canShowUpgrade) {
     return (
@@ -309,7 +308,7 @@ function SummaryAction({
       state={state}
       access={group.access}
       priceLabel={priceLabel}
-      brandColor={brand}
+      brandColor={resolveCommunityTheme(group).primaryAction}
     />
   );
 }
@@ -369,11 +368,23 @@ export function CommunityAboutView({
   const visibleReviews = reviews.slice(0, 6);
   const remainingReviews = reviews.slice(6);
   const logoUrl = group.logoUrl ?? group.cardImageUrl ?? group.coverUrl;
+  // Theme parity (2026-08-29 closeout) — `brand` (== primary) stays the
+  // caller-supplied value everywhere it was already used (identity marks:
+  // logo, review avatars, current-tier indicator); primaryAction/accent are
+  // resolved here from the same shared source so the CTA button and the
+  // pill/stars roles split out from primary, matching the Branding preview.
+  const theme = resolveCommunityTheme(group);
 
   return (
     <div
       className="community-about"
-      style={{ "--ca-primary": brand } as CSSProperties}
+      style={
+        {
+          "--ca-primary": brand,
+          "--ca-primary-action": theme.primaryAction,
+          "--ca-accent": theme.accent,
+        } as CSSProperties
+      }
     >
       <CommunityAboutStyles />
       <div className="community-about-layout">
@@ -445,7 +456,6 @@ export function CommunityAboutView({
                     state={state}
                     priceLabel={priceLabel}
                     canShowUpgrade={upgradeEligible}
-                    brand={brand}
                   />
                 </div>
                 <p className="community-about-powered">
@@ -531,6 +541,7 @@ export function CommunityAboutView({
                 saId={saId}
                 groupId={group.id}
                 brand={brand}
+                accent={theme.accent}
                 currentReview={currentReview}
               />
             )}

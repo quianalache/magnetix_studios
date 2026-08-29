@@ -22,12 +22,16 @@ export function DmInbox({
   saId,
   pretty = false,
   brand,
+  accent,
   initialItems,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
   brand: string;
+  /** Theme parity (2026-08-29 closeout) — the unread dot is a small badge.
+   *  Optional, falls back to `brand`. */
+  accent?: string;
   initialItems: DmInboxItem[];
 }) {
   const items = useInbox(saId, initialItems);
@@ -80,7 +84,7 @@ export function DmInbox({
           {t.unread && (
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: brand }}
+              style={{ backgroundColor: accent || brand }}
             />
           )}
         </Link>

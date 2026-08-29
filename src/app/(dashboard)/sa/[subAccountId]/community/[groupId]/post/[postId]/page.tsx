@@ -17,6 +17,7 @@ import {
 import type { ClientPost } from "@/components/community/feed/feed-view";
 import { renderCommunityPostHtml, renderCommunityCommentHtml } from "@/lib/community/post-html";
 import { communityHomeHref } from "@/lib/community/routes";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,10 @@ export default async function StaffPostDetailPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { group, member, membership } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
+  // Home; see that page's identical comment for the full rationale.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
   const feedPost = await getFeedPost({
     subAccountId: saId,
@@ -122,6 +126,8 @@ export default async function StaffPostDetailPage({
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}
+        primaryAction={resolvedTheme.primaryAction}
+        accent={resolvedTheme.accent}
         communityName={group.name}
         categories={group.categories}
         post={post}

@@ -6,6 +6,7 @@ import {
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { ProfileEditor } from "@/components/community/profile-editor";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,10 @@ export default async function ProfilePage({
 
   const pretty = await isCommunityPrettyRequest(saId);
   const { group, member } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
+  // Home; see that page's identical comment for the full rationale.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: COMMUNITY_BG }}>
@@ -30,6 +34,7 @@ export default async function ProfilePage({
         pretty={pretty}
         groupSlug={group.slug}
         brand={brand}
+        primaryAction={resolvedTheme.primaryAction}
         initial={{
           displayName:
             member.displayName?.trim() || member.email.split("@")[0] || "",

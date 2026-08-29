@@ -15,11 +15,18 @@ import type { CommunitySidebarCard } from "@/types/community";
 export function SidebarContentCard({
   card,
   brand,
+  primaryAction,
 }: {
   card: CommunitySidebarCard;
   brand: string;
+  /** Theme parity (2026-08-29 closeout): the card's button renders a CTA,
+   *  so its un-customized fallback color should be the theme's primary-
+   *  action role, not the bare identity color — matches every other real
+   *  CTA button in Community. Optional, falls back to `brand` so a caller
+   *  that hasn't been updated yet keeps its exact prior behavior. */
+  primaryAction?: string;
 }) {
-  const color = card.accentColor?.trim() || brand;
+  const color = card.accentColor?.trim() || primaryAction || brand;
   const hasButton = card.buttonLabel.trim() && card.buttonUrl.trim();
 
   return (
