@@ -20,7 +20,7 @@ import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunitySettingsImage } from "@/lib/community/upload-image";
 import { ABOUT_MAX_CHARS, TAGLINE_MAX_CHARS } from "@/config/community";
 import { cn } from "@/lib/utils";
-import type { CommunityAboutMediaItem, CommunityGroup } from "@/types/community";
+import type { CommunityAboutMediaItem } from "@/types/community";
 
 const SELECT_CLASS =
   "h-9 w-full rounded-md border border-[#E4E4E4] bg-white px-3 text-sm text-[#202124] shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring";
@@ -58,23 +58,40 @@ export function AboutEditDialog({
   onOpenChange,
   saId,
   groupId,
-  group,
+  initial,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   saId: string;
   groupId: string;
-  group: CommunityGroup;
-  onSaved: (group: CommunityGroup) => void;
+  /**
+   * Deliberately NOT the full `CommunityGroup` — that object, read
+   * server-side, carries real Firestore `Timestamp` class instances
+   * (`createdAt`/`updatedAt`), which React Flight refuses to serialize
+   * across the Server → Client Component boundary ("Only plain objects...
+   * can be passed to Client Components", crashed in production the first
+   * time this was tried). Every field this editor actually needs is a
+   * plain string/array, so the caller passes just those, matching the
+   * `serializeForClient` precedent already used elsewhere in Community
+   * (e.g. the Leaderboard page) for the identical class of bug.
+   */
+  initial: {
+    tagline: string;
+    aboutHtml: string;
+    about: string;
+    aboutMedia: CommunityAboutMediaItem[];
+    cardImageUrl: string | null;
+  };
+  onSaved: () => void;
 }) {
-  const [tagline, setTagline] = useState(group.tagline ?? "");
-  const [about, setAbout] = useState(group.aboutHtml || group.about || "");
+  const [tagline, setTagline] = useState(initial.tagline ?? "");
+  const [about, setAbout] = useState(initial.aboutHtml || initial.about || "");
   const [aboutMedia, setAboutMedia] = useState<CommunityAboutMediaItem[]>(
-    group.aboutMedia ?? [],
+    initial.aboutMedia ?? [],
   );
   const [cardImageUrl, setCardImageUrl] = useState<string | null>(
-    group.cardImageUrl ?? null,
+    initial.cardImageUrl ?? null,
   );
   const [saving, setSaving] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
@@ -127,13 +144,13 @@ export function AboutEditDialog({
       });
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
-        group?: CommunityGroup;
+        group?: unknown;
         error?: string;
       };
       if (!res.ok || !data.ok || !data.group) {
         throw new Error(data.error ?? "Couldn't save About");
       }
-      onSaved(data.group);
+      onSaved();
       toast.success("About page saved.");
       onOpenChange(false);
     } catch (err) {
@@ -320,11 +337,19 @@ export function AboutEditDialog({
 export function AboutEditButton({
   saId,
   groupId,
-  group,
+  initial,
 }: {
   saId: string;
   groupId: string;
-  group: CommunityGroup;
+  /** See `AboutEditDialog`'s identical prop for why this is a plain-field
+   *  subset rather than the full `CommunityGroup`. */
+  initial: {
+    tagline: string;
+    aboutHtml: string;
+    about: string;
+    aboutMedia: CommunityAboutMediaItem[];
+    cardImageUrl: string | null;
+  };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -340,7 +365,7 @@ export function AboutEditButton({
           onOpenChange={setOpen}
           saId={saId}
           groupId={groupId}
-          group={group}
+          initial={initial}
           onSaved={() => router.refresh()}
         />
       )}

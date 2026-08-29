@@ -395,7 +395,17 @@ export function CommunityAboutView({
       {isModerator && (
         <div className="community-about-edit-bar">
           <span>You&apos;re viewing the live About page.</span>
-          <AboutEditButton saId={saId} groupId={group.id} group={group} />
+          <AboutEditButton
+            saId={saId}
+            groupId={group.id}
+            initial={{
+              tagline: group.tagline,
+              aboutHtml: group.aboutHtml,
+              about: group.about,
+              aboutMedia: group.aboutMedia,
+              cardImageUrl: group.cardImageUrl,
+            }}
+          />
         </div>
       )}
       <div className="community-about-layout">
