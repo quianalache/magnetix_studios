@@ -60,6 +60,19 @@ function canUpgrade(membership: GroupMembership | null, tiers: CommunityTier[]) 
   return active.some((tier) => tier.priceCents != null || tier.checkoutUrl);
 }
 
+/**
+ * Whether a rich-text field actually has visible content. Saved About HTML
+ * can be a non-empty but visually-blank string like `"<p></p>"` (an editor
+ * that was opened and cleared, or never really filled in) — a plain
+ * truthiness check on the string treats that as real content and renders
+ * an empty gap under the "About this community" heading instead of the
+ * clean "coming soon" fallback. Server-side safe (no DOM), same
+ * strip-tags approach as `plainTextLength` in the About editor.
+ */
+function hasRealText(html: string): boolean {
+  return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").trim().length > 0;
+}
+
 function ratingLabel(group: CommunityGroup): string {
   if (!group.reviewCount || !group.averageRating) return "No reviews yet";
   return `${group.averageRating.toFixed(1)} average · ${group.reviewCount} review${
@@ -513,7 +526,7 @@ export function CommunityAboutView({
 
             <section className="community-about-copy-section">
               <h2>About this community</h2>
-              {(group.aboutHtml || group.about) ? (
+              {hasRealText(group.aboutHtml) || hasRealText(group.about) ? (
                 <div
                   className="community-about-rich prose prose-sm max-w-none"
                   dangerouslySetInnerHTML={{
