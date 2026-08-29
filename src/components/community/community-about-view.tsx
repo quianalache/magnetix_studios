@@ -5,14 +5,14 @@ import {
   ChevronRight,
   Globe,
   Lock,
-  Play,
+  Pencil,
   Star,
   Users,
 } from "lucide-react";
 import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
 import { ReviewFormLauncher } from "@/components/community/review-form-launcher";
-import { AboutEditButton } from "@/components/community/about-edit-dialog";
-import { communityHomeHref } from "@/lib/community/routes";
+import { AboutMediaGallery } from "@/components/community/about-media-gallery";
+import { communityAboutEditHref, communityHomeHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type {
@@ -136,17 +136,24 @@ function CommunityAboutStyles() {
 }
 .community-about a { color: inherit; }
 .community-about-edit-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1120px; margin: 0 auto 18px; padding: 10px 14px; border-radius: 8px; background: var(--ca-soft); color: var(--ca-muted); font-size: 12.5px; }
+.community-about-edit-link { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--ca-border); border-radius: 7px; background: var(--ca-card); color: var(--ca-text); padding: 5px 10px; font-size: 12.5px; font-weight: 650; text-decoration: none; }
 .community-about-layout { display: grid; gap: 38px; }
 
 /* Conversion-layout redesign (2026-08-29): a persistent sales card in a
    sticky right column beside the long-scroll content, instead of the old
    "hero row" that only paired identity/conversion next to the media. */
-.community-about-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: start; max-width: 1180px; width: 100%; margin: 0 auto; }
+.community-about-grid { display: grid; grid-template-columns: minmax(0, 1fr) 328px; gap: 32px; align-items: start; max-width: 1180px; width: 100%; margin: 0 auto; }
 .community-about-content { min-width: 0; display: grid; gap: 40px; }
 .community-about-sidebar { min-width: 0; position: sticky; top: 20px; }
 
-/* Sales / join card */
-.community-about-card { display: grid; gap: 16px; border: 1px solid var(--ca-border); border-radius: 14px; background: var(--ca-card); padding: 24px 22px; box-shadow: 0 10px 30px rgba(32,33,36,.06); }
+/* Sales / join card — sized/densified per Part 15 (2026-08-30 mockup pass):
+   narrower column (was 340px) and tighter internal gaps/padding, still
+   comfortably inside the approved ~320-360px target. */
+.community-about-card { display: grid; gap: 14px; border: 1px solid var(--ca-border); border-radius: 14px; background: var(--ca-card); padding: 20px 18px; box-shadow: 0 10px 30px rgba(32,33,36,.06); }
+/* Join Card Image — its own dedicated shape, deliberately NOT the wide
+   Home-banner ratio. Kept at 16:9 (matches the media aspect used
+   throughout the page) but the card column itself is narrow (~328px), so
+   the rendered image reads as a compact photo, not a long banner strip. */
 .community-about-card-image { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 1px solid var(--ca-border); }
 .community-about-card-identity { display: grid; justify-items: center; gap: 8px; text-align: center; }
 .community-about-logo { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 12px; object-fit: cover; background: var(--ca-primary); color: var(--ca-primary-text); display: grid; place-items: center; font-size: 20px; font-weight: 750; }
@@ -171,34 +178,34 @@ function CommunityAboutStyles() {
 .community-about-current { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; color: var(--ca-primary); font-size: 12px; font-weight: 760; }
 .community-about-powered { margin: 2px 0 0; color: var(--ca-muted); font-size: 11.5px; font-weight: 650; letter-spacing: .02em; text-align: center; }
 
-/* Media gallery */
-.community-about-gallery { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 14px; align-items: stretch; }
-.community-about-gallery-solo { grid-template-columns: minmax(0, 1fr); }
-.community-about-supporting { display: grid; grid-template-columns: 1fr; gap: 12px; align-content: start; }
-.community-about-media { position: relative; min-height: 156px; overflow: hidden; border: 1px solid var(--ca-border); border-radius: 10px; background: var(--ca-text); box-shadow: 0 10px 34px rgba(32,33,36,.08); }
-.community-about-media-featured { min-height: 460px; }
-.community-about-media-image { position: absolute; inset: 0; background-size: cover; background-position: center; transition: transform .45s ease; }
-.community-about-media:hover .community-about-media-image { transform: scale(1.03); }
+/* Media gallery (2026-08-30 mockup pass) — one 16:9 featured viewer with a
+   compact 16:9 thumbnail strip UNDERNEATH (not beside — Part 2 explicitly
+   rules out a tall supporting-media column next to the featured item).
+   Capped max-width so the block reads as meaningfully smaller than the
+   prior full-width-of-column implementation (Part 3: ~15-25% less
+   dominant) without shrinking the rest of the page. */
+.community-about-media-block { display: grid; gap: 10px; max-width: 620px; }
+.community-about-media-featured-wrap, .community-about-media-thumb-inner {
+  position: relative; overflow: hidden; border: 1px solid var(--ca-border);
+  background: var(--ca-text); display: block; width: 100%; aspect-ratio: 16 / 9;
+}
+.community-about-media-featured-wrap { border-radius: 10px; box-shadow: 0 10px 34px rgba(32,33,36,.08); }
+.community-about-media-image { position: absolute; inset: 0; background-size: cover; background-position: center; }
 .community-about-media-empty { background: linear-gradient(135deg, color-mix(in srgb, var(--ca-primary) 22%, var(--ca-card)), var(--ca-soft)); }
 .community-about-media-empty .community-about-media-image { display: none; }
-.community-about-play { position: absolute; z-index: 2; border-radius: 999px; display: grid; place-items: center; background: rgba(255,255,255,.94); color: #202124; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; }
-.community-about-media-featured .community-about-play { width: 64px; height: 64px; }
-/* "Fill" cards (no title/caption authored) — media fills the whole card
-   cleanly, no shade, no forced text. Do not fabricate a caption. */
-.community-about-media-fill { min-height: 132px; }
-/* "Support-row" cards (title/label authored) — the mockup's thumbnail+text
-   layout, used only when there is real text to show. */
-.community-about-media-support-row { display: flex; align-items: stretch; gap: 12px; min-height: 0; padding: 8px; background: var(--ca-card); box-shadow: none; }
-.community-about-media-support-row .community-about-media-thumb { position: relative; flex: 0 0 108px; border-radius: 7px; overflow: hidden; background: var(--ca-text); }
-.community-about-media-support-row .community-about-media-thumb .community-about-play { width: 30px; height: 30px; }
-.community-about-media-support-row .community-about-media-support-copy { min-width: 0; display: grid; align-content: center; gap: 2px; }
-.community-about-media-support-row .community-about-media-support-copy p { margin: 0; color: var(--ca-muted); font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.community-about-media-support-row .community-about-media-support-copy h3 { margin: 0; color: var(--ca-text); font-size: 13.5px; line-height: 1.35; font-weight: 700; }
+.community-about-play { position: absolute; z-index: 2; border-radius: 999px; display: grid; place-items: center; background: rgba(255,255,255,.94); color: #202124; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.community-about-play-lg { width: 56px; height: 56px; }
+.community-about-play-sm { width: 22px; height: 22px; }
 .community-about-media-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.7), rgba(0,0,0,.1) 55%, transparent); }
-.community-about-media-copy { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px; color: #fff; z-index: 2; }
-.community-about-media-copy p { margin: 0 0 4px; color: rgba(255,255,255,.78); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.community-about-media-copy h3 { margin: 0; font-size: 16px; line-height: 1.2; font-weight: 750; letter-spacing: 0; }
-.community-about-media-featured .community-about-media-copy h3 { font-size: 26px; }
+.community-about-media-copy { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px; color: #fff; z-index: 2; }
+.community-about-media-copy p { margin: 0 0 4px; color: rgba(255,255,255,.78); font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.community-about-media-copy h3 { margin: 0; font-size: 20px; line-height: 1.2; font-weight: 750; letter-spacing: 0; }
+/* Thumbnail strip — compact 16:9 tiles, no forced title text (Part 2/5),
+   scrolls horizontally instead of growing the page (Part 5/7). */
+.community-about-media-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scroll-snap-type: x proximity; }
+.community-about-media-thumb { flex: 0 0 108px; padding: 0; border: none; background: none; cursor: pointer; scroll-snap-align: start; border-radius: 7px; }
+.community-about-media-thumb-inner { border-radius: 7px; transition: opacity .15s ease, transform .15s ease; }
+.community-about-media-thumb:hover .community-about-media-thumb-inner { opacity: .85; }
 
 /* About content */
 .community-about-copy-section { max-width: 780px; }
@@ -207,6 +214,17 @@ function CommunityAboutStyles() {
 .community-about-rich { max-width: 760px; }
 .community-about-rich :where(h1,h2,h3) { color: var(--ca-text); }
 .community-about-rich :where(p,li) { color: var(--ca-muted); line-height: 1.7; }
+
+/* "What You'll Get Inside" — Part 8, real structured data, up to
+   ABOUT_BENEFITS_MAX (4) cards. Absent/hidden entirely when there's
+   nothing configured or the section is toggled off (Part 11) — no
+   reserved empty space, same convention as the media gallery. */
+.community-about-benefits h2 { margin: 0 0 14px; color: var(--ca-text); font-size: 24px; line-height: 1.2; }
+.community-about-benefits-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 780px; }
+.community-about-benefit { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--ca-border); border-radius: 10px; background: var(--ca-card); padding: 16px; }
+.community-about-benefit-icon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px; background: var(--ca-soft); display: grid; place-items: center; font-size: 19px; }
+.community-about-benefit h3 { margin: 0 0 3px; color: var(--ca-text); font-size: 14.5px; font-weight: 750; }
+.community-about-benefit p { margin: 0; color: var(--ca-muted); font-size: 13px; line-height: 1.55; }
 
 /* Reviews */
 .community-about-reviews { display: grid; gap: 16px; }
@@ -237,16 +255,16 @@ function CommunityAboutStyles() {
 @media (max-width: 840px) {
   .community-about-layout { gap: 18px; }
   .community-about-content { gap: 26px; }
-  .community-about-gallery { grid-template-columns: 1fr; }
-  .community-about-media-featured { min-height: 300px; }
+  .community-about-media-block { max-width: 100%; }
+  .community-about-benefits-grid { grid-template-columns: 1fr; }
   .community-about-review-grid { grid-template-columns: 1fr; }
   .community-about-section-head { align-items: flex-start; flex-direction: column; }
 }
 @media (max-width: 520px) {
-  .community-about-media-featured { min-height: 240px; }
   .community-about-sidebar { max-width: 100%; }
   .community-about-card { padding: 20px 16px; }
   .community-about-card-stats { gap: 16px; }
+  .community-about-media-thumb { flex-basis: 92px; }
 }
         `,
       }}
@@ -261,98 +279,6 @@ function RatingStars({ rating, muted = false }: { rating: number; muted?: boolea
         <Star key={star} style={{ opacity: star <= rating && !muted ? 1 : 0.28 }} />
       ))}
     </span>
-  );
-}
-
-/**
- * About-media rendering (2026-08-29 conversion-layout redesign). Media
- * items are never assumed to be video-only, and a title/caption is never
- * fabricated — `item.title`/`item.label` are shown only when the admin
- * actually set them (see `AboutEditDialog`'s media-item form, where both
- * are optional). Two supporting-card renderings, chosen by whether there's
- * real text to show, not by media type:
- *  - text authored → the "support-row" thumbnail+text layout (the
- *    approved mockup's little video-card look), for image or video alike.
- *  - no text authored → the media fills the card cleanly with no overlay,
- *    so a bare image/video never gets an empty text column forced next to
- *    it. Featured always fills the card; an overlay only appears on it too
- *    when real text exists.
- */
-function MediaCard({
-  item,
-  featured = false,
-}: {
-  item: CommunityAboutMediaItem;
-  featured?: boolean;
-}) {
-  const title = item.title?.trim() || "";
-  const label = item.label?.trim() || "";
-  const hasText = Boolean(title || label);
-  const mediaImage =
-    item.type === "image" ? item.url : item.thumbnailUrl || null;
-  const isEmpty = !mediaImage;
-  const isVideo = item.type === "video";
-
-  const inner =
-    !featured && hasText ? (
-      <article className="community-about-media community-about-media-support-row">
-        <div
-          className={`community-about-media-thumb ${
-            isEmpty ? "community-about-media-empty" : ""
-          }`}
-        >
-          {mediaImage && (
-            <div
-              className="community-about-media-image"
-              style={{ backgroundImage: `url(${mediaImage})` }}
-            />
-          )}
-          {isVideo && (
-            <div className="community-about-play">
-              <Play size={14} fill="currentColor" />
-            </div>
-          )}
-        </div>
-        <div className="community-about-media-support-copy">
-          {label && <p>{label}</p>}
-          <h3>{title}</h3>
-        </div>
-      </article>
-    ) : (
-      <article
-        className={`community-about-media ${
-          featured ? "community-about-media-featured" : "community-about-media-fill"
-        } ${isEmpty ? "community-about-media-empty" : ""}`}
-      >
-        {mediaImage && (
-          <div
-            className="community-about-media-image"
-            style={{ backgroundImage: `url(${mediaImage})` }}
-          />
-        )}
-        {isVideo && (
-          <div className="community-about-play">
-            <Play size={featured ? 22 : 14} fill="currentColor" />
-          </div>
-        )}
-        {hasText && (
-          <>
-            <div className="community-about-media-shade" />
-            <div className="community-about-media-copy">
-              {label && <p>{label}</p>}
-              <h3>{title}</h3>
-            </div>
-          </>
-        )}
-      </article>
-    );
-
-  return item.linkUrl ? (
-    <a href={item.linkUrl} target="_blank" rel="noreferrer">
-      {inner}
-    </a>
-  ) : (
-    inner
   );
 }
 
@@ -437,10 +363,13 @@ export function CommunityAboutView({
   reviews: CommunityReviewView[];
 }) {
   const gallery = galleryForGroup(group);
-  const featured = gallery.find((item) => item.featured) ?? gallery[0] ?? null;
-  const supporting = featured
-    ? gallery.filter((item) => item.id !== featured.id).slice(0, 4)
-    : [];
+  // "What You'll Get Inside" (Part 8/11) — hidden entirely, not a reserved
+  // empty section, when there's nothing configured OR the admin toggled it
+  // off. `showAboutBenefits` absent/undefined = shown (backward-compatible
+  // default, same convention as `showBanner`), but real content is always
+  // required too — this flag alone can never produce an empty section.
+  const benefits =
+    group.showAboutBenefits === false ? [] : (group.aboutBenefits ?? []);
   const activeTiers = tiers.filter((tier) => tier.active);
   const upgradeEligible = canUpgrade(membership, activeTiers);
   const priceLabel =
@@ -490,39 +419,21 @@ export function CommunityAboutView({
       {isModerator && (
         <div className="community-about-edit-bar">
           <span>You&apos;re viewing the live About page.</span>
-          <AboutEditButton
-            saId={saId}
-            groupId={group.id}
-            initial={{
-              tagline: group.tagline,
-              aboutHtml: group.aboutHtml,
-              about: group.about,
-              aboutMedia: group.aboutMedia,
-              cardImageUrl: group.cardImageUrl,
-            }}
-          />
+          {/* Edit About (2026-08-30 mockup pass) — a real page now, not a
+              modal, per the approved single-page mockup's own header/back
+              chrome. See communityAboutEditHref/AboutEditPage. */}
+          <Link
+            href={communityAboutEditHref({ saId, pretty, staffGroupId }, group.slug)}
+            className="community-about-edit-link"
+          >
+            <Pencil size={13} /> Edit About
+          </Link>
         </div>
       )}
       <div className="community-about-layout">
         <div className="community-about-grid">
           <div className="community-about-content">
-            {featured && (
-              <section
-                className={`community-about-gallery ${
-                  supporting.length === 0 ? "community-about-gallery-solo" : ""
-                }`}
-                aria-label="Community media"
-              >
-                <MediaCard item={featured} featured />
-                {supporting.length > 0 && (
-                  <div className="community-about-supporting">
-                    {supporting.map((item) => (
-                      <MediaCard key={item.id} item={item} />
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
+            {gallery.length > 0 && <AboutMediaGallery items={gallery} />}
 
             <section className="community-about-copy-section">
               <h2>About this community</h2>
@@ -539,6 +450,23 @@ export function CommunityAboutView({
                 </p>
               )}
             </section>
+
+            {benefits.length > 0 && (
+              <section className="community-about-benefits">
+                <h2>What You&apos;ll Get Inside</h2>
+                <div className="community-about-benefits-grid">
+                  {benefits.map((benefit) => (
+                    <div key={benefit.id} className="community-about-benefit">
+                      <span className="community-about-benefit-icon">{benefit.icon}</span>
+                      <div>
+                        <h3>{benefit.title}</h3>
+                        {benefit.description && <p>{benefit.description}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="community-about-reviews">
               <div className="community-about-section-head">

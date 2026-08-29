@@ -135,6 +135,21 @@ export interface CommunityAboutMediaItem {
 }
 
 /**
+ * About page "What You'll Get Inside" — one benefit/value-prop card
+ * (2026-08-29 conversion-layout redesign). `icon` is a plain emoji string,
+ * same convention as {@link CommunityChannel.icon} — rendered directly as
+ * text, never a component/icon name. Up to
+ * {@link "@/config/community".ABOUT_BENEFITS_MAX} per group.
+ */
+export interface CommunityAboutBenefit {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  order: number;
+}
+
+/**
  * Community Settings → Branding. A small, deliberately-limited set of color
  * ROLES a normal business owner can reason about ("what does this affect?"),
  * not a dump of internal CSS custom properties — see
@@ -284,10 +299,30 @@ export interface CommunityGroup {
    * of this flag, since there's nothing to show.
    */
   showBanner?: boolean;
-  /** Image at the top of the right-hand join card (falls back to cover). */
+  /**
+   * Image at the top of the right-hand About/join card. Its own dedicated
+   * slot — no fallback to `coverUrl` (the Home banner). See the About-page
+   * cleanup entry in the Build Log for why (2026-08-29).
+   */
   cardImageUrl: string | null;
   /** Purpose-built About media gallery. First/featured item renders large. */
   aboutMedia: CommunityAboutMediaItem[];
+  /**
+   * About page "What You'll Get Inside" value-prop cards (2026-08-29
+   * conversion-layout redesign). Empty array = section not configured —
+   * public page renders nothing, no reserved space (same convention as
+   * {@link CommunityGroup.aboutMedia}).
+   */
+  aboutBenefits: CommunityAboutBenefit[];
+  /**
+   * Independent show/hide for the benefits section, separate from whether
+   * `aboutBenefits` has items — lets an admin temporarily hide it without
+   * deleting the configured cards. Absent/undefined = shown (backward-
+   * compatible default, same convention as {@link CommunityGroup.showBanner});
+   * the section still only actually renders when `aboutBenefits` is
+   * non-empty too, so this alone never produces an empty section.
+   */
+  showAboutBenefits?: boolean;
   /** Rich-text About body. Kept to the same 1,000-character text budget. */
   aboutHtml: string;
   /** Small brand mark shown in the page header (falls back to cover). */

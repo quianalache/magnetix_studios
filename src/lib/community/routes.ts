@@ -51,6 +51,18 @@ export function communityAboutHref(b: CommunityLinkBase, groupSlug: string): str
   return b.pretty ? `/communities/${groupSlug}/about` : `/c/${b.saId}/${groupSlug}`;
 }
 
+/**
+ * "Edit About" (2026-08-30 mockup pass) — a dedicated single page, not a
+ * modal, per the approved mockup's own header/back-link chrome. Same
+ * shape as {@link communitySettingsHref}: diverges only in the segment
+ * before the path (staff vs. member route tree), moderator-gated on both
+ * sides via the same `GroupMembership.role === "moderator"` check.
+ */
+export function communityAboutEditHref(b: CommunityLinkBase, groupSlug: string): string {
+  if (b.staffGroupId) return `${staffBase(b)}/about/edit`;
+  return b.pretty ? `/communities/${groupSlug}/about/edit` : `/c/${b.saId}/${groupSlug}/about/edit`;
+}
+
 export function communityHomeHref(b: CommunityLinkBase, groupSlug: string): string {
   if (b.staffGroupId) return staffBase(b);
   return b.pretty ? `/communities/${groupSlug}/home` : `/c/${b.saId}/${groupSlug}/community`;

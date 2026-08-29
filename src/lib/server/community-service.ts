@@ -5,6 +5,9 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import {
+  ABOUT_BENEFITS_MAX,
+  ABOUT_BENEFIT_DESCRIPTION_MAX,
+  ABOUT_BENEFIT_TITLE_MAX,
   ABOUT_MAX_CHARS,
   GUIDELINES_MAX_CHARS,
   SIDEBAR_CARDS_MAX,
@@ -22,6 +25,7 @@ import { parseVideoUrl } from "@/lib/community/video-embed";
 import { awardPoints } from "@/lib/server/community-points-service";
 import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
+  CommunityAboutBenefit,
   CommunityAboutMediaItem,
   CommunityAboutMediaType,
   CommunityGroup,
@@ -111,6 +115,26 @@ function cleanSidebarCards(
     .map((c, index) => ({ ...c, order: index }));
 }
 
+/** About page "What You'll Get Inside" — same normalize-and-cap shape as
+ *  {@link cleanSidebarCards}. Drops an item with no title (an icon+empty
+ *  card isn't a real benefit); description is optional. */
+function cleanAboutBenefits(
+  items: CommunityAboutBenefit[] | undefined,
+): CommunityAboutBenefit[] {
+  return (items ?? [])
+    .filter((b) => b && b.title?.trim())
+    .map((b, index) => ({
+      id: b.id?.trim() || `benefit-${Date.now()}-${index}`,
+      icon: (b.icon ?? "").trim() || "✨",
+      title: b.title.trim().slice(0, ABOUT_BENEFIT_TITLE_MAX),
+      description: (b.description ?? "").trim().slice(0, ABOUT_BENEFIT_DESCRIPTION_MAX),
+      order: Number.isFinite(b.order) ? b.order : index,
+    }))
+    .sort((a, b) => a.order - b.order)
+    .slice(0, ABOUT_BENEFITS_MAX)
+    .map((b, index) => ({ ...b, order: index }));
+}
+
 function toMillis(v: unknown): number | null {
   if (!v) return null;
   const m = v as {
@@ -176,6 +200,7 @@ export interface CreateGroupInput {
   coverUrl?: string | null;
   cardImageUrl?: string | null;
   aboutMedia?: CommunityAboutMediaItem[];
+  aboutBenefits?: CommunityAboutBenefit[];
   logoUrl?: string | null;
   brandColor?: string | null;
   access?: GroupAccess;
@@ -204,6 +229,7 @@ export async function createGroupServerSide(
     coverUrl: input.coverUrl ?? null,
     cardImageUrl: input.cardImageUrl ?? null,
     aboutMedia: cleanAboutMedia(input.aboutMedia),
+    aboutBenefits: cleanAboutBenefits(input.aboutBenefits),
     logoUrl: input.logoUrl ?? null,
     faviconUrl: null,
     brandColor: input.brandColor ?? null,
@@ -240,6 +266,11 @@ export interface UpdateGroupPatch {
   coverUrl?: string | null;
   cardImageUrl?: string | null;
   aboutMedia?: CommunityAboutMediaItem[];
+  /** About page "What You'll Get Inside" — see `CommunityGroup.aboutBenefits`. */
+  aboutBenefits?: CommunityAboutBenefit[];
+  /** See `CommunityGroup.showAboutBenefits`'s own doc comment for the
+   *  backward-compatible absent-means-shown contract. */
+  showAboutBenefits?: boolean;
   logoUrl?: string | null;
   faviconUrl?: string | null;
   /** Community Settings → General — "Show Community Banner". See
@@ -312,6 +343,8 @@ export async function updateGroupServerSide(opts: {
   if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
   if (p.cardImageUrl !== undefined) updates.cardImageUrl = p.cardImageUrl;
   if (Array.isArray(p.aboutMedia)) updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
+  if (Array.isArray(p.aboutBenefits)) updates.aboutBenefits = cleanAboutBenefits(p.aboutBenefits);
+  if (p.showAboutBenefits !== undefined) updates.showAboutBenefits = p.showAboutBenefits;
   if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
   if (p.faviconUrl !== undefined) updates.faviconUrl = p.faviconUrl;
   if (p.showBanner !== undefined) updates.showBanner = p.showBanner;

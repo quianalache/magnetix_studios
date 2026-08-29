@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { updateGroupServerSide } from "@/lib/server/community-service";
 import type {
+  CommunityAboutBenefit,
   CommunityAboutMediaItem,
   CommunityTheme,
   GroupJoinPolicy,
@@ -32,6 +33,10 @@ export const dynamic = "force-dynamic";
  * to be the only place to edit these fields lives under the STAFF CRM
  * route tree (Firebase-auth gated), so a pure Community moderator with no
  * CRM/staff access had no way to edit their own About content at all.
+ *
+ * `aboutBenefits`/`showAboutBenefits` (2026-08-29 conversion-layout
+ * redesign) — the About page's "What You'll Get Inside" section, added to
+ * the same Edit About save payload for the same reason as above.
  */
 export async function PATCH(
   request: Request,
@@ -60,6 +65,8 @@ export async function PATCH(
     tagline?: string;
     cardImageUrl?: string | null;
     aboutMedia?: CommunityAboutMediaItem[];
+    aboutBenefits?: CommunityAboutBenefit[];
+    showAboutBenefits?: boolean;
   };
   try {
     body = await request.json();
@@ -84,6 +91,8 @@ export async function PATCH(
       tagline: body.tagline,
       cardImageUrl: body.cardImageUrl,
       aboutMedia: body.aboutMedia,
+      aboutBenefits: body.aboutBenefits,
+      showAboutBenefits: body.showAboutBenefits,
     },
   });
   if (!group) {

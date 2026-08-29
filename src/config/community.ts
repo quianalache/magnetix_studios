@@ -28,6 +28,17 @@ export const SIDEBAR_CARD_BODY_MAX = 200;
 export const SIDEBAR_CARD_BUTTON_LABEL_MAX = 30;
 
 /**
+ * About page "What You'll Get Inside" benefits (2026-08-29 conversion-layout
+ * redesign, approved as real structured data — see CommunityAboutBenefit).
+ * Sensible V1 limits, not over-engineered: a title needs to read at a
+ * glance in a compact card, a description needs to stay to one short line
+ * or two, same spirit as the sidebar-card limits above.
+ */
+export const ABOUT_BENEFITS_MAX = 4;
+export const ABOUT_BENEFIT_TITLE_MAX = 50;
+export const ABOUT_BENEFIT_DESCRIPTION_MAX = 140;
+
+/**
  * Skool's exact points→level curve (1 like = 1 point, per-group). A member's
  * level is the highest entry whose threshold is ≤ their points. Used by the
  * gamification slice + level-locked courses; defined here so the auth slice and
