@@ -13,7 +13,10 @@ import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
-import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
+import {
+  FeedView,
+  type ClientPost,
+} from "@/components/community/feed/feed-view";
 import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import { CommunityBanner } from "@/components/community/community-banner";
 import { CommunityLeftNav } from "@/components/community/community-left-nav";
@@ -22,6 +25,7 @@ import { TopContributorsCard } from "@/components/community/top-contributors-car
 import { SidebarContentCard } from "@/components/community/sidebar-content-card";
 import { GuidelinesCard } from "@/components/community/guidelines-card";
 import { staffCommunityManageHref } from "@/lib/community/staff-routes";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -59,12 +63,21 @@ export default async function StaffCommunityFeedPage({
   params: Promise<{ subAccountId: string; groupId: string }>;
 }) {
   const { subAccountId: saId, groupId } = await params;
-  const access = await requireStaffGroupPageAccess(saId, groupId, `/sa/${saId}/community/${groupId}`);
+  const access = await requireStaffGroupPageAccess(
+    saId,
+    groupId,
+    `/sa/${saId}/community/${groupId}`
+  );
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
   const { group, member, membership, gate } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity fix (2026-08-29) — same shared resolver Branding's live
+  // preview reads, so `brand` and `primaryAction` are guaranteed to match
+  // whatever the preview showed for this group's saved theme. See
+  // resolveCommunityTheme's own doc comment for the legacy-fallback rule.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
   const viewer: AuthorView = {
     memberId: member.id,
@@ -86,8 +99,16 @@ export default async function StaffCommunityFeedPage({
     groupId: group.id,
     isModerator: viewerIsModerator,
   });
-  const clientChannels = channels.map((c) => ({ ...c, createdAt: null, updatedAt: null }));
-  const clientSections = sections.map((s) => ({ ...s, createdAt: null, updatedAt: null }));
+  const clientChannels = channels.map((c) => ({
+    ...c,
+    createdAt: null,
+    updatedAt: null,
+  }));
+  const clientSections = sections.map((s) => ({
+    ...s,
+    createdAt: null,
+    updatedAt: null,
+  }));
 
   const posts: ClientPost[] = feed.map((p) => ({
     id: p.id,
@@ -107,12 +128,22 @@ export default async function StaffCommunityFeedPage({
     author: p.author,
     likedByViewer: p.likedByViewer,
     poll: p.poll,
+    postType: p.postType,
+    liveSessionId: p.liveSessionId,
+    liveRoomId: p.liveRoomId,
+    liveMode: p.liveMode,
+    liveStatus: p.liveStatus,
   }));
 
   void gate;
 
   const [topMembers, directory] = await Promise.all([
-    getLeaderboard({ subAccountId: saId, groupId: group.id, window: "all", limit: 5 }),
+    getLeaderboard({
+      subAccountId: saId,
+      groupId: group.id,
+      window: "all",
+      limit: 5,
+    }),
     listMemberDirectory({ subAccountId: saId, groupId: group.id }),
   ]);
 
@@ -120,10 +151,14 @@ export default async function StaffCommunityFeedPage({
   const activeMembers = directory.filter((r) => r.status === "active");
   const isOnline = (ms: number | null) => !!ms && now - ms < ONLINE_WINDOW_MS;
   const memberCount = activeMembers.length;
-  const onlineCount = activeMembers.filter((r) => isOnline(r.lastSeenAtMs)).length;
+  const onlineCount = activeMembers.filter((r) =>
+    isOnline(r.lastSeenAtMs)
+  ).length;
   const adminCount = activeMembers.filter((r) => r.role === "moderator").length;
 
-  const sidebarCards = (group.sidebarCards ?? []).slice().sort((a, b) => a.order - b.order);
+  const sidebarCards = (group.sidebarCards ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order);
 
   return (
     <CommunityShell
@@ -157,16 +192,17 @@ export default async function StaffCommunityFeedPage({
           {viewerIsModerator && (
             <Link
               href={staffCommunityManageHref(saId, groupId)}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E4E4E4] bg-white p-3 text-sm font-medium text-[#3a3a44] hover:bg-muted"
+              className="hover:bg-muted flex items-center gap-1.5 rounded-lg border border-[#E4E4E4] bg-white p-3 text-sm font-medium text-[#3a3a44]"
             >
-              <Settings2 className="h-3.5 w-3.5" /> Legacy group fields (About media, tiers, reviews…)
+              <Settings2 className="h-3.5 w-3.5" /> Legacy group fields (About
+              media, tiers, reviews…)
             </Link>
           )}
         </>
       }
     >
       <div className="space-y-4">
-        <CommunityBanner group={group} brand={brand} />
+        {(group.showBanner ?? true) && <CommunityBanner group={group} />}
         <Suspense fallback={null}>
           <div className="grid gap-6 md:grid-cols-[200px_1fr]">
             <div className="min-w-0">
@@ -177,6 +213,7 @@ export default async function StaffCommunityFeedPage({
                 groupId={group.id}
                 groupSlug={group.slug}
                 brand={brand}
+                primaryAction={resolvedTheme.primaryAction}
                 viewer={{ memberId: member.id, role: membership.role }}
                 initialChannels={clientChannels}
                 initialSections={clientSections}

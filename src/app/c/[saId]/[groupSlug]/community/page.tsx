@@ -12,7 +12,10 @@ import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
-import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
+import {
+  FeedView,
+  type ClientPost,
+} from "@/components/community/feed/feed-view";
 import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import { CommunityBanner } from "@/components/community/community-banner";
 import { CommunityLeftNav } from "@/components/community/community-left-nav";
@@ -20,6 +23,7 @@ import { AboutCommunityCard } from "@/components/community/about-community-card"
 import { TopContributorsCard } from "@/components/community/top-contributors-card";
 import { SidebarContentCard } from "@/components/community/sidebar-content-card";
 import { GuidelinesCard } from "@/components/community/guidelines-card";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -53,7 +57,10 @@ export default async function CommunityFeedPage({
 
   const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership, gate } = access;
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity fix (2026-08-29) — see the staff feed page's identical
+  // comment; same shared resolver, same guarantee, member side.
+  const resolvedTheme = resolveCommunityTheme(group);
+  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
   const viewer: AuthorView = {
     memberId: member.id,
@@ -81,8 +88,16 @@ export default async function CommunityFeedPage({
   // Classes... are not supported"), confirmed live in production logs.
   // `CommunityLeftNav` (client) never reads either field, so nulling them
   // out here is honest, not a lossy workaround.
-  const clientChannels = channels.map((c) => ({ ...c, createdAt: null, updatedAt: null }));
-  const clientSections = sections.map((s) => ({ ...s, createdAt: null, updatedAt: null }));
+  const clientChannels = channels.map((c) => ({
+    ...c,
+    createdAt: null,
+    updatedAt: null,
+  }));
+  const clientSections = sections.map((s) => ({
+    ...s,
+    createdAt: null,
+    updatedAt: null,
+  }));
 
   const posts: ClientPost[] = feed.map((p) => ({
     id: p.id,
@@ -107,6 +122,11 @@ export default async function CommunityFeedPage({
     // Already the safe, per-viewer FeedPoll view (buildFeedPoll) — see
     // types/community.ts. Never the raw CommunityPost.poll doc.
     poll: p.poll,
+    postType: p.postType,
+    liveSessionId: p.liveSessionId,
+    liveRoomId: p.liveRoomId,
+    liveMode: p.liveMode,
+    liveStatus: p.liveStatus,
   }));
 
   void gate;
@@ -129,10 +149,14 @@ export default async function CommunityFeedPage({
   const activeMembers = directory.filter((r) => r.status === "active");
   const isOnline = (ms: number | null) => !!ms && now - ms < ONLINE_WINDOW_MS;
   const memberCount = activeMembers.length;
-  const onlineCount = activeMembers.filter((r) => isOnline(r.lastSeenAtMs)).length;
+  const onlineCount = activeMembers.filter((r) =>
+    isOnline(r.lastSeenAtMs)
+  ).length;
   const adminCount = activeMembers.filter((r) => r.role === "moderator").length;
 
-  const sidebarCards = (group.sidebarCards ?? []).slice().sort((a, b) => a.order - b.order);
+  const sidebarCards = (group.sidebarCards ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order);
 
   return (
     <CommunityShell
@@ -166,7 +190,7 @@ export default async function CommunityFeedPage({
       }
     >
       <div className="space-y-4">
-        <CommunityBanner group={group} brand={brand} />
+        {(group.showBanner ?? true) && <CommunityBanner group={group} />}
         <Suspense fallback={null}>
           <div className="grid gap-6 md:grid-cols-[200px_1fr]">
             {/* min-w-0 on both grid items -- a CSS grid item's default
@@ -187,6 +211,7 @@ export default async function CommunityFeedPage({
                 groupId={group.id}
                 groupSlug={group.slug}
                 brand={brand}
+                primaryAction={resolvedTheme.primaryAction}
                 viewer={{ memberId: member.id, role: membership.role }}
                 initialChannels={clientChannels}
                 initialSections={clientSections}

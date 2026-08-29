@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Clock, Copy, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { communityHomeHref } from "@/lib/community/routes";
 import { uploadCommunitySettingsImage } from "@/lib/community/upload-image";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SettingsNav } from "@/components/community/settings/settings-nav";
 import { SettingsImageRow } from "@/components/community/settings/settings-image-row";
 import { LivePreviewPanel } from "@/components/community/settings/live-preview-panel";
+import { Switch } from "@/components/ui/switch";
 import type { CommunityGroup, GroupJoinPolicy } from "@/types/community";
 
 const ABOUT_MAX_CHARS = 1000;
@@ -20,7 +21,11 @@ const NAME_MAX_CHARS = 100;
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 function plainTextOf(html: string): string {
-  if (typeof window === "undefined") return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  if (typeof window === "undefined")
+    return html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
   const div = document.createElement("div");
   div.innerHTML = html;
   return (div.textContent ?? "").replace(/\s+/g, " ").trim();
@@ -34,6 +39,7 @@ interface EditState {
   logoUrl: string | null;
   faviconUrl: string | null;
   coverUrl: string | null;
+  showBanner: boolean;
 }
 
 function stateFromGroup(group: CommunityGroup): EditState {
@@ -49,6 +55,11 @@ function stateFromGroup(group: CommunityGroup): EditState {
     // here would need if it had been added after the type was first written.
     faviconUrl: group.faviconUrl ?? null,
     coverUrl: group.coverUrl,
+    // Absent = enabled — the required backward-compatible default (see
+    // CommunityGroup.showBanner's own doc comment). Same `??` pattern as
+    // faviconUrl above for the same reason: older docs genuinely lack this
+    // key in Firestore.
+    showBanner: group.showBanner ?? true,
   };
 }
 
@@ -63,6 +74,7 @@ export function SettingsWorkspace({
   onlineCount,
   adminCount,
   domainPrefix,
+  canonicalUrl,
 }: {
   saId: string;
   pretty?: boolean;
@@ -76,9 +88,13 @@ export function SettingsWorkspace({
   adminCount: number;
   /** Real host prefix shown before the slug (e.g. the sub-account's verified custom domain, or the platform's opaque URL) — never hardcoded. */
   domainPrefix: string;
+  canonicalUrl: string;
 }) {
   const [savedGroup, setSavedGroup] = useState(initialGroup);
-  const [form, setForm] = useState<EditState>(() => stateFromGroup(initialGroup));
+  const [urlCopied, setUrlCopied] = useState(false);
+  const [form, setForm] = useState<EditState>(() =>
+    stateFromGroup(initialGroup)
+  );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -102,7 +118,9 @@ export function SettingsWorkspace({
     }
     const trimmedSlug = form.slug.trim().toLowerCase();
     if (!trimmedSlug || !SLUG_PATTERN.test(trimmedSlug)) {
-      toast.error("Slug can only contain lowercase letters, numbers, and hyphens.");
+      toast.error(
+        "Slug can only contain lowercase letters, numbers, and hyphens."
+      );
       return;
     }
     setSaving(true);
@@ -118,6 +136,7 @@ export function SettingsWorkspace({
           logoUrl: form.logoUrl,
           faviconUrl: form.faviconUrl,
           coverUrl: form.coverUrl,
+          showBanner: form.showBanner,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -132,7 +151,7 @@ export function SettingsWorkspace({
       setForm(stateFromGroup(data.group));
       if (data.group.slug !== trimmedSlug) {
         toast.success(
-          `Saved. "${trimmedSlug}" was already taken, so your slug is now "${data.group.slug}".`,
+          `Saved. "${trimmedSlug}" was already taken, so your slug is now "${data.group.slug}".`
         );
       } else {
         toast.success("Settings saved.");
@@ -150,9 +169,14 @@ export function SettingsWorkspace({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
+          <h1 className="text-xl font-semibold text-[#202124]">
+            Community Settings
+          </h1>
           <Link
-            href={communityHomeHref({ saId, pretty, staffGroupId }, savedGroup.slug)}
+            href={communityHomeHref(
+              { saId, pretty, staffGroupId },
+              savedGroup.slug
+            )}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -173,7 +197,11 @@ export function SettingsWorkspace({
             style={{ backgroundColor: brand }}
           >
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {uploading ? "Uploading image…" : saving ? "Saving…" : "Save Changes"}
+            {uploading
+              ? "Uploading image…"
+              : saving
+                ? "Saving…"
+                : "Save Changes"}
           </button>
         </div>
       </div>
@@ -188,7 +216,9 @@ export function SettingsWorkspace({
 
         <div className="space-y-6">
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
-            <h2 className="text-base font-semibold text-[#202124]">Community Details</h2>
+            <h2 className="text-base font-semibold text-[#202124]">
+              Community Details
+            </h2>
             <p className="mt-0.5 text-sm text-[#909090]">
               Manage the basic details and visibility of your community.
             </p>
@@ -199,21 +229,26 @@ export function SettingsWorkspace({
                 <Input
                   id="cs-name"
                   value={form.name}
-                  onChange={(e) => set("name", e.target.value.slice(0, NAME_MAX_CHARS))}
+                  onChange={(e) =>
+                    set("name", e.target.value.slice(0, NAME_MAX_CHARS))
+                  }
                   maxLength={NAME_MAX_CHARS}
                 />
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   This is the name of your community.
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="cs-about">Community Description</Label>
-                <AboutRichTextEditor value={form.aboutHtml} onChange={(v) => set("aboutHtml", v)} />
-                <p className="text-right text-xs text-muted-foreground">
+                <AboutRichTextEditor
+                  value={form.aboutHtml}
+                  onChange={(v) => set("aboutHtml", v)}
+                />
+                <p className="text-muted-foreground text-right text-xs">
                   {aboutTextCount}/{ABOUT_MAX_CHARS}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   Describe your community in a few sentences.
                 </p>
               </div>
@@ -221,30 +256,51 @@ export function SettingsWorkspace({
               <div className="space-y-1.5">
                 <Label htmlFor="cs-slug">Community Slug</Label>
                 <div className="flex items-stretch">
-                  <span className="flex items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground">
+                  <span className="border-input bg-muted text-muted-foreground flex items-center rounded-l-md border border-r-0 px-3 text-sm">
                     {domainPrefix}/
                   </span>
                   <Input
                     id="cs-slug"
                     value={form.slug}
                     onChange={(e) =>
-                      set("slug", e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
+                      set(
+                        "slug",
+                        e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+                      )
                     }
                     className="rounded-l-none"
                   />
+                  <button
+                    type="button"
+                    aria-label="Copy community URL"
+                    title={urlCopied ? "Copied!" : "Copy community URL"}
+                    className="border-input bg-background text-muted-foreground hover:bg-muted ml-2 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(canonicalUrl)
+                        .then(() => {
+                          setUrlCopied(true);
+                          toast.success("Community URL copied.");
+                          window.setTimeout(() => setUrlCopied(false), 1800);
+                        });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Your community&apos;s unique URL. Changing it changes existing links to your
-                  community — saved on Save Changes, and re-checked for uniqueness at that point.
+                <p className="text-muted-foreground text-xs">
+                  Your community&apos;s unique URL. Changing it changes existing
+                  links to your community — saved on Save Changes, and
+                  re-checked for uniqueness at that point.
                 </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label>Join Policy</Label>
-                <p className="text-xs text-muted-foreground">
-                  Magnetix doesn&apos;t currently support hiding a community from being found
-                  (true &quot;private/invite-only&quot;) — this controls whether joining is
-                  instant or requires your approval.
+                <p className="text-muted-foreground text-xs">
+                  Magnetix doesn&apos;t currently support hiding a community
+                  from being found (true &quot;private/invite-only&quot;) — this
+                  controls whether joining is instant or requires your approval.
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <VisibilityOption
@@ -269,7 +325,9 @@ export function SettingsWorkspace({
           </section>
 
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
-            <h2 className="text-base font-semibold text-[#202124]">Community Image & Logo</h2>
+            <h2 className="text-base font-semibold text-[#202124]">
+              Community Image & Logo
+            </h2>
             <p className="mt-0.5 text-sm text-[#909090]">
               These images represent your community across the platform.
             </p>
@@ -281,7 +339,9 @@ export function SettingsWorkspace({
                 value={form.logoUrl}
                 onChange={(url) => set("logoUrl", url)}
                 onUploadingChange={setUploading}
-                onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "logo")}
+                onUpload={(file) =>
+                  uploadCommunitySettingsImage(file, saId, groupId, "logo")
+                }
                 shape="square"
               />
               <SettingsImageRow
@@ -291,7 +351,9 @@ export function SettingsWorkspace({
                 value={form.faviconUrl}
                 onChange={(url) => set("faviconUrl", url)}
                 onUploadingChange={setUploading}
-                onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "favicon")}
+                onUpload={(file) =>
+                  uploadCommunitySettingsImage(file, saId, groupId, "favicon")
+                }
                 shape="tiny"
               />
               <SettingsImageRow
@@ -301,9 +363,27 @@ export function SettingsWorkspace({
                 value={form.coverUrl}
                 onChange={(url) => set("coverUrl", url)}
                 onUploadingChange={setUploading}
-                onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "cover")}
+                onUpload={(file) =>
+                  uploadCommunitySettingsImage(file, saId, groupId, "cover")
+                }
                 shape="wide"
               />
+              <label className="flex items-center justify-between gap-3 py-4 first:pt-0 last:pb-0">
+                <span>
+                  <span className="block text-sm font-semibold text-[#202124]">
+                    Show Community Banner
+                  </span>
+                  <span className="block text-xs text-[#909090]">
+                    Displays the cover image above at the top of Community
+                    Home. Turn off to skip the banner entirely — the feed
+                    moves up to fill the space.
+                  </span>
+                </span>
+                <Switch
+                  checked={form.showBanner}
+                  onCheckedChange={(v) => set("showBanner", v)}
+                />
+              </label>
             </div>
           </section>
         </div>
@@ -316,6 +396,7 @@ export function SettingsWorkspace({
             aboutPlainText={plainTextOf(form.aboutHtml)}
             logoUrl={form.logoUrl}
             coverUrl={form.coverUrl}
+            showBanner={form.showBanner}
             memberCount={memberCount}
             onlineCount={onlineCount}
             adminCount={adminCount}
@@ -347,9 +428,13 @@ function VisibilityOption({
       onClick={onClick}
       className={cn(
         "flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors",
-        active ? "border-2" : "border-[#E4E4E4] hover:border-[#d4d4d4]",
+        active ? "border-2" : "border-[#E4E4E4] hover:border-[#d4d4d4]"
       )}
-      style={active ? { borderColor: brand, backgroundColor: `${brand}0d` } : undefined}
+      style={
+        active
+          ? { borderColor: brand, backgroundColor: `${brand}0d` }
+          : undefined
+      }
     >
       <span className="flex items-center gap-1.5 text-sm font-semibold text-[#202124]">
         <span style={active ? { color: brand } : undefined}>{icon}</span>

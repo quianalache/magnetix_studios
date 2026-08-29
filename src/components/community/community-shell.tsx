@@ -13,6 +13,7 @@ import {
   communitySettingsHref,
 } from "@/lib/community/routes";
 import { getVisibleNavItems, normalizeNavigation } from "@/lib/community/community-navigation";
+import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
 
@@ -83,7 +84,14 @@ export function CommunityShell({
    */
   staffGroupId?: string;
 }) {
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  // Theme parity fix (2026-08-29) — resolved from the SAME shared resolver
+  // Branding's live preview is built from, instead of reading `brandColor`
+  // directly here. For a group with no `theme` configured this resolves to
+  // the exact same value `brandColor` always held (zero visual change);
+  // for a group WITH a saved theme, `primary` here is now guaranteed to be
+  // byte-identical to what the preview showed for Primary/Brand when it
+  // was saved — see resolveCommunityTheme's own doc comment.
+  const brand = resolveCommunityTheme(group).primary || COMMUNITY_DEFAULT_BRAND;
   const linkBase = { saId, pretty, staffGroupId };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label

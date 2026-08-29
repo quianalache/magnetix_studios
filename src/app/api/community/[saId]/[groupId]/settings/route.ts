@@ -41,6 +41,7 @@ export async function PATCH(
     logoUrl?: string | null;
     coverUrl?: string | null;
     faviconUrl?: string | null;
+    showBanner?: boolean;
     theme?: CommunityTheme;
     navigation?: NavItem[];
   };
@@ -61,6 +62,7 @@ export async function PATCH(
       logoUrl: body.logoUrl,
       coverUrl: body.coverUrl,
       faviconUrl: body.faviconUrl,
+      showBanner: body.showBanner,
       theme: body.theme,
       navigation: body.navigation,
     },

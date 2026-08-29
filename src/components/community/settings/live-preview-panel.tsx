@@ -21,6 +21,7 @@ export function LivePreviewPanel({
   aboutPlainText,
   logoUrl,
   coverUrl,
+  showBanner,
   memberCount,
   onlineCount,
   adminCount,
@@ -31,6 +32,9 @@ export function LivePreviewPanel({
   aboutPlainText: string;
   logoUrl: string | null;
   coverUrl: string | null;
+  /** Draft value of "Show Community Banner" (General tab) — the preview
+   *  reflects the unsaved toggle state, same as every other field here. */
+  showBanner: boolean;
   memberCount: number;
   onlineCount: number;
   adminCount: number;
@@ -41,6 +45,7 @@ export function LivePreviewPanel({
     about: aboutPlainText,
     coverUrl,
     logoUrl,
+    showBanner,
   };
 
   return (
@@ -51,7 +56,7 @@ export function LivePreviewPanel({
       </div>
 
       <div className="relative">
-        <CommunityBanner group={previewGroup} brand={brand} />
+        {showBanner && <CommunityBanner group={previewGroup} />}
         {logoUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img

@@ -90,6 +90,33 @@ export type GroupStatus = "draft" | "published";
 export type CommunityAboutMediaType = "image" | "video";
 export type CommunityBillingInterval = "one_time" | "month" | "year";
 
+export type CommunityLiveRoomStatus =
+  | "scheduled"
+  | "live"
+  | "ended"
+  | "canceled";
+
+/** Community-owned pointer to the provider-neutral LiveSession record. */
+export interface CommunityLiveRoom {
+  id: string;
+  subAccountId: string;
+  agencyId: string;
+  groupId: string;
+  liveSessionId: string;
+  title: string;
+  description: string | null;
+  mode: "meeting" | "broadcast";
+  status: CommunityLiveRoomStatus;
+  createdByMemberId: string;
+  channel: string | null;
+  keepAsPost: boolean;
+  notifyMembers: boolean;
+  communityPostId: string | null;
+  scheduledStartAt: Timestamp | FieldValue | null;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
 export interface CommunityAboutMediaItem {
   id: string;
   type: CommunityAboutMediaType;
@@ -242,8 +269,21 @@ export interface CommunityGroup {
   about: string;
   /** Short one-line tagline shown under the logo in the join card (≤100 chars). */
   tagline: string;
-  /** Hero/cover image on the public About page (left column). */
+  /** Hero/cover image on the public About page (left column). Also the
+   *  Community Home banner image — see {@link CommunityGroup.showBanner}. */
   coverUrl: string | null;
+  /**
+   * Community Settings → General — "Show Community Banner" (2026-08-29).
+   * Controls only whether Community Home's hero banner renders at all, not
+   * whether a cover image is configured (`coverUrl` above still gates the
+   * separate About-page hero independently). Absent/undefined = enabled —
+   * the required backward-compatible default: every community that existed
+   * before this field was added keeps showing its banner exactly as before
+   * deployment, with no migration. `false` is the only value that hides it;
+   * a community with no `coverUrl` renders no banner either way regardless
+   * of this flag, since there's nothing to show.
+   */
+  showBanner?: boolean;
   /** Image at the top of the right-hand join card (falls back to cover). */
   cardImageUrl: string | null;
   /** Purpose-built About media gallery. First/featured item renders large. */
@@ -494,6 +534,11 @@ export interface CommunityPost {
   channelPinnedBy?: string | null;
   likeCount: number;
   commentCount: number;
+  postType?: "live";
+  liveSessionId?: string | null;
+  liveRoomId?: string | null;
+  liveMode?: "meeting" | "broadcast";
+  liveStatus?: "live" | "ended";
   /** Phase D — author-controlled "allow comments/replies" toggle. Absent
    *  (undefined) means comments are allowed — same additive convention as
    *  `attachments`, so every post written before this field existed stays

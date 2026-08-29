@@ -42,6 +42,7 @@ export function CommunityLeftNav({
   groupId,
   groupSlug,
   brand,
+  primaryAction,
   viewer,
   initialChannels,
   initialSections,
@@ -52,7 +53,16 @@ export function CommunityLeftNav({
   staffGroupId?: string;
   groupId: string;
   groupSlug: string;
+  /** Selected/active state — All Posts, the active channel row. Same role
+   *  Branding's preview uses for the active nav tab (`colors.primary`). */
   brand: string;
+  /**
+   * "New Post" button fill — Branding's preview uses `colors.primaryAction`
+   * for its own "+ New Post" button (theme parity, 2026-08-29). Optional so
+   * this component doesn't break if some future caller only has one color;
+   * falls back to `brand`, the exact behavior before this prop existed.
+   */
+  primaryAction?: string;
   viewer: Viewer;
   initialChannels: CommunityChannel[];
   initialSections: CommunitySection[];
@@ -123,8 +133,8 @@ export function CommunityLeftNav({
     <nav className="space-y-4">
       <button
         onClick={openComposer}
-        className="flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white"
-        style={{ backgroundColor: brand }}
+        className="flex w-full items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-semibold text-white transition-[filter] hover:brightness-90"
+        style={{ backgroundColor: primaryAction || brand }}
       >
         <Plus className="h-4 w-4" /> New Post
       </button>

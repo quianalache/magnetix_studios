@@ -1,4 +1,5 @@
 import type {
+  CommunityGroup,
   CommunityTheme,
   CommunityThemeColors,
   CommunityThemePresetKey,
@@ -198,4 +199,47 @@ export function defaultCommunityTheme(): CommunityTheme {
 export function normalizeCommunityTheme(theme: CommunityTheme | undefined | null): CommunityTheme {
   if (!theme || !theme.light || !theme.dark) return defaultCommunityTheme();
   return theme;
+}
+
+/**
+ * The ONE resolved color set every real Community surface — staff shell,
+ * member shell, and (once saved) the Branding live preview — should read
+ * from (2026-08-29 theme-parity fix). Previously, real Community pages only
+ * ever read the single `brandColor` string; the richer per-role `theme`
+ * values (Primary Action, Accent, Background, Surface, Text) were fully
+ * configurable and shown in the Branding preview but never reached
+ * production, which is exactly why a preset like Rose Pink looked like a
+ * varied family of tones in the preview but collapsed into one flat,
+ * stronger color in the real Community. This is the shared resolver that
+ * closes that gap — every real component wired to it gets the SAME 6-role
+ * set the preview already shows for the same saved theme, with no
+ * per-component re-derivation.
+ *
+ * Deliberately NOT `normalizeCommunityTheme(group.theme).light` — that
+ * would fall back to the Magnetix Purple PRESET for a legacy community that
+ * has a custom `brandColor` but has never touched Branding, silently
+ * changing its real color. Instead: a group with `theme` configured uses
+ * its full saved Light set directly (Dark is intentionally never read here
+ * — see `CommunityGroup.theme`'s own doc comment for why no real Community
+ * surface has a dark-mode rendering path yet); a group WITHOUT `theme`
+ * resolves every role from `brandColor` alone, reproducing exactly what
+ * real Community surfaces already rendered before this resolver existed —
+ * zero visual change for any community that's never configured Branding.
+ */
+export function resolveCommunityTheme(
+  group: Pick<CommunityGroup, "theme" | "brandColor">,
+): CommunityThemeColors {
+  if (group.theme?.light) return group.theme.light;
+  // Mirrors COMMUNITY_DEFAULT_BRAND / COMMUNITY_BG (community-shell.tsx) as
+  // literals rather than importing them, to avoid a cycle: community-shell
+  // imports Community components that will in turn import this resolver.
+  const brand = group.brandColor?.trim() || "#202124";
+  return {
+    primary: brand,
+    primaryAction: brand,
+    accent: brand,
+    background: "#F8F7F5",
+    surface: "#FFFFFF",
+    text: "#202124",
+  };
 }

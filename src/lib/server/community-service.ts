@@ -242,6 +242,10 @@ export interface UpdateGroupPatch {
   aboutMedia?: CommunityAboutMediaItem[];
   logoUrl?: string | null;
   faviconUrl?: string | null;
+  /** Community Settings → General — "Show Community Banner". See
+   *  `CommunityGroup.showBanner`'s own doc comment for the backward-
+   *  compatible absent-means-enabled contract. */
+  showBanner?: boolean;
   brandColor?: string | null;
   /** Community Settings → Branding. See `CommunityGroup.theme`'s own doc
    *  comment — saving this also derives `brandColor` (below), which is
@@ -310,6 +314,7 @@ export async function updateGroupServerSide(opts: {
   if (Array.isArray(p.aboutMedia)) updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
   if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
   if (p.faviconUrl !== undefined) updates.faviconUrl = p.faviconUrl;
+  if (p.showBanner !== undefined) updates.showBanner = p.showBanner;
   if (p.brandColor !== undefined) updates.brandColor = p.brandColor;
   // Branding (Part 9) — saving a theme is also the mechanism that makes
   // Primary/Brand real on production TODAY: every existing Community
