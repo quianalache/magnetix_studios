@@ -172,7 +172,7 @@ export async function registerForWebinarServerSide(input: {
     input.subAccountId,
     input.webinarId
   );
-  if (!webinar || webinar.status === "canceled" || webinar.status === "ended")
+  if (!webinar || (webinar.status !== "scheduled" && webinar.status !== "live"))
     throw new Error("Webinar registration is closed.");
   const existing = await registrants(input.subAccountId, input.webinarId)
     .where("email", "==", email)
