@@ -30,7 +30,11 @@ export default async function StaffCommunitySettingsPage({
   params: Promise<{ subAccountId: string; groupId: string }>;
 }) {
   const { subAccountId: saId, groupId } = await params;
-  const access = await requireStaffGroupPageAccess(saId, groupId, `/sa/${saId}/community/${groupId}/settings`);
+  const access = await requireStaffGroupPageAccess(
+    saId,
+    groupId,
+    `/sa/${saId}/community/${groupId}/settings`
+  );
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
@@ -55,12 +59,17 @@ export default async function StaffCommunitySettingsPage({
     level: membership.level,
   };
 
-  const directory = await listMemberDirectory({ subAccountId: saId, groupId: group.id });
+  const directory = await listMemberDirectory({
+    subAccountId: saId,
+    groupId: group.id,
+  });
   const now = Date.now();
   const activeMembers = directory.filter((r) => r.status === "active");
   const isOnline = (ms: number | null) => !!ms && now - ms < ONLINE_WINDOW_MS;
   const memberCount = activeMembers.length;
-  const onlineCount = activeMembers.filter((r) => isOnline(r.lastSeenAtMs)).length;
+  const onlineCount = activeMembers.filter((r) =>
+    isOnline(r.lastSeenAtMs)
+  ).length;
   const adminCount = activeMembers.filter((r) => r.role === "moderator").length;
 
   return (
@@ -83,6 +92,7 @@ export default async function StaffCommunitySettingsPage({
         onlineCount={onlineCount}
         adminCount={adminCount}
         domainPrefix={domainPrefix}
+        canonicalUrl={`${origin}/c/${saId}/${group.slug}`}
       />
     </CommunityShell>
   );
