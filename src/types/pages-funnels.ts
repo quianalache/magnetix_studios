@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { Data as PuckData } from "@puckeditor/core";
 
 /**
  * Native Pages & Funnels builder — the data model for a block-based visual
@@ -252,7 +253,11 @@ export interface PageSeo {
   ogImage: string;
 }
 
-export const DEFAULT_PAGE_SEO: PageSeo = { title: "", description: "", ogImage: "" };
+export const DEFAULT_PAGE_SEO: PageSeo = {
+  title: "",
+  description: "",
+  ogImage: "",
+};
 
 export interface PageDoc {
   id: string;
@@ -278,6 +283,36 @@ export interface PageDoc {
   createdAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
   publishedAt: Timestamp | FieldValue | null;
+  /**
+   * Puck persistence (Puck Persistence + Publish Foundation task, master
+   * spec §24.12). Entirely additive — every field below is optional and
+   * absent on any page that predates this task or has never been opened in
+   * the new builder, so nothing above this line changes meaning and V1's
+   * own `blocks`/`status`/`publishedAt` fields are untouched by any of it.
+   *
+   * `puckDraftData` is the durable Puck draft — what the new builder loads
+   * and what "Save Draft"/autosave write to. `puckPublishedData` is a
+   * frozen SNAPSHOT of the draft at the moment Publish was last clicked,
+   * not a live reference to the draft — editing and saving the draft again
+   * after publishing must never change what `puckPublishedData` holds
+   * until Publish is clicked again. This is the same "draft vs published
+   * must be separate" requirement V1 itself does NOT actually implement
+   * (V1 has one `blocks` array that both editing and publishing write
+   * straight through), so Puck's model is intentionally stricter than V1's,
+   * not copied from it.
+   *
+   * `puckDraftUpdatedAt`/`puckPublishedAt` are this pair's own timestamps —
+   * distinct from the top-level `updatedAt`/`publishedAt` above, which
+   * remain V1's page-level bookkeeping (any V1 metadata edit still touches
+   * `updatedAt`; only V1's own Publish flow touches the top-level
+   * `publishedAt`). Comparing `puckDraftUpdatedAt` to `puckPublishedAt` is
+   * how the new builder derives "Draft" / "Published" / "Published, with
+   * unpublished changes" without inventing a second status enum.
+   */
+  puckDraftData?: PuckData | null;
+  puckPublishedData?: PuckData | null;
+  puckDraftUpdatedAt?: Timestamp | FieldValue | null;
+  puckPublishedAt?: Timestamp | FieldValue | null;
 }
 
 export type CreatePageInput = {

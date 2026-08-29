@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowLeft, Eye } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { AlertTriangle, ArrowLeft, Check, Eye, Loader2 } from "lucide-react";
 import { Puck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "./magnetix-theme.css";
@@ -14,6 +15,8 @@ import { MagnetixBlocksPanel } from "@/components/pages-funnels/puck/blocks-pane
 import { MagnetixLayersPanel } from "@/components/pages-funnels/puck/layers-panel";
 import { MagnetixSettingsPanel } from "@/components/pages-funnels/puck/settings-panel";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
+import { usePuckPersistence } from "@/components/pages-funnels/puck/use-puck-persistence";
+import type { PuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 
 /**
@@ -46,14 +49,15 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
  * where native Undo/Redo actually live) with a prepended "Back to Pages &
  * Funnels" link and a status badge. `overrides.headerActions` replaces
  * Puck's default (a single hardcoded "Publish" button wired to an
- * `onPublish` prop this shell deliberately never sets) with three explicit
- * buttons: Preview (real — see below), and Save Draft / Publish, both
- * disabled with an explanatory title — per the master spec, "if
- * Save/Publish are not yet wired for Puck Data, clearly mark or disable
- * rather than pretending they work." `renderHeaderActions` (used in Phase
- * 1) is deprecated as of the installed 0.23.0 (confirmed via the package's
- * own runtime deprecation warning) in favor of exactly this
- * `overrides.headerActions` + native render-prop pattern — this shell uses
+ * `onPublish` prop this shell deliberately never sets) with four explicit
+ * controls: a Saving…/Saved/error indicator, Preview, Save Draft, and
+ * Publish — all real as of the Puck Persistence + Publish Foundation task
+ * (master spec §24.12; `use-puck-persistence.ts` is what actually performs
+ * every write, this component only wires it to the header UI).
+ * `renderHeaderActions` (used in Phase 1) is deprecated as of the installed
+ * 0.23.0 (confirmed via the package's own runtime deprecation warning) in
+ * favor of exactly this `overrides.headerActions` + native render-prop
+ * pattern — this shell uses
  * the current, non-deprecated API.
  *
  * PHASE 2D PREVIEW REWRITE (task §10/§11/§12/§13/§14): real user QA
@@ -83,7 +87,12 @@ import type { PuckPageMetadata } from "@/types/pages-funnels-puck";
 export interface MagnetixPuckEditorShellProps {
   pageId: string;
   pageName: string;
+  /** V1's own legacy status — still the correct thing to show whenever
+   *  `puckPublishStatus === "v1-only"` (this page has never been Published
+   *  from the new builder, so V1's status is what's actually live at
+   *  `/p/[pageId]`). See `publish-status.ts`'s own doc comment. */
   pageStatus: "draft" | "published";
+  puckPublishStatus: PuckPublishStatus;
   subAccountId: string;
   backHref: string;
   /** Route Preview opens in a new tab — `.../new-builder/preview` (see
@@ -98,12 +107,33 @@ export function MagnetixPuckEditorShell({
   pageId,
   pageName,
   pageStatus,
+  puckPublishStatus,
   subAccountId,
   backHref,
   previewHref,
   initialData,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
+  // Guards autosave against firing before the editor has actually mounted —
+  // set true in a layout-safe effect below (master spec §24.12 "no save
+  // before initial page load completes"). The hook's own comparison against
+  // the initial `data` snapshot already prevents a spurious first save, but
+  // this is a second, explicit guard rather than relying on that alone.
+  const [persistenceEnabled, setPersistenceEnabled] = useState(false);
+
+  const {
+    saveState,
+    saveError,
+    saveDraft,
+    publishState,
+    publishError,
+    publish,
+  } = usePuckPersistence({
+    subAccountId,
+    pageId,
+    data,
+    enabled: persistenceEnabled,
+  });
 
   // Context-dependent, so useMemo (not a fresh literal) — same referential-
   // stability rule as VIEWPORTS/IFRAME_CONFIG below, per the Insert Undo
@@ -115,6 +145,10 @@ export function MagnetixPuckEditorShell({
     () => ({ subAccountId }),
     [subAccountId]
   );
+
+  useEffect(() => {
+    setPersistenceEnabled(true);
+  }, []);
 
   /**
    * Writes the CURRENT in-memory `data` into this page's session-scoped
@@ -139,6 +173,15 @@ export function MagnetixPuckEditorShell({
     window.open(previewHref, "_blank");
   }
 
+  async function handlePublish() {
+    const result = await publish();
+    if (result.ok) {
+      toast.success("Page published");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
       <div className="min-h-0 flex-1">
@@ -159,12 +202,10 @@ export function MagnetixPuckEditorShell({
                 >
                   <ArrowLeft className="h-4 w-4" /> Back to Pages &amp; Funnels
                 </a>
-                <Badge
-                  variant={pageStatus === "published" ? "default" : "secondary"}
-                  className="shrink-0"
-                >
-                  {pageStatus === "published" ? "Published" : "Draft"}
-                </Badge>
+                <PageStatusBadge
+                  pageStatus={pageStatus}
+                  puckPublishStatus={puckPublishStatus}
+                />
                 {/* Self-identifying QA badge (added after real user QA
                     confirmed a user could land in V1 and not realize it —
                     this makes which editor is on screen unambiguous at a
@@ -184,22 +225,34 @@ export function MagnetixPuckEditorShell({
             ),
             headerActions: () => (
               <div className="flex items-center gap-2">
+                <SaveStateIndicator state={saveState} error={saveError} />
                 <Button variant="outline" size="sm" onClick={openPreview}>
                   <Eye className="h-4 w-4" /> Preview
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled
-                  title="Puck Data persistence isn't wired yet (Phase 2A is session-local, safe-testing only) — see the master spec's Build Status."
+                  onClick={saveDraft}
+                  disabled={saveState === "saving"}
                 >
+                  {saveState === "saving" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
                   Save Draft
                 </Button>
                 <Button
                   size="sm"
-                  disabled
-                  title="Puck Data persistence isn't wired yet (Phase 2A is session-local, safe-testing only) — see the master spec's Build Status."
+                  onClick={handlePublish}
+                  disabled={publishState === "saving"}
+                  title={
+                    publishState === "error"
+                      ? (publishError ?? undefined)
+                      : undefined
+                  }
                 >
+                  {publishState === "saving" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : null}
                   Publish
                 </Button>
               </div>
@@ -224,5 +277,85 @@ export function MagnetixPuckEditorShell({
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Page Status badge (master spec §24.12 "Page Status") — deliberately
+ * defers to V1's own status whenever this page has never been Published
+ * from the new builder (`puckPublishStatus === "v1-only"`), since V1's
+ * status is what's ACTUALLY live at `/p/[pageId]` in that case; only once
+ * a real Puck publish has happened does this switch to Puck-aware status.
+ * See `publish-status.ts`'s own doc comment for why these are genuinely
+ * different things, not two labels for the same state.
+ */
+function PageStatusBadge({
+  pageStatus,
+  puckPublishStatus,
+}: {
+  pageStatus: "draft" | "published";
+  puckPublishStatus: PuckPublishStatus;
+}) {
+  if (puckPublishStatus === "v1-only") {
+    return (
+      <Badge
+        variant={pageStatus === "published" ? "default" : "secondary"}
+        className="shrink-0"
+      >
+        {pageStatus === "published" ? "Published" : "Draft"}
+      </Badge>
+    );
+  }
+  if (puckPublishStatus === "published-outdated") {
+    return (
+      <Badge variant="outline" className="shrink-0">
+        Unpublished changes
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="default" className="shrink-0">
+      Published
+    </Badge>
+  );
+}
+
+/**
+ * Save Draft's own state feedback (master spec §24.6/§24.12 "Saving… /
+ * Saved" — reused for both the manual button and autosave, since they
+ * share one save code path). Rendered separately from the Save Draft
+ * button itself (not just a changing button label) so autosave — which the
+ * user never clicked anything for — still has somewhere to show its own
+ * result without silently relabeling a button they didn't press.
+ */
+function SaveStateIndicator({
+  state,
+  error,
+}: {
+  state: "idle" | "saving" | "saved" | "error";
+  error: string | null;
+}) {
+  if (state === "idle") return null;
+  if (state === "saving") {
+    return (
+      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+        <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+      </span>
+    );
+  }
+  if (state === "error") {
+    return (
+      <span
+        className="text-destructive flex shrink-0 items-center gap-1 text-xs"
+        title={error ?? undefined}
+      >
+        <AlertTriangle className="h-3 w-3" /> Save failed
+      </span>
+    );
+  }
+  return (
+    <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+      <Check className="h-3 w-3" /> Saved
+    </span>
   );
 }

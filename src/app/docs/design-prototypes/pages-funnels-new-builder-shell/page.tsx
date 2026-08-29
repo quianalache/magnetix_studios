@@ -60,6 +60,7 @@ export default function NewBuilderShellQaPage() {
       pageId="qa-fixture-page"
       pageName="Free Guide Landing Page"
       pageStatus="draft"
+      puckPublishStatus="v1-only"
       subAccountId="qa-fixture-subaccount"
       backHref="/docs/design-prototypes/pages-funnels-new-builder-shell"
       previewHref="/docs/design-prototypes/pages-funnels-new-builder-shell/preview"

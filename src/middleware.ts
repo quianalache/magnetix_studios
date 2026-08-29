@@ -22,6 +22,16 @@ const PUBLIC_PATHS = [
   // guide linked from /thank-you and shareable as a stable URL).
   "/docs",
   "/f",
+  // Public Pages & Funnels published-page route (src/app/p/[pageId]) — a
+  // genuine pre-existing gap found while wiring the Puck Persistence +
+  // Publish Foundation task's mandatory "open /p/[pageId]" QA: this route
+  // was never actually reachable without a session (it 307-redirected to
+  // /login exactly like every authenticated route), for V1-published pages
+  // too, not just Puck ones — the route itself has always correctly gated
+  // on `status === "published"` and used the Admin SDK precisely because
+  // it was meant to be public, but nothing told the middleware that. Added
+  // here the same way "/f" (public forms) already is.
+  "/p",
   "/api/forms",
   "/api/auth/signup",
   // Workflow Builder step worker — QStash callback, signature-verified inside
@@ -285,7 +295,7 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
 function isPublicPath(pathname: string): boolean {
   if (
     PUBLIC_PATHS.some(
-      (path) => pathname === path || pathname.startsWith(`${path}/`),
+      (path) => pathname === path || pathname.startsWith(`${path}/`)
     )
   ) {
     return true;
@@ -314,7 +324,9 @@ const ACTION_ROUTE_REDIRECT_OVERRIDES: Array<{
   {
     pattern: /^\/api\/sub-accounts\/([^/]+)\/meta\/connect$/,
     target: (pathname) => {
-      const id = pathname.match(/^\/api\/sub-accounts\/([^/]+)\/meta\/connect$/)?.[1];
+      const id = pathname.match(
+        /^\/api\/sub-accounts\/([^/]+)\/meta\/connect$/
+      )?.[1];
       return id ? `/sa/${id}/dashboard/settings` : "/dashboard";
     },
   },
@@ -328,7 +340,9 @@ const ACTION_ROUTE_REDIRECT_OVERRIDES: Array<{
 ];
 
 function loginRedirectTarget(pathname: string): string {
-  const override = ACTION_ROUTE_REDIRECT_OVERRIDES.find((o) => o.pattern.test(pathname));
+  const override = ACTION_ROUTE_REDIRECT_OVERRIDES.find((o) =>
+    o.pattern.test(pathname)
+  );
   return override ? override.target(pathname) : pathname;
 }
 
@@ -362,7 +376,7 @@ export default function middleware(request: NextRequest) {
       clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL ?? "",
       privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY ?? "").replace(
         /\\n/g,
-        "\n",
+        "\n"
       ),
     },
     handleValidToken: async ({ decodedToken }, headers) => {

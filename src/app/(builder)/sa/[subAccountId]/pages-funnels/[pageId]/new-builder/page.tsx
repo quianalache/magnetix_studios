@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToPage } from "@/lib/firestore/pages-funnels";
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
+import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
 import type { PageDoc } from "@/types/pages-funnels";
 
 /**
@@ -23,12 +24,26 @@ import type { PageDoc } from "@/types/pages-funnels";
  * Pages & Funnels list via a "Try New Builder" entry point (added to that
  * list's PageCard dropdown), not just a hidden docs URL.
  *
- * SAFE-TESTING DATA MODEL (Phase 2A task §6): reads the real `PageDoc`,
- * converts its `blocks` (V1) to Puck `Data` in memory via the Phase 1
- * `migratePageBlocksToPuckData` foundation, and hands that to the editor
- * shell. Nothing is written back — `<Puck>`'s `onChange` only updates
- * React state inside `MagnetixPuckEditorShell`. No new Firestore field, no
- * `blocks` overwrite, no page mutation of any kind from this route.
+ * DATA MODEL (originally Phase 2A task §6 "safe-testing, nothing written
+ * back"; superseded by the Puck Persistence + Publish Foundation task,
+ * master spec §24.12): reads the real `PageDoc` and loads initial Puck
+ * `Data` with the load priority that task requires —
+ *
+ *   1. `page.puckDraftData`, if a durable Puck draft already exists
+ *      (a page someone has already saved from the new builder before), or
+ *   2. `migratePageBlocksToPuckData(page.blocks)` — the Phase 1 in-memory
+ *      V1→Puck converter — if no Puck draft exists yet, or
+ *   3. an empty Puck `Data` shape, for the (rare) case of neither existing.
+ *
+ * Once a page has a persisted Puck draft, reopening this route uses THAT
+ * — it never re-runs V1 migration again and silently discards prior Puck
+ * edits. `blocks` (V1) is still read here (for the migration fallback) but
+ * NEVER written by this route or by anything downstream of it — V1's own
+ * persistence stays completely untouched. `MagnetixPuckEditorShell` is what
+ * actually performs Save Draft/autosave/Publish now (via
+ * `use-puck-persistence.ts`), each writing ONLY the new `puckDraftData`/
+ * `puckPublishedData` fields via a dedicated Admin-SDK API route — this
+ * component itself still never writes to Firestore directly.
  */
 export default function NewBuilderPage({
   params,
@@ -49,15 +64,22 @@ export default function NewBuilderPage({
     return () => unsub();
   }, [pageId]);
 
-  // Recomputed only when the `page` reference itself changes (a fresh
-  // Firestore snapshot) — pure, cheap, never persisted (see migrate-v1.ts's
-  // own doc comment). The editor's own in-memory `data` state (inside the
-  // shell) is the source of truth once mounted, exactly like V1's `blocks`
-  // state already works (loaded once, then edited locally until an
-  // explicit Save) — this memo isn't what makes editing session-local, it
-  // just avoids re-running the converter on every render for no reason.
-  const initialData = useMemo(
-    () => (page ? migratePageBlocksToPuckData(page.blocks) : null),
+  // Load priority (master spec §24.12): a real persisted Puck draft always
+  // wins over re-migrating V1 `blocks` — otherwise every reopen of this
+  // route would silently discard whatever was saved from the new builder
+  // last time and replace it with a fresh migration. Recomputed only when
+  // the `page` reference itself changes (a fresh Firestore snapshot); once
+  // mounted, the editor's own in-memory `data` state (inside the shell) is
+  // the source of truth until the next explicit Save/autosave, exactly
+  // like V1's own `blocks` state already works.
+  const initialData = useMemo(() => {
+    if (!page) return null;
+    if (page.puckDraftData) return page.puckDraftData;
+    return migratePageBlocksToPuckData(page.blocks);
+  }, [page]);
+
+  const puckPublishStatus = useMemo(
+    () => (page ? derivePuckPublishStatus(page) : "v1-only"),
     [page]
   );
 
@@ -88,6 +110,7 @@ export default function NewBuilderPage({
       pageId={page.id}
       pageName={page.name}
       pageStatus={page.status}
+      puckPublishStatus={puckPublishStatus}
       subAccountId={subAccountId}
       backHref={saPath("/pages-funnels")}
       previewHref={saPath(`/pages-funnels/${page.id}/new-builder/preview`)}
