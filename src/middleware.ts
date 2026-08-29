@@ -290,6 +290,12 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
   // no auth required. Each competitor has its own static route under
   // src/app/leadstack-vs-{slug}/page.tsx; this regex catches them all.
   /^\/leadstack-vs-[a-z0-9-]+$/,
+  // Public Webinar registration and attendee access. Authorization is
+  // enforced by the Webinar routes using the webinar slug or signed token.
+  /^\/webinar\/[^/]+\/[^/]+$/,
+  /^\/webinar\/join\/[^/]+$/,
+  /^\/api\/webinar\/[^/]+\/[^/]+\/register$/,
+  /^\/api\/webinar\/access\/[^/]+$/,
 ];
 
 function isPublicPath(pathname: string): boolean {
