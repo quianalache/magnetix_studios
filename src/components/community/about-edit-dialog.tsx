@@ -327,7 +327,7 @@ export function AboutEditDialog({
 /**
  * Self-contained trigger + dialog, so the server-component `CommunityAboutView`
  * can render one client island (same pattern as `JoinButton`/
- * `CommunityReviewForm` elsewhere on this same page) instead of owning the
+ * `ReviewFormLauncher` elsewhere on this same page) instead of owning the
  * modal's open state itself. Only ever rendered when the caller has already
  * confirmed the viewer is an active moderator — see `CommunityAboutView`.
  * `router.refresh()` after a successful save re-fetches this Server
