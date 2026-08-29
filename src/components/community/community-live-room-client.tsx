@@ -32,6 +32,8 @@ function RoomView({
   groupId,
   title,
   postId,
+  moderationPath,
+  endPath,
   onLeave,
 }: {
   room: Room;
@@ -41,6 +43,8 @@ function RoomView({
   groupId: string;
   title: string;
   postId: string | null;
+  moderationPath: string;
+  endPath: string;
   onLeave: () => void;
 }) {
   const state = useConnectionState(room);
@@ -144,14 +148,11 @@ function RoomView({
     identity: string,
     nextRole: "SPEAKER" | "ATTENDEE" | "PRESENTER"
   ) {
-    const response = await fetch(
-      `/api/community/${saId}/${groupId}/live-rooms/moderation`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId, identity, role: nextRole }),
-      }
-    );
+    const response = await fetch(moderationPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId, identity, role: nextRole }),
+    });
     setNotice(
       response.ok
         ? `${identity} is now ${nextRole.toLowerCase()}.`
@@ -160,10 +161,9 @@ function RoomView({
   }
   async function endRoom() {
     if (!confirm("End this live room for everyone?")) return;
-    await fetch(
-      `/api/community/${saId}/${groupId}/live-rooms?roomId=${encodeURIComponent(roomId)}`,
-      { method: "DELETE" }
-    );
+    await fetch(`${endPath}?roomId=${encodeURIComponent(roomId)}`, {
+      method: "DELETE",
+    });
     onLeave();
   }
   const host = role === "HOST" || role === "CO_HOST";
@@ -338,23 +338,33 @@ export default function CommunityLiveRoomClient({
   saId,
   groupId,
   roomId,
+  joinPath,
+  moderationPath,
+  endPath,
+  leaveHref,
 }: {
   saId: string;
   groupId: string;
   roomId: string;
+  joinPath?: string;
+  moderationPath?: string;
+  endPath?: string;
+  leaveHref?: string;
 }) {
   const [room, setRoom] = useState<Room | null>(null);
   const [info, setInfo] = useState<{
     role: string;
     title: string;
     postId: string | null;
+    moderationPath: string;
+    endPath: string;
   } | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     void (async () => {
       try {
         const response = await fetch(
-          `/api/community/${saId}/${groupId}/live-rooms`,
+          joinPath ?? `/api/community/${saId}/${groupId}/live-rooms`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -377,6 +387,10 @@ export default function CommunityLiveRoomClient({
           role: data.role ?? "ATTENDEE",
           title: data.title ?? "Live room",
           postId: data.communityPostId ?? null,
+          moderationPath:
+            moderationPath ??
+            `/api/community/${saId}/${groupId}/live-rooms/moderation`,
+          endPath: endPath ?? `/api/community/${saId}/${groupId}/live-rooms`,
         });
         setRoom(next);
       } catch (cause) {
@@ -385,7 +399,7 @@ export default function CommunityLiveRoomClient({
         );
       }
     })();
-  }, [saId, groupId, roomId]);
+  }, [saId, groupId, roomId, joinPath, moderationPath, endPath]);
   if (error)
     return (
       <main className="p-8">
@@ -410,9 +424,11 @@ export default function CommunityLiveRoomClient({
         groupId={groupId}
         title={info.title}
         postId={info.postId}
+        moderationPath={info.moderationPath}
+        endPath={info.endPath}
         onLeave={() => {
           room.disconnect();
-          window.location.href = `/c/${saId}`;
+          window.location.href = leaveHref ?? `/c/${saId}`;
         }}
       />
     </RoomContext.Provider>

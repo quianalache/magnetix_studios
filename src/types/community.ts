@@ -96,6 +96,29 @@ export type CommunityLiveRoomStatus =
   | "ended"
   | "canceled";
 
+export type CommunityEventStatus = CommunityLiveRoomStatus;
+export type CommunityEventLocationType = "magnetix_live" | "external" | "none";
+
+export interface CommunityEvent {
+  id: string;
+  subAccountId: string;
+  groupId: string;
+  title: string;
+  description: string;
+  startAt: Timestamp | FieldValue | null;
+  endAt: Timestamp | FieldValue | null;
+  timezone: string;
+  status: CommunityEventStatus;
+  channel: string | null;
+  locationType: CommunityEventLocationType;
+  externalUrl: string | null;
+  liveSessionId: string | null;
+  liveMode: "meeting" | "broadcast" | null;
+  createdByMemberId: string;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
 /** Community-owned pointer to the provider-neutral LiveSession record. */
 export interface CommunityLiveRoom {
   id: string;

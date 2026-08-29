@@ -154,6 +154,16 @@ export function communitySettingsHref(
     : `/c/${b.saId}/${groupSlug}/settings`;
 }
 
+export function communityEventsHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
+  if (b.staffGroupId) return `${staffBase(b)}/events`;
+  return b.pretty
+    ? `/communities/${groupSlug}/events`
+    : `/c/${b.saId}/${groupSlug}/events`;
+}
+
 /** Community Settings → Branding — same shape as General with `/branding`
  *  appended for both route families (they diverge on the segment BEFORE
  *  `/settings`, not after it), so no separate pretty/opaque branch needed. */

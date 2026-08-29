@@ -54,6 +54,8 @@ export async function createLiveSessionServerSide(input: {
   mode?: LiveSessionMode;
   status?: LiveSessionStatus;
   hostPersonId?: string | null;
+  scheduledStartAt?: Date | null;
+  scheduledEndAt?: Date | null;
 }): Promise<LiveSession> {
   const ref = input.id
     ? sessionRef(input.id)
@@ -70,8 +72,8 @@ export async function createLiveSessionServerSide(input: {
     description: input.description?.trim().slice(0, 2000) ?? null,
     mode: input.mode ?? "meeting",
     status: input.status ?? "scheduled",
-    scheduledStartAt: null,
-    scheduledEndAt: null,
+    scheduledStartAt: input.scheduledStartAt ?? null,
+    scheduledEndAt: input.scheduledEndAt ?? null,
     actualStartedAt: null,
     actualEndedAt: null,
     provider: "livekit" as const,

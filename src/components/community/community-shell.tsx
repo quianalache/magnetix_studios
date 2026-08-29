@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup, NavItemKey } from "@/types/community";
 import {
   communityAboutHref,
+  communityEventsHref,
   communityHomeHref,
   communityLeaderboardHref,
   communityLearningHref,
@@ -106,10 +107,7 @@ export function CommunityShell({
   const HREF_BY_KEY: Record<NavItemKey, string | undefined> = {
     community: communityHomeHref(linkBase, group.slug),
     classroom: communityLearningHref(linkBase, group.slug),
-    // Events has no built page in either route tree yet — stays a
-    // permanently inert tab regardless of its saved visibility/order, same
-    // as before the Navigation settings page existed.
-    events: undefined,
+    events: communityEventsHref(linkBase, group.slug),
     members: communityMembersHref(linkBase, group.slug),
     leaderboards: communityLeaderboardHref(linkBase, group.slug),
     about,
