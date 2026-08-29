@@ -5,6 +5,55 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Community owns its appearance. These scoped bridges keep the existing
+   component classes readable while routing their neutral Magnetix utilities
+   through the Community's semantic palette instead of html-level app theme
+   tokens. */
+.community-theme {
+  background-color: var(--community-bg);
+  color: var(--community-text);
+}
+.community-theme .bg-background {
+  background-color: var(--community-bg) !important;
+}
+.community-theme .bg-card,
+.community-theme .bg-white,
+.community-theme [class~="bg-white"] {
+  background-color: var(--community-surface) !important;
+}
+.community-theme [class~="bg-[#F8F7F5]"] {
+  background-color: var(--community-bg) !important;
+}
+.community-theme [class~="bg-[#F5F4F2]"],
+.community-theme [class~="bg-[#F0F0F0]"] {
+  background-color: color-mix(
+    in srgb,
+    var(--community-text) 8%,
+    var(--community-bg)
+  ) !important;
+}
+.community-theme .border-border,
+.community-theme [class~="border-[#E4E4E4]"],
+.community-theme [class~="border-[#f0f0f0]"] {
+  border-color: var(--community-border) !important;
+}
+.community-theme [class~="text-[#202124]"],
+.community-theme .text-foreground {
+  color: var(--community-text) !important;
+}
+.community-theme [class~="text-[#3a3a44]"],
+.community-theme .text-muted-foreground {
+  color: var(--community-text-muted) !important;
+}
+.community-theme [class~="text-[#909090]"],
+.community-theme [class~="text-[#b4b4b4]"] {
+  color: var(--community-text-muted) !important;
+}
+.community-theme [class~="text-[#202124]"]:hover,
+.community-theme [class~="text-[#3a3a44]"]:hover {
+  color: var(--community-text) !important;
+}
+
 /* App-like touch behavior (PWA native-feel pass):
    - no gray tap flash on touch (we provide our own press states)
    - no whole-page rubber-banding / accidental pull-to-refresh mid-scroll;
@@ -44,14 +93,16 @@ body {
      stale artifact: `ui-sans-serif, system-ui, sans-serif, "Apple Color
      Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"`.
      Plain native system font, no custom webfont at all. */
-  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
     "Segoe UI Symbol", "Noto Color Emoji";
   /* Was Geist Mono — Vercel's own stylized monospace, and the exact font
      she called out ("I hate it") on every stat number in the app. Switched
      to the plain native system monospace (SF Mono on a Mac) instead, same
      stack MomentumOS itself uses for every number on its dashboard — not
      a custom font at all, which is exactly why its numbers read clean. */
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
   --font-serif: var(--font-instrument-serif);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -219,81 +270,101 @@ body {
    once, so a property only .theme-magnetix defines still cascades in dark
    mode. */
 .theme-magnetix {
-  --mx-lavender-mist: #EDD9EC;
-  --mx-rose-quartz: #E8B7C8;
-  --mx-blush-veil: #F3D9D7;
-  --mx-aqua-glow: #9EDBDD;
-  --mx-purple: #5E2574;
-  --mx-purple-deep: #3D1652;
-  --mx-purple-deeper: #2A0F3A;
+  --mx-lavender-mist: #edd9ec;
+  --mx-rose-quartz: #e8b7c8;
+  --mx-blush-veil: #f3d9d7;
+  --mx-aqua-glow: #9edbdd;
+  --mx-purple: #5e2574;
+  --mx-purple-deep: #3d1652;
+  --mx-purple-deeper: #2a0f3a;
   /* Was #F7F0F6 — measurably more pink-tinted (G channel 240) than the
      real MomentumOS page background, confirmed by converting its actual
      shipped token (hsl(4 30% 98%)) to hex: #FBF9F8, nearly white with
      only a whisper of warmth. She asked for "the whitish background"
      multiple times — this is the real, computed target, not eyeballed. */
-  --background: #FBF9F8;
-  --foreground: #2B1830;
-  --card: #FFFFFF;
-  --card-foreground: #2B1830;
-  --popover: #FFFFFF;
-  --popover-foreground: #2B1830;
-  --primary: #5E2574;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F3E4F0;
-  --secondary-foreground: #2B1830;
-  --muted: #F1E6EF;
-  --muted-foreground: #8A7690;
-  --accent: #F3E4F0;
-  --accent-foreground: #5E2574;
-  --border: #E9DCE8;
-  --input: #E9DCE8;
-  --ring: #5E2574;
+  --background: #fbf9f8;
+  --foreground: #2b1830;
+  --card: #ffffff;
+  --card-foreground: #2b1830;
+  --popover: #ffffff;
+  --popover-foreground: #2b1830;
+  --primary: #5e2574;
+  --primary-foreground: #ffffff;
+  --secondary: #f3e4f0;
+  --secondary-foreground: #2b1830;
+  --muted: #f1e6ef;
+  --muted-foreground: #8a7690;
+  --accent: #f3e4f0;
+  --accent-foreground: #5e2574;
+  --border: #e9dce8;
+  --input: #e9dce8;
+  --ring: #5e2574;
   --sidebar: var(--mx-purple-deep);
-  --sidebar-foreground: #EDE0EF;
-  --sidebar-primary: #FFFFFF;
+  --sidebar-foreground: #ede0ef;
+  --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: var(--mx-purple-deeper);
   --sidebar-accent: rgba(255, 255, 255, 0.06);
-  --sidebar-accent-foreground: #EDE0EF;
+  --sidebar-accent-foreground: #ede0ef;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: var(--mx-aqua-glow);
-  --mx-border-soft: #F0E4EF;
-  --mx-shadow-card: 0 1px 2px rgba(43, 24, 48, 0.04), 0 8px 24px -12px rgba(94, 37, 116, 0.18);
-  --mx-gradient-hero: linear-gradient(120deg, var(--mx-rose-quartz) 0%, var(--mx-purple) 100%);
-  --mx-gradient-banner: linear-gradient(115deg, var(--mx-rose-quartz) 0%, #C6699A 45%, var(--mx-purple) 100%);
+  --mx-border-soft: #f0e4ef;
+  --mx-shadow-card:
+    0 1px 2px rgba(43, 24, 48, 0.04), 0 8px 24px -12px rgba(94, 37, 116, 0.18);
+  --mx-gradient-hero: linear-gradient(
+    120deg,
+    var(--mx-rose-quartz) 0%,
+    var(--mx-purple) 100%
+  );
+  --mx-gradient-banner: linear-gradient(
+    115deg,
+    var(--mx-rose-quartz) 0%,
+    #c6699a 45%,
+    var(--mx-purple) 100%
+  );
 }
 .dark.theme-magnetix {
-  --background: #1B0F22;
-  --foreground: #F3EAF3;
+  --background: #1b0f22;
+  --foreground: #f3eaf3;
   --card: #241530;
-  --card-foreground: #F3EAF3;
+  --card-foreground: #f3eaf3;
   --popover: #241530;
-  --popover-foreground: #F3EAF3;
-  --primary: #C892DE;
-  --primary-foreground: #2A0F3A;
-  --secondary: #341E42;
-  --secondary-foreground: #F3EAF3;
-  --muted: #2E1B38;
-  --muted-foreground: #9884A0;
-  --accent: #341E42;
-  --accent-foreground: #C892DE;
-  --border: #3A2444;
-  --input: #3A2444;
-  --ring: #C892DE;
+  --popover-foreground: #f3eaf3;
+  --primary: #c892de;
+  --primary-foreground: #2a0f3a;
+  --secondary: #341e42;
+  --secondary-foreground: #f3eaf3;
+  --muted: #2e1b38;
+  --muted-foreground: #9884a0;
+  --accent: #341e42;
+  --accent-foreground: #c892de;
+  --border: #3a2444;
+  --input: #3a2444;
+  --ring: #c892de;
   /* Sidebar tokens IDENTICAL to the light block above — this is the
      "always purple chrome regardless of light/dark" requirement, achieved
      for free by not varying these values between the two blocks. */
   --sidebar: var(--mx-purple-deep);
-  --sidebar-foreground: #EDE0EF;
-  --sidebar-primary: #FFFFFF;
+  --sidebar-foreground: #ede0ef;
+  --sidebar-primary: #ffffff;
   --sidebar-primary-foreground: var(--mx-purple-deeper);
   --sidebar-accent: rgba(255, 255, 255, 0.06);
-  --sidebar-accent-foreground: #EDE0EF;
+  --sidebar-accent-foreground: #ede0ef;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: var(--mx-aqua-glow);
-  --mx-border-soft: #2E1B38;
-  --mx-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 8px 24px -12px rgba(0, 0, 0, 0.4);
-  --mx-gradient-hero: linear-gradient(120deg, var(--mx-rose-quartz) 0%, #C892DE 100%);
-  --mx-gradient-banner: linear-gradient(115deg, #B87CA0 0%, #8A4A87 45%, var(--mx-purple) 100%);
+  --mx-border-soft: #2e1b38;
+  --mx-shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.24), 0 8px 24px -12px rgba(0, 0, 0, 0.4);
+  --mx-gradient-hero: linear-gradient(
+    120deg,
+    var(--mx-rose-quartz) 0%,
+    #c892de 100%
+  );
+  --mx-gradient-banner: linear-gradient(
+    115deg,
+    #b87ca0 0%,
+    #8a4a87 45%,
+    var(--mx-purple) 100%
+  );
 }
 
 /* Fixed dark-purple sidebar chrome for the Magnetix theme — a CSS custom
@@ -303,7 +374,11 @@ body {
    fallback if this rule is ever missing. */
 .theme-magnetix .app-sidebar,
 .dark.theme-magnetix .app-sidebar {
-  background-image: linear-gradient(180deg, var(--mx-purple-deep) 0%, var(--mx-purple-deeper) 100%);
+  background-image: linear-gradient(
+    180deg,
+    var(--mx-purple-deep) 0%,
+    var(--mx-purple-deeper) 100%
+  );
 }
 
 /* Dashboard-page gradient spots that were literal indigo/violet/pink
@@ -315,7 +390,11 @@ body {
   background-image: var(--mx-gradient-hero);
 }
 .theme-magnetix .mx-wash-gradient {
-  background-image: linear-gradient(135deg, var(--mx-blush-veil) 0%, var(--mx-lavender-mist) 100%);
+  background-image: linear-gradient(
+    135deg,
+    var(--mx-blush-veil) 0%,
+    var(--mx-lavender-mist) 100%
+  );
 }
 .theme-magnetix .mx-banner-gradient {
   background-image: var(--mx-gradient-banner);

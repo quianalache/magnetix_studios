@@ -1,5 +1,7 @@
 import { Bell, Heart, MessageCircle, Search } from "lucide-react";
 import type { CommunityThemeColors } from "@/types/community";
+import type { CommunityTheme } from "@/types/community";
+import { resolveCommunityThemeColors } from "@/lib/community/community-theme-presets";
 
 /**
  * Branding's "Live Theme Preview" (Part 8) — deliberately NOT the General
@@ -14,16 +16,32 @@ import type { CommunityThemeColors } from "@/types/community";
  * on purpose — a moderator changing any one of the six should be able to
  * point at what moved.
  */
-export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }) {
+export function BrandingLivePreview({
+  theme,
+  mode,
+}: {
+  theme: CommunityTheme;
+  mode: "light" | "dark";
+}) {
+  const colors: CommunityThemeColors = resolveCommunityThemeColors(theme, mode);
   return (
     <div
       className="overflow-hidden rounded-xl border shadow-sm"
-      style={{ backgroundColor: colors.background, borderColor: colors.surface === colors.background ? `${colors.text}22` : colors.surface }}
+      style={{
+        backgroundColor: colors.background,
+        borderColor:
+          colors.surface === colors.background
+            ? `${colors.text}22`
+            : colors.surface,
+      }}
     >
       {/* Header / nav */}
       <div
         className="flex items-center gap-3 border-b px-3 py-2.5"
-        style={{ backgroundColor: colors.surface, borderColor: `${colors.text}14` }}
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: `${colors.text}14`,
+        }}
       >
         <div
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold text-white"
@@ -33,12 +51,18 @@ export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }
         </div>
         <div
           className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-[10px]"
-          style={{ backgroundColor: colors.background, color: `${colors.text}99` }}
+          style={{
+            backgroundColor: colors.background,
+            color: `${colors.text}99`,
+          }}
         >
           <Search className="h-3 w-3 shrink-0" />
           <span className="truncate">Search community…</span>
         </div>
-        <Bell className="h-3.5 w-3.5 shrink-0" style={{ color: `${colors.text}99` }} />
+        <Bell
+          className="h-3.5 w-3.5 shrink-0"
+          style={{ color: `${colors.text}99` }}
+        />
         <div
           className="h-5 w-5 shrink-0 rounded-full"
           style={{ backgroundColor: colors.accent }}
@@ -48,7 +72,10 @@ export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }
       {/* Nav tabs */}
       <div
         className="flex items-center gap-3 border-b px-3 py-1.5 text-[10px] font-medium"
-        style={{ backgroundColor: colors.surface, borderColor: `${colors.text}14` }}
+        style={{
+          backgroundColor: colors.surface,
+          borderColor: `${colors.text}14`,
+        }}
       >
         {["Home", "Classroom", "Events", "About"].map((tab, i) => (
           <span
@@ -76,25 +103,43 @@ export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }
         {/* Post card */}
         <div
           className="space-y-1.5 rounded-lg border p-2.5"
-          style={{ backgroundColor: colors.surface, borderColor: `${colors.text}14` }}
+          style={{
+            backgroundColor: colors.surface,
+            borderColor: `${colors.text}14`,
+          }}
         >
           <div className="flex items-center gap-1.5">
-            <div className="h-4 w-4 shrink-0 rounded-full" style={{ backgroundColor: colors.accent }} />
-            <span className="text-[10px] font-semibold" style={{ color: colors.text }}>
+            <div
+              className="h-4 w-4 shrink-0 rounded-full"
+              style={{ backgroundColor: colors.accent }}
+            />
+            <span
+              className="text-[10px] font-semibold"
+              style={{ color: colors.text }}
+            >
               Quiana LaChé
             </span>
             <span className="text-[9px]" style={{ color: `${colors.text}66` }}>
               2h ago
             </span>
           </div>
-          <p className="text-[10px] font-semibold" style={{ color: colors.text }}>
+          <p
+            className="text-[10px] font-semibold"
+            style={{ color: colors.text }}
+          >
             Just launched my new course!
           </p>
-          <p className="text-[9px] leading-snug" style={{ color: `${colors.text}99` }}>
-            After months of planning, I&apos;m excited to finally share this with you.{" "}
-            <span style={{ color: colors.accent }}>#launch</span>
+          <p
+            className="text-[9px] leading-snug"
+            style={{ color: `${colors.text}99` }}
+          >
+            After months of planning, I&apos;m excited to finally share this
+            with you. <span style={{ color: colors.accent }}>#launch</span>
           </p>
-          <div className="flex items-center gap-3 pt-1 text-[9px]" style={{ color: `${colors.text}80` }}>
+          <div
+            className="flex items-center gap-3 pt-1 text-[9px]"
+            style={{ color: `${colors.text}80` }}
+          >
             <span className="flex items-center gap-1">
               <Heart className="h-3 w-3" style={{ color: colors.accent }} /> 24
             </span>
@@ -108,9 +153,15 @@ export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }
         <div className="grid grid-cols-[1fr_78px] gap-2.5">
           <div
             className="space-y-1 rounded-lg border p-2.5"
-            style={{ backgroundColor: colors.surface, borderColor: `${colors.text}14` }}
+            style={{
+              backgroundColor: colors.surface,
+              borderColor: `${colors.text}14`,
+            }}
           >
-            <p className="text-[9px] font-semibold" style={{ color: colors.text }}>
+            <p
+              className="text-[9px] font-semibold"
+              style={{ color: colors.text }}
+            >
               Best tools for course creation?
             </p>
             <p className="text-[8px]" style={{ color: `${colors.text}80` }}>
@@ -121,9 +172,13 @@ export function BrandingLivePreview({ colors }: { colors: CommunityThemeColors }
             className="flex flex-col items-center justify-center gap-0.5 rounded-lg p-2 text-center"
             style={{ backgroundColor: colors.primary }}
           >
-            <span className="text-[13px] font-bold leading-none text-white">24</span>
+            <span className="text-[13px] leading-none font-bold text-white">
+              24
+            </span>
             <span className="text-[7px] leading-none text-white/80">AUG</span>
-            <span className="mt-1 text-[7px] leading-tight text-white">Live Q&A</span>
+            <span className="mt-1 text-[7px] leading-tight text-white">
+              Live Q&A
+            </span>
           </div>
         </div>
       </div>

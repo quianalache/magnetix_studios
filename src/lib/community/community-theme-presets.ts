@@ -2,8 +2,10 @@ import type {
   CommunityGroup,
   CommunityTheme,
   CommunityThemeColors,
+  CommunityThemeMode,
   CommunityThemePresetKey,
 } from "@/types/community";
+import type { CSSProperties } from "react";
 
 /**
  * Client-safe Branding preset table — the 8 named presets from the approved
@@ -190,15 +192,55 @@ export function findThemePreset(key: CommunityThemePresetKey) {
  *  starting point and as "Reset to Default". */
 export function defaultCommunityTheme(): CommunityTheme {
   const preset = COMMUNITY_THEME_PRESETS[0];
-  return { preset: preset.key, light: { ...preset.light }, dark: { ...preset.dark } };
+  return {
+    preset: preset.key,
+    light: { ...preset.light },
+    dark: { ...preset.dark },
+    mode: "light",
+  };
 }
 
 /** Normalizes a possibly-absent/partial theme (older community, or a
  *  malformed save) into a complete, safe-to-render `CommunityTheme` —
  *  the ONE place that decides what "not configured yet" falls back to. */
-export function normalizeCommunityTheme(theme: CommunityTheme | undefined | null): CommunityTheme {
+export function normalizeCommunityTheme(
+  theme: CommunityTheme | undefined | null
+): CommunityTheme {
   if (!theme || !theme.light || !theme.dark) return defaultCommunityTheme();
-  return theme;
+  return { ...theme, mode: theme.mode === "dark" ? "dark" : "light" };
+}
+
+export function resolveCommunityThemeColors(
+  theme: CommunityTheme | undefined | null,
+  mode?: CommunityThemeMode
+): CommunityThemeColors {
+  const normalized = normalizeCommunityTheme(theme);
+  return normalized[mode ?? normalized.mode ?? "light"];
+}
+
+/** Inline variables are scoped to the Community root, so the CRM's html-level
+ * theme can never replace a Community's configured appearance. */
+export function communityThemeStyle(
+  theme: CommunityTheme | undefined | null
+): CSSProperties {
+  const colors = resolveCommunityThemeColors(theme);
+  return {
+    "--community-bg": colors.background,
+    "--community-surface": colors.surface,
+    "--community-surface-elevated": colors.surface,
+    "--community-primary": colors.primary,
+    "--community-primary-action": colors.primaryAction,
+    "--community-accent": colors.accent,
+    "--community-border": `${colors.text}22`,
+    "--community-text": colors.text,
+    "--community-text-muted": `${colors.text}99`,
+    color: colors.text,
+    backgroundColor: colors.background,
+    colorScheme:
+      theme && normalizeCommunityTheme(theme).mode === "dark"
+        ? "dark"
+        : "light",
+  } as CSSProperties;
 }
 
 /**

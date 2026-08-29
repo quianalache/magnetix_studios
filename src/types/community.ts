@@ -172,6 +172,8 @@ export interface CommunityThemeColors {
   text: string;
 }
 
+export type CommunityThemeMode = "light" | "dark";
+
 export type CommunityThemePresetKey =
   | "magnetix-purple"
   | "ocean-blue"
@@ -193,6 +195,8 @@ export interface CommunityTheme {
   preset: CommunityThemePresetKey;
   light: CommunityThemeColors;
   dark: CommunityThemeColors;
+  /** The independently selected appearance for member-facing surfaces. */
+  mode?: CommunityThemeMode;
 }
 
 /**

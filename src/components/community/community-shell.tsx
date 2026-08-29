@@ -16,6 +16,10 @@ import { getVisibleNavItems, normalizeNavigation } from "@/lib/community/communi
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
+import {
+  communityThemeStyle,
+  resolveCommunityThemeColors,
+} from "@/lib/community/community-theme-presets";
 
 export const COMMUNITY_BG = "#F8F7F5";
 export const COMMUNITY_DEFAULT_BRAND = "#202124";
@@ -113,14 +117,17 @@ export function CommunityShell({
   const navItems = getVisibleNavItems(normalizeNavigation(group.navigation), {
     isModerator: viewerIsModerator,
   });
-  const tabs: { key: CommunityTab; label: string; href?: string; disabled?: boolean }[] = navItems.map(
-    (item) => ({
-      key: item.key,
-      label: item.label,
-      href: HREF_BY_KEY[item.key],
-      disabled: HREF_BY_KEY[item.key] === undefined,
-    }),
-  );
+  const tabs: {
+    key: CommunityTab;
+    label: string;
+    href?: string;
+    disabled?: boolean;
+  }[] = navItems.map((item) => ({
+    key: item.key,
+    label: item.label,
+    href: HREF_BY_KEY[item.key],
+    disabled: HREF_BY_KEY[item.key] === undefined,
+  }));
 
   // Mobile header layout (root cause of the pre-existing clientWidth:0 tab-
   // strip bug, found + fixed 2026-08-24): the original markup was a single
@@ -148,8 +155,8 @@ export function CommunityShell({
     <div
       className={cn(
         "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2",
-        "md:h-14 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4 md:py-0 md:px-4 lg:px-6",
-        !staffGroupId && "md:mx-auto md:max-w-7xl",
+        "md:h-14 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4 md:px-4 md:py-0 lg:px-6",
+        !staffGroupId && "md:mx-auto md:max-w-7xl"
       )}
     >
       <Link
@@ -167,7 +174,11 @@ export function CommunityShell({
             className="flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm font-medium transition-colors md:px-3"
             style={
               active === "settings"
-                ? { borderColor: brand, color: brand, backgroundColor: `${brand}14` }
+                ? {
+                    borderColor: brand,
+                    color: brand,
+                    backgroundColor: `${brand}14`,
+                  }
                 : { borderColor: "#E4E4E4", color: "#3a3a44" }
             }
           >
@@ -200,7 +211,7 @@ export function CommunityShell({
               rel="noreferrer"
               aria-label="View as Member — open the standalone member-facing Community in a new tab"
               title="Open the standalone member-facing Community in a new tab"
-              className="flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-2 py-1.5 text-sm font-medium text-[#3a3a44] hover:bg-muted md:px-3"
+              className="hover:bg-muted flex items-center gap-1.5 rounded-md border border-[#E4E4E4] px-2 py-1.5 text-sm font-medium text-[#3a3a44] md:px-3"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden md:inline">View as Member</span>
@@ -208,7 +219,11 @@ export function CommunityShell({
           </>
         ) : (
           <>
-            <Link href={communityProfileHref(linkBase, group.slug)} title="Your profile" aria-label="Your profile">
+            <Link
+              href={communityProfileHref(linkBase, group.slug)}
+              title="Your profile"
+              aria-label="Your profile"
+            >
               <MemberAvatar author={viewer} size={28} brand={brand} />
             </Link>
             <form action={`/api/community/${saId}/logout`} method="post">
@@ -216,7 +231,7 @@ export function CommunityShell({
                 type="submit"
                 title="Sign out"
                 aria-label="Sign out"
-                className="flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground hover:bg-[#F0F0F0] hover:text-foreground md:px-2"
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md p-1.5 text-xs hover:bg-[#F0F0F0] md:px-2"
               >
                 <LogOut className="h-3.5 w-3.5 shrink-0" />
                 <span className="hidden md:inline">Sign out</span>
@@ -226,34 +241,33 @@ export function CommunityShell({
         )}
       </div>
 
-      <nav
-        className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto md:order-2 md:col-span-1 md:col-start-2 md:row-start-1"
-      >
+      <nav className="col-span-2 row-start-2 flex min-w-0 items-center gap-1 overflow-x-auto md:order-2 md:col-span-1 md:col-start-2 md:row-start-1">
         {tabs.map((t) => {
           const isActive = t.key === active;
-          return (
-            t.disabled ? (
-              <span
-                key={t.key}
-                aria-disabled="true"
-                className="shrink-0 cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/55"
-              >
-                {t.label}
-              </span>
-            ) : (
-              <Link
-                key={t.key}
-                href={t.href!}
-                className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors"
-                style={
-                  isActive
-                    ? { borderColor: brand, color: "var(--foreground)" }
-                    : { borderColor: "transparent", color: "var(--muted-foreground)" }
-                }
-              >
-                {t.label}
-              </Link>
-            )
+          return t.disabled ? (
+            <span
+              key={t.key}
+              aria-disabled="true"
+              className="text-muted-foreground/55 shrink-0 cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium"
+            >
+              {t.label}
+            </span>
+          ) : (
+            <Link
+              key={t.key}
+              href={t.href!}
+              className="shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors"
+              style={
+                isActive
+                  ? { borderColor: brand, color: "var(--community-text)" }
+                  : {
+                      borderColor: "transparent",
+                      color: "var(--community-text-muted)",
+                    }
+              }
+            >
+              {t.label}
+            </Link>
           );
         })}
       </nav>
@@ -265,7 +279,7 @@ export function CommunityShell({
       className={cn(
         "gap-6",
         staffGroupId ? "py-4" : "mx-auto max-w-7xl px-4 py-6 md:px-6",
-        rightRail !== undefined && "grid md:grid-cols-[1fr_320px]",
+        rightRail !== undefined && "grid md:grid-cols-[1fr_320px]"
       )}
     >
       <div className="min-w-0">{children}</div>
@@ -288,16 +302,22 @@ export function CommunityShell({
     // tokens, so they're already visually self-contained regardless of
     // which CRM theme (light/dark) is active around them.
     return (
-      <div className="overflow-hidden rounded-xl border border-border" style={{ backgroundColor: COMMUNITY_BG }}>
-        <header className="border-b border-border bg-card">{headerRow}</header>
+      <div
+        className="community-theme border-border overflow-hidden rounded-xl border"
+        style={themeStyle}
+      >
+        <header className="border-border bg-card border-b">{headerRow}</header>
         {mainContent}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground" style={{ backgroundColor: COMMUNITY_BG }}>
-      <header className="border-b border-border bg-card">{headerRow}</header>
+    <div
+      className="community-theme bg-background text-foreground min-h-screen"
+      style={themeStyle}
+    >
+      <header className="border-border bg-card border-b">{headerRow}</header>
       {mainContent}
     </div>
   );

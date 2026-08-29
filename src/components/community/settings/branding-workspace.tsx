@@ -18,12 +18,36 @@ import {
 import type { CommunityTheme, CommunityThemeColors } from "@/types/community";
 
 /** Human labels for the 6 color roles, in the order the mock-up lists them. */
-const COLOR_ROLES: { key: keyof CommunityThemeColors; label: string; hint: string }[] = [
-  { key: "primary", label: "Primary / Brand", hint: "Your community's main identity color." },
-  { key: "primaryAction", label: "Primary Actions / Buttons", hint: "Post, Save, and other primary buttons." },
-  { key: "accent", label: "Accent / Highlights", hint: "Likes, links, badges, and small highlights." },
-  { key: "background", label: "Background", hint: "The page background behind everything." },
-  { key: "surface", label: "Surface / Cards", hint: "Post cards, panels, and the header bar." },
+const COLOR_ROLES: {
+  key: keyof CommunityThemeColors;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "primary",
+    label: "Primary / Brand",
+    hint: "Your community's main identity color.",
+  },
+  {
+    key: "primaryAction",
+    label: "Primary Actions / Buttons",
+    hint: "Post, Save, and other primary buttons.",
+  },
+  {
+    key: "accent",
+    label: "Accent / Highlights",
+    hint: "Likes, links, badges, and small highlights.",
+  },
+  {
+    key: "background",
+    label: "Background",
+    hint: "The page background behind everything.",
+  },
+  {
+    key: "surface",
+    label: "Surface / Cards",
+    hint: "Post cards, panels, and the header bar.",
+  },
   { key: "text", label: "Text / Links", hint: "Body text and link color." },
 ];
 
@@ -76,9 +100,13 @@ export function BrandingWorkspace({
   theme: CommunityTheme | undefined;
   brand: string;
 }) {
-  const [savedTheme, setSavedTheme] = useState(() => normalizeCommunityTheme(initialTheme));
+  const [savedTheme, setSavedTheme] = useState(() =>
+    normalizeCommunityTheme(initialTheme)
+  );
   const [draft, setDraft] = useState(savedTheme);
-  const [mode, setMode] = useState<"light" | "dark">("light");
+  const [mode, setMode] = useState<"light" | "dark">(
+    savedTheme.mode ?? "light"
+  );
   const [colorTab, setColorTab] = useState<"presets" | "custom">("presets");
   const [saving, setSaving] = useState(false);
 
@@ -87,7 +115,11 @@ export function BrandingWorkspace({
   function selectPreset(key: (typeof COMMUNITY_THEME_PRESETS)[number]["key"]) {
     const preset = COMMUNITY_THEME_PRESETS.find((p) => p.key === key);
     if (!preset) return;
-    setDraft({ preset: key, light: { ...preset.light }, dark: { ...preset.dark } });
+    setDraft({
+      preset: key,
+      light: { ...preset.light },
+      dark: { ...preset.dark },
+    });
   }
 
   function selectCustom() {
@@ -96,7 +128,11 @@ export function BrandingWorkspace({
   }
 
   function setColor(role: keyof CommunityThemeColors, value: string) {
-    setDraft((d) => ({ ...d, preset: "custom", [mode]: { ...d[mode], [role]: value } }));
+    setDraft((d) => ({
+      ...d,
+      preset: "custom",
+      [mode]: { ...d[mode], [role]: value },
+    }));
   }
 
   function resetToDefault() {
@@ -141,7 +177,9 @@ export function BrandingWorkspace({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
+          <h1 className="text-xl font-semibold text-[#202124]">
+            Community Settings
+          </h1>
           <Link
             href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
@@ -170,7 +208,12 @@ export function BrandingWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr_340px]">
-        <SettingsNav brand={brand} active="branding" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
+        <SettingsNav
+          brand={brand}
+          active="branding"
+          link={{ saId, pretty, staffGroupId }}
+          groupSlug={groupSlug}
+        />
 
         <div className="space-y-5">
           <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
@@ -191,7 +234,10 @@ export function BrandingWorkspace({
               />
               <SegmentedControl
                 value={mode}
-                onChange={setMode}
+                onChange={(nextMode) => {
+                  setMode(nextMode);
+                  setDraft((d) => ({ ...d, mode: nextMode }));
+                }}
                 options={[
                   { value: "light", label: "Light Mode" },
                   { value: "dark", label: "Dark Mode" },
@@ -202,8 +248,12 @@ export function BrandingWorkspace({
 
             {colorTab === "presets" ? (
               <div className="mt-5">
-                <p className="mb-2 text-sm font-medium text-[#202124]">Theme Presets</p>
-                <p className="mb-3 text-xs text-[#909090]">Choose a preset theme to get started quickly.</p>
+                <p className="mb-2 text-sm font-medium text-[#202124]">
+                  Theme Presets
+                </p>
+                <p className="mb-3 text-xs text-[#909090]">
+                  Choose a preset theme to get started quickly.
+                </p>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {COMMUNITY_THEME_PRESETS.map((preset) => {
                     const selected = draft.preset === preset.key;
@@ -215,20 +265,27 @@ export function BrandingWorkspace({
                         onClick={() => selectPreset(preset.key)}
                         className={cn(
                           "relative flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors",
-                          selected ? "border-2" : "border-[#E4E4E4] hover:border-[#d4d4d4]",
+                          selected
+                            ? "border-2"
+                            : "border-[#E4E4E4] hover:border-[#d4d4d4]"
                         )}
                         style={selected ? { borderColor: brand } : undefined}
                       >
                         {selected && (
                           <span
-                            className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full text-white"
+                            className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full text-white"
                             style={{ backgroundColor: brand }}
                           >
                             <Check className="h-2.5 w-2.5" />
                           </span>
                         )}
                         <div className="flex gap-1">
-                          {[swatches.primary, swatches.primaryAction, swatches.accent, swatches.surface].map((c, i) => (
+                          {[
+                            swatches.primary,
+                            swatches.primaryAction,
+                            swatches.accent,
+                            swatches.surface,
+                          ].map((c, i) => (
                             <span
                               key={i}
                               className="h-4 w-4 rounded-full border border-black/5"
@@ -236,7 +293,9 @@ export function BrandingWorkspace({
                             />
                           ))}
                         </div>
-                        <span className="text-xs font-medium text-[#202124]">{preset.label}</span>
+                        <span className="text-xs font-medium text-[#202124]">
+                          {preset.label}
+                        </span>
                       </button>
                     );
                   })}
@@ -245,13 +304,19 @@ export function BrandingWorkspace({
                     onClick={selectCustom}
                     className={cn(
                       "relative flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors",
-                      draft.preset === "custom" ? "border-2" : "border-[#E4E4E4] hover:border-[#d4d4d4]",
+                      draft.preset === "custom"
+                        ? "border-2"
+                        : "border-[#E4E4E4] hover:border-[#d4d4d4]"
                     )}
-                    style={draft.preset === "custom" ? { borderColor: brand } : undefined}
+                    style={
+                      draft.preset === "custom"
+                        ? { borderColor: brand }
+                        : undefined
+                    }
                   >
                     {draft.preset === "custom" && (
                       <span
-                        className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full text-white"
+                        className="absolute top-2 right-2 flex h-4 w-4 items-center justify-center rounded-full text-white"
                         style={{ backgroundColor: brand }}
                       >
                         <Check className="h-2.5 w-2.5" />
@@ -260,16 +325,21 @@ export function BrandingWorkspace({
                     <div
                       className="h-4 w-4 rounded-full"
                       style={{
-                        background: "conic-gradient(from 0deg, #EF4444, #F59E0B, #22C55E, #3B82F6, #8B5CF6, #EF4444)",
+                        background:
+                          "conic-gradient(from 0deg, #EF4444, #F59E0B, #22C55E, #3B82F6, #8B5CF6, #EF4444)",
                       }}
                     />
-                    <span className="text-xs font-medium text-[#202124]">Custom</span>
-                    <span className="text-[11px] text-[#909090]">Create your own unique color theme</span>
+                    <span className="text-xs font-medium text-[#202124]">
+                      Custom
+                    </span>
+                    <span className="text-[11px] text-[#909090]">
+                      Create your own unique color theme
+                    </span>
                   </button>
                 </div>
 
                 <div className="mt-5 border-t border-[#f0f0f0] pt-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#909090]">
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-[#909090] uppercase">
                     Quick Actions
                   </p>
                   <button
@@ -279,20 +349,31 @@ export function BrandingWorkspace({
                   >
                     Reset to Default
                   </button>
-                  <p className="mt-1.5 text-xs text-[#909090]">This will restore the Magnetix Purple theme.</p>
+                  <p className="mt-1.5 text-xs text-[#909090]">
+                    This will restore the Magnetix Purple theme.
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="mt-5 space-y-4">
                 <p className="text-xs text-[#909090]">
-                  Editing <span className="font-medium text-[#202124]">{mode === "light" ? "Light Mode" : "Dark Mode"}</span> colors.
+                  Editing{" "}
+                  <span className="font-medium text-[#202124]">
+                    {mode === "light" ? "Light Mode" : "Dark Mode"}
+                  </span>{" "}
+                  colors.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   {COLOR_ROLES.map((role) => (
                     <div key={role.key} className="flex items-start gap-3">
-                      <ColorInput value={activeColors[role.key]} onChange={(hex) => setColor(role.key, hex)} />
+                      <ColorInput
+                        value={activeColors[role.key]}
+                        onChange={(hex) => setColor(role.key, hex)}
+                      />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-[#202124]">{role.label}</p>
+                        <p className="text-sm font-medium text-[#202124]">
+                          {role.label}
+                        </p>
                         <p className="text-xs text-[#909090]">{role.hint}</p>
                       </div>
                     </div>
@@ -306,10 +387,14 @@ export function BrandingWorkspace({
         <div className="md:sticky md:top-6 md:self-start">
           <div className="space-y-3">
             <div>
-              <h2 className="text-sm font-semibold text-[#202124]">Live Theme Preview</h2>
-              <p className="text-xs text-[#909090]">See how your community will look with this theme.</p>
+              <h2 className="text-sm font-semibold text-[#202124]">
+                Live Theme Preview
+              </h2>
+              <p className="text-xs text-[#909090]">
+                See how your community will look with this theme.
+              </p>
             </div>
-            <BrandingLivePreview colors={activeColors} />
+            <BrandingLivePreview theme={draft} mode={mode} />
           </div>
         </div>
       </div>

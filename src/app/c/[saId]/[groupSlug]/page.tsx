@@ -15,6 +15,10 @@ import {
 } from "@/components/community/community-shell";
 import { CommunityAboutView } from "@/components/community/community-about-view";
 import type { AuthorView } from "@/types/community";
+import {
+  communityThemeStyle,
+  resolveCommunityThemeColors,
+} from "@/lib/community/community-theme-presets";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +53,15 @@ export default async function GroupAboutPage({
     else if (membership?.status === "pending") state = "pending";
   }
 
-  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+  const themeColors = resolveCommunityThemeColors(group.theme);
+  const brand =
+    themeColors.primary || group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
   const [tiers, reviews] = await Promise.all([
-    listCommunityTiers({ subAccountId: saId, groupId: group.id, activeOnly: true }),
+    listCommunityTiers({
+      subAccountId: saId,
+      groupId: group.id,
+      activeOnly: true,
+    }),
     listCommunityReviews({ subAccountId: saId, groupId: group.id, limit: 24 }),
   ]);
   const about = (
@@ -90,7 +100,10 @@ export default async function GroupAboutPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5]">
+    <div
+      className="community-theme min-h-screen bg-[#F8F7F5]"
+      style={communityThemeStyle(group.theme)}
+    >
       <header className="border-b border-[#E4E4E4] bg-white">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 md:px-6">
           <div className="flex items-center gap-2">
@@ -119,7 +132,9 @@ export default async function GroupAboutPage({
               style={{ backgroundColor: brand }}
               title={member.email}
             >
-              {(member.displayName?.charAt(0) || member.email.charAt(0)).toUpperCase()}
+              {(
+                member.displayName?.charAt(0) || member.email.charAt(0)
+              ).toUpperCase()}
             </div>
           ) : (
             <a
@@ -133,7 +148,7 @@ export default async function GroupAboutPage({
       </header>
       <div className="px-4 py-10">
         <div className="mx-auto max-w-7xl">{about}</div>
-        </div>
+      </div>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import {
-  COMMUNITY_BG,
-  COMMUNITY_DEFAULT_BRAND,
-} from "@/components/community/community-shell";
+import { COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { ProfileEditor } from "@/components/community/profile-editor";
-import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
+import {
+  communityThemeStyle,
+  resolveCommunityTheme,
+} from "@/lib/community/community-theme-presets";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +28,10 @@ export default async function ProfilePage({
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: COMMUNITY_BG }}>
+    <div
+      className="community-theme min-h-screen"
+      style={communityThemeStyle(group.theme)}
+    >
       <ProfileEditor
         saId={saId}
         pretty={pretty}

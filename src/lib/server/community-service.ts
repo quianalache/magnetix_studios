@@ -50,11 +50,14 @@ function cleanLinks(links: ResourceLink[]): ResourceLink[] {
     .slice(0, 10);
 }
 
-function cleanAboutMedia(items: CommunityAboutMediaItem[] | undefined): CommunityAboutMediaItem[] {
+function cleanAboutMedia(
+  items: CommunityAboutMediaItem[] | undefined
+): CommunityAboutMediaItem[] {
   return (items ?? [])
     .filter((item) => item && item.url?.trim())
     .map((item, index) => {
-      const type: CommunityAboutMediaType = item.type === "video" ? "video" : "image";
+      const type: CommunityAboutMediaType =
+        item.type === "video" ? "video" : "image";
       const parsed = type === "video" ? parseVideoUrl(item.url) : null;
       return {
         id: item.id?.trim() || `media-${Date.now()}-${index}`,
@@ -80,7 +83,9 @@ function cleanAboutHtml(input: { about?: string; aboutHtml?: string }): string {
   const normalized = normalizeAboutHtml(candidate);
   return aboutPlainTextLength(normalized) <= ABOUT_MAX_CHARS
     ? normalized
-    : normalizeAboutHtml(aboutHtmlToPlainText(normalized).slice(0, ABOUT_MAX_CHARS));
+    : normalizeAboutHtml(
+        aboutHtmlToPlainText(normalized).slice(0, ABOUT_MAX_CHARS)
+      );
 }
 
 /** Same sanitize-and-cap convention as {@link cleanAboutHtml}, own length budget. */
@@ -89,14 +94,14 @@ function cleanGuidelinesHtml(candidate: string): string {
   return aboutPlainTextLength(normalized) <= GUIDELINES_MAX_CHARS
     ? normalized
     : normalizeAboutHtml(
-        aboutHtmlToPlainText(normalized).slice(0, GUIDELINES_MAX_CHARS),
+        aboutHtmlToPlainText(normalized).slice(0, GUIDELINES_MAX_CHARS)
       );
 }
 
 /** Normalize admin-entered sidebar cards: trim, drop cards with no heading,
  *  cap field lengths, cap at {@link SIDEBAR_CARDS_MAX}, re-sequence order. */
 function cleanSidebarCards(
-  cards: CommunitySidebarCard[] | undefined,
+  cards: CommunitySidebarCard[] | undefined
 ): CommunitySidebarCard[] {
   return (cards ?? [])
     .filter((c) => c && c.heading?.trim())
@@ -105,7 +110,9 @@ function cleanSidebarCards(
       heading: c.heading.trim().slice(0, SIDEBAR_CARD_HEADING_MAX),
       body: (c.body ?? "").trim().slice(0, SIDEBAR_CARD_BODY_MAX),
       imageUrl: c.imageUrl?.trim() || null,
-      buttonLabel: (c.buttonLabel ?? "").trim().slice(0, SIDEBAR_CARD_BUTTON_LABEL_MAX),
+      buttonLabel: (c.buttonLabel ?? "")
+        .trim()
+        .slice(0, SIDEBAR_CARD_BUTTON_LABEL_MAX),
       buttonUrl: (c.buttonUrl ?? "").trim(),
       accentColor: c.accentColor?.trim() || null,
       order: Number.isFinite(c.order) ? c.order : index,
@@ -175,7 +182,7 @@ function slugify(input: string): string {
 async function uniqueSlug(
   subAccountId: string,
   base: string,
-  excludeGroupId?: string,
+  excludeGroupId?: string
 ): Promise<string> {
   const db = getAdminDb();
   const col = db.collection(`subAccounts/${subAccountId}/communityGroups`);
@@ -211,7 +218,7 @@ export interface CreateGroupInput {
 }
 
 export async function createGroupServerSide(
-  input: CreateGroupInput,
+  input: CreateGroupInput
 ): Promise<CommunityGroup> {
   const db = getAdminDb();
   const slug = await uniqueSlug(input.subAccountId, input.name);
@@ -223,7 +230,10 @@ export async function createGroupServerSide(
     createdByUid: input.createdByUid,
     name: input.name.trim(),
     slug,
-    about: aboutHtmlToPlainText(input.about ?? input.aboutHtml ?? "").slice(0, ABOUT_MAX_CHARS),
+    about: aboutHtmlToPlainText(input.about ?? input.aboutHtml ?? "").slice(
+      0,
+      ABOUT_MAX_CHARS
+    ),
     aboutHtml: cleanAboutHtml(input),
     tagline: (input.tagline?.trim() ?? "").slice(0, TAGLINE_MAX_CHARS),
     coverUrl: input.coverUrl ?? null,
@@ -305,7 +315,7 @@ export async function updateGroupServerSide(opts: {
 }): Promise<CommunityGroup | null> {
   const db = getAdminDb();
   const ref = db.doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
   );
   const snap = await ref.get();
   if (!snap.exists) return null;
@@ -359,7 +369,8 @@ export async function updateGroupServerSide(opts: {
   // General's own save never sends `theme`, so this never fires there.
   if (p.theme !== undefined) {
     updates.theme = p.theme;
-    updates.brandColor = p.theme.light.primary;
+    updates.brandColor =
+      p.theme[p.theme.mode === "dark" ? "dark" : "light"].primary;
   }
   if (p.joinPolicy) updates.joinPolicy = p.joinPolicy;
   if (p.status) updates.status = p.status;
@@ -384,7 +395,8 @@ export async function updateGroupServerSide(opts: {
     updates.guidelinesHtml = cleanGuidelinesHtml(p.guidelinesHtml);
   if (Array.isArray(p.sidebarCards))
     updates.sidebarCards = cleanSidebarCards(p.sidebarCards);
-  if (Array.isArray(p.navigation)) updates.navigation = normalizeNavigation(p.navigation);
+  if (Array.isArray(p.navigation))
+    updates.navigation = normalizeNavigation(p.navigation);
   if (p.access) {
     updates.access = p.access;
     if (p.access === "paid") {
@@ -403,7 +415,7 @@ export async function updateGroupServerSide(opts: {
 
 export async function getGroupBySlug(
   subAccountId: string,
-  slug: string,
+  slug: string
 ): Promise<CommunityGroup | null> {
   const snap = await getAdminDb()
     .collection(`subAccounts/${subAccountId}/communityGroups`)
@@ -417,7 +429,7 @@ export async function getGroupBySlug(
 
 export async function getGroupById(
   subAccountId: string,
-  groupId: string,
+  groupId: string
 ): Promise<CommunityGroup | null> {
   const snap = await getAdminDb()
     .doc(`subAccounts/${subAccountId}/communityGroups/${groupId}`)
@@ -447,11 +459,11 @@ export async function listGroupsForSubAccount(
 export async function getMembership(
   subAccountId: string,
   groupId: string,
-  memberId: string,
+  memberId: string
 ): Promise<GroupMembership | null> {
   const snap = await getAdminDb()
     .doc(
-      `subAccounts/${subAccountId}/communityGroups/${groupId}/memberships/${memberId}`,
+      `subAccounts/${subAccountId}/communityGroups/${groupId}/memberships/${memberId}`
     )
     .get();
   if (!snap.exists) return null;
@@ -473,10 +485,12 @@ export async function getMembership(
  */
 export async function isStaffEmail(
   subAccountId: string,
-  email: string,
+  email: string
 ): Promise<boolean> {
   try {
-    const user = await getAdminAuth().getUserByEmail(email.trim().toLowerCase());
+    const user = await getAdminAuth().getUserByEmail(
+      email.trim().toLowerCase()
+    );
     const db = getAdminDb();
     const saSnap = await db.doc(`subAccounts/${subAccountId}`).get();
     const agencyId = saSnap.data()?.agencyId;
@@ -537,7 +551,7 @@ export async function joinGroupServerSide(opts: {
 }): Promise<JoinOutcome> {
   const db = getAdminDb();
   const groupRef = db.doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
   );
   const groupSnap = await groupRef.get();
   if (!groupSnap.exists) throw new Error("Group not found");
@@ -622,7 +636,11 @@ export async function joinGroupServerSide(opts: {
       agencyId: opts.agencyId,
       mode: "live",
       type: "community.member.joined",
-      payload: { groupId: opts.groupId, memberId: opts.memberId, via: staff ? "staff" : "open" },
+      payload: {
+        groupId: opts.groupId,
+        memberId: opts.memberId,
+        via: staff ? "staff" : "open",
+      },
     });
     // Reliability fix (2026-08-26): AWAITED, not void-fired. Confirmed live
     // that the void-fired form intermittently produced ZERO notification
@@ -638,7 +656,9 @@ export async function joinGroupServerSide(opts: {
       subAccountId: opts.subAccountId,
       groupId: opts.groupId,
       memberId: opts.memberId,
-    }).catch((err) => console.error("[joinGroupServerSide] notification failed", err));
+    }).catch((err) =>
+      console.error("[joinGroupServerSide] notification failed", err)
+    );
   }
 
   return becomesActive ? { status: "active" } : { status: "pending" };
@@ -651,7 +671,7 @@ export async function listCommunityTiers(opts: {
 }): Promise<CommunityTier[]> {
   const snap = await getAdminDb()
     .collection(
-      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/tiers`,
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/tiers`
     )
     .orderBy("displayOrder", "asc")
     .get();
@@ -669,7 +689,7 @@ export async function replaceCommunityTiersServerSide(opts: {
 }): Promise<CommunityTier[]> {
   const db = getAdminDb();
   const groupRef = db.doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
   );
   const groupSnap = await groupRef.get();
   if (!groupSnap.exists) return [];
@@ -706,14 +726,17 @@ export async function replaceCommunityTiersServerSide(opts: {
           createdAt: tier.createdAt ?? FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
-        { merge: true },
+        { merge: true }
       );
     });
   existing.docs.forEach((doc) => {
     if (!seen.has(doc.id)) batch.delete(doc.ref);
   });
   await batch.commit();
-  return listCommunityTiers({ subAccountId: opts.subAccountId, groupId: opts.groupId });
+  return listCommunityTiers({
+    subAccountId: opts.subAccountId,
+    groupId: opts.groupId,
+  });
 }
 
 export async function listCommunityReviews(opts: {
@@ -724,18 +747,23 @@ export async function listCommunityReviews(opts: {
 }): Promise<CommunityReviewView[]> {
   const snap = await getAdminDb()
     .collection(
-      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews`,
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews`
     )
     .orderBy("updatedAt", "desc")
     .limit(opts.limit ?? 20)
     .get();
   const reviews = snap.docs
-    .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<CommunityReview, "id">) }))
+    .map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<CommunityReview, "id">),
+    }))
     .filter((review) => opts.includeRemoved || review.status === "active");
   const memberSnaps = await Promise.all(
     reviews.map((review) =>
-      getAdminDb().doc(`subAccounts/${opts.subAccountId}/members/${review.memberId}`).get(),
-    ),
+      getAdminDb()
+        .doc(`subAccounts/${opts.subAccountId}/members/${review.memberId}`)
+        .get()
+    )
   );
   return reviews.map((review, index) => {
     const member = memberSnaps[index].data();
@@ -745,7 +773,8 @@ export async function listCommunityReviews(opts: {
         (member?.displayName as string | undefined)?.trim() ||
         (member?.email as string | undefined)?.split("@")[0] ||
         "Member",
-      reviewerAvatarUrl: (member?.avatarUrl as string | null | undefined) ?? null,
+      reviewerAvatarUrl:
+        (member?.avatarUrl as string | null | undefined) ?? null,
       createdAtMs: toMillis(review.createdAt),
       updatedAtMs: toMillis(review.updatedAt),
     };
@@ -754,17 +783,26 @@ export async function listCommunityReviews(opts: {
 
 async function recomputeReviewAggregate(subAccountId: string, groupId: string) {
   const groupRef = getAdminDb().doc(
-    `subAccounts/${subAccountId}/communityGroups/${groupId}`,
+    `subAccounts/${subAccountId}/communityGroups/${groupId}`
   );
-  const snap = await groupRef.collection("reviews").where("status", "==", "active").get();
+  const snap = await groupRef
+    .collection("reviews")
+    .where("status", "==", "active")
+    .get();
   const ratings = snap.docs
     .map((doc) => Number(doc.data().rating))
     .filter((rating) => rating >= 1 && rating <= 5);
   const average =
     ratings.length > 0
-      ? Math.round((ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) * 10) / 10
+      ? Math.round(
+          (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length) *
+            10
+        ) / 10
       : null;
-  await groupRef.update({ reviewCount: ratings.length, averageRating: average });
+  await groupRef.update({
+    reviewCount: ratings.length,
+    averageRating: average,
+  });
 }
 
 export async function upsertCommunityReviewServerSide(opts: {
@@ -774,7 +812,11 @@ export async function upsertCommunityReviewServerSide(opts: {
   rating: number;
   body: string;
 }): Promise<CommunityReview> {
-  const membership = await getMembership(opts.subAccountId, opts.groupId, opts.memberId);
+  const membership = await getMembership(
+    opts.subAccountId,
+    opts.groupId,
+    opts.memberId
+  );
   if (!membership || membership.status !== "active") {
     throw new Error("Only active members can review this community.");
   }
@@ -782,7 +824,7 @@ export async function upsertCommunityReviewServerSide(opts: {
   if (!group) throw new Error("Group not found");
   const rating = Math.max(1, Math.min(5, Math.round(opts.rating)));
   const ref = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.memberId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.memberId}`
   );
   const snap = await ref.get();
   await ref.set(
@@ -794,12 +836,14 @@ export async function upsertCommunityReviewServerSide(opts: {
       rating,
       body: opts.body.trim().slice(0, 600),
       status: "active",
-      createdAt: snap.exists ? snap.data()?.createdAt : FieldValue.serverTimestamp(),
+      createdAt: snap.exists
+        ? snap.data()?.createdAt
+        : FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       removedAt: null,
       removedByUid: null,
     },
-    { merge: true },
+    { merge: true }
   );
   await recomputeReviewAggregate(opts.subAccountId, opts.groupId);
   const fresh = await ref.get();
@@ -813,7 +857,7 @@ export async function removeCommunityReviewServerSide(opts: {
   removedByUid: string | null;
 }): Promise<void> {
   const ref = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.reviewId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/reviews/${opts.reviewId}`
   );
   const snap = await ref.get();
   if (!snap.exists) return;
@@ -834,13 +878,15 @@ export async function approveMembershipServerSide(opts: {
   agencyId: string;
 }): Promise<void> {
   const groupRef = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
   );
   const memRef = groupRef.collection("memberships").doc(opts.memberId);
   const snap = await memRef.get();
   if (!snap.exists || snap.data()!.status === "active") return;
 
-  const invitedByMemberId = snap.data()!.invitedByMemberId as string | undefined;
+  const invitedByMemberId = snap.data()!.invitedByMemberId as
+    | string
+    | undefined;
 
   await memRef.update({ status: "active" });
   await groupRef.update({ memberCount: FieldValue.increment(1) });
@@ -859,7 +905,10 @@ export async function approveMembershipServerSide(opts: {
       action: "invite_member",
       sourceEntityId: opts.memberId,
     }).catch((err) => {
-      console.error("[approveMembershipServerSide] invite_member award failed", err);
+      console.error(
+        "[approveMembershipServerSide] invite_member award failed",
+        err
+      );
     });
   }
 
@@ -878,7 +927,9 @@ export async function approveMembershipServerSide(opts: {
     subAccountId: opts.subAccountId,
     groupId: opts.groupId,
     memberId: opts.memberId,
-  }).catch((err) => console.error("[approveMembershipServerSide] notification failed", err));
+  }).catch((err) =>
+    console.error("[approveMembershipServerSide] notification failed", err)
+  );
 }
 
 /** Staff: promote a member to moderator (inline pin/delete rights) or demote. */
@@ -889,7 +940,7 @@ export async function setMembershipRoleServerSide(opts: {
   role: GroupMembership["role"];
 }): Promise<void> {
   const memRef = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships/${opts.memberId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships/${opts.memberId}`
   );
   const snap = await memRef.get();
   if (!snap.exists) return;
@@ -905,7 +956,7 @@ export async function setMembershipStatusServerSide(opts: {
   status: "removed" | "banned" | "active";
 }): Promise<void> {
   const groupRef = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+    `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
   );
   const memRef = groupRef.collection("memberships").doc(opts.memberId);
   const snap = await memRef.get();
