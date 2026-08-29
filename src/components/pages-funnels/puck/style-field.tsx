@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type {
   StyleConfig,
   StyleCompatibility,
+  LayoutConfig,
   TypographyConfig,
   SpacingConfig,
   SpacingSides,
@@ -28,50 +29,8 @@ import type {
   FontFamilyKey,
 } from "@/types/pages-funnels-puck";
 import { DEFAULT_STYLE_CONFIG } from "@/lib/pages-funnels/puck/style";
+import { WIDTH_OPTIONS } from "@/lib/pages-funnels/puck/constants";
 
-/**
- * The shared System A field editor (master spec §24.2/§24.3) — a single
- * component owning its own rich internal layout, rather than Puck
- * `object`/`resolveFields` composition, following the exact pattern
- * Phase 2D proved for Background (`background-field.tsx`'s
- * `BackgroundFieldEditor`): this UI's collapsible groups, linked/unlinked
- * side controls, and per-group compatibility gating need one cohesive
- * component managing its own layout the same way the gradient stop editor
- * did.
- *
- * The actual `CustomField<StyleConfig>` OBJECT (wrapping this component in
- * a `{type:"custom", label, render}` shape per component's compatibility)
- * is built in config.tsx itself, NOT here — deliberately. An earlier
- * version of this file exported a `createStyleField(compatibility)`
- * factory FUNCTION that config.tsx called directly at module scope; that
- * broke `next build` for the server config's docs harness route with
- * "Attempted to call createStyleField() from the server but
- * createStyleField is on the client": config.tsx is imported by BOTH the
- * client and server Puck configs (server-config.tsx has no "use client"
- * — it must stay server-import-safe), and directly CALLING a function
- * exported from a "use client" module at module-eval time crosses that
- * boundary in a way React's compiler forbids, even though simply
- * RENDERING a client component via JSX from server code (which is what
- * `backgroundField` in config.tsx already safely does with
- * `BackgroundFieldEditor`) is completely fine. Exporting only this
- * component — never a function config.tsx has to CALL — keeps that same
- * safe pattern intact for Styles too.
- *
- * `compatibility` is the literal, in-code component-compatibility matrix
- * (master spec §24, "define which shared style groups apply to which
- * components") — it only gates which GROUPS this instance's editor shows;
- * `style.ts`'s resolvers apply every group unconditionally, so nothing
- * here can disagree with what actually renders.
- *
- * NOTE on right-sidebar organization (master spec §24.2, General/Styles/
- * Animations): this component is what surfaces as "Styles" in each
- * component's Settings — see config.tsx's own doc comment for why the
- * literal three-tab split isn't attempted at the top-level Puck Fields
- * list (slot fields can't safely nest inside an `object` field, and
- * Puck's Fields panel has no other native section-header primitive this
- * task could safely reach for). This field's own internal collapsible
- * groups are what actually solves the "not one giant list" problem.
- */
 const FONT_FAMILY_OPTIONS: { label: string; value: FontFamilyKey }[] = [
   { label: "System", value: "system" },
   { label: "Serif", value: "serif" },
@@ -113,6 +72,50 @@ const BORDER_STYLE_OPTIONS = [
   { label: "Dotted", value: "dotted" },
 ] as const;
 
+/**
+ * The shared System A field editor (master spec §24.2/§24.3) — a single
+ * component owning its own rich internal layout, rather than Puck
+ * `object`/`resolveFields` composition, following the exact pattern
+ * Phase 2D proved for Background (`background-field.tsx`'s
+ * `BackgroundFieldEditor`): this UI's collapsible groups, linked/unlinked
+ * side controls, and per-group compatibility gating need one cohesive
+ * component managing its own layout the same way the gradient stop editor
+ * did.
+ *
+ * The actual `CustomField<StyleConfig>` OBJECT (wrapping this component in
+ * a `{type:"custom", label, render}` shape per component's compatibility)
+ * is built in config.tsx itself, NOT here — deliberately. An earlier
+ * version of this file exported a `createStyleField(compatibility)`
+ * factory FUNCTION that config.tsx called directly at module scope; that
+ * broke `next build` for the server config's docs harness route with
+ * "Attempted to call createStyleField() from the server but
+ * createStyleField is on the client": config.tsx is imported by BOTH the
+ * client and server Puck configs (server-config.tsx has no "use client"
+ * — it must stay server-import-safe), and directly CALLING a function
+ * exported from a "use client" module at module-eval time crosses that
+ * boundary in a way React's compiler forbids, even though simply
+ * RENDERING a client component via JSX from server code (which is what
+ * `backgroundField` in config.tsx already safely does with
+ * `BackgroundFieldEditor`) is completely fine. Exporting only this
+ * component — never a function config.tsx has to CALL — keeps that same
+ * safe pattern intact for Styles too.
+ *
+ * `compatibility` is the literal, in-code component-compatibility matrix
+ * (master spec §24, "define which shared style groups apply to which
+ * components") — it only gates which GROUPS this instance's editor shows;
+ * `style.ts`'s resolvers apply every group unconditionally, so nothing
+ * here can disagree with what actually renders.
+ *
+ * NOTE on right-sidebar organization (master spec §24.2, General/Styles/
+ * Animations): this component IS the "Styles" tab's content — the literal
+ * top-level General/Styles/Animations tab split now lives in
+ * `settings-panel.tsx`'s `MagnetixSettingsPanel` (System A closeout task
+ * §8), which sorts Puck's own rendered fields by name into General vs.
+ * this component's Styles tab. This component's OWN internal collapsible
+ * groups (Layout/Typography/Spacing/Border & Radius/Shadow/Responsive/
+ * Visibility) are the second, finer level of organization within that one
+ * Styles tab.
+ */
 export function StyleFieldEditor({
   value,
   onChange,
@@ -133,6 +136,15 @@ export function StyleFieldEditor({
 
   return (
     <div className="space-y-1 px-1 pb-2">
+      {compatibility.layout && (
+        <Group label="Layout">
+          <LayoutEditor
+            layout={cfg.layout}
+            onChange={(layout) => patch({ layout })}
+          />
+        </Group>
+      )}
+
       {compatibility.typography && (
         <Group label="Typography" defaultOpen>
           <TypographyEditor
@@ -190,6 +202,7 @@ export function StyleFieldEditor({
           <ResponsiveEditor
             responsive={cfg.responsive}
             onChange={(responsive) => patch({ responsive })}
+            showColumnWidth={!!compatibility.columnWidth}
           />
         </Group>
       )}
@@ -206,6 +219,23 @@ export function StyleFieldEditor({
   );
 }
 
+/**
+ * Which style groups are open, keyed by their own label — persisted OUTSIDE
+ * React's fiber tree (module scope), same pattern and same reason as
+ * `settings-panel.tsx`'s `lastActiveSettingsTab`.
+ *
+ * Live QA for this closeout task (unlinked spacing/independent radius)
+ * caught this bug at the Group level too: unlinking Margin's sides (a real
+ * Puck data edit) collapsed the whole "Spacing" group out from under the
+ * user mid-edit, because base-ui's `<Collapsible defaultOpen>` only seeds
+ * its open state once per mount, and this component's fiber does not
+ * survive every Puck data change. It was invisible for "Typography" (whose
+ * `defaultOpen` is `true`) because a remount there still lands back on
+ * "open" — the exact same class of bug, just not observable until a
+ * default-closed group's content changed shape underneath a user's hands.
+ */
+const openGroupState = new Map<string, boolean>();
+
 function Group({
   label,
   defaultOpen,
@@ -215,9 +245,16 @@ function Group({
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(
+    () => openGroupState.get(label) ?? !!defaultOpen
+  );
   return (
     <Collapsible
-      defaultOpen={defaultOpen}
+      open={open}
+      onOpenChange={(next) => {
+        openGroupState.set(label, next);
+        setOpen(next);
+      }}
       className="border-border/60 border-b last:border-b-0"
     >
       <CollapsibleGroupTrigger>{label}</CollapsibleGroupTrigger>
@@ -306,6 +343,28 @@ function NativeSelect<T extends string>({
         </option>
       ))}
     </select>
+  );
+}
+
+// ---------- Layout ----------
+
+function LayoutEditor({
+  layout,
+  onChange,
+}: {
+  layout: LayoutConfig;
+  onChange: (l: LayoutConfig) => void;
+}) {
+  return (
+    <Row label="Min Height">
+      <NumberField
+        value={layout.minHeight}
+        onChange={(minHeight) => onChange({ ...layout, minHeight })}
+        min={0}
+        max={2000}
+        suffix="px"
+      />
+    </Row>
   );
 }
 
@@ -785,9 +844,11 @@ function TextShadowEditor({
 function ResponsiveEditor({
   responsive,
   onChange,
+  showColumnWidth,
 }: {
   responsive: ResponsiveConfig;
   onChange: (r: ResponsiveConfig) => void;
+  showColumnWidth: boolean;
 }) {
   return (
     <div className="space-y-3">
@@ -795,11 +856,13 @@ function ResponsiveEditor({
         label="Tablet Overrides"
         override={responsive.tablet}
         onChange={(tablet) => onChange({ ...responsive, tablet })}
+        showColumnWidth={showColumnWidth}
       />
       <ResponsiveBreakpointEditor
         label="Mobile Overrides"
         override={responsive.mobile}
         onChange={(mobile) => onChange({ ...responsive, mobile })}
+        showColumnWidth={showColumnWidth}
       />
     </div>
   );
@@ -809,10 +872,12 @@ function ResponsiveBreakpointEditor({
   label,
   override,
   onChange,
+  showColumnWidth,
 }: {
   label: string;
   override: ResponsiveConfig["tablet"];
   onChange: (o: ResponsiveConfig["tablet"]) => void;
+  showColumnWidth: boolean;
 }) {
   const v = override ?? {};
   return (
@@ -853,6 +918,15 @@ function ResponsiveBreakpointEditor({
           suffix="px"
         />
       </Row>
+      {showColumnWidth && (
+        <Row label="Column Width">
+          <NativeSelect
+            value={v.columnWidth}
+            onChange={(columnWidth) => onChange({ ...v, columnWidth })}
+            options={WIDTH_OPTIONS}
+          />
+        </Row>
+      )}
     </div>
   );
 }

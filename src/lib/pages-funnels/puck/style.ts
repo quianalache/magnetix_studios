@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type {
   StyleConfig,
+  LayoutConfig,
   TypographyConfig,
   SpacingConfig,
   SpacingSides,
@@ -11,6 +12,7 @@ import type {
   ResponsiveConfig,
   DeviceVisibilityConfig,
   FontFamilyKey,
+  PuckColumnWidth,
 } from "@/types/pages-funnels-puck";
 import { FONT_FAMILY_STACKS } from "@/types/forms";
 
@@ -36,6 +38,8 @@ import { FONT_FAMILY_STACKS } from "@/types/forms";
 // ---------- defaults ----------
 
 const EMPTY_SIDES: SpacingSides = {};
+
+export const DEFAULT_LAYOUT: LayoutConfig = {};
 
 export const DEFAULT_TYPOGRAPHY: TypographyConfig = {};
 
@@ -86,6 +90,7 @@ export const DEFAULT_VISIBILITY: DeviceVisibilityConfig = {
 };
 
 export const DEFAULT_STYLE_CONFIG: StyleConfig = {
+  layout: DEFAULT_LAYOUT,
   typography: DEFAULT_TYPOGRAPHY,
   spacing: DEFAULT_SPACING,
   border: DEFAULT_BORDER,
@@ -94,6 +99,25 @@ export const DEFAULT_STYLE_CONFIG: StyleConfig = {
   textShadow: DEFAULT_TEXT_SHADOW,
   responsive: DEFAULT_RESPONSIVE,
   visibility: DEFAULT_VISIBILITY,
+};
+
+/**
+ * Matches `COLUMN_SPAN_CLASS` (constants.ts) exactly — the 12-column grid
+ * span each `PuckColumnWidth` value represents. Used by
+ * `resolveResponsiveCss` to express a per-breakpoint Column width
+ * override as a real `grid-column: span N` declaration (System A closeout
+ * task §4) — a SEPARATE numeric map, not a re-derivation from the
+ * Tailwind class strings, since the class strings are compile-time
+ * utility names, not parseable at runtime.
+ */
+export const COLUMN_WIDTH_GRID_SPAN: Record<PuckColumnWidth, number> = {
+  auto: 6,
+  "1/4": 3,
+  "1/3": 4,
+  "1/2": 6,
+  "2/3": 8,
+  "3/4": 9,
+  full: 12,
 };
 
 // ---------- breakpoints ----------
@@ -110,6 +134,17 @@ export const RESPONSIVE_BREAKPOINTS = {
   tabletMax: 1279,
   mobileMax: 767,
 } as const;
+
+// ---------- layout ----------
+
+export function resolveLayoutStyles(
+  layout: LayoutConfig | undefined
+): CSSProperties {
+  if (!layout) return {};
+  const style: CSSProperties = {};
+  if (layout.minHeight != null) style.minHeight = `${layout.minHeight}px`;
+  return style;
+}
 
 // ---------- typography ----------
 
@@ -234,6 +269,7 @@ export function resolveBaseStyleProps(
 ): CSSProperties {
   if (!style) return {};
   return {
+    ...resolveLayoutStyles(style.layout),
     ...resolveTypographyStyles(style.typography),
     ...resolveSpacingStyles(style.spacing),
     ...resolveBorderStyles(style.border),
@@ -259,6 +295,24 @@ function cssDeclarations(style: CSSProperties): string {
       return `${cssProp}:${value};`;
     })
     .join("");
+}
+
+/**
+ * Column's per-breakpoint width override (System A closeout task §4) —
+ * expressed as a real `grid-column: span N / span N` CSS declaration,
+ * bypassing the base desktop-level `COLUMN_SPAN_CLASS` Tailwind utility
+ * class entirely for the OVERRIDE (the base/desktop span still comes from
+ * that class, unchanged) — this is what lets tablet/mobile pick an
+ * independent span without duplicating Column's whole `width` prop per
+ * device, and without touching the proven 12-column
+ * `grid-template-columns` on Row at all.
+ */
+function columnWidthOverrideStyle(
+  width: PuckColumnWidth | undefined
+): CSSProperties {
+  if (!width) return {};
+  const span = COLUMN_WIDTH_GRID_SPAN[width];
+  return { gridColumn: `span ${span} / span ${span}` };
 }
 
 /**
@@ -297,6 +351,7 @@ export function resolveResponsiveCss(
     const decl = cssDeclarations({
       ...resolveTypographyStyles(tabletOverride.typography),
       ...resolveSpacingStyles(tabletOverride.spacing),
+      ...columnWidthOverrideStyle(tabletOverride.columnWidth),
     });
     if (decl) css += `@media (max-width:${tabletMax}px){${selector}{${decl}}}`;
   }
@@ -306,6 +361,7 @@ export function resolveResponsiveCss(
     const decl = cssDeclarations({
       ...resolveTypographyStyles(mobileOverride.typography),
       ...resolveSpacingStyles(mobileOverride.spacing),
+      ...columnWidthOverrideStyle(mobileOverride.columnWidth),
     });
     if (decl) css += `@media (max-width:${mobileMax}px){${selector}{${decl}}}`;
   }

@@ -82,11 +82,33 @@ const SECTION_MAX_WIDTH_PX: Record<SectionMaxWidthOption, number | undefined> =
  * `relative z-10` classes are appended to those SAME direct slot-call
  * classNames, never moved to a wrapper, for exactly this reason.
  */
+/**
+ * `fullWidthBackground` (System A closeout task §3) decouples the
+ * Section's BACKGROUND width from its CONTENT max-width — two genuinely
+ * separate settings, never coupled into one, per the task's explicit
+ * instruction. Defaults to `true`, matching every Section's behavior
+ * before this flag existed (the background has always rendered on this
+ * unconstrained outer `<section>`, never on the maxWidth'd content div) —
+ * so this is a real additive capability, not a behavior change for
+ * existing/migrated Sections.
+ *
+ * `true` (default): `BackgroundLayer` renders on the outer `<section>`,
+ * which has no width constraint of its own — genuinely edge-to-edge,
+ * independent of whatever `maxWidth` the CONTENT is set to.
+ * `false`: `BackgroundLayer` renders inside the SAME maxWidth+`mx-auto`
+ * content div instead, so the background visually matches the content's
+ * width and centering exactly (e.g. a "card" look) — given a `-z-10`
+ * (negative z-index) rather than relying on DOM order, so it reliably
+ * paints behind `<Rows>` regardless of the CSS 2.1 §E painting-order
+ * subtlety this file's own top doc comment already documents for the
+ * `relative z-10` pattern elsewhere.
+ */
 export function SectionRender({
   id,
   background,
   style,
   maxWidth,
+  fullWidthBackground,
   paddingTop,
   paddingBottom,
   rows: Rows,
@@ -95,11 +117,13 @@ export function SectionRender({
   background: BackgroundConfig;
   style?: StyleConfig;
   maxWidth: SectionMaxWidthOption;
+  fullWidthBackground: boolean;
   paddingTop: number;
   paddingBottom: number;
   rows: React.ComponentType<{ allow?: string[] }>;
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
+  const contentMaxWidth = SECTION_MAX_WIDTH_PX[maxWidth];
   return (
     <section
       id={id}
@@ -109,11 +133,16 @@ export function SectionRender({
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      <BackgroundLayer background={background} />
+      {fullWidthBackground && <BackgroundLayer background={background} />}
       <div
         className="relative z-10 mx-auto flex flex-col gap-8"
-        style={{ maxWidth: SECTION_MAX_WIDTH_PX[maxWidth] }}
+        style={{ maxWidth: contentMaxWidth }}
       >
+        {!fullWidthBackground && (
+          <div className="absolute inset-0 -z-10" aria-hidden>
+            <BackgroundLayer background={background} />
+          </div>
+        )}
         <Rows allow={["Row"]} />
       </div>
     </section>

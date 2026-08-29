@@ -146,12 +146,22 @@ const backgroundField: CustomField<BackgroundConfig> = {
  * to a clickable label).
  */
 const LAYOUT_CONTAINER_STYLE: StyleCompatibility = {
+  layout: true,
   spacing: true,
   border: true,
   radius: true,
   boxShadow: true,
   responsive: true,
   visibility: true,
+};
+/** Column-only — everything Section/Row get, plus the per-breakpoint
+ *  Column Width override (System A closeout task §4). A separate constant
+ *  (not a mutation of `LAYOUT_CONTAINER_STYLE`) so Section/Row/Column's
+ *  base compatibility stays visibly identical at a glance, with Column's
+ *  one real difference spelled out explicitly right here. */
+const COLUMN_STYLE: StyleCompatibility = {
+  ...LAYOUT_CONTAINER_STYLE,
+  columnWidth: true,
 };
 const TEXT_ELEMENT_STYLE: StyleCompatibility = {
   typography: true,
@@ -228,6 +238,7 @@ function makeStyleField(
 // all plain containers, not text/media elements) — one field instance,
 // referenced by all four, exactly like `backgroundField` above.
 const layoutStyleField = makeStyleField(LAYOUT_CONTAINER_STYLE);
+const columnStyleField = makeStyleField(COLUMN_STYLE);
 const textStyleField = makeStyleField(TEXT_ELEMENT_STYLE);
 const buttonStyleField = makeStyleField(BUTTON_STYLE_COMPAT);
 const mediaStyleField = makeStyleField(MEDIA_ELEMENT_STYLE);
@@ -248,6 +259,19 @@ const SECTION_SHARED_FIELDS = {
       { label: "Contained", value: "contained" },
       { label: "Wide", value: "wide" },
       { label: "Full", value: "full" },
+    ],
+  },
+  // System A closeout task §3 — deliberately a SEPARATE field from
+  // `maxWidth` above, never coupled into one setting: `maxWidth` controls
+  // the CONTENT'S width, this controls whether the BACKGROUND spans the
+  // full section or matches that same content width. See SectionRender's
+  // own doc comment in layout.tsx for the rendering mechanics.
+  fullWidthBackground: {
+    type: "radio" as const,
+    label: "Full-Width Background",
+    options: [
+      { label: "Yes", value: true },
+      { label: "No (match content width)", value: false },
     ],
   },
   paddingTop: {
@@ -297,6 +321,7 @@ export function createPuckConfig(
           background: DEFAULT_BACKGROUND,
           style: DEFAULT_STYLE_CONFIG,
           maxWidth: "contained",
+          fullWidthBackground: true,
           paddingTop: 64,
           paddingBottom: 64,
           rows: [],
@@ -306,6 +331,7 @@ export function createPuckConfig(
           background,
           style,
           maxWidth,
+          fullWidthBackground,
           paddingTop,
           paddingBottom,
           rows,
@@ -315,6 +341,7 @@ export function createPuckConfig(
             background={background}
             style={style}
             maxWidth={maxWidth}
+            fullWidthBackground={fullWidthBackground}
             paddingTop={paddingTop}
             paddingBottom={paddingBottom}
             rows={rows}
@@ -348,6 +375,7 @@ export function createPuckConfig(
           background: HERO_DEFAULT_BACKGROUND,
           style: DEFAULT_STYLE_CONFIG,
           maxWidth: "contained",
+          fullWidthBackground: true,
           paddingTop: 96,
           paddingBottom: 96,
           rows: [
@@ -427,6 +455,7 @@ export function createPuckConfig(
           background,
           style,
           maxWidth,
+          fullWidthBackground,
           paddingTop,
           paddingBottom,
           rows,
@@ -436,6 +465,7 @@ export function createPuckConfig(
             background={background}
             style={style}
             maxWidth={maxWidth}
+            fullWidthBackground={fullWidthBackground}
             paddingTop={paddingTop}
             paddingBottom={paddingBottom}
             rows={rows}
@@ -516,7 +546,7 @@ export function createPuckConfig(
         inline: true,
         fields: {
           background: backgroundField,
-          style: layoutStyleField,
+          style: columnStyleField,
           width: { type: "select", label: "Width", options: WIDTH_OPTIONS },
           alignment: {
             type: "radio",

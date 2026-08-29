@@ -1,5 +1,6 @@
 import type { LeadForm } from "@/types/forms";
 import type { BlockAlignment } from "@/types/pages-funnels";
+import type { ColumnWidth } from "@/types/pages-funnels-v2";
 
 /**
  * Pages & Funnels — Puck production foundation, shared prop/action types.
@@ -28,6 +29,9 @@ export type {
   ColumnWidth as PuckColumnWidth,
   SectionMaxWidth as PuckSectionMaxWidth,
 } from "@/types/pages-funnels-v2";
+/** Same local-alias fix as `PuckAlignment` above — needed for the
+ *  System A closeout's `ResponsiveStyleOverride.columnWidth`. */
+type PuckColumnWidth = ColumnWidth;
 
 // ---------- shared Action System foundation (§8/§9 of the master spec) ----------
 
@@ -335,10 +339,20 @@ export interface TextShadowConfig {
  * future public page both use must express this as actual media-query CSS,
  * not a runtime "which Puck viewport is selected" check (that concept only
  * exists inside the editor).
+ *
+ * `columnWidth` (System A closeout task §4) is the ONE addition beyond the
+ * original System A scope — Column's own grid-span override per
+ * breakpoint, expressed as a real `grid-column: span N` CSS declaration
+ * (see `style.ts`), not a duplicated `width` prop per device. Only
+ * meaningful on Column (gated via `StyleCompatibility.columnWidth`) — a
+ * harmless no-op key on every other component's override, same
+ * "unconditional resolution, compatibility only gates the editor" rule
+ * `StyleCompatibility` already documents below.
  */
 export interface ResponsiveStyleOverride {
   typography?: Pick<TypographyConfig, "fontSize" | "textAlign">;
   spacing?: Partial<SpacingConfig>;
+  columnWidth?: PuckColumnWidth;
 }
 export interface ResponsiveConfig {
   tablet?: ResponsiveStyleOverride;
@@ -354,7 +368,26 @@ export interface DeviceVisibilityConfig {
   mobile: boolean;
 }
 
+/**
+ * System A closeout task §2 — shared min-height, applicable to any
+ * container (Section/Row/Column). Optional/unset like every other group
+ * here except visibility — an unset `minHeight` emits no CSS and existing
+ * content is unaffected. Kept as its own small `layout` group rather than
+ * folded into an existing one, matching the original System A task's own
+ * conceptual sketch of `StyleConfig` (`layout, typography, spacing,
+ * border, shadow, responsive, visibility`) — `layout` was deferred out of
+ * the first System A pass because Section's `maxWidth`/Row's `gap`/
+ * Column's `width` are genuinely component-specific and stayed as their
+ * own dedicated fields; `minHeight` is different — it means the exact same
+ * thing on all three, so it belongs in the shared system, not duplicated
+ * three times as one-off fields.
+ */
+export interface LayoutConfig {
+  minHeight?: number;
+}
+
 export interface StyleConfig {
+  layout: LayoutConfig;
   typography: TypographyConfig;
   spacing: SpacingConfig;
   border: BorderConfig;
@@ -379,6 +412,7 @@ export interface StyleConfig {
  * renders, so nothing here can silently disagree with what's on screen.
  */
 export interface StyleCompatibility {
+  layout?: boolean;
   typography?: boolean;
   spacing?: boolean;
   border?: boolean;
@@ -387,4 +421,7 @@ export interface StyleCompatibility {
   textShadow?: boolean;
   responsive?: boolean;
   visibility?: boolean;
+  /** Column-only (System A closeout §4) — shows the per-breakpoint Column
+   *  Width override inside the shared Responsive group. */
+  columnWidth?: boolean;
 }
