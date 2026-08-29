@@ -1,7 +1,5 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Settings2 } from "lucide-react";
 import { requireStaffGroupPageAccess } from "@/lib/community/member-context";
 import { listFeed } from "@/lib/server/community-feed-service";
 import { listChannelsAndSectionsForViewer } from "@/lib/server/community-channels-service";
@@ -24,7 +22,6 @@ import { AboutCommunityCard } from "@/components/community/about-community-card"
 import { TopContributorsCard } from "@/components/community/top-contributors-card";
 import { SidebarContentCard } from "@/components/community/sidebar-content-card";
 import { GuidelinesCard } from "@/components/community/guidelines-card";
-import { staffCommunityManageHref } from "@/lib/community/staff-routes";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
@@ -190,15 +187,6 @@ export default async function StaffCommunityFeedPage({
             <SidebarContentCard key={card.id} card={card} brand={brand} />
           ))}
           <GuidelinesCard guidelinesHtml={group.guidelinesHtml ?? ""} />
-          {viewerIsModerator && (
-            <Link
-              href={staffCommunityManageHref(saId, groupId)}
-              className="hover:bg-muted flex items-center gap-1.5 rounded-lg border border-[#E4E4E4] bg-white p-3 text-sm font-medium text-[#3a3a44]"
-            >
-              <Settings2 className="h-3.5 w-3.5" /> Legacy group fields (About
-              media, tiers, reviews…)
-            </Link>
-          )}
         </>
       }
     >

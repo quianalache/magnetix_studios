@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
 import { CommunityReviewForm } from "@/components/community/review-form";
+import { AboutEditButton } from "@/components/community/about-edit-dialog";
 import { communityHomeHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
@@ -43,10 +44,6 @@ function tierPrice(tier: CommunityTier): string {
   return price;
 }
 
-function isVideo(url: string | null | undefined): boolean {
-  return !!url && /youtube|youtu\.be|vimeo|loom|descript/i.test(url);
-}
-
 function formatDate(ms: number | null): string {
   return ms ? new Date(ms).toLocaleDateString() : "";
 }
@@ -67,24 +64,19 @@ function ratingLabel(group: CommunityGroup): string {
   }`;
 }
 
+/**
+ * About-page media gallery — About Media ONLY (2026-08-29 cleanup). This
+ * used to synthesize a fake gallery item from `group.coverUrl` (the
+ * Community Home banner) whenever no real About media was configured —
+ * rendering a wide banner image forced into the gallery's tall
+ * featured-card aspect ratio, cropped/smushed. Community Banner belongs to
+ * Home/feed only; About Media is its own separate, purpose-built gallery.
+ * No About media configured now correctly means no gallery at all (the
+ * `.community-about-hero-no-media` clean layout below already existed for
+ * exactly this case — it just could never actually be reached before).
+ */
 function galleryForGroup(group: CommunityGroup): CommunityAboutMediaItem[] {
-  if (group.aboutMedia?.length) return group.aboutMedia;
-  if (!group.coverUrl) return [];
-  return [
-    {
-      id: "cover",
-      type: isVideo(group.coverUrl) ? "video" : "image",
-      url: group.coverUrl,
-      label: "",
-      title: group.name,
-      linkUrl: null,
-      featured: true,
-      thumbnailUrl: null,
-      provider: null,
-      videoId: null,
-      order: 0,
-    },
-  ];
+  return group.aboutMedia?.length ? group.aboutMedia : [];
 }
 
 function CommunityAboutStyles() {
@@ -104,12 +96,14 @@ function CommunityAboutStyles() {
   color: var(--ca-text);
 }
 .community-about a { color: inherit; }
+.community-about-edit-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1120px; margin: 0 auto 18px; padding: 10px 14px; border-radius: 8px; background: var(--ca-soft); color: var(--ca-muted); font-size: 12.5px; }
 .community-about-layout { display: grid; gap: 38px; }
 .community-about-main { min-width: 0; display: grid; gap: 42px; max-width: 1120px; width: 100%; margin: 0 auto; }
 .community-about-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr); grid-template-areas: "media identity" "media conversion"; gap: 22px 28px; align-items: start; }
 .community-about-hero-no-media { grid-template-columns: minmax(0, 680px); grid-template-areas: "identity" "conversion"; }
 .community-about-identity { grid-area: identity; min-width: 0; padding-top: 4px; }
 .community-about-conversion { grid-area: conversion; min-width: 0; display: grid; gap: 18px; }
+.community-about-card-image { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 1px solid var(--ca-border); }
 .community-about-heading { min-width: 0; display: flex; gap: 14px; align-items: flex-start; }
 .community-about-gallery { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .9fr); gap: 12px; }
 .community-about-hero > .community-about-gallery { grid-area: media; }
@@ -367,13 +361,24 @@ export function CommunityAboutView({
       : null;
   const visibleReviews = reviews.slice(0, 6);
   const remainingReviews = reviews.slice(6);
-  const logoUrl = group.logoUrl ?? group.cardImageUrl ?? group.coverUrl;
+  // About-page cleanup (2026-08-29) — no fallback chain into `cardImageUrl`
+  // or `coverUrl` here anymore: `cardImageUrl` now has its own dedicated
+  // slot (the About/Join card's own image, below), and `coverUrl` is the
+  // Community Home banner, which never belongs on the About page. No logo
+  // set correctly falls straight to the existing plain-letter avatar.
+  const logoUrl = group.logoUrl;
   // Theme parity (2026-08-29 closeout) — `brand` (== primary) stays the
   // caller-supplied value everywhere it was already used (identity marks:
   // logo, review avatars, current-tier indicator); primaryAction/accent are
   // resolved here from the same shared source so the CTA button and the
   // pill/stars roles split out from primary, matching the Branding preview.
   const theme = resolveCommunityTheme(group);
+  // About-tab cleanup (2026-08-29) — "Edit About" only for an active
+  // moderator (never a guest/pending prospect, who take an entirely
+  // different, unauthenticated render branch upstream — see the two real
+  // About page.tsx callers). Members with no edit rights see the exact
+  // same saved content, no editing controls.
+  const isModerator = state === "joined" && membership?.role === "moderator";
 
   return (
     <div
@@ -387,6 +392,12 @@ export function CommunityAboutView({
       }
     >
       <CommunityAboutStyles />
+      {isModerator && (
+        <div className="community-about-edit-bar">
+          <span>You&apos;re viewing the live About page.</span>
+          <AboutEditButton saId={saId} groupId={group.id} group={group} />
+        </div>
+      )}
       <div className="community-about-layout">
         <div className="community-about-main">
           <section
@@ -431,6 +442,14 @@ export function CommunityAboutView({
             </div>
 
             <div className="community-about-conversion">
+              {group.cardImageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={group.cardImageUrl}
+                  alt=""
+                  className="community-about-card-image"
+                />
+              )}
               <div className="community-about-meta">
                 <div className="community-about-meta-row">
                   <span>Access</span>

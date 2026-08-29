@@ -20,13 +20,11 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import { useSubAccount } from "@/context/sub-account-context";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import {
-  ABOUT_MAX_CHARS,
   GUIDELINES_MAX_CHARS,
   SIDEBAR_CARDS_MAX,
   SIDEBAR_CARD_BODY_MAX,
   SIDEBAR_CARD_BUTTON_LABEL_MAX,
   SIDEBAR_CARD_HEADING_MAX,
-  TAGLINE_MAX_CHARS,
 } from "@/config/community";
 import { AboutRichTextEditor } from "@/components/community/about-rich-text-editor";
 import { ImageUpload } from "@/components/community/image-upload";
@@ -36,13 +34,11 @@ import { ColorInput } from "@/components/ui/color-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type {
-  CommunityAboutMediaItem,
   CommunityGroup,
   CommunityReview,
   CommunitySidebarCard,
   CommunityTier,
   GroupAccess,
-  GroupJoinPolicy,
   GroupStatus,
   ResourceLink,
 } from "@/types/community";
@@ -71,17 +67,13 @@ export default function CommunityGroupSettingsPage({
   const [group, setGroup] = useState<CommunityGroup | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Form state
-  const [name, setName] = useState("");
-  const [about, setAbout] = useState("");
-  const [aboutMedia, setAboutMedia] = useState<CommunityAboutMediaItem[]>([]);
-  const [tagline, setTagline] = useState("");
-  const [brandColor, setBrandColor] = useState("");
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [cardImageUrl, setCardImageUrl] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // Form state — About content (text/media/card image/tagline) and the
+  // Settings-duplicate fields (name/cover/logo/join policy/brand color)
+  // were removed from this page's editable form (2026-08-29 About-tab
+  // cleanup); see the note rendered above the fieldset for where each one
+  // actually lives now. Their values are intentionally no longer read into
+  // local state here since nothing on this page edits them anymore.
   const [status, setStatus] = useState<GroupStatus>("draft");
-  const [joinPolicy, setJoinPolicy] = useState<GroupJoinPolicy>("open");
   const [access, setAccess] = useState<GroupAccess>("free");
   const [price, setPrice] = useState("");
   const [categories, setCategories] = useState("");
@@ -105,16 +97,7 @@ export default function CommunityGroupSettingsPage({
         }
         const g = { id: snap.id, ...(snap.data() as Omit<CommunityGroup, "id">) };
         setGroup(g);
-        setName(g.name);
-        setAbout(g.aboutHtml || g.about || "");
-        setAboutMedia(g.aboutMedia ?? []);
-        setTagline(g.tagline ?? "");
-        setBrandColor(g.brandColor ?? "");
-        setCoverUrl(g.coverUrl ?? null);
-        setCardImageUrl(g.cardImageUrl ?? null);
-        setLogoUrl(g.logoUrl ?? null);
         setStatus(g.status);
-        setJoinPolicy(g.joinPolicy);
         setAccess(g.access);
         setPrice(g.priceCents != null ? (g.priceCents / 100).toString() : "");
         setCategories((g.categories ?? ["General"]).join(", "));
@@ -152,10 +135,6 @@ export default function CommunityGroupSettingsPage({
   }, [subAccountId, groupId]);
 
   async function handleSave() {
-    if (clientPlainTextLength(about) > ABOUT_MAX_CHARS) {
-      toast.error(`About must be ${ABOUT_MAX_CHARS} characters or less.`);
-      return;
-    }
     setSaving(true);
     try {
       const priceCents =
@@ -168,16 +147,7 @@ export default function CommunityGroupSettingsPage({
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name,
-            aboutHtml: about,
-            aboutMedia,
-            tagline,
-            brandColor: brandColor.trim() || null,
-            coverUrl,
-            cardImageUrl,
-            logoUrl,
             status,
-            joinPolicy,
             access,
             priceCents,
             categories: categories
@@ -259,34 +229,8 @@ export default function CommunityGroupSettingsPage({
     subAccountId,
     groupSlug: group.slug,
   });
-  const aboutTextCount = clientPlainTextLength(about);
   const guidelinesTextCount = clientPlainTextLength(guidelines);
   const activeReviews = reviews.filter((review) => review.status === "active");
-
-  function updateMedia(
-    index: number,
-    patch: Partial<CommunityAboutMediaItem>,
-  ) {
-    setAboutMedia((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    );
-  }
-
-  function addMedia(type: "image" | "video") {
-    setAboutMedia((prev) => [
-      ...prev,
-      {
-        id: `media-${Date.now()}`,
-        type,
-        url: "",
-        title: "",
-        thumbnailUrl: null,
-        provider: null,
-        videoId: null,
-        order: prev.length,
-      },
-    ]);
-  }
 
   function updateSidebarCard(index: number, patch: Partial<CommunitySidebarCard>) {
     setSidebarCards((prev) =>
@@ -340,14 +284,21 @@ export default function CommunityGroupSettingsPage({
           <ArrowLeft className="h-4 w-4" /> Back to Community
         </Link>
         <div className="flex items-center gap-4">
-          {/* Staff Community-in-CRM integration (2026-08-24) — this "legacy
-              fields" form used to be the ONLY staff-side view of a group at
-              all (hence "Enter Community" living here); the real feed/
-              channels/leaderboard/members/Settings experience now renders
-              natively inside the CRM at the parent route above. This page
-              stays reachable for the fields not yet folded into the native
-              Settings tabs (About media gallery, join policy, price, tiers,
-              reviews) — see the Staff Community Integration report.
+          {/* Staff Community-in-CRM integration (2026-08-24) — this form used
+              to be the ONLY staff-side view of a group at all (hence "Enter
+              Community" living here); the real feed/channels/leaderboard/
+              members/Settings experience now renders natively inside the
+              CRM at the parent route above. About text/media/Join Card
+              image moved to the About tab's own "Edit About" panel, and
+              name/cover/logo/join policy to Settings → General (2026-08-29
+              About-tab cleanup) — this page is no longer a primary
+              customer workflow, just the remaining home for Status, Feed
+              categories, Home sidebar Links/Guidelines/cards, Access/
+              price/Tiers (deferred Access & Membership entitlement
+              architecture), and review moderation, none of which have a
+              better home yet. No longer linked from Community Home's
+              sidebar; still reachable from the Community list page's own
+              "Manage" link and directly by URL.
               "View as Member" (same Staff -> Member Seamless Entry bridge
               as before, unchanged) is still the one intentional door out to
               the real standalone branded experience. */}
@@ -397,182 +348,32 @@ export default function CommunityGroupSettingsPage({
         </p>
       )}
 
+      <div className="rounded-lg border border-dashed bg-muted/40 p-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">
+          About page content, cover/logo image, and community identity moved.
+        </p>
+        <p className="mt-1">
+          Edit the About text, About media gallery, and Join Card image from{" "}
+          <strong>the About tab</strong> itself (an &quot;Edit About&quot;
+          button appears there for moderators). Group name, cover image,
+          logo, and join policy are edited in{" "}
+          <strong>Community Settings → General</strong> — this page no
+          longer duplicates them. Public URL: <code>{publicUrl}</code>
+        </p>
+      </div>
+
       <fieldset disabled={!isAdmin || saving} className="space-y-5">
         <div className="space-y-1.5">
-          <Label htmlFor="name">Group name</Label>
-          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-          <p className="text-xs text-muted-foreground">
-            Public URL: <code>{publicUrl}</code>
-          </p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="about">About</Label>
-          <AboutRichTextEditor
-            value={about}
-            onChange={setAbout}
-            disabled={!isAdmin || saving}
-          />
-          <p
-            className={`text-right text-xs ${
-              aboutTextCount > ABOUT_MAX_CHARS
-                ? "text-destructive"
-                : "text-muted-foreground"
-            }`}
+          <Label htmlFor="status">Status</Label>
+          <select
+            id="status"
+            className={SELECT_CLASS}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as GroupStatus)}
           >
-            {aboutTextCount}/{ABOUT_MAX_CHARS}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Supports bold, italic, underline, links, lists, line breaks, and
-            lightweight headings. The member-facing page renders a sanitized
-            preview of this same content.
-          </p>
-        </div>
-
-        <div className="space-y-3 rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label>About media gallery</Label>
-              <p className="text-xs text-muted-foreground">
-                First item is featured large; up to 8 items render in the gallery.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => addMedia("image")}>
-                <Plus className="h-4 w-4" /> Image
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => addMedia("video")}>
-                <Plus className="h-4 w-4" /> Video
-              </Button>
-            </div>
-          </div>
-          {aboutMedia.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Add media for the About page, or keep using the cover image fallback.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {aboutMedia.map((item, i) => (
-                <div key={item.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-[120px_1fr_auto]">
-                  <div className="text-xs font-medium text-muted-foreground">
-                    {i === 0 ? "Featured" : `Gallery ${i}`}
-                  </div>
-                  <div className="grid gap-2">
-                    <select
-                      className={SELECT_CLASS}
-                      value={item.type}
-                      onChange={(e) => updateMedia(i, { type: e.target.value as "image" | "video" })}
-                    >
-                      <option value="image">Image</option>
-                      <option value="video">Video</option>
-                    </select>
-                    {item.type === "image" ? (
-                      <ImageUpload
-                        label="Image"
-                        value={item.url || null}
-                        onChange={(url) => updateMedia(i, { url: url ?? "" })}
-                        onUploadingChange={setImgUploading}
-                        onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "about")}
-                        aspect="video"
-                        disabled={!isAdmin}
-                      />
-                    ) : (
-                      <Input
-                        value={item.url}
-                        onChange={(e) => updateMedia(i, { url: e.target.value })}
-                        placeholder="YouTube, Vimeo, Loom, or Descript URL"
-                      />
-                    )}
-                    <Input
-                      value={item.title}
-                      onChange={(e) => updateMedia(i, { title: e.target.value })}
-                      placeholder="Media title (optional)"
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setAboutMedia(aboutMedia.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <ImageUpload
-            label="Cover image"
-            hint="The large hero image on the public About page (16:9 works best)."
-            value={coverUrl}
-            onChange={setCoverUrl}
-            onUploadingChange={setImgUploading}
-            onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "cover")}
-            aspect="video"
-            disabled={!isAdmin}
-          />
-          <ImageUpload
-            label="Card image"
-            hint="The image at the top of the right-hand join card (16:9). Falls back to the cover if empty."
-            value={cardImageUrl}
-            onChange={setCardImageUrl}
-            onUploadingChange={setImgUploading}
-            onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "card")}
-            aspect="video"
-            disabled={!isAdmin}
-          />
-        </div>
-
-        <ImageUpload
-          label="Logo / icon"
-          hint="Small brand mark shown in the page header. Square works best."
-          value={logoUrl}
-          onChange={setLogoUrl}
-          onUploadingChange={setImgUploading}
-          onUpload={(file) => uploadCommunityImage(file, subAccountId, groupId, "logo")}
-          aspect="square"
-          disabled={!isAdmin}
-        />
-
-        <div className="space-y-1.5">
-          <Label htmlFor="tagline">Card tagline</Label>
-          <Input
-            id="tagline"
-            value={tagline}
-            onChange={(e) => setTagline(e.target.value.slice(0, TAGLINE_MAX_CHARS))}
-            maxLength={TAGLINE_MAX_CHARS}
-            placeholder="One short line shown under the logo in the join card."
-          />
-          <p className="text-right text-xs text-muted-foreground">
-            {tagline.length}/{TAGLINE_MAX_CHARS}
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="status">Status</Label>
-            <select
-              id="status"
-              className={SELECT_CLASS}
-              value={status}
-              onChange={(e) => setStatus(e.target.value as GroupStatus)}
-            >
-              <option value="draft">Draft (hidden)</option>
-              <option value="published">Published (live)</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="brandColor">Brand color (hex)</Label>
-            <Input
-              id="brandColor"
-              value={brandColor}
-              onChange={(e) => setBrandColor(e.target.value)}
-              placeholder="#2E6EF5"
-            />
-          </div>
+            <option value="draft">Draft (hidden)</option>
+            <option value="published">Published (live)</option>
+          </select>
         </div>
 
         <div className="space-y-1.5">
@@ -758,31 +559,17 @@ export default function CommunityGroupSettingsPage({
           )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="joinPolicy">Join policy</Label>
-            <select
-              id="joinPolicy"
-              className={SELECT_CLASS}
-              value={joinPolicy}
-              onChange={(e) => setJoinPolicy(e.target.value as GroupJoinPolicy)}
-            >
-              <option value="open">Open — anyone can join instantly</option>
-              <option value="approval">Approval — admin approves joins</option>
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="access">Access</Label>
-            <select
-              id="access"
-              className={SELECT_CLASS}
-              value={access}
-              onChange={(e) => setAccess(e.target.value as GroupAccess)}
-            >
-              <option value="free">Free</option>
-              <option value="paid">Paid (one-time)</option>
-            </select>
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="access">Access</Label>
+          <select
+            id="access"
+            className={SELECT_CLASS}
+            value={access}
+            onChange={(e) => setAccess(e.target.value as GroupAccess)}
+          >
+            <option value="free">Free</option>
+            <option value="paid">Paid (one-time)</option>
+          </select>
         </div>
 
         {access === "paid" && (

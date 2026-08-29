@@ -8,12 +8,17 @@ export const dynamic = "force-dynamic";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /**
- * Logo/cover/favicon image upload for Community Settings → General,
- * moderator-only. Favicon reuses the exact same validation as logo/cover
- * (image/* MIME + 5MB cap) — the mock-up's "PNG or ICO up to 200KB"
- * guidance is copy shown in the UI, not a stricter enforced limit; `image/
- * x-icon`/`image/vnd.microsoft.icon` (.ico) already satisfy the existing
- * `image/*` check, so no new validation branch was needed.
+ * Logo/cover/favicon/about/card image upload for Community Settings →
+ * General and the About tab's "Edit About" panel, moderator-only. Favicon
+ * reuses the exact same validation as logo/cover (image/* MIME + 5MB cap)
+ * — the mock-up's "PNG or ICO up to 200KB" guidance is copy shown in the
+ * UI, not a stricter enforced limit; `image/x-icon`/`image/vnd.microsoft.
+ * icon` (.ico) already satisfy the existing `image/*` check, so no new
+ * validation branch was needed. `about`/`card` (2026-08-29 About-tab
+ * cleanup) added so a pure Community moderator with no CRM/staff access
+ * can upload About media and the Join Card image too — previously only
+ * the staff-only, Firebase-client-auth `uploadCommunityImage` supported
+ * those two kinds, which a non-staff moderator can never call.
  * Members are NOT Firebase users (see `storage.rules`'s doc comment on the
  * `community/**` path — client Storage writes require `request.auth`, which
  * a member session never has), so this mirrors the same Admin-SDK-upload
@@ -52,7 +57,11 @@ export async function POST(
     const f = form.get("file");
     if (f instanceof File) file = f;
     const k = form.get("kind");
-    if (typeof k === "string" && (k === "logo" || k === "cover" || k === "favicon")) kind = k;
+    if (
+      typeof k === "string" &&
+      (k === "logo" || k === "cover" || k === "favicon" || k === "about" || k === "card")
+    )
+      kind = k;
   } catch {
     return NextResponse.json({ error: "Invalid upload" }, { status: 400 });
   }

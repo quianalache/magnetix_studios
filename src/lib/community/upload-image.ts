@@ -19,18 +19,21 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /**
  * Member-facing sibling of `uploadCommunityImage` for Community Settings →
- * General. Members have no Firebase auth, so this can't write to Storage
- * client-side — it POSTs to the member-session-authenticated
- * `/api/community/[saId]/[groupId]/settings/upload` route instead, which
- * does the actual Admin-SDK write and returns the same kind of public URL.
- * Validation (file type / 5 MB cap) happens again server-side; this just
- * surfaces whatever error message the route returns.
+ * General and the About tab's "Edit About" panel. Members have no Firebase
+ * auth, so this can't write to Storage client-side — it POSTs to the
+ * member-session-authenticated `/api/community/[saId]/[groupId]/settings/
+ * upload` route instead, which does the actual Admin-SDK write and returns
+ * the same kind of public URL. Validation (file type / 5 MB cap) happens
+ * again server-side; this just surfaces whatever error message the route
+ * returns. `about`/`card` (2026-08-29 About-tab cleanup) added so the new
+ * About editor works for a pure Community moderator with no CRM/staff
+ * access, not just staff.
  */
 export async function uploadCommunitySettingsImage(
   file: File,
   saId: string,
   groupId: string,
-  kind: "logo" | "cover" | "favicon",
+  kind: "logo" | "cover" | "favicon" | "about" | "card",
 ): Promise<string> {
   const form = new FormData();
   form.append("file", file);

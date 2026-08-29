@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
 import { updateGroupServerSide } from "@/lib/server/community-service";
-import type { CommunityTheme, GroupJoinPolicy, NavItem } from "@/types/community";
+import type {
+  CommunityAboutMediaItem,
+  CommunityTheme,
+  GroupJoinPolicy,
+  NavItem,
+} from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +24,14 @@ export const dynamic = "force-dynamic";
  * record. Deliberately whitelists only the General + Branding + Navigation
  * tab fields (Access & Membership, Gamification, etc. are still out of
  * scope and have no write path here).
+ *
+ * `aboutMedia`/`cardImageUrl`/`tagline` (2026-08-29 About-tab cleanup) —
+ * added so the new About tab's "Edit About" panel can save through this
+ * SAME moderator-gated route rather than needing a second write path. This
+ * is the fix for a real pre-existing gap: the legacy Manage page that used
+ * to be the only place to edit these fields lives under the STAFF CRM
+ * route tree (Firebase-auth gated), so a pure Community moderator with no
+ * CRM/staff access had no way to edit their own About content at all.
  */
 export async function PATCH(
   request: Request,
@@ -44,6 +57,9 @@ export async function PATCH(
     showBanner?: boolean;
     theme?: CommunityTheme;
     navigation?: NavItem[];
+    tagline?: string;
+    cardImageUrl?: string | null;
+    aboutMedia?: CommunityAboutMediaItem[];
   };
   try {
     body = await request.json();
@@ -65,6 +81,9 @@ export async function PATCH(
       showBanner: body.showBanner,
       theme: body.theme,
       navigation: body.navigation,
+      tagline: body.tagline,
+      cardImageUrl: body.cardImageUrl,
+      aboutMedia: body.aboutMedia,
     },
   });
   if (!group) {
