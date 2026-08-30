@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { doc, onSnapshot } from "firebase/firestore";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
 import {
   Home,
   Users,
@@ -289,59 +290,95 @@ function SidebarContent({
     });
   }
 
+  // Reads whichever SubAccountProvider (if any) already wraps this render —
+  // `null` on agency-level pages, where none does.
+  const sharedSubAccount = useOptionalSubAccount();
+
+  function applyGateData(data: Record<string, unknown> | undefined) {
+    setBroadcastsGate(data?.broadcastsEnabledByAgency === true);
+    setWebsiteGate(data?.websiteEnabledByAgency === true);
+    setSocialGate(data?.socialPlannerEnabledByAgency === true);
+    setCommunityGate(data?.communityEnabledByAgency === true);
+    setStandaloneCoursesGate(data?.standaloneCoursesEnabledByAgency === true);
+    // Workspace Assistant is opt-in like the other gates — off unless the
+    // agency owner explicitly enabled it (legacy/unset reads as off).
+    setAiSuiteGate(data?.aiSuiteEnabledByAgency === true);
+    setGetLeadsGate(data?.getLeadsEnabledByAgency === true);
+    setLabsGate(data?.labsEnabledByAgency === true);
+    // Default (unset) → hidden. Only an explicit `false` shows the Locked row.
+    setBroadcastsHidden(data?.broadcastsHiddenWhenDisabled !== false);
+    setWebsiteHidden(data?.websiteHiddenWhenDisabled !== false);
+    setSocialHidden(data?.socialPlannerHiddenWhenDisabled !== false);
+    setCommunityHidden(data?.communityHiddenWhenDisabled !== false);
+    setStandaloneCoursesHidden(data?.standaloneCoursesHiddenWhenDisabled !== false);
+    setGetLeadsHidden(data?.getLeadsHiddenWhenDisabled !== false);
+    setAiSuiteHidden(data?.aiSuiteHiddenWhenDisabled !== false);
+    setLabsHidden(data?.labsHiddenWhenDisabled !== false);
+  }
+
+  function clearGateData() {
+    setBroadcastsGate(null);
+    setWebsiteGate(null);
+    setSocialGate(null);
+    setCommunityGate(null);
+    setStandaloneCoursesGate(null);
+    setAiSuiteGate(null);
+    setGetLeadsGate(null);
+    setLabsGate(null);
+  }
+
+  // Whether the same document a shared SubAccountProvider is ALREADY
+  // subscribed to (on any /sa/[subAccountId]/* page) is the one we need
+  // gates for — the common case. Reusing it here, rather than opening a
+  // SECOND independent `onSnapshot` on the identical document, closes a
+  // real duplicate-listener code-quality issue (2026-08-30 launch-
+  // hardening follow-up). NOTE: measured live, this consolidation alone
+  // did NOT reduce the Community/Courses crash rate (~56% before and
+  // after) — the actual fix for that is the defensive try/catch around
+  // each onSnapshot registration (see useResilientList and
+  // sub-account-context.tsx), which catches the upstream Firestore SDK's
+  // synchronous-throw failure mode (firebase-js-sdk#9267) directly. This
+  // consolidation is kept because removing a genuinely duplicate listener
+  // is correct on its own merits, not because it moved the crash rate.
+  const usingSharedSubAccount =
+    !!sharedSubAccount && sharedSubAccount.subAccountId === activeSubId;
+
   useEffect(() => {
+    if (!usingSharedSubAccount) return;
+    applyGateData(
+      (sharedSubAccount!.subAccount as unknown as Record<string, unknown> | null) ??
+        undefined,
+    );
+    // sharedSubAccount is a fresh object identity on every provider update
+    // (a real Firestore snapshot), so it's the correct effect dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usingSharedSubAccount, sharedSubAccount?.subAccount]);
+
+  useEffect(() => {
+    if (usingSharedSubAccount) return;
     const linkSubIdLocal = activeSubId ?? memberships[0]?.subAccountId ?? null;
     if (!linkSubIdLocal) {
-      setBroadcastsGate(null);
-      setWebsiteGate(null);
-      setSocialGate(null);
-      setCommunityGate(null);
-      setStandaloneCoursesGate(null);
-      setAiSuiteGate(null);
-      setGetLeadsGate(null);
-      setLabsGate(null);
+      clearGateData();
       return;
     }
-    return onSnapshot(
-      doc(getFirebaseDb(), "subAccounts", linkSubIdLocal),
-      (snap) => {
-        const data = snap.data();
-        setBroadcastsGate(data?.broadcastsEnabledByAgency === true);
-        setWebsiteGate(data?.websiteEnabledByAgency === true);
-        setSocialGate(data?.socialPlannerEnabledByAgency === true);
-        setCommunityGate(data?.communityEnabledByAgency === true);
-        setStandaloneCoursesGate(
-          data?.standaloneCoursesEnabledByAgency === true,
-        );
-        // Workspace Assistant is opt-in like the other gates — off unless the
-        // agency owner explicitly enabled it (legacy/unset reads as off).
-        setAiSuiteGate(data?.aiSuiteEnabledByAgency === true);
-        setGetLeadsGate(data?.getLeadsEnabledByAgency === true);
-        setLabsGate(data?.labsEnabledByAgency === true);
-        // Default (unset) → hidden. Only an explicit `false` shows the Locked row.
-        setBroadcastsHidden(data?.broadcastsHiddenWhenDisabled !== false);
-        setWebsiteHidden(data?.websiteHiddenWhenDisabled !== false);
-        setSocialHidden(data?.socialPlannerHiddenWhenDisabled !== false);
-        setCommunityHidden(data?.communityHiddenWhenDisabled !== false);
-        setStandaloneCoursesHidden(
-          data?.standaloneCoursesHiddenWhenDisabled !== false,
-        );
-        setGetLeadsHidden(data?.getLeadsHiddenWhenDisabled !== false);
-        setAiSuiteHidden(data?.aiSuiteHiddenWhenDisabled !== false);
-        setLabsHidden(data?.labsHiddenWhenDisabled !== false);
-      },
-      () => {
-        setBroadcastsGate(null);
-        setWebsiteGate(null);
-        setSocialGate(null);
-        setCommunityGate(null);
-        setStandaloneCoursesGate(null);
-        setAiSuiteGate(null);
-        setGetLeadsGate(null);
-        setLabsGate(null);
-      },
-    );
-  }, [activeSubId, memberships]);
+    // Defensive try/catch (2026-08-30, same reasoning as
+    // SubAccountProvider's own listener): this fallback path only runs on
+    // agency-level pages, where no SubAccountProvider is mounted, but it's
+    // still layout-level — above every route's error.tsx — so a
+    // synchronous throw here (the confirmed-real firebase-js-sdk#9267
+    // failure mode) would crash the whole app shell rather than being
+    // gracefully contained.
+    try {
+      return onSnapshot(
+        doc(getFirebaseDb(), "subAccounts", linkSubIdLocal),
+        (snap) => applyGateData(snap.data()),
+        () => clearGateData(),
+      );
+    } catch {
+      clearGateData();
+      return undefined;
+    }
+  }, [activeSubId, memberships, usingSharedSubAccount]);
 
   // When no sub-account is active (agency-level pages), fall back to the
   // user's first membership for sub-account-scoped link templating.

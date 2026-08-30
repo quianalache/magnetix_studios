@@ -106,14 +106,38 @@ export function useResilientList<T>({
 
   useEffect(() => {
     if (!enabled) return;
-    const unsub = subscribeRef.current(
-      (items) => {
-        setLiveItems(items);
-        setLiveDegraded(false);
-      },
-      () => setLiveDegraded(true),
-    );
-    return unsub;
+    // 2026-08-30 root-cause follow-up: registering a Firestore listener
+    // (calling onSnapshot) is normally async-safe — failures are supposed
+    // to only ever reach the onError callback above. Live production
+    // testing proved that's not always true here: a currently-open
+    // upstream Firestore JS SDK bug (firebase-js-sdk#9267, "INTERNAL
+    // ASSERTION FAILED... Unexpected state") can leave the shared client
+    // SDK instance in a corrupted state from an EARLIER, unrelated
+    // listener elsewhere on the page, such that THIS call — the very next
+    // onSnapshot registration to run — throws SYNCHRONOUSLY instead of
+    // routing the failure through onError. An uncaught synchronous throw
+    // inside a render-phase effect takes down the whole route segment
+    // (confirmed live: this exact call site, `Object.subscribe [as
+    // current]`, was the crash's proximate frame). Catching it here and
+    // treating it identically to an async onError failure keeps this
+    // hook's existing resilient-fallback contract (server data stays
+    // authoritative, "liveDegraded" note only) intact even when the SDK
+    // itself misbehaves this way — this is a defensive containment of a
+    // confirmed-real upstream bug, not a fix for the SDK's own state
+    // corruption.
+    try {
+      const unsub = subscribeRef.current(
+        (items) => {
+          setLiveItems(items);
+          setLiveDegraded(false);
+        },
+        () => setLiveDegraded(true),
+      );
+      return unsub;
+    } catch {
+      setLiveDegraded(true);
+      return undefined;
+    }
   }, [enabled]);
 
   const resolved = serverState.loaded || liveItems !== null;

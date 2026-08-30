@@ -61,23 +61,40 @@ export function SubAccountProvider({
       setSubLoading(false);
       return;
     }
-    const unsub = onSnapshot(
-      doc(getFirebaseDb(), "subAccounts", subAccountId),
-      (snap) => {
-        if (!snap.exists()) {
+    // 2026-08-30: this provider sits in the layout, ABOVE every route
+    // segment's own error.tsx boundary — a synchronous throw out of this
+    // listener registration (a confirmed-real failure mode of the current
+    // Firestore JS SDK under firebase-js-sdk#9267's "INTERNAL ASSERTION
+    // FAILED... Unexpected state" condition, see useResilientList's own
+    // subscribe try/catch for the full explanation) would bypass every
+    // page's graceful error boundary entirely and crash the whole app
+    // shell (sidebar included), not just the page content. Wrapped
+    // defensively for the same reason, even though this exact call site
+    // hasn't itself been caught throwing in testing — the failure mode is
+    // real and this is the one listener whose crash blast radius is worst.
+    let unsub: (() => void) | undefined;
+    try {
+      unsub = onSnapshot(
+        doc(getFirebaseDb(), "subAccounts", subAccountId),
+        (snap) => {
+          if (!snap.exists()) {
+            setSubAccount(null);
+            setSubLoading(false);
+            return;
+          }
+          setSubAccount(snap.data() as SubAccountDoc);
+          setSubLoading(false);
+        },
+        () => {
           setSubAccount(null);
           setSubLoading(false);
-          return;
-        }
-        setSubAccount(snap.data() as SubAccountDoc);
-        setSubLoading(false);
-      },
-      () => {
-        setSubAccount(null);
-        setSubLoading(false);
-      },
-    );
-    return () => unsub();
+        },
+      );
+    } catch {
+      setSubAccount(null);
+      setSubLoading(false);
+    }
+    return () => unsub?.();
   }, [user, subAccountId]);
 
   // Compute role + access. Agency owners always pass.
