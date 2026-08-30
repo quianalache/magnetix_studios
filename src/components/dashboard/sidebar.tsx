@@ -728,7 +728,25 @@ function SidebarContent({
             "w-full gap-2.5 text-[13px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
             collapsed ? "justify-center" : "justify-start",
           )}
-          onClick={() => signOutUser()}
+          onClick={() => {
+            // 2026-08-30: signOutUser() clears both the server __session
+            // cookie and the client Firebase Auth session, but does no
+            // navigation itself — the dashboard React tree stayed mounted
+            // and visible until the next click happened to hit
+            // middleware. Same hard-redirect convention already used
+            // elsewhere in this app for "sign out, then leave" (see
+            // AuthProvider's removed-user path in auth-context.tsx) — a
+            // full navigation, not router.push, so every provider/
+            // listener genuinely tears down instead of lingering in a
+            // signed-out React tree. try/catch/finally so a client
+            // signOut() failure still redirects rather than stranding
+            // the user on the dashboard.
+            signOutUser()
+              .catch(() => undefined)
+              .finally(() => {
+                window.location.href = "/login";
+              });
+          }}
         >
           <LogOut className="h-4 w-4 shrink-0" />
           {!collapsed && "Sign Out"}

@@ -201,7 +201,17 @@ export default function MySettingsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => signOutUser()}
+            onClick={() => {
+              // 2026-08-30: same missing-navigation bug as the sidebar/
+              // header Sign Out — see their fix comments for the full
+              // explanation. Hard redirect, matching the existing
+              // sign-out-then-leave convention elsewhere in this app.
+              signOutUser()
+                .catch(() => undefined)
+                .finally(() => {
+                  window.location.href = "/login";
+                });
+            }}
           >
             Sign out
           </Button>

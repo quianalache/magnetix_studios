@@ -35,6 +35,25 @@ export default function DashboardLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // 2026-08-30 sign-out UX fix: after a hard redirect to /login, pressing
+  // Back can restore THIS page from the browser's bfcache — an in-memory
+  // snapshot of the authenticated shell exactly as it looked a moment
+  // ago, shown instantly with no new network request, so middleware
+  // never gets a chance to re-check the (now-cleared) session cookie.
+  // `pageshow`'s `persisted` flag is true only for a bfcache restore
+  // (never a normal load), so this can't affect ordinary navigation —
+  // forcing a real reload here always re-runs middleware fresh, which
+  // correctly bounces to /login if the session is genuinely gone, or
+  // just shows the same dashboard again if it isn't (e.g. Back after
+  // ordinary browsing, not a sign-out).
+  useEffect(() => {
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) window.location.reload();
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   return (
     // h-dvh (not h-screen): 100vh overshoots when mobile browser toolbars
     // or the on-screen keyboard are up, hiding bottom-anchored UI like the

@@ -129,8 +129,18 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
   }, []);
 
   async function handleSignOut() {
-    await signOutUser();
-    router.push("/");
+    // 2026-08-30: was router.push("/") — a soft client navigation to the
+    // wrong route (the marketing home, not login) that also left the
+    // authenticated React tree/providers alive across the transition.
+    // Hard redirect straight to /login, matching the existing sign-out-
+    // then-leave convention elsewhere in this app (see AuthProvider's
+    // removed-user path in auth-context.tsx). catch+finally so a client
+    // signOut() failure still redirects — the server session cookie
+    // clearing (inside signOutUser(), via /api/logout) already swallows
+    // its own errors, and middleware gates every protected route on that
+    // cookie regardless of client Firebase Auth state.
+    await signOutUser().catch(() => undefined);
+    window.location.href = "/login";
   }
 
   async function handleSwitchToMyMagnetix() {
