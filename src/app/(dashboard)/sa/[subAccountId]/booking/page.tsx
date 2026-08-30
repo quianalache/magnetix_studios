@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToBookingPages } from "@/lib/firestore/booking-pages";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { Button } from "@/components/ui/button";
 import { BookingHelpDialog } from "@/components/booking/booking-help-dialog";
 import { DefaultBookingLinkCard } from "@/components/booking/default-booking-link-card";
@@ -41,15 +42,22 @@ export default function BookingListPage() {
 
   useEffect(() => {
     if (!subAccountId) return;
-    const unsub = subscribeToBookingPages(
-      subAccountId,
-      (list) => {
-        setPages(list);
-        setLoaded(true);
-      },
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment. Booking was one of the routes actually reproduced
+    // crashing live during this pass's QA.
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToBookingPages(
+          subAccountId,
+          (list) => {
+            setPages(list);
+            setLoaded(true);
+          },
+          () => setLoaded(true),
+        ),
       () => setLoaded(true),
     );
-    return () => unsub();
+    return () => unsub?.();
   }, [subAccountId]);
 
   function publicLinkFor(slug: string): string {

@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToConversations } from "@/lib/firestore/conversations";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ConversationList } from "@/components/conversations/conversation-list";
@@ -23,11 +24,18 @@ export default function ConversationsPage() {
   useEffect(() => {
     if (authLoading || !user || !subAccountId) return;
     setLoading(true);
-    const unsub = subscribeToConversations(subAccountId, (list) => {
-      setConversations(list);
-      setLoading(false);
-    });
-    return () => unsub();
+    // safeSubscribe (2026-08-30 CRM-wide stability pass): see its own doc
+    // comment — catches a synchronous listener-registration throw
+    // (firebase-js-sdk#9267) instead of letting it crash this page.
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToConversations(subAccountId, (list) => {
+          setConversations(list);
+          setLoading(false);
+        }),
+      () => setLoading(false),
+    );
+    return () => unsub?.();
   }, [user, subAccountId, authLoading]);
 
   const unreadTotal = conversations.filter(

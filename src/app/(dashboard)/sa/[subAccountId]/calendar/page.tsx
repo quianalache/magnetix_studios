@@ -8,6 +8,7 @@ import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToEvents } from "@/lib/firestore/events";
 import { subscribeToTasks } from "@/lib/firestore/tasks";
 import { subscribeToExternalCalendarEvents } from "@/lib/firestore/external-calendar-events";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
@@ -40,31 +41,62 @@ export default function CalendarPage() {
         setLoading(false);
       }
     };
-    const unsubE = subscribeToEvents(scope, { territoryFilter }, (l) => {
-      setEvents(l);
-      eventsReady = true;
-      settle();
-    });
-    const unsubC = subscribeToContacts(scope, { territoryFilter }, (l) => {
-      setContacts(l);
-      contactsReady = true;
-      settle();
-    });
-    const unsubT = subscribeToTasks(scope, { territoryFilter }, (l) => {
-      setTasks(l);
-      tasksReady = true;
-      settle();
-    });
-    const unsubG = subscribeToExternalCalendarEvents(scope, user.uid, (l) => {
-      setGoogleEvents(l);
-      googleEventsReady = true;
-      settle();
-    });
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment. Calendar has the most concurrent listeners of any
+    // page in the app (4), making it a high-leverage spot for this fix.
+    const unsubE = safeSubscribe(
+      () =>
+        subscribeToEvents(scope, { territoryFilter }, (l) => {
+          setEvents(l);
+          eventsReady = true;
+          settle();
+        }),
+      () => {
+        eventsReady = true;
+        settle();
+      },
+    );
+    const unsubC = safeSubscribe(
+      () =>
+        subscribeToContacts(scope, { territoryFilter }, (l) => {
+          setContacts(l);
+          contactsReady = true;
+          settle();
+        }),
+      () => {
+        contactsReady = true;
+        settle();
+      },
+    );
+    const unsubT = safeSubscribe(
+      () =>
+        subscribeToTasks(scope, { territoryFilter }, (l) => {
+          setTasks(l);
+          tasksReady = true;
+          settle();
+        }),
+      () => {
+        tasksReady = true;
+        settle();
+      },
+    );
+    const unsubG = safeSubscribe(
+      () =>
+        subscribeToExternalCalendarEvents(scope, user.uid, (l) => {
+          setGoogleEvents(l);
+          googleEventsReady = true;
+          settle();
+        }),
+      () => {
+        googleEventsReady = true;
+        settle();
+      },
+    );
     return () => {
-      unsubE();
-      unsubC();
-      unsubT();
-      unsubG();
+      unsubE?.();
+      unsubC?.();
+      unsubT?.();
+      unsubG?.();
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 

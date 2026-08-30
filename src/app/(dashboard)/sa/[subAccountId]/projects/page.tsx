@@ -15,6 +15,7 @@ import {
   subscribeToProjects,
   subscribeToProjectTemplates,
 } from "@/lib/firestore/projects";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/projects/project-card";
 import { ProjectDialog } from "@/components/projects/project-dialog";
@@ -56,25 +57,48 @@ export default function ProjectsPage() {
     const settle = () => {
       if (projectsReady && templatesReady && contactsReady) setLoading(false);
     };
-    const unsubP = subscribeToProjects(scope, (l) => {
-      setProjects(l);
-      projectsReady = true;
-      settle();
-    });
-    const unsubT = subscribeToProjectTemplates(scope, (l) => {
-      setTemplates(l);
-      templatesReady = true;
-      settle();
-    });
-    const unsubC = subscribeToContacts(scope, (l) => {
-      setContacts(l);
-      contactsReady = true;
-      settle();
-    });
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment.
+    const unsubP = safeSubscribe(
+      () =>
+        subscribeToProjects(scope, (l) => {
+          setProjects(l);
+          projectsReady = true;
+          settle();
+        }),
+      () => {
+        projectsReady = true;
+        settle();
+      },
+    );
+    const unsubT = safeSubscribe(
+      () =>
+        subscribeToProjectTemplates(scope, (l) => {
+          setTemplates(l);
+          templatesReady = true;
+          settle();
+        }),
+      () => {
+        templatesReady = true;
+        settle();
+      },
+    );
+    const unsubC = safeSubscribe(
+      () =>
+        subscribeToContacts(scope, (l) => {
+          setContacts(l);
+          contactsReady = true;
+          settle();
+        }),
+      () => {
+        contactsReady = true;
+        settle();
+      },
+    );
     return () => {
-      unsubP();
-      unsubT();
-      unsubC();
+      unsubP?.();
+      unsubT?.();
+      unsubC?.();
     };
   }, [user, agencyId, subAccountId, authLoading]);
 

@@ -20,6 +20,7 @@ import {
   bumpTemplateUseCount,
 } from "@/lib/firestore/content-templates";
 import { subscribeToSocialPosts } from "@/lib/firestore/social-posts";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { metaCanPublish } from "@/lib/comms/meta-capabilities";
 import {
   emptyContentItem,
@@ -47,10 +48,24 @@ import { TemplatesTab } from "@/components/content-library/templates-tab";
 export default function ContentLibraryPage() {
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId, subAccount, isAdmin } = useSubAccount();
-  const [items, setItems] = useState<ContentItemDoc[]>([]);
-  const [templates, setTemplates] = useState<ContentTemplateDoc[]>([]);
+  // Resilient read (2026-08-30 CRM-wide stability pass, same precedence
+  // model as useResilientList): server-verified data is the reliable
+  // baseline; each live listener is a pure enhancement, trusted only once
+  // it has actually delivered — an unavailable/degraded listener can
+  // never overwrite known-good data with an empty array. Custom (not the
+  // shared hook) because this page needs items AND templates from one
+  // shared server fetch, not two separate requests to the same route.
+  const [serverState, setServerState] = useState<{
+    loaded: boolean;
+    items: ContentItemDoc[];
+    templates: ContentTemplateDoc[];
+  }>({ loaded: false, items: [], templates: [] });
+  const [liveItems, setLiveItems] = useState<ContentItemDoc[] | null>(null);
+  const [liveTemplates, setLiveTemplates] = useState<ContentTemplateDoc[] | null>(null);
   const [posts, setPosts] = useState<SocialPostDoc[]>([]);
-  const [loading, setLoading] = useState(true);
+  const items = liveItems ?? serverState.items;
+  const templates = liveTemplates ?? serverState.templates;
+  const loading = !serverState.loaded && liveItems === null;
 
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ContentItemDoc | null>(null);
@@ -68,23 +83,67 @@ export default function ContentLibraryPage() {
 
   const syncedRef = useRef(new Set<string>());
 
+  // Server-verified baseline — the reliable fallback whenever the live
+  // listeners below haven't delivered (including "never").
+  useEffect(() => {
+    if (authLoading || !user || !subAccountId) return;
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/content`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("content fetch failed"))))
+      .then((json: { items?: ContentItemDoc[]; templates?: ContentTemplateDoc[] }) => {
+        if (cancelled) return;
+        setServerState({
+          loaded: true,
+          items: json.items ?? [],
+          templates: json.templates ?? [],
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setServerState((prev) =>
+            prev.loaded ? prev : { loaded: true, items: [], templates: [] },
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, subAccountId, authLoading]);
+
+  // Live listeners — pure enhancement. Each onSnapshot registration is
+  // wrapped in safeSubscribe: a currently-open upstream Firestore JS SDK
+  // bug (firebase-js-sdk#9267) can make registration throw synchronously
+  // instead of routing the failure through its own onError callback,
+  // which previously could crash this page (see safeSubscribe's own doc
+  // comment for the full explanation, first found and fixed for
+  // Community/Courses).
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
-    const unsubItems = subscribeToContentItems(
-      { agencyId, subAccountId },
-      (list) => {
-        setItems(list);
-        setLoading(false);
-      },
-      () => setLoading(false),
+    const unsubItems = safeSubscribe(
+      () =>
+        subscribeToContentItems(
+          { agencyId, subAccountId },
+          (list) => setLiveItems(list),
+          () => {},
+        ),
+      () => {},
     );
-    const unsubTemplates = subscribeToContentTemplates({ agencyId, subAccountId }, setTemplates);
-    const unsubPosts = subscribeToSocialPosts(subAccountId, setPosts);
+    const unsubTemplates = safeSubscribe(
+      () =>
+        subscribeToContentTemplates({ agencyId, subAccountId }, (list) =>
+          setLiveTemplates(list),
+        ),
+      () => {},
+    );
+    const unsubPosts = safeSubscribe(
+      () => subscribeToSocialPosts(subAccountId, setPosts),
+      () => {},
+    );
     void ensureSystemTemplatesSeeded({ agencyId, subAccountId }).catch(() => {});
     return () => {
-      unsubItems();
-      unsubTemplates();
-      unsubPosts();
+      unsubItems?.();
+      unsubTemplates?.();
+      unsubPosts?.();
     };
   }, [user, agencyId, subAccountId, authLoading]);
 

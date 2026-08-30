@@ -8,6 +8,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
 import { subscribeToTerritories } from "@/lib/firestore/territories";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { formatCurrency } from "@/lib/format";
 import { PIPELINE_STAGES, type Deal } from "@/types/deals";
@@ -51,29 +52,48 @@ export default function PipelinePage() {
     const settle = () => {
       if (dealsReady && contactsReady) setLoading(false);
     };
-    const unsubDeals = subscribeToDeals(
-      scope,
-      { territoryFilter },
-      (list) => {
-        setDeals(list);
-        dealsReady = true;
-        settle();
-      },
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment: catches a synchronous listener-registration throw
+    // (firebase-js-sdk#9267) instead of letting it crash this page.
+    const unsubDeals = safeSubscribe(
+      () =>
+        subscribeToDeals(
+          scope,
+          { territoryFilter },
+          (list) => {
+            setDeals(list);
+            dealsReady = true;
+            settle();
+          },
+          (err) => {
+            console.error("[pipeline] deals listener error", err);
+            // Don't hang on the skeleton if the listener fails.
+            dealsReady = true;
+            settle();
+          },
+        ),
       (err) => {
         console.error("[pipeline] deals listener error", err);
-        // Don't hang on the skeleton if the listener fails.
         dealsReady = true;
         settle();
       },
     );
-    const unsubContacts = subscribeToContacts(
-      scope,
-      { territoryFilter },
-      (list) => {
-        setContacts(list);
-        contactsReady = true;
-        settle();
-      },
+    const unsubContacts = safeSubscribe(
+      () =>
+        subscribeToContacts(
+          scope,
+          { territoryFilter },
+          (list) => {
+            setContacts(list);
+            contactsReady = true;
+            settle();
+          },
+          (err) => {
+            console.error("[pipeline] contacts listener error", err);
+            contactsReady = true;
+            settle();
+          },
+        ),
       (err) => {
         console.error("[pipeline] contacts listener error", err);
         contactsReady = true;
@@ -81,8 +101,8 @@ export default function PipelinePage() {
       },
     );
     return () => {
-      unsubDeals();
-      unsubContacts();
+      unsubDeals?.();
+      unsubContacts?.();
     };
   }, [
     user,
@@ -100,12 +120,16 @@ export default function PipelinePage() {
       setTerritories([]);
       return;
     }
-    const unsub = subscribeToTerritories(
-      subAccountId,
-      (list) => setTerritories(list),
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToTerritories(
+          subAccountId,
+          (list) => setTerritories(list),
+          (err) => console.error("[pipeline] territories listener error", err),
+        ),
       (err) => console.error("[pipeline] territories listener error", err),
     );
-    return () => unsub();
+    return () => unsub?.();
   }, [scopingOn, subAccountId]);
 
   // contactsById is needed for the country filter (deals don't carry

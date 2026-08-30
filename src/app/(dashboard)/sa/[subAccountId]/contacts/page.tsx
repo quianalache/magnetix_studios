@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToTerritories } from "@/lib/firestore/territories";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { serializeCsv, downloadCsv } from "@/lib/csv";
 import { toDate } from "@/lib/format";
@@ -71,15 +72,21 @@ export default function ContactsPage() {
     if (authLoading || !user || !agencyId) return;
     if (!filterReady) return;
     setLoading(true);
-    const unsub = subscribeToContacts(
-      { agencyId, subAccountId },
-      { territoryFilter },
-      (list) => {
-        setContacts(list);
-        setLoading(false);
-      },
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment.
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToContacts(
+          { agencyId, subAccountId },
+          { territoryFilter },
+          (list) => {
+            setContacts(list);
+            setLoading(false);
+          },
+        ),
+      () => setLoading(false),
     );
-    return () => unsub();
+    return () => unsub?.();
   }, [
     user,
     agencyId,
@@ -94,10 +101,11 @@ export default function ContactsPage() {
       setTerritories([]);
       return;
     }
-    const unsub = subscribeToTerritories(subAccountId, (list) =>
-      setTerritories(list),
+    const unsub = safeSubscribe(
+      () => subscribeToTerritories(subAccountId, (list) => setTerritories(list)),
+      () => {},
     );
-    return () => unsub();
+    return () => unsub?.();
   }, [scopingOn, subAccountId]);
 
   function handleExport() {

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToTasks } from "@/lib/firestore/tasks";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
 import { toDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -37,19 +38,35 @@ export default function TasksPage() {
     const settle = () => {
       if (tasksReady && contactsReady) setLoading(false);
     };
-    const unsubT = subscribeToTasks(scope, { territoryFilter }, (l) => {
-      setTasks(l);
-      tasksReady = true;
-      settle();
-    });
-    const unsubC = subscribeToContacts(scope, { territoryFilter }, (l) => {
-      setContacts(l);
-      contactsReady = true;
-      settle();
-    });
+    // safeSubscribe (2026-08-30 CRM-wide stability pass) — see its own
+    // doc comment.
+    const unsubT = safeSubscribe(
+      () =>
+        subscribeToTasks(scope, { territoryFilter }, (l) => {
+          setTasks(l);
+          tasksReady = true;
+          settle();
+        }),
+      () => {
+        tasksReady = true;
+        settle();
+      },
+    );
+    const unsubC = safeSubscribe(
+      () =>
+        subscribeToContacts(scope, { territoryFilter }, (l) => {
+          setContacts(l);
+          contactsReady = true;
+          settle();
+        }),
+      () => {
+        contactsReady = true;
+        settle();
+      },
+    );
     return () => {
-      unsubT();
-      unsubC();
+      unsubT?.();
+      unsubC?.();
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 

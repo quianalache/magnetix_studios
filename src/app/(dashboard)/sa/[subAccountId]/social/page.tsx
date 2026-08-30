@@ -15,7 +15,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
 import { subscribeToSocialPosts } from "@/lib/firestore/social-posts";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { metaCanPublish } from "@/lib/comms/meta-capabilities";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -56,7 +58,20 @@ export default function SocialPlannerPage() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const gateOn = subAccount?.socialPlannerEnabledByAgency === true;
+  // 2026-08-30 false-lock fix (CRM-wide stability pass): this used to read
+  // subAccount?.socialPlannerEnabledByAgency directly off the client-only
+  // SubAccountProvider value — the exact same false-lock pattern already
+  // found and fixed for Community/Courses (see useResilientFeatureGate's
+  // own doc comment), just never migrated here. When the client Firestore
+  // listener hadn't delivered yet (or degraded under the firebase-js-sdk
+  // #9267 corrupted-state condition), this page showed "locked by your
+  // agency" for a genuinely-entitled sub-account with no fallback and no
+  // loading state.
+  const gate = useResilientFeatureGate({
+    field: "socialPlannerEnabledByAgency",
+    fallbackKey: "socialPlannerEnabled",
+  });
+  const gateOn = gate.known && gate.enabled;
   const cfg = subAccount?.metaConfig ?? null;
   // Posting readiness is the capability flag, not a bare "connected" — a
   // connection made for the inbox only must not look post-ready here.
@@ -66,15 +81,22 @@ export default function SocialPlannerPage() {
 
   useEffect(() => {
     if (!subAccountId || !gateOn) return;
-    const unsub = subscribeToSocialPosts(
-      subAccountId,
-      (list) => {
-        setPosts(list);
-        setLoaded(true);
-      },
+    // Defensive try/catch (safeSubscribe) — same firebase-js-sdk#9267
+    // synchronous-throw containment already applied across Community/
+    // Courses' listeners.
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToSocialPosts(
+          subAccountId,
+          (list) => {
+            setPosts(list);
+            setLoaded(true);
+          },
+          () => setLoaded(true),
+        ),
       () => setLoaded(true),
     );
-    return () => unsub();
+    return () => unsub?.();
   }, [subAccountId, gateOn]);
 
   async function deletePost(id: string) {
@@ -100,6 +122,22 @@ export default function SocialPlannerPage() {
     } finally {
       setDeletingId(null);
     }
+  }
+
+  // ── Gate: still confirming (no false "locked" flash) ─────────────
+  if (!gate.known) {
+    return (
+      <div className="mx-auto flex w-full max-w-5xl justify-center py-16">
+        {gate.timedOut ? (
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            Couldn&apos;t confirm Social Planner&apos;s status. Try refreshing
+            the page.
+          </p>
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        )}
+      </div>
+    );
   }
 
   // ── Gate: locked state ────────────────────────────────────────────
