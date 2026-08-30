@@ -211,7 +211,15 @@ function CommunityAboutStyles() {
 .community-about-description { margin: 0; max-width: 700px; color: var(--ca-muted); font-size: 15.5px; line-height: 1.75; }
 .community-about-rich { max-width: 760px; }
 .community-about-rich :where(h1,h2,h3) { color: var(--ca-text); }
-.community-about-rich :where(p,li) { color: var(--ca-muted); line-height: 1.7; }
+/* 2026-08-30: was var(--ca-muted), which resolves to the app's global
+   --muted-foreground — under the Magnetix theme (and several other
+   presets) that's a theme-tinted gray, not a true neutral, so the About
+   body copy read as colored/theme-accented instead of normal readable
+   page text. Product decision: About body text should always be plain
+   dark neutral, matching the heading rule immediately above and every
+   other real body-copy usage on this page — var(--ca-text) is that
+   existing token (--foreground), not a new/hardcoded color. */
+.community-about-rich :where(p,li) { color: var(--ca-text); line-height: 1.7; }
 
 /* "What You'll Get Inside" — Part 8, real structured data, up to
    ABOUT_BENEFITS_MAX (4) cards. Absent/hidden entirely when there's
