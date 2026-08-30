@@ -5,6 +5,7 @@ import {
   createWebinarServerSide,
   listWebinarsServerSide,
 } from "@/lib/server/webinar-service";
+import { validateWebinarSchedule } from "@/lib/webinar/scheduling";
 
 function serialize(value: unknown) {
   const v = value as { toMillis?: () => number; seconds?: number } | null;
@@ -51,22 +52,17 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const title = typeof body.title === "string" ? body.title.trim() : "";
-  const startAt =
-    typeof body.startAt === "string" ? new Date(body.startAt) : null;
-  const endAt = typeof body.endAt === "string" ? new Date(body.endAt) : null;
-  if (
-    !title ||
-    !startAt ||
-    !endAt ||
-    Number.isNaN(startAt.getTime()) ||
-    Number.isNaN(endAt.getTime()) ||
-    endAt <= startAt ||
-    startAt <= new Date()
-  )
-    return NextResponse.json(
-      { error: "Choose a future start time and a later end time." },
-      { status: 400 }
-    );
+  const timezone =
+    typeof body.timezone === "string" && body.timezone ? body.timezone : "UTC";
+  const schedule = validateWebinarSchedule({
+    startAt: typeof body.startAt === "string" ? body.startAt : "",
+    endAt: typeof body.endAt === "string" ? body.endAt : "",
+    timezone,
+  });
+  if (!title)
+    return NextResponse.json({ error: "Title is required." }, { status: 400 });
+  if (!schedule.ok)
+    return NextResponse.json({ error: schedule.error }, { status: 400 });
   const sub = await getAdminDb().doc(`subAccounts/${id}`).get();
   const agencyId = sub.data()?.agencyId as string | undefined;
   if (!agencyId)
@@ -80,12 +76,9 @@ export async function POST(
     hostUid: access.uid,
     title,
     description: typeof body.description === "string" ? body.description : "",
-    startAt,
-    endAt,
-    timezone:
-      typeof body.timezone === "string" && body.timezone
-        ? body.timezone
-        : "UTC",
+    startAt: schedule.startAt,
+    endAt: schedule.endAt,
+    timezone,
     webinarType:
       body.webinarType === "hybrid" || body.webinarType === "evergreen"
         ? body.webinarType

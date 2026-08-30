@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import type { Webinar } from "@/types/webinar";
+import { validateWebinarSchedule } from "@/lib/webinar/scheduling";
 
 function dateLabel(value: number | null) {
   return value ? new Date(value).toLocaleString() : "—";
@@ -37,6 +38,11 @@ export default function WebinarsPage() {
   }, [load]);
   async function create() {
     setError("");
+    const schedule = validateWebinarSchedule(form);
+    if (!schedule.ok) {
+      setError(schedule.error);
+      return;
+    }
     const res = await fetch(`/api/sub-accounts/${subAccountId}/webinars`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
