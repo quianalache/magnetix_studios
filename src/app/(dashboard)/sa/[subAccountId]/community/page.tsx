@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
+import { useResilientList } from "@/hooks/use-resilient-list";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import {
   staffCommunityFeedHref,
@@ -47,35 +48,39 @@ import type { SubAccountDoc } from "@/types";
  * `subAccount?.communityEnabledByAgency` directly — see that hook's own
  * doc comment for why: the live client value alone left a genuinely
  * enabled sub-account stuck on this locked screen indefinitely.
+ *
+ * The group list + "New group" gating are read via `useResilientList`
+ * (2026-08-30 launch-hardening), same reasoning: a stalled/erroring live
+ * listener previously showed a false "No groups yet" for a sub-account
+ * with real groups, and could hide the admin create action entirely. See
+ * that hook's own doc comment for the full precedence model.
  */
 export default function CommunityPage() {
-  const { subAccountId, subAccount, isAdmin } = useSubAccount();
+  const { subAccountId, subAccount } = useSubAccount();
   const gate = useResilientFeatureGate({
     field: "communityEnabledByAgency",
     fallbackKey: "communityEnabled",
   });
-  const [groups, setGroups] = useState<CommunityGroup[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [refetchToken, setRefetchToken] = useState(0);
 
   const gateOn = gate.known && gate.enabled;
 
-  useEffect(() => {
-    if (!gate.known || !gateOn) {
-      if (gate.known) setLoaded(true);
-      return;
-    }
-    return subscribeToCommunityGroups(
-      subAccountId,
-      (list) => {
-        setGroups(
-          [...list].sort((a, b) => a.name.localeCompare(b.name)),
-        );
-        setLoaded(true);
-      },
-      () => setLoaded(true),
-    );
-  }, [subAccountId, gate.known, gateOn]);
+  const list = useResilientList<CommunityGroup>({
+    enabled: gateOn,
+    fetchUrl: `/api/sub-accounts/${subAccountId}/community`,
+    extractItems: (json) => (json as { groups?: CommunityGroup[] }).groups ?? [],
+    extractIsAdmin: (json) => (json as { isAdmin?: boolean }).isAdmin === true,
+    subscribe: (onData, onError) =>
+      subscribeToCommunityGroups(
+        subAccountId,
+        (list) => onData([...list].sort((a, b) => a.name.localeCompare(b.name))),
+        onError,
+      ),
+    refetchToken,
+  });
+  const groups = list.items;
+  const isAdmin = list.isAdmin;
 
   if (!gate.known) {
     return (
@@ -127,7 +132,13 @@ export default function CommunityPage() {
         )}
       </div>
 
-      {!loaded ? (
+      {list.liveDegraded && list.resolved && (
+        <p className="text-xs text-muted-foreground">
+          Showing saved data — live updates are unavailable right now.
+        </p>
+      )}
+
+      {!list.resolved ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -157,6 +168,7 @@ export default function CommunityPage() {
         subAccountId={subAccountId}
         open={createOpen}
         onOpenChange={setCreateOpen}
+        onCreated={() => setRefetchToken((t) => t + 1)}
       />
     </div>
   );
@@ -276,10 +288,15 @@ function CreateGroupDialog({
   subAccountId,
   open,
   onOpenChange,
+  onCreated,
 }: {
   subAccountId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 2026-08-30 launch-hardening — forces one extra server-verified
+   *  refetch so the new group appears immediately even if the live
+   *  listener isn't healthy right now, instead of relying solely on it. */
+  onCreated: () => void;
 }) {
   const [name, setName] = useState("");
   const [about, setAbout] = useState("");
@@ -306,6 +323,7 @@ function CreateGroupDialog({
       setName("");
       setAbout("");
       onOpenChange(false);
+      onCreated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create");
     } finally {

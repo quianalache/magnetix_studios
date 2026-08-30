@@ -426,6 +426,24 @@ export async function getGroupById(
   return { id: snap.id, ...(snap.data() as Omit<CommunityGroup, "id">) };
 }
 
+/**
+ * All Community groups in a sub-account (2026-08-30 launch-hardening) — the
+ * Admin-SDK read backing the staff Community list page's resilient
+ * server-verified fallback (see `useResilientList`). Mirrors
+ * `listStandaloneCourses`'s exact shape; unsorted here, the same as the
+ * client listener it backs up — the page itself sorts by name.
+ */
+export async function listGroupsForSubAccount(
+  subAccountId: string,
+): Promise<CommunityGroup[]> {
+  const snap = await getAdminDb()
+    .collection(`subAccounts/${subAccountId}/communityGroups`)
+    .get();
+  return snap.docs.map(
+    (doc) => ({ id: doc.id, ...(doc.data() as Omit<CommunityGroup, "id">) }),
+  );
+}
+
 export async function getMembership(
   subAccountId: string,
   groupId: string,

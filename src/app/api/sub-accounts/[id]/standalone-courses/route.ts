@@ -1,11 +1,51 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { getAdminDb } from "@/lib/firebase/admin";
 import { requireStandaloneCoursesStaff } from "@/lib/standalone-courses/staff-guard";
-import { createStandaloneCourseServerSide } from "@/lib/server/standalone-course-service";
+import {
+  createStandaloneCourseServerSide,
+  listStandaloneCourses,
+} from "@/lib/server/standalone-course-service";
 import type { StandaloneCourseAccess } from "@/types/standalone-courses";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Staff: the server-verified fallback for the Standalone Courses list
+ * (2026-08-30 launch-hardening) — mirrors the identical Community list GET
+ * at /api/sub-accounts/[id]/community. Read access is member-level
+ * (`requireSubAccountMember`, not the admin-only `requireStandaloneCoursesStaff`
+ * the POST below uses), matching who can already VIEW the list page;
+ * `isAdmin` is returned alongside so "New course" can be gated from this
+ * same reliable read instead of the client-only computation that shares
+ * the exact listener fragility this route exists to route around.
+ */
+export async function GET(
+  request: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id: subAccountId } = await ctx.params;
+  const access = await requireSubAccountMember(request, subAccountId);
+  if (access instanceof NextResponse) return access;
+
+  const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  if (!subSnap.exists) {
+    return NextResponse.json({ error: "Sub-account not found" }, { status: 404 });
+  }
+  if (subSnap.data()?.standaloneCoursesEnabledByAgency !== true) {
+    return NextResponse.json(
+      { error: "Standalone Courses is disabled for this sub-account." },
+      { status: 403 },
+    );
+  }
+
+  const courses = await listStandaloneCourses(subAccountId);
+  const isAdmin =
+    access.subAccountRole === "admin" || access.subAccountRole === "agencyOwner";
+  return NextResponse.json({ ok: true, courses, isAdmin });
+}
 
 /** Staff: create a standalone course. */
 export async function POST(

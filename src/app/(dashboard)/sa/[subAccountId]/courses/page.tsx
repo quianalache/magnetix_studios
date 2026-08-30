@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
+import { useResilientList } from "@/hooks/use-resilient-list";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -21,33 +22,36 @@ type CoursesTab = "products" | "offers";
  * hasn't enabled it. Each course links to its editor + its public
  * `/course/[saId]/[courseId]` sales page. Mirrors the Community group list
  * page's structure — a flat list of courses, no group concept.
+ *
+ * Gate read via `useResilientFeatureGate` (2026-08-30 false-lock fix); the
+ * course list + "New course" gating are read via `useResilientList`
+ * (2026-08-30 launch-hardening) — see those hooks' own doc comments / the
+ * Community page's identical fix.
  */
 export default function StandaloneCoursesPage() {
-  const { subAccountId, isAdmin } = useSubAccount();
+  const { subAccountId } = useSubAccount();
   const gate = useResilientFeatureGate({
     field: "standaloneCoursesEnabledByAgency",
     fallbackKey: "standaloneCoursesEnabled",
   });
-  const [courses, setCourses] = useState<StandaloneCourse[]>([]);
-  const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<CoursesTab>("products");
 
   const gateOn = gate.known && gate.enabled;
 
-  useEffect(() => {
-    if (!gate.known || !gateOn) {
-      if (gate.known) setLoaded(true);
-      return;
-    }
-    return subscribeToStandaloneCourses(
-      subAccountId,
-      (list) => {
-        setCourses([...list].sort((a, b) => a.title.localeCompare(b.title)));
-        setLoaded(true);
-      },
-      () => setLoaded(true),
-    );
-  }, [subAccountId, gate.known, gateOn]);
+  const list = useResilientList<StandaloneCourse>({
+    enabled: gateOn,
+    fetchUrl: `/api/sub-accounts/${subAccountId}/standalone-courses`,
+    extractItems: (json) => (json as { courses?: StandaloneCourse[] }).courses ?? [],
+    extractIsAdmin: (json) => (json as { isAdmin?: boolean }).isAdmin === true,
+    subscribe: (onData, onError) =>
+      subscribeToStandaloneCourses(
+        subAccountId,
+        (list) => onData([...list].sort((a, b) => a.title.localeCompare(b.title))),
+        onError,
+      ),
+  });
+  const courses = list.items;
+  const isAdmin = list.isAdmin;
 
   if (!gate.known) {
     return (
@@ -110,9 +114,15 @@ export default function StandaloneCoursesPage() {
         )}
       </div>
 
+      {tab === "products" && list.liveDegraded && list.resolved && (
+        <p className="text-xs text-muted-foreground">
+          Showing saved data — live updates are unavailable right now.
+        </p>
+      )}
+
       {tab === "offers" ? (
         <OffersList subAccountId={subAccountId} />
-      ) : !loaded ? (
+      ) : !list.resolved ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
