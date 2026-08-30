@@ -12,9 +12,15 @@ import { Button } from "@/components/ui/button";
  * (see the Build Log's "Application Error" root-cause entry), not a
  * generic catch-all: this is Next.js's own per-route-segment error
  * boundary convention, scoped to just these two routes, not the whole app.
- * Never shows the raw error/digest to the customer — `reset()` re-renders
- * this route segment from scratch (a fresh mount re-runs the server fetch
- * fallback too, not just the client listener that likely caused this).
+ * Never shows the raw error/digest to the customer. "Try again" forces a
+ * real page reload rather than only calling Next's `reset()` — live-QA'd
+ * both ways: `reset()` alone re-renders this route segment in place, but
+ * the underlying corrupted client Firebase Auth/Firestore session (the
+ * actual root cause) lives in that same browser tab's JS heap and often
+ * survives a `reset()`, so it kept re-throwing; a genuine reload gets a
+ * fresh JS context and reliably recovered in the same testing. `reset()`
+ * is still called first (harmless, and instant when it happens to be
+ * enough) before the reload fires.
  */
 export function ListPageErrorFallback({
   label,
@@ -24,6 +30,11 @@ export function ListPageErrorFallback({
   label: string;
   reset: () => void;
 }) {
+  function tryAgain() {
+    reset();
+    window.location.reload();
+  }
+
   return (
     <div className="mx-auto w-full max-w-5xl rounded-2xl p-6">
       <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
@@ -33,7 +44,7 @@ export function ListPageErrorFallback({
           Something went wrong loading this page. Your data is safe — this is a
           temporary display issue, not a data problem.
         </p>
-        <Button type="button" variant="outline" onClick={reset}>
+        <Button type="button" variant="outline" onClick={tryAgain}>
           <RotateCw className="h-4 w-4" /> Try again
         </Button>
       </div>
