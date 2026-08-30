@@ -63,12 +63,20 @@ export function communityAboutHref(
  * before the path (staff vs. member route tree), moderator-gated on both
  * sides via the same `GroupMembership.role === "moderator"` check.
  */
-export function communityAboutEditHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityAboutEditHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return `${staffBase(b)}/about/edit`;
-  return b.pretty ? `/communities/${groupSlug}/about/edit` : `/c/${b.saId}/${groupSlug}/about/edit`;
+  return b.pretty
+    ? `/communities/${groupSlug}/about/edit`
+    : `/c/${b.saId}/${groupSlug}/about/edit`;
 }
 
-export function communityHomeHref(b: CommunityLinkBase, groupSlug: string): string {
+export function communityHomeHref(
+  b: CommunityLinkBase,
+  groupSlug: string
+): string {
   if (b.staffGroupId) return staffBase(b);
   return b.pretty
     ? `/communities/${groupSlug}/home`

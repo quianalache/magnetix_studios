@@ -269,7 +269,7 @@ export function communityThemeStyle(
  * zero visual change for any community that's never configured Branding.
  */
 export function resolveCommunityTheme(
-  group: Pick<CommunityGroup, "theme" | "brandColor">,
+  group: Pick<CommunityGroup, "theme" | "brandColor">
 ): CommunityThemeColors {
   if (group.theme?.light) return group.theme.light;
   // Mirrors COMMUNITY_DEFAULT_BRAND / COMMUNITY_BG (community-shell.tsx) as

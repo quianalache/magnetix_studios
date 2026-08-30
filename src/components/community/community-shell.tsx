@@ -13,14 +13,14 @@ import {
   communityProfileHref,
   communitySettingsHref,
 } from "@/lib/community/routes";
-import { getVisibleNavItems, normalizeNavigation } from "@/lib/community/community-navigation";
+import {
+  getVisibleNavItems,
+  normalizeNavigation,
+} from "@/lib/community/community-navigation";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { DmLauncher } from "./dm/dm-launcher";
-import {
-  communityThemeStyle,
-  resolveCommunityThemeColors,
-} from "@/lib/community/community-theme-presets";
+import { communityThemeStyle } from "@/lib/community/community-theme-presets";
 
 export const COMMUNITY_BG = "#F8F7F5";
 export const COMMUNITY_DEFAULT_BRAND = "#202124";
@@ -98,6 +98,7 @@ export function CommunityShell({
   // was saved — see resolveCommunityTheme's own doc comment.
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
+  const themeStyle = communityThemeStyle(group.theme);
   const linkBase = { saId, pretty, staffGroupId };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label

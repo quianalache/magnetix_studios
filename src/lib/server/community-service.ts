@@ -126,7 +126,7 @@ function cleanSidebarCards(
  *  {@link cleanSidebarCards}. Drops an item with no title (an icon+empty
  *  card isn't a real benefit); description is optional. */
 function cleanAboutBenefits(
-  items: CommunityAboutBenefit[] | undefined,
+  items: CommunityAboutBenefit[] | undefined
 ): CommunityAboutBenefit[] {
   return (items ?? [])
     .filter((b) => b && b.title?.trim())
@@ -134,7 +134,9 @@ function cleanAboutBenefits(
       id: b.id?.trim() || `benefit-${Date.now()}-${index}`,
       icon: (b.icon ?? "").trim() || "✨",
       title: b.title.trim().slice(0, ABOUT_BENEFIT_TITLE_MAX),
-      description: (b.description ?? "").trim().slice(0, ABOUT_BENEFIT_DESCRIPTION_MAX),
+      description: (b.description ?? "")
+        .trim()
+        .slice(0, ABOUT_BENEFIT_DESCRIPTION_MAX),
       order: Number.isFinite(b.order) ? b.order : index,
     }))
     .sort((a, b) => a.order - b.order)
@@ -352,9 +354,12 @@ export async function updateGroupServerSide(opts: {
     updates.tagline = p.tagline.trim().slice(0, TAGLINE_MAX_CHARS);
   if (p.coverUrl !== undefined) updates.coverUrl = p.coverUrl;
   if (p.cardImageUrl !== undefined) updates.cardImageUrl = p.cardImageUrl;
-  if (Array.isArray(p.aboutMedia)) updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
-  if (Array.isArray(p.aboutBenefits)) updates.aboutBenefits = cleanAboutBenefits(p.aboutBenefits);
-  if (p.showAboutBenefits !== undefined) updates.showAboutBenefits = p.showAboutBenefits;
+  if (Array.isArray(p.aboutMedia))
+    updates.aboutMedia = cleanAboutMedia(p.aboutMedia);
+  if (Array.isArray(p.aboutBenefits))
+    updates.aboutBenefits = cleanAboutBenefits(p.aboutBenefits);
+  if (p.showAboutBenefits !== undefined)
+    updates.showAboutBenefits = p.showAboutBenefits;
   if (p.logoUrl !== undefined) updates.logoUrl = p.logoUrl;
   if (p.faviconUrl !== undefined) updates.faviconUrl = p.faviconUrl;
   if (p.showBanner !== undefined) updates.showBanner = p.showBanner;
@@ -446,14 +451,15 @@ export async function getGroupById(
  * client listener it backs up — the page itself sorts by name.
  */
 export async function listGroupsForSubAccount(
-  subAccountId: string,
+  subAccountId: string
 ): Promise<CommunityGroup[]> {
   const snap = await getAdminDb()
     .collection(`subAccounts/${subAccountId}/communityGroups`)
     .get();
-  return snap.docs.map(
-    (doc) => ({ id: doc.id, ...(doc.data() as Omit<CommunityGroup, "id">) }),
-  );
+  return snap.docs.map((doc) => ({
+    id: doc.id,
+    ...(doc.data() as Omit<CommunityGroup, "id">),
+  }));
 }
 
 export async function getMembership(

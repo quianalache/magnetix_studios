@@ -774,5 +774,22 @@
         }
       ]
     }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "communityGroups",
+      "fieldPath": "slug",
+      "ttl": false,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
   ]
 }

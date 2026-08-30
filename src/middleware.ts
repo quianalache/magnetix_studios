@@ -327,8 +327,7 @@ const FIREBASE_PROTECTED_ROOT_PATHS = new Set([
 function isPublicOrCommunityRootPath(pathname: string): boolean {
   if (isPublicPath(pathname)) return true;
   return (
-    /^\/[^/]+$/.test(pathname) &&
-    !FIREBASE_PROTECTED_ROOT_PATHS.has(pathname)
+    /^\/[^/]+$/.test(pathname) && !FIREBASE_PROTECTED_ROOT_PATHS.has(pathname)
   );
 }
 
