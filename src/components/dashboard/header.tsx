@@ -148,13 +148,24 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
     router.push(`/sa/${targetSubId}${tail || "/dashboard"}`);
   }
 
-  const initials = user?.displayName
-    ? user.displayName
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-    : user?.email?.[0]?.toUpperCase() ?? "U";
+  // Gated on `authReady` (2026-08-30 hydration-mismatch fix) — the SAME
+  // reason as the sub-account switcher above: `user` is client-only and
+  // starts `null` on the server, but Firebase Auth's persisted session can
+  // resolve fast enough in production to update it before hydration
+  // finishes, so an ungated `initials` occasionally rendered a different
+  // letter than the server did — a text-content hydration mismatch
+  // (React error #418) on this exact, always-visible node, on every
+  // authenticated dashboard page. Reproduced live; see the Build Log's
+  // Community/Courses launch-hardening entry for the full trace.
+  const initials = !authReady
+    ? "U"
+    : user?.displayName
+      ? user.displayName
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+      : user?.email?.[0]?.toUpperCase() ?? "U";
 
   return (
     <header className="flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
