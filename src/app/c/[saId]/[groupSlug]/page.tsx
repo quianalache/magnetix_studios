@@ -61,7 +61,6 @@ export default async function GroupAboutPage({
       group={group}
       brand={brand}
       state={state}
-      member={member}
       membership={membership}
       tiers={tiers}
       reviews={reviews}

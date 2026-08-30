@@ -3,14 +3,11 @@ import type { CSSProperties } from "react";
 import {
   Check,
   ChevronRight,
-  Globe,
-  Lock,
   Pencil,
   Star,
   Users,
 } from "lucide-react";
 import { JoinButton } from "@/app/c/[saId]/[groupSlug]/join-button";
-import { ReviewFormLauncher } from "@/components/community/review-form-launcher";
 import { AboutMediaGallery } from "@/components/community/about-media-gallery";
 import { communityAboutEditHref, communityHomeHref } from "@/lib/community/routes";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
@@ -21,7 +18,6 @@ import type {
   CommunityReviewView,
   CommunityTier,
   GroupMembership,
-  Member,
 } from "@/types/community";
 
 type ViewerState = "guest" | "member" | "joined" | "pending";
@@ -142,18 +138,20 @@ function CommunityAboutStyles() {
 /* Conversion-layout redesign (2026-08-29): a persistent sales card in a
    sticky right column beside the long-scroll content, instead of the old
    "hero row" that only paired identity/conversion next to the media. */
-.community-about-grid { display: grid; grid-template-columns: minmax(0, 1fr) 328px; gap: 32px; align-items: start; max-width: 1180px; width: 100%; margin: 0 auto; }
+.community-about-grid { display: grid; grid-template-columns: minmax(0, 1fr) 356px; gap: 32px; align-items: start; max-width: 1180px; width: 100%; margin: 0 auto; }
 .community-about-content { min-width: 0; display: grid; gap: 40px; }
 .community-about-sidebar { min-width: 0; position: sticky; top: 20px; }
 
-/* Sales / join card — sized/densified per Part 15 (2026-08-30 mockup pass):
-   narrower column (was 340px) and tighter internal gaps/padding, still
-   comfortably inside the approved ~320-360px target. */
+/* Sales / join card — nudged back up slightly (328px -> 356px, 2026-08-30
+   corrections, Part D) after the prior pass's reduction read as a touch
+   too small against the main column; stays well short of the original
+   oversized card and inside the approved ~350-370px target. Padding/gaps
+   unchanged from that pass. */
 .community-about-card { display: grid; gap: 14px; border: 1px solid var(--ca-border); border-radius: 14px; background: var(--ca-card); padding: 20px 18px; box-shadow: 0 10px 30px rgba(32,33,36,.06); }
 /* Join Card Image — its own dedicated shape, deliberately NOT the wide
    Home-banner ratio. Kept at 16:9 (matches the media aspect used
-   throughout the page) but the card column itself is narrow (~328px), so
-   the rendered image reads as a compact photo, not a long banner strip. */
+   throughout the page); still reads as a compact photo at this card
+   width, not a long banner strip. */
 .community-about-card-image { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 1px solid var(--ca-border); }
 .community-about-card-identity { display: grid; justify-items: center; gap: 8px; text-align: center; }
 .community-about-logo { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 12px; object-fit: cover; background: var(--ca-primary); color: var(--ca-primary-text); display: grid; place-items: center; font-size: 20px; font-weight: 750; }
@@ -246,7 +244,6 @@ function CommunityAboutStyles() {
 .community-about-details { display: grid; gap: 12px; }
 .community-about-details summary { list-style: none; }
 .community-about-details summary::-webkit-details-marker { display: none; }
-.community-about-empty { border: 1px dashed var(--ca-border); border-radius: 10px; padding: 22px; color: var(--ca-muted); font-size: 14px; text-align: center; }
 
 @media (max-width: 1080px) {
   .community-about-grid { grid-template-columns: 1fr; }
@@ -345,7 +342,6 @@ export function CommunityAboutView({
   group,
   brand,
   state,
-  member,
   membership,
   tiers,
   reviews,
@@ -357,9 +353,12 @@ export function CommunityAboutView({
   group: CommunityGroup;
   brand: string;
   state: ViewerState;
-  member: Member | null;
   membership: GroupMembership | null;
   tiers: CommunityTier[];
+  /** Only used to decide whether the Reviews section renders at all
+   *  (2026-08-30 corrections, Part A) — writing a review moved to the
+   *  member-only "About this Community" Home card (Part B), so this
+   *  component no longer needs the viewer's own `member` identity. */
   reviews: CommunityReviewView[];
 }) {
   const gallery = galleryForGroup(group);
@@ -376,13 +375,7 @@ export function CommunityAboutView({
     group.access === "paid"
       ? formatPrice(group.priceCents, group.currency)
       : "Free";
-  const accessLabel =
-    group.joinPolicy === "approval" ? "Approval required" : "Open access";
   const ctaSubtext = joinSubtext(group, state, priceLabel);
-  const currentReview =
-    member && reviews.find((review) => review.memberId === member.id)
-      ? reviews.find((review) => review.memberId === member.id)!
-      : null;
   const visibleReviews = reviews.slice(0, 6);
   const remainingReviews = reviews.slice(6);
   // About-page cleanup (2026-08-29) — no fallback chain into `cardImageUrl`
@@ -468,61 +461,43 @@ export function CommunityAboutView({
               </section>
             )}
 
-            <section className="community-about-reviews">
-              <div className="community-about-section-head">
-                <div>
-                  <h2>Member Reviews</h2>
-                  <div className="community-about-review-summary">
-                    {group.reviewCount > 0 ? (
-                      <>
-                        <RatingStars rating={Math.round(group.averageRating ?? 0)} />
-                        <span>{ratingLabel(group)}</span>
-                      </>
-                    ) : (
-                      <>
-                        <RatingStars rating={0} muted />
-                        <span>No reviews yet</span>
-                      </>
-                    )}
+            {/* Zero-review state (2026-08-30 corrections, Part A): the
+                entire section — heading, empty stars, "No reviews yet",
+                the empty-state box — is absent, not just quietly empty.
+                A sales page with a visible "no social proof yet" block
+                works against itself; the section appears automatically,
+                unmodified below, the moment a first real review exists. */}
+            {reviews.length > 0 && (
+              <section className="community-about-reviews">
+                <div className="community-about-section-head">
+                  <div>
+                    <h2>Member Reviews</h2>
+                    <div className="community-about-review-summary">
+                      <RatingStars rating={Math.round(group.averageRating ?? 0)} />
+                      <span>{ratingLabel(group)}</span>
+                    </div>
                   </div>
                 </div>
-                {state === "joined" && (
-                  <ReviewFormLauncher
-                    saId={saId}
-                    groupId={group.id}
-                    brand={brand}
-                    accent={theme.accent}
-                    currentReview={currentReview}
-                  />
-                )}
-              </div>
 
-              {reviews.length === 0 ? (
-                <div className="community-about-empty">
-                  Reviews from members will appear here once someone leaves one.
+                <div className="community-about-review-grid">
+                  {visibleReviews.map((review) => (
+                    <ReviewCard key={review.id} review={review} brand={brand} />
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <div className="community-about-review-grid">
-                    {visibleReviews.map((review) => (
-                      <ReviewCard key={review.id} review={review} brand={brand} />
-                    ))}
-                  </div>
-                  {remainingReviews.length > 0 && (
-                    <details className="community-about-details">
-                      <summary className="community-about-button community-about-see-more">
-                        See all reviews
-                      </summary>
-                      <div className="community-about-review-grid">
-                        {remainingReviews.map((review) => (
-                          <ReviewCard key={review.id} review={review} brand={brand} />
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </>
-              )}
-            </section>
+                {remainingReviews.length > 0 && (
+                  <details className="community-about-details">
+                    <summary className="community-about-button community-about-see-more">
+                      See all reviews
+                    </summary>
+                    <div className="community-about-review-grid">
+                      {remainingReviews.map((review) => (
+                        <ReviewCard key={review.id} review={review} brand={brand} />
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </section>
+            )}
           </div>
 
           <aside className="community-about-sidebar">
@@ -555,16 +530,16 @@ export function CommunityAboutView({
                 )}
               </div>
 
+              {/* "Open access" stat removed (2026-08-30 corrections, Part
+                  C) — redundant with the real access/price line under the
+                  CTA below ("Free · Anyone can join" or the paid
+                  equivalent). Members count is real, useful social proof
+                  on its own; access logic itself is unchanged. */}
               <div className="community-about-card-stats">
                 <div className="community-about-card-stat">
                   <Users />
                   <strong>{group.memberCount}</strong>
                   <span>Members</span>
-                </div>
-                <div className="community-about-card-stat">
-                  {group.joinPolicy === "approval" ? <Lock /> : <Globe />}
-                  <strong>{accessLabel}</strong>
-                  <span>Access</span>
                 </div>
               </div>
 

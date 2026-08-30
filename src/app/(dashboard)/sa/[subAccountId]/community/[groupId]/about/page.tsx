@@ -63,7 +63,6 @@ export default async function StaffAboutPage({
         group={group}
         brand={brand}
         state="joined"
-        member={member}
         membership={membership}
         tiers={tiers}
         reviews={reviews}

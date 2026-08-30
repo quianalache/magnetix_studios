@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Lock, Plus, ExternalLink, Users } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
 import { subscribeToStandaloneCourses } from "@/lib/firestore/standalone-courses";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -22,16 +23,20 @@ type CoursesTab = "products" | "offers";
  * page's structure — a flat list of courses, no group concept.
  */
 export default function StandaloneCoursesPage() {
-  const { subAccountId, subAccount, isAdmin } = useSubAccount();
+  const { subAccountId, isAdmin } = useSubAccount();
+  const gate = useResilientFeatureGate({
+    field: "standaloneCoursesEnabledByAgency",
+    fallbackKey: "standaloneCoursesEnabled",
+  });
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<CoursesTab>("products");
 
-  const gateOn = subAccount?.standaloneCoursesEnabledByAgency === true;
+  const gateOn = gate.known && gate.enabled;
 
   useEffect(() => {
-    if (!gateOn) {
-      setLoaded(true);
+    if (!gate.known || !gateOn) {
+      if (gate.known) setLoaded(true);
       return;
     }
     return subscribeToStandaloneCourses(
@@ -42,7 +47,21 @@ export default function StandaloneCoursesPage() {
       },
       () => setLoaded(true),
     );
-  }, [subAccountId, gateOn]);
+  }, [subAccountId, gate.known, gateOn]);
+
+  if (!gate.known) {
+    return (
+      <div className="mx-auto flex w-full max-w-5xl justify-center py-16">
+        {gate.timedOut ? (
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            Couldn&apos;t confirm Courses&apos; status. Try refreshing the page.
+          </p>
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        )}
+      </div>
+    );
+  }
 
   if (!gateOn) {
     return (

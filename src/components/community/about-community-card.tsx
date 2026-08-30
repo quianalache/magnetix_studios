@@ -1,5 +1,6 @@
 import { Info, Link2 } from "lucide-react";
-import type { CommunityGroup, ResourceLink } from "@/types/community";
+import { ReviewFormLauncher } from "@/components/community/review-form-launcher";
+import type { CommunityGroup, CommunityReviewView, ResourceLink } from "@/types/community";
 
 /**
  * Community Home right-rail "About this Community" card (Part 4). Real data
@@ -9,6 +10,15 @@ import type { CommunityGroup, ResourceLink } from "@/types/community";
  * invented. Also folds in the group's existing `links` list (previously only
  * shown via `GroupRailCard`) so that functionality isn't lost by dropping
  * that component from Home.
+ *
+ * `saId`/`groupId`/`currentReview` (2026-08-30 About-page corrections,
+ * Part B) — optional so every OTHER caller of this card is unaffected.
+ * When passed, renders the existing `ReviewFormLauncher` (the exact same
+ * modal + write logic the About page used) as a small action here instead.
+ * Reachable only from pages already gated to an active member (both real
+ * callers — member Home and the staff bridge — redirect/404 anyone without
+ * one before this card ever renders), so no extra membership check is
+ * needed here; a guest/pending prospect never reaches this card at all.
  */
 export function AboutCommunityCard({
   group,
@@ -17,6 +27,9 @@ export function AboutCommunityCard({
   memberCount,
   onlineCount,
   adminCount,
+  saId,
+  groupId,
+  currentReview,
 }: {
   group: CommunityGroup;
   brand: string;
@@ -28,6 +41,9 @@ export function AboutCommunityCard({
   memberCount: number;
   onlineCount: number;
   adminCount: number;
+  saId?: string;
+  groupId?: string;
+  currentReview?: CommunityReviewView | null;
 }) {
   const desc = group.tagline?.trim() || group.about;
   const links: ResourceLink[] = group.links ?? [];
@@ -61,6 +77,18 @@ export function AboutCommunityCard({
               <span className="truncate">{l.label}</span>
             </a>
           ))}
+        </div>
+      )}
+
+      {saId && groupId && (
+        <div className="mt-3 border-t border-[#f0f0f0] pt-3">
+          <ReviewFormLauncher
+            saId={saId}
+            groupId={groupId}
+            brand={brand}
+            accent={accent}
+            currentReview={currentReview ?? null}
+          />
         </div>
       )}
     </div>

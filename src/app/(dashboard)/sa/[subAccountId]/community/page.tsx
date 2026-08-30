@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
+import { useResilientFeatureGate } from "@/hooks/use-resilient-feature-gate";
 import { buildCommunityGroupUrl } from "@/lib/domains/public-url";
 import {
   staffCommunityFeedHref,
@@ -41,18 +42,27 @@ import type { SubAccountDoc } from "@/types";
  * card opens straight to Manage (its feed page 404s until published); a
  * published group's card opens its feed, with Manage and the public View
  * link both always available too.
+ *
+ * Gate read via `useResilientFeatureGate` (2026-08-30 false-lock fix), not
+ * `subAccount?.communityEnabledByAgency` directly — see that hook's own
+ * doc comment for why: the live client value alone left a genuinely
+ * enabled sub-account stuck on this locked screen indefinitely.
  */
 export default function CommunityPage() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
+  const gate = useResilientFeatureGate({
+    field: "communityEnabledByAgency",
+    fallbackKey: "communityEnabled",
+  });
   const [groups, setGroups] = useState<CommunityGroup[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const gateOn = subAccount?.communityEnabledByAgency === true;
+  const gateOn = gate.known && gate.enabled;
 
   useEffect(() => {
-    if (!gateOn) {
-      setLoaded(true);
+    if (!gate.known || !gateOn) {
+      if (gate.known) setLoaded(true);
       return;
     }
     return subscribeToCommunityGroups(
@@ -65,7 +75,21 @@ export default function CommunityPage() {
       },
       () => setLoaded(true),
     );
-  }, [subAccountId, gateOn]);
+  }, [subAccountId, gate.known, gateOn]);
+
+  if (!gate.known) {
+    return (
+      <div className="mx-auto flex w-full max-w-5xl justify-center py-16">
+        {gate.timedOut ? (
+          <p className="max-w-md text-center text-sm text-muted-foreground">
+            Couldn&apos;t confirm Community&apos;s status. Try refreshing the page.
+          </p>
+        ) : (
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        )}
+      </div>
+    );
+  }
 
   if (!gateOn) {
     return (

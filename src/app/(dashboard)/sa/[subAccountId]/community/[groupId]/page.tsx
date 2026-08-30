@@ -7,6 +7,7 @@ import {
   getLeaderboard,
   listMemberDirectory,
 } from "@/lib/server/community-leaderboard-service";
+import { listCommunityReviews } from "@/lib/server/community-service";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
@@ -134,7 +135,7 @@ export default async function StaffCommunityFeedPage({
 
   void gate;
 
-  const [topMembers, directory] = await Promise.all([
+  const [topMembers, directory, reviews] = await Promise.all([
     getLeaderboard({
       subAccountId: saId,
       groupId: group.id,
@@ -142,7 +143,11 @@ export default async function StaffCommunityFeedPage({
       limit: 5,
     }),
     listMemberDirectory({ subAccountId: saId, groupId: group.id }),
+    // "Leave a review" moved here from the public About page (2026-08-30
+    // corrections, Part B) — see the member Home page's identical comment.
+    listCommunityReviews({ subAccountId: saId, groupId: group.id, limit: 24 }),
   ]);
+  const currentReview = reviews.find((r) => r.memberId === member.id) ?? null;
 
   const now = Date.now();
   const activeMembers = directory.filter((r) => r.status === "active");
@@ -174,6 +179,9 @@ export default async function StaffCommunityFeedPage({
             memberCount={memberCount}
             onlineCount={onlineCount}
             adminCount={adminCount}
+            saId={saId}
+            groupId={group.id}
+            currentReview={currentReview}
           />
           <TopContributorsCard
             saId={saId}
