@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RoomAudioRenderer,
   RoomContext,
@@ -12,14 +12,17 @@ import {
 import { Room, RoomEvent, Track, type Participant } from "livekit-client";
 import {
   ChevronDown,
+  Check,
   Hand,
   MessageCircle,
   Mic,
+  MicOff,
   MonitorUp,
   Send,
   Settings,
   Users,
   Video,
+  VideoOff,
   X,
 } from "lucide-react";
 import "@livekit/components-styles";
@@ -27,7 +30,12 @@ import "@livekit/components-styles";
 type Layout = "speaker" | "gallery";
 type Panel = "people" | "chat" | null;
 type Tab = "audio" | "video" | "general";
-type Comment = { id: string; body: string; author: { displayName: string } };
+type Comment = {
+  id: string;
+  body: string;
+  author: { displayName: string };
+  createdAt?: { _seconds?: number } | string | null;
+};
 const reactions = ["👍", "👏", "❤️", "😂", "😮", "😢", "😡", "🎉"];
 const control =
   "flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-medium hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--community-accent)]";
@@ -67,12 +75,24 @@ function Tile({
           {name(track.participant, self)}
           {track.source === Track.Source.ScreenShare ? " · Screen share" : ""}
         </span>
-        <span>
-          {hands.includes(track.participant.identity) ? "✋" : ""}
+        <span
+          className="flex items-center gap-2 text-base"
+          aria-label="Participant media status"
+        >
+          {hands.includes(track.participant.identity) && (
+            <span
+              className="rounded-full bg-amber-400/95 px-2 py-1 text-lg shadow-lg"
+              title="Raised hand"
+            >
+              ✋
+            </span>
+          )}
           {track.source === Track.Source.Camera &&
-          !track.participant.isMicrophoneEnabled
-            ? " 🔇"
-            : ""}
+            (track.participant.isMicrophoneEnabled ? (
+              <Mic className="h-5 w-5 rounded bg-black/55 p-1" />
+            ) : (
+              <MicOff className="h-5 w-5 rounded bg-red-600/85 p-1" />
+            ))}
         </span>
       </div>
     </div>
@@ -118,6 +138,7 @@ function View({
     [reacting, setReacting] = useState(false),
     [hands, setHands] = useState<string[]>([]),
     [flash, setFlash] = useState(""),
+    [endConfirm, setEndConfirm] = useState(false),
     [canPublish, setCanPublish] = useState(
       self.permissions?.canPublish ?? false
     ),
@@ -127,6 +148,7 @@ function View({
     [notice, setNotice] = useState(""),
     [search, setSearch] = useState(""),
     [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cameraTrack = self.getTrackPublication(Track.Source.Camera)?.track;
   const active = useMemo(
     () =>
@@ -170,8 +192,9 @@ function View({
         if (x.type === "lower-hand" && x.identity)
           setHands((v) => v.filter((id) => id !== x.identity));
         if (x.type === "reaction" && x.emoji) {
+          if (reactionTimer.current) clearTimeout(reactionTimer.current);
           setFlash(x.emoji);
-          setTimeout(() => setFlash(""), 1800);
+          reactionTimer.current = setTimeout(() => setFlash(""), 1800);
         }
       } catch {}
     };
@@ -180,6 +203,12 @@ function View({
       room.off(RoomEvent.DataReceived, receive);
     };
   }, [room]);
+  useEffect(
+    () => () => {
+      if (reactionTimer.current) clearTimeout(reactionTimer.current);
+    },
+    []
+  );
   const data = (x: object) =>
     void self.publishData(new TextEncoder().encode(JSON.stringify(x)), {
       reliable: true,
@@ -244,19 +273,26 @@ function View({
     );
   }
   async function end() {
-    if (!confirm("End this live session for everyone?")) return;
+    setEndConfirm(false);
     const r = await fetch(`${endPath}?roomId=${encodeURIComponent(roomId)}`, {
       method: "DELETE",
     });
     if (r.ok) onLeave();
     else setNotice("Unable to end the session.");
   }
-  const list = people.filter((p) =>
-    `${p.name} ${p.identity}`.toLowerCase().includes(search.toLowerCase())
-  );
+  const list = people
+    .filter((p) =>
+      `${p.name} ${p.identity}`.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort(
+      (a, b) =>
+        Number(hands.includes(b.identity)) -
+          Number(hands.includes(a.identity)) ||
+        Number(b.permissions?.canPublish) - Number(a.permissions?.canPublish)
+    );
   return (
-    <main className="min-h-screen bg-[var(--community-bg,#0b1020)] p-2 text-[var(--community-text,#fff)] sm:p-4">
-      <div className="mx-auto flex min-h-[calc(100vh-1rem)] max-w-[1500px] flex-col overflow-hidden rounded-2xl border border-[var(--community-border,#ffffff22)] bg-slate-950 shadow-2xl">
+    <main className="h-[100dvh] overflow-hidden bg-[var(--community-bg,#0b1020)] p-0 text-[var(--community-text,#fff)] sm:p-2">
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-none border border-[var(--community-border,#ffffff22)] bg-slate-950 shadow-2xl sm:rounded-2xl">
         <header className="flex items-center justify-between gap-3 border-b border-white/10 px-3 py-3 sm:px-5">
           <div className="min-w-0">
             <p className="text-[10px] font-bold tracking-[.18em] text-[var(--community-accent,#c084fc)] uppercase">
@@ -289,6 +325,9 @@ function View({
                       setMenu(false);
                     }}
                   >
+                    {layout === "speaker" && (
+                      <Check className="mr-2 inline h-4 w-4" />
+                    )}
                     Speaker View
                   </button>
                   <button
@@ -298,6 +337,9 @@ function View({
                       setMenu(false);
                     }}
                   >
+                    {layout === "gallery" && (
+                      <Check className="mr-2 inline h-4 w-4" />
+                    )}
                     Gallery View
                   </button>
                 </div>
@@ -305,7 +347,7 @@ function View({
             </div>
             <button
               className="rounded-lg border border-red-400/40 px-2 py-1.5 text-red-200"
-              onClick={host ? () => void end() : onLeave}
+              onClick={host ? () => setEndConfirm(true) : onLeave}
             >
               {host ? "End Session" : "Leave"}
             </button>
@@ -317,21 +359,60 @@ function View({
           </p>
         )}
         <div className="flex min-h-0 flex-1">
-          <section className="relative flex min-w-0 flex-1 flex-col p-3 sm:p-5">
+          <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden p-3 sm:p-5">
             <div
-              className={`min-h-0 flex-1 ${layout === "gallery" ? "grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" : "flex flex-col gap-3"}`}
+              className={`min-h-0 flex-1 ${layout === "gallery" ? (tracks.some((x) => x.source === Track.Source.ScreenShare) ? "flex flex-col gap-3" : `grid gap-3 ${tracks.length === 1 ? "place-items-center" : "auto-rows-fr grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`) : "flex flex-col gap-3"}`}
             >
               {tracks.length ? (
                 layout === "gallery" ? (
-                  tracks.map((x) => (
-                    <Tile
-                      key={`${x.participant.identity}-${x.source}`}
-                      track={x}
-                      self={self.identity}
-                      hands={hands}
-                      mirror={mirror}
-                    />
-                  ))
+                  tracks.some((x) => x.source === Track.Source.ScreenShare) ? (
+                    <>
+                      <div className="min-h-0 flex-1">
+                        {active && (
+                          <Tile
+                            track={active}
+                            self={self.identity}
+                            hands={hands}
+                            mirror={mirror}
+                            selected
+                          />
+                        )}
+                      </div>
+                      <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
+                        {tracks
+                          .filter((x) => x !== active)
+                          .map((x) => (
+                            <div
+                              className="w-44 shrink-0"
+                              key={`${x.participant.identity}-${x.source}`}
+                            >
+                              <Tile
+                                track={x}
+                                self={self.identity}
+                                hands={hands}
+                                mirror={mirror}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    tracks.map((x) => (
+                      <div
+                        className={
+                          tracks.length === 1 ? "w-full max-w-4xl" : ""
+                        }
+                        key={`${x.participant.identity}-${x.source}`}
+                      >
+                        <Tile
+                          track={x}
+                          self={self.identity}
+                          hands={hands}
+                          mirror={mirror}
+                        />
+                      </div>
+                    ))
+                  )
                 ) : (
                   <>
                     <div className="min-h-0 flex-1">
@@ -373,7 +454,7 @@ function View({
               )}
             </div>
             {flash && (
-              <span className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-6xl">
+              <span className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse text-6xl transition-opacity duration-500">
                 {flash}
               </span>
             )}
@@ -450,15 +531,37 @@ function View({
                 <>
                   <div className="min-h-0 flex-1 space-y-3 overflow-auto p-4">
                     {postId ? (
-                      comments.map((x) => (
-                        <div className="text-sm" key={x.id}>
-                          <b>{x.author.displayName}</b>
-                          <p
-                            className="text-slate-300"
-                            dangerouslySetInnerHTML={{ __html: x.body }}
-                          />
-                        </div>
-                      ))
+                      comments.length ? (
+                        comments.map((x) => (
+                          <div className="text-sm" key={x.id}>
+                            <div className="flex items-baseline gap-2">
+                              <b>{x.author.displayName}</b>
+                              <time className="text-[11px] text-slate-500">
+                                {x.createdAt
+                                  ? new Date(
+                                      typeof x.createdAt === "string"
+                                        ? x.createdAt
+                                        : (x.createdAt._seconds ?? 0) * 1000
+                                    ).toLocaleTimeString([], {
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })
+                                  : "Now"}
+                              </time>
+                            </div>
+                            <p
+                              className="text-slate-300"
+                              dangerouslySetInnerHTML={{ __html: x.body }}
+                            />
+                          </div>
+                        ))
+                      ) : (
+                        <p className="pt-8 text-center text-sm text-slate-400">
+                          No messages yet
+                          <br />
+                          Start the conversation.
+                        </p>
+                      )
                     ) : (
                       <p className="text-sm text-slate-400">
                         This session has no live post, so durable chat is
@@ -494,18 +597,36 @@ function View({
           {canPublish && (
             <>
               <button
-                className={control}
+                className={`${control} ${self.isMicrophoneEnabled ? "" : "bg-red-500/20 text-red-100"}`}
+                aria-label={
+                  self.isMicrophoneEnabled
+                    ? "Mute microphone"
+                    : "Unmute microphone"
+                }
+                aria-pressed={!self.isMicrophoneEnabled}
                 onClick={() => void media(Track.Source.Microphone)}
               >
-                <Mic className="h-5 w-5" />
-                Audio
+                {self.isMicrophoneEnabled ? (
+                  <Mic className="h-5 w-5" />
+                ) : (
+                  <MicOff className="h-5 w-5" />
+                )}
+                {self.isMicrophoneEnabled ? "Audio" : "Muted"}
               </button>
               <button
-                className={control}
+                className={`${control} ${self.isCameraEnabled ? "" : "bg-red-500/20 text-red-100"}`}
+                aria-label={
+                  self.isCameraEnabled ? "Turn camera off" : "Turn camera on"
+                }
+                aria-pressed={!self.isCameraEnabled}
                 onClick={() => void media(Track.Source.Camera)}
               >
-                <Video className="h-5 w-5" />
-                Video
+                {self.isCameraEnabled ? (
+                  <Video className="h-5 w-5" />
+                ) : (
+                  <VideoOff className="h-5 w-5" />
+                )}
+                {self.isCameraEnabled ? "Video" : "Camera off"}
               </button>
             </>
           )}
@@ -535,7 +656,13 @@ function View({
                     key={x}
                     onClick={() => {
                       data({ type: "reaction", emoji: x });
+                      if (reactionTimer.current)
+                        clearTimeout(reactionTimer.current);
                       setFlash(x);
+                      reactionTimer.current = setTimeout(
+                        () => setFlash(""),
+                        1800
+                      );
                       setReacting(false);
                     }}
                   >
@@ -564,6 +691,37 @@ function View({
           </button>
         </footer>
       </div>
+      {endConfirm && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="end-live-title"
+        >
+          <section className="w-full max-w-md rounded-2xl border border-white/15 bg-slate-900 p-6 text-white shadow-2xl">
+            <h2 id="end-live-title" className="text-lg font-semibold">
+              End live session?
+            </h2>
+            <p className="mt-2 text-sm text-slate-300">
+              This will end the live session for everyone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="rounded-lg border border-white/15 px-4 py-2 text-sm"
+                onClick={() => setEndConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium"
+                onClick={() => void end()}
+              >
+                End Session
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {tab && (
         <div className="fixed inset-0 z-40 grid place-items-center bg-black/65 p-4">
           <section className="w-full max-w-2xl rounded-2xl border border-white/15 bg-slate-900 text-white">
