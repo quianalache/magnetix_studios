@@ -35,6 +35,7 @@ export function QuickGoLiveSetup({
   const [uploading, setUploading] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
+  const [mirrorPreview, setMirrorPreview] = useState(true);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [microphones, setMicrophones] = useState<MediaDeviceInfo[]>([]);
   const [cameraId, setCameraId] = useState("");
@@ -175,6 +176,7 @@ export function QuickGoLiveSetup({
             <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
               <video
                 ref={videoRef}
+                style={{ transform: mirrorPreview ? "scaleX(-1)" : undefined }}
                 autoPlay
                 muted
                 playsInline
@@ -211,6 +213,14 @@ export function QuickGoLiveSetup({
                 Preview · you are not live
               </span>
             </div>
+            <label className="text-muted-foreground flex items-center gap-2 text-xs">
+              <input
+                checked={mirrorPreview}
+                onChange={(event) => setMirrorPreview(event.target.checked)}
+                type="checkbox"
+              />
+              Mirror my preview
+            </label>
             <div>
               <p className="mb-2 text-sm font-medium">Select Video Source</p>
               <div
