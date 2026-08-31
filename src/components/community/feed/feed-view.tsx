@@ -21,6 +21,8 @@ import {
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import { QuickGoLiveSetup } from "@/components/community/quick-go-live-setup";
+import { FocusedPostOverlay } from "@/components/community/feed/focused-post-overlay";
+import { InlineCommentThread } from "@/components/community/feed/inline-comment-thread";
 
 export interface ClientPost {
   id: string;
@@ -256,6 +258,8 @@ export function FeedView({
   const [composerOpen, setComposerOpen] = useState(false);
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [focusedPost, setFocusedPost] = useState<ClientPost | null>(null);
+  const [expandedComments, setExpandedComments] = useState<string | null>(null);
   const [sort, setSort] = useState<"latest" | "top" | "unanswered">("latest");
   // Category filter is driven by the left nav's `?c=` link (Part 7) rather
   // than an in-feed pill row, so there's one control for it, not two.
@@ -549,20 +553,23 @@ export function FeedView({
                   Twitter/Reddit/HN) rather than wrapping the whole card
                   body in one giant <a>, which made member-inserted links
                   inside the body invalid-nested and unclickable. */}
-              <Link
-                href={detail}
+              <button
+                onClick={() => setFocusedPost(p)}
                 className="text-xs text-[#909090] hover:underline"
               >
                 {timeAgo(p.createdAtMs)}
-              </Link>
+              </button>
               {p.category && (
                 <span className="text-xs text-[#909090]">· {p.category}</span>
               )}
             </div>
             {p.title && (
-              <Link href={detail} className="mt-1 block hover:underline">
+              <button
+                onClick={() => setFocusedPost(p)}
+                className="mt-1 block text-left hover:underline"
+              >
                 <h3 className="font-semibold text-[#202124]">{p.title}</h3>
-              </Link>
+              </button>
             )}
             {/* NOT wrapped in a <Link> — the old "wrap the whole title+body
                 in one <a>" pattern made any link a member inserted into
@@ -606,18 +613,47 @@ export function FeedView({
                 />
                 {p.likeCount}
               </button>
-              <Link
-                href={detail}
+              <button
+                onClick={() =>
+                  setExpandedComments(expandedComments === p.id ? null : p.id)
+                }
                 className="flex items-center gap-1 hover:text-[#202124]"
+                aria-expanded={expandedComments === p.id}
               >
                 <MessageCircle className="h-4 w-4" />
-                {p.commentCount}
-              </Link>
+                {expandedComments === p.id
+                  ? "Hide comments"
+                  : `${p.commentCount} comments`}
+              </button>
             </div>
+            {expandedComments === p.id && (
+              <InlineCommentThread
+                saId={saId}
+                groupId={groupId}
+                groupSlug={groupSlug}
+                brand={brand}
+                communityName={communityName}
+                categories={categories}
+                pretty={pretty}
+                staffGroupId={staffGroupId}
+                post={p}
+                viewer={viewer}
+              />
+            )}
           </div>
           {(canModerate || canDelete || canEdit) && (
             <ActionsMenu
               items={[
+                { label: "Open post", onClick: () => setFocusedPost(p) },
+                {
+                  label: "Copy link",
+                  onClick: async () => {
+                    await navigator.clipboard.writeText(
+                      new URL(detail, window.location.origin).toString()
+                    );
+                    toast.success("Link copied");
+                  },
+                },
                 ...(canEdit
                   ? [
                       {
@@ -667,6 +703,21 @@ export function FeedView({
 
   return (
     <div className="space-y-4">
+      {focusedPost && (
+        <FocusedPostOverlay
+          saId={saId}
+          groupId={groupId}
+          groupSlug={groupSlug}
+          brand={brand}
+          communityName={communityName}
+          categories={categories}
+          pretty={pretty}
+          staffGroupId={staffGroupId}
+          post={focusedPost}
+          viewer={viewer}
+          onClose={() => setFocusedPost(null)}
+        />
+      )}
       {/* Modal composer launcher (Phase D, Part 2) — a lightweight
           affordance, not the composer itself. Clicking opens the full
           `PostComposer` modal; this button never turns into a composer
