@@ -24,6 +24,7 @@ export type NotificationEventType =
   | "community.access.granted"
   | "community.reply"
   | "community.mention"
+  | "community.live.started"
   // Booking loop (2026-08-26): the public booking flow now emits reliable
   // internal events for all three lifecycle transitions — see
   // notification-producers.ts's notifyBookingCreated/Rescheduled/Cancelled
@@ -47,7 +48,8 @@ export type NotificationObjectType =
   | "post"
   | "comment"
   | "reading"
-  | "booking";
+  | "booking"
+  | "live-room";
 
 export interface NotificationDoc {
   id: string;

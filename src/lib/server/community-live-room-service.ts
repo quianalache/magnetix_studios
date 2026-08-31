@@ -12,6 +12,7 @@ import type {
   CommunityLiveRoomStatus,
 } from "@/types/community";
 import { createPostServerSide } from "@/lib/server/community-feed-service";
+import { notifyCommunityLiveStarted } from "@/lib/server/notification-producers";
 
 function roomCollection(subAccountId: string, groupId: string) {
   return getAdminDb().collection(
@@ -109,6 +110,19 @@ export async function createCommunityLiveRoomServerSide(input: {
     updatedAt: FieldValue.serverTimestamp(),
   };
   await roomRef.create(doc);
+  // The room is now durably LIVE; never notify while the setup dialog is
+  // merely open. The notification service's deterministic room-id dedupe
+  // keeps this safe if this lifecycle path is retried.
+  if (doc.notifyMembers) {
+    await notifyCommunityLiveStarted({
+      subAccountId: input.subAccountId,
+      groupId: input.groupId,
+      roomId: roomRef.id,
+      title: doc.title,
+      channel: doc.channel,
+      hostMemberId: input.createdByMemberId,
+    });
+  }
   return { id: roomRef.id, ...doc } as CommunityLiveRoom;
 }
 

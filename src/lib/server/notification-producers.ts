@@ -37,14 +37,108 @@ function enterHref(subAccountId: string, next: string): string {
   return `/api/my/enter?subAccountId=${subAccountId}&next=${encodeURIComponent(next)}`;
 }
 
-async function resolvePersonIdForMember(subAccountId: string, memberId: string): Promise<string | null> {
-  const snap = await getAdminDb().doc(`subAccounts/${subAccountId}/members/${memberId}`).get();
+/**
+ * Emits one durable bell notification per eligible Community member when a
+ * Quick Go Live room has actually been created as live. Recipient selection
+ * intentionally mirrors the Live Room's access rules: active memberships
+ * only; a private channel is moderator-only. The room id is the event's
+ * stable recurrence unit, so reconnects/retries cannot fan out duplicates.
+ */
+export async function notifyCommunityLiveStarted(opts: {
+  subAccountId: string;
+  groupId: string;
+  roomId: string;
+  title: string;
+  channel: string | null;
+  hostMemberId: string;
+}): Promise<void> {
+  const db = getAdminDb();
+  const [groupSnap, membershipsSnap, hostName, channelSnap] = await Promise.all(
+    [
+      db
+        .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
+        .get(),
+      db
+        .collection(
+          `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`
+        )
+        .where("status", "==", "active")
+        .get(),
+      getMemberDisplayName(opts.subAccountId, opts.hostMemberId),
+      opts.channel
+        ? db
+            .collection(
+              `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/channels`
+            )
+            .where("name", "==", opts.channel)
+            .limit(1)
+            .get()
+        : Promise.resolve(null),
+    ]
+  );
+  const group = groupSnap.data() as
+    | { name?: string; slug?: string }
+    | undefined;
+  const communityName = group?.name || "a Community";
+  const slug = group?.slug || opts.groupId;
+  const privateChannel = channelSnap
+    ? !channelSnap.empty && channelSnap.docs[0].data().private === true
+    : false;
+  const destination = enterHref(
+    opts.subAccountId,
+    `/c/${opts.subAccountId}/${slug}/live/${opts.roomId}`
+  );
+  await Promise.all(
+    membershipsSnap.docs.map(async (membership) => {
+      const data = membership.data() as {
+        memberId: string;
+        role: "member" | "moderator";
+      };
+      if (
+        data.memberId === opts.hostMemberId ||
+        (privateChannel && data.role !== "moderator")
+      )
+        return;
+      const personId = await resolvePersonIdForMember(
+        opts.subAccountId,
+        data.memberId
+      );
+      if (!personId) return;
+      await createNotification({
+        personId,
+        subAccountId: opts.subAccountId,
+        eventType: "community.live.started",
+        objectType: "live-room",
+        objectId: opts.roomId,
+        actorMemberId: opts.hostMemberId,
+        title: `${hostName} is live: ${opts.title}`,
+        message: `Join ${communityName} now.`,
+        destination,
+        meta: { communityName, actorName: hostName },
+        sourceObjectId: opts.roomId,
+      });
+    })
+  );
+}
+
+async function resolvePersonIdForMember(
+  subAccountId: string,
+  memberId: string
+): Promise<string | null> {
+  const snap = await getAdminDb()
+    .doc(`subAccounts/${subAccountId}/members/${memberId}`)
+    .get();
   if (!snap.exists) return null;
   return (snap.data()?.personId as string | undefined) ?? null;
 }
 
-async function getMemberDisplayName(subAccountId: string, memberId: string): Promise<string> {
-  const snap = await getAdminDb().doc(`subAccounts/${subAccountId}/members/${memberId}`).get();
+async function getMemberDisplayName(
+  subAccountId: string,
+  memberId: string
+): Promise<string> {
+  const snap = await getAdminDb()
+    .doc(`subAccounts/${subAccountId}/members/${memberId}`)
+    .get();
   const data = snap.data();
   return (data?.displayName as string) || (data?.email as string) || "Someone";
 }
@@ -78,10 +172,17 @@ export async function notifyCourseAccessGranted(opts: {
   courseId: string;
   memberId: string;
 }): Promise<void> {
-  const personId = await resolvePersonIdForMember(opts.subAccountId, opts.memberId);
+  const personId = await resolvePersonIdForMember(
+    opts.subAccountId,
+    opts.memberId
+  );
   if (!personId) return;
   const [courseSnap, businessName] = await Promise.all([
-    getAdminDb().doc(`subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}`).get(),
+    getAdminDb()
+      .doc(
+        `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}`
+      )
+      .get(),
     getBusinessName(opts.subAccountId),
   ]);
   const courseName = (courseSnap.data()?.title as string) || "a course";
@@ -93,7 +194,10 @@ export async function notifyCourseAccessGranted(opts: {
     objectType: "course",
     objectId: opts.courseId,
     title: `You were granted access to ${courseName}`,
-    destination: enterHref(opts.subAccountId, `/course/${opts.subAccountId}/${opts.courseId}/classroom`),
+    destination: enterHref(
+      opts.subAccountId,
+      `/course/${opts.subAccountId}/${opts.courseId}/classroom`
+    ),
     meta: { courseName, businessName },
     sourceObjectId: `${opts.courseId}:${opts.memberId}`,
   });
@@ -113,10 +217,15 @@ export async function notifyCommunityAccessGranted(opts: {
   groupId: string;
   memberId: string;
 }): Promise<void> {
-  const personId = await resolvePersonIdForMember(opts.subAccountId, opts.memberId);
+  const personId = await resolvePersonIdForMember(
+    opts.subAccountId,
+    opts.memberId
+  );
   if (!personId) return;
   const [groupSnap, businessName] = await Promise.all([
-    getAdminDb().doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`).get(),
+    getAdminDb()
+      .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
+      .get(),
     getBusinessName(opts.subAccountId),
   ]);
   const communityName = (groupSnap.data()?.name as string) || "a Community";
@@ -129,7 +238,10 @@ export async function notifyCommunityAccessGranted(opts: {
     objectType: "community",
     objectId: opts.groupId,
     title: `You were granted access to ${communityName}`,
-    destination: enterHref(opts.subAccountId, communityHomeHref({ saId: opts.subAccountId, pretty: false }, groupSlug)),
+    destination: enterHref(
+      opts.subAccountId,
+      communityHomeHref({ saId: opts.subAccountId, pretty: false }, groupSlug)
+    ),
     meta: { communityName, businessName },
     sourceObjectId: `${opts.groupId}:${opts.memberId}`,
   });
@@ -156,12 +268,17 @@ export async function notifyCommunityReply(opts: {
 }): Promise<void> {
   if (opts.recipientMemberId === opts.commenterMemberId) return; // no self-notify
 
-  const personId = await resolvePersonIdForMember(opts.subAccountId, opts.recipientMemberId);
+  const personId = await resolvePersonIdForMember(
+    opts.subAccountId,
+    opts.recipientMemberId
+  );
   if (!personId) return;
 
   const [commenterName, groupSnap] = await Promise.all([
     getMemberDisplayName(opts.subAccountId, opts.commenterMemberId),
-    getAdminDb().doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`).get(),
+    getAdminDb()
+      .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
+      .get(),
   ]);
   const communityName = (groupSnap.data()?.name as string) || "a Community";
   const groupSlug = (groupSnap.data()?.slug as string) || opts.groupId;
@@ -178,7 +295,11 @@ export async function notifyCommunityReply(opts: {
       : `${commenterName} replied to your post in ${communityName}`,
     destination: enterHref(
       opts.subAccountId,
-      communityPostHref({ saId: opts.subAccountId, pretty: false }, groupSlug, opts.postId),
+      communityPostHref(
+        { saId: opts.subAccountId, pretty: false },
+        groupSlug,
+        opts.postId
+      )
     ),
     meta: { communityName, actorName: commenterName },
     // The reply itself (commentId) is the recurring unit — each distinct
@@ -201,23 +322,34 @@ export async function notifyCommunityMentions(opts: {
   authorMemberId: string;
   mentionedMemberIds: string[];
 }): Promise<void> {
-  const targets = opts.mentionedMemberIds.filter((id) => id !== opts.authorMemberId);
+  const targets = opts.mentionedMemberIds.filter(
+    (id) => id !== opts.authorMemberId
+  );
   if (targets.length === 0) return;
 
   const [authorName, groupSnap] = await Promise.all([
     getMemberDisplayName(opts.subAccountId, opts.authorMemberId),
-    getAdminDb().doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`).get(),
+    getAdminDb()
+      .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
+      .get(),
   ]);
   const communityName = (groupSnap.data()?.name as string) || "a Community";
   const groupSlug = (groupSnap.data()?.slug as string) || opts.groupId;
   const destination = enterHref(
     opts.subAccountId,
-    communityPostHref({ saId: opts.subAccountId, pretty: false }, groupSlug, opts.postId),
+    communityPostHref(
+      { saId: opts.subAccountId, pretty: false },
+      groupSlug,
+      opts.postId
+    )
   );
 
   await Promise.all(
     targets.map(async (memberId) => {
-      const personId = await resolvePersonIdForMember(opts.subAccountId, memberId);
+      const personId = await resolvePersonIdForMember(
+        opts.subAccountId,
+        memberId
+      );
       if (!personId) return;
       await createNotification({
         personId,
@@ -235,7 +367,7 @@ export async function notifyCommunityMentions(opts: {
         // only ever runs once, at creation time.
         sourceObjectId: `${opts.contentObjectId}:${memberId}`,
       });
-    }),
+    })
   );
 }
 
@@ -266,7 +398,9 @@ function bookingDestination(token: string): string {
 /** Shared by every producer whose source object is a CRM Contact rather
  *  than a community Member (booking, reading) — reads just the one field
  *  each needs to resolve a Person. */
-async function getContactEmail(contactId: string): Promise<{ email: string } | null> {
+async function getContactEmail(
+  contactId: string
+): Promise<{ email: string } | null> {
   const snap = await getAdminDb().doc(`contacts/${contactId}`).get();
   const email = (snap.data()?.email as string | undefined)?.trim();
   if (!email) return null;
@@ -443,7 +577,9 @@ export async function notifyReadingReady(opts: {
   getAdminDb()
     .doc(`energeticDecoderReadings/${opts.readingId}`)
     .set({ personId }, { merge: true })
-    .catch((err) => console.warn("[notifyReadingReady] personId link-back failed", err));
+    .catch((err) =>
+      console.warn("[notifyReadingReady] personId link-back failed", err)
+    );
 
   const businessName = await getBusinessName(opts.subAccountId);
   const readingName = deriveReadingName(opts);
@@ -465,8 +601,14 @@ export async function notifyReadingReady(opts: {
   });
 }
 
-function deriveReadingName(sys: { hasGeneKeys: boolean; hasHumanDesign: boolean; hasAstrology: boolean }): string {
-  const count = [sys.hasGeneKeys, sys.hasHumanDesign, sys.hasAstrology].filter(Boolean).length;
+function deriveReadingName(sys: {
+  hasGeneKeys: boolean;
+  hasHumanDesign: boolean;
+  hasAstrology: boolean;
+}): string {
+  const count = [sys.hasGeneKeys, sys.hasHumanDesign, sys.hasAstrology].filter(
+    Boolean
+  ).length;
   if (count >= 3) return "Energetic Blueprint";
   if (sys.hasHumanDesign && count === 1) return "Human Design Reading";
   if (sys.hasAstrology && count === 1) return "Astrology Reading";

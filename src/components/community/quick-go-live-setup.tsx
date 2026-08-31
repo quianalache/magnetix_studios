@@ -447,13 +447,7 @@ export function QuickGoLiveSetup({
                 checked={notifyMembers}
                 onChange={(e) => setNotifyMembers(e.target.checked)}
               />{" "}
-              Notify members{" "}
-              <span
-                className="text-xs"
-                style={{ color: "var(--community-text-muted)" }}
-              >
-                (delivery deferred)
-              </span>
+              Notify members
             </label>
             {error && <p className="text-sm text-red-700">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">
