@@ -51,6 +51,7 @@ export async function POST(
     channel?: string | null;
     keepAsPost?: boolean;
     notifyMembers?: boolean;
+    thumbnailUrl?: string | null;
   };
   try {
     body = await request.json();
@@ -87,6 +88,8 @@ export async function POST(
       channel,
       keepAsPost: body.keepAsPost !== false,
       notifyMembers: body.notifyMembers === true,
+      thumbnailUrl:
+        typeof body.thumbnailUrl === "string" ? body.thumbnailUrl : null,
     });
     return NextResponse.json({ room }, { status: 201 });
   }

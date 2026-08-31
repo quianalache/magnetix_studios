@@ -56,6 +56,7 @@ export async function createCommunityLiveRoomServerSide(input: {
   channel?: string | null;
   keepAsPost?: boolean;
   notifyMembers?: boolean;
+  thumbnailUrl?: string | null;
 }): Promise<CommunityLiveRoom> {
   const roomRef = roomCollection(input.subAccountId, input.groupId).doc();
   const session = await createLiveSessionServerSide({
@@ -84,6 +85,7 @@ export async function createCommunityLiveRoomServerSide(input: {
       liveRoomId: roomRef.id,
       liveMode: input.mode,
       liveStatus: "live",
+      thumbnailUrl: input.thumbnailUrl ?? null,
     });
     communityPostId = post.id;
   }
@@ -94,6 +96,7 @@ export async function createCommunityLiveRoomServerSide(input: {
     liveSessionId: session.id,
     title: input.title.trim().slice(0, 200),
     description: input.description?.trim().slice(0, 2000) ?? null,
+    thumbnailUrl: input.thumbnailUrl ?? null,
     mode: input.mode,
     status: "live" as const,
     createdByMemberId: input.createdByMemberId,

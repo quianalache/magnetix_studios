@@ -231,6 +231,7 @@ export interface CreatePostInput {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  thumbnailUrl?: string | null;
 }
 
 export async function createPostServerSide(
@@ -266,6 +267,7 @@ export async function createPostServerSide(
     liveRoomId: input.liveRoomId,
     liveMode: input.liveMode,
     liveStatus: input.liveStatus,
+    thumbnailUrl: input.thumbnailUrl,
     pinned: false,
     pinnedToChannel: false,
     likeCount: 0,

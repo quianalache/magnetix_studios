@@ -134,6 +134,7 @@ export interface CommunityLiveRoom {
   liveSessionId: string;
   title: string;
   description: string | null;
+  thumbnailUrl?: string | null;
   mode: "meeting" | "broadcast";
   status: CommunityLiveRoomStatus;
   createdByMemberId: string;
@@ -607,6 +608,7 @@ export interface CommunityPost {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  thumbnailUrl?: string | null;
   /** Phase D — author-controlled "allow comments/replies" toggle. Absent
    *  (undefined) means comments are allowed — same additive convention as
    *  `attachments`, so every post written before this field existed stays

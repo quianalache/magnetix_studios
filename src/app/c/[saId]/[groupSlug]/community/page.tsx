@@ -128,6 +128,7 @@ export default async function CommunityFeedPage({
     liveRoomId: p.liveRoomId,
     liveMode: p.liveMode,
     liveStatus: p.liveStatus,
+    thumbnailUrl: p.thumbnailUrl,
   }));
 
   void gate;

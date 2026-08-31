@@ -67,7 +67,8 @@ export async function POST(
         k === "favicon" ||
         k === "about" ||
         k === "card" ||
-        k === "event")
+        k === "event" ||
+        k === "live")
     )
       kind = k;
   } catch {

@@ -20,6 +20,7 @@ import {
 } from "@/components/community/feed/gif-resolver-context";
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
+import { QuickGoLiveSetup } from "@/components/community/quick-go-live-setup";
 
 export interface ClientPost {
   id: string;
@@ -49,6 +50,7 @@ export interface ClientPost {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  thumbnailUrl?: string | null;
 }
 
 interface Viewer {
@@ -59,7 +61,10 @@ interface Viewer {
   level: number;
 }
 
-function GoLiveDialog({
+// Retained temporarily as source history while the replacement setup mounts
+// through the unchanged composer action below.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function LegacyGoLiveDialog({
   saId,
   groupId,
   categories,
@@ -486,6 +491,13 @@ export function FeedView({
             )}
           </div>
         )}
+        {p.postType === "live" && p.thumbnailUrl && (
+          <img
+            src={p.thumbnailUrl}
+            alt=""
+            className="mb-3 aspect-video w-full rounded-lg object-cover"
+          />
+        )}
         {variant === "featured" && (
           <div
             className="mb-2 flex items-center gap-1 text-[11px] font-semibold tracking-wide uppercase"
@@ -685,15 +697,20 @@ export function FeedView({
         )}
       </div>
       {goLiveOpen && viewer.role === "moderator" && (
-        <GoLiveDialog
+        <QuickGoLiveSetup
           saId={saId}
           groupId={groupId}
           categories={categories}
           filter={filter}
           onClose={() => setGoLiveOpen(false)}
-          onCreated={() => {
+          onCreated={(roomId) => {
             setGoLiveOpen(false);
-            window.location.reload();
+            const href = staffGroupId
+              ? `/sa/${saId}/community/${staffGroupId}/live/${roomId}`
+              : pretty
+                ? `/communities/${groupSlug}/live/${roomId}`
+                : `/c/${saId}/${groupSlug}/live/${roomId}`;
+            window.location.assign(href);
           }}
         />
       )}
