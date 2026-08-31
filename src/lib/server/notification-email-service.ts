@@ -2,8 +2,16 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { sendTenantEmail, NoTenantDomainError, emailIsConfigured } from "@/lib/comms/resend";
-import type { NotificationDoc, NotificationEventType, NotificationEmailDelivery } from "@/types/notifications";
+import {
+  sendTenantEmail,
+  NoTenantDomainError,
+  emailIsConfigured,
+} from "@/lib/comms/resend";
+import type {
+  NotificationDoc,
+  NotificationEventType,
+  NotificationEmailDelivery,
+} from "@/types/notifications";
 import type { ResendConfig } from "@/types/tenancy";
 
 /**
@@ -52,13 +60,23 @@ import type { ResendConfig } from "@/types/tenancy";
  * transactional email, not a second one on top of an existing customer
  * email.
  */
-const EMAIL_ELIGIBLE_EVENT_TYPES: ReadonlySet<NotificationEventType> = new Set([
+const EMAIL_ELIGIBLE_EVENT_TYPES = [
   "course.access.granted",
   "community.access.granted",
   "community.reply",
   "community.mention",
   "reading.ready",
-]);
+] as const satisfies readonly NotificationEventType[];
+
+type EmailEligibleEventType = (typeof EMAIL_ELIGIBLE_EVENT_TYPES)[number];
+
+function isEmailEligibleEventType(
+  eventType: NotificationEventType
+): eventType is EmailEligibleEventType {
+  return (
+    EMAIL_ELIGIBLE_EVENT_TYPES as readonly NotificationEventType[]
+  ).includes(eventType);
+}
 
 function deliveryCol() {
   return getAdminDb().collection("notificationEmailDeliveries");
@@ -93,9 +111,11 @@ interface DispatchInput {
  * delivery record and returns. The caller never awaits this in a way that
  * could block the notification write it already completed.
  */
-export async function dispatchNotificationEmail(notification: DispatchInput): Promise<void> {
+export async function dispatchNotificationEmail(
+  notification: DispatchInput
+): Promise<void> {
   try {
-    if (!EMAIL_ELIGIBLE_EVENT_TYPES.has(notification.eventType)) return;
+    if (!isEmailEligibleEventType(notification.eventType)) return;
     if (!notification.subAccountId) return; // every V1-eligible type has one; defensive only
     if (!emailIsConfigured()) return; // local/dev without Resend configured — silent no-op, matches emailIsConfigured's existing use elsewhere
 
@@ -108,7 +128,8 @@ export async function dispatchNotificationEmail(notification: DispatchInput): Pr
       // future retry pass, not built in V1); sent/skipped are final. Either
       // way, this call is done — never send a second email here.
       const code = (err as { code?: number })?.code;
-      if (code !== 6) console.error("[notification-email] delivery doc create failed:", err);
+      if (code !== 6)
+        console.error("[notification-email] delivery doc create failed:", err);
       return;
     }
 
@@ -117,7 +138,8 @@ export async function dispatchNotificationEmail(notification: DispatchInput): Pr
       getAdminDb().doc(`subAccounts/${notification.subAccountId}`).get(),
     ]);
 
-    const recipientEmail = (personSnap.data()?.primaryEmail as string | undefined)?.trim() || null;
+    const recipientEmail =
+      (personSnap.data()?.primaryEmail as string | undefined)?.trim() || null;
     if (!recipientEmail) {
       await ref.update({
         status: "skipped",
@@ -137,7 +159,10 @@ export async function dispatchNotificationEmail(notification: DispatchInput): Pr
       : null;
     const businessName = sub?.name?.trim() || "Magnetix";
 
-    const rendered = renderNotificationEmail(notification, businessName);
+    const rendered = renderNotificationEmail(
+      { ...notification, eventType: notification.eventType },
+      businessName
+    );
 
     try {
       const result = await sendTenantEmail({
@@ -174,11 +199,17 @@ export async function dispatchNotificationEmail(notification: DispatchInput): Pr
   } catch (err) {
     // Top-level safety net — this function must never throw into its
     // fire-and-forget caller regardless of what fails above.
-    console.error("[notification-email] dispatchNotificationEmail failed:", err);
+    console.error(
+      "[notification-email] dispatchNotificationEmail failed:",
+      err
+    );
   }
 }
 
-function pendingDoc(n: DispatchInput): Omit<NotificationEmailDelivery, "id" | "createdAt" | "updatedAt" | "sentAt"> & {
+function pendingDoc(n: DispatchInput): Omit<
+  NotificationEmailDelivery,
+  "id" | "createdAt" | "updatedAt" | "sentAt"
+> & {
   createdAt: FieldValue;
   updatedAt: FieldValue;
   sentAt: null;
@@ -213,18 +244,14 @@ function pendingDoc(n: DispatchInput): Omit<NotificationEmailDelivery, "id" | "c
 // Booking entries below are unreachable in V1 (not in
 // EMAIL_ELIGIBLE_EVENT_TYPES — see that set's own comment) but kept
 // complete/accurate rather than omitted: CTA_LABELS is a total map over
-// every NotificationEventType, and having a correct-but-unused entry here
-// is harmless and future-proofs the day the legacy booking emails are
-// ever retired in favor of this pipeline.
-const CTA_LABELS: Record<NotificationEventType, string> = {
+// every email-deliverable event. Booking remains deliberately absent from
+// the allowlist even though its labels are retained for a later migration.
+const CTA_LABELS: Record<EmailEligibleEventType, string> = {
   "course.access.granted": "View in MyMagnetix",
   "community.access.granted": "View in MyMagnetix",
   "community.reply": "View reply",
   "community.mention": "View mention",
   "reading.ready": "View your reading",
-  "booking.created": "View booking",
-  "booking.rescheduled": "View booking",
-  "booking.cancelled": "View details",
 };
 
 // Reading Ready's subject needs the reading's own name ("Your Human
@@ -232,7 +259,10 @@ const CTA_LABELS: Record<NotificationEventType, string> = {
 // category uses — so the builder also receives `meta` (every existing
 // entry ignores the second param, harmless).
 const SUBJECT_BY_CATEGORY: Partial<
-  Record<NotificationEventType, (businessName: string, meta: NotificationDoc["meta"]) => string>
+  Record<
+    NotificationEventType,
+    (businessName: string, meta: NotificationDoc["meta"]) => string
+  >
 > = {
   "course.access.granted": (b) => `You have something new from ${b}`,
   "community.access.granted": (b) => `You have something new from ${b}`,
@@ -241,26 +271,31 @@ const SUBJECT_BY_CATEGORY: Partial<
   "booking.cancelled": () => "Your booking was cancelled",
   "community.reply": (b) => `New activity in ${b}`,
   "community.mention": (b) => `New activity in ${b}`,
-  "reading.ready": (_b, meta) => `Your ${meta.readingName ?? "reading"} is ready`,
+  "reading.ready": (_b, meta) =>
+    `Your ${meta.readingName ?? "reading"} is ready`,
 };
 
 function renderNotificationEmail(
-  n: DispatchInput,
-  businessName: string,
+  n: Omit<DispatchInput, "eventType"> & { eventType: EmailEligibleEventType },
+  businessName: string
 ): { subject: string; text: string; html: string } {
-  const subject = (SUBJECT_BY_CATEGORY[n.eventType] ?? ((b: string) => `Update from ${b}`))(businessName, n.meta);
-  const ctaLabel = CTA_LABELS[n.eventType] ?? "View in MyMagnetix";
+  const subject = (
+    SUBJECT_BY_CATEGORY[n.eventType] ?? ((b: string) => `Update from ${b}`)
+  )(businessName, n.meta);
+  const ctaLabel = CTA_LABELS[n.eventType];
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
   const ctaHref = `${appUrl}${n.destination}`;
 
-  const text = [n.title, "", `${ctaLabel}: ${ctaHref}`, "", businessName].join("\n");
+  const text = [n.title, "", `${ctaLabel}: ${ctaHref}`, "", businessName].join(
+    "\n"
+  );
 
   const html = wrapHtml(
     businessName,
     `
       <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#1a1a22;">${escapeHtml(n.title)}</p>
       ${primaryCta(ctaHref, ctaLabel)}
-    `,
+    `
   );
 
   return { subject, text, html };
