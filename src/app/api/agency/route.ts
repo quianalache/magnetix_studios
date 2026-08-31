@@ -29,6 +29,7 @@ interface PatchBody {
   appTheme?: string | null;
   agencyAssistantEnabled?: boolean;
   agencyAssistantModel?: "opus" | "sonnet";
+  primarySalesPageUrl?: string | null;
 }
 
 const APP_THEMES = new Set(["leadstack", "green", "neutral", "magnetix"]);
@@ -207,6 +208,40 @@ export async function PATCH(request: Request) {
       );
     } else {
       update.appTheme = body.appTheme;
+    }
+  }
+
+  // Primary sales-page URL (Agency Acquisition Foundation, 2026-08-31) —
+  // Agency → Settings → Sales page. A plain URL string; deliberately no
+  // vendor validation beyond "is this a URL" (works for GitPage today,
+  // anything else tomorrow — see AgencyDoc.primarySalesPageUrl's own doc
+  // comment). `salesPageMode` isn't settable via this route yet — it's
+  // always "external" until a native Pages & Funnels page exists to point
+  // it at "internal" (out of scope for this task).
+  if (body.primarySalesPageUrl !== undefined) {
+    if (body.primarySalesPageUrl === null || body.primarySalesPageUrl === "") {
+      update.primarySalesPageUrl = null;
+    } else if (typeof body.primarySalesPageUrl !== "string") {
+      return NextResponse.json(
+        { error: "Sales page URL must be a string or null." },
+        { status: 400 },
+      );
+    } else {
+      const trimmed = body.primarySalesPageUrl.trim();
+      if (!URL_RE.test(trimmed)) {
+        return NextResponse.json(
+          { error: "Sales page URL must start with http:// or https://." },
+          { status: 400 },
+        );
+      }
+      if (trimmed.length > 500) {
+        return NextResponse.json(
+          { error: "Sales page URL must be 500 characters or fewer." },
+          { status: 400 },
+        );
+      }
+      update.primarySalesPageUrl = trimmed;
+      update.salesPageMode = "external";
     }
   }
 

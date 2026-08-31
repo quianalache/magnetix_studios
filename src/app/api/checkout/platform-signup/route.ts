@@ -2,12 +2,13 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
+import { normalizeAttribution } from "@/lib/attribution";
 import {
   BillingError,
   createPlatformSignupCheckoutSession,
-  type PlatformSignupAttribution,
 } from "@/lib/server/billing-service";
 import type { BillingInterval } from "@/types/billing";
+import type { ContactAttribution } from "@/types/contacts";
 
 /**
  * Public Magnetix SaaS Signup — checkout-session creation. Reachable
@@ -21,27 +22,28 @@ import type { BillingInterval } from "@/types/billing";
  * never a price, a Stripe price id, or an agency id. A tampered request can
  * at worst buy the same plan at its real price; it can never buy an
  * archived/private plan or set its own amount.
+ *
+ * Attribution (2026-08-31, Agency Acquisition Foundation): the request body
+ * now carries the SAME `ContactAttribution` shape every other public page
+ * forwards (via `readAttributionFromBrowser()` on the client — see
+ * `plan-signup-form.tsx`), normalized server-side through the SAME
+ * `normalizeAttribution()` every Forms/Booking/Course-Offer submission
+ * already goes through — not a narrower one-off shape. See the Sales &
+ * Affiliate Infrastructure audit, Part 4/8.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_REFERRAL_CODE_LEN = 80;
 
 interface RequestBody {
   planSlug?: string;
   interval?: string;
   email?: string;
   businessName?: string;
-  attribution?: {
-    utmSource?: string | null;
-    utmMedium?: string | null;
-    utmCampaign?: string | null;
-    utmContent?: string | null;
-    utmTerm?: string | null;
-    referrer?: string | null;
-  };
-}
-
-function normalizeAttributionField(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  attribution?: Partial<ContactAttribution> | null;
+  /** Foundation for future affiliate-referral attribution — stored, not
+   *  used for any commission calculation in this task. */
+  referralCode?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -81,14 +83,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const attribution: PlatformSignupAttribution = {
-    utmSource: normalizeAttributionField(body.attribution?.utmSource),
-    utmMedium: normalizeAttributionField(body.attribution?.utmMedium),
-    utmCampaign: normalizeAttributionField(body.attribution?.utmCampaign),
-    utmContent: normalizeAttributionField(body.attribution?.utmContent),
-    utmTerm: normalizeAttributionField(body.attribution?.utmTerm),
-    referrer: normalizeAttributionField(body.attribution?.referrer),
-  };
+  const attribution = normalizeAttribution(body.attribution ?? undefined);
+  const referralCode =
+    typeof body.referralCode === "string" && body.referralCode.trim()
+      ? body.referralCode.trim().slice(0, MAX_REFERRAL_CODE_LEN)
+      : null;
 
   const agencyId = await resolveFirstAgencyId();
   if (!agencyId) {
@@ -106,6 +105,7 @@ export async function POST(request: Request) {
       buyerEmail: email,
       businessName,
       attribution,
+      referralCode,
     });
     return NextResponse.json({ url });
   } catch (err) {

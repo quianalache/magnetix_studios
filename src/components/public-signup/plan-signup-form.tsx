@@ -7,15 +7,24 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatBillingPrice } from "@/lib/billing/status";
+import { readAttributionFromBrowser } from "@/lib/attribution";
 
 /**
  * Public Magnetix SaaS Signup — the interactive half of
  * `/get-started/[planSlug]`. Collects only the minimum needed before Stripe
  * Checkout (business name + email — Stripe Checkout itself collects
  * payment/billing details), lets the visitor pick monthly/annual when both
- * are offered, and carries standard UTM + referrer attribution through to
- * the checkout-session endpoint. All pricing/plan resolution happens
- * server-side in that endpoint — this form never sends a price.
+ * are offered.
+ *
+ * Attribution (2026-08-31, Agency Acquisition Foundation): now captured via
+ * `readAttributionFromBrowser()` — the SAME helper Forms/Booking/Course-
+ * Offer checkouts already use — instead of a narrower one-off UTM+referrer
+ * shape. Picks up `fbclid`/`gclid`/`landingPage` too, and is normalized
+ * server-side by the SAME `normalizeAttribution()` pipeline every other
+ * public page's submission goes through (Sales & Affiliate Infrastructure
+ * audit, Part 4/8). `?ref=` (a future affiliate/referral code) is read
+ * separately — see the audit's Part 7/15 on why it's kept apart from
+ * marketing attribution.
  */
 
 interface Props {
@@ -43,9 +52,11 @@ export function PlanSignupForm({
   // Captured once on mount — a fresh page load is the only moment
   // document.referrer / the URL's own query string reflect where the
   // visitor actually came from (GitPage, an email link, social, etc.).
-  const [referrer, setReferrer] = useState<string | null>(null);
+  const [attribution, setAttribution] = useState<ReturnType<
+    typeof readAttributionFromBrowser
+  > | null>(null);
   useEffect(() => {
-    setReferrer(document.referrer || null);
+    setAttribution(readAttributionFromBrowser());
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,14 +80,8 @@ export function PlanSignupForm({
           interval,
           email: email.trim(),
           businessName: businessName.trim(),
-          attribution: {
-            utmSource: searchParams.get("utm_source"),
-            utmMedium: searchParams.get("utm_medium"),
-            utmCampaign: searchParams.get("utm_campaign"),
-            utmContent: searchParams.get("utm_content"),
-            utmTerm: searchParams.get("utm_term"),
-            referrer,
-          },
+          attribution,
+          referralCode: searchParams.get("ref"),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {

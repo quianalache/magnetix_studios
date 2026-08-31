@@ -84,6 +84,36 @@ export interface AgencyDoc {
    * enable switch.
    */
   agencyAssistantModel?: AiSuiteModelChoice;
+  /**
+   * No-code pointer to the agency's own SaaS acquisition/sales page — where
+   * a stranger lands before signing up for Magnetix itself (Agency →
+   * Settings → Sales page). Deliberately just a URL + mode, never a vendor
+   * integration: works today with an externally-hosted page (GitPage, or
+   * literally any HTML with the tracking snippet pasted in — see
+   * `src/lib/track/acquisition.ts`), and carries no GitPage-specific
+   * assumption anywhere in the data model. Null until the owner sets it —
+   * every consumer must handle that (no "Open my sales page" affordance
+   * renders until it's set).
+   */
+  primarySalesPageUrl?: string | null;
+  /**
+   * Whether `primarySalesPageUrl` points at an externally-hosted page
+   * ("external" — the only mode this task builds) or a future native
+   * Magnetix Pages & Funnels page ("internal", identified by
+   * `primarySalesPageId` instead of a raw URL). Undefined/legacy reads as
+   * "external". Switching to "internal" and building the page it points at
+   * is explicitly future work — see the Sales & Affiliate Infrastructure
+   * audit, Part 13/14 (P3).
+   */
+  salesPageMode?: "external" | "internal";
+  /**
+   * Reserved for a future Pages & Funnels page id, once `salesPageMode` is
+   * "internal". Unused (null) while external — not read by anything in
+   * this task. The foundation exists so a future migration can swap modes
+   * without a data-model change, per the Sales & Affiliate Infrastructure
+   * audit's Part 14 (future HTML-import migration path).
+   */
+  primarySalesPageId?: string | null;
 }
 
 /**

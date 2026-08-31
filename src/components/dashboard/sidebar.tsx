@@ -44,6 +44,7 @@ import {
   Layers,
   Orbit,
   TrendingUp,
+  Rocket,
   LayoutPanelTop,
   LayoutTemplate,
 } from "lucide-react";
@@ -690,6 +691,22 @@ function SidebarContent({
               >
                 <CreditCard className="h-4 w-4 shrink-0" />
                 {!collapsed && "Client billing"}
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/acquisition"
+                title={collapsed ? "Acquisition" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
+                  pathname.startsWith("/agency/acquisition")
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                )}
+              >
+                <Rocket className="h-4 w-4 shrink-0" />
+                {!collapsed && "Acquisition"}
               </Link>
             )}
             {/* Hidden until the owner enables it under Agency → Settings —

@@ -25,9 +25,14 @@ import {
   type BillingPlanDoc,
   type BillingPlanResponse,
   type PlanGates,
+  type PlatformSignupPurchaseDoc,
+  type PlatformSignupPurchaseStatus,
   type SubAccountBilling,
   type SubAccountBillingStatus,
 } from "@/types/billing";
+import { normalizeAttribution } from "@/lib/attribution";
+import { bumpAttributionVisit } from "@/lib/attribution-visits";
+import type { ContactAttribution } from "@/types/contacts";
 
 /**
  * Client Billing v1 service — the single write path for agency plans
@@ -1021,15 +1026,6 @@ export async function resolvePublicPlan(
   return plan;
 }
 
-export interface PlatformSignupAttribution {
-  utmSource: string | null;
-  utmMedium: string | null;
-  utmCampaign: string | null;
-  utmContent: string | null;
-  utmTerm: string | null;
-  referrer: string | null;
-}
-
 /** Stripe metadata values are capped at 500 chars; keep everything well
  *  under that and drop empties so metadata stays small and readable. */
 function truncateForMetadata(value: string | null | undefined, max = 200): string {
@@ -1038,14 +1034,28 @@ function truncateForMetadata(value: string | null | undefined, max = 200): strin
 }
 
 /**
- * Create the public-signup Stripe Checkout Session. Every billing object
- * (plan, price, currency, agencyId) is resolved server-side from
- * `resolvePublicPlan` — the caller supplies only a slug + cadence + the
- * buyer's own contact details, never a price or agency id, so a tampered
- * request can at worst buy the SAME plan at its SAME real price, never an
- * arbitrary one. Runs on the PLATFORM Stripe client (no `stripeAccount` —
- * same client Client Billing v1's own checkout uses) — this is Magnetix
- * Studios billing a business owner, never Stripe Connect.
+ * Create the public-signup Stripe Checkout Session — AND, as of the Agency
+ * Acquisition Foundation (2026-08-31), write the `purchases/{session.id}`
+ * doc right here with `status: "checkout_started"`, before the buyer has
+ * paid anything. This is the fix for the Sales & Affiliate Infrastructure
+ * audit's Part 3/5/9 finding: previously nothing was written to Magnetix's
+ * own Firestore until the webhook confirmed payment, so "checkout starts"
+ * and "abandoned checkouts" didn't exist as data. The signed Stripe webhook
+ * (`handlePlatformSignupCheckoutCompleted`) remains the ONLY thing that can
+ * move this doc to "provisioned" — this function never provisions anything.
+ *
+ * Every billing object (plan, price, currency, agencyId) is resolved
+ * server-side from `resolvePublicPlan` — the caller supplies only a slug +
+ * cadence + the buyer's own contact details, never a price or agency id, so
+ * a tampered request can at worst buy the SAME plan at its SAME real price,
+ * never an arbitrary one. Runs on the PLATFORM Stripe client (no
+ * `stripeAccount` — same client Client Billing v1's own checkout uses) —
+ * this is Magnetix Studios billing a business owner, never Stripe Connect.
+ *
+ * Attribution now flows through the SAME `ContactAttribution` shape/
+ * `normalizeAttribution` pipeline every other public page in this codebase
+ * uses (Forms/Booking/Course-Offers), instead of the narrower one-off shape
+ * this flow previously carried — see the audit's Part 4/8.
  */
 export async function createPlatformSignupCheckoutSession(input: {
   agencyId: string;
@@ -1053,7 +1063,11 @@ export async function createPlatformSignupCheckoutSession(input: {
   interval: BillingInterval;
   buyerEmail: string;
   businessName: string;
-  attribution: PlatformSignupAttribution;
+  attribution: ContactAttribution | null;
+  /** Foundation for future affiliate-referral attribution — stamped onto
+   *  metadata and the purchase doc, not used for any commission
+   *  calculation (out of scope). */
+  referralCode?: string | null;
 }): Promise<{ url: string }> {
   if (!billingStripeIsConfigured()) {
     throw new BillingError("Stripe isn't configured on this deployment.", 503);
@@ -1079,6 +1093,9 @@ export async function createPlatformSignupCheckoutSession(input: {
     );
   }
 
+  const attribution = input.attribution;
+  const referralCode = input.referralCode?.trim().slice(0, 80) || null;
+
   const stripe = getStripeServer();
   const metadata: Record<string, string> = {
     kind: PLATFORM_SIGNUP_KIND,
@@ -1087,12 +1104,16 @@ export async function createPlatformSignupCheckoutSession(input: {
     interval: input.interval,
     buyerEmail: input.buyerEmail,
     businessName: truncateForMetadata(input.businessName, 120),
-    utmSource: truncateForMetadata(input.attribution.utmSource),
-    utmMedium: truncateForMetadata(input.attribution.utmMedium),
-    utmCampaign: truncateForMetadata(input.attribution.utmCampaign),
-    utmContent: truncateForMetadata(input.attribution.utmContent),
-    utmTerm: truncateForMetadata(input.attribution.utmTerm),
-    referrer: truncateForMetadata(input.attribution.referrer, 300),
+    utmSource: truncateForMetadata(attribution?.utmSource),
+    utmMedium: truncateForMetadata(attribution?.utmMedium),
+    utmCampaign: truncateForMetadata(attribution?.utmCampaign),
+    utmContent: truncateForMetadata(attribution?.utmContent),
+    utmTerm: truncateForMetadata(attribution?.utmTerm),
+    referrer: truncateForMetadata(attribution?.referrer, 300),
+    fbclid: truncateForMetadata(attribution?.fbclid),
+    gclid: truncateForMetadata(attribution?.gclid),
+    landingPage: truncateForMetadata(attribution?.landingPage, 300),
+    referralCode: truncateForMetadata(referralCode, 80),
   };
 
   const session = await stripe.checkout.sessions.create({
@@ -1107,6 +1128,44 @@ export async function createPlatformSignupCheckoutSession(input: {
   if (!session.url) {
     throw new BillingError("Stripe did not return a checkout URL.", 502);
   }
+
+  // Checkout-start record — best-effort: a write failure here must never
+  // block the buyer from reaching Stripe. The webhook's own fallback path
+  // (see handlePlatformSignupCheckoutCompleted) creates this doc fresh if
+  // it's somehow still missing by the time payment completes, so a blip
+  // here degrades to "no checkout-start visibility for this one purchase,"
+  // never to "purchase lost."
+  try {
+    const doc: PlatformSignupPurchaseDoc = {
+      sessionId: session.id,
+      kind: PLATFORM_SIGNUP_KIND,
+      agencyId: input.agencyId,
+      planId: plan.id,
+      interval: input.interval,
+      buyerEmail: input.buyerEmail,
+      businessName: input.businessName,
+      attribution,
+      referralCode,
+      checkoutStartedAt: FieldValue.serverTimestamp(),
+      provisionedAt: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      status: "checkout_started",
+      subAccountId: null,
+      invite: null,
+      welcomeEmailSentAt: null,
+      error: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    await getAdminDb().collection("purchases").doc(session.id).create(doc);
+  } catch (err) {
+    console.error(
+      `[billing] platformSignup checkout_started write failed for session ${session.id}`,
+      err,
+    );
+  }
+
   return { url: session.url };
 }
 
@@ -1284,42 +1343,93 @@ export async function handlePlatformSignupCheckoutCompleted(
   const purchaseRef = db.collection("purchases").doc(session.id);
   let subAccountId: string | null = null;
 
-  const initialDoc = {
-    sessionId: session.id,
-    kind: PLATFORM_SIGNUP_KIND,
-    agencyId,
-    planId,
-    interval,
-    buyerEmail,
-    businessName,
-    stripeCustomerId: (session.customer as string | null) ?? null,
-    stripeSubscriptionId: (session.subscription as string | null) ?? null,
-    status: "processing" as "processing" | "provisioned" | "error",
-    subAccountId: null as string | null,
-    invite: null as unknown,
-    welcomeEmailSentAt: null as unknown,
-    error: null as string | null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
+  // Reconstructs attribution from Stripe metadata — used ONLY in the
+  // fallback path below, for a session whose checkout_started doc is
+  // somehow missing (a pre-migration session, or that write failed). The
+  // normal path preserves the attribution captured at checkout-START time
+  // instead of ever re-deriving it here.
+  const metadataAttribution: ContactAttribution | null = normalizeAttribution({
+    utmSource: meta.utmSource || null,
+    utmMedium: meta.utmMedium || null,
+    utmCampaign: meta.utmCampaign || null,
+    utmContent: meta.utmContent || null,
+    utmTerm: meta.utmTerm || null,
+    referrer: meta.referrer || null,
+    fbclid: meta.fbclid || null,
+    gclid: meta.gclid || null,
+    landingPage: meta.landingPage || null,
+  });
+  const metadataReferralCode = meta.referralCode?.trim() || null;
 
-  try {
-    await purchaseRef.create(initialDoc);
-  } catch (err) {
-    const code = (err as { code?: number })?.code;
-    if (code !== 6) throw err; // not ALREADY_EXISTS — a real write failure.
-    const existing = await purchaseRef.get();
-    const existingData = existing.data() ?? {};
+  // Preserved from the checkout_started doc (or reconstructed above) —
+  // used for the conversion-bump below so completion reports the SAME
+  // attribution checkout-start captured, not a re-derived guess.
+  let attribution: ContactAttribution | null = metadataAttribution;
+
+  const existingSnap = await purchaseRef.get();
+  if (existingSnap.exists) {
+    const existingData = existingSnap.data() ?? {};
     if (existingData.status === "provisioned") {
       console.log(
         `[billing] platformSignup: skipping duplicate webhook for already-provisioned session ${session.id}`,
       );
       return;
     }
-    // "processing" or "error" from a prior attempt — resume rather than
-    // restart. If a sub-account was already checkpointed, reuse it instead
-    // of calling createSubAccountForAgency again (which would duplicate it).
+    // "checkout_started" (the normal path — created by
+    // createPlatformSignupCheckoutSession), or "processing"/"error" from a
+    // prior webhook attempt — resume rather than restart. If a sub-account
+    // was already checkpointed, reuse it instead of calling
+    // createSubAccountForAgency again (which would duplicate it).
     subAccountId = (existingData.subAccountId as string | null) ?? null;
+    attribution =
+      (existingData.attribution as ContactAttribution | null | undefined) ??
+      metadataAttribution;
+    await purchaseRef.update({
+      status: "processing" satisfies PlatformSignupPurchaseStatus,
+      stripeCustomerId: (session.customer as string | null) ?? null,
+      stripeSubscriptionId: (session.subscription as string | null) ?? null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } else {
+    // Defensive fallback — no checkout_started doc exists for this session
+    // (shouldn't happen for any session created after this shipped; kept
+    // so a pre-migration or blipped session still provisions correctly
+    // instead of failing the webhook outright).
+    const doc: PlatformSignupPurchaseDoc = {
+      sessionId: session.id,
+      kind: PLATFORM_SIGNUP_KIND,
+      agencyId,
+      planId,
+      interval,
+      buyerEmail,
+      businessName,
+      attribution: metadataAttribution,
+      referralCode: metadataReferralCode,
+      checkoutStartedAt: null,
+      provisionedAt: null,
+      stripeCustomerId: (session.customer as string | null) ?? null,
+      stripeSubscriptionId: (session.subscription as string | null) ?? null,
+      status: "processing",
+      subAccountId: null,
+      invite: null,
+      welcomeEmailSentAt: null,
+      error: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    try {
+      await purchaseRef.create(doc);
+    } catch (err) {
+      const code = (err as { code?: number })?.code;
+      if (code !== 6) throw err; // not ALREADY_EXISTS — a real write failure.
+      // Lost a race with a concurrent webhook delivery that created it
+      // first — re-read and resume exactly like the `existingSnap.exists`
+      // branch above.
+      const raced = await purchaseRef.get();
+      const racedData = raced.data() ?? {};
+      if (racedData.status === "provisioned") return;
+      subAccountId = (racedData.subAccountId as string | null) ?? null;
+    }
   }
 
   try {
@@ -1486,9 +1596,26 @@ export async function handlePlatformSignupCheckoutCompleted(
     }
 
     await purchaseRef.update({
-      status: "provisioned",
+      status: "provisioned" satisfies PlatformSignupPurchaseStatus,
+      provisionedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+
+    // Conversion side of the same rollup bucket the checkout-start's visit
+    // beacon writes "visits" into (see /api/track/acquisition) — the
+    // counterpart every other page type (booking/offer) already bumps on
+    // its own completion path. Best-effort; a failure here must never
+    // undo a successful provisioning.
+    void bumpAttributionVisit({
+      subAccountId: null,
+      agencyId,
+      pageType: "platformSignup",
+      pageId: agencyId,
+      attribution,
+      field: "conversions",
+    }).catch((err) =>
+      console.warn("[billing] platformSignup conversion bump failed", err),
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(

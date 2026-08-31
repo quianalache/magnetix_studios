@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { BrandingSection } from "@/components/agency/branding-section";
+import { SalesPageSection } from "@/components/agency/sales-page-section";
 import { AppIconSection } from "@/components/agency/app-icon-section";
 import { AppThemeSection } from "@/components/agency/app-theme-section";
 import { MessagingSection } from "@/components/agency/messaging-section";
@@ -64,6 +65,11 @@ export default function AgencySettingsPage() {
       </section>
 
       <BrandingSection />
+
+      {/* No-code pointer to the agency's own SaaS sales page + the copy-
+          paste acquisition-tracking snippet — see Agency → Acquisition for
+          what it measures. */}
+      <SalesPageSection />
 
       {/* Home-screen icon for the installable app (PWA) — pairs with the
           Branding card: logo URL brands the pages, this brands the phone. */}

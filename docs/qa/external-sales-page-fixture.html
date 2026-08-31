@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>External sales page fixture — Acquisition tracking QA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <!--
+    Standalone QA fixture for the Agency Acquisition Foundation
+    (2026-08-31). Simulates a GitPage-hosted (or any other externally-
+    hosted) Magnetix sales page: ordinary HTML, no build step, no
+    framework — exactly what the tracking snippet has to work on.
+
+    HOW TO USE:
+      1. Set NEXT_PUBLIC_APP_URL in this deployment's .env.local to the
+         URL you want to test against (a local tunnel, staging, or prod).
+      2. Open this file directly in a browser (file:// is fine — the
+         snippet is fetched from a real origin regardless).
+      3. Open DevTools → Network. You should see one POST to
+         /api/track/acquisition per page load (or a sendBeacon entry,
+         which some browsers hide from the main Network list — check
+         about:net-internals or the "Other" filter if it's not visible).
+      4. Reload with different query params (see the links below) and
+         confirm each POST body carries the matching utm_source etc.
+      5. Click "Simulate 'Get started' button" and confirm the target
+         URL was decorated with whatever params this page loaded with —
+         inspect the link's href in DevTools before clicking, or watch
+         the browser's address bar after.
+      6. Check Agency → Acquisition in the dashboard — visits/unique
+         visitors should reflect what you generated here (allow a few
+         seconds; there's no live listener, it's a page-load fetch).
+
+    Replace the <script src> below with whatever this deployment's
+    Agency → Settings → Sales page card actually shows you to copy —
+    the URL is deployment-specific (baked in server-side from
+    NEXT_PUBLIC_APP_URL), so the hardcoded one below is illustrative
+    only and likely won't match your own environment.
+  -->
+  <h1>QA fixture: pretend GitPage sales page</h1>
+  <p>
+    This page exists only to exercise the acquisition-tracking snippet
+    against a real deployment from a genuinely different origin
+    (open via <code>file://</code>, or host it anywhere — the point is
+    it's not on the Magnetix domain).
+  </p>
+
+  <p>Reload this page with different query strings to test attribution capture:</p>
+  <ul>
+    <li><a href="?utm_source=youtube&amp;utm_medium=video&amp;utm_campaign=launch">?utm_source=youtube&amp;utm_medium=video&amp;utm_campaign=launch</a></li>
+    <li><a href="?utm_source=facebook&amp;utm_campaign=retarget&amp;fbclid=abc123">?utm_source=facebook&amp;utm_campaign=retarget&amp;fbclid=abc123</a></li>
+    <li><a href="?ref=affiliate-code-123">?ref=affiliate-code-123 (future affiliate attribution — captured, not yet acted on)</a></li>
+    <li><a href="?">(no params — direct/untagged traffic)</a></li>
+  </ul>
+
+  <p>
+    <a id="get-started-btn" href="https://your-deployment.example.com/get-started/some-plan">
+      Simulate "Get started" button →
+    </a>
+    <br />
+    <small>
+      Its href should get decorated with this page's current UTM/ref
+      params automatically (no onclick handler needed) — inspect it
+      before clicking.
+    </small>
+  </p>
+
+  <!-- Replace with the real snippet URL from Agency → Settings → Sales page. -->
+  <script src="https://your-deployment.example.com/api/track/acquisition/snippet.js"></script>
+</body>
+</html>

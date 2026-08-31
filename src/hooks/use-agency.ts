@@ -30,6 +30,9 @@ interface AgencySummary {
    * "opus" — matches pre-picker behavior for upgrading deployments.
    */
   agencyAssistantModel: "opus" | "sonnet";
+  /** No-code pointer to the agency's own SaaS sales page. Null until set
+   *  in Agency → Settings → Sales page. See AgencyDoc's own doc comment. */
+  primarySalesPageUrl: string | null;
   /** True until the Firestore snapshot has resolved. UI shouldn't render brand chrome before this flips false. */
   loading: boolean;
 }
@@ -42,6 +45,7 @@ interface AgencyData {
   appTheme: AppTheme | null;
   agencyAssistantEnabled: boolean;
   agencyAssistantModel: "opus" | "sonnet";
+  primarySalesPageUrl: string | null;
 }
 
 /**
@@ -60,6 +64,7 @@ export function useAgency(): AgencySummary {
     appTheme: null,
     agencyAssistantEnabled: false,
     agencyAssistantModel: "opus",
+    primarySalesPageUrl: null,
   });
   // Starts true and stays true until auth resolves — `agencyId` reads
   // `null` both before auth has resolved AND when there's genuinely no
@@ -107,6 +112,8 @@ export function useAgency(): AgencySummary {
                 agencyAssistantEnabled: d.agencyAssistantEnabled === true,
                 agencyAssistantModel:
                   d.agencyAssistantModel === "sonnet" ? "sonnet" : "opus",
+                primarySalesPageUrl:
+                  (d.primarySalesPageUrl as string | null) ?? null,
               });
             }
             setSnapLoading(false);

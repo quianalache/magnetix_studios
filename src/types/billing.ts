@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { ContactAttribution } from "./contacts";
 
 /**
  * Client Billing v1 — agency → sub-account plans + paywall.
@@ -153,6 +154,143 @@ export interface BillingPlanResponse {
   publicSaleUrl: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+}
+
+/**
+ * Lifecycle of one `purchases/{sessionId}` doc for a `kind: "platformSignup"`
+ * purchase (Public Magnetix SaaS Signup — buying Magnetix itself, not a
+ * sub-account's own product). One doc, one row, from the moment Stripe
+ * Checkout is opened through provisioning — never a separate "analytics"
+ * record alongside it (see the Sales & Affiliate Infrastructure audit,
+ * Part 9/10):
+ *
+ *   "checkout_started" — written by `createPlatformSignupCheckoutSession`
+ *     the instant the Stripe Checkout Session is created, BEFORE the buyer
+ *     has paid anything. This is what makes "checkout starts" and
+ *     "abandoned checkouts" first-class, queryable data — previously
+ *     nothing was written until payment completed.
+ *   "processing" — the signed Stripe webhook has confirmed payment and
+ *     provisioning is underway (sub-account creation, gates, welcome
+ *     email). Transient.
+ *   "provisioned" — terminal success: `subAccountId` is set, the buyer has
+ *     a working workspace.
+ *   "error" — provisioning threw; `error` carries the message. The webhook
+ *     handler rethrows so Stripe retries, which RESUMES from this same doc
+ *     (see `handlePlatformSignupCheckoutCompleted`'s own doc comment)
+ *     rather than starting over.
+ *
+ * A row that stays "checkout_started" past a reasonable threshold with no
+ * later status is an abandoned checkout (`getAbandonedPlatformSignups`) —
+ * queryable, not automated (no recovery email in this task).
+ *
+ * SECURITY: this doc is written ONLY from `createPlatformSignupCheckoutSession`
+ * (server-side, a real Stripe Checkout Session was just created) and the
+ * SIGNED Stripe webhook. No public tracking beacon ever writes here — see
+ * `src/app/api/track/acquisition/route.ts`'s doc comment. A tracking event
+ * can inflate `attributionVisits` counters; it can never create, update, or
+ * be mistaken for a purchase record.
+ */
+export type PlatformSignupPurchaseStatus =
+  | "checkout_started"
+  | "processing"
+  | "provisioned"
+  | "error";
+
+export interface PlatformSignupPurchaseDoc {
+  sessionId: string;
+  kind: "platformSignup";
+  agencyId: string;
+  planId: string;
+  interval: BillingInterval;
+  buyerEmail: string;
+  businessName: string;
+  /**
+   * Normalized marketing attribution captured at the MOMENT checkout was
+   * started (whatever UTM/referrer params were present in the URL when the
+   * signup form was submitted — see Part 7/9 of the audit: query-parameter
+   * forwarding is what carries the ORIGINAL sales-page attribution this
+   * far). Never overwritten by the completion webhook — only added to.
+   */
+  attribution: ContactAttribution | null;
+  /**
+   * Foundation for future affiliate-referral attribution — captured from a
+   * `?ref=` param alongside `attribution` but deliberately NOT part of
+   * `ContactAttribution` (a general CRM-wide type) and NOT used for any
+   * commission calculation in this task. Null = no referral code present.
+   */
+  referralCode: string | null;
+  /** Set once, when this doc is first created — never touched again. */
+  checkoutStartedAt: Timestamp | FieldValue | Date | null;
+  /** Set on the "provisioned" transition. Null until then. */
+  provisionedAt: Timestamp | FieldValue | Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  status: PlatformSignupPurchaseStatus;
+  subAccountId: string | null;
+  invite: unknown;
+  welcomeEmailSentAt: Timestamp | FieldValue | Date | null;
+  error: string | null;
+  createdAt: Timestamp | FieldValue | Date | null;
+  updatedAt: Timestamp | FieldValue | Date | null;
+}
+
+/** One breakdown row (by source / campaign / referrer) in {@link AcquisitionSummary}. */
+export interface AcquisitionBreakdownRow {
+  /** e.g. "youtube", "(direct)" for untagged traffic. */
+  key: string;
+  visits: number;
+  purchases: number;
+}
+
+/**
+ * Server-computed summary for the Agency → Acquisition view — see
+ * `src/lib/server/acquisition-service.ts`. Deliberately a single computed
+ * response, not a live Firestore listener: every number here is an
+ * aggregate across potentially many `attributionVisits`/`purchases` docs,
+ * cheaper and simpler to compute server-side once per page load than to
+ * reduce client-side from a live query.
+ *
+ * Every count sourced from browser beacons (`visits`, `uniqueVisitors`) is
+ * explicitly labeled as such in the UI — see the Sales & Affiliate
+ * Infrastructure audit's Part 12: "do not present tracking estimates as
+ * exact people counts." Only `checkoutStarts`, `purchases`, and revenue
+ * figures are authoritative (Stripe/webhook-sourced).
+ */
+export interface AcquisitionSummary {
+  agencyId: string;
+  /** Whether `AgencyDoc.primarySalesPageUrl` is set — the UI uses this to
+   *  distinguish "no data yet" from "tracking isn't installed yet." */
+  salesPageConfigured: boolean;
+  /** Sum of `attributionVisits.visits` across the platformSignup rollup —
+   *  a page-load count, NOT a person count (see audit Part 12). */
+  visits: number;
+  /** Sum of `attributionVisits.uniqueVisitors` — session-based, see the
+   *  tracking snippet's own doc comment on what a "session" is. */
+  uniqueVisitors: number;
+  /** Count of `purchases` docs ever created (every doc starts life here —
+   *  this IS the checkout-start count). Authoritative (server-written at
+   *  Stripe Checkout Session creation, not a browser beacon). */
+  checkoutStarts: number;
+  /** Count of `purchases` docs with `status === "provisioned"`. Authoritative. */
+  purchases: number;
+  /** `status === "checkout_started"` and older than the abandonment
+   *  threshold (see `getAbandonedPlatformSignups`). Authoritative. */
+  abandonedCheckouts: number;
+  /** purchases / visits, or null when visits is 0 (undefined, not 0%). */
+  salesPageConversionRate: number | null;
+  /** purchases / checkoutStarts, or null when checkoutStarts is 0. */
+  checkoutConversionRate: number | null;
+  bySource: AcquisitionBreakdownRow[];
+  byCampaign: AcquisitionBreakdownRow[];
+  byReferrer: AcquisitionBreakdownRow[];
+  recentSignups: Array<{
+    sessionId: string;
+    businessName: string;
+    buyerEmail: string;
+    planId: string;
+    utmSource: string | null;
+    provisionedAt: string | null;
+  }>;
 }
 
 /**

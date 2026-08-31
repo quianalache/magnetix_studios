@@ -72,6 +72,14 @@ const PUBLIC_PATHS = [
   // Existence + published-status checked inside the route; best-effort,
   // never blocks the page it's tracking.
   "/api/track/visit",
+  // Agency Acquisition Foundation — public beacon called cross-origin from
+  // the agency's externally-hosted sales page (GitPage today, or literally
+  // any HTML page with the tracking snippet pasted in). No session; the
+  // agency is resolved server-side, never trusted from the request. Rate-
+  // limited + bot-filtered inside the route; can only ever increment
+  // analytics counters, never provision anything. Also serves the snippet
+  // itself as a static JS file at the same prefix.
+  "/api/track/acquisition",
   "/api/webhooks/twilio",
   "/api/webhooks/stripe",
   // Resend inbound-email webhook — public POST from Resend's cloud.
