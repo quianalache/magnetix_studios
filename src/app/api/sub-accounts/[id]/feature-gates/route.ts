@@ -30,6 +30,13 @@ export const dynamic = "force-dynamic";
  * agency-owner-only — this is a read of your OWN sub-account's status,
  * unlike the agency-only PATCH at /api/agency/sub-accounts/[id]/
  * feature-gates that actually changes the gates).
+ *
+ * `broadcastsEnabled`/`aiSuiteEnabled` added 2026-08-31 (SaaS QA pass) so
+ * the Broadcasts and Workspace Assistant pages could adopt this same
+ * resilient-gate pattern — those two pages previously had no page-level
+ * gate check at all (only their underlying send/chat routes enforced the
+ * gate), so a direct URL visit rendered the full feature regardless of
+ * entitlement.
  */
 export async function GET(
   request: Request,
@@ -52,5 +59,7 @@ export async function GET(
     labsEnabled: data.labsEnabledByAgency === true,
     getLeadsEnabled: data.getLeadsEnabledByAgency === true,
     socialPlannerEnabled: data.socialPlannerEnabledByAgency === true,
+    broadcastsEnabled: data.broadcastsEnabledByAgency === true,
+    aiSuiteEnabled: data.aiSuiteEnabledByAgency === true,
   });
 }

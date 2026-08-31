@@ -14,13 +14,17 @@ type GateSpec = {
     | "labsEnabledByAgency"
     | "getLeadsEnabledByAgency"
     | "socialPlannerEnabledByAgency"
+    | "broadcastsEnabledByAgency"
+    | "aiSuiteEnabledByAgency"
   >;
   fallbackKey:
     | "communityEnabled"
     | "standaloneCoursesEnabled"
     | "labsEnabled"
     | "getLeadsEnabled"
-    | "socialPlannerEnabled";
+    | "socialPlannerEnabled"
+    | "broadcastsEnabled"
+    | "aiSuiteEnabled";
 };
 
 const TIMEOUT_MS = 10_000;

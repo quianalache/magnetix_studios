@@ -157,24 +157,21 @@ export function LeadsMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, located.length > 0]);
 
-  // Missing token — render a configuration nudge instead of the map.
+  // Missing token — render a neutral, customer-safe empty state instead of
+  // the map. Deliberately no mention of the env var name, .env.local, or
+  // CLAUDE.md here (2026-08-31 SaaS QA pass) — this card is on the paying
+  // customer's own dashboard, not a developer/operator surface, and the
+  // prior copy exposed exactly that kind of setup instruction to them.
   if (!token) {
     return (
       <Card>
-        <Header
-          title="Where your leads are"
-          subtitle="Map unavailable — Mapbox not configured"
-        />
+        <Header title="Where your leads are" subtitle="Map unavailable" />
         <div className="flex aspect-[16/9] items-center justify-center rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
           <div className="max-w-md space-y-2">
             <Globe2 className="mx-auto h-8 w-8 text-muted-foreground/60" />
             <p>
-              Add{" "}
-              <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                NEXT_PUBLIC_MAPBOX_TOKEN
-              </code>{" "}
-              to <code className="rounded bg-muted px-1 py-0.5 text-xs">.env.local</code>{" "}
-              to render the map. See CLAUDE.md for setup.
+              The lead map isn&apos;t available right now. The rest of your
+              dashboard is unaffected.
             </p>
           </div>
         </div>
