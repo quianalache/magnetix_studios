@@ -12,8 +12,10 @@ import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
 import { isHeroVariantId } from "@/lib/hero-variants";
 import { bumpLandingAttribution } from "@/lib/landing/attribution-rollup";
 import {
+  PLATFORM_SIGNUP_KIND,
   SUB_ACCOUNT_CHARGE_KIND,
   SUB_ACCOUNT_PLAN_KIND,
+  handlePlatformSignupCheckoutCompleted,
   handleSubAccountChargeCheckoutCompleted,
   handleSubAccountPlanCheckoutCompleted,
   handleSubAccountSubscriptionEvent,
@@ -46,6 +48,17 @@ export async function handleCheckoutCompleted(
   // never see these sessions.
   if (session.metadata?.kind === SUB_ACCOUNT_PLAN_KIND) {
     await handleSubAccountPlanCheckoutCompleted(session);
+    return;
+  }
+
+  // Public Magnetix SaaS Signup: a stranger buying a publicly-purchasable
+  // Agency Plan with no pre-existing sub-account. Provisions the sub-account
+  // + owner invite, then hands off to the SUB_ACCOUNT_PLAN_KIND sync path
+  // above for every subsequent subscription event — see
+  // handlePlatformSignupCheckoutCompleted's own doc comment for the full
+  // provisioning + idempotency design.
+  if (session.metadata?.kind === PLATFORM_SIGNUP_KIND) {
+    await handlePlatformSignupCheckoutCompleted(session);
     return;
   }
 

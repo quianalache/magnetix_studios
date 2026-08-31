@@ -15,6 +15,12 @@ const PUBLIC_PATHS = [
   // Affiliate direct "Buy now" link (/buy?ref=CODE). Sets the referral
   // cookie client-side then bounces to Stripe checkout. Public — no session.
   "/buy",
+  // Public Magnetix SaaS Signup — the plan entry page (GitPage/Pages &
+  // Funnels/email/social CTAs link here) and its post-checkout status page
+  // (/get-started/[planSlug]/success). No session; both pages resolve the
+  // plan/purchase server-side with the Admin SDK. The checkout-session POST
+  // itself lives under "/api/checkout" below, already public.
+  "/get-started",
   // Secret webinar-only founders landing. Unlinked + noindex (page
   // metadata); the URL is only shared during webinars. Public — no session.
   "/founderx",

@@ -112,6 +112,25 @@ export interface BillingPlanDoc {
   stripePriceId: string | null;
   /** The interval=year Stripe Price. `null` when the plan is monthly-only. */
   stripeAnnualPriceId: string | null;
+  /**
+   * Whether a stranger can self-serve purchase this plan at
+   * `/get-started/{publicSlug}` (Public Magnetix SaaS Signup). Defaults to
+   * `false` — an agency may have an active plan used only for manually
+   * assigned clients (Client Billing v1's original purpose), so public
+   * availability is never inferred from `status === "active"`; the agency
+   * owner must explicitly opt a plan in from Agency → Billing.
+   */
+  publiclyPurchasable: boolean;
+  /**
+   * Stable public identifier used in the sale URL instead of the Firestore
+   * doc id or any Stripe object id. Generated once (from the plan name,
+   * slugified + de-duplicated within the agency) the FIRST time the owner
+   * turns `publiclyPurchasable` on, and never changes afterward — even if
+   * the plan is later renamed or re-toggled off/on — so a link already
+   * shared (GitPage, email, social) never breaks. `null` until first
+   * enabled. Unique within `agencies/{agencyId}/plans`.
+   */
+  publicSlug: string | null;
   createdAt: Timestamp | FieldValue | Date | null;
   updatedAt: Timestamp | FieldValue | Date | null;
 }
@@ -127,6 +146,11 @@ export interface BillingPlanResponse {
   currency: string;
   gates: PlanGates;
   status: BillingPlanStatus;
+  publiclyPurchasable: boolean;
+  publicSlug: string | null;
+  /** Full `/get-started/{publicSlug}` URL — present only when publicly
+   *  purchasable and `NEXT_PUBLIC_APP_URL` is configured. */
+  publicSaleUrl: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

@@ -71,3 +71,25 @@ export async function resolveBrandName(): Promise<string> {
     return "LeadStack";
   }
 }
+
+/**
+ * The deployment's one agency id (`appConfig/main.firstAgencyId`) — the
+ * same "one agency per deployment" resolution `resolveCustomBrand` already
+ * uses for the public landing page. Exported for the other genuinely public,
+ * unauthenticated surface that needs to know "which agency": the Public
+ * Magnetix SaaS Signup flow (`/get-started/[planSlug]` +
+ * `createPlatformSignupCheckoutSession`), which has no session/claims to
+ * read an agencyId from. Returns `null` (never throws) if unset/misconfigured
+ * so callers can render a clean "not available" state instead of a 500.
+ */
+export async function resolveFirstAgencyId(): Promise<string | null> {
+  try {
+    const configSnap = await getAdminDb().doc("appConfig/main").get();
+    const firstAgencyId = configSnap.exists
+      ? (configSnap.data()?.firstAgencyId as string | undefined)
+      : undefined;
+    return firstAgencyId ?? null;
+  } catch {
+    return null;
+  }
+}

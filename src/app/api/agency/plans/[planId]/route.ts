@@ -90,6 +90,9 @@ export async function PATCH(
   if (body.status === "active" || body.status === "archived") {
     patch.status = body.status;
   }
+  if (typeof body.publiclyPurchasable === "boolean") {
+    patch.publiclyPurchasable = body.publiclyPurchasable;
+  }
 
   try {
     const plan = await updatePlanForAgency(patch);

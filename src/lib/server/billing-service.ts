@@ -2,7 +2,7 @@ import "server-only";
 
 import type Stripe from "stripe";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { getAdminDb } from "@/lib/firebase/admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { getStripeServer } from "@/lib/stripe/server";
 import { applyFeatureGates } from "@/lib/server/feature-gates-service";
 import {
@@ -12,6 +12,9 @@ import {
   issueCheckoutToken,
 } from "@/lib/billing/token";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { createSubAccountForAgency } from "@/lib/server/sub-accounts-service";
+import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
+import { resolveBrandName, resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import {
   BILLING_GRACE_DAYS,
   PLAN_GATE_KEYS,
@@ -49,6 +52,18 @@ import {
 export const SUB_ACCOUNT_PLAN_KIND = "subAccountPlan";
 /** metadata.kind for ONE-TIME charges (mode:"payment" checkouts). */
 export const SUB_ACCOUNT_CHARGE_KIND = "subAccountCharge";
+/**
+ * metadata.kind for the PUBLIC Magnetix SaaS Signup checkout — a stranger
+ * buying a publicly-purchasable Agency Plan with no pre-existing sub-account
+ * (see `createPlatformSignupCheckoutSession` / `handlePlatformSignupCheckoutCompleted`
+ * below). Deliberately a NEW kind rather than reusing `SUB_ACCOUNT_PLAN_KIND`
+ * at session-creation time, because no `subAccountId` exists yet to stamp —
+ * `handlePlatformSignupCheckoutCompleted` re-tags the resulting Stripe
+ * subscription's metadata to `SUB_ACCOUNT_PLAN_KIND` once the sub-account is
+ * created, so every subscription event AFTER provisioning flows through the
+ * existing, unmodified `handleSubAccountSubscriptionEvent` sync path.
+ */
+export const PLATFORM_SIGNUP_KIND = "platformSignup";
 
 /** Stripe's practical floor for a recurring charge, in cents. */
 const MIN_PRICE_CENTS = 100;
@@ -108,6 +123,14 @@ function tsToIso(value: unknown): string | null {
   return null;
 }
 
+/** Full shareable public-signup URL for a plan. Empty when
+ *  NEXT_PUBLIC_APP_URL is unset (mirrors buildCheckoutUrl's convention). */
+export function buildPublicPlanUrl(publicSlug: string): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (!base) return "";
+  return `${base}/get-started/${publicSlug}`;
+}
+
 function serializePlan(
   id: string,
   data: FirebaseFirestore.DocumentData,
@@ -116,6 +139,8 @@ function serializePlan(
   for (const key of PLAN_GATE_KEYS) {
     gates[key] = data.gates?.[key] === true;
   }
+  const publiclyPurchasable = data.publiclyPurchasable === true;
+  const publicSlug = (data.publicSlug as string | null) ?? null;
   return {
     id,
     name: String(data.name ?? ""),
@@ -126,9 +151,52 @@ function serializePlan(
     currency: String(data.currency ?? "usd"),
     gates,
     status: data.status === "archived" ? "archived" : "active",
+    publiclyPurchasable,
+    publicSlug,
+    publicSaleUrl:
+      publiclyPurchasable && publicSlug ? buildPublicPlanUrl(publicSlug) || null : null,
     createdAt: tsToIso(data.createdAt),
     updatedAt: tsToIso(data.updatedAt),
   };
+}
+
+/** kebab-case a plan name for use as the base of a public slug. Falls back
+ *  to "plan" if the name has no ASCII-alnum characters at all (e.g. an
+ *  emoji-only name) so slug generation never produces an empty string. */
+function slugifyPlanName(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return slug || "plan";
+}
+
+/**
+ * Generate a `publicSlug` that's unique within this agency's plans, from the
+ * plan's current name. Called once, lazily, the first time a plan is turned
+ * publicly purchasable (see `updatePlanForAgency`) — never regenerated after
+ * that, so an already-shared link stays valid even if the plan is renamed.
+ */
+async function generateUniquePublicSlug(
+  agencyId: string,
+  name: string,
+): Promise<string> {
+  const base = slugifyPlanName(name);
+  const col = plansCollection(agencyId);
+  let candidate = base;
+  let suffix = 2;
+  // Small, bounded loop — an agency has at most a handful of plans, so this
+  // is at most a few extra reads even in a pathological all-same-name case.
+  while (suffix < 100) {
+    const existing = await col.where("publicSlug", "==", candidate).limit(1).get();
+    if (existing.empty) return candidate;
+    candidate = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  // Astronomically unlikely fallback: fold in a short random suffix.
+  return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /** Normalize an untrusted gates payload into a full PlanGates record. */
@@ -262,6 +330,12 @@ export async function createPlanForAgency(input: {
     stripeProductId: product.id,
     stripePriceId: price.id,
     stripeAnnualPriceId: annualPriceId,
+    // Public sale is always OFF at creation — the agency owner must
+    // intentionally opt a plan into self-serve signup from Agency → Billing,
+    // never inferred from status === "active" (a plan can be active and
+    // still manually-assignment-only).
+    publiclyPurchasable: false,
+    publicSlug: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -280,6 +354,16 @@ export async function updatePlanForAgency(input: {
   priceAnnualCents?: number | null;
   gates?: PlanGates;
   status?: "active" | "archived";
+  /**
+   * Public Magnetix SaaS Signup toggle. `true` enables self-serve purchase
+   * at `/get-started/{publicSlug}`, generating that slug on first enable if
+   * the plan doesn't have one yet (see `generateUniquePublicSlug`). `false`
+   * disables public purchase immediately — the slug is kept (not cleared),
+   * so re-enabling later doesn't break a link someone already has, and a
+   * disabled plan's URL resolves to "not available" rather than 404,
+   * matching `resolvePublicPlan`'s status+publiclyPurchasable check.
+   */
+  publiclyPurchasable?: boolean;
 }): Promise<BillingPlanResponse> {
   const ref = plansCollection(input.agencyId).doc(input.planId);
   const snap = await ref.get();
@@ -293,6 +377,20 @@ export async function updatePlanForAgency(input: {
   if (input.description !== undefined) updates.description = input.description;
   if (input.gates) updates.gates = input.gates;
   if (input.status) updates.status = input.status;
+  if (typeof input.publiclyPurchasable === "boolean") {
+    if (input.publiclyPurchasable && plan.status === "archived" && !input.status) {
+      throw new BillingError(
+        "An archived plan can't be made publicly purchasable — unarchive it first.",
+      );
+    }
+    updates.publiclyPurchasable = input.publiclyPurchasable;
+    if (input.publiclyPurchasable && !plan.publicSlug) {
+      updates.publicSlug = await generateUniquePublicSlug(
+        input.agencyId,
+        (typeof input.name === "string" ? input.name : plan.name) as string,
+      );
+    }
+  }
 
   const stripe = billingStripeIsConfigured() ? getStripeServer() : null;
 
@@ -861,6 +959,131 @@ export async function createSubAccountCheckoutSession(input: {
 }
 
 // ---------------------------------------------------------------------------
+// Public Magnetix SaaS Signup (Part 3/4 of the implementation task) — a
+// stranger buying a publicly-purchasable Agency Plan with NO pre-existing
+// sub-account. Two halves: resolve + create-checkout-session here (called
+// from the public /get-started page + /api/checkout/platform-signup), and
+// the webhook fulfillment handler further below.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a plan by its public slug for the public signup surfaces. Returns
+ * `null` — never throws, never distinguishes "doesn't exist" from "exists
+ * but not public" to the caller — for: no matching slug, archived plan, or
+ * `publiclyPurchasable !== true`. This is the SINGLE authoritative check
+ * both the public entry page (display) and the checkout-session endpoint
+ * (server-side price resolution) use, so they can never drift.
+ *
+ * Deliberately a single-field `where("publicSlug", "==", …)` query (no
+ * compound filter) so this needs no new Firestore composite index — the
+ * status/publiclyPurchasable check happens in code after the read.
+ */
+export async function resolvePublicPlan(
+  agencyId: string,
+  publicSlug: string,
+): Promise<BillingPlanDoc | null> {
+  if (!agencyId || !publicSlug) return null;
+  const snap = await plansCollection(agencyId)
+    .where("publicSlug", "==", publicSlug)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  const plan = { ...(doc.data() as BillingPlanDoc), id: doc.id };
+  if (plan.status !== "active" || plan.publiclyPurchasable !== true) return null;
+  return plan;
+}
+
+export interface PlatformSignupAttribution {
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+  referrer: string | null;
+}
+
+/** Stripe metadata values are capped at 500 chars; keep everything well
+ *  under that and drop empties so metadata stays small and readable. */
+function truncateForMetadata(value: string | null | undefined, max = 200): string {
+  if (!value) return "";
+  return value.trim().slice(0, max);
+}
+
+/**
+ * Create the public-signup Stripe Checkout Session. Every billing object
+ * (plan, price, currency, agencyId) is resolved server-side from
+ * `resolvePublicPlan` — the caller supplies only a slug + cadence + the
+ * buyer's own contact details, never a price or agency id, so a tampered
+ * request can at worst buy the SAME plan at its SAME real price, never an
+ * arbitrary one. Runs on the PLATFORM Stripe client (no `stripeAccount` —
+ * same client Client Billing v1's own checkout uses) — this is Magnetix
+ * Studios billing a business owner, never Stripe Connect.
+ */
+export async function createPlatformSignupCheckoutSession(input: {
+  agencyId: string;
+  planSlug: string;
+  interval: BillingInterval;
+  buyerEmail: string;
+  businessName: string;
+  attribution: PlatformSignupAttribution;
+}): Promise<{ url: string }> {
+  if (!billingStripeIsConfigured()) {
+    throw new BillingError("Stripe isn't configured on this deployment.", 503);
+  }
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (!base) {
+    throw new BillingError("NEXT_PUBLIC_APP_URL isn't configured.", 500);
+  }
+
+  const plan = await resolvePublicPlan(input.agencyId, input.planSlug);
+  if (!plan) {
+    throw new BillingError("This plan isn't available for signup.", 404);
+  }
+  if (input.interval === "year" && plan.priceAnnualCents == null) {
+    throw new BillingError("This plan doesn't offer annual billing.", 400);
+  }
+  const stripePriceId =
+    input.interval === "year" ? plan.stripeAnnualPriceId : plan.stripePriceId;
+  if (!stripePriceId) {
+    throw new BillingError(
+      "This plan has no Stripe price configured — contact support.",
+      500,
+    );
+  }
+
+  const stripe = getStripeServer();
+  const metadata: Record<string, string> = {
+    kind: PLATFORM_SIGNUP_KIND,
+    agencyId: input.agencyId,
+    planId: plan.id,
+    interval: input.interval,
+    buyerEmail: input.buyerEmail,
+    businessName: truncateForMetadata(input.businessName, 120),
+    utmSource: truncateForMetadata(input.attribution.utmSource),
+    utmMedium: truncateForMetadata(input.attribution.utmMedium),
+    utmCampaign: truncateForMetadata(input.attribution.utmCampaign),
+    utmContent: truncateForMetadata(input.attribution.utmContent),
+    utmTerm: truncateForMetadata(input.attribution.utmTerm),
+    referrer: truncateForMetadata(input.attribution.referrer, 300),
+  };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer_email: input.buyerEmail,
+    line_items: [{ price: stripePriceId, quantity: 1 }],
+    success_url: `${base}/get-started/${input.planSlug}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/get-started/${input.planSlug}?cancelled=1`,
+    metadata,
+    subscription_data: { metadata },
+  });
+  if (!session.url) {
+    throw new BillingError("Stripe did not return a checkout URL.", 502);
+  }
+  return { url: session.url };
+}
+
+// ---------------------------------------------------------------------------
 // Stripe webhook handlers (called from lib/stripe/webhooks.ts routing)
 // ---------------------------------------------------------------------------
 
@@ -950,6 +1173,348 @@ export async function handleSubAccountPlanCheckoutCompleted(
       currency: billing?.currency ?? null,
     },
   });
+}
+
+/**
+ * checkout.session.completed with metadata.kind === "platformSignup" — a
+ * stranger just paid for a publicly-purchasable Agency Plan with no
+ * pre-existing sub-account. Provisions the account end-to-end:
+ *
+ *   1. Idempotency checkpoint (`purchases/{session.id}`, doc.kind =
+ *      "platformSignup") — the SAME collection + `.create()`-throws-on-
+ *      duplicate pattern `handleFoundersCheckout` already uses one screen up
+ *      in this file, extended with a resumable `subAccountId` checkpoint
+ *      (see below) because this flow has more than one side effect to make
+ *      idempotent, unlike a single Firestore write.
+ *   2. Re-resolve the plan fresh from Firestore (never trust checkout-time
+ *      metadata for anything Stripe-object-shaped) and look up the agency
+ *      owner (every sub-account creation — manual or automatic — is
+ *      attributed to the owner, matching `createSubAccountForAgency`'s
+ *      existing contract).
+ *   3. `createSubAccountForAgency` — the EXACT function
+ *      `POST /api/agency/sub-accounts` (manual creation) and the AI Suite's
+ *      `create_sub_account` capability already call. Produces a
+ *      structurally identical SubAccountDoc, membership, seeded templates,
+ *      AND — via its own `accountContact` invite step — the buyer's owner
+ *      invite + delivery email through the SAME invite system Settings →
+ *      Members uses. No second account-creation or invite path exists.
+ *   4. Write `SubAccountDoc.billing` directly to "active" — the identical
+ *      shape `handleSubAccountPlanCheckoutCompleted` above writes on a
+ *      manually-billed client's first payment. Same collection, same
+ *      fields, same `effectiveBillingState()`/`billingBlocksWorkspace()`
+ *      that already read it. No new billing model.
+ *   5. `applyFeatureGates` — the same plan-gates application
+ *      `handleSubAccountPlanCheckoutCompleted` performs.
+ *   6. Re-tag the Stripe subscription's metadata from `platformSignup` to
+ *      `SUB_ACCOUNT_PLAN_KIND` + the now-known `subAccountId`. This is the
+ *      hand-off: every subscription.updated/.deleted event from this point
+ *      on is routed by `lib/stripe/webhooks.ts` to the pre-existing,
+ *      UNCHANGED `handleSubAccountSubscriptionEvent` below — dunning,
+ *      cancellation, and the Billing Portal all keep working exactly as
+ *      they do for a manually-billed client, because as far as that sync
+ *      logic is concerned, this IS a manually-billed client from here on.
+ *   7. A dedicated payment-confirmation welcome email (separate from the
+ *      invite email in step 3, which carries the actual sign-in link).
+ *
+ * IDEMPOTENCY: Stripe redelivers webhooks (retries + dashboard "Resend").
+ * The `purchases/{session.id}` doc is the atomicity anchor. On the first
+ * delivery, `.create()` succeeds and provisioning proceeds. On a genuine
+ * duplicate delivery of an ALREADY-FULFILLED session, `.create()` throws
+ * ALREADY_EXISTS and this function returns immediately without touching
+ * anything else. The subtler case this guards against: a delivery that
+ * previously got partway through and failed (network blip, a transient
+ * Firestore/Stripe error) — `.create()` also throws ALREADY_EXISTS there,
+ * but the stored doc's `status` is "processing"/"error", not "provisioned",
+ * so the function RESUMES: if `subAccountId` is already checkpointed on the
+ * doc, `createSubAccountForAgency` is NOT called again (which would create a
+ * second sub-account) — the remaining steps (billing write, gates,
+ * subscription re-tag, welcome email) just re-run against the SAME
+ * sub-account, and are each individually idempotent (plain `.update()`s
+ * with deterministic values, or an explicit `welcomeEmailSentAt` guard for
+ * the one true side effect — the email — that isn't naturally idempotent).
+ */
+export async function handlePlatformSignupCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  const db = getAdminDb();
+  const meta = session.metadata ?? {};
+  const agencyId = meta.agencyId;
+  const planId = meta.planId;
+  const interval: BillingInterval = meta.interval === "year" ? "year" : "month";
+  // Prefer what Stripe itself collected/verified during checkout; fall back
+  // to the metadata we stamped at session-creation time.
+  const buyerEmail =
+    session.customer_details?.email ?? session.customer_email ?? meta.buyerEmail;
+  const businessName = meta.businessName || "";
+
+  if (!agencyId || !planId || !buyerEmail) {
+    console.error(
+      `[billing] platformSignup checkout ${session.id} missing required metadata (agencyId/planId/buyerEmail) — cannot provision`,
+    );
+    return;
+  }
+
+  const purchaseRef = db.collection("purchases").doc(session.id);
+  let subAccountId: string | null = null;
+
+  const initialDoc = {
+    sessionId: session.id,
+    kind: PLATFORM_SIGNUP_KIND,
+    agencyId,
+    planId,
+    interval,
+    buyerEmail,
+    businessName,
+    stripeCustomerId: (session.customer as string | null) ?? null,
+    stripeSubscriptionId: (session.subscription as string | null) ?? null,
+    status: "processing" as "processing" | "provisioned" | "error",
+    subAccountId: null as string | null,
+    invite: null as unknown,
+    welcomeEmailSentAt: null as unknown,
+    error: null as string | null,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  try {
+    await purchaseRef.create(initialDoc);
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code !== 6) throw err; // not ALREADY_EXISTS — a real write failure.
+    const existing = await purchaseRef.get();
+    const existingData = existing.data() ?? {};
+    if (existingData.status === "provisioned") {
+      console.log(
+        `[billing] platformSignup: skipping duplicate webhook for already-provisioned session ${session.id}`,
+      );
+      return;
+    }
+    // "processing" or "error" from a prior attempt — resume rather than
+    // restart. If a sub-account was already checkpointed, reuse it instead
+    // of calling createSubAccountForAgency again (which would duplicate it).
+    subAccountId = (existingData.subAccountId as string | null) ?? null;
+  }
+
+  try {
+    if (!subAccountId) {
+      const [planSnap, agencySnap] = await Promise.all([
+        db.doc(`agencies/${agencyId}/plans/${planId}`).get(),
+        db.doc(`agencies/${agencyId}`).get(),
+      ]);
+      if (!planSnap.exists) {
+        throw new Error(`Plan ${planId} not found under agency ${agencyId}`);
+      }
+      if (!agencySnap.exists) {
+        throw new Error(`Agency ${agencyId} not found`);
+      }
+      const plan = { ...(planSnap.data() as BillingPlanDoc), id: planSnap.id };
+      const ownerUid = agencySnap.data()?.ownerUid as string | undefined;
+      if (!ownerUid) {
+        throw new Error(`Agency ${agencyId} has no ownerUid`);
+      }
+      const ownerRecord = await getAdminAuth().getUser(ownerUid);
+
+      const created = await createSubAccountForAgency({
+        agencyId,
+        uid: ownerUid,
+        email: ownerRecord.email ?? "",
+        displayName: ownerRecord.displayName ?? "",
+        name: businessName || `${buyerEmail.split("@")[0]}'s workspace`,
+        slug: "",
+        timezone: "UTC",
+        accountContact: { name: null, email: buyerEmail, phone: null },
+      });
+      subAccountId = created.subAccountId;
+
+      await purchaseRef.update({
+        subAccountId,
+        invite: created.invite,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Billing write — identical shape to handleSubAccountPlanCheckoutCompleted's
+      // activation write above, so effectiveBillingState()/billingBlocksWorkspace()
+      // and every UI that reads SubAccountDoc.billing need no changes at all.
+      const priceCents =
+        interval === "year" ? plan.priceAnnualCents : plan.priceMonthlyCents;
+      const stripePriceId =
+        interval === "year" ? plan.stripeAnnualPriceId : plan.stripePriceId;
+      await db.doc(`subAccounts/${subAccountId}`).update({
+        billing: {
+          status: "active" satisfies SubAccountBillingStatus,
+          planId: plan.id,
+          planName: plan.name,
+          priceCents: priceCents ?? null,
+          billingInterval: interval,
+          currency: plan.currency,
+          specialPriceCents: null,
+          stripePriceId: stripePriceId ?? null,
+          stripeCustomerId: (session.customer as string | null) ?? null,
+          stripeSubscriptionId: (session.subscription as string | null) ?? null,
+          checkoutTokenHash: null,
+          graceUntil: null,
+          assignedAt: FieldValue.serverTimestamp(),
+          activatedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Plan's feature-gate bundle — same chokepoint every other activation
+      // path uses.
+      try {
+        const { skippedMetaGates } = await applyFeatureGates(subAccountId, plan.gates);
+        if (skippedMetaGates.length > 0) {
+          console.warn(
+            `[billing] platformSignup plan ${planId} wants Meta gates but the deployment lacks META_APP_ID/SECRET — left off for ${subAccountId}`,
+          );
+        }
+      } catch (err) {
+        // Activation must not fail because a gate write blipped — the agency
+        // can re-apply from the Manage dialog, same tolerance as the manual
+        // activation path above.
+        console.error("[billing] platformSignup gate application failed", err);
+      }
+
+      // Hand off to the EXISTING subscription sync path (see doc comment) —
+      // every subsequent updated/deleted event now routes through
+      // handleSubAccountSubscriptionEvent unmodified.
+      if (session.subscription) {
+        await getStripeServer().subscriptions.update(
+          session.subscription as string,
+          {
+            metadata: {
+              kind: SUB_ACCOUNT_PLAN_KIND,
+              agencyId,
+              subAccountId,
+              planId: plan.id,
+            },
+          },
+        );
+      }
+
+      recordBillingEvent({
+        agencyId,
+        subAccountId,
+        event: "activated",
+        detail: {
+          planId: plan.id,
+          planName: plan.name,
+          priceCents: priceCents ?? null,
+          via: "platformSignup",
+          stripeSubscriptionId: (session.subscription as string | null) ?? null,
+        },
+      });
+      void emitWebhookEvent({
+        subAccountId,
+        agencyId,
+        mode: "live",
+        type: "billing.activated",
+        payload: {
+          subAccountId,
+          planId: plan.id,
+          planName: plan.name,
+          priceCents: priceCents ?? null,
+          currency: plan.currency,
+        },
+      });
+    }
+
+    // Welcome email — separate from the invite email (which carries the
+    // actual sign-in link) and guarded so a webhook retry after this point
+    // never sends it twice.
+    const currentSnap = await purchaseRef.get();
+    if (!currentSnap.data()?.welcomeEmailSentAt) {
+      try {
+        if (emailIsConfigured() && subAccountId) {
+          const [brandName, brand] = await Promise.all([
+            resolveBrandName(),
+            resolveCustomBrand(),
+          ]);
+          await sendEmail({
+            to: buyerEmail,
+            subject: `Your ${brandName} subscription is active`,
+            text: renderPlatformSignupWelcomeText({
+              brandName,
+              buyerEmail,
+              supportEmail: brand.supportEmail,
+            }),
+            html: renderPlatformSignupWelcomeHtml({
+              brandName,
+              buyerEmail,
+              supportEmail: brand.supportEmail,
+            }),
+          });
+        }
+      } catch (err) {
+        // Best-effort — the invite email (already sent inside
+        // createSubAccountForAgency) still carries the actual login link,
+        // so a failure here doesn't strand the buyer.
+        console.error("[billing] platformSignup welcome email failed", err);
+      }
+      await purchaseRef.update({
+        welcomeEmailSentAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await purchaseRef.update({
+      status: "provisioned",
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error(
+      `[billing] platformSignup provisioning failed for session ${session.id}: ${message}`,
+    );
+    await purchaseRef
+      .update({
+        status: "error",
+        error: message,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+      .catch(() => undefined);
+    // Rethrow so the webhook route returns 500 and Stripe retries — the
+    // retry resumes from the subAccountId checkpoint above rather than
+    // duplicating anything.
+    throw err;
+  }
+}
+
+function renderPlatformSignupWelcomeText(ctx: {
+  brandName: string;
+  buyerEmail: string;
+  supportEmail: string;
+}): string {
+  return [
+    `Your ${ctx.brandName} subscription is active.`,
+    ``,
+    `Payment was received and your workspace is being set up now.`,
+    ``,
+    `A separate email is on its way to ${ctx.buyerEmail} with a link to create your login — that's where you'll set your password and get in. If it doesn't arrive in a few minutes, check spam.`,
+    ``,
+    `Once you're in, you'll log in at any time from the ${ctx.brandName} sign-in page.`,
+    ``,
+    `Questions? Contact us at ${ctx.supportEmail}.`,
+  ].join("\n");
+}
+
+function renderPlatformSignupWelcomeHtml(ctx: {
+  brandName: string;
+  buyerEmail: string;
+  supportEmail: string;
+}): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `
+    <div style="font-family:-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#18181b;max-width:480px;">
+      <p style="font-size:16px;font-weight:600;margin:0 0 12px;">Your ${esc(ctx.brandName)} subscription is active</p>
+      <p style="margin:0 0 12px;">Payment was received and your workspace is being set up now.</p>
+      <p style="margin:0 0 12px;">A separate email is on its way to <strong>${esc(ctx.buyerEmail)}</strong> with a link to create your login — that's where you'll set your password and get in. If it doesn't arrive in a few minutes, check spam.</p>
+      <p style="margin:0 0 12px;">Once you're in, you'll log in at any time from the ${esc(ctx.brandName)} sign-in page.</p>
+      <p style="margin:20px 0 0;color:#52525b;">Questions? Contact us at <a href="mailto:${esc(ctx.supportEmail)}">${esc(ctx.supportEmail)}</a>.</p>
+    </div>
+  `.trim();
 }
 
 /**

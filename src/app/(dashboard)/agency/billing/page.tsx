@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { toast } from "sonner";
-import { Archive, CreditCard, Pencil, Plus } from "lucide-react";
+import { Archive, Copy, CreditCard, Globe2, Loader2, Pencil, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ export default function AgencyBillingPage() {
   );
   const [managingId, setManagingId] = useState<string | null>(null);
   const managing = subs.find((s) => s.id === managingId) ?? null;
+  // Public Magnetix SaaS Signup — per-plan toggle busy state, keyed by
+  // planId so multiple cards can't stomp on each other's request.
+  const [togglingPlanId, setTogglingPlanId] = useState<string | null>(null);
 
   const refreshPlans = useCallback(() => {
     void fetch("/api/agency/plans")
@@ -133,6 +136,41 @@ export default function AgencyBillingPage() {
       refreshPlans();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to archive.");
+    }
+  }
+
+  // Public Magnetix SaaS Signup — enable/disable self-serve purchase for one
+  // plan. The API generates (and keeps stable) the plan's publicSlug on
+  // first enable; refreshPlans() picks up the resulting publicSaleUrl.
+  async function handleTogglePublic(plan: BillingPlanResponse) {
+    setTogglingPlanId(plan.id);
+    try {
+      const res = await fetch(`/api/agency/plans/${plan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ publiclyPurchasable: !plan.publiclyPurchasable }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to update.");
+      toast.success(
+        plan.publiclyPurchasable
+          ? `${plan.name} is no longer available for public signup.`
+          : `${plan.name} is now available for public signup.`,
+      );
+      refreshPlans();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update.");
+    } finally {
+      setTogglingPlanId(null);
+    }
+  }
+
+  async function handleCopySaleLink(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Sale link copied.");
+    } catch {
+      toast.error("Couldn't copy — select the link manually.");
     }
   }
 
@@ -291,6 +329,67 @@ export default function AgencyBillingPage() {
                         <Archive className="mr-1 h-3 w-3" />
                         Archive
                       </Button>
+                    )}
+                  </div>
+
+                  {/* Public Magnetix SaaS Signup — per-plan opt-in. Never
+                      inferred from status === "active"; the owner must
+                      explicitly flip this. Archived plans can't be enabled
+                      (the checkbox disables itself) but a plan archived
+                      AFTER being made public stays public until switched
+                      off, matching "Edit"'s own don't-surprise-the-owner
+                      behavior elsewhere on this page. */}
+                  <div className="mt-3 rounded-md border border-dashed p-2.5">
+                    <label className="flex cursor-pointer items-start gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={plan.publiclyPurchasable}
+                        onChange={() => handleTogglePublic(plan)}
+                        disabled={
+                          togglingPlanId === plan.id ||
+                          (plan.status === "archived" && !plan.publiclyPurchasable)
+                        }
+                        className="mt-0.5 h-3.5 w-3.5 cursor-pointer"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                          <Globe2 className="h-3 w-3" />
+                          Public signup
+                          {togglingPlanId === plan.id && (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          )}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {plan.publiclyPurchasable
+                            ? "Anyone with the link below can self-serve purchase this plan."
+                            : "Off — this plan is manually-assignment only."}
+                        </span>
+                      </span>
+                    </label>
+
+                    {plan.publiclyPurchasable && (
+                      <p className="mt-1.5 pl-[22px] text-[10.5px] text-muted-foreground">
+                        {plan.priceAnnualCents != null
+                          ? "Monthly and annual both available at signup."
+                          : "Monthly only — no annual price set on this plan."}
+                      </p>
+                    )}
+
+                    {plan.publiclyPurchasable && plan.publicSaleUrl && (
+                      <div className="mt-2 flex items-center gap-1.5 border-t border-dashed pt-2 pl-[22px]">
+                        <code className="min-w-0 flex-1 truncate text-[11px]">
+                          {plan.publicSaleUrl}
+                        </code>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 shrink-0 px-1.5"
+                          onClick={() => handleCopySaleLink(plan.publicSaleUrl!)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
