@@ -7,9 +7,19 @@ import {
   MAX_IMAGES_PER_COMMENT,
   MAX_VOICE_NOTES_PER_COMMENT,
 } from "@/lib/community/community-image-mime";
-import { MAX_FILES_PER_POST, MAX_FILES_PER_COMMENT } from "@/lib/community/community-file-mime";
-import { MAX_GIFS_PER_POST, MAX_GIFS_PER_COMMENT } from "@/lib/community/gif-limits";
-import type { MediaAttachment, VideoProviderName } from "@/types/media-attachment";
+import {
+  MAX_FILES_PER_POST,
+  MAX_FILES_PER_COMMENT,
+} from "@/lib/community/community-file-mime";
+import {
+  MAX_GIFS_PER_POST,
+  MAX_GIFS_PER_COMMENT,
+} from "@/lib/community/gif-limits";
+import type {
+  MediaAttachment,
+  VideoProviderName,
+} from "@/types/media-attachment";
+import { isOwnedCommunityAttachmentStoragePath } from "@/lib/community/attachment-provenance";
 
 const MAX_VIDEO_LINKS_PER_POST = 1;
 
@@ -53,6 +63,7 @@ const MAX_VIDEO_LINKS_PER_POST = 1;
 function validateImageItem(
   item: unknown,
   authorMemberId: string,
+  subAccountId: string
 ): Extract<MediaAttachment, { kind: "image" }> | null {
   if (!item || typeof item !== "object") return null;
   const image = (item as { image?: Record<string, unknown> }).image;
@@ -66,6 +77,15 @@ function validateImageItem(
   ) {
     return null;
   }
+  if (
+    !isOwnedCommunityAttachmentStoragePath({
+      storagePath: image.storagePath,
+      subAccountId,
+      memberId: authorMemberId,
+      kind: "image",
+    })
+  )
+    return null;
   return {
     kind: "image",
     image: {
@@ -86,6 +106,7 @@ function validateImageItem(
 function validateVoiceItem(
   item: unknown,
   authorMemberId: string,
+  subAccountId: string
 ): Extract<MediaAttachment, { kind: "voice" }> | null {
   if (!item || typeof item !== "object") return null;
   const voice = (item as { voice?: Record<string, unknown> }).voice;
@@ -100,6 +121,15 @@ function validateVoiceItem(
   ) {
     return null;
   }
+  if (
+    !isOwnedCommunityAttachmentStoragePath({
+      storagePath: voice.storagePath,
+      subAccountId,
+      memberId: authorMemberId,
+      kind: "voice",
+    })
+  )
+    return null;
   return {
     kind: "voice",
     voice: {
@@ -119,6 +149,7 @@ function validateVoiceItem(
 function validateFileItem(
   item: unknown,
   authorMemberId: string,
+  subAccountId: string
 ): Extract<MediaAttachment, { kind: "file" }> | null {
   if (!item || typeof item !== "object") return null;
   const file = (item as { file?: Record<string, unknown> }).file;
@@ -133,6 +164,15 @@ function validateFileItem(
   ) {
     return null;
   }
+  if (
+    !isOwnedCommunityAttachmentStoragePath({
+      storagePath: file.storagePath,
+      subAccountId,
+      memberId: authorMemberId,
+      kind: "file",
+    })
+  )
+    return null;
   return {
     kind: "file",
     file: {
@@ -151,7 +191,7 @@ function validateFileItem(
 
 function validateGifItem(
   item: unknown,
-  authorMemberId: string,
+  authorMemberId: string
 ): Extract<MediaAttachment, { kind: "gif" }> | null {
   if (!item || typeof item !== "object") return null;
   const gif = (item as { gif?: Record<string, unknown> }).gif;
@@ -169,7 +209,8 @@ function validateGifItem(
       id: typeof gif.id === "string" ? gif.id : gif.providerId,
       provider: "giphy",
       providerId: gif.providerId,
-      title: typeof gif.title === "string" ? gif.title.slice(0, 300) : undefined,
+      title:
+        typeof gif.title === "string" ? gif.title.slice(0, 300) : undefined,
       authorMemberId,
       createdAt: Date.now(),
     },
@@ -178,12 +219,14 @@ function validateGifItem(
 
 function validateVideoLinkItem(
   item: unknown,
-  authorMemberId: string,
+  authorMemberId: string
 ): Extract<MediaAttachment, { kind: "video-link" }> | null {
   if (!item || typeof item !== "object") return null;
   const videoLink = (item as { videoLink?: Record<string, unknown> }).videoLink;
   const originalUrl =
-    videoLink && typeof videoLink.originalUrl === "string" ? videoLink.originalUrl : null;
+    videoLink && typeof videoLink.originalUrl === "string"
+      ? videoLink.originalUrl
+      : null;
   // Re-derived from the URL, never trusting the client's own provider/
   // providerId/embedUrl claims — see the module comment.
   const parsed = originalUrl ? parseVideoUrl(originalUrl) : null;
@@ -205,6 +248,7 @@ function validateVideoLinkItem(
 export function normalizePostAttachments(
   raw: unknown,
   authorMemberId: string,
+  subAccountId: string
 ): MediaAttachment[] {
   if (!Array.isArray(raw)) return [];
   const images: MediaAttachment[] = [];
@@ -218,18 +262,21 @@ export function normalizePostAttachments(
     const kind = (item as { kind?: unknown }).kind;
 
     if (kind === "image" && images.length < MAX_IMAGES_PER_POST) {
-      const v = validateImageItem(item, authorMemberId);
+      const v = validateImageItem(item, authorMemberId, subAccountId);
       if (v) images.push(v);
     } else if (kind === "voice" && voices.length < MAX_VOICE_NOTES_PER_POST) {
-      const v = validateVoiceItem(item, authorMemberId);
+      const v = validateVoiceItem(item, authorMemberId, subAccountId);
       if (v) voices.push(v);
     } else if (kind === "file" && files.length < MAX_FILES_PER_POST) {
-      const v = validateFileItem(item, authorMemberId);
+      const v = validateFileItem(item, authorMemberId, subAccountId);
       if (v) files.push(v);
     } else if (kind === "gif" && gifs.length < MAX_GIFS_PER_POST) {
       const v = validateGifItem(item, authorMemberId);
       if (v) gifs.push(v);
-    } else if (kind === "video-link" && videoLinks.length < MAX_VIDEO_LINKS_PER_POST) {
+    } else if (
+      kind === "video-link" &&
+      videoLinks.length < MAX_VIDEO_LINKS_PER_POST
+    ) {
       const v = validateVideoLinkItem(item, authorMemberId);
       if (v) videoLinks.push(v);
     }
@@ -248,6 +295,7 @@ export function normalizePostAttachments(
 export function normalizeCommentAttachments(
   raw: unknown,
   authorMemberId: string,
+  subAccountId: string
 ): MediaAttachment[] {
   if (!Array.isArray(raw)) return [];
   const images: MediaAttachment[] = [];
@@ -260,13 +308,16 @@ export function normalizeCommentAttachments(
     const kind = (item as { kind?: unknown }).kind;
 
     if (kind === "image" && images.length < MAX_IMAGES_PER_COMMENT) {
-      const v = validateImageItem(item, authorMemberId);
+      const v = validateImageItem(item, authorMemberId, subAccountId);
       if (v) images.push(v);
-    } else if (kind === "voice" && voices.length < MAX_VOICE_NOTES_PER_COMMENT) {
-      const v = validateVoiceItem(item, authorMemberId);
+    } else if (
+      kind === "voice" &&
+      voices.length < MAX_VOICE_NOTES_PER_COMMENT
+    ) {
+      const v = validateVoiceItem(item, authorMemberId, subAccountId);
       if (v) voices.push(v);
     } else if (kind === "file" && files.length < MAX_FILES_PER_COMMENT) {
-      const v = validateFileItem(item, authorMemberId);
+      const v = validateFileItem(item, authorMemberId, subAccountId);
       if (v) files.push(v);
     } else if (kind === "gif" && gifs.length < MAX_GIFS_PER_COMMENT) {
       const v = validateGifItem(item, authorMemberId);

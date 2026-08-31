@@ -29,22 +29,30 @@ export async function PATCH(
       postId: string;
       commentId: string;
     }>;
-  },
+  }
 ) {
   const { saId, groupId, postId, commentId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
-  const authorId = await getCommentAuthor({ subAccountId: saId, groupId, postId, commentId });
+  const authorId = await getCommentAuthor({
+    subAccountId: saId,
+    groupId,
+    postId,
+    commentId,
+  });
   if (!authorId) {
     return NextResponse.json({ error: "Comment not found" }, { status: 404 });
   }
   if (authorId !== access.member.id) {
     return NextResponse.json(
       { error: "You can only edit your own comments" },
-      { status: 403 },
+      { status: 403 }
     );
   }
 
@@ -57,12 +65,16 @@ export async function PATCH(
 
   const html = body.body?.trim() ?? "";
   const visibleLength = aboutPlainTextLength(html);
-  const attachments = normalizeCommentAttachments(body.attachments, access.member.id);
+  const attachments = normalizeCommentAttachments(
+    body.attachments,
+    access.member.id,
+    saId
+  );
 
   if (visibleLength === 0 && attachments.length === 0) {
     return NextResponse.json(
       { error: "Write something, or attach a photo, voice note, or file" },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (visibleLength > 5000) {
@@ -95,12 +107,15 @@ export async function DELETE(
       postId: string;
       commentId: string;
     }>;
-  },
+  }
 ) {
   const { saId, groupId, postId, commentId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
   const authorId = await getCommentAuthor({
@@ -116,10 +131,15 @@ export async function DELETE(
   if (!isAuthor && access.membership.role !== "moderator") {
     return NextResponse.json(
       { error: "You can only delete your own comments" },
-      { status: 403 },
+      { status: 403 }
     );
   }
 
-  await deleteCommentServerSide({ subAccountId: saId, groupId, postId, commentId });
+  await deleteCommentServerSide({
+    subAccountId: saId,
+    groupId,
+    postId,
+    commentId,
+  });
   return NextResponse.json({ ok: true });
 }

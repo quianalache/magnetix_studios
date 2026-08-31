@@ -1,22 +1,31 @@
 import { NextResponse } from "next/server";
 import { requireGroupApiAccess } from "@/lib/community/member-context";
-import { createPostServerSide, buildFeedPoll } from "@/lib/server/community-feed-service";
+import {
+  createPostServerSide,
+  buildFeedPoll,
+} from "@/lib/server/community-feed-service";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import { normalizePostAttachments } from "@/lib/community/normalize-post-attachments";
 import { normalizePollDraft } from "@/lib/community/normalize-poll";
-import { getChannelByName, getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
+import {
+  getChannelByName,
+  getInaccessibleChannelNames,
+} from "@/lib/server/community-channels-service";
 
 export const dynamic = "force-dynamic";
 
 /** Member: create a feed post. */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string; groupId: string }> },
+  { params }: { params: Promise<{ saId: string; groupId: string }> }
 ) {
   const { saId, groupId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
   let body: {
@@ -37,7 +46,10 @@ export async function POST(
   // regardless of whether the composer's Poll icon was correctly hidden
   // for this member; hiding the icon is UX, not the security boundary.
   if (body.poll != null && access.membership.role !== "moderator") {
-    return NextResponse.json({ error: "Only moderators can create a poll" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Only moderators can create a poll" },
+      { status: 403 }
+    );
   }
   let poll;
   try {
@@ -45,7 +57,7 @@ export async function POST(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Invalid poll" },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -57,7 +69,10 @@ export async function POST(
   // actually enforced it either — both are fixed together here.
   const title = body.title?.trim() ?? "";
   if (!title) {
-    return NextResponse.json({ error: "A post needs a title" }, { status: 400 });
+    return NextResponse.json(
+      { error: "A post needs a title" },
+      { status: 400 }
+    );
   }
 
   // `body.body` is real HTML from the Community rich-text composer
@@ -69,7 +84,11 @@ export async function POST(
   // duplicated.
   const html = body.body?.trim() ?? "";
   const visibleLength = aboutPlainTextLength(html);
-  const attachments = normalizePostAttachments(body.attachments, access.member.id);
+  const attachments = normalizePostAttachments(
+    body.attachments,
+    access.member.id,
+    saId
+  );
 
   // Phase C: a post is valid with visible text OR at least one real
   // attachment — image/voice-only posts are real content, not empty
@@ -83,7 +102,7 @@ export async function POST(
   if (visibleLength === 0 && attachments.length === 0 && !poll) {
     return NextResponse.json(
       { error: "Write something, attach a photo or voice note, or add a poll" },
-      { status: 400 },
+      { status: 400 }
     );
   }
   if (visibleLength > 10000) {
@@ -110,13 +129,16 @@ export async function POST(
       isModerator,
     });
     if (inaccessible.has(category)) {
-      return NextResponse.json({ error: "You don't have access to this channel" }, { status: 403 });
+      return NextResponse.json(
+        { error: "You don't have access to this channel" },
+        { status: 403 }
+      );
     }
     const channel = await getChannelByName(saId, groupId, category);
     if (channel?.readOnly) {
       return NextResponse.json(
         { error: "Only moderators can post in this channel" },
-        { status: 403 },
+        { status: 403 }
       );
     }
   }
@@ -151,6 +173,9 @@ export async function POST(
   // `canManage` are always true for their own optimistic render.
   return NextResponse.json({
     ok: true,
-    post: { ...post, poll: post.poll ? buildFeedPoll(post.poll, [], true) : undefined },
+    post: {
+      ...post,
+      poll: post.poll ? buildFeedPoll(post.poll, [], true) : undefined,
+    },
   });
 }

@@ -94,7 +94,8 @@ export async function POST(
   const visibleLength = aboutPlainTextLength(html);
   const attachments = normalizeCommentAttachments(
     body.attachments,
-    access.member.id
+    access.member.id,
+    saId
   );
 
   if (visibleLength === 0 && attachments.length === 0) {

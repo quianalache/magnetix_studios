@@ -31,12 +31,17 @@ export const dynamic = "force-dynamic";
  */
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ saId: string; groupId: string; postId: string }> },
+  {
+    params,
+  }: { params: Promise<{ saId: string; groupId: string; postId: string }> }
 ) {
   const { saId, groupId, postId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
   let body: {
@@ -66,7 +71,7 @@ export async function PATCH(
     // existing convention for "moderator can act on any post" in this
     // codebase, not a new role concept.
     const postRef = getAdminDb().doc(
-      `subAccounts/${saId}/communityGroups/${groupId}/posts/${postId}`,
+      `subAccounts/${saId}/communityGroups/${groupId}/posts/${postId}`
     );
     const snap = await postRef.get();
     if (!snap.exists) {
@@ -76,7 +81,7 @@ export async function PATCH(
     if (!isAuthor && access.membership.role !== "moderator") {
       return NextResponse.json(
         { error: "You can only edit your own posts" },
-        { status: 403 },
+        { status: 403 }
       );
     }
 
@@ -87,8 +92,14 @@ export async function PATCH(
     // existence is a moderator decision, not a plain post-ownership one
     // (an author editing their OWN post still can't add/change a poll
     // unless they're also a moderator).
-    if (body.edit.poll !== undefined && access.membership.role !== "moderator") {
-      return NextResponse.json({ error: "Only moderators can change a poll" }, { status: 403 });
+    if (
+      body.edit.poll !== undefined &&
+      access.membership.role !== "moderator"
+    ) {
+      return NextResponse.json(
+        { error: "Only moderators can change a poll" },
+        { status: 403 }
+      );
     }
     let poll: ReturnType<typeof normalizePollEdit>;
     try {
@@ -96,7 +107,7 @@ export async function PATCH(
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : "Invalid poll" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -105,18 +116,27 @@ export async function PATCH(
     // this separate route, not through createPostServerSide.
     const title = body.edit.title?.trim() ?? "";
     if (!title) {
-      return NextResponse.json({ error: "A post needs a title" }, { status: 400 });
+      return NextResponse.json(
+        { error: "A post needs a title" },
+        { status: 400 }
+      );
     }
 
     const html = body.edit.body?.trim() ?? "";
     const visibleLength = aboutPlainTextLength(html);
-    const attachments = normalizePostAttachments(body.edit.attachments, access.member.id);
+    const attachments = normalizePostAttachments(
+      body.edit.attachments,
+      access.member.id,
+      saId
+    );
     const effectivePoll = poll === undefined ? existing.poll : poll;
 
     if (visibleLength === 0 && attachments.length === 0 && !effectivePoll) {
       return NextResponse.json(
-        { error: "Write something, attach a photo or voice note, or add a poll" },
-        { status: 400 },
+        {
+          error: "Write something, attach a photo or voice note, or add a poll",
+        },
+        { status: 400 }
       );
     }
     if (visibleLength > 10000) {
@@ -141,7 +161,10 @@ export async function PATCH(
         isModerator,
       });
       if (inaccessible.has(category)) {
-        return NextResponse.json({ error: "You don't have access to this channel" }, { status: 403 });
+        return NextResponse.json(
+          { error: "You don't have access to this channel" },
+          { status: 403 }
+        );
       }
     }
 
@@ -167,10 +190,18 @@ export async function PATCH(
     // own vote is looked up for real rather than assumed empty.
     let responsePoll: ReturnType<typeof buildFeedPoll> | undefined;
     if (post.poll) {
-      const votes = await viewerPollVotes(saId, groupId, [postId], access.member.id);
+      const votes = await viewerPollVotes(
+        saId,
+        groupId,
+        [postId],
+        access.member.id
+      );
       responsePoll = buildFeedPoll(post.poll, votes.get(postId) ?? null, true);
     }
-    return NextResponse.json({ ok: true, post: { ...post, poll: responsePoll } });
+    return NextResponse.json({
+      ok: true,
+      post: { ...post, poll: responsePoll },
+    });
   }
 
   // Pin/unpin — moderator-only, both targets.
@@ -195,18 +226,27 @@ export async function PATCH(
     const status = message === "Post not found" ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }
-  return NextResponse.json({ ok: true, pinned: body.pinned === true, pinTarget });
+  return NextResponse.json({
+    ok: true,
+    pinned: body.pinned === true,
+    pinTarget,
+  });
 }
 
 /** Member: delete a post (author) or moderator. */
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ saId: string; groupId: string; postId: string }> },
+  {
+    params,
+  }: { params: Promise<{ saId: string; groupId: string; postId: string }> }
 ) {
   const { saId, groupId, postId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
 
   // Confirm the group still resolves (defensive) + read the post author.
@@ -221,7 +261,7 @@ export async function DELETE(
   if (!isAuthor && access.membership.role !== "moderator") {
     return NextResponse.json(
       { error: "You can only delete your own posts" },
-      { status: 403 },
+      { status: 403 }
     );
   }
 

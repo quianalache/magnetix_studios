@@ -28,6 +28,7 @@ import type {
   Member,
 } from "@/types/community";
 import type { MediaAttachment } from "@/types/media-attachment";
+import { ownedAttachmentStoragePath } from "@/lib/community/attachment-provenance";
 
 /**
  * Server-side feed service (Admin SDK). Members are not Firebase users, so the
@@ -867,22 +868,9 @@ export async function setPostPinServerSide(opts: {
  */
 /** Attachment storage path, or null for kinds with nothing of ours to
  *  clean up (gif = provider CDN URL, video-link = metadata only). */
-function attachmentStoragePath(a: MediaAttachment): string | null {
-  switch (a.kind) {
-    case "image":
-      return a.image.storagePath;
-    case "voice":
-      return a.voice.storagePath;
-    case "file":
-      return a.file.storagePath;
-    case "gif":
-    case "video-link":
-      return null;
-  }
-}
-
 async function deleteAttachmentStorage(
-  attachments: MediaAttachment[] | undefined
+  attachments: MediaAttachment[] | undefined,
+  subAccountId: string
 ) {
   if (!attachments?.length) return;
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
@@ -890,7 +878,7 @@ async function deleteAttachmentStorage(
   const bucket = getStorage().bucket(bucketName);
   await Promise.allSettled(
     attachments.map(async (a) => {
-      const storagePath = attachmentStoragePath(a);
+      const storagePath = ownedAttachmentStoragePath(a, subAccountId);
       if (!storagePath) return;
       try {
         await bucket.file(storagePath).delete();
@@ -944,11 +932,13 @@ export async function updatePostServerSide(
 
   const newPaths = new Set(
     (input.attachments ?? [])
-      .map(attachmentStoragePath)
+      .map((attachment) =>
+        ownedAttachmentStoragePath(attachment, input.subAccountId)
+      )
       .filter((p): p is string => !!p)
   );
   const removed = (existing.attachments ?? []).filter((a) => {
-    const p = attachmentStoragePath(a);
+    const p = ownedAttachmentStoragePath(a, input.subAccountId);
     return p ? !newPaths.has(p) : false;
   });
 
@@ -987,7 +977,7 @@ export async function updatePostServerSide(
   await ref.update(updates);
   // Best-effort, after the write succeeds — a Storage hiccup here must
   // never leave the post itself in a broken/half-saved state.
-  await deleteAttachmentStorage(removed);
+  await deleteAttachmentStorage(removed, input.subAccountId);
 
   // Built from `input`, not `updates` — `updates.attachments` may be a
   // FieldValue.delete() sentinel, not a real value safe to hand back to
@@ -1114,7 +1104,7 @@ export async function deletePostServerSide(opts: {
   const ref = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
   const snap = await ref.get();
   const attachments = (snap.data() as CommunityPost | undefined)?.attachments;
-  await deleteAttachmentStorage(attachments);
+  await deleteAttachmentStorage(attachments, opts.subAccountId);
 
   // Comments & Replies (2026-08-19) — `recursiveDelete` below correctly
   // wipes every comment/reply DOCUMENT (it's a Firestore-only operation),
@@ -1129,7 +1119,7 @@ export async function deletePostServerSide(opts: {
   const commentAttachments = commentsSnap.docs.flatMap(
     (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? []
   );
-  await deleteAttachmentStorage(commentAttachments);
+  await deleteAttachmentStorage(commentAttachments, opts.subAccountId);
 
   // Recursive delete cleans up the comments + likes + pollVotes
   // subcollections — no separate poll-response cleanup step needed. This
@@ -1193,7 +1183,7 @@ export async function deleteCommentServerSide(opts: {
   const allAttachments = allSnaps.flatMap(
     (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? []
   );
-  await deleteAttachmentStorage(allAttachments);
+  await deleteAttachmentStorage(allAttachments, opts.subAccountId);
 
   await Promise.all(allSnaps.map((d) => db.recursiveDelete(d.ref)));
   await postRef.update({
@@ -1229,11 +1219,13 @@ export async function updateCommentServerSide(opts: {
 
   const newPaths = new Set(
     (opts.attachments ?? [])
-      .map(attachmentStoragePath)
+      .map((attachment) =>
+        ownedAttachmentStoragePath(attachment, opts.subAccountId)
+      )
       .filter((p): p is string => !!p)
   );
   const removed = (existing.attachments ?? []).filter((a) => {
-    const p = attachmentStoragePath(a);
+    const p = ownedAttachmentStoragePath(a, opts.subAccountId);
     return p ? !newPaths.has(p) : false;
   });
 
@@ -1255,7 +1247,7 @@ export async function updateCommentServerSide(opts: {
       : FieldValue.delete(),
     editedAt: FieldValue.serverTimestamp(),
   });
-  await deleteAttachmentStorage(removed);
+  await deleteAttachmentStorage(removed, opts.subAccountId);
 
   return { ok: true, sanitizedBody };
 }
