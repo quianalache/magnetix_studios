@@ -509,6 +509,33 @@ export async function updatePlanForAgency(input: {
     }
   }
 
+  // Unarchive → reactivate the plan's CURRENT price(s) so checkout (manual
+  // assignment and public signup alike) works again. Only fires on a real
+  // archived -> active transition, never on an ordinary edit that happens to
+  // resend status:"active" — and it's a plain Stripe Price activation, not a
+  // price change, so it never mints a new Price and never touches historical/
+  // grandfathered prices from a prior price edit (those were already
+  // deactivated at edit time and aren't referenced by `stripePriceId`/
+  // `stripeAnnualPriceId` anymore).
+  //
+  // Deliberately NOT `.catch()`-and-continue like the archive block above:
+  // archiving is tolerant of a failed deactivation because the worst case is
+  // a stale-but-inert Price nobody can reach (the plan is archived either
+  // way). Unarchiving is the opposite risk — silently writing status:"active"
+  // to Firestore while Stripe still has the Price inactive would show the
+  // plan as active/purchasable in the Agency UI while every real checkout
+  // (manual or public) actually fails. A thrown error here aborts before
+  // `ref.update(updates)` below, so the plan visibly stays archived in
+  // Firestore rather than lying about being active.
+  if (input.status === "active" && plan.status === "archived" && stripe) {
+    if (plan.stripePriceId) {
+      await stripe.prices.update(plan.stripePriceId, { active: true });
+    }
+    if (plan.stripeAnnualPriceId) {
+      await stripe.prices.update(plan.stripeAnnualPriceId, { active: true });
+    }
+  }
+
   await ref.update(updates);
 
   // Gate edits propagate to every sub-account currently ON this plan —

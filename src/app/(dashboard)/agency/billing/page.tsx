@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { toast } from "sonner";
-import { Archive, Copy, CreditCard, Globe2, Loader2, Pencil, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, Copy, CreditCard, Globe2, Loader2, Pencil, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
@@ -136,6 +136,25 @@ export default function AgencyBillingPage() {
       refreshPlans();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to archive.");
+    }
+  }
+
+  // Reactivates an archived plan's current Stripe price(s) and flips it back
+  // to active. If Stripe reactivation fails, the API call fails outright
+  // (the plan stays archived) rather than showing a false "active" state.
+  async function handleUnarchive(plan: BillingPlanResponse) {
+    try {
+      const res = await fetch(`/api/agency/plans/${plan.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "active" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to unarchive.");
+      toast.success(`${plan.name} is active again.`);
+      refreshPlans();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to unarchive.");
     }
   }
 
@@ -318,7 +337,7 @@ export default function AgencyBillingPage() {
                       <Pencil className="mr-1 h-3 w-3" />
                       Edit
                     </Button>
-                    {plan.status === "active" && (
+                    {plan.status === "active" ? (
                       <Button
                         type="button"
                         size="sm"
@@ -328,6 +347,17 @@ export default function AgencyBillingPage() {
                       >
                         <Archive className="mr-1 h-3 w-3" />
                         Archive
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2.5 text-xs"
+                        onClick={() => handleUnarchive(plan)}
+                      >
+                        <ArchiveRestore className="mr-1 h-3 w-3" />
+                        Unarchive
                       </Button>
                     )}
                   </div>
