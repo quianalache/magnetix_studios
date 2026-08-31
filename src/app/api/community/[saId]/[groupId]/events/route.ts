@@ -9,6 +9,7 @@ import {
   listCommunityEventsServerSide,
   updateCommunityEventLifecycleServerSide,
 } from "@/lib/server/community-event-service";
+import { validateCommunityEventSchedule } from "@/lib/community/event-scheduling";
 
 export const dynamic = "force-dynamic";
 
@@ -86,30 +87,20 @@ export async function POST(
   const title = typeof body.title === "string" ? body.title.trim() : "";
   const timezone =
     typeof body.timezone === "string" ? body.timezone.trim() : "";
-  const startAt =
-    typeof body.startAt === "string" ? new Date(body.startAt) : null;
-  const endAt = typeof body.endAt === "string" ? new Date(body.endAt) : null;
+  const schedule = validateCommunityEventSchedule({
+    startAt: typeof body.startAt === "string" ? body.startAt : "",
+    endAt: typeof body.endAt === "string" ? body.endAt : "",
+    timezone,
+  });
   const locationType =
     body.locationType === "external" || body.locationType === "none"
       ? body.locationType
       : "magnetix_live";
   if (!title)
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
-  if (
-    !timezone ||
-    !startAt ||
-    !endAt ||
-    Number.isNaN(startAt.getTime()) ||
-    Number.isNaN(endAt.getTime()) ||
-    endAt <= startAt
-  )
+  if (!timezone || !schedule.ok)
     return NextResponse.json(
-      { error: "Choose a valid start and end time." },
-      { status: 400 }
-    );
-  if (startAt <= new Date())
-    return NextResponse.json(
-      { error: "Event must start in the future." },
+      { error: schedule.ok ? "Choose a valid timezone." : schedule.error },
       { status: 400 }
     );
   const channel =
@@ -128,10 +119,19 @@ export async function POST(
       title,
       description:
         typeof body.description === "string" ? body.description : null,
-      startAt,
-      endAt,
+      startAt: schedule.startAt,
+      endAt: schedule.endAt,
       timezone,
       channel,
+      accentColor:
+        typeof body.accentColor === "string" &&
+        /^#[0-9a-f]{6}$/i.test(body.accentColor)
+          ? body.accentColor
+          : null,
+      thumbnailUrl:
+        typeof body.thumbnailUrl === "string" ? body.thumbnailUrl : null,
+      hideAttendees: body.hideAttendees === true,
+      reminderEnabled: body.reminderEnabled === true,
       locationType,
       externalUrl:
         typeof body.externalUrl === "string" ? body.externalUrl : null,

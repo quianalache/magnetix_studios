@@ -65,6 +65,7 @@ export default async function StaffCommunityEventsPage({
         saId={saId}
         groupId={group.id}
         groupSlug={group.slug}
+        staffGroupId={groupId}
         categories={group.categories}
         initialEvents={events.map(serialize)}
         moderator={membership.role === "moderator"}

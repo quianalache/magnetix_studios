@@ -69,6 +69,10 @@ export async function createCommunityEventServerSide(input: {
   endAt: Date;
   timezone: string;
   channel?: string | null;
+  accentColor?: string | null;
+  thumbnailUrl?: string | null;
+  hideAttendees?: boolean;
+  reminderEnabled?: boolean;
   locationType: CommunityEventLocationType;
   externalUrl?: string | null;
   liveMode?: "meeting" | "broadcast";
@@ -100,6 +104,10 @@ export async function createCommunityEventServerSide(input: {
     timezone: input.timezone,
     status: "scheduled" as const,
     channel: input.channel ?? null,
+    accentColor: input.accentColor ?? null,
+    thumbnailUrl: input.thumbnailUrl ?? null,
+    hideAttendees: input.hideAttendees === true,
+    reminderEnabled: input.reminderEnabled === true,
     locationType: input.locationType,
     externalUrl:
       input.locationType === "external"

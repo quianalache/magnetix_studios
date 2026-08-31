@@ -110,6 +110,12 @@ export interface CommunityEvent {
   timezone: string;
   status: CommunityEventStatus;
   channel: string | null;
+  /** Optional calendar-only accent; Community theme remains authoritative. */
+  accentColor?: string | null;
+  thumbnailUrl?: string | null;
+  hideAttendees?: boolean;
+  /** Persisted preference only until a Community event reminder dispatcher exists. */
+  reminderEnabled?: boolean;
   locationType: CommunityEventLocationType;
   externalUrl: string | null;
   liveSessionId: string | null;

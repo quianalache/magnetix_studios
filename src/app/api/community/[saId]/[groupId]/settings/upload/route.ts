@@ -31,12 +31,15 @@ const MAX_BYTES = 5 * 1024 * 1024;
  */
 export async function POST(
   request: Request,
-  { params }: { params: Promise<{ saId: string; groupId: string }> },
+  { params }: { params: Promise<{ saId: string; groupId: string }> }
 ) {
   const { saId, groupId } = await params;
   const access = await requireGroupApiAccess(saId, groupId);
   if (access.kind === "error") {
-    return NextResponse.json({ error: access.message }, { status: access.status });
+    return NextResponse.json(
+      { error: access.message },
+      { status: access.status }
+    );
   }
   if (access.membership.role !== "moderator") {
     return NextResponse.json({ error: "Moderators only" }, { status: 403 });
@@ -46,7 +49,7 @@ export async function POST(
   if (!bucketName) {
     return NextResponse.json(
       { error: "Image uploads aren't configured on this deployment." },
-      { status: 503 },
+      { status: 503 }
     );
   }
 
@@ -59,7 +62,12 @@ export async function POST(
     const k = form.get("kind");
     if (
       typeof k === "string" &&
-      (k === "logo" || k === "cover" || k === "favicon" || k === "about" || k === "card")
+      (k === "logo" ||
+        k === "cover" ||
+        k === "favicon" ||
+        k === "about" ||
+        k === "card" ||
+        k === "event")
     )
       kind = k;
   } catch {
@@ -69,12 +77,15 @@ export async function POST(
     return NextResponse.json({ error: "No file" }, { status: 400 });
   }
   if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "Choose an image file" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Choose an image file" },
+      { status: 400 }
+    );
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
       { error: "Image is too large — keep it under 5 MB." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { listCommunityEventsServerSide } from "@/lib/server/community-event-service";
+import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 import {
   CommunityEventsView,
   type CommunityEventViewModel,
@@ -49,7 +50,14 @@ export default async function CommunityEventsPage({
     avatarUrl: member.avatarUrl,
     level: membership.level,
   };
-  const events = await listCommunityEventsServerSide(saId, group.id);
+  const [events, inaccessible] = await Promise.all([
+    listCommunityEventsServerSide(saId, group.id),
+    getInaccessibleChannelNames({
+      subAccountId: saId,
+      groupId: group.id,
+      isModerator: membership.role === "moderator",
+    }),
+  ]);
   return (
     <CommunityShell
       saId={saId}
@@ -65,7 +73,14 @@ export default async function CommunityEventsPage({
         groupSlug={group.slug}
         pretty={pretty}
         categories={group.categories}
-        initialEvents={events.map(serialize)}
+        initialEvents={events
+          .filter(
+            (event) =>
+              membership.role === "moderator" ||
+              !event.channel ||
+              !inaccessible.has(event.channel)
+          )
+          .map(serialize)}
         moderator={membership.role === "moderator"}
       />
     </CommunityShell>
