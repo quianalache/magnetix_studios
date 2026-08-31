@@ -110,13 +110,34 @@ const BOT_UA_RE =
   /bot|spider|crawl|slurp|facebookexternalhit|pingdom|uptimerobot|headlesschrome|phantomjs/i;
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "Access-Control-Allow-Origin": origin ?? "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
+  // Production QA (2026-08-31) found a real defect here: navigator.sendBeacon
+  // — the snippet's PRIMARY delivery method, tried before the fetch fallback
+  // — is unconditionally sent with `credentials: "include"` per the Beacon
+  // API spec; that's not something the caller can opt out of. A browser
+  // refuses to complete ANY credentialed cross-origin request unless the
+  // response carries `Access-Control-Allow-Credentials: true`, and per spec
+  // that header is only meaningful (and only honored by browsers) alongside
+  // a SPECIFIC `Access-Control-Allow-Origin` — never "*". So this is safe to
+  // set unconditionally: when `origin` is present (every real browser
+  // sendBeacon/fetch call always sends one) it's already reflected verbatim
+  // above, satisfying that requirement; the "*" fallback only ever fires for
+  // non-browser callers (curl, a server) that send no Origin header at all,
+  // where credentials are moot. Confirmed live: without this header, every
+  // real external sales page's beacon silently failed at the CORS preflight
+  // — reproduced via a real cross-origin browser load, not just curl (curl
+  // doesn't enforce CORS, which is why every earlier same-origin-equivalent
+  // test passed despite this bug). This endpoint reads no cookie for its own
+  // logic either way — it's a public, anonymous, analytics-only route — so
+  // there's no confidentiality downside to accepting credentials.
+  if (origin) headers["Access-Control-Allow-Credentials"] = "true";
+  return headers;
 }
 
 function trim(v: unknown, max = 500): string | null {
