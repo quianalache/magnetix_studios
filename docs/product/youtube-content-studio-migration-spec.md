@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-**Phase 0 (import architecture + data rescue) is COMPLETE.** The owner's real Channel Brain, 2 Saved Ideas, and 15 Video Projects are live in Firestore under `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main"), with all 7 real voice recordings migrated to Firebase Storage. Full read-back reconciliation against the source export passed (967 field-level checks; the 2 that initially appeared to fail were both confirmed, by direct inspection, to be artifacts of the verification script's own comparison method, not real discrepancies — see the Phase 0 addendum). Idempotency was proven with a real second live run: identical Firestore doc counts, zero duplicate Storage objects. No Channel Brain/Video Workspace UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum at the end of this document for the full importer spec, dry-run findings, and final reconciliation results.
+**Phase 0 (import architecture + data rescue) is COMPLETE**, and its Channel Brain data has since been **promoted to a shared, sub-account-owned Business Brain architecture** (below) — Channel Brain is no longer conceptually owned by YouTube Content Studio. The owner's real strategic context (Creator Vision, Audience, Offers ×3, Frameworks ×1, Stories+Proof ×1, Brand Voice, Topics ×1, Subtopics ×1, Positioning) is canonically at `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`; the historical `ytcs/brain` location is retained, unmutated except for additive deprecation markers, and is no longer the editable source. 2 Saved Ideas and 15 Video Projects remain YTCS-specific and stay at `ytcsIdeas`/`ytcsVideos`, unaffected by this move. All 7 real voice recordings remain migrated to Firebase Storage from Phase 0. No Channel Brain/Business Brain UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum and the **Business Brain Architecture** section (after §26) for full details.
 
 ## SOURCE MATERIAL
 
@@ -43,6 +43,7 @@ Where sources disagreed, this document does not silently pick a winner — see *
 - Titles: final product uses **Title Prompt Builder only** — no in-app AI title generator going forward. Real historical in-app-generated titles exist in the export and must be preserved as read-only legacy data, not deleted, not resurrected as an active feature. (§12, §18)
 - Script Prompt Builder stays deterministic prompt assembly, never an in-app script writer; regenerating a prompt must never overwrite the Final Script Draft (`compiledScript`). (§9)
 - Positioning stays optional, never blocks video creation, and is **not** injected into Script Prompt Builder in this migration. (§17)
+- **Channel Brain is now Business Brain** — a shared, sub-account-owned strategic context layer, not YouTube-specific. Canonical path: `subAccounts/{subAccountId}/businessBrain/main`. See the **Business Brain Architecture** section after §26 for the full rationale, service layer, and compatibility strategy.
 
 ## UNRESOLVED DECISIONS
 
@@ -56,11 +57,13 @@ Kept genuinely open — see §20 for full detail:
 
 ## DATA MIGRATION STATUS
 
-**Live migration executed 2026-09-01 against `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main").** Written: 1 Channel Brain (`ytcs/brain`), 2 Saved Ideas (`ytcsIdeas/{id}`), 15 Video Projects (`ytcsVideos/{id}`), 7 voice-note audio files in Firebase Storage under `ytcs/xvnedVCmQpEvHrcPhEDI/voice-notes/{voiceNoteId}.webm` with only Storage references (never inline base64) left on the Firestore records. Full read-back verification against the source export passed. Rerun idempotency proven directly (a second live run produced identical Firestore doc counts and exactly 7 Storage objects, not 14). The original export file (`~/Downloads/youtube-studio-backup-2026-09-01.json`) is unmodified — md5 confirmed identical before and after every run. Full results in the Phase 0 addendum.
+**Live migration executed 2026-09-01 against `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main").** Written: 1 Channel Brain (originally `ytcs/brain`), 2 Saved Ideas (`ytcsIdeas/{id}`), 15 Video Projects (`ytcsVideos/{id}`), 7 voice-note audio files in Firebase Storage under `ytcs/xvnedVCmQpEvHrcPhEDI/voice-notes/{voiceNoteId}.webm` with only Storage references (never inline base64) left on the Firestore records. Full read-back verification against the source export passed. Rerun idempotency proven directly (a second live run produced identical Firestore doc counts and exactly 7 Storage objects, not 14). The original export file (`~/Downloads/youtube-studio-backup-2026-09-01.json`) is unmodified — md5 confirmed identical before and after every run. Full results in the Phase 0 addendum.
+
+**Same day, second migration:** the Channel Brain portion of that data was moved to its new canonical location, `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`. Source (`ytcs/brain`) retained, unmutated except additive `deprecated`/`supersededBy` markers. 25 field-level/count/no-duplicate checks passed. Saved Ideas and Video Projects are unaffected — still exactly 2 and 15 respectively, still at their original YTCS-specific paths. Full results in the **Business Brain Architecture** section after §26.
 
 ## NEXT APPROVED TASK
 
-None yet. Phase 0 is done; Phase 1 (Channel Brain UI) has no approval and should not start automatically.
+None yet. Business Brain architecture/migration is done; Business Brain UI, YouTube Content Studio Phase 1, and Content Alchemy Lab all have no approval and should not start automatically.
 
 ---
 
@@ -1475,3 +1478,53 @@ A second `--live` run was executed against the same export and sub-account. Resu
 - No client-reachable import path was ever created; the importer remains a local admin-credential script only.
 
 **Phase 0 is complete.** Everything the task specified — importer, dry-run validation, live write, field-by-field no-data-loss verification, idempotency proof, security posture, unrelated-work isolation — is done.
+
+---
+
+# Business Brain Architecture (2026-09-01)
+
+## Product decision
+
+The 8 sections Phase 0 imported as YouTube Content Studio's "Channel Brain" — Creator Vision, Audience, Offers, Frameworks, Stories + Proof, Brand Voice, Topics + Subtopics, Positioning — are not YouTube-specific data. They're the sub-account's general strategic context, useful to YouTube Content Studio, the future Content Alchemy Lab, and any other current or future AI-assisted content feature (Social Planner AI, email AI, sales copy tools). Canonical ownership moves out of YouTube Content Studio to the sub-account itself, under the name **Business Brain**. "Channel Brain" remains the correct historical/YouTube-facing term wherever this document (§4, §5, §9, etc.) describes what YouTube Content Studio's screens looked like and did live — those sections are unchanged by this move, only where the data canonically lives has changed.
+
+## Canonical path
+
+```
+subAccounts/{subAccountId}/businessBrain/main
+```
+
+**Why this path:** matches the established sub-account-scoping convention already used throughout the codebase (`subAccounts/{id}/{collectionName}` — confirmed via `src/lib/community/*.ts`'s member/token/settings subcollections, and `src/lib/server/content-library-service.ts`'s sub-account-filtered collections). A dedicated `businessBrain` collection (rather than a field on the sub-account root doc) keeps the sub-account document itself uncluttered and leaves room for natural future siblings (e.g. a `businessBrain/settings` doc) without restructuring. A fixed doc id (`main`) reflects that this is genuinely a singleton per sub-account, not a list — the same shape Phase 0 already used for `ytcs/brain`, just generalized and moved up a level to where it actually belongs.
+
+**Reuse check performed first, per instruction:** searched for any existing shared business/brand/profile-context concept in the codebase (`brandProfile`, `businessProfile`, `brandContext`, `businessContext`, etc.) — found none. This is a genuinely new shared domain, not a duplicate of something that already existed. Existing patterns reused instead: the `subAccounts/{id}/{collection}` scoping convention, the `"server-only"` + `getAdminDb()` service-file pattern (`src/lib/server/content-library-service.ts` as the closest precedent for a typed, sub-account-scoped Firestore reader), and the dry-run/`--live` migration-script pattern already established by `scripts/migrate-energetic-profiles.mjs` and Phase 0's own `scripts/migrate-youtube-content-studio.mjs`.
+
+## Files
+
+- `src/types/business-brain.ts` — the `BusinessBrain` interface and its 8 section types (`BusinessBrainVision`, `BusinessBrainAudience`, `BusinessBrainOffer`, `BusinessBrainFramework`, `BusinessBrainStory`, `BusinessBrainVoice`, `BusinessBrainTopic`, `BusinessBrainSubtopic`, `BusinessBrainPositioning`), a `BusinessBrainLegacy` type for the superseded `method`/`pillars` sections, and the canonical path helper `businessBrainDocPath(subAccountId)`. Every field name is taken verbatim from this document's §4 (the real, already-reconciled schema) — nothing simplified or renamed casually.
+- `src/lib/server/business-brain-service.ts` — `getBusinessBrain(subAccountId): Promise<BusinessBrain | null>`, the one shared server-side read path. Deliberately does not offer a "selected sections" API — the whole document is small (~26KB) and a single Firestore read; callers destructure what they need (e.g. YTCS's Script Prompt Builder would do `const { audience, voice, vision } = await getBusinessBrain(id)`). Deliberately does **not** fall back to reading `ytcs/brain` — that would permanently couple a supposedly-generic shared reader to a YouTube-specific legacy detail, contradicting the whole point of this move.
+- `scripts/migrate-business-brain.mjs` — the one-time migration script, same dry-run/`--live` pattern as every other migration script in this repo.
+
+## Migration result
+
+Ran dry-run, then `--live`, against `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main") — the same sub-account Phase 0 targeted. `subAccounts/xvnedVCmQpEvHrcPhEDI/ytcs/brain` existed and was confirmed as the source; its full content (all 9 real top-level keys: `vision`, `audience`, `offers`, `frameworks`, `stories`, `voice`, `topics`, `subtopics`, `positioning`, plus `legacy` and Phase 0's own `migratedFromExport`/`migratedAt` provenance fields) was copied verbatim to `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`, with two new provenance fields added (`movedFromYtcsBrain: true`, `movedFromYtcsBrainAt`). The source doc was then updated **additively only** (`.set(..., {merge: true})`) with `deprecated: true` and `supersededBy: "subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main"` — every one of its original fields is untouched and still readable at the old path, but it is now explicitly marked as no longer the editable source.
+
+## Field-level reconciliation — 25/25 checks passed
+
+Existence of both docs; all 3 deprecation markers on the old doc; every original field byte-identical between old and new (ignoring only the deprecation markers on one side and the new provenance markers on the other); 8 canonical sections present; exact counts — 3 offers, 1 framework, 1 story, 1 topic, 1 subtopic; both legacy sections (`method`, `pillars`) preserved verbatim; zero unknown fields introduced; exactly 1 doc in the `businessBrain` collection and exactly 1 doc in the `ytcs` collection (no duplicate logical Brain records, old or new); the shared reader's own query logic sanity-checked directly against the written data; and confirmation that `ytcsIdeas` (2 docs) and `ytcsVideos` (15 docs) were completely unaffected by this migration.
+
+## Compatibility strategy
+
+**One canonical, editable Business Brain exists going forward: `subAccounts/{id}/businessBrain/main`.** The historical `ytcs/brain` doc is retained (never deleted — a real historical record, and the source this migration itself was reconciled against) but is now explicitly marked `deprecated`/`supersededBy` rather than silently left ambiguous. No code in this repo currently reads `ytcs/brain` at all (YTCS Phase 1 UI was never built), so there is no live consumer to redirect — the "compatibility" concern here is purely about not losing historical data and not leaving a second, un-marked, independently-editable copy lying around, both of which are satisfied. When YouTube Content Studio's Phase 1 is eventually built, it reads Business Brain via `getBusinessBrain(subAccountId)`, the same as any other future consumer (Content Alchemy Lab included) — it does not read or write `ytcs/brain`.
+
+## Relationship to YouTube Content Studio and Content Alchemy Lab
+
+YouTube Content Studio no longer conceptually owns the Brain. It remains the owner of everything genuinely YouTube-specific: `ytcsVideos` (video projects, generated Script Prompts, Final Script Drafts, Titles, Create Video status/checklists, Publish data, all historical legacy YTCS records), `ytcsIdeas` (Saved Ideas), and its own future Settings. When its Phase 1 is built, it becomes a *consumer* of `getBusinessBrain()`, exactly like any other module — nothing about §6–§16's documented screens, workflows, or field-level behavior changes; only where the Brain data itself lives changes. Content Alchemy Lab — not built this pass, per instruction — is designed to consume the same `getBusinessBrain()` function when it exists, so the two modules share one real context instead of each maintaining their own copy.
+
+## AI context future-proofing
+
+No special "give me sections X, Y, Z" API was built — deliberately, per "do not over-engineer." `getBusinessBrain(subAccountId)` returns the whole normalized object; a YTCS Script Prompt Builder implementation needing "Audience + Brand Voice + Creator Vision" does `const { audience, voice, vision } = await getBusinessBrain(id)`; a future Content Alchemy Lab needing "Audience + Brand Voice + Creator Vision + Topics + Offers" does the same with more destructured keys. Nothing about this shape blocks building a smarter selective-retrieval layer later if the document ever grows large enough to matter — at 26KB for the one real account that exists today, it doesn't yet.
+
+## QA summary
+
+All 15 items from this task's QA list were verified directly (not assumed): original `ytcs/brain` confirmed to exist before migration; new `businessBrain/main` confirmed created correctly; every real field confirmed preserved (25-check suite above); all nested records (offers/frameworks/stories/topics/subtopics/legacy) confirmed preserved; exact counts (3/1/1/1/1) confirmed; all 8 sections confirmed represented; no duplicate logical Brain records (exactly 1 doc in each of the two collections); the shared reader's logic confirmed correct against real written data; `ytcsIdeas`/`ytcsVideos` confirmed unaffected (2/15, unchanged); and the unrelated 55-file concurrent-session work confirmed untouched throughout (same count at every checkpoint in this pass). `npx eslint` clean on all 3 new files; `npx tsc --noEmit` clean (0 errors) across the whole project.
+
+**Business Brain architecture and migration are complete.** No Business Brain UI, no YouTube Content Studio Phase 1, no Content Alchemy Lab — none of these were started, per instruction.
