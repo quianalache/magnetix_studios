@@ -13,6 +13,10 @@ import type {
 } from "@/types/community";
 import { createPostServerSide } from "@/lib/server/community-feed-service";
 import { notifyCommunityLiveStarted } from "@/lib/server/notification-producers";
+import {
+  createCommunityLiveRecordingAsset,
+  stopCommunityLiveRecordingServerSide,
+} from "@/lib/server/community-live-recording-service";
 
 function roomCollection(subAccountId: string, groupId: string) {
   return getAdminDb().collection(
@@ -72,6 +76,7 @@ export async function createCommunityLiveRoomServerSide(input: {
   });
   const keepAsPost = input.keepAsPost !== false;
   let communityPostId: string | null = null;
+  let recordingAssetId: string | null = null;
   if (keepAsPost) {
     const post = await createPostServerSide({
       subAccountId: input.subAccountId,
@@ -89,6 +94,39 @@ export async function createCommunityLiveRoomServerSide(input: {
       thumbnailUrl: input.thumbnailUrl ?? null,
     });
     communityPostId = post.id;
+    try {
+      const asset = await createCommunityLiveRecordingAsset({
+        agencyId: input.agencyId,
+        subAccountId: input.subAccountId,
+        groupId: input.groupId,
+        roomId: roomRef.id,
+        sessionId: session.id,
+        uploadedByPersonId: input.createdByMemberId,
+      });
+      recordingAssetId = asset.id;
+    } catch {
+      // Starting a live room must not fail because recording storage is
+      // temporarily unavailable. The retained post truthfully remains
+      // unavailable for replay rather than claiming it is processing.
+      await getAdminDb().collection("liveSessions").doc(session.id).set(
+        {
+          recordingStatus: "failed",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      await getAdminDb()
+        .doc(
+          `subAccounts/${input.subAccountId}/communityGroups/${input.groupId}/posts/${post.id}`
+        )
+        .set(
+          {
+            replayStatus: "unavailable",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+    }
   }
   const doc = {
     subAccountId: input.subAccountId,
@@ -105,6 +143,8 @@ export async function createCommunityLiveRoomServerSide(input: {
     keepAsPost,
     notifyMembers: input.notifyMembers === true,
     communityPostId,
+    recordingAssetId,
+    recordingStatus: recordingAssetId ? "pending" : "unavailable",
     scheduledStartAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -137,6 +177,17 @@ export async function endCommunityLiveRoomServerSide(
     roomId
   );
   if (!room) return false;
+  // A processing status is only set after LiveKit accepted an egress. The
+  // stop request allows its verified terminal webhook to finalize the asset.
+  if (room.status === "live") {
+    try {
+      await stopCommunityLiveRecordingServerSide(room.liveSessionId);
+    } catch {
+      // Do not erase a confirmed processing state: LiveKit may still send
+      // the terminal webhook after a transient stop request failure.
+    }
+  }
+  const recordingProcessing = room.recordingStatus === "processing";
   await Promise.all([
     room.status === "live"
       ? updateLiveSessionLifecycleServerSide(room.liveSessionId, "ended")
@@ -154,6 +205,12 @@ export async function endCommunityLiveRoomServerSide(
           )
           .update({
             liveStatus: "ended",
+            ...(recordingProcessing
+              ? { replayStatus: "processing" }
+              : room.recordingStatus === "failed" ||
+                  room.recordingStatus === "unavailable"
+                ? { replayStatus: room.recordingStatus }
+                : {}),
             updatedAt: FieldValue.serverTimestamp(),
           })
       : Promise.resolve(),

@@ -98,6 +98,13 @@ export default async function StaffPostDetailPage({
     author: feedPost.author,
     likedByViewer: feedPost.likedByViewer,
     poll: feedPost.poll,
+    postType: feedPost.postType,
+    liveSessionId: feedPost.liveSessionId,
+    liveRoomId: feedPost.liveRoomId,
+    liveMode: feedPost.liveMode,
+    liveStatus: feedPost.liveStatus,
+    replayStatus: feedPost.replayStatus,
+    replayAssetId: feedPost.replayAssetId,
   };
 
   const clientComments: ClientComment[] = comments.map((c) => ({

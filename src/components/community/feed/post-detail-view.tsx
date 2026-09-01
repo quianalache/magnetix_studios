@@ -27,6 +27,8 @@ import {
 import { communityHomeHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
+import { CommunityLiveStage } from "@/components/community/community-live-stage";
+import { CommunityReplayPlayer } from "@/components/community/community-replay-player";
 
 export interface ClientComment {
   id: string;
@@ -366,6 +368,37 @@ export function PostDetailView({
                   {currentPost.title}
                 </h1>
               )}
+              {currentPost.postType === "live" &&
+                currentPost.liveStatus === "live" &&
+                currentPost.liveRoomId && (
+                  <CommunityLiveStage
+                    saId={saId}
+                    groupId={groupId}
+                    postId={currentPost.id}
+                    mode={
+                      currentPost.liveMode === "broadcast"
+                        ? "broadcast"
+                        : "meeting"
+                    }
+                  />
+                )}
+              {currentPost.postType === "live" &&
+                currentPost.liveStatus === "ended" &&
+                currentPost.replayStatus === "processing" && (
+                  <div className="mt-3 flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">
+                    Replay processing…
+                  </div>
+                )}
+              {currentPost.postType === "live" &&
+                currentPost.liveStatus === "ended" &&
+                currentPost.replayStatus === "ready" &&
+                currentPost.replayAssetId && (
+                  <CommunityReplayPlayer
+                    saId={saId}
+                    groupId={groupId}
+                    postId={currentPost.id}
+                  />
+                )}
               <CommunityPostBody
                 html={currentPost.body}
                 brand={accent || brand}

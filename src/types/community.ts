@@ -142,6 +142,13 @@ export interface CommunityLiveRoom {
   keepAsPost: boolean;
   notifyMembers: boolean;
   communityPostId: string | null;
+  recordingAssetId?: string | null;
+  recordingStatus?:
+    | "pending"
+    | "processing"
+    | "ready"
+    | "failed"
+    | "unavailable";
   scheduledStartAt: Timestamp | FieldValue | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
@@ -608,6 +615,8 @@ export interface CommunityPost {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  replayStatus?: "processing" | "ready" | "failed" | "unavailable";
+  replayAssetId?: string | null;
   thumbnailUrl?: string | null;
   /** Phase D — author-controlled "allow comments/replies" toggle. Absent
    *  (undefined) means comments are allowed — same additive convention as

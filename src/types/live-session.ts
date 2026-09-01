@@ -41,8 +41,9 @@ export interface LiveSession {
   providerRoomName: string;
   hostPersonId: string | null;
   settings: LiveSessionSettings;
-  recordingStatus: "disabled" | "pending" | "ready" | "failed";
+  recordingStatus: "disabled" | "pending" | "processing" | "ready" | "failed";
   providerEgressId: string | null;
+  recordingAssetId?: string | null;
   replayAssetId: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;

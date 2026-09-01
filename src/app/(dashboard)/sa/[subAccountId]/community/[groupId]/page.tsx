@@ -131,6 +131,8 @@ export default async function StaffCommunityFeedPage({
     liveRoomId: p.liveRoomId,
     liveMode: p.liveMode,
     liveStatus: p.liveStatus,
+    replayStatus: p.replayStatus,
+    replayAssetId: p.replayAssetId,
     thumbnailUrl: p.thumbnailUrl,
   }));
 

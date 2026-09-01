@@ -159,6 +159,9 @@ function View({
       tracks[0],
     [room.activeSpeakers, tracks]
   );
+  const screenShare = tracks.find(
+    (track) => track.source === Track.Source.ScreenShare
+  );
   useEffect(() => {
     const updated = () => setCanPublish(self.permissions?.canPublish ?? false);
     room.on(RoomEvent.ParticipantPermissionsChanged, updated);
@@ -364,30 +367,34 @@ function View({
               className={`min-h-0 flex-1 ${layout === "gallery" ? (tracks.some((x) => x.source === Track.Source.ScreenShare) ? "flex flex-col gap-3" : `grid gap-3 ${tracks.length === 1 ? "place-items-center" : "auto-rows-fr grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"}`) : "flex flex-col gap-3"}`}
             >
               {tracks.length ? (
-                layout === "gallery" ? (
-                  tracks.some((x) => x.source === Track.Source.ScreenShare) ? (
-                    <>
-                      <div className="min-h-0 flex-1">
-                        {active && (
-                          <Tile
-                            track={active}
-                            self={self.identity}
-                            hands={hands}
-                            mirror={mirror}
-                            selected
-                          />
-                        )}
-                      </div>
-                      <div className="flex shrink-0 gap-2 overflow-x-auto pb-1">
+                screenShare ? (
+                  <>
+                    {/* The presentation gets its own complete surface. Camera
+                        tracks live in a separate strip below it, never as a
+                        floating picture-in-picture over shared content. */}
+                    <div className="min-h-0 flex-1">
+                      <Tile
+                        track={screenShare}
+                        self={self.identity}
+                        hands={hands}
+                        mirror={mirror}
+                        selected
+                      />
+                    </div>
+                    {tracks.some((track) => track !== screenShare) && (
+                      <div
+                        className="flex shrink-0 gap-2 overflow-x-auto pb-1"
+                        aria-label="Participant cameras"
+                      >
                         {tracks
-                          .filter((x) => x !== active)
-                          .map((x) => (
+                          .filter((track) => track !== screenShare)
+                          .map((track) => (
                             <div
-                              className="w-44 shrink-0"
-                              key={`${x.participant.identity}-${x.source}`}
+                              className="w-32 shrink-0 sm:w-44"
+                              key={`${track.participant.identity}-${track.source}`}
                             >
                               <Tile
-                                track={x}
+                                track={track}
                                 self={self.identity}
                                 hands={hands}
                                 mirror={mirror}
@@ -395,24 +402,22 @@ function View({
                             </div>
                           ))}
                       </div>
-                    </>
-                  ) : (
-                    tracks.map((x) => (
-                      <div
-                        className={
-                          tracks.length === 1 ? "w-full max-w-4xl" : ""
-                        }
-                        key={`${x.participant.identity}-${x.source}`}
-                      >
-                        <Tile
-                          track={x}
-                          self={self.identity}
-                          hands={hands}
-                          mirror={mirror}
-                        />
-                      </div>
-                    ))
-                  )
+                    )}
+                  </>
+                ) : layout === "gallery" ? (
+                  tracks.map((x) => (
+                    <div
+                      className={tracks.length === 1 ? "w-full max-w-4xl" : ""}
+                      key={`${x.participant.identity}-${x.source}`}
+                    >
+                      <Tile
+                        track={x}
+                        self={self.identity}
+                        hands={hands}
+                        mirror={mirror}
+                      />
+                    </div>
+                  ))
                 ) : (
                   <>
                     <div className="min-h-0 flex-1">
@@ -914,6 +919,16 @@ export default function CommunityLiveRoomClient({
         const next = new Room();
         await next.connect(x.url, x.token);
         if (!active) return next.disconnect();
+        // Egress is a server-side operation. Starting it after the host has
+        // connected ensures the RoomComposite has a real room to capture;
+        // the endpoint is idempotent and only records retained live posts.
+        if (x.role === "HOST") {
+          void fetch(joinPath, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "start-recording", roomId }),
+          });
+        }
         setInfo({
           role: x.role ?? "ATTENDEE",
           title: x.title ?? "Live room",

@@ -112,6 +112,28 @@ export async function POST(
     );
   }
   const isModerator = access.membership.role === "moderator";
+  if (body.action === "start-recording") {
+    if (!isModerator)
+      return NextResponse.json(
+        { error: "Moderator access required" },
+        { status: 403 }
+      );
+    const { startCommunityLiveRecordingServerSide } =
+      await import("@/lib/server/community-live-recording-service");
+    try {
+      const result = await startCommunityLiveRecordingServerSide({
+        subAccountId: saId,
+        groupId,
+        roomId: body.roomId,
+      });
+      return NextResponse.json(result);
+    } catch {
+      return NextResponse.json(
+        { error: "Unable to start recording." },
+        { status: 502 }
+      );
+    }
+  }
   if (!isModerator && found.room.channel) {
     const inaccessible = await getInaccessibleChannelNames({
       subAccountId: saId,

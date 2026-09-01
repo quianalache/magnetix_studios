@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { QuickGoLiveSetup } from "@/components/community/quick-go-live-setup";
 import { FocusedPostOverlay } from "@/components/community/feed/focused-post-overlay";
 import { InlineCommentThread } from "@/components/community/feed/inline-comment-thread";
+import { CommunityLiveStage } from "@/components/community/community-live-stage";
+import { CommunityReplayPlayer } from "@/components/community/community-replay-player";
 
 export interface ClientPost {
   id: string;
@@ -52,6 +54,8 @@ export interface ClientPost {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  replayStatus?: "processing" | "ready" | "failed" | "unavailable";
+  replayAssetId?: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -495,6 +499,31 @@ export function FeedView({
             )}
           </div>
         )}
+        {p.postType === "live" && p.liveStatus === "live" && p.liveRoomId && (
+          <CommunityLiveStage
+            saId={saId}
+            groupId={groupId}
+            postId={p.id}
+            mode={p.liveMode === "broadcast" ? "broadcast" : "meeting"}
+          />
+        )}
+        {p.postType === "live" &&
+          p.liveStatus === "ended" &&
+          p.replayStatus === "processing" && (
+            <div className="mb-3 flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">
+              Replay processing…
+            </div>
+          )}
+        {p.postType === "live" &&
+          p.liveStatus === "ended" &&
+          p.replayStatus === "ready" &&
+          p.replayAssetId && (
+            <CommunityReplayPlayer
+              saId={saId}
+              groupId={groupId}
+              postId={p.id}
+            />
+          )}
         {p.postType === "live" && p.thumbnailUrl && (
           <img
             src={p.thumbnailUrl}

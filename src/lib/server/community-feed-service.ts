@@ -232,6 +232,8 @@ export interface CreatePostInput {
   liveRoomId?: string | null;
   liveMode?: "meeting" | "broadcast";
   liveStatus?: "live" | "ended";
+  replayStatus?: "processing" | "ready" | "failed" | "unavailable";
+  replayAssetId?: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -268,6 +270,8 @@ export async function createPostServerSide(
     liveRoomId: input.liveRoomId,
     liveMode: input.liveMode,
     liveStatus: input.liveStatus,
+    replayStatus: input.replayStatus,
+    replayAssetId: input.replayAssetId,
     thumbnailUrl: input.thumbnailUrl,
     pinned: false,
     pinnedToChannel: false,
