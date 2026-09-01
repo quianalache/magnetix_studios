@@ -60,6 +60,9 @@ const PUBLIC_PATHS = [
   // check before ever reaching the route's own signature verification,
   // so connections would show "Connected" but never actually sync.
   "/api/cron/google-calendar-sync",
+  // QStash-scheduled Community recording reconciliation; signature-verified
+  // inside the route.
+  "/api/cron/community-recording-reconciliation",
   "/api/landing/metrics",
   "/api/landing/recent-purchases",
   // Live-visitors heartbeat ping for the agency dashboard's world map.
