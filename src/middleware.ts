@@ -82,6 +82,10 @@ const PUBLIC_PATHS = [
   "/api/track/acquisition",
   "/api/webhooks/twilio",
   "/api/webhooks/stripe",
+  // LiveKit signs recording lifecycle callbacks using the configured API
+  // credentials. It must reach its route without a CRM session so the
+  // handler can verify that signature itself.
+  "/api/webhooks/livekit",
   // Resend inbound-email webhook — public POST from Resend's cloud.
   // Security: Svix signature (RESEND_WEBHOOK_SECRET) verified inside the
   // route before anything else runs.
