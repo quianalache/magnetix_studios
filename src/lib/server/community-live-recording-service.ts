@@ -67,6 +67,33 @@ function sessionRef(sessionId: string) {
   return getAdminDb().collection("liveSessions").doc(sessionId);
 }
 
+/**
+ * Resolve a Community room without a collection-group query. The room ID is
+ * already stored on the trusted Community LiveSession relation; enumerate
+ * only this tenant's groups, then read that exact room document in each.
+ * This keeps reconciliation independent of a Firestore collection-group
+ * index while still requiring the room's liveSessionId to match.
+ */
+export async function findCommunityLiveRoomForSession(
+  subAccountId: string,
+  roomId: string,
+  liveSessionId: string
+) {
+  const groups = await getAdminDb()
+    .collection(`subAccounts/${subAccountId}/communityGroups`)
+    .get();
+  const rooms = await Promise.all(
+    groups.docs.map((group) =>
+      group.ref.collection("liveRooms").doc(roomId).get()
+    )
+  );
+  return (
+    rooms.find(
+      (room) => room.exists && room.data()?.liveSessionId === liveSessionId
+    ) ?? null
+  );
+}
+
 export async function createCommunityLiveRecordingAsset(input: {
   agencyId: string;
   subAccountId: string;
@@ -239,13 +266,12 @@ export async function reconcileCommunityRecordingEgressServerSide(
     !session.recordingAssetId
   )
     return;
-  const rooms = await getAdminDb()
-    .collectionGroup("liveRooms")
-    .where("liveSessionId", "==", sessionDoc.id)
-    .limit(1)
-    .get();
-  if (rooms.empty) return;
-  const room = rooms.docs[0];
+  const room = await findCommunityLiveRoomForSession(
+    session.subAccountId,
+    session.sourceId,
+    sessionDoc.id
+  );
+  if (!room) return;
   const roomData = room.data() as {
     groupId: string;
     communityPostId: string | null;

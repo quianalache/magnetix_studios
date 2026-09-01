@@ -9,7 +9,10 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { livekitConfig } from "@/lib/livekit/config";
 import { mediaStorageAdapter } from "@/lib/server/media-storage";
 import { getMediaAsset } from "@/lib/server/media-asset-service";
-import { reconcileCommunityRecordingEgressServerSide } from "@/lib/server/community-live-recording-service";
+import {
+  findCommunityLiveRoomForSession,
+  reconcileCommunityRecordingEgressServerSide,
+} from "@/lib/server/community-live-recording-service";
 
 const TERMINAL_STATUSES = new Set([
   EgressStatus.EGRESS_COMPLETE,
@@ -48,6 +51,32 @@ function isTerminal(egress: EgressInfo) {
   return TERMINAL_STATUSES.has(egress.status);
 }
 
+function logStageFailure(
+  providerEgressId: string,
+  stage: string,
+  error: unknown
+) {
+  console.error("[community-recording-reconciliation] stage failed", {
+    providerEgressId,
+    stage,
+    errorName: error instanceof Error ? error.name : "unknown",
+    errorMessage: error instanceof Error ? error.message : "unknown",
+  });
+}
+
+async function atStage<T>(
+  providerEgressId: string,
+  stage: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    logStageFailure(providerEgressId, stage, error);
+    throw error;
+  }
+}
+
 export interface CommunityRecordingReconciliationPlan {
   providerEgressId: string;
   egressStatus: string;
@@ -69,11 +98,11 @@ export interface CommunityRecordingReconciliationPlan {
 
 async function getEgress(providerEgressId: string): Promise<EgressInfo | null> {
   const { url, apiKey, apiSecret } = livekitConfig();
-  const rows = await new EgressClient(
-    egressHost(url),
-    apiKey,
-    apiSecret
-  ).listEgress({ egressId: providerEgressId });
+  const rows = await atStage(providerEgressId, "livekit_egress_lookup", () =>
+    new EgressClient(egressHost(url), apiKey, apiSecret).listEgress({
+      egressId: providerEgressId,
+    })
+  );
   return rows[0] ?? null;
 }
 
@@ -106,11 +135,13 @@ export async function inspectCommunityRecordingReconciliation(
   if (!isTerminal(egress))
     return { plan: empty("Egress is still active."), egress };
 
-  const match = await getAdminDb()
-    .collection("liveSessions")
-    .where("providerEgressId", "==", providerEgressId)
-    .limit(1)
-    .get();
+  const match = await atStage(providerEgressId, "live_session_lookup", () =>
+    getAdminDb()
+      .collection("liveSessions")
+      .where("providerEgressId", "==", providerEgressId)
+      .limit(1)
+      .get()
+  );
   if (match.empty)
     return {
       plan: empty("No Magnetix LiveSession references this Egress."),
@@ -141,17 +172,18 @@ export async function inspectCommunityRecordingReconciliation(
       egress,
     };
 
-  const rooms = await getAdminDb()
-    .collectionGroup("liveRooms")
-    .where("liveSessionId", "==", sessionDoc.id)
-    .limit(1)
-    .get();
-  if (rooms.empty)
+  const room = await atStage(providerEgressId, "community_room_lookup", () =>
+    findCommunityLiveRoomForSession(
+      session.subAccountId!,
+      session.sourceId!,
+      sessionDoc.id
+    )
+  );
+  if (!room)
     return {
       plan: empty("No Community live room references this LiveSession."),
       egress,
     };
-  const room = rooms.docs[0];
   const parts = roomPathParts(room.ref.path);
   const roomData = room.data() as {
     groupId?: string;
@@ -170,9 +202,11 @@ export async function inspectCommunityRecordingReconciliation(
       egress,
     };
 
-  const asset = await getMediaAsset(
-    { agencyId: session.agencyId, subAccountId: session.subAccountId },
-    session.recordingAssetId
+  const asset = await atStage(providerEgressId, "media_asset_lookup", () =>
+    getMediaAsset(
+      { agencyId: session.agencyId!, subAccountId: session.subAccountId! },
+      session.recordingAssetId!
+    )
   );
   if (!asset)
     return { plan: empty("Recording MediaAsset was not found."), egress };
@@ -192,7 +226,9 @@ export async function inspectCommunityRecordingReconciliation(
 
   const object =
     egress.status === EgressStatus.EGRESS_COMPLETE
-      ? await mediaStorageAdapter("s3_compatible").inspectObject(expectedKey)
+      ? await atStage(providerEgressId, "r2_head_object", () =>
+          mediaStorageAdapter("s3_compatible").inspectObject(expectedKey)
+        )
       : null;
   const exists = Boolean(object && (object.fileSizeBytes ?? 0) > 0);
   const roomName = egress.roomName || null;
@@ -202,11 +238,13 @@ export async function inspectCommunityRecordingReconciliation(
     roomName === expectedRoomName && filePath === expectedKey;
   const complete = egress.status === EgressStatus.EGRESS_COMPLETE;
   const post = roomData.communityPostId
-    ? await postRef(
-        session.subAccountId,
-        parts.groupId,
-        roomData.communityPostId
-      ).get()
+    ? await atStage(providerEgressId, "community_post_lookup", () =>
+        postRef(
+          session.subAccountId!,
+          parts.groupId,
+          roomData.communityPostId!
+        ).get()
+      )
     : null;
   const postData = post?.exists
     ? (post.data() as { replayStatus?: string })
