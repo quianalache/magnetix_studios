@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { getFirebaseDb } from "@/lib/firebase/client";
-import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
+import { safeSubscribeWithTimeout } from "@/lib/firestore/safe-subscribe";
 import { CUSTOM_BRAND } from "@/config/landing";
 import type { AgencyDoc, AppTheme } from "@/types";
 
@@ -88,39 +88,58 @@ export function useAgency(): AgencySummary {
     // 2026-08-30: this listener is mounted via <AppAccent> in the shared
     // dashboard layout — runs on EVERY page, above every route's own
     // error.tsx. An uncaught synchronous throw here (the confirmed
-    // firebase-js-sdk#9267 failure mode — see safeSubscribe's own doc
-    // comment) previously crashed the WHOLE app shell, not just one
-    // page, which is why it could take down routes with nothing to do
-    // with Community/Courses. It's also the thing that drives the saved
-    // app theme (appTheme) — a failed/never-delivered snapshot silently
-    // leaves appTheme at its initial `null`, which is why the configured
-    // CRM color theme could intermittently fall back to the default
-    // palette with no visible error at all.
-    const unsub = safeSubscribe(
-      () =>
+    // firebase-js-sdk#9267 failure mode) previously crashed the WHOLE app
+    // shell, not just one page, which is why it could take down routes
+    // with nothing to do with Community/Courses. It's also the thing that
+    // drives the saved app theme (appTheme).
+    //
+    // Recurring-regression fix (see safe-subscribe.ts's own doc comment
+    // for the full evidence trail): the throw-guard alone never covered
+    // this listener's more common failure mode — registering fine and
+    // then never delivering a snapshot again, silently leaving appTheme
+    // at its initial `null` (default palette) with no error to catch,
+    // which is exactly the "saved CRM color theme not rendering" symptom.
+    // `safeSubscribeWithTimeout` bounds the wait to 8s and falls back to
+    // ONE plain `getDoc()` (a different, non-listener SDK code path) so
+    // the real saved theme can still resolve instead of silently reverting.
+    function applySnapshotData(d: Partial<AgencyDoc>) {
+      setData({
+        name: (d.name as string) || CUSTOM_BRAND.name,
+        logoUrl: (d.logoUrl as string | null) ?? null,
+        supportEmail: (d.supportEmail as string | null) ?? null,
+        primaryDomain: (d.primaryDomain as string | null) ?? null,
+        appTheme: (d.appTheme as AppTheme | null) ?? null,
+        agencyAssistantEnabled: d.agencyAssistantEnabled === true,
+        agencyAssistantModel:
+          d.agencyAssistantModel === "sonnet" ? "sonnet" : "opus",
+        primarySalesPageUrl: (d.primarySalesPageUrl as string | null) ?? null,
+      });
+    }
+    const unsub = safeSubscribeWithTimeout(
+      (onSettled) =>
         onSnapshot(
           ref,
           (snap) => {
+            onSettled();
             if (snap.exists()) {
-              const d = snap.data() as Partial<AgencyDoc>;
-              setData({
-                name: (d.name as string) || CUSTOM_BRAND.name,
-                logoUrl: (d.logoUrl as string | null) ?? null,
-                supportEmail: (d.supportEmail as string | null) ?? null,
-                primaryDomain: (d.primaryDomain as string | null) ?? null,
-                appTheme: (d.appTheme as AppTheme | null) ?? null,
-                agencyAssistantEnabled: d.agencyAssistantEnabled === true,
-                agencyAssistantModel:
-                  d.agencyAssistantModel === "sonnet" ? "sonnet" : "opus",
-                primarySalesPageUrl:
-                  (d.primarySalesPageUrl as string | null) ?? null,
-              });
+              applySnapshotData(snap.data() as Partial<AgencyDoc>);
             }
             setSnapLoading(false);
           },
-          () => setSnapLoading(false),
+          () => {
+            onSettled();
+            setSnapLoading(false);
+          }
         ),
-      () => setSnapLoading(false),
+      () => {
+        getDoc(ref)
+          .then((snap) => {
+            if (snap.exists())
+              applySnapshotData(snap.data() as Partial<AgencyDoc>);
+          })
+          .catch(() => undefined)
+          .finally(() => setSnapLoading(false));
+      }
     );
     return () => unsub?.();
   }, [agencyId, authLoading]);

@@ -28,10 +28,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
   subscribeToPages,
+  getPagesOnce,
   createPage,
   deletePage,
   duplicatePage,
 } from "@/lib/firestore/pages-funnels";
+import { safeSubscribeWithTimeout } from "@/lib/firestore/safe-subscribe";
 import { PAGE_TEMPLATES, getTemplate } from "@/lib/pages-funnels/templates";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -114,11 +116,36 @@ export default function PagesFunnelsPage() {
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
     setLoading(true);
-    const unsub = subscribeToPages({ agencyId, subAccountId }, (list) => {
-      setPages(list);
-      setLoading(false);
-    });
-    return () => unsub();
+    // Recurring-CRM-regression fix (see safe-subscribe.ts's own doc
+    // comment for the full evidence trail): this listener previously had
+    // NO protection at all — not even the throw-guard every sibling
+    // dashboard page already had — so it was the most exposed of the
+    // routes reported stuck spinning. `safeSubscribeWithTimeout` bounds
+    // the wait to 8s and falls back to one plain `getPagesOnce()` read (a
+    // different, non-listener SDK code path) so the page library can
+    // still resolve instead of spinning forever.
+    const unsub = safeSubscribeWithTimeout(
+      (onSettled) =>
+        subscribeToPages(
+          { agencyId, subAccountId },
+          (list) => {
+            onSettled();
+            setPages(list);
+            setLoading(false);
+          },
+          () => {
+            onSettled();
+            setLoading(false);
+          }
+        ),
+      () => {
+        getPagesOnce({ agencyId, subAccountId })
+          .then(setPages)
+          .catch(() => undefined)
+          .finally(() => setLoading(false));
+      }
+    );
+    return () => unsub?.();
   }, [user, agencyId, subAccountId, authLoading]);
 
   async function handleDelete(page: PageDoc) {

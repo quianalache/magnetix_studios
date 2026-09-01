@@ -8,9 +8,10 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { safeSubscribeWithTimeout } from "@/lib/firestore/safe-subscribe";
 import type { SubAccountDoc, SubAccountRole } from "@/types";
 
 export interface SubAccountContextValue {
@@ -33,7 +34,7 @@ export interface SubAccountContextValue {
 }
 
 const SubAccountContext = createContext<SubAccountContextValue | undefined>(
-  undefined,
+  undefined
 );
 
 export function SubAccountProvider({
@@ -68,32 +69,52 @@ export function SubAccountProvider({
     // FAILED... Unexpected state" condition, see useResilientList's own
     // subscribe try/catch for the full explanation) would bypass every
     // page's graceful error boundary entirely and crash the whole app
-    // shell (sidebar included), not just the page content. Wrapped
-    // defensively for the same reason, even though this exact call site
-    // hasn't itself been caught throwing in testing — the failure mode is
-    // real and this is the one listener whose crash blast radius is worst.
-    let unsub: (() => void) | undefined;
-    try {
-      unsub = onSnapshot(
-        doc(getFirebaseDb(), "subAccounts", subAccountId),
-        (snap) => {
-          if (!snap.exists()) {
+    // shell (sidebar included), not just the page content.
+    //
+    // Recurring-regression fix (see safe-subscribe.ts's own doc comment
+    // for the full evidence trail): the throw-guard above was never the
+    // whole story — the SAME upstream SDK bug's more common manifestation
+    // is this listener registering fine and then simply never delivering
+    // a snapshot again, which left EVERY dashboard route (they all read
+    // subAccountId/agencyId/loading from this one provider) spinning
+    // forever, with no error anywhere to catch. `safeSubscribeWithTimeout`
+    // adds an 8s bound: if neither the success nor the error callback has
+    // fired by then, it attempts ONE plain `getDoc()` (a non-listener read
+    // — a different SDK code path than the corrupted watch stream, not
+    // expected to share its failure mode) so real data can still resolve
+    // this instead of leaving every page below it stuck.
+    const ref = doc(getFirebaseDb(), "subAccounts", subAccountId);
+    const unsub = safeSubscribeWithTimeout(
+      (onSettled) =>
+        onSnapshot(
+          ref,
+          (snap) => {
+            onSettled();
+            if (!snap.exists()) {
+              setSubAccount(null);
+              setSubLoading(false);
+              return;
+            }
+            setSubAccount(snap.data() as SubAccountDoc);
+            setSubLoading(false);
+          },
+          () => {
+            onSettled();
             setSubAccount(null);
             setSubLoading(false);
-            return;
           }
-          setSubAccount(snap.data() as SubAccountDoc);
-          setSubLoading(false);
-        },
-        () => {
-          setSubAccount(null);
-          setSubLoading(false);
-        },
-      );
-    } catch {
-      setSubAccount(null);
-      setSubLoading(false);
-    }
+        ),
+      () => {
+        getDoc(ref)
+          .then((snap) => {
+            setSubAccount(
+              snap.exists() ? (snap.data() as SubAccountDoc) : null
+            );
+          })
+          .catch(() => setSubAccount(null))
+          .finally(() => setSubLoading(false));
+      }
+    );
     return () => unsub?.();
   }, [user, subAccountId]);
 

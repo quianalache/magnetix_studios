@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -47,29 +48,55 @@ function toMillis(v: unknown): number {
 export function subscribeToPages(
   scope: TenantScope,
   callback: (pages: PageDoc[]) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), PAGES),
-    where("subAccountId", "==", scope.subAccountId),
+    where("subAccountId", "==", scope.subAccountId)
   );
   return onSnapshot(
     q,
     (snap) => {
-      const pages = snap.docs.map(
-        (d) => ({ id: d.id, ...(d.data() as Omit<PageDoc, "id">) }),
-      );
+      const pages = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<PageDoc, "id">),
+      }));
       pages.sort((a, b) => toMillis(b.updatedAt) - toMillis(a.updatedAt));
       callback(pages);
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
+}
+
+function sortPagesByUpdatedAt(pages: PageDoc[]): PageDoc[] {
+  return [...pages].sort(
+    (a, b) => toMillis(b.updatedAt) - toMillis(a.updatedAt)
+  );
+}
+
+/** One-shot equivalent of `subscribeToPages` — used as the resilient
+ *  timeout fallback (recurring-CRM-regression fix; see
+ *  `safe-subscribe.ts`'s doc comment) when the live listener doesn't
+ *  deliver in time. A plain `getDocs()` read is a different, non-listener
+ *  Firestore SDK code path than the corrupted watch stream, so it isn't
+ *  expected to share that failure mode. */
+export async function getPagesOnce(scope: TenantScope): Promise<PageDoc[]> {
+  const q = query(
+    collection(getFirebaseDb(), PAGES),
+    where("subAccountId", "==", scope.subAccountId)
+  );
+  const snap = await getDocs(q);
+  const pages = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<PageDoc, "id">),
+  }));
+  return sortPagesByUpdatedAt(pages);
 }
 
 export function subscribeToPage(
   id: string,
   callback: (page: PageDoc | null) => void,
-  onError?: (err: Error) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
   return onSnapshot(
     doc(getFirebaseDb(), PAGES, id),
@@ -80,7 +107,7 @@ export function subscribeToPage(
       }
       callback({ id: snap.id, ...(snap.data() as Omit<PageDoc, "id">) });
     },
-    (err) => onError?.(err),
+    (err) => onError?.(err)
   );
 }
 
@@ -93,7 +120,7 @@ export async function getPage(id: string): Promise<PageDoc | null> {
 export async function createPage(
   scope: TenantScope,
   createdByUid: string,
-  input: CreatePageInput,
+  input: CreatePageInput
 ): Promise<string> {
   const ref = await addDoc(collection(getFirebaseDb(), PAGES), {
     name: input.name,
@@ -121,7 +148,7 @@ export async function createPage(
  *  explicitly for "Save Draft". */
 export async function updatePageBlocks(
   id: string,
-  blocks: PageBlock[],
+  blocks: PageBlock[]
 ): Promise<void> {
   await updateDoc(doc(getFirebaseDb(), PAGES, id), {
     blocks,
@@ -131,7 +158,7 @@ export async function updatePageBlocks(
 
 export async function updatePageMeta(
   id: string,
-  data: Partial<Pick<PageDoc, "name" | "seo" | "funnelId">>,
+  data: Partial<Pick<PageDoc, "name" | "seo" | "funnelId">>
 ): Promise<void> {
   const patch: Record<string, string | PageSeo | null> = { ...data };
   if (data.name) patch.slug = slugify(data.name);
@@ -159,7 +186,7 @@ export async function unpublishPage(id: string): Promise<void> {
 export async function duplicatePage(
   scope: TenantScope,
   createdByUid: string,
-  source: PageDoc,
+  source: PageDoc
 ): Promise<string> {
   const ref = await addDoc(collection(getFirebaseDb(), PAGES), {
     name: `${source.name} (Copy)`,

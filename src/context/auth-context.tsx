@@ -1,16 +1,12 @@
 "use client";
 
-import {
-  createContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useEffect, useState, type ReactNode } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
 } from "firebase/firestore";
 import {
@@ -19,6 +15,7 @@ import {
   isFirebaseConfigured,
 } from "@/lib/firebase/client";
 import { signOutUser } from "@/lib/firebase/auth";
+import { safeSubscribeWithTimeout } from "@/lib/firestore/safe-subscribe";
 import type {
   AgencyRole,
   AppConfig,
@@ -61,7 +58,7 @@ export interface AuthContextValue {
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(
-  undefined,
+  undefined
 );
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -72,7 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<MemberStatus | null>(null);
   const [agencyId, setAgencyId] = useState<string | null>(null);
   const [agencyRole, setAgencyRole] = useState<AgencyRole | null>(null);
-  const [memberships, setMemberships] = useState<UserSubAccountMembership[]>([]);
+  const [memberships, setMemberships] = useState<UserSubAccountMembership[]>(
+    []
+  );
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
 
   useEffect(() => {
@@ -128,9 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             getDoc(doc(db, "users", firebaseUser.uid)),
           ]);
 
-          const cfg = cfgSnap.exists()
-            ? (cfgSnap.data() as AppConfig)
-            : null;
+          const cfg = cfgSnap.exists() ? (cfgSnap.data() as AppConfig) : null;
           const userDoc = userSnap.exists()
             ? (userSnap.data() as UserDoc)
             : null;
@@ -158,10 +155,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAgencyId(
             (claims.agencyId as string | undefined) ??
               userDoc.primaryAgencyId ??
-              null,
+              null
           );
           setAgencyRole(
-            (claims.agencyRole as AgencyRole | null | undefined) ?? null,
+            (claims.agencyRole as AgencyRole | null | undefined) ?? null
           );
 
           // Fire-and-forget: claim any pending sub-account invites for
@@ -191,45 +188,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // Subscribe to the user's sub-account memberships so the switcher
           // updates live when an admin adds/removes them somewhere.
-          membershipUnsub = onSnapshot(
-            collection(db, `userMemberships/${firebaseUser.uid}/subAccounts`),
-            (snap) => {
-              const items: UserSubAccountMembership[] = snap.docs.map((d) => {
-                const data = d.data() as Partial<UserSubAccountMembership>;
-                return {
-                  subAccountId: data.subAccountId ?? d.id,
-                  agencyId: data.agencyId ?? "",
-                  role: (data.role ?? "collaborator") as
-                    | "admin"
-                    | "collaborator",
-                  name: data.name ?? "",
-                  accountNumber: data.accountNumber,
-                  addedAt:
-                    data.addedAt instanceof Date
-                      ? data.addedAt
-                      : new Date(),
-                };
+          //
+          // Recurring-regression fix (see safe-subscribe.ts's own doc
+          // comment for the full evidence trail): this whole callback IS
+          // already inside a try/catch, so a SYNCHRONOUS throw out of this
+          // registration was already routed to the catch block below
+          // (`setMembershipsLoaded(true)`) — but the SAME upstream SDK bug
+          // also manifests as this listener registering fine and then
+          // simply never delivering a snapshot again, which the
+          // surrounding try/catch cannot detect (nothing throws) and which
+          // left `membershipsLoaded` stuck `false` forever — and because
+          // `SubAccountProvider`'s own `loading` is
+          // `authLoading || subLoading || !membershipsLoaded`, EVERY
+          // dashboard route (they all sit inside a `SubAccountProvider`)
+          // would spin forever too. `safeSubscribeWithTimeout` bounds the
+          // wait to 8s and falls back to ONE plain `getDocs()` (a
+          // different, non-listener SDK code path) of the exact same
+          // collection so a real membership list can still resolve.
+          const mapMembershipDocs = (
+            docs: {
+              id: string;
+              data: () => Partial<UserSubAccountMembership>;
+            }[]
+          ): UserSubAccountMembership[] => {
+            const items: UserSubAccountMembership[] = docs.map((d) => {
+              const data = d.data();
+              return {
+                subAccountId: data.subAccountId ?? d.id,
+                agencyId: data.agencyId ?? "",
+                role: (data.role ?? "collaborator") as "admin" | "collaborator",
+                name: data.name ?? "",
+                accountNumber: data.accountNumber,
+                addedAt:
+                  data.addedAt instanceof Date ? data.addedAt : new Date(),
+              };
+            });
+            // Stable, human-friendly order for every consumer (the header
+            // switcher, legacy first-membership redirects): ascending
+            // account number (#1000 first), docs without a number last,
+            // ties broken by name.
+            items.sort((a, b) => {
+              const an = a.accountNumber ?? Number.MAX_SAFE_INTEGER;
+              const bn = b.accountNumber ?? Number.MAX_SAFE_INTEGER;
+              if (an !== bn) return an - bn;
+              return a.name.localeCompare(b.name, undefined, {
+                sensitivity: "base",
               });
-              // Stable, human-friendly order for every consumer (the header
-              // switcher, legacy first-membership redirects): ascending
-              // account number (#1000 first), docs without a number last,
-              // ties broken by name.
-              items.sort((a, b) => {
-                const an = a.accountNumber ?? Number.MAX_SAFE_INTEGER;
-                const bn = b.accountNumber ?? Number.MAX_SAFE_INTEGER;
-                if (an !== bn) return an - bn;
-                return a.name.localeCompare(b.name, undefined, {
-                  sensitivity: "base",
-                });
-              });
-              setMemberships(items);
-              setMembershipsLoaded(true);
-            },
-            () => {
-              setMemberships([]);
-              setMembershipsLoaded(true);
-            },
+            });
+            return items;
+          };
+          const membershipsRef = collection(
+            db,
+            `userMemberships/${firebaseUser.uid}/subAccounts`
           );
+          membershipUnsub =
+            safeSubscribeWithTimeout(
+              (onSettled) =>
+                onSnapshot(
+                  membershipsRef,
+                  (snap) => {
+                    onSettled();
+                    setMemberships(mapMembershipDocs(snap.docs));
+                    setMembershipsLoaded(true);
+                  },
+                  () => {
+                    onSettled();
+                    setMemberships([]);
+                    setMembershipsLoaded(true);
+                  }
+                ),
+              () => {
+                getDocs(membershipsRef)
+                  .then((snap) => setMemberships(mapMembershipDocs(snap.docs)))
+                  .catch(() => setMemberships([]))
+                  .finally(() => setMembershipsLoaded(true));
+              }
+            ) ?? null;
         } catch (err) {
           console.error("Failed to load auth context", err);
           // Don't strand membership-gated UI if setup threw before the
@@ -238,7 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setLoading(false);
         }
-      },
+      }
     );
 
     return () => {
