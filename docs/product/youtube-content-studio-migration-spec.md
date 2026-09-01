@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-Specification complete. **Phase 0 (import architecture + data rescue) is built and dry-run validated end-to-end against the real export — zero unknown fields, zero document-size risk, full field-by-field reconciliation.** Live migration (the actual Firestore/Storage writes) has not run — it was correctly blocked pending explicit confirmation, since it writes real, currently-irreplaceable owner data. No Channel Brain/Video Workspace UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum at the end of this document for the full importer spec and dry-run findings.
+**Phase 0 (import architecture + data rescue) is COMPLETE.** The owner's real Channel Brain, 2 Saved Ideas, and 15 Video Projects are live in Firestore under `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main"), with all 7 real voice recordings migrated to Firebase Storage. Full read-back reconciliation against the source export passed (967 field-level checks; the 2 that initially appeared to fail were both confirmed, by direct inspection, to be artifacts of the verification script's own comparison method, not real discrepancies — see the Phase 0 addendum). Idempotency was proven with a real second live run: identical Firestore doc counts, zero duplicate Storage objects. No Channel Brain/Video Workspace UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum at the end of this document for the full importer spec, dry-run findings, and final reconciliation results.
 
 ## SOURCE MATERIAL
 
@@ -56,11 +56,11 @@ Kept genuinely open — see §20 for full detail:
 
 ## DATA MIGRATION STATUS
 
-**Phase 0 importer built and dry-run validated end-to-end against the real export; live migration has not been executed — it requires explicit go-ahead (Firestore/Storage writes of real, currently-irreplaceable owner data are a genuinely hard-to-reverse action, so this is a deliberate stop, not an oversight).** Audio voice-note blobs (7 real recordings, inline base64 in the export — corrected during Phase 0 from an earlier estimate of 8 via an exhaustive recursive scan of the whole export tree) were flagged as a hard blocker for direct Firestore document storage; the Phase 0 importer resolves this by uploading each to Firebase Storage and storing only a reference on the Firestore record — see §19, §21, and the Phase 0 addendum at the end of this document.
+**Live migration executed 2026-09-01 against `subAccounts/xvnedVCmQpEvHrcPhEDI` ("Main").** Written: 1 Channel Brain (`ytcs/brain`), 2 Saved Ideas (`ytcsIdeas/{id}`), 15 Video Projects (`ytcsVideos/{id}`), 7 voice-note audio files in Firebase Storage under `ytcs/xvnedVCmQpEvHrcPhEDI/voice-notes/{voiceNoteId}.webm` with only Storage references (never inline base64) left on the Firestore records. Full read-back verification against the source export passed. Rerun idempotency proven directly (a second live run produced identical Firestore doc counts and exactly 7 Storage objects, not 14). The original export file (`~/Downloads/youtube-studio-backup-2026-09-01.json`) is unmodified — md5 confirmed identical before and after every run. Full results in the Phase 0 addendum.
 
 ## NEXT APPROVED TASK
 
-Awaiting explicit go-ahead to run the Phase 0 importer in `--live` mode (writes real data to `subAccounts/xvnedVCmQpEvHrcPhEDI` — the "Main" sub-account — in Firestore and Firebase Storage). The importer itself, its dry run, and the full reconciliation report are already built and verified; only the actual write is pending. Phase 1 (Channel Brain UI) has no approval and should not start automatically once Phase 0's live write completes.
+None yet. Phase 0 is done; Phase 1 (Channel Brain UI) has no approval and should not start automatically.
 
 ---
 
@@ -1451,10 +1451,27 @@ For comparison: that same video record, if its voice notes had been left inline 
 - Unknown fields: 0.
 - Size warnings: 0.
 
-## Idempotency design (not yet exercised via a real rerun, since live mode hasn't executed)
+## Live migration executed and verified (2026-09-01)
 
-Firestore: `subAccounts/{id}/ytcs/brain` (fixed doc id), `subAccounts/{id}/ytcsIdeas/{sourceId}`, `subAccounts/{id}/ytcsVideos/{sourceId}` — every id is either fixed or the source record's own real id, and every write is a full deterministic `.set()`, so a rerun reproduces the identical end state rather than duplicating. Storage: same principle, source-id-keyed paths, `.save()` overwrites in place. Once live mode has actually run once, a second dry run against the same export and sub-account is the intended way to prove this — not yet done.
+Pre-flight, immediately before the live write: source export md5 re-confirmed identical to the value recorded at dry-run time; target sub-account re-confirmed as "Main" (`xvnedVCmQpEvHrcPhEDI`, `quianalache.com`); unrelated concurrent-session working-tree changes re-confirmed untouched (55 files, same count before and after).
 
-## What remains before Phase 0 can be marked fully complete
+Live run wrote 1 Channel Brain, 2 Saved Ideas, 15 Video Projects, and uploaded all 7 voice notes to Firebase Storage. A dedicated read-back verification script then compared every written Firestore document field-by-field against the source export — id existence and no-extras for both Ideas and Videos, all 9 Brain sections plus both legacy sections verbatim, every one of the ~55 canonical Video fields per record (55 fields × 15 videos), all 4 Advanced Details fields, `communityPost`, `generatedScriptPrompt`/`compiledScript`, all 3 checklists, all title/publish fields, the `legacy` bucket on all 3 videos that carry historical structured-script-builder/title-generator/thumbnail data, and every voice-note reference (Storage path present, `audioBase64` field absent, content-type and byte size matching the Storage object's actual metadata).
 
-Only the live write itself, run once, followed by direct verification (read back the written Firestore docs and Storage objects, confirm counts match this dry run exactly) and one more rerun to prove idempotency in practice rather than by design alone. Everything else the task asked Phase 0 to produce — the importer, its validation, the field-by-field reconciliation, the size-safety analysis, the security posture — is done and is not gated on that write.
+**Result: 967 checks, 966 passed on the first pass.** The 2 that initially read as failures (one on the first live run, a second at the status-count summary level) were both investigated before any corrective action, per instruction, and both were conclusively proven to be defects in the verification script's own comparison logic — not real discrepancies:
+
+1. A check asserting `brain.legacy.method` had "at least one non-empty sub-field" failed because the source data for `method` was itself always fully empty (5 keys, all empty strings) — direct inspection confirmed the migrated value matches the source **exactly**, empty fields and all. The check's assumption, not the migration, was wrong; the check was corrected to a verbatim-match assertion and passed cleanly afterward.
+2. A check comparing video status counts as `JSON.stringify`'d objects failed because Firestore returned documents in a different iteration order than the report-building loop, producing the same six status counts serialized with different key order. Confirmed identical as sets in a separate comparison (Python `dict ==`) before treating it as resolved.
+
+No corrective writes were needed in either case, because there was nothing to correct — both were test-script artifacts, confirmed by direct inspection before moving on, exactly as instructed.
+
+## Idempotency — proven, not just designed
+
+A second `--live` run was executed against the same export and sub-account. Result: identical Firestore doc counts (still exactly 1 Brain, 2 Ideas, 15 Videos — no duplicates), and Firebase Storage still holds exactly 7 objects under `ytcs/xvnedVCmQpEvHrcPhEDI/voice-notes/` (not 14), same filenames, same byte sizes. The full read-back verification suite was re-run after this second write and passed identically.
+
+## Post-migration checks
+
+- Original export file: byte-identical (md5 `01c8adff5eed09c642ec6e51948fed4b`) before the dry run, before the live run, and after the idempotency rerun.
+- Unrelated concurrent-session work: untouched throughout (55 modified/staged files in the shared working tree, same count at every checkpoint).
+- No client-reachable import path was ever created; the importer remains a local admin-credential script only.
+
+**Phase 0 is complete.** Everything the task specified — importer, dry-run validation, live write, field-by-field no-data-loss verification, idempotency proof, security posture, unrelated-work isolation — is done.
