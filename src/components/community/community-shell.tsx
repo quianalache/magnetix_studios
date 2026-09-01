@@ -20,6 +20,7 @@ import {
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { CommunityAccountMenu } from "./community-account-menu";
+import { CommunityClientErrorReporter } from "./community-client-error-reporter";
 import { DmLauncher } from "./dm/dm-launcher";
 import { communityThemeStyle } from "@/lib/community/community-theme-presets";
 
@@ -305,6 +306,7 @@ export function CommunityShell({
       className="community-theme bg-background text-foreground min-h-screen"
       style={themeStyle}
     >
+      <CommunityClientErrorReporter saId={saId} />
       <header className="border-border bg-card border-b">{headerRow}</header>
       {mainContent}
     </div>
