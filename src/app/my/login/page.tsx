@@ -32,7 +32,7 @@ export default async function MyMagnetixLoginPage({
   // Already has a MyMagnetix session — skip the form entirely, straight to
   // the originally requested destination if one survived this far.
   const existingPerson = await getCurrentPerson();
-  if (existingPerson) redirect(destination ?? "/my/gateway");
+  if (existingPerson) redirect(destination ?? "/gateway");
 
   // Portal Member -> MyMagnetix bridge (2026-08-16): attempt the
   // automatic bridge ONLY when no error is already showing — this is
@@ -44,7 +44,7 @@ export default async function MyMagnetixLoginPage({
     const cookieStore = await cookies();
     const hasMemberCookie = !!cookieStore.get(MEMBER_SESSION_COOKIE)?.value;
     if (hasMemberCookie) {
-      redirect(`/api/my/bridge-from-member?next=${encodeURIComponent(destination ?? "/my/gateway")}`);
+      redirect(`/api/my/bridge-from-member?next=${encodeURIComponent(destination ?? "/gateway")}`);
     }
   }
 

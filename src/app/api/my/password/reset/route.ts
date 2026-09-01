@@ -25,5 +25,5 @@ export async function POST(request: Request) {
   }
 
   await setPersonSessionCookie(result.sessionToken);
-  return NextResponse.json({ ok: true, redirectTo: "/my/gateway" });
+  return NextResponse.json({ ok: true, redirectTo: "/gateway" });
 }

@@ -9,6 +9,7 @@ import { countUnreadForPerson } from "@/lib/server/notification-service";
 import { MEMBER_SESSION_COOKIE } from "@/lib/community/member-auth";
 import { MyMagnetixHeader } from "@/components/mymagnetix/header";
 import { MyMagnetixSidebarNav } from "@/components/mymagnetix/sidebar-nav";
+import { MyMagnetixInstallBanner } from "@/components/mymagnetix/install-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,7 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
             attentionItems={attentionItems}
             unreadNotificationCount={unreadNotificationCount}
           />
+          <MyMagnetixInstallBanner />
           <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         </div>
       </div>

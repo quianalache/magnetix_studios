@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpFromDot, Download, X } from "lucide-react";
+import { usePwaInstallState } from "@/hooks/use-pwa-install-state";
 
 /**
  * Mobile install prompt for the dashboard (PWA v1). Shown once, dismissible
@@ -25,54 +25,13 @@ import { ArrowUpFromDot, Download, X } from "lucide-react";
 
 const DISMISS_KEY = "leadstack-install-banner-dismissed";
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
 export function InstallBanner() {
-  const [mode, setMode] = useState<"hidden" | "android" | "ios">("hidden");
-  const [installEvent, setInstallEvent] =
-    useState<BeforeInstallPromptEvent | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(DISMISS_KEY)) return;
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (navigator as unknown as { standalone?: boolean }).standalone === true;
-    if (standalone) return;
-
-    const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
-    if (isIos) {
-      setMode("ios");
-      return;
-    }
-
-    // Chromium fires this only when the app is installable and not yet
-    // installed — the event IS the "show the banner" signal.
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallEvent(e as BeforeInstallPromptEvent);
-      setMode("android");
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
-  }, []);
+  // Detection/dismiss/install-state logic lives in the shared hook (2026-
+  // 09-01) — see its own doc comment. Behavior here is unchanged from
+  // before the extraction.
+  const { mode, dismiss, install } = usePwaInstallState(DISMISS_KEY);
 
   if (mode === "hidden") return null;
-
-  const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, "1");
-    setMode("hidden");
-  };
-
-  const install = async () => {
-    if (!installEvent) return;
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
-    if (choice.outcome === "accepted") setMode("hidden");
-  };
 
   return (
     <div className="border-b bg-card px-4 py-2.5 md:hidden">

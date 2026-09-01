@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   // specific course/community/etc. from a deep link. Threaded through
   // both credential paths below so neither one stands the destination on
   // the generic gateway.
-  const next = safeNext(body.next) ?? "/my/gateway";
+  const next = safeNext(body.next) ?? "/gateway";
 
   if (body.mode === "password") {
     const allowed = checkMemberAuthRateLimit({

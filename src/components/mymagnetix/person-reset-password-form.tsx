@@ -31,7 +31,7 @@ export function PersonResetPasswordForm({ token }: { token: string }) {
       if (!res.ok || !data.ok) {
         throw new Error(data.error ?? "Could not set password.");
       }
-      window.location.href = data.redirectTo ?? "/my/gateway";
+      window.location.href = data.redirectTo ?? "/gateway";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not set password.");
     } finally {

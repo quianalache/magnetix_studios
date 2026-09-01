@@ -48,13 +48,27 @@ import { Footer as CustomFooter } from "@/components/landing-custom/footer";
  * variant live in src/config/landing.ts (CUSTOM_BRAND).
  */
 export default async function HomePage() {
+  const host = (await headers()).get("host");
+
+  // 2026-09-01 Magnetix login/gateway launch fix: crm.magnetixstudios.com
+  // is the authentication/product-access entry point, not a second copy
+  // of the marketing site — magnetixstudios.com (and www) keep rendering
+  // the landing page below unchanged; only this exact host redirects.
+  // /my/login already does everything needed for both an already-signed-
+  // in visitor (redirects straight to /gateway) and a logged-out one
+  // (shows the existing unified staff/member sign-in) — reusing it here
+  // rather than duplicating that branch is deliberate: one real place
+  // decides "logged in or not," not two.
+  if (host === "crm.magnetixstudios.com") {
+    redirect("/my/login");
+  }
+
   // A verified sub-account custom domain's bare root ("/") is NOT this
   // platform's own marketing landing — send it wherever that sub-account
   // has configured (their existing site, a community, etc.), or a minimal
   // placeholder if they haven't set one. The shared platform domain
   // (crm.magnetixstudios.com and its `.vercel.app` origin) is unaffected —
   // getSubAccountByCustomDomain only matches a registered custom domain.
-  const host = (await headers()).get("host");
   const customDomainSub = await getSubAccountByCustomDomain(host);
   if (customDomainSub) {
     if (customDomainSub.customDomain?.rootRedirectUrl) {

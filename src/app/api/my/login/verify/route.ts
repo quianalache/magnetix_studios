@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   // this URL is the one that actually goes out in an email and could in
   // principle be hand-edited before being clicked.
   const nextParam = url.searchParams.get("next");
-  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/my/gateway";
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/gateway";
 
   try {
     const { sessionToken } = await establishPersonSessionForEmail(verified.email);

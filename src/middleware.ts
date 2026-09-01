@@ -238,6 +238,13 @@ const PUBLIC_PATHS = [
   // /login before ever reaching MyMagnetix's own login page.
   "/my",
   "/api/my",
+  // 2026-09-01: the canonical dual-role destination chooser, moved out of
+  // /my/gateway (which sat conceptually BETWEEN Business Center and
+  // MyMagnetix, and was already public via the "/my" prefix-match above)
+  // to its own neutral top-level route. Same mm_session auth-inside-the-
+  // page pattern as everything else in this block — needs its own entry
+  // since it's no longer under /my.
+  "/gateway",
   // Client Billing v1 — public checkout entry + post-checkout status page.
   // The HMAC-signed token in the URL is the credential (verified inside the
   // route against billing.checkoutTokenHash, quote-link model); a valid
@@ -304,12 +311,6 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
   // no auth required. Each competitor has its own static route under
   // src/app/leadstack-vs-{slug}/page.tsx; this regex catches them all.
   /^\/leadstack-vs-[a-z0-9-]+$/,
-  // Public Webinar registration and attendee access. Authorization is
-  // enforced by the Webinar routes using the webinar slug or signed token.
-  /^\/webinar\/[^/]+\/[^/]+$/,
-  /^\/webinar\/join\/[^/]+$/,
-  /^\/api\/webinar\/[^/]+\/[^/]+\/register$/,
-  /^\/api\/webinar\/access\/[^/]+$/,
 ];
 
 function isPublicPath(pathname: string): boolean {
@@ -321,28 +322,6 @@ function isPublicPath(pathname: string): boolean {
     return true;
   }
   return PUBLIC_PATH_PATTERNS.some((re) => re.test(pathname));
-}
-
-// Root-level Community slugs are resolved by `src/app/[groupSlug]/page.tsx`.
-// Keep the existing CRM legacy roots behind Firebase auth before allowing an
-// otherwise-unmatched single-segment path to reach Next.js routing.
-const FIREBASE_PROTECTED_ROOT_PATHS = new Set([
-  "/agency",
-  "/calendar",
-  "/contacts",
-  "/conversations",
-  "/dashboard",
-  "/forms",
-  "/pipeline",
-  "/reports",
-  "/tasks",
-]);
-
-function isPublicOrCommunityRootPath(pathname: string): boolean {
-  if (isPublicPath(pathname)) return true;
-  return (
-    /^\/[^/]+$/.test(pathname) && !FIREBASE_PROTECTED_ROOT_PATHS.has(pathname)
-  );
 }
 
 /**
@@ -433,7 +412,7 @@ export default function middleware(request: NextRequest) {
       const pathname = request.nextUrl.pathname;
 
       // Allow public paths without authentication
-      if (isPublicOrCommunityRootPath(pathname)) {
+      if (isPublicPath(pathname)) {
         return NextResponse.next();
       }
 
@@ -447,7 +426,7 @@ export default function middleware(request: NextRequest) {
       const pathname = request.nextUrl.pathname;
 
       // On error, allow public paths and redirect protected paths
-      if (isPublicOrCommunityRootPath(pathname)) {
+      if (isPublicPath(pathname)) {
         return NextResponse.next();
       }
 
