@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Check, Eye, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  Copy,
+  ExternalLink,
+  Eye,
+  Loader2,
+} from "lucide-react";
 import { Puck } from "@puckeditor/core";
 import "@puckeditor/core/puck.css";
 import "./magnetix-theme.css";
@@ -100,6 +108,19 @@ export interface MagnetixPuckEditorShellProps {
    *  `page.tsx`) via the same `saPath()` helper every other in-app link
    *  already uses, so this shell stays route-path-agnostic. */
   previewHref: string;
+  /** Whether this page genuinely has a live public page right now — either
+   *  V1 has published it, or the new builder has (see the caller's own
+   *  `hasLivePage` doc comment in `new-builder/page.tsx` for the exact
+   *  gate). Drives whether "View Live Page"/"Copy Link" render at all —
+   *  master spec's explicit "do not show a fake link for an unpublished
+   *  page." */
+  hasLivePage: boolean;
+  /** The canonical public URL for this page (custom-domain-aware via
+   *  `buildPublishedPageUrl`) — always computed by the caller even when
+   *  `hasLivePage` is false, so it's ready the instant a Publish flips
+   *  `hasLivePage` true without this shell needing its own URL-building
+   *  logic. */
+  liveUrl: string;
   initialData: Data;
 }
 
@@ -111,9 +132,20 @@ export function MagnetixPuckEditorShell({
   subAccountId,
   backHref,
   previewHref,
+  hasLivePage,
+  liveUrl,
   initialData,
 }: MagnetixPuckEditorShellProps) {
   const [data, setData] = useState<Data>(initialData);
+  // Read fresh at click-time by openPreview (below) so that callback can
+  // stay referentially stable (empty/near-empty dep array) without ever
+  // reading a stale `data` snapshot — same "ref always holds latest value"
+  // pattern `use-puck-persistence.ts`'s own `latestDataRef` already
+  // establishes for the exact same reason.
+  const latestDataRef = useRef(data);
+  useEffect(() => {
+    latestDataRef.current = data;
+  }, [data]);
   // Guards autosave against firing before the editor has actually mounted —
   // set true in a layout-safe effect below (master spec §24.12 "no save
   // before initial page load completes"). The hook's own comparison against
@@ -161,9 +193,12 @@ export function MagnetixPuckEditorShell({
    * routes, so the reverse-tabnabbing risk `noopener` normally guards
    * against doesn't apply here.
    */
-  function openPreview() {
+  const openPreview = useCallback(() => {
     try {
-      sessionStorage.setItem(previewStorageKey(pageId), JSON.stringify(data));
+      sessionStorage.setItem(
+        previewStorageKey(pageId),
+        JSON.stringify(latestDataRef.current)
+      );
     } catch {
       // sessionStorage can throw (private-browsing storage caps, quota,
       // etc.) — Preview still opens; the new tab's own "no preview data
@@ -171,16 +206,192 @@ export function MagnetixPuckEditorShell({
       // failing with no feedback at all.
     }
     window.open(previewHref, "_blank");
-  }
+  }, [pageId, previewHref]);
 
-  async function handlePublish() {
+  const handlePublish = useCallback(async () => {
     const result = await publish();
     if (result.ok) {
       toast.success("Page published");
     } else {
       toast.error(result.error);
     }
-  }
+  }, [publish]);
+
+  /**
+   * Live published-page link UX (real user QA blocker — Publish reported
+   * success but gave no obvious way to open/copy the actual public page).
+   * `liveUrl` is the same canonical `buildPublishedPageUrl` output the
+   * dashboard's PageCard now uses — never a hardcoded localhost/relative
+   * path — and both actions are only rendered at all when `hasLivePage` is
+   * true (see this component's own prop doc comment).
+   */
+  const copyLiveLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(liveUrl);
+      toast.success("Live link copied");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't copy link.");
+    }
+  }, [liveUrl]);
+
+  // Root cause of the inline-editing bug (real user QA blocker — see master
+  // spec's Known Bugs): `overrides` is ALSO a controlled `<Puck>` prop, same
+  // as `iframe`/`metadata` above, and needs the identical referential-
+  // stability treatment §3 already mandates for those two — this was simply
+  // never applied to `overrides` when Phase 2B introduced it. Passing a
+  // fresh object (and fresh `header`/`headerActions` closures) on every
+  // render was invisible for clicks/selection, but fatal for typing: `data`
+  // updates on every keystroke (that's the whole point of a controlled
+  // canvas), which re-renders this shell, which previously rebuilt
+  // `overrides` from scratch every time. Puck's own `PuckProvider` feeds
+  // `overrides` into `useLoadedOverrides` (memoized on `[plugins,
+  // overrides]`) and then into `generateAppStore` (a `useCallback` whose own
+  // deps include that loaded-overrides result), and re-runs
+  // `appStore.setState(generateAppStore(state))` every time `generateAppStore`
+  // itself gets a new identity — i.e., every keystroke, unconditionally,
+  // regardless of whether any override actually changed. That churn was
+  // enough to reset the InlineTextField's own local `isFocused` state
+  // (confirmed live: `document.activeElement` inside the canvas iframe fell
+  // back to `<body>` after exactly one typed character, exactly matching
+  // "only one character accepted"). `header`/`headerActions` are memoized
+  // via `useCallback` first (their own dependencies are ordinary React
+  // state, unrelated to `data`) so `overrides` itself is a real, stable
+  // reference across every keystroke — verified with a live Playwright
+  // repro against the QA harness before and after this fix (see task
+  // report).
+  const renderHeader = useCallback(
+    ({ children }: { children: React.ReactNode }) => (
+      <div className="border-border bg-card flex items-center gap-3 border-b px-4 py-2.5">
+        <a
+          href={backHref}
+          className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Pages &amp; Funnels
+        </a>
+        <PageStatusBadge
+          pageStatus={pageStatus}
+          puckPublishStatus={puckPublishStatus}
+        />
+        {/* Self-identifying QA badge (added after real user QA confirmed a
+            user could land in V1 and not realize it — this makes which
+            editor is on screen unambiguous at a glance, without reading
+            anything else). "New Builder Preview" per this task's explicit
+            naming guidance — not "Puck", which isn't customer-facing product
+            naming. Remove once Puck is the only editor and this distinction
+            no longer needs calling out. */}
+        <Badge
+          variant="outline"
+          className="border-primary/40 text-primary shrink-0 border-dashed"
+        >
+          New Builder Preview
+        </Badge>
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+    ),
+    [backHref, pageStatus, puckPublishStatus]
+  );
+
+  const renderHeaderActions = useCallback(
+    () => (
+      <div className="flex items-center gap-2">
+        <SaveStateIndicator state={saveState} error={saveError} />
+        {/* Live published-page link UX (real user QA blocker) — only
+            rendered once this page genuinely has a live public page (see
+            `hasLivePage`'s own doc comment). "View Live Page" opens the
+            REAL public route in a new tab; "Copy Link" copies the exact
+            same canonical URL, never a hardcoded localhost/relative
+            path. */}
+        {hasLivePage && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<a href={liveUrl} target="_blank" rel="noreferrer" />}
+            >
+              <ExternalLink className="h-4 w-4" /> View Live Page
+            </Button>
+            <Button variant="outline" size="sm" onClick={copyLiveLink}>
+              <Copy className="h-4 w-4" /> Copy Link
+            </Button>
+          </>
+        )}
+        <Button variant="outline" size="sm" onClick={openPreview}>
+          <Eye className="h-4 w-4" /> Preview
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={saveDraft}
+          disabled={saveState === "saving"}
+        >
+          {saveState === "saving" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : null}
+          Save Draft
+        </Button>
+        <Button
+          size="sm"
+          onClick={handlePublish}
+          disabled={publishState === "saving"}
+          title={
+            publishState === "error" ? (publishError ?? undefined) : undefined
+          }
+        >
+          {publishState === "saving" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : null}
+          Publish
+        </Button>
+      </div>
+    ),
+    [
+      saveState,
+      saveError,
+      hasLivePage,
+      liveUrl,
+      copyLiveLink,
+      openPreview,
+      saveDraft,
+      publishState,
+      publishError,
+      handlePublish,
+    ]
+  );
+
+  const renderDrawer = useCallback(
+    () => <MagnetixBlocksPanel config={clientPuckConfig} />,
+    []
+  );
+  const renderOutline = useCallback(
+    ({ children }: { children: React.ReactNode }) => (
+      <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
+    ),
+    []
+  );
+  const renderFields = useCallback(
+    ({ children }: { children: React.ReactNode }) => (
+      <MagnetixSettingsPanel>{children}</MagnetixSettingsPanel>
+    ),
+    []
+  );
+
+  const overrides = useMemo(
+    () => ({
+      header: renderHeader,
+      headerActions: renderHeaderActions,
+      drawer: renderDrawer,
+      outline: renderOutline,
+      fields: renderFields,
+    }),
+    [
+      renderHeader,
+      renderHeaderActions,
+      renderDrawer,
+      renderOutline,
+      renderFields,
+    ]
+  );
 
   return (
     <div className="magnetix-puck-shell bg-background text-foreground flex h-dvh flex-col">
@@ -193,87 +404,7 @@ export function MagnetixPuckEditorShell({
           viewports={VIEWPORTS}
           iframe={IFRAME_CONFIG}
           metadata={metadata}
-          overrides={{
-            header: ({ children }) => (
-              <div className="border-border bg-card flex items-center gap-3 border-b px-4 py-2.5">
-                <a
-                  href={backHref}
-                  className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
-                >
-                  <ArrowLeft className="h-4 w-4" /> Back to Pages &amp; Funnels
-                </a>
-                <PageStatusBadge
-                  pageStatus={pageStatus}
-                  puckPublishStatus={puckPublishStatus}
-                />
-                {/* Self-identifying QA badge (added after real user QA
-                    confirmed a user could land in V1 and not realize it —
-                    this makes which editor is on screen unambiguous at a
-                    glance, without reading anything else). "New Builder
-                    Preview" per this task's explicit naming guidance —
-                    not "Puck", which isn't customer-facing product naming.
-                    Remove once Puck is the only editor and this distinction
-                    no longer needs calling out. */}
-                <Badge
-                  variant="outline"
-                  className="border-primary/40 text-primary shrink-0 border-dashed"
-                >
-                  New Builder Preview
-                </Badge>
-                <div className="min-w-0 flex-1">{children}</div>
-              </div>
-            ),
-            headerActions: () => (
-              <div className="flex items-center gap-2">
-                <SaveStateIndicator state={saveState} error={saveError} />
-                <Button variant="outline" size="sm" onClick={openPreview}>
-                  <Eye className="h-4 w-4" /> Preview
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={saveDraft}
-                  disabled={saveState === "saving"}
-                >
-                  {saveState === "saving" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  Save Draft
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handlePublish}
-                  disabled={publishState === "saving"}
-                  title={
-                    publishState === "error"
-                      ? (publishError ?? undefined)
-                      : undefined
-                  }
-                >
-                  {publishState === "saving" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  Publish
-                </Button>
-              </div>
-            ),
-            // Phase 2B (master spec §6/§13): the stock text-heavy drawer
-            // and plain Outline/Fields panels are replaced with the
-            // Magnetix visual system below. Each wrapper renders Puck's
-            // OWN real content (drag mechanics, tree, fields) unmodified —
-            // only the surrounding chrome is custom. `drawer` fully
-            // replaces Puck's default library listing (not just wraps it)
-            // with MagnetixBlocksPanel, which itself is built on the
-            // public `Drawer`/`Drawer.Item` components, so the real Puck
-            // insertion/drag system is what actually runs.
-            drawer: () => <MagnetixBlocksPanel config={clientPuckConfig} />,
-            outline: ({ children }) => (
-              <MagnetixLayersPanel>{children}</MagnetixLayersPanel>
-            ),
-            fields: ({ children }) => (
-              <MagnetixSettingsPanel>{children}</MagnetixSettingsPanel>
-            ),
-          }}
+          overrides={overrides}
         />
       </div>
     </div>

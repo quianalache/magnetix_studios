@@ -18,6 +18,8 @@ import {
 } from "@/lib/pages-funnels/puck/background";
 import { BackgroundFieldEditor } from "@/components/pages-funnels/puck/background-field";
 import { StyleFieldEditor } from "@/components/pages-funnels/puck/style-field";
+import { FormFieldEditor } from "@/components/pages-funnels/puck/form-field";
+import { ImageFieldEditor } from "@/components/pages-funnels/puck/image-field";
 import {
   SectionRender,
   RowRender,
@@ -129,6 +131,38 @@ const backgroundField: CustomField<BackgroundConfig> = {
   label: "Background",
   render: ({ value, onChange }) => (
     <BackgroundFieldEditor value={value} onChange={onChange} />
+  ),
+};
+
+/**
+ * Real Magnetix Form selector (real user QA blocker — see form-field.tsx's
+ * own doc comment). Bound to the Form component's existing `formId: string`
+ * prop — the persisted Data shape is unchanged, only the Settings-panel
+ * editor for it. `label: "Choose Form"` is set on `FormFieldEditor` itself
+ * (not here) since the field needs its own `<Label>` styled consistently
+ * with the rest of that component's states (loading/empty/loaded).
+ */
+const formIdField: CustomField<string> = {
+  type: "custom",
+  label: "Form",
+  render: ({ value, onChange }) => (
+    <FormFieldEditor value={value} onChange={onChange} />
+  ),
+};
+
+/**
+ * Real Upload Image UX (real user QA blocker — see image-field.tsx's own
+ * doc comment). Bound to the Image component's existing `src: string`
+ * prop — persisted shape is unchanged, only the Settings-panel editor for
+ * it. Alt Text stays its OWN separate, plain Puck `text` field (unchanged)
+ * — no cross-field write problem to solve there, unlike Form's
+ * formId/formName pair.
+ */
+const imageSrcField: CustomField<string> = {
+  type: "custom",
+  label: "Image",
+  render: ({ value, onChange }) => (
+    <ImageFieldEditor value={value} onChange={onChange} />
   ),
 };
 
@@ -721,7 +755,7 @@ export function createPuckConfig(
       Image: {
         label: "Image",
         fields: {
-          src: { type: "text", label: "Image URL" },
+          src: imageSrcField,
           alt: { type: "text", label: "Alt Text" },
           action: actionField,
           style: mediaStyleField,
@@ -830,8 +864,21 @@ export function createPuckConfig(
       Form: {
         label: "Form",
         fields: {
-          formId: { type: "text", label: "Magnetix Form ID" },
-          formName: { type: "text", label: "Display Name (optional)" },
+          // Real user QA blocker: this used to be a raw text field asking
+          // for a Magnetix Form ID directly ("unacceptable customer UX" per
+          // that task). `formIdField` is a real dropdown of this
+          // sub-account's own Forms, showing human-readable names — see
+          // form-field.tsx. The underlying stored prop is still the same
+          // flat `formId: string` (schema-compatible with every
+          // already-persisted page), so nothing downstream (`resolve.ts`'s
+          // `collectPuckFormIds`, the publish/save flow, migrate-v1.ts)
+          // needed to change. `formName` is intentionally no longer a
+          // separately user-editable field — the selector itself already
+          // shows the real form name, and the render side's `formName` prop
+          // (still accepted, for the "not found" fallback label) is simply
+          // never written by new selections; harmless on any page that
+          // already had one from before this fix.
+          formId: formIdField,
           style: formStyleField,
         },
         defaultProps: { formId: "", formName: "", style: DEFAULT_STYLE_CONFIG },

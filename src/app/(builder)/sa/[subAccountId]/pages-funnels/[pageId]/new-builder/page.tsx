@@ -7,6 +7,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToPage } from "@/lib/firestore/pages-funnels";
 import { migratePageBlocksToPuckData } from "@/lib/pages-funnels/puck/migrate-v1";
 import { derivePuckPublishStatus } from "@/lib/pages-funnels/puck/publish-status";
+import { buildPublishedPageUrl } from "@/lib/domains/public-url";
 import type { PageDoc } from "@/types/pages-funnels";
 
 /**
@@ -51,7 +52,7 @@ export default function NewBuilderPage({
   params: Promise<{ subAccountId: string; pageId: string }>;
 }) {
   const { subAccountId, pageId } = use(params);
-  const { saPath } = useSubAccount();
+  const { saPath, subAccount } = useSubAccount();
 
   const [page, setPage] = useState<PageDoc | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -81,6 +82,22 @@ export default function NewBuilderPage({
   const puckPublishStatus = useMemo(
     () => (page ? derivePuckPublishStatus(page) : "v1-only"),
     [page]
+  );
+
+  // Live-link discoverability fix (real user QA blocker): "genuinely
+  // published" means EITHER V1 has ever published this page
+  // (`page.status === "published"`) OR the new builder has
+  // (`page.puckPublishedData` set) — matches the exact same gate the
+  // Pages & Funnels dashboard's PageCard now uses, so the two surfaces can
+  // never disagree about whether a live link exists. `page` is a live
+  // Firestore subscription, so this recomputes automatically the moment a
+  // real Publish click writes `puckPublishedData`/`status` — no extra
+  // plumbing needed for "View Live Page appears right after Publish."
+  const hasLivePage =
+    !!page && (page.status === "published" || !!page.puckPublishedData);
+  const liveUrl = useMemo(
+    () => buildPublishedPageUrl({ subAccount, pageId }),
+    [subAccount, pageId]
   );
 
   if (!loaded) {
@@ -114,6 +131,8 @@ export default function NewBuilderPage({
       subAccountId={subAccountId}
       backHref={saPath("/pages-funnels")}
       previewHref={saPath(`/pages-funnels/${page.id}/new-builder/preview`)}
+      hasLivePage={hasLivePage}
+      liveUrl={liveUrl}
       initialData={initialData}
     />
   );

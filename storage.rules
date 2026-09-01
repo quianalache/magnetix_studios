@@ -61,6 +61,19 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Pages & Funnels Image element uploads (real user QA blocker — the
+    // Image element previously only accepted a raw pasted URL) — same
+    // rules, independent path. Public read: a published Puck page
+    // (`/p/[pageId]`) is a public route, fetched by visitors with no
+    // Firebase session at all, same rationale as every match block above.
+    match /pages-funnels/{subAccountId}/{pageId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Default deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;

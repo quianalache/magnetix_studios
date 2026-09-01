@@ -18,8 +18,12 @@ interface HasCustomDomain {
   } | null;
 }
 
-function verifiedDomain(sub: HasCustomDomain | null | undefined): string | null {
-  return sub?.customDomain?.status === "verified" ? sub.customDomain.domain : null;
+function verifiedDomain(
+  sub: HasCustomDomain | null | undefined
+): string | null {
+  return sub?.customDomain?.status === "verified"
+    ? sub.customDomain.domain
+    : null;
 }
 
 /**
@@ -52,7 +56,9 @@ export function buildDecoderUrl(opts: {
   subAccountId: string;
 }): string {
   const domain = verifiedDomain(opts.subAccount);
-  return domain ? `https://${domain}/decoder` : `${platformOrigin()}/decoder/${opts.subAccountId}`;
+  return domain
+    ? `https://${domain}/decoder`
+    : `${platformOrigin()}/decoder/${opts.subAccountId}`;
 }
 
 /**
@@ -157,9 +163,35 @@ export function buildPortalLoginPageUrl(opts: {
  * Same domain-or-platform choice as `buildPortalLoginUrl`, just without a
  * path baked in, since these callers append their own.
  */
-export function resolvePortalOrigin(subAccount: HasCustomDomain | null | undefined): string {
+export function resolvePortalOrigin(
+  subAccount: HasCustomDomain | null | undefined
+): string {
   const domain = verifiedDomain(subAccount);
   return domain ? `https://${domain}` : platformOrigin();
+}
+
+/**
+ * Pages & Funnels' published-page link (master spec §24.12/§24.13's
+ * "discoverable live link" requirement) — the exact same verified-domain-
+ * or-opaque-fallback choice as every other builder here. The current public
+ * renderer is `/p/[pageId]` (master spec's own §4 "Public route" note);
+ * this deliberately does NOT introduce a slug-based route or any new public
+ * route — `slug` exists on `PageDoc` but nothing resolves pages by it yet,
+ * and inventing that here would be redesigning routing this task
+ * explicitly isn't scoped for. On a verified custom domain the SAME
+ * `/p/{pageId}` path is used under that domain (not a prettier path) —
+ * the id-based route is the "strongest existing architecture" today; a
+ * future slug/custom-domain routing task can replace this builder's
+ * innards without any caller needing to change.
+ */
+export function buildPublishedPageUrl(opts: {
+  subAccount: HasCustomDomain | null | undefined;
+  pageId: string;
+}): string {
+  const domain = verifiedDomain(opts.subAccount);
+  return domain
+    ? `https://${domain}/p/${opts.pageId}`
+    : `${platformOrigin()}/p/${opts.pageId}`;
 }
 
 /**

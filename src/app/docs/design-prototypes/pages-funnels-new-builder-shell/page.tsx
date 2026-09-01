@@ -40,6 +40,75 @@ const NewBuilderEditor = dynamic(
 const fixtureBlocks = PAGE_TEMPLATES[0].blocks();
 const fixtureData = migratePageBlocksToPuckData(fixtureBlocks);
 
+// QA-only addition (Puck user-QA blockers task): the "Free Guide Landing
+// Page" V1 template has no Form or Image block, so there was previously no
+// way to click-select one in this harness to verify the new Form
+// selector/Image upload field editors without also needing real drag-and-
+// drop across the canvas iframe boundary (a separately-documented Playwright
+// friction, unrelated to these field editors themselves — see master spec
+// Known Bugs). Appending one empty Form + Image element gives every future
+// session a stable, click-to-select fixture for both, no drag required.
+fixtureData.content.push({
+  type: "Section",
+  props: {
+    id: "qa-form-image-section",
+    background: { source: "none", color: { mode: "solid", solid: "" } },
+    style: {},
+    maxWidth: "contained",
+    fullWidthBackground: true,
+    paddingTop: 48,
+    paddingBottom: 48,
+    rows: [
+      {
+        type: "Row",
+        props: {
+          id: "qa-form-image-row",
+          background: { source: "none", color: { mode: "solid", solid: "" } },
+          style: {},
+          gap: 24,
+          verticalAlign: "top",
+          columns: [
+            {
+              type: "Column",
+              props: {
+                id: "qa-form-image-col",
+                background: {
+                  source: "none",
+                  color: { mode: "solid", solid: "" },
+                },
+                style: {},
+                width: "full",
+                alignment: "left",
+                elements: [
+                  {
+                    type: "Form",
+                    props: {
+                      id: "qa-test-form",
+                      formId: "",
+                      formName: "",
+                      style: {},
+                    },
+                  },
+                  {
+                    type: "Image",
+                    props: {
+                      id: "qa-test-image",
+                      src: "",
+                      alt: "",
+                      action: { type: "none" },
+                      style: {},
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+  },
+});
+
 export default function NewBuilderShellQaPage() {
   // QA-only: the real Magnetix theme class is normally applied by
   // <AppAccent/> (mounted in (dashboard) and, as of this task,
@@ -64,6 +133,8 @@ export default function NewBuilderShellQaPage() {
       subAccountId="qa-fixture-subaccount"
       backHref="/docs/design-prototypes/pages-funnels-new-builder-shell"
       previewHref="/docs/design-prototypes/pages-funnels-new-builder-shell/preview"
+      hasLivePage={false}
+      liveUrl="https://example.com/p/qa-fixture-page"
       initialData={fixtureData}
     />
   );

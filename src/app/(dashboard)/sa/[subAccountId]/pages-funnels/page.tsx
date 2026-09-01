@@ -35,6 +35,7 @@ import {
 import { PAGE_TEMPLATES, getTemplate } from "@/lib/pages-funnels/templates";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { buildPublishedPageUrl } from "@/lib/domains/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,7 @@ import type {
   PageType,
 } from "@/types/pages-funnels";
 import { PAGE_GOAL_LABELS, PAGE_TYPE_LABELS } from "@/types/pages-funnels";
+import type { SubAccountDoc } from "@/types";
 
 const PAGE_TYPE_TILES: {
   type: PageType;
@@ -102,7 +104,7 @@ type CreateMethod = "blank" | "template" | "ai";
 
 export default function PagesFunnelsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subAccountId, agencyId, saPath } = useSubAccount();
+  const { subAccountId, agencyId, subAccount, saPath } = useSubAccount();
   const router = useRouter();
 
   const [pages, setPages] = useState<PageDoc[]>([]);
@@ -192,6 +194,7 @@ export default function PagesFunnelsPage() {
             <PageCard
               key={page.id}
               page={page}
+              subAccount={subAccount}
               editHref={saPath(`/pages-funnels/${page.id}`)}
               newBuilderHref={saPath(`/pages-funnels/${page.id}/new-builder`)}
               onDuplicate={() => handleDuplicate(page)}
@@ -206,18 +209,40 @@ export default function PagesFunnelsPage() {
 
 function PageCard({
   page,
+  subAccount,
   editHref,
   newBuilderHref,
   onDuplicate,
   onDelete,
 }: {
   page: PageDoc;
+  subAccount: SubAccountDoc | null;
   editHref: string;
   newBuilderHref: string;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const updated = toDate(page.updatedAt);
+  // A page has a genuinely live public page whenever EITHER V1 has ever
+  // published it (`page.status === "published"`, the pre-Puck publish
+  // flag `/p/[pageId]` has always respected) OR the new builder has
+  // (`page.puckPublishedData` set — Puck Persistence + Publish Foundation
+  // task). Never show/enable a live-link action for a page that's never
+  // actually been published from either editor — master spec's explicit
+  // "do not show a fake link for an unpublished page" requirement.
+  const hasLivePage = page.status === "published" || !!page.puckPublishedData;
+  const liveUrl = buildPublishedPageUrl({ subAccount, pageId: page.id });
+
+  async function copyLiveLink() {
+    try {
+      await navigator.clipboard.writeText(liveUrl);
+      toast.success("Live link copied");
+    } catch (err) {
+      console.error(err);
+      toast.error("Couldn't copy link.");
+    }
+  }
+
   return (
     <div className="group border-border bg-card hover:border-primary/30 flex flex-col rounded-2xl border p-5 transition-all hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -236,13 +261,27 @@ function PageCard({
             <DropdownMenuItem render={<a href={editHref} />}>
               <Pencil className="h-3.5 w-3.5" /> Edit
             </DropdownMenuItem>
-            <DropdownMenuItem
-              render={
-                <a href={`/p/${page.id}`} target="_blank" rel="noreferrer" />
-              }
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> Preview
-            </DropdownMenuItem>
+            {/* Real-user-QA blocker fix: the previous "Preview" item always
+                linked to the raw `/p/[pageId]` path regardless of whether
+                the page had ever actually been published — a real
+                misleading-link bug (master spec's explicit "do not show a
+                fake link for an unpublished page"). Now genuinely gated on
+                `hasLivePage`, uses the canonical custom-domain-aware
+                `buildPublishedPageUrl`, and is joined by a real "Copy Live
+                Link" action — the same pair the builder toolbar itself now
+                exposes after Publish. */}
+            {hasLivePage && (
+              <>
+                <DropdownMenuItem
+                  render={<a href={liveUrl} target="_blank" rel="noreferrer" />}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> View Live Page
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={copyLiveLink}>
+                  <Copy className="h-3.5 w-3.5" /> Copy Live Link
+                </DropdownMenuItem>
+              </>
+            )}
             {/* Phase 2A temporary testing entry point (master spec §6/§13,
                 Phase 2A task §5) — the real, CRM-integrated, Magnetix-styled
                 Puck editor, session-local safe-testing only. Not gated
