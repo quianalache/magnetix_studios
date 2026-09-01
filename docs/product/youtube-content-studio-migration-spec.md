@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-**Phase 0 (import architecture + data rescue) is COMPLETE**, and its Channel Brain data has since been **promoted to a shared, sub-account-owned Business Brain architecture** (below) — Channel Brain is no longer conceptually owned by YouTube Content Studio. The owner's real strategic context (Creator Vision, Audience, Offers ×3, Frameworks ×1, Stories+Proof ×1, Brand Voice, Topics ×1, Subtopics ×1, Positioning) is canonically at `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`; the historical `ytcs/brain` location is retained, unmutated except for additive deprecation markers, and is no longer the editable source. 2 Saved Ideas and 15 Video Projects remain YTCS-specific and stay at `ytcsIdeas`/`ytcsVideos`, unaffected by this move. All 7 real voice recordings remain migrated to Firebase Storage from Phase 0. No Channel Brain/Business Brain UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum and the **Business Brain Architecture** section (after §26) for full details.
+**Phase 0 (import architecture + data rescue) is COMPLETE.** Channel Brain data has since been **promoted to a shared, sub-account-owned Business Brain architecture** and now has its **first Magnetix-native UI**, live in production at Settings → Business Brain. The owner's real strategic context (Creator Vision, Audience, Offers ×3, Frameworks ×1, Stories+Proof ×1, Brand Voice, Topics ×1, Subtopics ×1, Positioning) is canonically at `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`, readable and editable through that UI; the historical `ytcs/brain` location is retained, unmutated except additive deprecation markers. 2 Saved Ideas and 15 Video Projects remain YTCS-specific at `ytcsIdeas`/`ytcsVideos`, unaffected. All 7 real voice recordings remain in Firebase Storage from Phase 0. No YouTube Content Studio UI, no Content Alchemy Lab, no navigation entry for either, and no Phase 1 work has started. See the Phase 0 addendum, the **Business Brain Architecture** section, and the **Business Brain UI** section (after §26) for full details.
 
 ## SOURCE MATERIAL
 
@@ -63,7 +63,7 @@ Kept genuinely open — see §20 for full detail:
 
 ## NEXT APPROVED TASK
 
-None yet. Business Brain architecture/migration is done; Business Brain UI, YouTube Content Studio Phase 1, and Content Alchemy Lab all have no approval and should not start automatically.
+None yet. Business Brain UI is done and live in production; YouTube Content Studio Phase 1 and Content Alchemy Lab both have no approval and should not start automatically. One open item before fully closing this pass: a genuine interactive click-through QA pass (add/edit/delete via the real UI, responsive layout) is still needed from a browser session with working client-side auth — see the **Business Brain UI** section's QA note.
 
 ---
 
@@ -1528,3 +1528,52 @@ No special "give me sections X, Y, Z" API was built — deliberately, per "do no
 All 15 items from this task's QA list were verified directly (not assumed): original `ytcs/brain` confirmed to exist before migration; new `businessBrain/main` confirmed created correctly; every real field confirmed preserved (25-check suite above); all nested records (offers/frameworks/stories/topics/subtopics/legacy) confirmed preserved; exact counts (3/1/1/1/1) confirmed; all 8 sections confirmed represented; no duplicate logical Brain records (exactly 1 doc in each of the two collections); the shared reader's logic confirmed correct against real written data; `ytcsIdeas`/`ytcsVideos` confirmed unaffected (2/15, unchanged); and the unrelated 55-file concurrent-session work confirmed untouched throughout (same count at every checkpoint in this pass). `npx eslint` clean on all 3 new files; `npx tsc --noEmit` clean (0 errors) across the whole project.
 
 **Business Brain architecture and migration are complete.** No Business Brain UI, no YouTube Content Studio Phase 1, no Content Alchemy Lab — none of these were started, per instruction.
+
+---
+
+# Business Brain UI (2026-09-01)
+
+## Settings location
+
+**Settings → Business Brain** — a new tab inside the existing Sub-Account Settings page (`src/app/(dashboard)/sa/[subAccountId]/dashboard/settings/page.tsx`'s `Tabs`), alongside Admin/Messaging/API/Custom Fields/Importer. Not under Agency-level settings, not under YouTube Content Studio (which doesn't have a nav entry yet) — sub-account-level, per instruction.
+
+## Structure
+
+Business Brain's tab content has its own inner section navigation — a `SegmentedControl` (existing component, no new pattern) over the 8 canonical sections — so switching between Creator Vision/Audience/Offers/Frameworks/Stories + Proof/Brand Voice/Topics + Subtopics/Positioning never forces a giant single page.
+
+## Write path
+
+`GET`/`PATCH /api/sub-accounts/[id]/business-brain` — `GET` calls `getBusinessBrain()` directly (the same canonical reader every future consumer uses); `PATCH` merge-writes only whichever of the 9 canonical section keys (`vision`/`audience`/`offers`/`frameworks`/`stories`/`voice`/`topics`/`subtopics`/`positioning`) are present in the request body. `legacy`/`unknownFields`/the Phase-0 provenance fields are not in that allowed-key list, so no save action from this UI can reach or wipe them — structurally, not just by convention. Auth: `requireSubAccountAdmin`, the same guard every other sub-account settings write route uses.
+
+Each section's save action calls this one endpoint with just its own section: singleton sections (Vision/Audience/Voice) send the whole edited object on an explicit "Save" click, mirroring `sub-account-branding-section.tsx`'s hydrate-once/edit/Save/toast pattern exactly. List sections (Offers/Frameworks/Stories) send the whole updated array on each add/edit/delete action (Firestore has no partial-array-element write), presented to the user as a single-record action — matching the original tool's own "cards collapse after save" UX (migration spec §4.3–§4.5). Topics + Subtopics saves `{topics, subtopics}` together on any change to either, since a Subtopic references its parent Topic by id and the two arrays need to stay consistent.
+
+## Section results
+
+- **Creator Vision, Audience, Brand Voice** — one generic `SectionFieldForm` component drives all three (same shape: a fixed set of labeled multiline fields on one object). Audience's 5 Awareness Stage fields render under their own subheading, per instruction to group for readability.
+- **Offers, Frameworks, Stories + Proof** — one generic `RecordListEditor` drives all three (add/expand/edit/Save/Delete-with-confirm). Every canonical field from migration spec §4.3–§4.5 is editable; Primary CTA/Soft CTA are not present (never existed in the real data — nothing to resurrect). A framework's real `relatedPillar` field is preserved on every save (records are always spread, never rebuilt from just the edited fields) but has no editable control in the UI, so the deprecated "Pillar" term can't resurface there.
+- **Topics + Subtopics** — its own component (`topics-tab.tsx`) for the real parent/child hierarchy: each Topic card nests its Subtopics with their own add/edit/delete, `parentTopic` always set correctly on create, and deleting a Topic warns about and removes its Subtopics together.
+- **Positioning** — renders the real 12 Positioning Elements™ (`src/lib/business-brain/positioning-elements.ts`, verbatim slugs/names/definitions) as 3 checkbox groups (Most-Used / Want to Practice More / Do NOT Fit) plus a Notes field. Not wired into any AI generation or into Script Prompt Builder — pure data management, per instruction.
+
+## Legacy-data protection
+
+`legacy` (Brain-level `method`/`pillars`) is structurally unreachable by any PATCH this UI ever sends — not filtered out by a check, but simply never in the allowed-key list the API route accepts, so there is no code path in this pass that could wipe it even by accident.
+
+## Real-data QA (2026-09-01, against the live production API)
+
+Interactive click-through QA (the literal "open the tab, click Edit, type, click Save" flow) could not be completed this pass — the CDP-connected test browser's client-side Firebase Auth/Firestore state was stale (a long-lived tab reused across many hours of this session), so `useSubAccount()`'s client-computed `isAdmin` evaluated false and every admin-gated section — including pre-existing ones with no connection to this work, like the Admin tab's Branding and Account Contact sections — rendered nothing. This was confirmed to be a pre-existing browser-session condition, not a regression from this work: a fresh tab in the same browser showed the identical gap, and even the sub-account's own name (`subAccount?.name`, a completely separate Firestore listener) failed to resolve in the same tab, pointing at a broader stale-client-SDK-state issue of the same class already documented and defended against elsewhere in this codebase (`firebase-js-sdk#9267`), not anything specific to Business Brain.
+
+**What was verified instead, directly against the live production deployment and the real Business Brain document**, via authenticated `fetch()` calls made from inside that same browser tab (so real session cookies, real `requireSubAccountAdmin` auth, real Firestore — the exact same server-side path the UI's own code calls):
+
+- Baseline `GET` confirmed the real data: 3 offers, 1 framework, 1 story, 1 topic, 1 subtopic, Creator Vision/Audience/Brand Voice all present, Positioning's real 7 `mostUsed` elements, both legacy sections (`method`/`pillars`) present.
+- Added one clearly-labeled disposable QA record (`"QA TEST - DELETE ME"`) as a 4th offer via `PATCH`. Confirmed via `GET` that it persisted and — critically — that every other section (frameworks/stories/topics/subtopics/vision/legacy) was byte-for-byte unchanged, proving partial-section saves cannot wipe unrelated sections.
+- Removed the QA record via a second `PATCH`. Final `GET` confirmed the document matches the original baseline **exactly** across every section (offers/frameworks/stories/topics/subtopics/vision/audience/voice/positioning/legacy all byte-identical) — a clean, lossless round trip with zero residue.
+- Cross-sub-account isolation: `GET` against the other real sub-account ("Test") returned `brain: null` — confirmed as a completely separate, unrelated document, no cross-contamination.
+- Visual check: the Business Brain tab itself renders correctly and integrates cleanly into the existing Tabs shell (screenshot taken) — the tab pill highlights correctly on selection, no layout break, no console errors, no failed requests. Only the gated panel content beneath it is empty, for the auth-staleness reason above.
+
+**This verifies the entire persistence architecture end-to-end with real production data and zero data loss — but does not substitute for a real interactive UI walkthrough.** That remains a genuine open item: someone with a fresh, properly-authenticated browser session should click through add/edit/delete on each section and confirm the responsive layout at desktop/tablet/mobile widths before this is considered fully QA'd. Nothing found in this pass suggests the UI code itself has a defect — `tsc --noEmit` and `eslint` are both clean, and the component tree renders (confirmed by the correctly-selected tab pill) right up to the point the pre-existing auth-staleness gate stops it.
+
+## Files changed
+
+`src/app/(dashboard)/sa/[subAccountId]/dashboard/settings/page.tsx` (+12 lines: import, TabsTrigger, TabsContent block), `src/app/api/sub-accounts/[id]/business-brain/route.ts` (new), `src/components/settings/sub-account-business-brain-section.tsx` (new, orchestrator), `src/components/settings/business-brain/{field-form,positioning-tab,record-list-editor,topics-tab}.tsx` (new), `src/lib/business-brain/{enums,positioning-elements}.ts` (new).
+
+**Business Brain UI is live in production.** No YouTube Content Studio UI, no Content Alchemy Lab, no navigation entry for either — none started, per instruction.
