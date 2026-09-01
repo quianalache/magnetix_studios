@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-Specification complete. **No implementation has started.** No Magnetix code has been changed, no packages installed, no Firestore writes made, no navigation added. This document is the deliverable for this pass.
+Specification complete. **Phase 0 (import architecture + data rescue) is built and dry-run validated end-to-end against the real export — zero unknown fields, zero document-size risk, full field-by-field reconciliation.** Live migration (the actual Firestore/Storage writes) has not run — it was correctly blocked pending explicit confirmation, since it writes real, currently-irreplaceable owner data. No Channel Brain/Video Workspace UI, no navigation, and no Phase 1 work has started. See the Phase 0 addendum at the end of this document for the full importer spec and dry-run findings.
 
 ## SOURCE MATERIAL
 
@@ -52,15 +52,15 @@ Kept genuinely open — see §20 for full detail:
 2. The exact backend mechanism/prompt behind the one confirmed real internal AI call (Deep Dive Questions) — not recoverable from any of the three sources; must be newly designed.
 3. Whether `communityPost` is a standalone Publish-step field or belongs to a future Content Alchemy Lab / Social Planner integration.
 4. Whether "Balanced" and "Concise" Depth Preference values (asserted only by the dossier) are real, ever-shipped options or aspirational.
-5. Whether voice-note transcription is genuinely implemented anywhere (no transcript text was found attached to any of the 8 real voice-note recordings in the export).
+5. Whether voice-note transcription is genuinely implemented anywhere (no transcript text was found attached to any of the 7 real voice-note recordings in the export).
 
 ## DATA MIGRATION STATUS
 
-**Not started.** Real export available and fully schema-mapped (§17, §20, §21). Import has not been run. Audio voice-note blobs (8 real recordings, inline base64 in the export) are flagged as a **hard blocker for direct Firestore document storage** — see §19 and §21.
+**Phase 0 importer built and dry-run validated end-to-end against the real export; live migration has not been executed — it requires explicit go-ahead (Firestore/Storage writes of real, currently-irreplaceable owner data are a genuinely hard-to-reverse action, so this is a deliberate stop, not an oversight).** Audio voice-note blobs (7 real recordings, inline base64 in the export — corrected during Phase 0 from an earlier estimate of 8 via an exhaustive recursive scan of the whole export tree) were flagged as a hard blocker for direct Firestore document storage; the Phase 0 importer resolves this by uploading each to Firebase Storage and storing only a reference on the Firestore record — see §19, §21, and the Phase 0 addendum at the end of this document.
 
 ## NEXT APPROVED TASK
 
-None yet — this document ends with a recommendation (§25), not an authorization. Await explicit go-ahead before Phase 0.
+Awaiting explicit go-ahead to run the Phase 0 importer in `--live` mode (writes real data to `subAccounts/xvnedVCmQpEvHrcPhEDI` — the "Main" sub-account — in Firestore and Firebase Storage). The importer itself, its dry run, and the full reconciliation report are already built and verified; only the actual write is pending. Phase 1 (Channel Brain UI) has no approval and should not start automatically once Phase 0's live write completes.
 
 ---
 
@@ -687,7 +687,7 @@ Real export evidence: `scriptOutputType` and `depthPreference` are `None`/unset 
 
 ## Voice-note behavior (VERIFIED live via real recordings in the export)
 
-Real, populated voice-note fields on Video Projects: `brainDumpVoiceNotes`, `scriptBuilderVoiceNotes`, `productOfferDeepDiveVoiceNotes` — each an array of `{ id, audioBase64 }` objects, audio stored as inline `data:audio/webm;base64,...` — **no transcription text was found attached to any of the 8 real recordings across the export.** This means: voice-note *recording and storage* is CONFIRMED ACTIVE; voice-note *transcription* is UNVERIFIED — the dossier describes transcription behavior ("Voice note transcription:" label, "append not overwrite") but the real export shows only raw audio, never a resulting transcript merged into a text field. Treat transcription as a documented **intended** behavior, not a confirmed-working one. Full spec in §19.
+Real, populated voice-note fields on Video Projects: `brainDumpVoiceNotes`, `scriptBuilderVoiceNotes`, `productOfferDeepDiveVoiceNotes` — each an array of `{ id, audioBase64 }` objects, audio stored as inline `data:audio/webm;base64,...` — **no transcription text was found attached to any of the 7 real recordings across the export.** This means: voice-note *recording and storage* is CONFIRMED ACTIVE; voice-note *transcription* is UNVERIFIED — the dossier describes transcription behavior ("Voice note transcription:" label, "append not overwrite") but the real export shows only raw audio, never a resulting transcript merged into a text field. Treat transcription as a documented **intended** behavior, not a confirmed-working one. Full spec in §19.
 
 **Critical technical flag:** storing raw base64 audio inline inside the record (rather than a separate blob reference) is workable in `localStorage`/a JSON export but is a **hard blocker for storing voice notes as fields on a Firestore document** — Firestore has a 1MB per-document limit and inline base64 audio can exceed that alone. Voice notes must migrate to Firebase Storage with the Firestore field holding a reference/URL, not inline audio. See §21.
 
@@ -1251,7 +1251,7 @@ Intended surfaces (dossier + confirmed by real populated fields where noted):
 | Script Prompt Builder → Extra Script Notes | `scriptBuilderVoiceNotes` | CONFIRMED ACTIVE (populated) |
 | Saved Ideas | `ideaVoiceNotes` | CONFIRMED ACTIVE (populated on a real idea) |
 
-**Recording format (VERIFIED from real data):** each voice note is `{ id: uuid, audioBase64: "data:audio/webm;base64,..." }` — WebM audio, inline base64, no separate blob storage, no timestamp, no location-in-app field, no question/label linkage field, and **no transcription field ever populated** on any of the 8 real recordings found in the export (one exception: `productOfferDeepDiveAnswers`' free text shows a transcript-like line prefixed "Voice note transcription:" appearing to have been produced once for that specific field — see §8B — but this is text embedded in a different field, not a `transcription` key on the voice-note object itself).
+**Recording format (VERIFIED from real data):** each voice note is `{ id: uuid, audioBase64: "data:audio/webm;base64,..." }` — WebM audio, inline base64, no separate blob storage, no timestamp, no location-in-app field, no question/label linkage field, and **no transcription field ever populated** on any of the 7 real recordings found in the export (one exception: `productOfferDeepDiveAnswers`' free text shows a transcript-like line prefixed "Voice note transcription:" appearing to have been produced once for that specific field — see §8B — but this is text embedded in a different field, not a `transcription` key on the voice-note object itself).
 
 **Reconciling the dossier's fuller voice-note spec** (append-not-overwrite behavior, "Voice note transcription:" label, Transcribe to Answer behavior, date/time, location, question/label linkage): these are **documented intent, not confirmed implementation**. Only recording + storage is confirmed real. Build the storage/recording layer first (confirmed, low-risk); treat transcription and the richer metadata (date/time, location, question linkage) as **PARTIALLY DESIGNED**, to be built new rather than "ported."
 
@@ -1338,7 +1338,7 @@ The exact historic Deep Dive model/provider was not preserved by any of the thre
 | Settings — Export/Clear All Data | Export live-verified working; Clear untested | Planned/recommended | The real export itself is proof this works | **BUILD AS-IS** (export); Clear is destructive, spec only, don't test | §16 |
 | Settings — PDF/Brand Vision prompt | Button exists live, content uncaptured | Not detailed | — | **PARTIAL / NEEDS DECISION** | §16 |
 | Positioning Elements Library | Live-verified, full text captured | Matches exactly | mostUsed/practiceMore/notFit slugs confirm | **BUILD AS-IS** | §4.8, §17 |
-| Voice notes — recording/storage | Not live-tested (no mic interaction attempted) | Requested, "requires live verification" | Confirmed real, 8 real recordings | **BUILD AS-IS (storage architecture changed, §19/§21)** | |
+| Voice notes — recording/storage | Not live-tested (no mic interaction attempted) | Requested, "requires live verification" | Confirmed real, 7 real recordings | **BUILD AS-IS (storage architecture changed, §19/§21)** | |
 | Voice notes — transcription | Not live-tested | Requested, described in detail | Zero confirmed transcriptions found | **PARTIAL / NEEDS DECISION** | §19 |
 | Real login / cloud sync | N/A (client-side only, confirmed via direct localStorage inspection in prior audit) | Explicitly deferred, "do not build fake login" | Confirms no auth in the export | **BUILD AS-IS as Magnetix auth** | Not fake — real Magnetix auth replaces client-only storage entirely, per dossier's own explicit direction |
 
@@ -1393,3 +1393,68 @@ This defers the §18/§24 genuinely-unresolved items (the structured script-buil
 # 26. This Document
 
 Location: `docs/product/youtube-content-studio-migration-spec.md`. Read this before any YouTube Content Studio implementation work. Update **CURRENT STATUS** and **DATA MIGRATION STATUS** at the top after each phase.
+
+---
+
+# Phase 0 Addendum — Importer Built and Dry-Run Validated (2026-09-01)
+
+## What this is
+
+`scripts/migrate-youtube-content-studio.mjs` — a standalone, one-time, admin-credential migration script, deliberately **not** an HTTP route (per this phase's explicit security requirement: no public/client-reachable import endpoint). It follows the exact pattern already established by `scripts/migrate-energetic-profiles.mjs`: reads `.env.local` directly, initializes `firebase-admin` with the service-account cert, defaults to a zero-write dry run, and only writes with an explicit `--live` flag.
+
+```
+node scripts/migrate-youtube-content-studio.mjs \
+  --file=<path to youtube-studio-backup-*.json> \
+  --subAccountId=<id> \
+  [--report=<path to write the full JSON reconciliation report>] \
+  [--live]
+```
+
+`--file` and `--subAccountId` are both required with no default — the target sub-account is never guessed. The script confirms the sub-account document actually exists in Firestore before doing anything else, and aborts with no writes if not.
+
+## Field classification (the code-form of §18/§23)
+
+Every field on every Brain section, Idea, and Video record is classified into exactly one bucket:
+
+- **MAPPED** — copied verbatim to its canonical field on the new doc.
+- **LEGACY** — copied verbatim into a `legacy` sub-object on the doc (Brain: the pre-rename `method`/`pillars` keys; Video: the structured-script-builder cluster, the in-app title-generator output, and the thumbnail fields — see §18). Never surfaced by any UI this phase.
+- **UNKNOWN** — anything not in either list is copied into an `unknownFields` sub-object and loudly flagged in the report, never silently dropped.
+
+Dry-run result against the real export: **zero unknown fields** — every field on every one of the 18 real records (1 Brain, 2 Ideas, 15 Videos) matched a known MAPPED or LEGACY classification. This confirms the migration spec's §18 reconciliation was complete, not just directionally correct.
+
+## Voice notes → Firebase Storage
+
+Reused the existing community voice-note upload pattern (`src/app/api/community/[saId]/voice-notes/route.ts`) for the Storage path shape and download-URL construction. Storage path: `ytcs/{subAccountId}/voice-notes/{voiceNoteId}.{ext}` — deliberately keyed **only** by the voice note's own source id (never a timestamp), so a rerun overwrites the same Storage object instead of creating a duplicate.
+
+An exhaustive recursive scan of the entire export tree (every `audioBase64` occurrence, not just the fields this script knows about) found **7 real voice recordings**, not 8 as the live-audit-only pass had estimated — corrected throughout this document. All 7 are real `audio/webm` recordings ranging 75KB–436KB, attached to: 1 Saved Idea (1 note), 1 Saved Idea (2 notes), and 3 Video Projects (1, 1, and 2 notes respectively).
+
+Per-voice-note metadata preserved: id, attached entity type + id, location in app (human-readable, e.g. "Video Workspace > Deep Dive (Product/Offer)"), MIME type, byte size, Storage path, and — where the source text made it recoverable — a best-effort question association (parsed from the literal "Question N: ..." prefix the live app itself writes into `productOfferDeepDiveAnswers`; only ever populated when that exact pattern is found, never invented). Recording timestamp and transcription are recorded as `null` on every voice note — **the source data does not carry either field anywhere**, confirmed by the same exhaustive scan, so neither is fabricated.
+
+## Document size safety — real numbers
+
+| | Largest real doc | Firestore limit | Headroom |
+|---|---|---|---|
+| Any Firestore doc this importer writes (voice notes excluded — they go to Storage, not Firestore) | 81,452 bytes (`86417107...`) | 1,048,576 bytes | 92% free |
+
+For comparison: that same video record, if its voice notes had been left inline as base64 (i.e., the shape the source data was actually in), would have been within reach of a document that size — one real record elsewhere in the export (`c832488e...`, not this one) reaches 797KB with voice notes inline, 76% of the Firestore limit from voice audio alone. This is the concrete evidence behind §19's "hard blocker" call, and the Storage migration resolves it completely: the largest Firestore document this importer ever writes is under 8% of the limit.
+
+## Two fields confirmed absent from the source (not dropped — never existed)
+
+`uploadChecklist` and `optimizationChecklist` — the live-audited Publish screen shows both checklists on screen, but neither field name appears anywhere in any of the 15 real video records. `finalReviewChecklist`, `recordingChecklist`, and `editingChecklist` are real and migrated. This is a genuine absence in the persisted data, not an importer decision — flagged here rather than silently noted only in a log.
+
+## Dry-run reconciliation summary (full detail in the script's own report output)
+
+- Channel Brain: all 9 current sections found and mapped (vision, audience, offers ×3, frameworks ×1, stories ×1, voice, topics ×1, subtopics ×1, positioning); both legacy sections (`method`, `pillars`) found non-empty-in-part and preserved under `brain.legacy`. Brain doc: 26,173 bytes.
+- Saved Ideas: 2 found, both mapped, both real (3 voice notes between them).
+- Video Projects: 15 found. Status distribution: Compiled Script Ready ×1, Deep Dive ×4, Input ×4, Create Video ×1, Publish ×1, Script Prompt Builder ×4. 3 of 15 carry real legacy-cluster data (structured script-builder fields and/or in-app-generated titles/thumbnails) — all preserved under each video's own `legacy` object.
+- Voice notes: 7 found, all successfully decoded and measured in dry-run (`would-upload` status — no network calls made).
+- Unknown fields: 0.
+- Size warnings: 0.
+
+## Idempotency design (not yet exercised via a real rerun, since live mode hasn't executed)
+
+Firestore: `subAccounts/{id}/ytcs/brain` (fixed doc id), `subAccounts/{id}/ytcsIdeas/{sourceId}`, `subAccounts/{id}/ytcsVideos/{sourceId}` — every id is either fixed or the source record's own real id, and every write is a full deterministic `.set()`, so a rerun reproduces the identical end state rather than duplicating. Storage: same principle, source-id-keyed paths, `.save()` overwrites in place. Once live mode has actually run once, a second dry run against the same export and sub-account is the intended way to prove this — not yet done.
+
+## What remains before Phase 0 can be marked fully complete
+
+Only the live write itself, run once, followed by direct verification (read back the written Firestore docs and Storage objects, confirm counts match this dry run exactly) and one more rerun to prove idempotency in practice rather than by design alone. Everything else the task asked Phase 0 to produce — the importer, its validation, the field-by-field reconciliation, the size-safety analysis, the security posture — is done and is not gated on that write.
