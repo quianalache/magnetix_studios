@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ExternalLink, LogOut, Settings } from "lucide-react";
+import { ExternalLink, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthorView, CommunityGroup, NavItemKey } from "@/types/community";
 import {
@@ -19,6 +19,7 @@ import {
 } from "@/lib/community/community-navigation";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
+import { CommunityAccountMenu } from "./community-account-menu";
 import { DmLauncher } from "./dm/dm-launcher";
 import { communityThemeStyle } from "@/lib/community/community-theme-presets";
 
@@ -218,24 +219,12 @@ export function CommunityShell({
           </>
         ) : (
           <>
-            <Link
-              href={communityProfileHref(linkBase, group.slug)}
-              title="Your profile"
-              aria-label="Your profile"
-            >
-              <MemberAvatar author={viewer} size={28} brand={brand} />
-            </Link>
-            <form action={`/api/community/${saId}/logout`} method="post">
-              <button
-                type="submit"
-                title="Sign out"
-                aria-label="Sign out"
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md p-1.5 text-xs hover:bg-[#F0F0F0] md:px-2"
-              >
-                <LogOut className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden md:inline">Sign out</span>
-              </button>
-            </form>
+            <CommunityAccountMenu
+              author={viewer}
+              brand={brand}
+              profileHref={communityProfileHref(linkBase, group.slug)}
+              logoutAction={`/api/community/${saId}/logout`}
+            />
           </>
         )}
       </div>

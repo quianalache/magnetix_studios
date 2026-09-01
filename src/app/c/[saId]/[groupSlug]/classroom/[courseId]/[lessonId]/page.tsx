@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityLearningCourseHref, communityLearningHref } from "@/lib/community/routes";
+import {
+  communityLearningCourseHref,
+  communityLearningHref,
+} from "@/lib/community/routes";
 import {
   getCourseTree,
   getEnrollment,
@@ -36,7 +39,10 @@ export default async function LessonPlayerPage({
   }>;
 }) {
   const { saId, groupSlug, courseId, lessonId } = await params;
-  const access = await requireGroupPageAccess(saId, groupSlug);
+  const access = await requireGroupPageAccess(saId, groupSlug, {
+    opaque: `/c/${saId}/${groupSlug}/classroom/${courseId}/${lessonId}`,
+    pretty: `/communities/${groupSlug}/learning/${courseId}/${lessonId}`,
+  });
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
@@ -96,7 +102,14 @@ export default async function LessonPlayerPage({
   }));
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
+    <CommunityShell
+      saId={saId}
+      pretty={pretty}
+      group={group}
+      active="classroom"
+      viewer={viewer}
+      viewerIsModerator={membership.role === "moderator"}
+    >
       <Link
         href={catalog}
         className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
@@ -105,7 +118,11 @@ export default async function LessonPlayerPage({
       </Link>
       <LessonPlayer
         completeEndpoint={`/api/community/${saId}/${group.id}/courses/${courseId}/lessons/${lessonId}/complete`}
-        lessonHrefBase={communityLearningCourseHref(linkBase, groupSlug, courseId)}
+        lessonHrefBase={communityLearningCourseHref(
+          linkBase,
+          groupSlug,
+          courseId
+        )}
         brand={brand}
         primaryAction={resolvedTheme.primaryAction}
         accent={resolvedTheme.accent}

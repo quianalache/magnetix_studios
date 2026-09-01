@@ -1,7 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityLearningHref, communityLearningLessonHref } from "@/lib/community/routes";
+import {
+  communityLearningHref,
+  communityLearningLessonHref,
+} from "@/lib/community/routes";
 import { getCourseTree } from "@/lib/server/community-classroom-service";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +17,10 @@ export default async function CourseIndexPage({
   params: Promise<{ saId: string; groupSlug: string; courseId: string }>;
 }) {
   const { saId, groupSlug, courseId } = await params;
-  const access = await requireGroupPageAccess(saId, groupSlug);
+  const access = await requireGroupPageAccess(saId, groupSlug, {
+    opaque: `/c/${saId}/${groupSlug}/classroom/${courseId}`,
+    pretty: `/communities/${groupSlug}/learning/${courseId}`,
+  });
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
@@ -31,5 +37,7 @@ export default async function CourseIndexPage({
   if (!tree || !tree.course.published || !first) {
     redirect(communityLearningHref(linkBase, groupSlug));
   }
-  redirect(communityLearningLessonHref(linkBase, groupSlug, courseId, first.id));
+  redirect(
+    communityLearningLessonHref(linkBase, groupSlug, courseId, first.id)
+  );
 }

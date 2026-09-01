@@ -140,7 +140,9 @@ export function signMemberMagicLinkToken(
    *  already is, since the login POST and the eventual `/verify` GET are
    *  two separate, unrelated requests. */
   invitedByMemberId?: string,
-  displayName?: string
+  displayName?: string,
+  /** Signed, Community-scoped return path for an intentional deep link. */
+  returnPath?: string
 ): string {
   return encodeToken({
     sa: subAccountId,
@@ -151,6 +153,7 @@ export function signMemberMagicLinkToken(
     ...(courseId ? { c: courseId } : {}),
     ...(invitedByMemberId ? { r: invitedByMemberId } : {}),
     ...(displayName?.trim() ? { n: displayName.trim() } : {}),
+    ...(returnPath ? { next: returnPath } : {}),
   });
 }
 
@@ -175,6 +178,7 @@ export function verifyMemberMagicLinkToken(token: string): {
   courseId?: string;
   invitedByMemberId?: string;
   displayName?: string;
+  returnPath?: string;
 } | null {
   const payload = decodeToken(token);
   if (!payload || payload.k !== "ml") return null;
@@ -185,6 +189,7 @@ export function verifyMemberMagicLinkToken(token: string): {
     courseId: payload.c,
     invitedByMemberId: payload.r,
     displayName: payload.n,
+    returnPath: payload.next,
   };
 }
 

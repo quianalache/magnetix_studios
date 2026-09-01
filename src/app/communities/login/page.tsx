@@ -9,7 +9,12 @@ export const dynamic = "force-dynamic";
 export default async function CustomDomainLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; join?: string; ref?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    join?: string;
+    ref?: string;
+    next?: string;
+  }>;
 }) {
   const host = (await headers()).get("host");
   const sub = await getSubAccountByCustomDomain(host);

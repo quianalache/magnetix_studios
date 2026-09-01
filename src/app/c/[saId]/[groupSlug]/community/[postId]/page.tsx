@@ -4,10 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { communityHomeHref } from "@/lib/community/routes";
-import {
-  getFeedPost,
-  listComments,
-} from "@/lib/server/community-feed-service";
+import { getFeedPost, listComments } from "@/lib/server/community-feed-service";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
@@ -17,7 +14,10 @@ import {
   type ClientComment,
 } from "@/components/community/feed/post-detail-view";
 import type { ClientPost } from "@/components/community/feed/feed-view";
-import { renderCommunityPostHtml, renderCommunityCommentHtml } from "@/lib/community/post-html";
+import {
+  renderCommunityPostHtml,
+  renderCommunityCommentHtml,
+} from "@/lib/community/post-html";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
 
@@ -44,7 +44,10 @@ export default async function PostDetailPage({
   params: Promise<{ saId: string; groupSlug: string; postId: string }>;
 }) {
   const { saId, groupSlug, postId } = await params;
-  const access = await requireGroupPageAccess(saId, groupSlug);
+  const access = await requireGroupPageAccess(saId, groupSlug, {
+    opaque: `/c/${saId}/${groupSlug}/community/${postId}`,
+    pretty: `/communities/${groupSlug}/home/${postId}`,
+  });
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
@@ -125,7 +128,14 @@ export default async function PostDetailPage({
   }));
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="community" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
+    <CommunityShell
+      saId={saId}
+      pretty={pretty}
+      group={group}
+      active="community"
+      viewer={viewer}
+      viewerIsModerator={membership.role === "moderator"}
+    >
       <Link
         href={communityHomeHref({ saId, pretty }, group.slug)}
         className="mb-3 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"

@@ -40,7 +40,14 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  let body: { email?: string; password?: string; join?: string; mode?: string; ref?: string };
+  let body: {
+    email?: string;
+    password?: string;
+    join?: string;
+    mode?: string;
+    ref?: string;
+    next?: string;
+  };
   try {
     body = (await request.json()) as {
       email?: string;
@@ -48,6 +55,7 @@ export async function POST(
       join?: string;
       mode?: string;
       ref?: string;
+      next?: string;
     };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
@@ -66,12 +74,23 @@ export async function POST(
   // here: `joinGroupServerSide` -> `awardPoints` safely no-ops if it turns
   // out not to resolve to a real, active member.
   const invitedByMemberId =
-    typeof body.ref === "string" && body.ref.trim() ? body.ref.trim() : undefined;
+    typeof body.ref === "string" && body.ref.trim()
+      ? body.ref.trim()
+      : undefined;
 
   const { origin, pretty } = await resolveCommunityRequestOrigin(
     saId,
     request.headers.get("host")
   );
+  const safeNext =
+    typeof body.next === "string" &&
+    body.next.startsWith("/") &&
+    !body.next.startsWith("//") &&
+    (pretty
+      ? body.next.startsWith("/communities/")
+      : body.next.startsWith(`/c/${saId}/`))
+      ? body.next
+      : undefined;
 
   if (body.mode === "password") {
     const allowed = checkMemberAuthRateLimit({
@@ -132,13 +151,21 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      redirectTo: communityRootHref(linkBase),
+      redirectTo: safeNext ?? communityRootHref(linkBase),
     });
   }
 
   try {
     if (emailIsConfigured()) {
-      const token = signMemberMagicLinkToken(saId, email, joinGroupId, undefined, invitedByMemberId);
+      const token = signMemberMagicLinkToken(
+        saId,
+        email,
+        joinGroupId,
+        undefined,
+        invitedByMemberId,
+        undefined,
+        safeNext
+      );
       const link = `${origin}/api/community/${saId}/login/verify?token=${encodeURIComponent(token)}`;
       const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
       const sub = subSnap.data() as SubAccountDoc | undefined;

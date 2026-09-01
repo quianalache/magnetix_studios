@@ -11,7 +11,10 @@ export default async function CommunityLiveRoomPage({
   params: Promise<{ saId: string; groupSlug: string; roomId: string }>;
 }) {
   const { saId, groupSlug, roomId } = await params;
-  const access = await requireGroupPageAccess(saId, groupSlug);
+  const access = await requireGroupPageAccess(saId, groupSlug, {
+    opaque: `/c/${saId}/${groupSlug}/live/${roomId}`,
+    pretty: `/communities/${groupSlug}/live/${roomId}`,
+  });
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
   const room = await getCommunityLiveRoomServerSide(

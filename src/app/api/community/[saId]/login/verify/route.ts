@@ -98,5 +98,12 @@ export async function GET(
     }
   }
 
-  return NextResponse.redirect(new URL(communityRootHref(linkBase), url));
+  const safeReturnPath =
+    verified.returnPath &&
+    (pretty
+      ? verified.returnPath.startsWith("/communities/")
+      : verified.returnPath.startsWith(`/c/${saId}/`))
+      ? verified.returnPath
+      : communityRootHref(linkBase);
+  return NextResponse.redirect(new URL(safeReturnPath, url));
 }

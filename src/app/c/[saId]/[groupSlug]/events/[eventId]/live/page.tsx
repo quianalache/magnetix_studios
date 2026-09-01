@@ -11,7 +11,10 @@ export default async function CommunityEventLivePage({
   params: Promise<{ saId: string; groupSlug: string; eventId: string }>;
 }) {
   const { saId, groupSlug, eventId } = await params;
-  const access = await requireGroupPageAccess(saId, groupSlug);
+  const access = await requireGroupPageAccess(saId, groupSlug, {
+    opaque: `/c/${saId}/${groupSlug}/events/${eventId}/live`,
+    pretty: `/communities/${groupSlug}/events/${eventId}/live`,
+  });
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
   const event = await getCommunityEventServerSide(
