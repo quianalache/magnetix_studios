@@ -33,6 +33,7 @@ import { SubAccountApiRecipesSection } from "@/components/settings/sub-account-a
 import { SubAccountCalendarSyncSection } from "@/components/settings/sub-account-calendar-sync-section";
 import { SubAccountGoogleCalendarSection } from "@/components/settings/sub-account-google-calendar-section";
 import { SubAccountWebhooksSection } from "@/components/settings/sub-account-webhooks-section";
+import { SubAccountBusinessBrainSection } from "@/components/settings/sub-account-business-brain-section";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { UserDoc, SubscriptionStatus } from "@/types";
@@ -141,6 +142,7 @@ export default function SettingsPage() {
           <TabsTrigger value="messaging">Messaging</TabsTrigger>
           <TabsTrigger value="api">API</TabsTrigger>
           <TabsTrigger value="custom-fields">Custom Fields</TabsTrigger>
+          <TabsTrigger value="business-brain">Business Brain</TabsTrigger>
           <TabsTrigger value="import">Importer</TabsTrigger>
         </TabsList>
 
@@ -270,6 +272,16 @@ export default function SettingsPage() {
             (the migration-target schema; also useful standalone) ---------- */}
         <TabsContent value="custom-fields" className="mt-6 space-y-6">
           <SubAccountCustomFieldsSection />
+        </TabsContent>
+
+        {/* ---------- Business Brain: shared sub-account-level strategic
+            context (Creator Vision, Audience, Offers, Frameworks, Stories +
+            Proof, Brand Voice, Topics + Subtopics, Positioning). Not owned
+            by YouTube Content Studio or any other module — the canonical
+            businessBrain/main document, consumed via getBusinessBrain() by
+            every current and future AI-assisted content feature. ---------- */}
+        <TabsContent value="business-brain" className="mt-6 space-y-6">
+          <SubAccountBusinessBrainSection />
         </TabsContent>
 
         {/* ---------- Import: GoHighLevel migration wizard ---------- */}
