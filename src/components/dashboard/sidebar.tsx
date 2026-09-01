@@ -24,7 +24,6 @@ import {
   Compass,
   Lock,
   Send,
-  Video,
   Bot,
   Package,
   ScrollText,
@@ -47,6 +46,7 @@ import {
   Rocket,
   LayoutPanelTop,
   LayoutTemplate,
+  Clapperboard,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -91,9 +91,7 @@ interface NavGroup {
 const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
   {
     label: null,
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: Home, enabled: true },
-    ],
+    items: [{ href: "/dashboard", label: "Dashboard", icon: Home, enabled: true }],
   },
   {
     label: "CRM",
@@ -110,14 +108,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       // CRM once unparked, alongside Contacts.
       ...(GET_LEADS_PARKED
         ? []
-        : [
-            {
-              href: "/get-leads",
-              label: "Get Leads",
-              icon: Radar,
-              enabled: true,
-            },
-          ]),
+        : [{ href: "/get-leads", label: "Get Leads", icon: Radar, enabled: true }]),
       { href: "/pipeline", label: "Pipeline", icon: GitBranch, enabled: true },
       {
         href: "/tasks",
@@ -138,40 +129,25 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
     label: "Calendar",
     items: [
       { href: "/calendar", label: "Calendar", icon: Calendar, enabled: true },
-      {
-        href: "/booking",
-        label: "Booking",
-        icon: CalendarClock,
-        enabled: true,
-      },
+      { href: "/booking", label: "Booking", icon: CalendarClock, enabled: true },
     ],
   },
   {
     label: "Content",
     items: [
       { href: "/social", label: "Social Planner", icon: Share2, enabled: true },
-      {
-        href: "/content",
-        label: "Content Library",
-        icon: Layers,
-        enabled: true,
-      },
+      { href: "/content", label: "Content Library", icon: Layers, enabled: true },
+      { href: "/youtube-studio", label: "YouTube Content Studio", icon: Clapperboard, enabled: true },
     ],
   },
   {
     label: "Marketing",
     items: [
       { href: "/forms", label: "Forms", icon: FileText, enabled: true },
-      {
-        href: "/pages-funnels",
-        label: "Pages & Funnels",
-        icon: LayoutTemplate,
-        enabled: true,
-      },
+      { href: "/pages-funnels", label: "Pages & Funnels", icon: LayoutTemplate, enabled: true },
       { href: "/website", label: "Website", icon: Globe, enabled: true },
       { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
       { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
-      { href: "/webinars", label: "Webinars", icon: Video, enabled: true },
       { href: "/templates", label: "Templates", icon: FileText, enabled: true },
       { href: "/qr-codes", label: "QR Codes", icon: QrCode, enabled: true },
     ],
@@ -186,49 +162,24 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
   {
     label: "AI",
     items: [
-      {
-        href: "/ai-suite",
-        label: "Workspace Assistant",
-        icon: Sparkles,
-        enabled: true,
-      },
+      { href: "/ai-suite", label: "Workspace Assistant", icon: Sparkles, enabled: true },
       { href: "/ai-agents", label: "AI Agents", icon: Bot, enabled: true },
     ],
   },
   {
     label: "Memberships",
     items: [
-      {
-        href: "/community",
-        label: "Community",
-        icon: GraduationCap,
-        enabled: true,
-      },
+      { href: "/community", label: "Community", icon: GraduationCap, enabled: true },
       { href: "/courses", label: "Courses", icon: BookOpen, enabled: true },
-      {
-        href: "/energetic-decoder",
-        label: "Energetic Decoder",
-        icon: Orbit,
-        enabled: true,
-      },
-      {
-        href: "/client-portal",
-        label: "Client Portal",
-        icon: LayoutPanelTop,
-        enabled: true,
-      },
+      { href: "/energetic-decoder", label: "Energetic Decoder", icon: Orbit, enabled: true },
+      { href: "/client-portal", label: "Client Portal", icon: LayoutPanelTop, enabled: true },
     ],
   },
   {
     label: "Growth",
     items: [
       { href: "/growth", label: "Growth", icon: TrendingUp, enabled: true },
-      {
-        href: "/reflection",
-        label: "Reflection",
-        icon: BookOpen,
-        enabled: true,
-      },
+      { href: "/reflection", label: "Reflection", icon: BookOpen, enabled: true },
     ],
   },
   {
@@ -320,9 +271,7 @@ function SidebarContent({
   // Memberships / Insights only — Dashboard and Sub-Account Settings stay
   // fixed). Hydrated from localStorage after mount, same pattern as the
   // whole-sidebar collapse, to avoid an SSR/client markup mismatch.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set()
-  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(GROUP_COLLAPSE_STORAGE_KEY);
@@ -338,7 +287,7 @@ function SidebarContent({
       else next.add(label);
       window.localStorage.setItem(
         GROUP_COLLAPSE_STORAGE_KEY,
-        JSON.stringify([...next])
+        JSON.stringify([...next]),
       );
       return next;
     });
@@ -364,9 +313,7 @@ function SidebarContent({
     setWebsiteHidden(data?.websiteHiddenWhenDisabled !== false);
     setSocialHidden(data?.socialPlannerHiddenWhenDisabled !== false);
     setCommunityHidden(data?.communityHiddenWhenDisabled !== false);
-    setStandaloneCoursesHidden(
-      data?.standaloneCoursesHiddenWhenDisabled !== false
-    );
+    setStandaloneCoursesHidden(data?.standaloneCoursesHiddenWhenDisabled !== false);
     setGetLeadsHidden(data?.getLeadsHiddenWhenDisabled !== false);
     setAiSuiteHidden(data?.aiSuiteHiddenWhenDisabled !== false);
     setLabsHidden(data?.labsHiddenWhenDisabled !== false);
@@ -402,10 +349,8 @@ function SidebarContent({
   useEffect(() => {
     if (!usingSharedSubAccount) return;
     applyGateData(
-      (sharedSubAccount!.subAccount as unknown as Record<
-        string,
-        unknown
-      > | null) ?? undefined
+      (sharedSubAccount!.subAccount as unknown as Record<string, unknown> | null) ??
+        undefined,
     );
     // sharedSubAccount is a fresh object identity on every provider update
     // (a real Firestore snapshot), so it's the correct effect dependency.
@@ -430,7 +375,7 @@ function SidebarContent({
       return onSnapshot(
         doc(getFirebaseDb(), "subAccounts", linkSubIdLocal),
         (snap) => applyGateData(snap.data()),
-        () => clearGateData()
+        () => clearGateData(),
       );
     } catch {
       clearGateData();
@@ -475,20 +420,14 @@ function SidebarContent({
     // When the agency owner opted to hide (not just lock) a disabled
     // feature, omit the entry entirely so the tenant never sees it.
     const gateHidden =
-      (item.href === "/broadcasts" &&
-        broadcastsGate === false &&
-        broadcastsHidden) ||
+      (item.href === "/broadcasts" && broadcastsGate === false && broadcastsHidden) ||
       (item.href === "/website" && websiteGate === false && websiteHidden) ||
       (item.href === "/social" && socialGate === false && socialHidden) ||
-      (item.href === "/community" &&
-        communityGate === false &&
-        communityHidden) ||
+      (item.href === "/community" && communityGate === false && communityHidden) ||
       (item.href === "/courses" &&
         standaloneCoursesGate === false &&
         standaloneCoursesHidden) ||
-      (item.href === "/get-leads" &&
-        getLeadsGate === false &&
-        getLeadsHidden) ||
+      (item.href === "/get-leads" && getLeadsGate === false && getLeadsHidden) ||
       (item.href === "/ai-suite" && aiSuiteGate === false && aiSuiteHidden) ||
       (item.href === "/labs" && labsGate === false && labsHidden);
     if (gateHidden) return null;
@@ -506,8 +445,8 @@ function SidebarContent({
                 : "Coming soon"
           }
           className={cn(
-            "text-sidebar-foreground/55 flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium",
-            collapsed ? "justify-center" : "justify-between"
+            "flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-sidebar-foreground/55",
+            collapsed ? "justify-center" : "justify-between",
           )}
         >
           <span className="flex items-center gap-2.5">
@@ -515,7 +454,7 @@ function SidebarContent({
             {!collapsed && item.label}
           </span>
           {!collapsed && (
-            <span className="border-sidebar-border/40 text-sidebar-foreground/70 flex items-center gap-1 rounded-full border px-1.5 text-[10px] tracking-wide uppercase">
+            <span className="flex items-center gap-1 rounded-full border border-sidebar-border/40 px-1.5 text-[10px] uppercase tracking-wide text-sidebar-foreground/70">
               {lockedByGate && <Lock className="h-2.5 w-2.5" />}
               {lockedByGate ? "Locked" : "Soon"}
             </span>
@@ -541,12 +480,12 @@ function SidebarContent({
           collapsed ? "justify-center" : "justify-between",
           isActive
             ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
         )}
       >
         {isActive && !collapsed && (
           <span
-            className="absolute top-1/2 -left-1 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[linear-gradient(180deg,var(--mx-rose-quartz,transparent),var(--mx-aqua-glow,transparent))]"
+            className="absolute -left-1 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[linear-gradient(180deg,var(--mx-rose-quartz,transparent),var(--mx-aqua-glow,transparent))]"
             aria-hidden
           />
         )}
@@ -560,7 +499,7 @@ function SidebarContent({
               "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
               isActive
                 ? "bg-primary text-primary-foreground"
-                : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
             )}
           >
             {badge}
@@ -577,8 +516,8 @@ function SidebarContent({
     <div className="flex h-full flex-col">
       <div
         className={cn(
-          "border-sidebar-border flex h-14 items-center border-b",
-          collapsed ? "justify-center px-2" : "justify-between px-4"
+          "flex h-14 items-center border-b border-sidebar-border",
+          collapsed ? "justify-center px-2" : "justify-between px-4",
         )}
       >
         <Link href="/" className="flex items-center gap-2 text-lg font-bold">
@@ -595,7 +534,7 @@ function SidebarContent({
             <LogoMark size={20} idSuffix="-sidebar" />
           )}
           {!collapsed && (
-            <span className="bg-sidebar-accent truncate rounded-full px-2.5 py-1 text-sm">
+            <span className="truncate rounded-full bg-sidebar-accent px-2.5 py-1 text-sm">
               {agency.name}
             </span>
           )}
@@ -604,7 +543,7 @@ function SidebarContent({
           <button
             onClick={onToggleCollapsed}
             title="Collapse menu"
-            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground rounded-md p-1.5"
+            className="rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           >
             <ChevronsLeft className="h-4 w-4" />
           </button>
@@ -615,7 +554,7 @@ function SidebarContent({
         <button
           onClick={onToggleCollapsed}
           title="Expand menu"
-          className="border-sidebar-border text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground flex items-center justify-center border-b py-2"
+          className="flex items-center justify-center border-b border-sidebar-border py-2 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
         >
           <ChevronsRight className="h-4 w-4" />
         </button>
@@ -627,7 +566,7 @@ function SidebarContent({
         {(agencyRole === "owner" || memberships.length > 1) && (
           <div className="mb-3">
             {!collapsed && (
-              <p className="text-sidebar-foreground/60 mb-1 px-3 text-[10px] tracking-wider uppercase">
+              <p className="mb-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60">
                 Agency
               </p>
             )}
@@ -640,7 +579,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/get-started")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Compass className="h-4 w-4 shrink-0" />
@@ -655,7 +594,7 @@ function SidebarContent({
                 collapsed && "justify-center",
                 pathname === "/agency"
                   ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
               )}
             >
               <Building2 className="h-4 w-4 shrink-0" />
@@ -670,7 +609,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/sub-accounts")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Users className="h-4 w-4 shrink-0" />
@@ -686,7 +625,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/billing")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <CreditCard className="h-4 w-4 shrink-0" />
@@ -720,7 +659,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/ai-suite")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Sparkles className="h-4 w-4 shrink-0" />
@@ -736,7 +675,7 @@ function SidebarContent({
                   collapsed && "justify-center",
                   pathname.startsWith("/agency/settings")
                     ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 <Settings className="h-4 w-4 shrink-0" />
@@ -748,15 +687,14 @@ function SidebarContent({
 
         {showSubNav && (
           <div>
-            {(agencyRole === "owner" || memberships.length > 1) &&
-              !collapsed && (
-                <p
-                  className="text-sidebar-foreground/60 mb-1 truncate px-3 text-[10px] tracking-wider uppercase"
-                  title={subSectionLabel}
-                >
-                  {subSectionLabel}
-                </p>
-              )}
+            {(agencyRole === "owner" || memberships.length > 1) && !collapsed && (
+              <p
+                className="mb-1 truncate px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60"
+                title={subSectionLabel}
+              >
+                {subSectionLabel}
+              </p>
+            )}
             {SUB_ACCOUNT_NAV_GROUPS.map((group, groupIdx) => {
               const visibleItems = group.items;
               if (visibleItems.length === 0) return null;
@@ -769,14 +707,11 @@ function SidebarContent({
                 !!group.label && !collapsed && collapsedGroups.has(group.label);
 
               return (
-                <div
-                  key={group.label ?? `ungrouped-${groupIdx}`}
-                  className="mb-3"
-                >
+                <div key={group.label ?? `ungrouped-${groupIdx}`} className="mb-3">
                   {group.label && !collapsed && (
                     <button
                       onClick={() => toggleGroup(group.label!)}
-                      className="text-sidebar-foreground/60 hover:text-sidebar-foreground mb-1 flex w-full items-center gap-1 px-3 text-[10px] tracking-wider uppercase"
+                      className="mb-1 flex w-full items-center gap-1 px-3 text-[10px] uppercase tracking-wider text-sidebar-foreground/60 hover:text-sidebar-foreground"
                     >
                       {isGroupCollapsed ? (
                         <ChevronRight className="h-3 w-3" />
@@ -794,7 +729,7 @@ function SidebarContent({
         )}
 
         {!showSubNav && !loading && !collapsed && (
-          <p className="border-sidebar-border/40 text-sidebar-foreground/80 rounded-md border border-dashed px-3 py-3 text-xs">
+          <p className="rounded-md border border-dashed border-sidebar-border/40 px-3 py-3 text-xs text-sidebar-foreground/80">
             Pick a sub-account from{" "}
             <Link href="/agency" className="text-sidebar-foreground underline">
               Agency home
@@ -804,13 +739,13 @@ function SidebarContent({
         )}
       </nav>
 
-      <div className="border-sidebar-border border-t p-3">
+      <div className="border-t border-sidebar-border p-3">
         <Button
           variant="ghost"
           title={collapsed ? "Sign Out" : undefined}
           className={cn(
-            "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground w-full gap-2.5 text-[13px]",
-            collapsed ? "justify-center" : "justify-start"
+            "w-full gap-2.5 text-[13px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            collapsed ? "justify-center" : "justify-start",
           )}
           onClick={() => {
             // 2026-08-30: signOutUser() clears both the server __session
@@ -871,14 +806,11 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     <>
       <aside
         className={cn(
-          "app-sidebar border-sidebar-border bg-sidebar text-sidebar-foreground hidden shrink-0 border-r transition-[width] duration-150 md:block",
-          collapsed ? "w-14" : "w-56"
+          "app-sidebar hidden shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-150 md:block",
+          collapsed ? "w-14" : "w-56",
         )}
       >
-        <SidebarContent
-          collapsed={collapsed}
-          onToggleCollapsed={toggleCollapsed}
-        />
+        <SidebarContent collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </aside>
 
       {/* The drawer shows the exact same full nav as the desktop <aside> —
@@ -888,7 +820,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent
           side="left"
-          className="app-sidebar border-sidebar-border bg-sidebar text-sidebar-foreground w-56 p-0"
+          className="app-sidebar w-56 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>

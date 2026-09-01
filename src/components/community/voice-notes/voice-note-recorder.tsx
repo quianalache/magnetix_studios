@@ -8,6 +8,13 @@ import { uploadVoiceNote } from "@/lib/community/upload-voice-note";
 import { VoiceNotePlayer } from "./voice-note-player";
 import type { VoiceNote } from "@/types/media-attachment";
 
+type UploadFn = (opts: {
+  saId: string;
+  blob: Blob;
+  mimeType: string;
+  durationMs: number;
+}) => Promise<VoiceNote>;
+
 function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -41,12 +48,19 @@ export function VoiceNoteRecorder({
   brand = "#202124",
   confirmLabel = "Send",
   confirmIcon: ConfirmIcon = Send,
+  upload = uploadVoiceNote,
   onUploaded,
 }: {
   saId: string;
   brand?: string;
   confirmLabel?: string;
   confirmIcon?: LucideIcon;
+  /** Defaults to the community voice-note upload path. Pass a different
+   *  uploader (e.g. YTCS's own `/api/sub-accounts/[id]/ytcs/voice-notes`
+   *  route) to reuse this same record/preview/confirm UI against a
+   *  different auth/Storage destination — see YouTube Content Studio's
+   *  Brain Dump input for the first non-community caller. */
+  upload?: UploadFn;
   onUploaded: (voiceNote: VoiceNote) => void;
 }) {
   const { state, elapsedMs, error, result, supported, start, stop, cancel, reset, maxDurationMs } =
@@ -76,7 +90,7 @@ export function VoiceNoteRecorder({
     setUploading(true);
     setUploadError(null);
     try {
-      const voiceNote = await uploadVoiceNote({
+      const voiceNote = await upload({
         saId,
         blob: result.blob,
         mimeType: result.mimeType,
