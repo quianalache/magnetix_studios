@@ -1,10 +1,13 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type {
   PuckAlignment,
   PuckButtonStyle,
   PageAction,
   StyleConfig,
   BackgroundConfig,
+  ImageSizeConfig,
+  VideoSizeConfig,
+  VideoPlaybackConfig,
 } from "@/types/pages-funnels-puck";
 import {
   resolveActionHref,
@@ -14,6 +17,13 @@ import {
   resolveBaseStyleProps,
   resolveResponsiveCss,
 } from "@/lib/pages-funnels/puck/style";
+import {
+  resolveImageSizeStyle,
+  resolveVideoSizeStyle,
+  videoAspectRatioValue,
+  mediaAlignmentClass,
+} from "@/lib/pages-funnels/puck/media-size";
+import { resolveVideoEmbed } from "@/lib/pages-funnels/puck/video";
 import { BackgroundLayer } from "@/components/pages-funnels/puck/background-layer";
 
 /**
@@ -103,10 +113,13 @@ export function TextRender({
   alignment: PuckAlignment;
   style?: StyleConfig;
 }) {
-  // TODO(Phase 2+): expand to real rich text (bold/italic/underline/links/
-  // lists) via Puck's `richtext` field type (Tiptap-based — confirmed
-  // present as a peer dependency in the feasibility audit). Kept as plain
-  // text in Phase 1, matching the approved Launch-scope element inventory
+  // System B (master spec §24.3.1/§24.6) shipped Rich Text as a genuinely
+  // SEPARATE element (`RichTextRenderElement`, above) rather than
+  // upgrading this one in place — see that component's own doc comment
+  // for the full "why a separate element, not a Text migration" reasoning
+  // (Decision A: lowest risk to already-persisted Text content). Text
+  // deliberately stays exactly what it always was — a plain string field —
+  // matching the approved Launch-scope element inventory
   // ("Text / Rich Text" is one Launch line item, not required to ship with
   // rich text on day one of the foundation). System A's Typography system
   // (master spec §24 task §17) is deliberately built to work unchanged
@@ -125,6 +138,65 @@ export function TextRender({
       >
         {text}
       </p>
+    </>
+  );
+}
+
+/**
+ * System B Rich Text (master spec §24.3.1/§24.6 — "Rich Text is classified
+ * LAUNCH"). A genuinely SEPARATE element from Heading/Text, not an
+ * upgrade/migration of Text — see config.tsx's `RichText` registration
+ * doc comment for the full backward-compatibility reasoning (Decision A:
+ * lowest risk to already-persisted pages).
+ *
+ * Built on Puck's own native `richtext` field type (`type: "richtext",
+ * contentEditable: true` in config.tsx) — a real, first-class, Tiptap-
+ * backed field type confirmed present in the installed 0.23.0 package's
+ * types, with a documented default extension set (paragraph, heading,
+ * bold, italic, underline, strike, link, bulletList, orderedList — with
+ * native nesting via `listItem`, blockquote, code, codeBlock,
+ * horizontalRule). No custom Tiptap extensions/fork were added — the
+ * task's own default extension set already covers every Launch-target
+ * format except "highlight," which isn't part of Puck's default registered
+ * options and was deliberately left out rather than adding a custom
+ * extension for it (see master spec Known Bugs / this task's own "do not
+ * force every optional format if doing so requires a brittle custom
+ * Tiptap fork" instruction).
+ *
+ * Exactly the same `ReactNode`-when-`contentEditable` contract Heading/
+ * Text already established (§3): Puck owns the contentEditable<->Data
+ * sync internally (a Tiptap editor instance in the canvas, a stored HTML
+ * string in Data, an `RichText = string | ReactNode` value at render
+ * time) — this component just renders `{content}` directly, no parallel
+ * local state, no duplicate content store. The SAME field definition is
+ * reused by both `clientPuckConfig` and `serverPuckConfig` (config.tsx),
+ * exactly like Heading/Text — Puck's own field-transform pipeline renders
+ * the interactive Tiptap editor in the client/editing context and the
+ * plain serialized HTML in the server/public `<Render>` context
+ * automatically, with zero branching needed in this file.
+ */
+export function RichTextRenderElement({
+  id,
+  content,
+  style,
+}: {
+  id: string;
+  content: ReactNode;
+  style?: StyleConfig;
+}) {
+  const responsiveCss = resolveResponsiveCss(id, style);
+  return (
+    <>
+      {responsiveCss && (
+        <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
+      )}
+      <div
+        id={id}
+        className="richtext-content text-foreground [&_a]:text-primary [&_blockquote]:border-border [&_blockquote]:text-muted-foreground [&_code]:bg-muted [&_pre]:bg-muted max-w-none text-base [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_blockquote]:italic [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-sm [&_h1]:text-3xl [&_h1]:font-bold [&_h2]:text-2xl [&_h2]:font-bold [&_h3]:text-xl [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:list-disc [&_ul]:pl-5"
+        style={resolveBaseStyleProps(style)}
+      >
+        {content}
+      </div>
     </>
   );
 }
@@ -189,28 +261,43 @@ export function ButtonRender({
   );
 }
 
+/**
+ * System B Image depth (master spec §24.6 "Image — STYLES: width, max
+ * width, height/object-fit... alignment"). `size` is a NEW, OPTIONAL,
+ * additive-only prop (`ImageSizeConfig` — see its own doc comment in
+ * pages-funnels-puck.ts for why it's a separate small config, not folded
+ * into the shared `StyleConfig`) — an unset `size` (every existing/
+ * migrated Image element) resolves to zero extra inline style, so this is
+ * a pure capability addition, not a behavior change. `style` (the
+ * existing shared `StyleConfig` — spacing/border/radius/shadow/
+ * responsive/visibility, `MEDIA_ELEMENT_STYLE` in config.tsx) is
+ * unchanged and unaffected.
+ */
 export function ImageRender({
   id,
   src,
   alt,
   action,
   style,
+  size,
 }: {
   id: string;
   src: string;
   alt: string;
   action: PageAction;
   style?: StyleConfig;
+  size?: ImageSizeConfig;
 }) {
   const href = resolveActionHref(action);
   const responsiveCss = resolveResponsiveCss(id, style);
+  const sizeStyle = resolveImageSizeStyle(size);
   const img = src ? (
     // eslint-disable-next-line @next/next/no-img-element -- arbitrary user-entered URLs, same as V1/V2's Image renderer.
     <img
       src={src}
       alt={alt}
       className="h-auto w-full rounded-xl object-cover"
-      style={resolveBaseStyleProps(style)}
+      style={{ ...resolveBaseStyleProps(style), ...sizeStyle }}
     />
   ) : (
     <div className="border-border bg-muted text-muted-foreground flex h-56 w-full items-center justify-center rounded-xl border border-dashed text-sm">
@@ -218,7 +305,7 @@ export function ImageRender({
     </div>
   );
   return (
-    <div id={id}>
+    <div id={id} className={`flex ${mediaAlignmentClass(size?.alignment)}`}>
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
@@ -237,39 +324,74 @@ export function ImageRender({
   );
 }
 
-/** Minimal implementation only, per the master spec's Phase 1 scope — a raw
- *  embeddable URL (YouTube/Vimeo/Loom/mp4) in an iframe, no oEmbed/provider
- *  parsing. Identical contract to V2's "video" case
- *  (renderer-v2/tree-view.tsx) — same primitive, ported as-is. */
+/**
+ * System B Video depth (master spec §24.6/§8/§10). Deepened from Phase 1's
+ * raw-iframe-only implementation to a real provider/source model — see
+ * `video.ts`'s `resolveVideoEmbed()` for the actual YouTube/Vimeo/direct-
+ * file detection and playback-flag coercion logic, the ONE shared
+ * resolver this render function (used identically by both
+ * `clientPuckConfig` and `serverPuckConfig`) and the Preview route all
+ * consume — no separate embed logic per surface, per the task's explicit
+ * instruction. `size`/`playback` are NEW, OPTIONAL, additive-only props
+ * (unset resolves to the exact same 16:9-iframe-with-controls behavior
+ * every Video element already had) — `style` (shared spacing/border/
+ * radius/shadow/responsive/visibility) is unchanged.
+ */
 export function VideoRender({
   id,
   url,
   caption,
   style,
+  size,
+  playback,
 }: {
   id: string;
   url: string;
   caption: string;
   style?: StyleConfig;
+  size?: VideoSizeConfig;
+  playback?: VideoPlaybackConfig;
 }) {
   const responsiveCss = resolveResponsiveCss(id, style);
+  const embed = resolveVideoEmbed(url, playback);
+  const boxStyle: CSSProperties = {
+    ...resolveBaseStyleProps(style),
+    ...resolveVideoSizeStyle(size),
+    aspectRatio: videoAspectRatioValue(size?.aspectRatio),
+  };
   return (
     <div id={id} className="space-y-1.5">
       {responsiveCss && (
         <style dangerouslySetInnerHTML={{ __html: responsiveCss }} />
       )}
-      {url ? (
+      {embed.kind !== "none" ? (
         <>
-          <div
-            className="border-border aspect-video w-full overflow-hidden rounded-xl border bg-black"
-            style={resolveBaseStyleProps(style)}
-          >
-            <iframe
-              src={url}
-              title={caption || "Video"}
-              className="h-full w-full"
-              allowFullScreen
-            />
+          <div className={`flex ${mediaAlignmentClass(size?.alignment)}`}>
+            <div
+              className="border-border w-full overflow-hidden rounded-xl border bg-black"
+              style={boxStyle}
+            >
+              {embed.kind === "iframe" ? (
+                <iframe
+                  src={embed.src}
+                  title={caption || "Video"}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <video
+                  src={embed.src}
+                  className="h-full w-full object-cover"
+                  autoPlay={embed.autoplay}
+                  muted={embed.muted}
+                  loop={embed.loop}
+                  controls={embed.controls}
+                  poster={embed.posterUrl ?? undefined}
+                  playsInline
+                />
+              )}
+            </div>
           </div>
           {caption && (
             <p className="text-muted-foreground text-xs">{caption}</p>

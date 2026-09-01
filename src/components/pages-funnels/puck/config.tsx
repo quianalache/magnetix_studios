@@ -28,6 +28,7 @@ import {
 import {
   HeadingRender,
   TextRender,
+  RichTextRenderElement,
   ButtonRender,
   ImageRender,
   VideoRender,
@@ -35,6 +36,10 @@ import {
   SpacerRender,
   AccordionRender,
 } from "@/components/pages-funnels/puck/elements";
+import {
+  DEFAULT_IMAGE_SIZE,
+  DEFAULT_VIDEO_SIZE,
+} from "@/lib/pages-funnels/puck/media-size";
 
 /**
  * Production Puck component registry (master spec §6/§7) — the CLIENT and
@@ -164,6 +169,167 @@ const imageSrcField: CustomField<string> = {
   render: ({ value, onChange }) => (
     <ImageFieldEditor value={value} onChange={onChange} />
   ),
+};
+
+// ---------- Image/Video size + playback fields (System B — master spec §24.6) ----------
+
+/**
+ * Plain Puck `object` field (the same first-class mechanism `actionField`
+ * above already uses) — deliberately NOT a `custom` field like
+ * `imageSrcField`/`formIdField`: these are simple discrete
+ * select/number/radio controls with no live external data source or rich
+ * internal layout, so Puck's own built-in field renderer is the right,
+ * lower-effort tool (matching `Section`'s own `maxWidth`/`paddingTop`
+ * plain-field precedent), not a reason to build a bespoke component.
+ * `ImageSizeConfig` (pages-funnels-puck.ts) is entirely optional-shaped —
+ * an unset field here resolves to zero extra CSS (`media-size.ts`), so
+ * this is purely additive for every image element that predates it.
+ */
+const imageSizeField = {
+  type: "object" as const,
+  label: "Size",
+  objectFields: {
+    width: {
+      type: "select" as const,
+      label: "Width",
+      options: [
+        { label: "Auto (natural size)", value: "auto" },
+        { label: "25%", value: "25" },
+        { label: "50%", value: "50" },
+        { label: "75%", value: "75" },
+        { label: "100%", value: "100" },
+      ],
+    },
+    maxWidthPx: {
+      type: "number" as const,
+      label: "Max Width (px, optional)",
+      min: 0,
+    },
+    heightPx: {
+      type: "number" as const,
+      label: "Height (px, optional)",
+      min: 0,
+    },
+    objectFit: {
+      type: "select" as const,
+      label: "Object Fit (with Height set)",
+      options: [
+        { label: "Cover", value: "cover" },
+        { label: "Contain", value: "contain" },
+        { label: "Fill", value: "fill" },
+      ],
+    },
+    objectPosition: {
+      type: "select" as const,
+      label: "Object Position",
+      options: [
+        { label: "Center", value: "center" },
+        { label: "Top", value: "top" },
+        { label: "Bottom", value: "bottom" },
+        { label: "Left", value: "left" },
+        { label: "Right", value: "right" },
+      ],
+    },
+    alignment: {
+      type: "radio" as const,
+      label: "Alignment",
+      options: ALIGN_OPTIONS,
+    },
+  },
+};
+
+/** Same "plain built-in `object` field" reasoning as `imageSizeField` —
+ *  `VideoSizeConfig`'s own doc comment explains why it's a separate,
+ *  smaller config from Image's (aspect ratio has no Image equivalent;
+ *  Image's height/object-fit have no Video equivalent). */
+const videoSizeField = {
+  type: "object" as const,
+  label: "Size",
+  objectFields: {
+    width: {
+      type: "select" as const,
+      label: "Width",
+      options: [
+        { label: "Auto (fill column)", value: "auto" },
+        { label: "50%", value: "50" },
+        { label: "75%", value: "75" },
+        { label: "100%", value: "100" },
+      ],
+    },
+    maxWidthPx: {
+      type: "number" as const,
+      label: "Max Width (px, optional)",
+      min: 0,
+    },
+    aspectRatio: {
+      type: "select" as const,
+      label: "Aspect Ratio",
+      options: [
+        { label: "16:9 (widescreen)", value: "16:9" },
+        { label: "9:16 (vertical)", value: "9:16" },
+        { label: "1:1 (square)", value: "1:1" },
+        { label: "4:3 (classic)", value: "4:3" },
+      ],
+    },
+    alignment: {
+      type: "radio" as const,
+      label: "Alignment",
+      options: ALIGN_OPTIONS,
+    },
+  },
+};
+
+/**
+ * `VideoPlaybackConfig` (master spec §8/§24.6 "autoplay, muted, controls,
+ * loop, poster"). Kept separate from `videoSizeField` (playback behavior,
+ * not layout). The Settings UI exposes all four flags — the
+ * browser-cannot-honor-unmuted-autoplay coercion (`resolveVideoEmbed`,
+ * video.ts) happens once at RENDER time, not by hiding/disabling the Mute
+ * toggle here, so the user always sees exactly what they set and the
+ * render is what's actually guaranteed correct — same "resolve, don't
+ * gate the UI" principle `resolveBaseStyleProps` already uses everywhere.
+ */
+const videoPlaybackField = {
+  type: "object" as const,
+  label: "Playback",
+  objectFields: {
+    autoplay: {
+      type: "radio" as const,
+      label: "Autoplay",
+      options: [
+        { label: "No", value: false },
+        { label: "Yes", value: true },
+      ],
+    },
+    muted: {
+      type: "radio" as const,
+      label: "Muted",
+      options: [
+        { label: "No", value: false },
+        { label: "Yes", value: true },
+      ],
+    },
+    loop: {
+      type: "radio" as const,
+      label: "Loop",
+      options: [
+        { label: "No", value: false },
+        { label: "Yes", value: true },
+      ],
+    },
+    showControls: {
+      type: "radio" as const,
+      label: "Show Controls",
+      options: [
+        { label: "Yes", value: true },
+        { label: "No", value: false },
+      ],
+    },
+    posterUrl: {
+      type: "text" as const,
+      label: "Poster Image URL (direct video files only)",
+    },
+  },
 };
 
 // ---------- Shared Style field (System A — master spec §24.3/§24.20) ----------
@@ -334,6 +500,7 @@ export function createPuckConfig(
         components: [
           "Heading",
           "Text",
+          "RichText",
           "Button",
           "Image",
           "Video",
@@ -592,6 +759,7 @@ export function createPuckConfig(
             allow: [
               "Heading",
               "Text",
+              "RichText",
               "Button",
               "Image",
               "Video",
@@ -693,6 +861,36 @@ export function createPuckConfig(
         ),
       },
 
+      // System B (master spec §24.3.1/§24.6 — Rich Text is LAUNCH). A real,
+      // separate element — see RichTextRenderElement's own doc comment in
+      // elements.tsx for the full "why a native `richtext` field, why a
+      // separate element rather than upgrading Text" reasoning. `content`
+      // uses Puck's default Tiptap extension set (no custom fork) —
+      // paragraphs/headings/bold/italic/underline/strike/links/bulleted+
+      // numbered (nested) lists/blockquote/code/code block. No separate
+      // `alignment` field, unlike Heading/Text — Tiptap's own `textAlign`
+      // extension already gives per-block alignment control inside the
+      // rich-text toolbar itself, so a second top-level control would be
+      // redundant/conflicting rather than additive.
+      RichText: {
+        label: "Rich Text",
+        fields: {
+          content: {
+            type: "richtext",
+            label: "Content",
+            contentEditable: true,
+          },
+          style: textStyleField,
+        },
+        defaultProps: {
+          content: "<p>Add your rich text here.</p>",
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, content, style }) => (
+          <RichTextRenderElement id={id} content={content} style={style} />
+        ),
+      },
+
       Button: {
         label: "Button",
         fields: {
@@ -758,20 +956,23 @@ export function createPuckConfig(
           src: imageSrcField,
           alt: { type: "text", label: "Alt Text" },
           action: actionField,
+          size: imageSizeField,
           style: mediaStyleField,
         },
         defaultProps: {
           src: "",
           alt: "",
           action: { ...DEFAULT_PAGE_ACTION },
+          size: DEFAULT_IMAGE_SIZE,
           style: DEFAULT_STYLE_CONFIG,
         },
-        render: ({ id, src, alt, action, style }) => (
+        render: ({ id, src, alt, action, size, style }) => (
           <ImageRender
             id={id}
             src={src}
             alt={alt}
             action={toPageAction(action)}
+            size={size}
             style={style}
           />
         ),
@@ -782,11 +983,26 @@ export function createPuckConfig(
         fields: {
           url: { type: "text", label: "Video URL" },
           caption: { type: "text", label: "Caption (optional)" },
+          size: videoSizeField,
+          playback: videoPlaybackField,
           style: mediaStyleField,
         },
-        defaultProps: { url: "", caption: "", style: DEFAULT_STYLE_CONFIG },
-        render: ({ id, url, caption, style }) => (
-          <VideoRender id={id} url={url} caption={caption} style={style} />
+        defaultProps: {
+          url: "",
+          caption: "",
+          size: DEFAULT_VIDEO_SIZE,
+          playback: {},
+          style: DEFAULT_STYLE_CONFIG,
+        },
+        render: ({ id, url, caption, size, playback, style }) => (
+          <VideoRender
+            id={id}
+            url={url}
+            caption={caption}
+            size={size}
+            playback={playback}
+            style={style}
+          />
         ),
       },
 

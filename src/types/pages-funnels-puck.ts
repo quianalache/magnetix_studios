@@ -425,3 +425,79 @@ export interface StyleCompatibility {
    *  Width override inside the shared Responsive group. */
   columnWidth?: boolean;
 }
+
+/**
+ * System B (master spec §24.6 "Image — STYLES: width, max width,
+ * height/object-fit... alignment"). Deliberately NOT folded into the
+ * shared `StyleConfig` (§24.3's shared systems are Typography/Spacing/
+ * Border/Shadow/Background/Responsive/Visibility — sizing/object-fit are
+ * media-specific, not one of those five, so this is its own small,
+ * additive-only config, following the exact same "every field optional,
+ * unset resolves to zero extra CSS" rule every `StyleConfig` group already
+ * uses). Image keeps its existing shared `styleConfig`
+ * (spacing/border/radius/boxShadow/responsive/visibility, `MEDIA_ELEMENT_
+ * STYLE` in config.tsx) — this is purely additive alongside it, not a
+ * replacement.
+ */
+export interface ImageSizeConfig {
+  /** CSS width as a percentage of the containing column, or "auto" (the
+   *  image's natural/intrinsic width, today's unchanged default). */
+  width?: "auto" | "25" | "50" | "75" | "100";
+  /** Optional hard cap in px on top of `width` — e.g. "100% but never
+   *  wider than 480px." Unset = no cap. */
+  maxWidthPx?: number;
+  /** Optional fixed height in px. Unset (the default) = natural aspect
+   *  ratio, exactly today's behavior. */
+  heightPx?: number;
+  /** Only meaningful once `heightPx` constrains the box — with height
+   *  unset, `object-fit` has nothing to do since the image renders at its
+   *  natural ratio already. */
+  objectFit?: "cover" | "contain" | "fill";
+  objectPosition?: "center" | "top" | "bottom" | "left" | "right";
+  /** Horizontal position of the image WITHIN its column — independent of
+   *  `width`, e.g. a 50%-width image can sit left/center/right of its
+   *  column. */
+  alignment?: PuckAlignment;
+}
+
+/**
+ * System B (master spec §24.6 "Video — STYLES: size, aspect ratio,
+ * border, radius, shadow, spacing"). Same additive, not-part-of-
+ * `StyleConfig` reasoning as `ImageSizeConfig` above — Video keeps its
+ * own shared `styleConfig` (`MEDIA_ELEMENT_STYLE`) for border/radius/
+ * shadow/spacing/responsive/visibility; this covers only what's genuinely
+ * video-specific (aspect ratio has no Image equivalent; Image's
+ * `heightPx`/`objectFit` have no Video equivalent, since a video's
+ * intrinsic box is governed by aspect ratio, not a fixed pixel height).
+ */
+export interface VideoSizeConfig {
+  width?: "auto" | "50" | "75" | "100";
+  maxWidthPx?: number;
+  aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3";
+  alignment?: PuckAlignment;
+}
+
+/**
+ * System B Video source model (master spec §24.6/§8 "Video — GENERAL:
+ * source/provider, URL/media, playback behavior... autoplay, muted,
+ * controls, loop, poster"). `provider` is auto-detected from `url` at
+ * render time (`detectVideoProvider()`, video.ts) — not a separate field
+ * the user sets by hand, matching the task's "prefer automatic provider
+ * detection from URL where clean" instruction. Kept as its own small
+ * config (not folded into `VideoSizeConfig`) since these are playback
+ * behavior, not layout/size.
+ */
+export interface VideoPlaybackConfig {
+  autoplay?: boolean;
+  muted?: boolean;
+  loop?: boolean;
+  /** Whether the native/provider player chrome (play button, scrubber,
+   *  volume) is shown. Named `showControls` (not `controls`) to avoid any
+   *  ambiguity with the DOM `controls` attribute it maps to. */
+  showControls?: boolean;
+  /** Direct-file (`<video>`) only — YouTube/Vimeo embeds don't accept an
+   *  external poster image via a query param in a way this app can set
+   *  reliably, so this is a no-op (documented, not silently ignored) for
+   *  those two providers. */
+  posterUrl?: string;
+}

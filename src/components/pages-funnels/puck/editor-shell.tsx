@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { clientPuckConfig } from "@/components/pages-funnels/puck/client-config";
 import { VIEWPORTS, IFRAME_CONFIG } from "@/lib/pages-funnels/puck/constants";
 import { MagnetixBlocksPanel } from "@/components/pages-funnels/puck/blocks-panel";
+import { AutoHierarchyWatcher } from "@/components/pages-funnels/puck/auto-hierarchy-watcher";
 import { MagnetixLayersPanel } from "@/components/pages-funnels/puck/layers-panel";
 import { MagnetixSettingsPanel } from "@/components/pages-funnels/puck/settings-panel";
 import { previewStorageKey } from "@/lib/pages-funnels/puck/preview-session";
@@ -263,6 +264,13 @@ export function MagnetixPuckEditorShell({
   const renderHeader = useCallback(
     ({ children }: { children: React.ReactNode }) => (
       <div className="border-border bg-card flex items-center gap-3 border-b px-4 py-2.5">
+        {/* System B Auto Hierarchy (master spec §24.1/§6/§11–15) — a
+            non-rendering watcher, mounted here (not anywhere in the visual
+            layout) purely because this is a real descendant of `<Puck>`'s
+            own provider tree, which `AutoHierarchyWatcher`'s use of
+            `createUsePuck()` requires. See that component's own doc
+            comment for the full mechanism. */}
+        <AutoHierarchyWatcher />
         <a
           href={backHref}
           className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1.5 text-sm transition-colors"
