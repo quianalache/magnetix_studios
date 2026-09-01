@@ -54,13 +54,19 @@ export default async function HomePage() {
   // is the authentication/product-access entry point, not a second copy
   // of the marketing site — magnetixstudios.com (and www) keep rendering
   // the landing page below unchanged; only this exact host redirects.
-  // /my/login already does everything needed for both an already-signed-
-  // in visitor (redirects straight to /gateway) and a logged-out one
-  // (shows the existing unified staff/member sign-in) — reusing it here
-  // rather than duplicating that branch is deliberate: one real place
-  // decides "logged in or not," not two.
+  //
+  // CORRECTION (same day, caught in real Incognito QA): this originally
+  // sent an anonymous visitor to /my/login — wrong, because that
+  // pre-classifies them as "MyMagnetix" before Magnetix has any idea who
+  // they are or what they're allowed to access. An anonymous request
+  // cannot be pre-classified into either Business Center or MyMagnetix;
+  // /login is the real neutral entry (LoginForm now tries a Business
+  // Center credential first, falls back to a MyMagnetix-only one — one
+  // form, either identity, see its own doc comment) and only AFTER a
+  // successful sign-in does anything resolve which access this identity
+  // actually has (see /gateway's own doc comment for that resolution).
   if (host === "crm.magnetixstudios.com") {
-    redirect("/my/login");
+    redirect("/login");
   }
 
   // A verified sub-account custom domain's bare root ("/") is NOT this

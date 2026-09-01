@@ -31,18 +31,69 @@ export function LoginForm() {
   const [resetSent, setResetSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // 2026-09-01 login/gateway correction: this is now the ONE neutral
+  // Magnetix sign-in — reused at crm.magnetixstudios.com's root — so it
+  // has to authenticate EITHER identity type, not just staff. Tries the
+  // real Business Center credential first (existing, unchanged
+  // signInWithEmail — a genuine Firebase Auth check, richer than a bare
+  // identity check since success here can also unlock MyMagnetix via the
+  // existing staff bridge below); only on failure does it fall back to
+  // the existing unified MyMagnetix-only credential endpoint
+  // (/api/my/login, already built to try a Person's own password). Two
+  // already-proven, already-separate mechanisms sequenced from one form —
+  // never merged into a single credential check, per the explicit
+  // instruction not to blindly merge Business Center and MyMagnetix auth.
   async function handleSignIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setLoading(true);
+    const params = new URLSearchParams(window.location.search);
+    const explicitRedirect = params.get("redirect");
+
     try {
       await signInWithEmail(email, password);
-      const params = new URLSearchParams(window.location.search);
-      const redirect = params.get("redirect") ?? "/dashboard";
-      router.push(redirect);
+      // Best-effort: also establish a MyMagnetix session if this identity
+      // has any member relationships anywhere (existing bridge route —
+      // silently no-ops with a 404 if not; never blocks this login
+      // either way). Lets /gateway show a working "MyMagnetix" link
+      // immediately instead of a bridge-on-click button.
+      await fetch("/api/my/bridge-from-staff", { method: "POST" }).catch(() => {});
+      // An explicit ?redirect= (e.g. middleware bouncing a logged-out
+      // visit to a specific protected page, or /gateway's own "Business
+      // Center" link) is honored exactly — the bare/neutral-entry case
+      // (no redirect param at all) lands on /gateway, which resolves
+      // Business-Center-vs-MyMagnetix routing from here.
+      router.push(explicitRedirect ?? "/gateway");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sign in.");
+      return;
+    } catch {
+      // Not a valid Business Center credential (or no such account) —
+      // fall through to the MyMagnetix-only check below rather than
+      // failing immediately, so ONE form covers both identity types.
+    }
+
+    try {
+      const res = await fetch("/api/my/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          mode: "password",
+          next: explicitRedirect ?? undefined,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        redirectTo?: string;
+        error?: string;
+      };
+      if (res.ok && data.redirectTo) {
+        window.location.href = data.redirectTo;
+        return;
+      }
+      setError(data.error ?? "Email or password is incorrect.");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

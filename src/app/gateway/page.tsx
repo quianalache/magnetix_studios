@@ -1,57 +1,75 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentPerson } from "@/lib/server/person-session";
-import {
-  personHasStaffAccess,
-  personHasMemberRelationships,
-} from "@/lib/server/person-identity-service";
+import { getCurrentStaffUser } from "@/lib/auth/current-staff";
 import { resolvePersonDisplayName, listPersonMemberships } from "@/lib/server/mymagnetix-service";
+import { GatewayMyMagnetixButton } from "@/components/auth/gateway-mymagnetix-button";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Dual-role gateway — the ONE place role-aware routing decisions get made,
- * right after a successful global MyMagnetix authentication (see
- * /api/my/login, /api/my/login/verify, /api/my/password/reset, all of
- * which redirect here rather than straight to /my).
+ * reached only AFTER a successful authentication (never shown to an
+ * anonymous visitor — see /api/my/login, /api/my/login/verify,
+ * /api/my/password/reset, all of which redirect here, and the neutral
+ * LoginForm's own post-auth routing).
  *
- * 2026-09-01: moved here from /my/gateway (see that file, now a
- * backward-compatible redirect stub) — this page sits BETWEEN Business
- * Center and MyMagnetix conceptually, so it gets its own neutral route
- * instead of living under /my/*. One real implementation; the old URL
- * just forwards.
+ * 2026-09-01 correction: previously determined "has Business Center
+ * access" via `personHasStaffAccess(personId)`, which only ever resolved
+ * if a MyMagnetix Person/mm_session session already existed — a staff
+ * identity with zero MyMagnetix relationships never gets an mm_session
+ * minted at all (see /api/my/bridge-from-staff's own deliberate "nothing
+ * to show them, no session minted" behavior), so it could never reach
+ * this page and got silently bounced straight to /login instead, even
+ * though the approved product model says ANY Business Center access
+ * should land here and see the chooser. Now checks Business Center
+ * access independently via `getCurrentStaffUser()` (the real __session,
+ * the Business Center's OWN auth layer) rather than requiring it to be
+ * inferred through the Person layer — the two systems stay genuinely
+ * independent, combined only for this one routing decision, never
+ * merged into a single credential.
  *
  * Routing, per the approved product model:
- *   Member-only  -> /my directly
- *   Staff-only   -> nothing to show in MyMagnetix; send them to the real
- *                   staff login instead (a MyMagnetix login for a
- *                   staff-only identity is an edge case, not the norm —
- *                   staff normally never visit /my/login at all)
- *   Both         -> this page renders the chooser
+ *   Business Center access exists (regardless of MyMagnetix status)
+ *     -> show the chooser below. Never skip it.
+ *   No Business Center access, has MyMagnetix access
+ *     -> /my directly (the one accepted shortcut)
+ *   Neither
+ *     -> the existing no-account state
  *
- * This never merges the two authorization systems: staff access here is
- * detected read-only via personHasStaffAccess, never granted or assumed
- * from the mm_session itself.
+ * If a staff identity reaches here with no MyMagnetix session yet (the
+ * common case — most staff never separately signed into MyMagnetix), the
+ * MyMagnetix button below establishes one on click via the existing
+ * staff->Person bridge instead of linking straight to a page that would
+ * just bounce them to a login screen.
  */
 export default async function GatewayPage() {
-  const person = await getCurrentPerson();
-  if (!person) redirect("/my/login");
-
-  const [hasStaff, hasMember, memberships] = await Promise.all([
-    personHasStaffAccess(person.id),
-    personHasMemberRelationships(person.id),
-    listPersonMemberships(person.id),
+  const [staffUser, person] = await Promise.all([
+    getCurrentStaffUser(),
+    getCurrentPerson(),
   ]);
 
-  if (!hasMember) {
-    // Nothing for MyMagnetix to show this identity. If they also have no
-    // staff access either, there's genuinely nothing here for them yet.
-    redirect(hasStaff ? "/login" : "/my/login?error=no_access");
+  if (!staffUser && !person) {
+    // This page is a post-auth destination, not an entry point — nobody
+    // authenticated at all lands on the real neutral login instead.
+    redirect("/login");
   }
 
-  if (!hasStaff) redirect("/my");
+  const memberships = person
+    ? await listPersonMemberships(person.id)
+    : [];
+  const hasMember = memberships.length > 0;
+  const hasStaff = !!staffUser;
 
-  const displayName = await resolvePersonDisplayName(person.id, person.primaryEmail, memberships);
+  if (!hasStaff) {
+    // No Business Center access at all.
+    if (hasMember) redirect("/my");
+    redirect("/my/login?error=no_access");
+  }
+
+  const displayName = person
+    ? await resolvePersonDisplayName(person.id, person.primaryEmail, memberships)
+    : (staffUser!.email.split("@")[0] || "there");
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-6 py-16">
@@ -67,13 +85,17 @@ export default async function GatewayPage() {
           >
             Business Center
           </Link>
-          <Link
-            href="/my"
-            className="rounded-[9px] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: "#5E2574" }}
-          >
-            MyMagnetix
-          </Link>
+          {person ? (
+            <Link
+              href="/my"
+              className="rounded-[9px] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: "#5E2574" }}
+            >
+              MyMagnetix
+            </Link>
+          ) : (
+            <GatewayMyMagnetixButton />
+          )}
         </div>
       </div>
     </div>
