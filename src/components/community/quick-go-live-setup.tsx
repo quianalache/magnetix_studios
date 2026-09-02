@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, Mic, MonitorUp, Settings2, Video, X } from "lucide-react";
+import { storeLivePrejoinMediaState } from "@/lib/community/live-prejoin-state";
 
 type Source = "meeting" | "streaming";
 
@@ -135,6 +136,17 @@ export function QuickGoLiveSetup({
     setSaving(false);
     if (!response.ok || !data.room)
       return setError(data.error ?? "Unable to start live room.");
+    // Going live is a hard navigation (window.location.assign in feed-view's
+    // onCreated) — this component's state is gone before the room mounts.
+    // Stash the chosen camera/mic on-off + device here so the room can
+    // apply it verbatim instead of joining with everything off. See
+    // live-prejoin-state.ts.
+    storeLivePrejoinMediaState(data.room.id, {
+      cameraOn,
+      micOn,
+      cameraId,
+      microphoneId,
+    });
     onCreated(data.room.id);
   }
   return (

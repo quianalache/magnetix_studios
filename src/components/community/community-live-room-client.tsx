@@ -10,6 +10,7 @@ import {
   type TrackReference,
 } from "@livekit/components-react";
 import { Room, RoomEvent, Track, type Participant } from "livekit-client";
+import { consumeLivePrejoinMediaState } from "@/lib/community/live-prejoin-state";
 import {
   ChevronDown,
   Check,
@@ -871,6 +872,63 @@ function View({
   );
 }
 
+const PREJOIN_MEDIA_TIMEOUT_MS = 8000;
+
+/**
+ * Applies the host's pre-live camera/mic on-off + device choice
+ * (QuickGoLiveSetup, carried across the hard navigation via
+ * live-prejoin-state.ts) right after the room connects. Deliberately
+ * swallows every failure (device revoked/removed since the preview, a
+ * stalled permission prompt, no stored choice at all) rather than
+ * rejecting — this runs inline before the recording-start call in the
+ * join effect below, and a thrown error here must never abort that
+ * effect or block the room from finishing its join. The camera/mic
+ * toggle buttons already read LiveKit's own isCameraEnabled/
+ * isMicrophoneEnabled, so a failed enable here correctly leaves them
+ * showing off — never a false "on".
+ *
+ * Bounded by PREJOIN_MEDIA_TIMEOUT_MS so a hung getUserMedia() (e.g. a
+ * permission prompt the host never answers) can't stall the
+ * recording-start call that follows this indefinitely.
+ */
+async function applyPrejoinMediaState(room: Room, roomId: string) {
+  const state = consumeLivePrejoinMediaState(roomId);
+  if (!state) return;
+  const withTimeout = (p: Promise<unknown>) =>
+    Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(resolve, PREJOIN_MEDIA_TIMEOUT_MS)),
+    ]);
+  // Each device switch is independently best-effort: a stale/removed
+  // device id (selected in preview, gone by the time the host actually
+  // joins) should fall back to the default device, not block camera/mic
+  // from turning on at all.
+  if (state.cameraId) {
+    try {
+      await withTimeout(room.switchActiveDevice("videoinput", state.cameraId));
+    } catch {
+      // Falls back to the default camera below.
+    }
+  }
+  if (state.microphoneId) {
+    try {
+      await withTimeout(
+        room.switchActiveDevice("audioinput", state.microphoneId)
+      );
+    } catch {
+      // Falls back to the default microphone below.
+    }
+  }
+  try {
+    await Promise.all([
+      withTimeout(room.localParticipant.setCameraEnabled(state.cameraOn)),
+      withTimeout(room.localParticipant.setMicrophoneEnabled(state.micOn)),
+    ]);
+  } catch {
+    // Left exactly as LiveKit's own state landed — see doc comment above.
+  }
+}
+
 export default function CommunityLiveRoomClient({
   saId,
   groupId,
@@ -919,9 +977,24 @@ export default function CommunityLiveRoomClient({
         const next = new Room();
         await next.connect(x.url, x.token);
         if (!active) return next.disconnect();
+        if (x.role === "HOST") {
+          // Apply the pre-live camera/mic on-off + device choice BEFORE
+          // starting the recording below — 2026-09-02 fix for recordings
+          // that began with a black/dead frame because egress started
+          // the instant the room connected, before the host's camera/mic
+          // were ever turned on (nothing here previously enabled them at
+          // all; the host had to do it manually after joining). Bounded by
+          // PREJOIN_MEDIA_TIMEOUT_MS so a stalled device/permission prompt
+          // delays recording briefly rather than blocking it — and a host
+          // who chose Camera/Mic OFF is never made to wait for either.
+          await applyPrejoinMediaState(next, roomId);
+        }
+        if (!active) return next.disconnect();
         // Egress is a server-side operation. Starting it after the host has
-        // connected ensures the RoomComposite has a real room to capture;
-        // the endpoint is idempotent and only records retained live posts.
+        // connected (and, above, after their intended initial camera/mic
+        // state is applied) ensures the RoomComposite has a real room to
+        // capture; the endpoint is idempotent and only records retained
+        // live posts.
         if (x.role === "HOST") {
           void fetch(joinPath, {
             method: "POST",
