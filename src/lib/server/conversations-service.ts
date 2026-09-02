@@ -190,7 +190,8 @@ export async function updateConversationWorkflowState(input: {
       ? "conversation.closed"
       : input.status === "open" && previous.status === "closed"
         ? "conversation.reopened"
-        : input.assigneeUid !== undefined
+        : input.assigneeUid !== undefined &&
+            input.assigneeUid !== (previous.assigneeUid ?? null)
           ? "conversation.assigned"
           : null;
   if (agencyId && eventType) {

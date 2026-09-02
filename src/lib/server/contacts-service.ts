@@ -221,15 +221,20 @@ export async function updateContactServerSide(opts: {
     }
   }
   if (mode === "live") {
-    const changedFields = Object.keys(opts.patch).filter(
-      (field) => field !== "tags" && field !== "attribution"
-    );
+    const freshData = fresh.data() ?? {};
+    const changedFields = Object.keys(opts.patch).filter((field) => {
+      if (field === "tags" || field === "attribution") return false;
+      return (
+        JSON.stringify(existing[field] ?? null) !==
+        JSON.stringify(freshData[field] ?? null)
+      );
+    });
     if (changedFields.length > 0) {
       const oldValues = Object.fromEntries(
         changedFields.map((field) => [field, existing[field] ?? null])
       );
       const newValues = Object.fromEntries(
-        changedFields.map((field) => [field, fresh.data()?.[field] ?? null])
+        changedFields.map((field) => [field, freshData[field] ?? null])
       );
       const delta = JSON.stringify({ oldValues, newValues });
       emitWorkflowEvent({
@@ -251,7 +256,7 @@ export async function updateContactServerSide(opts: {
           source: "contacts",
           payload: {
             previousSource: existing.source ?? null,
-            newSource: fresh.data()?.source ?? null,
+            newSource: freshData.source ?? null,
           },
         });
       }
@@ -264,7 +269,7 @@ export async function updateContactServerSide(opts: {
       source: "contacts",
       payload: {
         changedFields: Object.keys(opts.patch),
-        source: fresh.data()?.source ?? null,
+        source: freshData.source ?? null,
       },
     });
   }
