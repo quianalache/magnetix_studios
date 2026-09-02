@@ -37,6 +37,12 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * `sourceIdeaId` stays out of the allowlist deliberately — it's only
  * ever set once, at creation time by Turn Into Video, never edited
  * afterward by any UI action.
+ * `generatedScript` (in-app script generation) is now included — the
+ * user can edit the generated draft and save those edits, same as
+ * `compiledScript`. `generatedScriptMeta` and `generatingScriptSince`
+ * stay OUT of this allowlist — both are written only by the dedicated
+ * generate-script route (directly via `updateVideoProject`, bypassing
+ * this filter server-side), never by a client-supplied PATCH body.
  */
 
 const EDITABLE_KEYS = [
@@ -97,6 +103,8 @@ const EDITABLE_KEYS = [
   "finalReviewChecklist",
   // Video Library (final completion phase)
   "archived",
+  // In-app script generation
+  "generatedScript",
 ] as const;
 
 export async function GET(

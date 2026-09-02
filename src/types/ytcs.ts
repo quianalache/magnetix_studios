@@ -135,6 +135,31 @@ export interface YtcsVideoProject {
   generatedDeepDiveQuestions?: string[];
   generatedScriptPrompt?: string;
   compiledScript?: string;
+  /** In-app Generate Script (script generation enhancement) — the AI's
+   *  generated draft, separate from `compiledScript` (Final Script
+   *  Draft) so regeneration never overwrites a user's finished/edited
+   *  script. Copied into `compiledScript` only via an explicit "Use as
+   *  Final Script Draft" action, never automatically. */
+  generatedScript?: string;
+  /** Generation metadata for the current `generatedScript` — persisted
+   *  (not just held in transient UI state) so a truncation warning
+   *  survives a page refresh. Written only by the generate-script
+   *  route; never user-editable. */
+  generatedScriptMeta?: {
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    finishReason?: string;
+    truncated: boolean;
+    generatedAt: string;
+  };
+  /** Short-lived lock set by the generate-script route for the duration
+   *  of one generation call — the smallest reasonable server-side
+   *  guard against two simultaneous generations on the same project
+   *  (e.g. a double-submit race the client-side disabled state
+   *  missed). Cleared in a `finally` regardless of outcome. */
+  generatingScriptSince?: string;
   generatedTitlePrompt?: string;
   selectedTitle?: string;
   backupTitle?: string;
