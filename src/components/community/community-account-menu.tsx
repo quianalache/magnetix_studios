@@ -52,10 +52,24 @@ export function CommunityAccountMenu({
           {author.displayName}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href={gatewayHref} />}>
+        {/* prefetch={false} is load-bearing, not stylistic — these two
+            targets are Route Handlers (/api/my/bridge-from-member), not
+            pages. Next's default Link prefetch treats every href as a
+            page and requests its RSC payload as soon as the link mounts
+            (the moment this menu opens, before any click); a Route
+            Handler's plain redirect Response isn't valid flight data, and
+            the router throws trying to parse it — the exact client-side
+            crash reported tapping this avatar. BackToMyMagnetixLink
+            already carries this same fix for the identical link shape;
+            this component (added later, restoring account navigation
+            from Community) never got it. profileHref below is a real
+            page route, so it keeps normal prefetching. */}
+        <DropdownMenuItem render={<Link href={gatewayHref} prefetch={false} />}>
           <Home className="mr-2 h-4 w-4" /> Magnetix Home
         </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href={communitiesHref} />}>
+        <DropdownMenuItem
+          render={<Link href={communitiesHref} prefetch={false} />}
+        >
           <MessagesSquare className="mr-2 h-4 w-4" /> My Communities
         </DropdownMenuItem>
         <DropdownMenuItem render={<Link href={profileHref} />}>

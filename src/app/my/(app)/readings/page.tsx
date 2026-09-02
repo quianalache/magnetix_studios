@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { listReadingsForPerson } from "@/lib/server/mymagnetix-readings-service";
 import { gradientForId } from "@/lib/mymagnetix/visuals";
+import { MyMagnetixBackLink } from "@/components/mymagnetix/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +26,11 @@ export default async function MyMagnetixReadingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <MyMagnetixBackLink />
       <h1 className="text-[20px] font-bold text-[#1D1B27]">My Readings</h1>
-      <p className="mt-1 text-[13px] text-[#84809A]">Every reading you&rsquo;ve generated, across every Magnetix business.</p>
+      <p className="mt-1 text-[13px] text-[#84809A]">
+        Every reading you&rsquo;ve generated, across every Magnetix business.
+      </p>
 
       {readings.length === 0 ? (
         <p className="mt-6 text-[13px] text-[#909090]">No readings yet.</p>
@@ -42,14 +46,23 @@ export default async function MyMagnetixReadingsPage() {
                 className="flex h-20 items-end p-3"
                 style={{ background: gradientForId(reading.readingId) }}
               >
-                <span className="text-[15px] font-extrabold uppercase leading-tight text-white/95">{reading.readingName}</span>
+                <span className="text-[15px] leading-tight font-extrabold text-white/95 uppercase">
+                  {reading.readingName}
+                </span>
               </div>
               <div className="p-3">
-                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">{reading.readingName}</p>
-                <p className="truncate text-[11px] text-[#8A87A0]">{reading.businessName}</p>
+                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">
+                  {reading.readingName}
+                </p>
+                <p className="truncate text-[11px] text-[#8A87A0]">
+                  {reading.businessName}
+                </p>
                 {reading.completedAt && (
                   <p className="mt-1.5 text-[11px] text-[#B4B0C6]">
-                    {new Date(reading.completedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    {new Date(reading.completedAt).toLocaleDateString(
+                      undefined,
+                      { month: "short", day: "numeric", year: "numeric" }
+                    )}
                   </p>
                 )}
               </div>

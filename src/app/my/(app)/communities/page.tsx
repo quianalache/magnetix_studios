@@ -2,8 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MessagesSquare } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
-import { listPersonMemberships, listCommunitiesForPerson, listPinnedKeys } from "@/lib/server/mymagnetix-service";
+import {
+  listPersonMemberships,
+  listCommunitiesForPerson,
+  listPinnedKeys,
+} from "@/lib/server/mymagnetix-service";
 import { PinButton } from "@/components/mymagnetix/pin-button";
+import { MyMagnetixBackLink } from "@/components/mymagnetix/back-link";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +36,11 @@ export default async function MyMagnetixCommunitiesPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
+      <MyMagnetixBackLink />
       <h1 className="text-[20px] font-bold text-[#1D1B27]">My Communities</h1>
-      <p className="mt-1 text-[13px] text-[#84809A]">Every community you belong to, across every Magnetix business.</p>
+      <p className="mt-1 text-[13px] text-[#84809A]">
+        Every community you belong to, across every Magnetix business.
+      </p>
 
       {sorted.length === 0 ? (
         <p className="mt-6 text-[13px] text-[#909090]">No communities yet.</p>
@@ -47,12 +55,17 @@ export default async function MyMagnetixCommunitiesPage() {
                 <MessagesSquare className="h-5 w-5" />
               </span>
               <Link href={community.enterHref} className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">{community.name}</p>
+                <p className="truncate text-[13px] font-semibold text-[#1D1B27]">
+                  {community.name}
+                </p>
                 <p className="truncate text-[11px] text-[#8A87A0]">
                   {community.businessName} · Level {community.level}
                 </p>
               </Link>
-              <PinButton pinKey={community.pinKey} initialPinned={pinned.has(community.pinKey)} />
+              <PinButton
+                pinKey={community.pinKey}
+                initialPinned={pinned.has(community.pinKey)}
+              />
             </div>
           ))}
         </div>
