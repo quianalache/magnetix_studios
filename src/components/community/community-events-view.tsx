@@ -309,7 +309,7 @@ export function CommunityEventsView({
       )}
       <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside
-          className="space-y-4 rounded-xl border p-4"
+          className="order-2 space-y-4 rounded-xl border p-4 xl:order-1"
           style={{
             borderColor: "var(--community-border)",
             backgroundColor: "var(--community-surface)",
@@ -375,7 +375,7 @@ export function CommunityEventsView({
           </div>
         </aside>
         <section
-          className="overflow-hidden rounded-xl border"
+          className="order-1 overflow-hidden rounded-xl border xl:order-2"
           style={{
             borderColor: "var(--community-border)",
             backgroundColor: "var(--community-surface)",
