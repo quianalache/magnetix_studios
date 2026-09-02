@@ -3,9 +3,17 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
-import { notifyCourseAccessGranted, notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
+import {
+  notifyCourseAccessGranted,
+  notifyCommunityAccessGranted,
+} from "@/lib/server/notification-producers";
 import { parseVideoUrl } from "@/lib/community/video-embed";
-import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
+import {
+  ensureUniqueSlug,
+  isSlugAvailable,
+  isValidSlugFormat,
+} from "@/lib/slug";
 import { createCourseOfferServerSide } from "@/lib/server/course-offer-service";
 import {
   DEFAULT_COURSE_THEME,
@@ -18,7 +26,10 @@ import type { ResourceLink } from "@/types/community";
 import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import { evaluateChartRule } from "@/lib/energetics/chart-rules";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
-import { calculateAstrologyChart, type AstrologyChart } from "@/lib/energetics/astrology";
+import {
+  calculateAstrologyChart,
+  type AstrologyChart,
+} from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import {
   DEFAULT_STANDALONE_COURSE_ADVANCED,
@@ -123,7 +134,11 @@ export async function createStandaloneCourseServerSide(opts: {
   // ongoing sync: editing the course's price afterward doesn't touch this
   // offer, same as applying a Theme Template copies rather than references.
   const offerType: OfferType =
-    access === "open" ? "free" : billingType === "recurring" ? "recurring" : "oneTime";
+    access === "open"
+      ? "free"
+      : billingType === "recurring"
+        ? "recurring"
+        : "oneTime";
   await createCourseOfferServerSide({
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
@@ -180,7 +195,7 @@ export async function updateStandaloneCourseServerSide(opts: {
     const slug = p.slug.trim().toLowerCase();
     if (!isValidSlugFormat(slug)) {
       throw new Error(
-        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen.",
+        "Slug must be 1-48 lowercase letters, numbers, and hyphens, and can't start or end with a hyphen."
       );
     }
     const available = await isSlugAvailable({
@@ -269,8 +284,8 @@ export async function applyLearningExperienceToAllCoursesServerSide(opts: {
       d.ref.update({
         learningExperience: opts.learningExperience,
         updatedAt: FieldValue.serverTimestamp(),
-      }),
-    ),
+      })
+    )
   );
 }
 
@@ -279,7 +294,7 @@ export async function deleteStandaloneCourseServerSide(opts: {
   courseId: string;
 }): Promise<void> {
   await getAdminDb().recursiveDelete(
-    courseDoc(opts.subAccountId, opts.courseId),
+    courseDoc(opts.subAccountId, opts.courseId)
   );
 }
 
@@ -287,7 +302,7 @@ export async function deleteStandaloneCourseServerSide(opts: {
  *  such fields — every read falls back to sensible defaults. */
 function withCourseDefaults(
   id: string,
-  data: Omit<StandaloneCourse, "id">,
+  data: Omit<StandaloneCourse, "id">
 ): StandaloneCourse {
   return {
     id,
@@ -309,26 +324,26 @@ function withCourseDefaults(
 
 export async function getStandaloneCourse(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<StandaloneCourse | null> {
   const snap = await courseDoc(saId, courseId).get();
   if (!snap.exists) return null;
   return withCourseDefaults(
     snap.id,
-    snap.data() as Omit<StandaloneCourse, "id">,
+    snap.data() as Omit<StandaloneCourse, "id">
   );
 }
 
 /** Slug lookup for the human-readable custom-domain route (/courses/{slug}). Published-only — an unpublished course 404s on its pretty URL same as it would on the opaque one. */
 export async function getStandaloneCourseBySlug(
   saId: string,
-  slug: string,
+  slug: string
 ): Promise<StandaloneCourse | null> {
   const snap = await coursesCol(saId).where("slug", "==", slug).limit(1).get();
   if (snap.empty) return null;
   const course = withCourseDefaults(
     snap.docs[0].id,
-    snap.docs[0].data() as Omit<StandaloneCourse, "id">,
+    snap.docs[0].data() as Omit<StandaloneCourse, "id">
   );
   return course.published ? course : null;
 }
@@ -348,11 +363,11 @@ export async function updateStandaloneCourseThemeServerSide(opts: {
 }
 
 export async function listStandaloneCourses(
-  saId: string,
+  saId: string
 ): Promise<StandaloneCourse[]> {
   const snap = await coursesCol(saId).orderBy("createdAt", "desc").get();
   return snap.docs.map((d) =>
-    withCourseDefaults(d.id, d.data() as Omit<StandaloneCourse, "id">),
+    withCourseDefaults(d.id, d.data() as Omit<StandaloneCourse, "id">)
   );
 }
 
@@ -407,7 +422,7 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
   const db = getAdminDb();
   for (const groupId of course.linkedCommunityGroupIds) {
     const groupRef = db.doc(
-      `subAccounts/${opts.subAccountId}/communityGroups/${groupId}`,
+      `subAccounts/${opts.subAccountId}/communityGroups/${groupId}`
     );
     const memRef = groupRef.collection("memberships").doc(opts.memberId);
     const existing = await memRef.get();
@@ -424,7 +439,7 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
         level: existing.data()?.level ?? 1,
         joinedAt: existing.data()?.joinedAt ?? FieldValue.serverTimestamp(),
       },
-      { merge: true },
+      { merge: true }
     );
     if (!wasActive) {
       await groupRef.update({ memberCount: FieldValue.increment(1) });
@@ -449,7 +464,12 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
         subAccountId: opts.subAccountId,
         groupId,
         memberId: opts.memberId,
-      }).catch((err) => console.error("[grantLinkedCommunityGroupsServerSide] notification failed", err));
+      }).catch((err) =>
+        console.error(
+          "[grantLinkedCommunityGroupsServerSide] notification failed",
+          err
+        )
+      );
     }
   }
 }
@@ -462,7 +482,7 @@ export async function createStandaloneSectionServerSide(opts: {
   title: string;
 }): Promise<StandaloneCourseSection> {
   const col = courseDoc(opts.subAccountId, opts.courseId).collection(
-    "sections",
+    "sections"
   );
   const count = (await col.count().get()).data().count;
   const doc = { title: opts.title.trim() || "Untitled section", order: count };
@@ -559,10 +579,14 @@ export async function updateStandaloneLessonServerSide(opts: {
   if (Array.isArray(p.resourceLinks)) {
     updates.resourceLinks = p.resourceLinks
       .filter((r) => r && r.url?.trim())
-      .map((r) => ({ label: r.label?.trim() || r.url.trim(), url: r.url.trim() }))
+      .map((r) => ({
+        label: r.label?.trim() || r.url.trim(),
+        url: r.url.trim(),
+      }))
       .slice(0, 20);
   }
-  if (p.chartUnlockCondition !== undefined) updates.chartUnlockCondition = p.chartUnlockCondition;
+  if (p.chartUnlockCondition !== undefined)
+    updates.chartUnlockCondition = p.chartUnlockCondition;
   let videoError = false;
   if (p.videoUrl !== undefined) {
     if (!p.videoUrl) {
@@ -592,7 +616,7 @@ export async function deleteStandaloneLessonServerSide(opts: {
   lessonId: string;
 }): Promise<void> {
   await getAdminDb().recursiveDelete(
-    lessonsCol(opts.subAccountId, opts.courseId).doc(opts.lessonId),
+    lessonsCol(opts.subAccountId, opts.courseId).doc(opts.lessonId)
   );
 }
 
@@ -608,7 +632,7 @@ export async function deleteStandaloneLessonServerSide(opts: {
  */
 export function filterLessonsForEnrollment(
   lessons: StandaloneLesson[],
-  enrollment: StandaloneEnrollment | null,
+  enrollment: StandaloneEnrollment | null
 ): StandaloneLesson[] {
   return lessons.filter((l) => {
     if (!l.chartUnlockCondition) return true;
@@ -640,12 +664,14 @@ export async function getStandaloneCourseTree(opts: {
     ref.collection("sections").orderBy("order", "asc").get(),
     ref.collection("lessons").orderBy("order", "asc").get(),
   ]);
-  const sections = sectionsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCourseSection, "id">) }),
-  );
-  let lessons = lessonsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<StandaloneLesson, "id">) }),
-  );
+  const sections = sectionsSnap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<StandaloneCourseSection, "id">),
+  }));
+  let lessons = lessonsSnap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<StandaloneLesson, "id">),
+  }));
   if (!opts.includeUnpublished) lessons = lessons.filter((l) => l.published);
   return { course, sections, lessons };
 }
@@ -657,7 +683,7 @@ export async function getStandaloneCourseTree(opts: {
  */
 export async function getCurriculumOutline(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<StandaloneCourseCurriculumSection[]> {
   const ref = courseDoc(saId, courseId);
   const [sectionsSnap, lessonsSnap] = await Promise.all([
@@ -686,7 +712,7 @@ function enrollmentDoc(saId: string, courseId: string, memberId: string) {
 export async function getStandaloneEnrollment(
   saId: string,
   courseId: string,
-  memberId: string,
+  memberId: string
 ): Promise<StandaloneEnrollment | null> {
   const snap = await enrollmentDoc(saId, courseId, memberId).get();
   if (!snap.exists) return null;
@@ -714,16 +740,23 @@ export interface EnrollBirthDetails {
 }
 
 /** Whether ANY published lesson in this course has a chart-unlock condition — the signal the checkout flow uses to decide whether to ask for birth details at all. */
-export async function courseHasChartGatedLessons(subAccountId: string, courseId: string): Promise<boolean> {
-  const snap = await lessonsCol(subAccountId, courseId).where("published", "==", true).get();
+export async function courseHasChartGatedLessons(
+  subAccountId: string,
+  courseId: string
+): Promise<boolean> {
+  const snap = await lessonsCol(subAccountId, courseId)
+    .where("published", "==", true)
+    .get();
   return snap.docs.some((d) => !!d.data().chartUnlockCondition);
 }
 
 async function computeBirthChart(
-  details: EnrollBirthDetails,
+  details: EnrollBirthDetails
 ): Promise<NonNullable<StandaloneEnrollment["birthChart"]>> {
   const place =
-    typeof details.lat === "number" && typeof details.lng === "number" && details.timeZone
+    typeof details.lat === "number" &&
+    typeof details.lng === "number" &&
+    details.timeZone
       ? { lat: details.lat, lng: details.lng, timeZone: details.timeZone }
       : await geocodeBirthPlace(details.birthPlace);
 
@@ -771,7 +804,9 @@ export async function enrollInStandaloneCourseServerSide(opts: {
   const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
   const snap = await ref.get();
   if (!snap.exists) {
-    const birthChart = opts.birthDetails ? await computeBirthChart(opts.birthDetails) : null;
+    const birthChart = opts.birthDetails
+      ? await computeBirthChart(opts.birthDetails)
+      : null;
     await ref.set({
       memberId: opts.memberId,
       courseId: opts.courseId,
@@ -792,6 +827,20 @@ export async function enrollInStandaloneCourseServerSide(opts: {
       type: "course.enrolled",
       payload: { courseId: opts.courseId, memberId: opts.memberId },
     });
+    const memberSnap = await getAdminDb()
+      .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+      .get();
+    const contactId = memberSnap.data()?.contactId as string | undefined;
+    if (contactId)
+      emitWorkflowEvent({
+        eventType: "course.enrolled",
+        eventId: `${opts.courseId}:${opts.memberId}`,
+        agencyId: opts.agencyId,
+        subAccountId: opts.subAccountId,
+        contactId,
+        source: "courses",
+        payload: { courseId: opts.courseId, memberId: opts.memberId },
+      });
     // Reliability fix (2026-08-26): AWAITED, not void-fired. Confirmed live
     // (on the community-access sibling producer, same shape) that a
     // void-fired call here can lose the race against the serverless
@@ -803,7 +852,12 @@ export async function enrollInStandaloneCourseServerSide(opts: {
       subAccountId: opts.subAccountId,
       courseId: opts.courseId,
       memberId: opts.memberId,
-    }).catch((err) => console.error("[enrollInStandaloneCourseServerSide] notification failed", err));
+    }).catch((err) =>
+      console.error(
+        "[enrollInStandaloneCourseServerSide] notification failed",
+        err
+      )
+    );
   }
   // Runs even on a repeat call — idempotent, and covers a group being
   // linked to the course after this member had already enrolled.
@@ -837,7 +891,7 @@ export async function markStandaloneLessonCompleteServerSide(opts: {
   const completedIds = Array.from(completed);
   const progressPct = Math.min(
     100,
-    Math.round((completedIds.length / total) * 100),
+    Math.round((completedIds.length / total) * 100)
   );
   const isComplete = progressPct >= 100;
 
@@ -851,7 +905,7 @@ export async function markStandaloneLessonCompleteServerSide(opts: {
       enrolledAt: existing?.enrolledAt ?? FieldValue.serverTimestamp(),
       completedAt: isComplete ? FieldValue.serverTimestamp() : null,
     },
-    { merge: true },
+    { merge: true }
   );
 
   const wasAlreadyComplete = existing?.status === "completed";
@@ -867,6 +921,35 @@ export async function markStandaloneLessonCompleteServerSide(opts: {
       progressPct,
     },
   });
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+    .get();
+  const contactId = memberSnap.data()?.contactId as string | undefined;
+  if (contactId) {
+    emitWorkflowEvent({
+      eventType: "course.lesson.completed",
+      eventId: `${opts.courseId}:${opts.memberId}:${opts.lessonId}`,
+      agencyId: opts.agencyId,
+      subAccountId: opts.subAccountId,
+      contactId,
+      source: "courses",
+      payload: {
+        courseId: opts.courseId,
+        lessonId: opts.lessonId,
+        memberId: opts.memberId,
+      },
+    });
+    if (isComplete && !wasAlreadyComplete)
+      emitWorkflowEvent({
+        eventType: "course.completed",
+        eventId: `${opts.courseId}:${opts.memberId}:completed`,
+        agencyId: opts.agencyId,
+        subAccountId: opts.subAccountId,
+        contactId,
+        source: "courses",
+        payload: { courseId: opts.courseId, memberId: opts.memberId },
+      });
+  }
   if (isComplete && !wasAlreadyComplete) {
     void emitWebhookEvent({
       subAccountId: opts.subAccountId,

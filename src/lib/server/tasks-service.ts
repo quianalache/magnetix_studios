@@ -8,6 +8,7 @@ import {
   type TaskApiObject,
 } from "@/lib/api/serializers/tasks";
 import { GLOBAL_TERRITORY_ID } from "@/types";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Server-side Task write service — create + complete go through here so
@@ -51,7 +52,7 @@ export interface TaskWriteResult {
 
 /** Create a task + emit `task.created`. */
 export async function createTaskServerSide(
-  input: CreateTaskInput,
+  input: CreateTaskInput
 ): Promise<TaskWriteResult> {
   const db = getAdminDb();
   const territoryId = await territoryForContact(input.contactId);
@@ -81,7 +82,7 @@ export async function createTaskServerSide(
   const task = serializeTaskForApi(
     ref.id,
     { ...doc, createdAt: now, updatedAt: now },
-    input.mode,
+    input.mode
   );
 
   void emitWebhookEvent({
@@ -91,6 +92,17 @@ export async function createTaskServerSide(
     type: "task.created",
     payload: { task },
   });
+  if (input.mode === "live" && input.contactId) {
+    emitWorkflowEvent({
+      eventType: "task.created",
+      eventId: ref.id,
+      agencyId: input.agencyId,
+      subAccountId: input.subAccountId,
+      contactId: input.contactId,
+      source: "tasks",
+      payload: { taskId: ref.id, ownerUid: null, projectId: null },
+    });
+  }
 
   return { id: ref.id, task };
 }
@@ -136,7 +148,7 @@ export async function setTaskCompletedServerSide(opts: {
       completedAt: opts.completed ? FieldValue.serverTimestamp() : null,
       updatedAt: FieldValue.serverTimestamp(),
     },
-    { merge: true },
+    { merge: true }
   );
 
   const justCompleted = opts.completed && !wasCompleted;
@@ -169,6 +181,17 @@ export async function setTaskCompletedServerSide(opts: {
       type: "task.completed",
       payload: { task },
     });
+    if (mode === "live" && existing.contactId) {
+      emitWorkflowEvent({
+        eventType: "task.completed",
+        eventId: ref.id,
+        agencyId: existing.agencyId,
+        subAccountId: existing.subAccountId,
+        contactId: existing.contactId as string,
+        source: "tasks",
+        payload: { taskId: ref.id, ownerUid: null, projectId: null },
+      });
+    }
   }
 
   return { id: fresh.id, task };

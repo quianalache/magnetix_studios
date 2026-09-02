@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { fireWorkflowTrigger } from "@/lib/workflows/engine";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 import {
   serializeContactForApi,
   type ContactApiObject,
@@ -70,7 +71,7 @@ export interface ContactWriteResult {
  * fire-and-forget — the write never blocks on dispatch.
  */
 export async function createContactServerSide(
-  input: CreateContactInput,
+  input: CreateContactInput
 ): Promise<ContactWriteResult> {
   const db = getAdminDb();
   const ref = db.collection("contacts").doc();
@@ -110,7 +111,7 @@ export async function createContactServerSide(
   const contact = serializeContactForApi(
     ref.id,
     { ...doc, createdAt: now, updatedAt: now },
-    input.mode,
+    input.mode
   );
 
   void emitWebhookEvent({
@@ -177,7 +178,7 @@ export async function updateContactServerSide(opts: {
 
   await ref.set(
     { ...opts.patch, updatedAt: FieldValue.serverTimestamp() },
-    { merge: true },
+    { merge: true }
   );
 
   const fresh = await ref.get();
@@ -204,6 +205,33 @@ export async function updateContactServerSide(opts: {
         context: { addedTags: added },
       });
     }
+    const removed = oldTags.filter((t) => !opts.patch.tags!.includes(t));
+    if (removed.length > 0) {
+      for (const tag of removed) {
+        emitWorkflowEvent({
+          eventType: "contact.tag.removed",
+          eventId: `${opts.contactId}:tag:${tag}:${Date.now()}`,
+          agencyId: existing.agencyId,
+          subAccountId: existing.subAccountId,
+          contactId: opts.contactId,
+          source: "contacts",
+          payload: { tag },
+        });
+      }
+    }
+  }
+  if (mode === "live") {
+    emitWorkflowEvent({
+      eventType: "contact.updated",
+      agencyId: existing.agencyId,
+      subAccountId: existing.subAccountId,
+      contactId: opts.contactId,
+      source: "contacts",
+      payload: {
+        changedFields: Object.keys(opts.patch),
+        source: fresh.data()?.source ?? null,
+      },
+    });
   }
 
   return { id: ref.id, contact };
@@ -280,7 +308,7 @@ export function emitContactDeleted(opts: {
 export async function findExistingContactId(
   db: FirebaseFirestore.Firestore,
   subAccountId: string,
-  { email, phone }: { email?: string; phone?: string },
+  { email, phone }: { email?: string; phone?: string }
 ): Promise<string | null> {
   const cleanEmail = email?.trim().toLowerCase();
   if (cleanEmail) {

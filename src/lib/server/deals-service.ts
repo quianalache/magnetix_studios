@@ -8,10 +8,15 @@ import {
   serializeDealForApi,
   type DealApiObject,
 } from "@/lib/api/serializers/deals";
-import { getStage, type DealPriority, type PipelineStageId } from "@/types/deals";
+import {
+  getStage,
+  type DealPriority,
+  type PipelineStageId,
+} from "@/types/deals";
 import type { WebhookEventType } from "@/types/webhooks";
 import type { CustomFieldValue } from "@/types/custom-fields";
 import { GLOBAL_TERRITORY_ID } from "@/types";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Server-side Deal write service — the single chokepoint where a deal is
@@ -44,7 +49,7 @@ function cleanStr(v: unknown): string | null {
 
 function summaryFromContactData(
   contactId: string,
-  data: FirebaseFirestore.DocumentData,
+  data: FirebaseFirestore.DocumentData
 ): DealContactSummary {
   return {
     id: contactId,
@@ -59,7 +64,7 @@ function summaryFromContactData(
  * the deal has no contact or the contact can't be read.
  */
 export async function fetchDealContactSummary(
-  contactId: string | null | undefined,
+  contactId: string | null | undefined
 ): Promise<DealContactSummary | null> {
   if (!contactId) return null;
   try {
@@ -118,7 +123,7 @@ async function writePipelineActivity(
     content: string;
     createdBy: string;
     meta: Record<string, unknown>;
-  },
+  }
 ): Promise<void> {
   await getAdminDb()
     .collection("contacts")
@@ -155,7 +160,7 @@ export interface DealWriteResult {
 
 /** Create a deal + log the create activity + emit `deal.created`. */
 export async function createDealServerSide(
-  input: CreateDealInput,
+  input: CreateDealInput
 ): Promise<DealWriteResult> {
   const db = getAdminDb();
   const ref = db.collection("deals").doc();
@@ -190,7 +195,7 @@ export async function createDealServerSide(
   const deal = serializeDealForApi(
     ref.id,
     { ...doc, createdAt: now, updatedAt: now, stageChangedAt: now },
-    input.mode,
+    input.mode
   );
 
   emitDealEvents({
@@ -200,6 +205,17 @@ export async function createDealServerSide(
     deal,
     events: [{ type: "deal.created" }],
   });
+  if (input.mode === "live") {
+    emitWorkflowEvent({
+      eventType: "deal.created",
+      eventId: ref.id,
+      agencyId: input.agencyId,
+      subAccountId: input.subAccountId,
+      contactId: input.contactId,
+      source: "deals",
+      payload: { dealId: ref.id, stageId: input.stageId },
+    });
+  }
 
   return { id: ref.id, deal };
 }
@@ -329,6 +345,23 @@ export async function updateDealServerSide(opts: {
     deal,
     events,
   });
+
+  if (
+    mode === "live" &&
+    data.contactId &&
+    stageChanged &&
+    (patch.stageId === "won" || patch.stageId === "lost")
+  ) {
+    emitWorkflowEvent({
+      eventType: patch.stageId === "won" ? "deal.won" : "deal.lost",
+      eventId: `${fresh.id}:${patch.stageId}`,
+      agencyId: existing.agencyId,
+      subAccountId: existing.subAccountId,
+      contactId: data.contactId as string,
+      source: "deals",
+      payload: { dealId: fresh.id, stageId: patch.stageId },
+    });
+  }
 
   // Workflow trigger — a stage move enrolls the deal's contact (workflow runs
   // are contact-scoped). `toStage` lets a workflow narrow to one target stage.

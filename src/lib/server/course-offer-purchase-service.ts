@@ -22,6 +22,7 @@ import type {
 import type { PayPalConfig } from "@/types";
 import type { ContactAttribution } from "@/types/contacts";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Purchases for a Course Offer — generalizes
@@ -660,6 +661,39 @@ export async function grantCourseOfferAccessServerSide(opts: {
     },
   });
 
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}/members/${purchase.memberId}`)
+    .get();
+  const contactId = memberSnap.data()?.contactId as string | undefined;
+  if (contactId) {
+    emitWorkflowEvent({
+      eventType: "offer.purchase.paid",
+      eventId: purchase.id,
+      agencyId: purchase.agencyId,
+      subAccountId: opts.subAccountId,
+      contactId,
+      source: "offers",
+      payload: {
+        offerId: opts.offerId,
+        purchaseId: purchase.id,
+        memberId: purchase.memberId,
+      },
+    });
+    emitWorkflowEvent({
+      eventType: "offer.access.granted",
+      eventId: `${purchase.id}:access-granted`,
+      agencyId: purchase.agencyId,
+      subAccountId: opts.subAccountId,
+      contactId,
+      source: "offers",
+      payload: {
+        offerId: opts.offerId,
+        purchaseId: purchase.id,
+        memberId: purchase.memberId,
+      },
+    });
+  }
+
   return { ok: true };
 }
 
@@ -735,6 +769,24 @@ export async function handleCourseOfferSubscriptionDeleted(
       expiresAt,
     });
   }
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${subAccountId}/members/${purchase.memberId}`)
+    .get();
+  const contactId = memberSnap.data()?.contactId as string | undefined;
+  if (contactId)
+    emitWorkflowEvent({
+      eventType: "offer.access.revoked",
+      eventId: `${snap.docs[0].id}:access-revoked`,
+      agencyId: purchase.agencyId,
+      subAccountId,
+      contactId,
+      source: "offers",
+      payload: {
+        offerId,
+        purchaseId: snap.docs[0].id,
+        memberId: purchase.memberId,
+      },
+    });
 }
 
 /**

@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
 import {
   ABOUT_BENEFITS_MAX,
@@ -648,6 +649,17 @@ export async function joinGroupServerSide(opts: {
         via: staff ? "staff" : "open",
       },
     });
+    const contactId = memberSnap.data()?.contactId as string | undefined;
+    if (contactId)
+      emitWorkflowEvent({
+        eventType: "community.member.joined",
+        eventId: `${opts.groupId}:${opts.memberId}:joined`,
+        agencyId: opts.agencyId,
+        subAccountId: opts.subAccountId,
+        contactId,
+        source: "community",
+        payload: { groupId: opts.groupId, memberId: opts.memberId },
+      });
     // Reliability fix (2026-08-26): AWAITED, not void-fired. Confirmed live
     // that the void-fired form intermittently produced ZERO notification
     // docs — the serverless function can be frozen/torn down the instant
@@ -925,6 +937,20 @@ export async function approveMembershipServerSide(opts: {
     type: "community.member.approved",
     payload: { groupId: opts.groupId, memberId: opts.memberId },
   });
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+    .get();
+  const contactId = memberSnap.data()?.contactId as string | undefined;
+  if (contactId)
+    emitWorkflowEvent({
+      eventType: "community.member.approved",
+      eventId: `${opts.groupId}:${opts.memberId}:approved`,
+      agencyId: opts.agencyId,
+      subAccountId: opts.subAccountId,
+      contactId,
+      source: "community",
+      payload: { groupId: opts.groupId, memberId: opts.memberId },
+    });
   // Reliability fix (2026-08-26): AWAITED, not void-fired — same
   // request-vs-teardown race as joinGroupServerSide's call above; see that
   // comment for the live evidence. The approval itself is already

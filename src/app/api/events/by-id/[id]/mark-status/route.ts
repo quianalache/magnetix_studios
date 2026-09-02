@@ -5,10 +5,7 @@ import { FieldValue } from "firebase-admin/firestore";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import {
-  emailIsConfigured,
-  sendTenantEmail,
-} from "@/lib/comms/resend";
+import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { issueEventToken } from "@/lib/booking/event-token";
 import {
   emitBookingWebhook,
@@ -19,7 +16,6 @@ import { notifyBookingCancelled } from "@/lib/server/notification-producers";
 import { renderBookingCancelledEmail } from "@/lib/booking/email";
 import { eventStatus } from "@/types/events";
 import type { ActivityType } from "@/types/contacts";
-import type { AutomationTriggerType } from "@/types";
 import type { BookingPage } from "@/types/booking";
 import type { CalendarEvent, EventStatus } from "@/types/events";
 import type { Contact } from "@/types/contacts";
@@ -48,7 +44,7 @@ const ALLOWED: EventStatus[] = ["completed", "no_show", "cancelled"];
 
 export async function POST(
   request: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id: eventId } = await ctx.params;
 
@@ -61,11 +57,12 @@ export async function POST(
   if (!body.status || !ALLOWED.includes(body.status)) {
     return NextResponse.json(
       { error: `status must be one of: ${ALLOWED.join(", ")}` },
-      { status: 400 },
+      { status: 400 }
     );
   }
   const next = body.status;
-  const reason = typeof body.reason === "string" ? body.reason.slice(0, 240) : "";
+  const reason =
+    typeof body.reason === "string" ? body.reason.slice(0, 240) : "";
 
   const db = getAdminDb();
   const eventRef = db.collection("events").doc(eventId);
@@ -92,7 +89,7 @@ export async function POST(
         error:
           "This event is already in a final state — operators can't flip past it.",
       },
-      { status: 409 },
+      { status: 409 }
     );
   }
   if (current === "awaiting_payment" && next !== "cancelled") {
@@ -101,7 +98,7 @@ export async function POST(
         error:
           "Mark as paid first if the visitor paid, or cancel to release the slot.",
       },
-      { status: 409 },
+      { status: 409 }
     );
   }
 
@@ -120,7 +117,7 @@ export async function POST(
     console.error("[events/mark-status] update failed", err);
     return NextResponse.json(
       { error: "Couldn't update event." },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -172,7 +169,7 @@ interface SideEffectResult {
 async function runStatusSideEffects(
   event: CalendarEvent,
   next: EventStatus,
-  reason: string,
+  reason: string
 ): Promise<SideEffectResult> {
   if (!event.contactId) {
     return {
@@ -188,8 +185,12 @@ async function runStatusSideEffects(
       : next === "no_show"
         ? "booking_no_show"
         : "booking_cancelled";
-  const triggerType: Extract<AutomationTriggerType, `event_${string}`> | null =
-    next === "cancelled" ? "event_cancelled" : null;
+  const triggerType =
+    next === "cancelled"
+      ? "event_cancelled"
+      : next === "completed"
+        ? "event_completed"
+        : "event_no_show";
 
   await recordBookingActivity(
     {
@@ -199,7 +200,7 @@ async function runStatusSideEffects(
       bookingPageSlug: event.bookingPageSlug ?? null,
     },
     activityType satisfies ActivityType,
-    { extra: reason || null },
+    { extra: reason || null }
   );
   if (triggerType) {
     await fireBookingTrigger(
@@ -208,7 +209,7 @@ async function runStatusSideEffects(
         subAccountId: event.subAccountId,
         contactId: event.contactId,
       },
-      triggerType,
+      triggerType
     );
   }
 
@@ -241,26 +242,39 @@ async function runStatusSideEffects(
         updatedAt: FieldValue.serverTimestamp(),
       });
       const pageSnap = event.bookingPageSlug
-        ? await db.doc(`subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`).get()
+        ? await db
+            .doc(
+              `subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`
+            )
+            .get()
         : null;
-      const bookingName = (pageSnap?.data()?.name as string | undefined) ?? event.title ?? "Meeting";
+      const bookingName =
+        (pageSnap?.data()?.name as string | undefined) ??
+        event.title ??
+        "Meeting";
       await notifyBookingCancelled({
         subAccountId: event.subAccountId,
         bookingId: event.id,
         contactId: event.contactId,
         bookingName,
         token: freshToken,
-      }).catch((err) => console.warn("[events/mark-status] notification failed", err));
+      }).catch((err) =>
+        console.warn("[events/mark-status] notification failed", err)
+      );
     } catch (err) {
-      console.warn("[events/mark-status] token mint / notification setup failed", err);
+      console.warn(
+        "[events/mark-status] token mint / notification setup failed",
+        err
+      );
     }
   }
 
   // Operator-cancelled bookings notify the visitor via email.
-  if (next !== "cancelled") return { emailSent: false, emailSkipReason: "not_cancelled" };
+  if (next !== "cancelled")
+    return { emailSent: false, emailSkipReason: "not_cancelled" };
   if (!emailIsConfigured()) {
     console.warn(
-      `[events/mark-status] email not configured — skipping cancel notify for event=${event.id}`,
+      `[events/mark-status] email not configured — skipping cancel notify for event=${event.id}`
     );
     return { emailSent: false, emailSkipReason: "email_not_configured" };
   }
@@ -272,14 +286,14 @@ async function runStatusSideEffects(
       event.bookingPageSlug
         ? db
             .doc(
-              `subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`,
+              `subAccounts/${event.subAccountId}/bookingPages/${event.bookingPageSlug}`
             )
             .get()
         : Promise.resolve(null),
     ]);
     if (!contactSnap.exists || !subSnap.exists) {
       console.warn(
-        `[events/mark-status] missing records: contact=${contactSnap.exists} sub=${subSnap.exists} event=${event.id}`,
+        `[events/mark-status] missing records: contact=${contactSnap.exists} sub=${subSnap.exists} event=${event.id}`
       );
       return { emailSent: false, emailSkipReason: "missing_records" };
     }
@@ -299,12 +313,10 @@ async function runStatusSideEffects(
     const startAt = (
       event.startAt as { toDate?: () => Date } | null
     )?.toDate?.();
-    const endAt = (
-      event.endAt as { toDate?: () => Date } | null
-    )?.toDate?.();
+    const endAt = (event.endAt as { toDate?: () => Date } | null)?.toDate?.();
     if (!(startAt instanceof Date) || !(endAt instanceof Date)) {
       console.warn(
-        `[events/mark-status] bad timestamps event=${event.id} start=${typeof startAt} end=${typeof endAt}`,
+        `[events/mark-status] bad timestamps event=${event.id} start=${typeof startAt} end=${typeof endAt}`
       );
       return { emailSent: false, emailSkipReason: "bad_timestamps" };
     }
@@ -318,7 +330,10 @@ async function runStatusSideEffects(
           name: page?.name ?? event.title ?? "Meeting",
           durationMinutes:
             page?.durationMinutes ??
-            Math.max(15, Math.round((endAt.getTime() - startAt.getTime()) / 60_000)),
+            Math.max(
+              15,
+              Math.round((endAt.getTime() - startAt.getTime()) / 60_000)
+            ),
           timezone: page?.timezone ?? "UTC",
           payment: page?.payment ?? null,
           confirmationMessage: page?.confirmationMessage ?? "",
@@ -327,7 +342,7 @@ async function runStatusSideEffects(
         endAt,
         publicEventUrl: "",
       },
-      "by_operator",
+      "by_operator"
     );
     try {
       await sendTenantEmail({
@@ -341,14 +356,14 @@ async function runStatusSideEffects(
     } catch (err) {
       console.warn(
         `[events/mark-status] cancel notify send failed event=${event.id} to=${contact.email}`,
-        err,
+        err
       );
       return { emailSent: false, emailSkipReason: "send_failed" };
     }
   } catch (err) {
     console.warn(
       `[events/mark-status] side-effect read failed event=${event.id}`,
-      err,
+      err
     );
     return { emailSent: false, emailSkipReason: "missing_records" };
   }

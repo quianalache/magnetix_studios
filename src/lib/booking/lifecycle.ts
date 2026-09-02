@@ -3,13 +3,12 @@ import "server-only";
 import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 
 import { getAdminDb } from "@/lib/firebase/admin";
-import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import type { ActivityType } from "@/types/contacts";
 import type { WebhookEventType } from "@/types/webhooks";
-import type { AutomationTriggerType } from "@/types";
 import type { CalendarEvent } from "@/types/events";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Side-effects fired off the back of a booking-event lifecycle change.
@@ -45,7 +44,7 @@ export async function recordBookingActivity(
     extra?: string | null;
     paymentAmount?: number;
     paymentCurrency?: string;
-  } = {},
+  } = {}
 ): Promise<void> {
   if (!event.contactId) return;
   try {
@@ -74,7 +73,7 @@ export async function recordBookingActivity(
 function defaultContent(
   title: string,
   type: BookingLifecycleEvent,
-  extra: string | null | undefined,
+  extra: string | null | undefined
 ): string {
   const suffix = extra ? ` — ${extra}` : "";
   switch (type) {
@@ -99,8 +98,16 @@ function defaultContent(
  * triggers' v1 caveat. Safe to call from any path.
  */
 export async function fireBookingTrigger(
-  event: Pick<CalendarEvent, "agencyId" | "subAccountId" | "contactId">,
-  trigger: Extract<AutomationTriggerType, `event_${string}`>,
+  event: Pick<CalendarEvent, "agencyId" | "subAccountId" | "contactId"> & {
+    id?: string;
+  },
+  trigger:
+    | "event_booked"
+    | "event_cancelled"
+    | "event_rescheduled"
+    | "event_completed"
+    | "event_no_show"
+    | "event_paid"
 ): Promise<void> {
   if (!event.contactId) return;
   // Workflow Builder triggers: created (v1), cancelled + rescheduled (v2).
@@ -111,13 +118,20 @@ export async function fireBookingTrigger(
         ? ("booking.cancelled" as const)
         : trigger === "event_rescheduled"
           ? ("booking.rescheduled" as const)
-          : null;
+          : trigger === "event_completed"
+            ? ("booking.completed" as const)
+            : trigger === "event_no_show"
+              ? ("booking.no_show" as const)
+              : null;
   if (type) {
-    void fireWorkflowTrigger({
+    emitWorkflowEvent({
+      eventType: type,
+      eventId: event.id ?? null,
       agencyId: event.agencyId,
       subAccountId: event.subAccountId,
-      type,
       contactId: event.contactId,
+      source: "bookings",
+      payload: { eventId: event.id ?? null },
     });
   }
 }
@@ -204,19 +218,28 @@ export async function emitBookingWebhook(opts: {
           timezone,
           status: (data.status as string | null) ?? "scheduled",
           created_at: tsToIsoOrNull(data.createdAt),
-          previous_start_at: rescheduled ? tsToIsoOrNull(opts.previousStartAt) : null,
-          previous_end_at: rescheduled ? tsToIsoOrNull(opts.previousEndAt) : null,
+          previous_start_at: rescheduled
+            ? tsToIsoOrNull(opts.previousStartAt)
+            : null,
+          previous_end_at: rescheduled
+            ? tsToIsoOrNull(opts.previousEndAt)
+            : null,
           cancelled_at: cancelled
             ? (tsToIsoOrNull(data.cancelledAt) ?? new Date().toISOString())
             : null,
           cancel_reason: cancelled
-            ? (opts.cancelReason ?? (data.cancelReason as string | null) ?? null)
+            ? (opts.cancelReason ??
+              (data.cancelReason as string | null) ??
+              null)
             : null,
         },
       },
     });
   } catch (err) {
-    console.warn(`[booking/lifecycle] webhook emit failed for ${opts.type}`, err);
+    console.warn(
+      `[booking/lifecycle] webhook emit failed for ${opts.type}`,
+      err
+    );
   }
 }
 
@@ -256,7 +279,7 @@ export async function scheduleEventReminders(input: {
   if (!qstashIsConfigured()) {
     console.warn(
       "[booking/lifecycle] QStash not configured — reminders won't fire for event " +
-        input.eventId,
+        input.eventId
     );
     return;
   }
@@ -281,7 +304,7 @@ export async function scheduleEventReminders(input: {
     } catch (err) {
       console.warn(
         `[booking/lifecycle] reminder schedule failed (offset ${offsetMin})`,
-        err,
+        err
       );
     }
   }
@@ -299,13 +322,13 @@ export async function schedulePaymentAutoExpire(input: {
   if (!qstashIsConfigured()) {
     console.warn(
       "[booking/lifecycle] QStash not configured — payment hold won't auto-expire for event " +
-        input.eventId,
+        input.eventId
     );
     return;
   }
   const delaySeconds = Math.max(
     30,
-    Math.floor((input.expiresAt.getTime() - Date.now()) / 1000),
+    Math.floor((input.expiresAt.getTime() - Date.now()) / 1000)
   );
   try {
     await publishCallback({
@@ -325,7 +348,7 @@ export async function schedulePaymentAutoExpire(input: {
  * Firestore via the Admin SDK.
  */
 export function timestampToDate(
-  ts: Timestamp | { toDate?: () => Date } | Date | null | undefined,
+  ts: Timestamp | { toDate?: () => Date } | Date | null | undefined
 ): Date | null {
   if (!ts) return null;
   if (ts instanceof Date) return ts;

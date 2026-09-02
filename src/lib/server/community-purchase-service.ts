@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { notifyCommunityAccessGranted } from "@/lib/server/notification-producers";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 import { getGroupById } from "@/lib/server/community-service";
 import { getCourse } from "@/lib/server/community-classroom-service";
 import type { Purchase, PurchaseScope } from "@/types/community";
@@ -19,7 +20,7 @@ import type { PayPalConfig } from "@/types";
 
 function purchasesCol(saId: string, groupId: string) {
   return getAdminDb().collection(
-    `subAccounts/${saId}/communityGroups/${groupId}/purchases`,
+    `subAccounts/${saId}/communityGroups/${groupId}/purchases`
   );
 }
 
@@ -42,7 +43,7 @@ export async function requestPurchaseServerSide(opts: {
   const paypal = sub?.paypalConfig as PayPalConfig | null | undefined;
   if (!paypal?.username) {
     throw new Error(
-      "This group hasn't set up payments yet. Contact the group owner.",
+      "This group hasn't set up payments yet. Contact the group owner."
     );
   }
   const agencyId = (sub?.agencyId as string) ?? "";
@@ -58,7 +59,11 @@ export async function requestPurchaseServerSide(opts: {
     amountCents = group.priceCents;
     currency = group.currency ?? "USD";
   } else {
-    const course = await getCourse(opts.subAccountId, opts.groupId, opts.targetId);
+    const course = await getCourse(
+      opts.subAccountId,
+      opts.groupId,
+      opts.targetId
+    );
     if (!course || course.access !== "purchase" || !course.priceCents) {
       throw new Error("This course isn't for sale.");
     }
@@ -113,7 +118,7 @@ export async function hasPaidCourse(
   saId: string,
   groupId: string,
   courseId: string,
-  memberId: string,
+  memberId: string
 ): Promise<boolean> {
   const snap = await purchasesCol(saId, groupId)
     .where("memberId", "==", memberId)
@@ -133,7 +138,9 @@ export async function markPurchasePaidServerSide(opts: {
   grantedByUid: string;
 }): Promise<{ ok: boolean }> {
   const db = getAdminDb();
-  const ref = purchasesCol(opts.subAccountId, opts.groupId).doc(opts.purchaseId);
+  const ref = purchasesCol(opts.subAccountId, opts.groupId).doc(
+    opts.purchaseId
+  );
   const snap = await ref.get();
   if (!snap.exists) throw new Error("Purchase not found");
   const purchase = { id: snap.id, ...(snap.data() as Omit<Purchase, "id">) };
@@ -148,12 +155,11 @@ export async function markPurchasePaidServerSide(opts: {
   // Grant access.
   if (purchase.scope === "group") {
     const groupRef = db.doc(
-      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`,
+      `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
     );
     const memRef = groupRef.collection("memberships").doc(purchase.memberId);
     const existing = await memRef.get();
-    const wasActive =
-      existing.exists && existing.data()!.status === "active";
+    const wasActive = existing.exists && existing.data()!.status === "active";
     await memRef.set(
       {
         subAccountId: opts.subAccountId,
@@ -166,7 +172,7 @@ export async function markPurchasePaidServerSide(opts: {
         level: existing.data()?.level ?? 1,
         joinedAt: existing.data()?.joinedAt ?? FieldValue.serverTimestamp(),
       },
-      { merge: true },
+      { merge: true }
     );
     if (!wasActive) {
       await groupRef.update({ memberCount: FieldValue.increment(1) });
@@ -181,6 +187,20 @@ export async function markPurchasePaidServerSide(opts: {
           via: "purchase",
         },
       });
+      const memberSnap = await db
+        .doc(`subAccounts/${opts.subAccountId}/members/${purchase.memberId}`)
+        .get();
+      const contactId = memberSnap.data()?.contactId as string | undefined;
+      if (contactId)
+        emitWorkflowEvent({
+          eventType: "community.member.joined",
+          eventId: `${opts.groupId}:${purchase.memberId}:joined`,
+          agencyId: purchase.agencyId,
+          subAccountId: opts.subAccountId,
+          contactId,
+          source: "community",
+          payload: { groupId: opts.groupId, memberId: purchase.memberId },
+        });
       // Reliability fix (2026-08-26): AWAITED, not void-fired — same
       // request-vs-teardown race as the other access-grant call sites; see
       // joinGroupServerSide's comment for the live evidence. This is a
@@ -191,7 +211,9 @@ export async function markPurchasePaidServerSide(opts: {
         subAccountId: opts.subAccountId,
         groupId: opts.groupId,
         memberId: purchase.memberId,
-      }).catch((err) => console.error("[markPurchasePaidServerSide] notification failed", err));
+      }).catch((err) =>
+        console.error("[markPurchasePaidServerSide] notification failed", err)
+      );
     }
   }
   // scope "course": access is read live from this paid purchase — no extra

@@ -1,6 +1,4 @@
-import type {
-  BuilderStep,
-} from "@/lib/workflows/builder-tree";
+import type { BuilderStep } from "@/lib/workflows/builder-tree";
 import type {
   ConditionOp,
   WorkflowNodeType,
@@ -18,6 +16,25 @@ export const TRIGGER_LABELS: Record<WorkflowTriggerType, string> = {
   "quote.accepted": "Quote accepted",
   "quote.paid": "Quote/invoice paid",
   "message.received": "Message received (inbox)",
+  "contact.updated": "Contact updated",
+  "contact.tag.removed": "Tag removed from contact",
+  "task.created": "Task created",
+  "task.completed": "Task completed",
+  "deal.created": "Deal created",
+  "deal.won": "Deal won",
+  "deal.lost": "Deal lost",
+  "booking.completed": "Booking completed",
+  "booking.no_show": "Booking no-show",
+  "course.enrolled": "Course enrolled",
+  "course.lesson.completed": "Lesson completed",
+  "course.completed": "Course completed",
+  "offer.purchase.paid": "Offer purchased",
+  "offer.access.granted": "Offer access granted",
+  "offer.access.revoked": "Offer access revoked",
+  "community.member.joined": "Community member joined",
+  "community.member.approved": "Community member approved",
+  "workflow.completed": "Workflow completed",
+  "workflow.failed": "Workflow failed",
 };
 
 export const NODE_LABELS: Record<WorkflowNodeType, string> = {
@@ -35,6 +52,14 @@ export const NODE_LABELS: Record<WorkflowNodeType, string> = {
   create_task: "Create task",
   notify: "Internal notification",
   webhook: "Webhook",
+  create_contact: "Create contact",
+  update_task: "Update task",
+  complete_task: "Complete task",
+  create_deal: "Create deal",
+  update_deal: "Update deal",
+  grant_offer_access: "Grant Offer access",
+  enroll_course: "Enroll in course",
+  start_workflow: "Start another workflow",
 };
 
 /**
@@ -44,13 +69,14 @@ export const NODE_LABELS: Record<WorkflowNodeType, string> = {
  * Node types not listed have no external dependency.
  */
 export type NodeRequirement = "email" | "sms" | "whatsapp";
-export const NODE_REQUIREMENT: Partial<Record<WorkflowNodeType, NodeRequirement>> =
-  {
-    send_email: "email",
-    notify: "email",
-    send_sms: "sms",
-    whatsapp_template: "whatsapp",
-  };
+export const NODE_REQUIREMENT: Partial<
+  Record<WorkflowNodeType, NodeRequirement>
+> = {
+  send_email: "email",
+  notify: "email",
+  send_sms: "sms",
+  whatsapp_template: "whatsapp",
+};
 
 /** Step types offerable from the "add step" menu, in display order. */
 export const ADDABLE_TYPES: WorkflowNodeType[] = [
@@ -66,6 +92,14 @@ export const ADDABLE_TYPES: WorkflowNodeType[] = [
   "create_task",
   "notify",
   "webhook",
+  "create_contact",
+  "update_task",
+  "complete_task",
+  "create_deal",
+  "update_deal",
+  "grant_offer_access",
+  "enroll_course",
+  "start_workflow",
   "if_else",
   "goal",
 ];
@@ -108,6 +142,41 @@ export function defaultConfig(type: WorkflowNodeType): Record<string, unknown> {
       return { recipient: "owner", to: "", subject: "", body: "" };
     case "webhook":
       return { url: "" };
+    case "create_contact":
+      return {
+        name: "",
+        email: "",
+        phone: "",
+        company: "",
+        source: "workflow",
+      };
+    case "update_task":
+      return { taskId: "", title: "", notes: "" };
+    case "complete_task":
+      return { taskId: "" };
+    case "create_deal":
+      return {
+        title: "",
+        value: 0,
+        currency: "USD",
+        stageId: "new",
+        priority: "medium",
+      };
+    case "update_deal":
+      return {
+        dealId: "",
+        title: "",
+        value: 0,
+        currency: "USD",
+        stageId: "new",
+        priority: "medium",
+      };
+    case "grant_offer_access":
+      return { offerId: "", purchaseId: "" };
+    case "enroll_course":
+      return { courseId: "" };
+    case "start_workflow":
+      return { workflowId: "" };
     default:
       return {};
   }
@@ -122,7 +191,9 @@ export function nodeSummary(step: BuilderStep): string {
     case "send_sms":
       return (c.body as string)?.slice(0, 60) || "No message yet";
     case "whatsapp_template":
-      return (c.templateId as string) ? "WhatsApp template" : "Choose a template";
+      return (c.templateId as string)
+        ? "WhatsApp template"
+        : "Choose a template";
     case "wait": {
       const s = Number(c.seconds ?? 0);
       if (s % 86_400 === 0) return `Wait ${s / 86_400} day(s)`;
@@ -156,6 +227,21 @@ export function nodeSummary(step: BuilderStep): string {
       return (c.subject as string) || (c.to as string) || "Notification";
     case "webhook":
       return (c.url as string) || "No URL yet";
+    case "create_contact":
+      return (c.name as string) || "New contact";
+    case "update_task":
+    case "complete_task":
+      return (c.taskId as string) || "Choose task";
+    case "create_deal":
+      return (c.title as string) || "New deal";
+    case "update_deal":
+      return (c.dealId as string) || "Choose deal";
+    case "grant_offer_access":
+      return (c.offerId as string) || "Choose offer";
+    case "enroll_course":
+      return (c.courseId as string) || "Choose course";
+    case "start_workflow":
+      return (c.workflowId as string) || "Choose workflow";
     case "goal":
       return "Ends the workflow here";
     default:

@@ -240,8 +240,8 @@ export function NodeConfigDialog({
               <p className="text-muted-foreground text-xs">
                 If the contact replies within this window, the workflow
                 continues down the <strong>Replied</strong> branch right away;
-                otherwise it takes the <strong>No reply</strong> branch when
-                the window ends. Counts SMS, WhatsApp, and Facebook/Instagram
+                otherwise it takes the <strong>No reply</strong> branch when the
+                window ends. Counts SMS, WhatsApp, and Facebook/Instagram
                 replies — email replies go straight to your own inbox and
                 can&apos;t be detected.
               </p>
@@ -377,6 +377,142 @@ export function NodeConfigDialog({
                 value={str("url")}
                 placeholder="https://…"
                 onChange={(e) => set({ url: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {step.type === "create_contact" && (
+            <>
+              {(["name", "email", "phone", "company", "source"] as const).map(
+                (field) => (
+                  <Field
+                    key={field}
+                    label={field[0].toUpperCase() + field.slice(1)}
+                  >
+                    <Input
+                      value={str(field)}
+                      onChange={(e) => set({ [field]: e.target.value })}
+                    />
+                  </Field>
+                )
+              )}
+            </>
+          )}
+
+          {(step.type === "update_task" || step.type === "complete_task") && (
+            <Field
+              label="Task ID"
+              hint="The task must belong to this sub-account."
+            >
+              <Input
+                value={str("taskId")}
+                onChange={(e) => set({ taskId: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {step.type === "update_task" && (
+            <>
+              <Field label="New title">
+                <Input
+                  value={str("title")}
+                  onChange={(e) => set({ title: e.target.value })}
+                />
+              </Field>
+              <Field label="New notes">
+                <Textarea
+                  rows={3}
+                  value={str("notes")}
+                  onChange={(e) => set({ notes: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {step.type === "create_deal" && (
+            <>
+              <Field label="Deal title">
+                <Input
+                  value={str("title")}
+                  onChange={(e) => set({ title: e.target.value })}
+                />
+              </Field>
+              <Field label="Value">
+                <Input
+                  type="number"
+                  value={Number(cfg.value ?? 0)}
+                  onChange={(e) => set({ value: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Stage">
+                <Input
+                  value={str("stageId") || "new"}
+                  onChange={(e) => set({ stageId: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {step.type === "update_deal" && (
+            <>
+              <Field label="Deal ID">
+                <Input
+                  value={str("dealId")}
+                  onChange={(e) => set({ dealId: e.target.value })}
+                />
+              </Field>
+              <Field label="New title">
+                <Input
+                  value={str("title")}
+                  onChange={(e) => set({ title: e.target.value })}
+                />
+              </Field>
+              <Field label="Stage">
+                <Input
+                  value={str("stageId")}
+                  onChange={(e) => set({ stageId: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {step.type === "grant_offer_access" && (
+            <>
+              <Field label="Offer ID">
+                <Input
+                  value={str("offerId")}
+                  onChange={(e) => set({ offerId: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Purchase ID"
+                hint="Only a purchase belonging to this contact can be granted."
+              >
+                <Input
+                  value={str("purchaseId")}
+                  onChange={(e) => set({ purchaseId: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {step.type === "enroll_course" && (
+            <Field label="Course ID">
+              <Input
+                value={str("courseId")}
+                onChange={(e) => set({ courseId: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {step.type === "start_workflow" && (
+            <Field
+              label="Target workflow ID"
+              hint="Active workflow in this sub-account; self-invocation is blocked."
+            >
+              <Input
+                value={str("workflowId")}
+                onChange={(e) => set({ workflowId: e.target.value })}
               />
             </Field>
           )}

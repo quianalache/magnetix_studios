@@ -2,7 +2,12 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { sendEmail, emailIsConfigured, tenantFrom, sendTenantEmail } from "@/lib/comms/resend";
+import {
+  sendEmail,
+  emailIsConfigured,
+  tenantFrom,
+  sendTenantEmail,
+} from "@/lib/comms/resend";
 import {
   sendSmsForSubAccount,
   sendWhatsappTemplateForSubAccount,
@@ -13,6 +18,14 @@ import {
 import { agencyAllowsSharedSms } from "@/lib/agency/policy";
 import { resolveTemplateVariables } from "@/lib/comms/whatsapp/resolve-template-variables";
 import { createTaskServerSide } from "@/lib/server/tasks-service";
+import { setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { createContactServerSide } from "@/lib/server/contacts-service";
+import {
+  createDealServerSide,
+  updateDealServerSide,
+} from "@/lib/server/deals-service";
+import { enrollInStandaloneCourseServerSide } from "@/lib/server/standalone-course-service";
+import { grantCourseOfferAccessServerSide } from "@/lib/server/course-offer-purchase-service";
 import {
   resolveMergeTags,
   type MergeTagSubject,
@@ -42,7 +55,15 @@ import type {
   WorkflowRunDoc,
   WorkflowRunHistoryEntry,
   WorkflowTriggerType,
+  CreateContactConfig,
+  TaskMutationConfig,
+  CreateDealConfig,
+  UpdateDealConfig,
+  CourseConfig,
+  OfferAccessConfig,
+  StartWorkflowConfig,
 } from "@/types/workflows";
+import type { PipelineStageId, DealPriority } from "@/types/deals";
 
 const STEP_PATH = "/api/workflows/step";
 
@@ -52,7 +73,20 @@ export type StepResult =
   | { kind: "next" }
   | { kind: "wait"; seconds: number }
   | { kind: "branch"; value: boolean }
-  | { kind: "end" };
+  | { kind: "end" }
+  | { kind: "fail"; retryable: boolean };
+
+export type ActionExecutionStatus =
+  | "success"
+  | "skipped"
+  | "retryable_failure"
+  | "terminal_failure";
+export interface ActionExecution {
+  status: ActionExecutionStatus;
+  errorCategory?: string;
+  errorMessage?: string;
+  referenceId?: string;
+}
 
 interface NodeContext {
   node: WorkflowNode;
@@ -69,12 +103,14 @@ interface NodeContext {
    * Webhook step can forward the form fields downstream.
    */
   triggerContext: Record<string, unknown>;
+  workflowId: string;
+  runId: string;
 }
 
 /** An executor returns the control-flow result + a short audit log string. */
 type NodeExecutor = (
   ctx: NodeContext
-) => Promise<{ result: StepResult; log: string }>;
+) => Promise<{ result: StepResult; log: string; execution?: ActionExecution }>;
 
 function mergeSubject(
   ctx: NodeContext,
@@ -128,10 +164,10 @@ const execSendEmail: NodeExecutor = async (ctx) => {
       html,
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch (err) {
+  } catch {
     return {
       result: { kind: "next" },
-      log: `error:${err instanceof Error ? err.message : "send_failed"}`,
+      log: "error:send_failed",
     };
   }
 };
@@ -162,10 +198,10 @@ const execSendSms: NodeExecutor = async (ctx) => {
       body,
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch (err) {
+  } catch {
     return {
       result: { kind: "next" },
-      log: `error:${err instanceof Error ? err.message : "send_failed"}`,
+      log: "error:send_failed",
     };
   }
 };
@@ -220,10 +256,10 @@ const execWhatsappTemplate: NodeExecutor = async (ctx) => {
       contentVariables,
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch (err) {
+  } catch {
     return {
       result: { kind: "next" },
-      log: `error:${err instanceof Error ? err.message : "send_failed"}`,
+      log: "error:send_failed",
     };
   }
 };
@@ -376,10 +412,10 @@ const execNotify: NodeExecutor = async (ctx) => {
       from: tenantFrom(ctx.subAccount),
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch (err) {
+  } catch {
     return {
       result: { kind: "next" },
-      log: `error:${err instanceof Error ? err.message : "send_failed"}`,
+      log: "error:send_failed",
     };
   }
 };
@@ -419,14 +455,248 @@ const execWebhook: NodeExecutor = async (ctx) => {
       signal: controller.signal,
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch (err) {
+  } catch {
     return {
       result: { kind: "next" },
-      log: `error:${err instanceof Error ? err.message : "webhook_failed"}`,
+      log: "error:webhook_failed",
     };
   } finally {
     clearTimeout(timer);
   }
+};
+
+function requiredString(value: unknown, name: string): string {
+  const result = typeof value === "string" ? value.trim() : "";
+  if (!result) throw new Error(`${name}_required`);
+  return result;
+}
+
+async function memberForContact(
+  subAccountId: string,
+  contactId: string
+): Promise<string> {
+  const snap = await getAdminDb()
+    .collection(`subAccounts/${subAccountId}/members`)
+    .where("contactId", "==", contactId)
+    .limit(1)
+    .get();
+  if (snap.empty) throw new Error("member_not_found");
+  return snap.docs[0].id;
+}
+
+const execCreateContact: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as CreateContactConfig;
+  const created = await createContactServerSide({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    createdByUid: ctx.createdByUid,
+    mode: "live",
+    name: (cfg.name ?? "").trim(),
+    email: (cfg.email ?? "").trim(),
+    phone: (cfg.phone ?? "").trim(),
+    company: (cfg.company ?? "").trim(),
+    address: (cfg.address ?? "").trim(),
+    source: (cfg.source ?? "workflow").trim(),
+    tags: Array.isArray(cfg.tags) ? cfg.tags : [],
+  });
+  return {
+    result: { kind: "next" },
+    log: `contact_created:${created.id}`,
+    execution: { status: "success", referenceId: created.id },
+  };
+};
+
+const execUpdateTask: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as TaskMutationConfig;
+  const taskId = requiredString(cfg.taskId, "task_id");
+  const ref = getAdminDb().doc(`tasks/${taskId}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.subAccountId !== ctx.subAccountId)
+    throw new Error("task_not_found");
+  const patch: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (cfg.title !== undefined) patch.title = cfg.title.trim();
+  if (cfg.notes !== undefined) patch.notes = cfg.notes;
+  if (cfg.dueInDays !== undefined)
+    patch.dueAt =
+      cfg.dueInDays == null
+        ? null
+        : new Date(Date.now() + Math.max(0, cfg.dueInDays) * 86_400_000);
+  await ref.set(patch, { merge: true });
+  return {
+    result: { kind: "next" },
+    log: `task_updated:${taskId}`,
+    execution: { status: "success", referenceId: taskId },
+  };
+};
+
+const execCompleteTask: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as TaskMutationConfig;
+  const taskId = requiredString(cfg.taskId, "task_id");
+  const result = await setTaskCompletedServerSide({
+    taskId,
+    completed: true,
+    userId: ctx.createdByUid,
+    mode: "live",
+    expectedSubAccountId: ctx.subAccountId,
+  });
+  if (!result) throw new Error("task_not_found");
+  return {
+    result: { kind: "next" },
+    log: `task_completed:${taskId}`,
+    execution: { status: "success", referenceId: taskId },
+  };
+};
+
+const execCreateDeal: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as CreateDealConfig;
+  const deal = await createDealServerSide({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    createdByUid: ctx.createdByUid,
+    mode: "live",
+    title: requiredString(cfg.title, "deal_title"),
+    value: Number(cfg.value ?? 0),
+    currency: cfg.currency ?? "USD",
+    contactId: ctx.contact.id,
+    stageId: (cfg.stageId ?? "new") as PipelineStageId,
+    priority: (cfg.priority ?? "medium") as DealPriority,
+  });
+  return {
+    result: { kind: "next" },
+    log: `deal_created:${deal.id}`,
+    execution: { status: "success", referenceId: deal.id },
+  };
+};
+
+const execUpdateDeal: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as UpdateDealConfig;
+  const dealId = requiredString(cfg.dealId, "deal_id");
+  const result = await updateDealServerSide({
+    dealId,
+    userId: ctx.createdByUid,
+    expectedSubAccountId: ctx.subAccountId,
+    mode: "live",
+    patch: {
+      ...(cfg.title !== undefined ? { title: cfg.title } : {}),
+      ...(cfg.value !== undefined ? { value: Number(cfg.value) } : {}),
+      ...(cfg.currency !== undefined ? { currency: cfg.currency } : {}),
+      ...(cfg.stageId !== undefined
+        ? { stageId: cfg.stageId as PipelineStageId }
+        : {}),
+      ...(cfg.priority !== undefined
+        ? { priority: cfg.priority as DealPriority }
+        : {}),
+    },
+  });
+  if (!result) throw new Error("deal_not_found");
+  return {
+    result: { kind: "next" },
+    log: `deal_updated:${dealId}`,
+    execution: { status: "success", referenceId: dealId },
+  };
+};
+
+const execGrantOfferAccess: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as OfferAccessConfig;
+  const offerId = requiredString(cfg.offerId, "offer_id");
+  const purchaseId = requiredString(cfg.purchaseId, "purchase_id");
+  const purchase = await getAdminDb()
+    .doc(
+      `subAccounts/${ctx.subAccountId}/courseOffers/${offerId}/purchases/${purchaseId}`
+    )
+    .get();
+  if (!purchase.exists || purchase.data()?.agencyId !== ctx.agencyId)
+    throw new Error("purchase_not_found");
+  const memberId = purchase.data()?.memberId as string | undefined;
+  const member = memberId
+    ? await getAdminDb()
+        .doc(`subAccounts/${ctx.subAccountId}/members/${memberId}`)
+        .get()
+    : null;
+  if (!member?.exists || member.data()?.contactId !== ctx.contact.id)
+    throw new Error("purchase_contact_mismatch");
+  await grantCourseOfferAccessServerSide({
+    subAccountId: ctx.subAccountId,
+    offerId,
+    purchaseId,
+    grantedByUid: ctx.createdByUid,
+  });
+  return {
+    result: { kind: "next" },
+    log: `offer_access_granted:${offerId}`,
+    execution: { status: "success", referenceId: purchaseId },
+  };
+};
+
+const execEnrollCourse: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as CourseConfig;
+  const courseId = requiredString(cfg.courseId, "course_id");
+  const memberId = await memberForContact(ctx.subAccountId, ctx.contact.id);
+  await enrollInStandaloneCourseServerSide({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    courseId,
+    memberId,
+  });
+  return {
+    result: { kind: "next" },
+    log: `course_enrolled:${courseId}`,
+    execution: { status: "success", referenceId: courseId },
+  };
+};
+
+const MAX_WORKFLOW_CHAIN_DEPTH = 5;
+
+async function startWorkflowForContact(opts: {
+  workflowId: string;
+  contactId: string;
+  subAccountId: string;
+  sourceWorkflowId: string;
+  sourceRunId: string;
+  chainDepth: number;
+}): Promise<string> {
+  if (opts.workflowId === opts.sourceWorkflowId)
+    throw new Error("workflow_self_invocation");
+  if (opts.chainDepth >= MAX_WORKFLOW_CHAIN_DEPTH)
+    throw new Error("workflow_chain_depth_exceeded");
+  const snap = await getAdminDb().doc(`workflows/${opts.workflowId}`).get();
+  if (!snap.exists) throw new Error("workflow_not_found");
+  const wf = { id: snap.id, ...(snap.data() as Omit<WorkflowDoc, "id">) };
+  if (wf.subAccountId !== opts.subAccountId || wf.status !== "active")
+    throw new Error("workflow_not_active");
+  if (!wf.startNodeId) throw new Error("workflow_has_no_steps");
+  if (!(await reentryAllows(wf, opts.contactId))) return "skipped:reentry";
+  await enroll(wf, opts.contactId, {
+    source: "workflow",
+    sourceWorkflowId: opts.sourceWorkflowId,
+    sourceRunId: opts.sourceRunId,
+    chainDepth: opts.chainDepth + 1,
+  });
+  return "started";
+}
+
+const execStartWorkflow: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as StartWorkflowConfig;
+  const workflowId = requiredString(cfg.workflowId, "workflow_id");
+  const depth = Number(ctx.triggerContext.chainDepth ?? 0);
+  const status = await startWorkflowForContact({
+    workflowId,
+    contactId: ctx.contact.id,
+    subAccountId: ctx.subAccountId,
+    sourceWorkflowId: ctx.workflowId,
+    sourceRunId: ctx.runId,
+    chainDepth: Number.isFinite(depth) ? depth : 0,
+  });
+  return {
+    result: { kind: "next" },
+    log: `workflow_${status}`,
+    execution: {
+      status: status === "started" ? "success" : "skipped",
+      referenceId: workflowId,
+    },
+  };
 };
 
 /** Unimplemented node types pass through (no stall) until their slice lands. */
@@ -449,6 +719,14 @@ const REGISTRY: Partial<Record<WorkflowNodeType, NodeExecutor>> = {
   create_task: execCreateTask,
   notify: execNotify,
   webhook: execWebhook,
+  create_contact: execCreateContact,
+  update_task: execUpdateTask,
+  complete_task: execCompleteTask,
+  create_deal: execCreateDeal,
+  update_deal: execUpdateDeal,
+  grant_offer_access: execGrantOfferAccess,
+  enroll_course: execEnrollCourse,
+  start_workflow: execStartWorkflow,
 };
 
 /* ----------------------------- Dispatch -------------------------------- */
@@ -490,6 +768,12 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
     for (const doc of matches.docs) {
       const wf = { id: doc.id, ...(doc.data() as Omit<WorkflowDoc, "id">) };
       if (!wf.startNodeId) continue;
+      if (
+        (input.type === "workflow.completed" ||
+          input.type === "workflow.failed") &&
+        input.context?.sourceWorkflowId === wf.id
+      )
+        continue;
 
       // Trigger-specific narrowing.
       if (
@@ -513,8 +797,44 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       ) {
         continue;
       }
+      const filterPairs: [keyof WorkflowDoc["trigger"], string][] = [
+        ["ownerUid", "ownerUid"],
+        ["projectId", "projectId"],
+        ["pipelineId", "pipelineId"],
+        ["stageId", "stageId"],
+        ["courseId", "courseId"],
+        ["lessonId", "lessonId"],
+        ["offerId", "offerId"],
+        ["groupId", "groupId"],
+        ["assignedToUid", "assignedToUid"],
+      ];
+      if (
+        filterPairs.some(
+          ([key, contextKey]) =>
+            wf.trigger[key] && wf.trigger[key] !== input.context?.[contextKey]
+        )
+      )
+        continue;
       if (!evalConditionGroup(wf.trigger.filters, contact)) continue;
       if (!(await reentryAllows(wf, contact.id))) continue;
+
+      const eventId =
+        typeof input.context?.eventId === "string"
+          ? input.context.eventId
+          : null;
+      if (eventId) {
+        const prior = await db
+          .collection("workflowRuns")
+          .where("workflowId", "==", wf.id)
+          .where("contactId", "==", contact.id)
+          .get();
+        if (
+          prior.docs.some(
+            (d) => (d.data() as WorkflowRunDoc).context?.eventId === eventId
+          )
+        )
+          continue;
+      }
 
       await enroll(wf, contact.id, input.context ?? {});
     }
@@ -582,6 +902,18 @@ async function enroll(
 
   if (!qstashIsConfigured()) {
     await runRef.update({ status: "failed" });
+    void fireWorkflowTrigger({
+      subAccountId: wf.subAccountId,
+      agencyId: wf.agencyId,
+      type: "workflow.failed",
+      contactId,
+      context: {
+        eventId: `${runRef.id}:failed`,
+        workflowId: wf.id,
+        runId: runRef.id,
+        sourceWorkflowId: wf.id,
+      },
+    });
     return;
   }
   await scheduleNode(runRef, wf.startNodeId!, 0);
@@ -628,6 +960,21 @@ async function completeRun(
     .doc(`workflows/${workflowId}`)
     .update({ "stats.completed": FieldValue.increment(1) })
     .catch(() => {});
+  const snap = await runRef.get();
+  const run = snap.data() as WorkflowRunDoc | undefined;
+  if (run)
+    void fireWorkflowTrigger({
+      subAccountId: run.subAccountId,
+      agencyId: run.agencyId,
+      type: "workflow.completed",
+      contactId: run.contactId,
+      context: {
+        eventId: `${run.id}:completed`,
+        workflowId,
+        runId: run.id,
+        sourceWorkflowId: workflowId,
+      },
+    });
 }
 
 /** Advance one node of a run. Idempotent on the run's history. */
@@ -708,23 +1055,77 @@ export async function runStep(
 
   const owner = await loadOwner(agency);
   const exec = REGISTRY[node.type] ?? execPassThrough;
-  const { result, log } = await exec({
-    node,
-    contact,
-    subAccount,
-    owner,
-    subAccountId: run.subAccountId,
-    agencyId: run.agencyId,
-    createdByUid: wf.createdByUid,
-    triggerContext: run.context ?? {},
-  });
+  let result: StepResult;
+  let log: string;
+  let execution: ActionExecution | undefined;
+  try {
+    ({ result, log, execution } = await exec({
+      node,
+      contact,
+      subAccount,
+      owner,
+      subAccountId: run.subAccountId,
+      agencyId: run.agencyId,
+      createdByUid: wf.createdByUid,
+      triggerContext: run.context ?? {},
+      workflowId: wf.id,
+      runId: run.id,
+    }));
+  } catch (err) {
+    const code = err instanceof Error ? err.message : "action_failed";
+    result = { kind: "fail", retryable: false };
+    log = `error:${code}`;
+    execution = {
+      status: "terminal_failure",
+      errorCategory: code,
+      errorMessage: code,
+    };
+  }
 
   const entry: WorkflowRunHistoryEntry = {
     nodeId,
     type: node.type,
     at: Timestamp.now(),
     result: log,
+    execution: {
+      actionId: nodeId,
+      attempt: 1,
+      status:
+        execution?.status ??
+        (log.startsWith("skipped:")
+          ? "skipped"
+          : log.startsWith("error:")
+            ? "retryable_failure"
+            : "success"),
+      errorCategory:
+        execution?.errorCategory ??
+        (log.startsWith("error:") ? log.slice("error:".length) : null),
+      errorMessage: execution?.errorMessage ?? null,
+      referenceId: execution?.referenceId ?? null,
+      at: Timestamp.now(),
+    },
   };
+  if (result.kind === "fail") {
+    await runRef.update({
+      status: "failed",
+      history: FieldValue.arrayUnion(entry),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    void fireWorkflowTrigger({
+      subAccountId: run.subAccountId,
+      agencyId: run.agencyId,
+      type: "workflow.failed",
+      contactId: run.contactId,
+      context: {
+        eventId: `${run.id}:failed:${nodeId}`,
+        workflowId: wf.id,
+        runId: run.id,
+        sourceWorkflowId: wf.id,
+        nodeId,
+      },
+    });
+    return;
+  }
   await runRef.update({
     history: FieldValue.arrayUnion(entry),
     updatedAt: FieldValue.serverTimestamp(),

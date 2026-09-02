@@ -28,7 +28,26 @@ export type WorkflowTriggerType =
   | "booking.rescheduled"
   | "quote.accepted"
   | "quote.paid"
-  | "message.received";
+  | "message.received"
+  | "contact.updated"
+  | "contact.tag.removed"
+  | "task.created"
+  | "task.completed"
+  | "deal.created"
+  | "deal.won"
+  | "deal.lost"
+  | "booking.completed"
+  | "booking.no_show"
+  | "course.enrolled"
+  | "course.lesson.completed"
+  | "course.completed"
+  | "offer.purchase.paid"
+  | "offer.access.granted"
+  | "offer.access.revoked"
+  | "community.member.joined"
+  | "community.member.approved"
+  | "workflow.completed"
+  | "workflow.failed";
 
 /* ------------------------------ Conditions ----------------------------- */
 
@@ -78,6 +97,16 @@ export interface WorkflowTrigger {
    * (sms | whatsapp | messenger | instagram). Null/absent = any channel.
    */
   channel?: string | null;
+  /** Optional entity-specific narrowing, matched against event context. */
+  ownerUid?: string | null;
+  projectId?: string | null;
+  pipelineId?: string | null;
+  stageId?: string | null;
+  courseId?: string | null;
+  lessonId?: string | null;
+  offerId?: string | null;
+  groupId?: string | null;
+  assignedToUid?: string | null;
 }
 
 /* --------------------------------- Nodes ------------------------------- */
@@ -96,7 +125,15 @@ export type WorkflowNodeType =
   | "update_field"
   | "create_task"
   | "notify"
-  | "webhook";
+  | "webhook"
+  | "create_contact"
+  | "update_task"
+  | "complete_task"
+  | "create_deal"
+  | "update_deal"
+  | "grant_offer_access"
+  | "enroll_course"
+  | "start_workflow";
 
 export interface WorkflowNode {
   id: string;
@@ -149,6 +186,24 @@ export interface WorkflowRunHistoryEntry {
    * "replied:<channel>" | "timeout".
    */
   result: string;
+  /** Structured execution metadata; absent on legacy history entries. */
+  execution?: WorkflowActionExecution;
+}
+
+export type WorkflowActionResultStatus =
+  | "success"
+  | "skipped"
+  | "retryable_failure"
+  | "terminal_failure";
+
+export interface WorkflowActionExecution {
+  actionId: string;
+  attempt: number;
+  status: WorkflowActionResultStatus;
+  errorCategory?: string | null;
+  errorMessage?: string | null;
+  referenceId?: string | null;
+  at: Timestamp | FieldValue | null;
 }
 
 /**
@@ -241,4 +296,45 @@ export interface NotifyConfig {
 }
 export interface WebhookConfig {
   url: string;
+}
+
+export interface CreateContactConfig {
+  name?: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  address?: string;
+  source?: string;
+  tags?: string[];
+}
+export interface TaskMutationConfig {
+  taskId: string;
+  title?: string;
+  notes?: string;
+  dueInDays?: number | null;
+}
+export interface CreateDealConfig {
+  title: string;
+  value?: number;
+  currency?: string;
+  stageId?: string;
+  priority?: "high" | "medium" | "low";
+}
+export interface UpdateDealConfig {
+  dealId: string;
+  title?: string;
+  value?: number;
+  currency?: string;
+  stageId?: string;
+  priority?: "high" | "medium" | "low";
+}
+export interface CourseConfig {
+  courseId: string;
+}
+export interface OfferAccessConfig {
+  offerId: string;
+  purchaseId: string;
+}
+export interface StartWorkflowConfig {
+  workflowId: string;
 }

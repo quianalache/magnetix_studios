@@ -77,6 +77,25 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "quote.accepted",
   "quote.paid",
   "message.received",
+  "contact.updated",
+  "contact.tag.removed",
+  "task.created",
+  "task.completed",
+  "deal.created",
+  "deal.won",
+  "deal.lost",
+  "booking.completed",
+  "booking.no_show",
+  "course.enrolled",
+  "course.lesson.completed",
+  "course.completed",
+  "offer.purchase.paid",
+  "offer.access.granted",
+  "offer.access.revoked",
+  "community.member.joined",
+  "community.member.approved",
+  "workflow.completed",
+  "workflow.failed",
 ];
 
 const MESSAGE_CHANNELS: { value: string; label: string }[] = [
@@ -101,6 +120,14 @@ const ICONS: Record<WorkflowNodeType, typeof Mail> = {
   create_task: CheckSquare,
   notify: Bell,
   webhook: Webhook,
+  create_contact: PencilLine,
+  update_task: CheckSquare,
+  complete_task: CheckSquare,
+  create_deal: KanbanSquare,
+  update_deal: KanbanSquare,
+  grant_offer_access: Zap,
+  enroll_course: Zap,
+  start_workflow: Zap,
 };
 
 export interface BuilderInitial {
@@ -369,11 +396,64 @@ export function WorkflowBuilder({
                 ))}
               </select>
               <p className="text-muted-foreground mt-1.5 text-xs">
-                Fires on every inbound message. Set re-entry to &ldquo;Not
-                while already in this workflow&rdquo; below so a chatty
-                contact isn&apos;t enrolled once per message.
+                Fires on every inbound message. Set re-entry to &ldquo;Not while
+                already in this workflow&rdquo; below so a chatty contact
+                isn&apos;t enrolled once per message.
               </p>
             </>
+          )}
+
+          {(
+            [
+              "task.created",
+              "task.completed",
+              "deal.created",
+              "deal.won",
+              "deal.lost",
+              "booking.completed",
+              "booking.no_show",
+              "course.enrolled",
+              "course.lesson.completed",
+              "course.completed",
+              "offer.purchase.paid",
+              "offer.access.granted",
+              "offer.access.revoked",
+              "community.member.joined",
+              "community.member.approved",
+            ] as WorkflowTriggerType[]
+          ).includes(trigger.type) && (
+            <Input
+              className="mt-2"
+              placeholder={
+                trigger.type.startsWith("course.")
+                  ? "Optional course ID"
+                  : trigger.type.startsWith("offer.")
+                    ? "Optional offer ID"
+                    : trigger.type.startsWith("community.")
+                      ? "Optional Community/group ID"
+                      : trigger.type.startsWith("deal.")
+                        ? "Optional stage ID"
+                        : "Optional entity ID"
+              }
+              value={
+                trigger.courseId ??
+                trigger.offerId ??
+                trigger.groupId ??
+                trigger.stageId ??
+                ""
+              }
+              onChange={(e) => {
+                const value = e.target.value || null;
+                if (trigger.type.startsWith("course."))
+                  setTrigger({ ...trigger, courseId: value });
+                else if (trigger.type.startsWith("offer."))
+                  setTrigger({ ...trigger, offerId: value });
+                else if (trigger.type.startsWith("community."))
+                  setTrigger({ ...trigger, groupId: value });
+                else if (trigger.type.startsWith("deal."))
+                  setTrigger({ ...trigger, stageId: value });
+              }}
+            />
           )}
 
           <div className="mt-3 border-t pt-3">
@@ -594,7 +674,7 @@ function ReadinessChips({
         <span
           key={b.code}
           title={b.title}
-          className="inline-flex h-4 min-w-4 cursor-help items-center justify-center rounded px-1 text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          className="inline-flex h-4 min-w-4 cursor-help items-center justify-center rounded bg-emerald-500/10 px-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
         >
           {b.code}
         </span>
