@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-**Phase 0** (import architecture + data rescue), **Business Brain** (shared sub-account architecture + its Settings UI), **YTCS Phase 1** (Content nav, module shell, Dashboard, project foundation, Input step for all 6 starting points), and **YTCS Phase 2** (Deep Dive + Script Prompt Builder) are all **COMPLETE and live in production** at `crm.magnetixstudios.com`. A user can now open/create a Video Workspace project, complete Input, complete Deep Dive (normal or Product/Offer, format-specific), select Script Ingredients from Business Brain, generate a fully-resolved copy-paste Script Prompt, and save an independent Final Script Draft — all against the owner's real migrated data (15 Video Projects, 2 Saved Ideas, 7 voice recordings in Storage, Business Brain with 3 Offers/1 Framework/1 Story/1 Topic/1 Subtopic). Create Video, Titles, Publish, full Saved Ideas, full Video Library, and Content Alchemy Lab are all still locked/not built, per instruction. See the Phase 0/Business Brain/Business Brain UI/**YTCS Phase 1**/**YTCS Phase 2** addenda (after §26) for full details.
+**Phase 0** (import architecture + data rescue), **Business Brain** (shared sub-account architecture + its Settings UI), **YTCS Phase 1** (Content nav, module shell, Dashboard, project foundation, Input step for all 6 starting points), **YTCS Phase 2** (Deep Dive + Script Prompt Builder), and **YTCS Phase 3A** (Create Video) are all **COMPLETE and live in production** at `crm.magnetixstudios.com`. A user can now open/create a Video Workspace project, complete Input, complete Deep Dive (normal or Product/Offer, format-specific), select Script Ingredients from Business Brain, generate a fully-resolved copy-paste Script Prompt, save an independent Final Script Draft, and move the video through Create Video (recording/editing checklists, recording/editing notes, status, Edits Lab resource card) — all against the owner's real migrated data (15 Video Projects, 2 Saved Ideas, 7 voice recordings in Storage, Business Brain with 3 Offers/1 Framework/1 Story/1 Topic/1 Subtopic). Titles, Publish, full Saved Ideas, full Video Library, and Content Alchemy Lab are all still locked/not built, per instruction. See the Phase 0/Business Brain/Business Brain UI/**YTCS Phase 1**/**YTCS Phase 2**/**YTCS Phase 3A** addenda (after §26) for full details.
 
 ## SOURCE MATERIAL
 
@@ -65,7 +65,7 @@ Kept genuinely open:
 
 ## NEXT APPROVED TASK
 
-None yet. YTCS Phase 2 (Deep Dive + Script Prompt Builder) is done and live in production; Create Video, Titles, Publish, and Content Alchemy Lab all have no approval and should not start automatically. Two open items carried forward: (1) a genuine interactive click-through QA pass is still owed from a real authenticated browser session — Phase 1's UI was since visually verified by the owner in production, but Phase 2's Deep Dive/Script Prompt Builder UI has only been QA'd via direct Firestore/logic testing, not clicked through live; (2) the Depth Preference and Offer/CTA-for-non-offer-projects questions noted above remain open product decisions, not silently resolved.
+None yet. YTCS Phase 3A (Create Video) is done and live in production; Titles, Publish, full Saved Ideas CRUD, full Video Library, and Content Alchemy Lab all have no approval and should not start automatically. Open items carried forward: (1) a genuine interactive click-through QA pass is still owed from a real authenticated browser session — Phase 1's UI was since visually verified by the owner in production, but Phase 2's Deep Dive/Script Prompt Builder UI and Phase 3A's Create Video UI have only been QA'd via direct Firestore/logic testing, not clicked through live; (2) the Depth Preference and Offer/CTA-for-non-offer-projects questions noted above remain open product decisions, not silently resolved.
 
 ---
 
@@ -1670,3 +1670,48 @@ eslint clean; `tsc --noEmit` shows zero YTCS-related errors (the only errors pre
 Commit: `90386c0`, pushed as `1888878`. Deployed and confirmed Ready on `crm.magnetixstudios.com`.
 
 **YTCS Phase 2 is live in production.** Create Video, Titles, Publish, and Content Alchemy Lab remain untouched, per instruction.
+
+---
+
+# YTCS Phase 3A (2026-09-02) — Create Video
+
+## Scope delivered
+
+Step 4 (Create Video) — completing Input → Deep Dive → Script Prompt Builder → Create Video. **Not an AI generation step** — no model call anywhere in this phase. Titles/Publish remain locked, shown with a lock icon and "coming in a later phase," never faked. Full Saved Ideas CRUD, full Video Library, and Content Alchemy Lab were also not touched, per instruction.
+
+## Recording Checklist / Editing Checklist — verbatim from §11, no invented copy
+
+Both 9-item lists reused exactly as documented in this spec's §11 (`src/lib/ytcs/create-video-checklists.ts`). Real-data investigation across all 15 real projects found:
+
+- `recordingChecklist` is empty `{}` on all 15 real projects — no real checked-state to render, but the field round-trips correctly for first real usage.
+- `editingChecklist` is empty on 13 of 15, but **2 real projects carry a genuine data-quality discrepancy**: project `86417107-f51a-472c-9a27-9588f4622eec` has `{"Record Hook": false}` and project `cf95ee97-1fd3-4435-b7cf-13ae05721e15` has `{"c1": false, "c2": false}` — keys that don't match any of the 9 canonical Editing Checklist labels (a cross-checklist mislabel and a generic-key scheme, respectively, from earlier in the tool's history). Per instruction, these are **preserved, not normalized**: the UI surfaces them as a small read-only note under the checklist ("This project also has older checklist data not shown above...") rather than silently dropping or renaming them, and no write path ever touches or deletes a key it didn't itself set.
+
+Each checkbox toggle auto-saves immediately (sends only `{ [kind]: { [item]: boolean } }`), relying on Firestore's own nested merge-set behavior — confirmed directly in this phase (a temporary test doc, since deleted) that `.set(data, {merge:true})` deep-merges nested map fields, so a single-item toggle write can never clobber sibling keys already on the same map, real legacy keys included. Verified specifically (not just generically) by simulating the exact real key shapes from both of the 2 legacy projects on a disposable doc and confirming a canonical-item toggle left them untouched — done on a simulated doc, not the 2 real projects themselves, so no real record was write-tested directly.
+
+## Recording Notes / Editing Notes
+
+Two independent multiline fields (`recordingNotes`, `editingNotes`), free text, each with its own explicit Save button — matching the established YTCS text-field convention (Script Prompt Builder's Extra Script Notes / Final Script Draft). Both are empty/absent on all 15 real projects today, so there is nothing real to preserve visually yet, but both round-trip correctly. No voice notes were added to Create Video — the migration spec never confirmed a real voice-note field for this step, and the phase instruction explicitly forbade adding one without that confirmation. `finalVideoNotes` (a real field in the schema, always empty across all 15 real projects) was deliberately **not** wired up — it wasn't named in this phase's explicit scope ("recording checklist, editing checklist, recording notes, editing notes, status dropdown, Edits Lab"), so it stays out of the PATCH allowlist rather than being added speculatively.
+
+## Create Video Status
+
+Real field `createVideoStatus`. Real-data check across all 15 projects found only two states: `"Ready to Record"` (10 projects) and unset (5 projects) — no other value has ever appeared. The UI exposes the already-decided 3-value enum from §11 (`Ready to Record`, `Editing`, `Ready for Titles`) as a button group; a project whose status doesn't match any of the 3 (a hypothetical future legacy value) is preserved as-is and surfaced with an explanatory note rather than silently coerced to a known value — this didn't occur in any of the 15 real projects today, but the UI handles it defensively.
+
+## Edits Lab resource card
+
+Preserved as a single card, not a modal or interruption: "Premium Resource" badge, one-line pitch, links out to `https://quianalache.com/the-edits-lab` in a new tab. Styled to match the existing YTCS card language (rounded-2xl border, muted background) rather than introducing new visual patterns.
+
+## Write safety
+
+The PATCH allowlist (`src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts`) was extended with exactly the 5 new fields (`createVideoStatus`, `recordingChecklist`, `editingChecklist`, `recordingNotes`, `editingNotes`). Titles/Publish fields remain structurally unreachable, same defense-in-depth as every prior phase. Verified directly via a disposable QA project that Create Video writes never touch Input's `rawTranscript`, Script Prompt Builder's `generatedScriptPrompt`/`compiledScript` (Final Script Draft), or a synthetic `legacy` field standing in for migration-provenance data.
+
+## QA result
+
+eslint clean; `tsc --noEmit` shows zero errors in any Phase 3A file (the only repo-wide errors present are the same concurrent session's own incomplete, entirely untracked billing/purchases work already documented in the Phase 2 addendum — confirmed again via `git show HEAD:<path>` returning "not in HEAD"). Real Firestore round-trip QA (20/20 checks) via a temporary script: all 15 real projects' render-safety confirmed (checklist fields are always a plain object or absent, never a shape that would break the UI), both real legacy-keyed `editingChecklist` entries confirmed still present and unchanged, the legacy-key-preservation mechanism confirmed against simulated docs carrying the exact real key shapes, a disposable QA project exercised every new field (both checklists, both notes fields, status) end-to-end with a full read-back, confirmed Input/Script-Prompt-Builder/legacy-shaped data untouched by any Create Video write, and confirmed all 15 real projects were byte-identical (across the fields that matter to this phase) before and after the entire QA run. Interactive browser/responsive QA was not performed this phase (no authenticated browser session available) — disclosed as still owed, not claimed as done.
+
+**Mid-phase note on shared-repo safety:** partway through this phase, a concurrent session's own `git stash push -u` (labeled "set aside unrelated dirty/untracked WIP for clean build check") swept this phase's uncommitted files into its stash along with that session's own unrelated work, briefly leaving them off disk. Nothing was lost: the 4 affected files were recovered by checking out just those paths from the stash's tracked and untracked-files commits (`git checkout <stash> -- <paths>` / `git checkout <stash>^3 -- <paths>`), verified byte-for-byte correct afterward, and the stash itself was left untouched for its original owner to pop or drop.
+
+## Files changed
+
+`src/lib/ytcs/create-video-checklists.ts` (new), `src/components/ytcs/create-video-step.tsx` (new), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts` (PATCH allowlist extended), the project detail page (`workspace/[videoId]/page.tsx` — Create Video tab unlocked). No changes to `src/types/ytcs.ts` (all 5 fields already existed in the real type from Phase 1) and no changes to `src/components/dashboard/sidebar.tsx` (no new nav entry needed for this phase).
+
+**YTCS Phase 3A is complete.** Titles, Publish, full Saved Ideas CRUD, full Video Library, and Content Alchemy Lab remain untouched, per instruction.

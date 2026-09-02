@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { InputStep } from "@/components/ytcs/input-step";
 import { DeepDiveStep } from "@/components/ytcs/deep-dive-step";
 import { ScriptPromptBuilderStep } from "@/components/ytcs/script-prompt-builder-step";
+import { CreateVideoStep } from "@/components/ytcs/create-video-step";
 import { YTCS_STARTING_POINTS, YTCS_STEPS, type YtcsStartingPointType, type YtcsVideoProject } from "@/types/ytcs";
 import type { BusinessBrain } from "@/types/business-brain";
 
-const BUILT_STEPS = new Set(["Input", "Deep Dive", "Script Prompt Builder"]);
+const BUILT_STEPS = new Set(["Input", "Deep Dive", "Script Prompt Builder", "Create Video"]);
 
 /**
  * Video Workspace project detail — the 6-step pipeline shell (migration
@@ -199,6 +200,8 @@ export default function VideoProjectPage() {
           businessBrain={businessBrain}
           onSave={saveProject}
         />
+      ) : viewingStep === "Create Video" ? (
+        <CreateVideoStep project={project} onSave={saveProject} />
       ) : (
         <div className="rounded-2xl border border-dashed p-8 text-center">
           <Lock className="mx-auto h-5 w-5 text-muted-foreground" />

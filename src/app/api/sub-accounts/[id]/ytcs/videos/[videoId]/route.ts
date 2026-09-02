@@ -22,8 +22,13 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * `legacy`/`unknownFields`/migration provenance fields are never in any
  * allowlist at all. Deliberately still excluded pending their own phase:
  * `compiledScript` (Final Script Draft) IS included — Phase 2 explicitly
- * builds it — but createVideoStatus/recordingChecklist/editingChecklist/
- * finalReviewChecklist/finalTitle/youtubeDescription/etc. are not.
+ * builds it — createVideoStatus/recordingChecklist/editingChecklist/
+ * recordingNotes/editingNotes are now included (Phase 3A), but
+ * finalTitle/youtubeDescription/publish assets/etc. are still not.
+ * `finalVideoNotes` is deliberately still excluded — Phase 3A's Create
+ * Video only specified recording notes, editing notes, checklists,
+ * status, and the Edits Lab card; `finalVideoNotes` is a real field in
+ * the schema but wasn't named in scope, so it isn't wired up yet.
  */
 
 const EDITABLE_KEYS = [
@@ -60,6 +65,12 @@ const EDITABLE_KEYS = [
   "generatedScriptPrompt",
   "compiledScript",
   "brainDumpVoiceNotes",
+  // Create Video (Phase 3A)
+  "createVideoStatus",
+  "recordingChecklist",
+  "editingChecklist",
+  "recordingNotes",
+  "editingNotes",
 ] as const;
 
 export async function GET(
