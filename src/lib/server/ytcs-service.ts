@@ -83,7 +83,6 @@ export async function createVideoProject(
   const now = new Date().toISOString();
   const settings = await getYtcsSettings(subAccountId);
   const doc: YtcsVideoProject = {
-    id,
     name: input.name || "Untitled Video Project",
     currentStep: "Input",
     status: "Input",
