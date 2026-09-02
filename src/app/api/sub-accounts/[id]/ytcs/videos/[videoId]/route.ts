@@ -12,15 +12,18 @@ import type { YtcsVideoProject } from "@/types/ytcs";
 /**
  * GET/PATCH/DELETE /api/sub-accounts/[id]/ytcs/videos/[videoId]
  *
- * PATCH is deliberately allowlisted to only the fields Phase 1's UI can
- * ever reach — project rename and the Input step's 6 starting points.
- * Deep Dive/Script Prompt Builder/Create Video/Titles/Publish fields
- * (compiledScript, generatedScriptPrompt, checklists, publish assets,
- * etc.) are NOT in this list, so even a malformed request from a future
- * un-reviewed client can't touch them before those steps are actually
- * built — the same defense-in-depth the Business Brain PATCH route uses.
+ * PATCH is deliberately allowlisted to only the fields Phase 1+2's UI can
+ * ever reach — project rename, the Input step's 6 starting points, Deep
+ * Dive (normal + Product/Offer), and Script Prompt Builder. Create Video/
+ * Titles/Publish fields (checklists, publish assets, etc.) are NOT in
+ * this list, so even a malformed request from a future un-reviewed
+ * client can't touch them before those steps are actually built — the
+ * same defense-in-depth the Business Brain PATCH route uses.
  * `legacy`/`unknownFields`/migration provenance fields are never in any
- * allowlist at all.
+ * allowlist at all. Deliberately still excluded pending their own phase:
+ * `compiledScript` (Final Script Draft) IS included — Phase 2 explicitly
+ * builds it — but createVideoStatus/recordingChecklist/editingChecklist/
+ * finalReviewChecklist/finalTitle/youtubeDescription/etc. are not.
  */
 
 const EDITABLE_KEYS = [
@@ -41,6 +44,21 @@ const EDITABLE_KEYS = [
   "framework",
   "frameworkId",
   "productOfferInput",
+  // Deep Dive (Phase 2)
+  "deepDiveAnswers",
+  "generatedDeepDiveQuestions",
+  "deepDiveVoiceNotes",
+  "productOfferDeepDiveAnswers",
+  "productOfferDeepDiveVoiceNotes",
+  // Script Prompt Builder (Phase 2)
+  "scriptOutputType",
+  "depthPreference",
+  "scriptBuilderExtraNotes",
+  "scriptBuilderSelectedFrameworkIds",
+  "scriptBuilderSelectedStoryProofIds",
+  "scriptBuilderVoiceNotes",
+  "generatedScriptPrompt",
+  "compiledScript",
   "brainDumpVoiceNotes",
 ] as const;
 
