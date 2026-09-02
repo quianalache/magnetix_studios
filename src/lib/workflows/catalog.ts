@@ -33,6 +33,36 @@ export const TRIGGER_LABELS: Record<WorkflowTriggerType, string> = {
   "offer.access.revoked": "Offer access revoked",
   "community.member.joined": "Community member joined",
   "community.member.approved": "Community member approved",
+  "contact.field.changed": "Contact field changed",
+  "contact.source.changed": "Contact source changed",
+  "deal.amount.changed": "Deal amount changed",
+  "deal.stage.changed": "Deal stage changed",
+  "deal.updated": "Deal updated",
+  "payment.succeeded": "Payment succeeded",
+  "payment.failed": "Payment failed",
+  "subscription.created": "Subscription created",
+  "subscription.renewed": "Subscription renewed",
+  "subscription.cancelled": "Subscription cancelled",
+  "subscription.paused": "Subscription paused",
+  "refund.issued": "Refund issued",
+  "community.member.left": "Community member left",
+  "community.post.created": "Community post created",
+  "community.comment.created": "Community comment created",
+  "community.event.started": "Community event started",
+  "community.event.ended": "Community event ended",
+  "community.live.ended": "Community live session ended",
+  "community.replay.ready": "Community replay ready",
+  "message.sent": "Message sent",
+  "conversation.assigned": "Conversation assigned",
+  "conversation.closed": "Conversation closed",
+  "conversation.reopened": "Conversation reopened",
+  "email.delivered": "Email delivered",
+  "email.opened": "Email opened",
+  "email.clicked": "Email link clicked",
+  "email.bounced": "Email bounced",
+  "email.complained": "Email marked as spam",
+  "scheduled.datetime": "Date/time reached",
+  "contact.date.reached": "Contact date reached",
   "workflow.completed": "Workflow completed",
   "workflow.failed": "Workflow failed",
 };
@@ -60,6 +90,14 @@ export const NODE_LABELS: Record<WorkflowNodeType, string> = {
   grant_offer_access: "Grant Offer access",
   enroll_course: "Enroll in course",
   start_workflow: "Start another workflow",
+  revoke_offer_access: "Revoke Offer access",
+  remove_course_access: "Remove from course",
+  grant_community_access: "Grant Community access",
+  notify_community_member: "Notify Community member",
+  assign_conversation: "Assign conversation",
+  close_conversation: "Close conversation",
+  reopen_conversation: "Reopen conversation",
+  stop_workflow: "Stop workflow",
 };
 
 /**
@@ -100,6 +138,12 @@ export const ADDABLE_TYPES: WorkflowNodeType[] = [
   "grant_offer_access",
   "enroll_course",
   "start_workflow",
+  "grant_community_access",
+  "notify_community_member",
+  "assign_conversation",
+  "close_conversation",
+  "reopen_conversation",
+  "stop_workflow",
   "if_else",
   "goal",
 ];
@@ -177,6 +221,21 @@ export function defaultConfig(type: WorkflowNodeType): Record<string, unknown> {
       return { courseId: "" };
     case "start_workflow":
       return { workflowId: "" };
+    case "revoke_offer_access":
+      return { offerId: "", purchaseId: "" };
+    case "remove_course_access":
+      return { courseId: "", enrollmentId: "" };
+    case "grant_community_access":
+      return { groupId: "" };
+    case "notify_community_member":
+      return { title: "", body: "" };
+    case "assign_conversation":
+      return { assigneeUid: "" };
+    case "close_conversation":
+    case "reopen_conversation":
+      return {};
+    case "stop_workflow":
+      return { workflowId: "" };
     default:
       return {};
   }
@@ -242,6 +301,22 @@ export function nodeSummary(step: BuilderStep): string {
       return (c.courseId as string) || "Choose course";
     case "start_workflow":
       return (c.workflowId as string) || "Choose workflow";
+    case "revoke_offer_access":
+      return (c.offerId as string) || "Choose offer";
+    case "remove_course_access":
+      return (c.courseId as string) || "Choose course";
+    case "grant_community_access":
+      return (c.groupId as string) || "Choose Community";
+    case "notify_community_member":
+      return (c.title as string) || "Community notification";
+    case "assign_conversation":
+      return (c.assigneeUid as string) || "Choose assignee";
+    case "close_conversation":
+      return "Close conversation";
+    case "reopen_conversation":
+      return "Reopen conversation";
+    case "stop_workflow":
+      return (c.workflowId as string) || "Stop workflow";
     case "goal":
       return "Ends the workflow here";
     default:

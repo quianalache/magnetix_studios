@@ -11,6 +11,7 @@ import type {
   CommunityEvent,
   CommunityEventLocationType,
 } from "@/types/community";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 function eventsCollection(subAccountId: string, groupId: string) {
   return getAdminDb().collection(
@@ -143,6 +144,44 @@ export async function updateCommunityEventLifecycleServerSide(
   }
   const ref = eventsCollection(subAccountId, groupId).doc(eventId);
   await ref.update({ status, updatedAt: FieldValue.serverTimestamp() });
+  if (status === "live" || status === "ended") {
+    const [memberSnap, subSnap] = await Promise.all([
+      getAdminDb()
+        .doc(`subAccounts/${subAccountId}/members/${event.createdByMemberId}`)
+        .get(),
+      getAdminDb().doc(`subAccounts/${subAccountId}`).get(),
+    ]);
+    const contactId = memberSnap.data()?.contactId as string | undefined;
+    const agencyId = subSnap.data()?.agencyId as string | undefined;
+    if (contactId && agencyId) {
+      const eventType =
+        status === "live" ? "community.event.started" : "community.event.ended";
+      emitWorkflowEvent({
+        eventType,
+        eventId: `community-event:${eventId}:${status}`,
+        agencyId,
+        subAccountId,
+        contactId,
+        source: "community-events",
+        payload: {
+          groupId,
+          eventId,
+          liveSessionId: event.liveSessionId ?? null,
+        },
+      });
+      if (status === "ended" && event.liveSessionId) {
+        emitWorkflowEvent({
+          eventType: "community.live.ended",
+          eventId: `community-live:${event.liveSessionId}:ended`,
+          agencyId,
+          subAccountId,
+          contactId,
+          source: "community-events",
+          payload: { groupId, eventId, liveSessionId: event.liveSessionId },
+        });
+      }
+    }
+  }
   return getCommunityEventServerSide(subAccountId, groupId, eventId);
 }
 

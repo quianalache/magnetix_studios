@@ -517,6 +517,54 @@ export function NodeConfigDialog({
             </Field>
           )}
 
+          {step.type === "grant_community_access" && (
+            <Field label="Community group ID">
+              <Input
+                value={str("groupId")}
+                onChange={(e) => set({ groupId: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {step.type === "notify_community_member" && (
+            <>
+              <Field label="Title">
+                <Input
+                  value={str("title")}
+                  onChange={(e) => set({ title: e.target.value })}
+                />
+              </Field>
+              <Field label="Message">
+                <Textarea
+                  rows={3}
+                  value={str("body")}
+                  onChange={(e) => set({ body: e.target.value })}
+                />
+              </Field>
+            </>
+          )}
+
+          {step.type === "assign_conversation" && (
+            <Field label="Assignee user ID">
+              <Input
+                value={str("assigneeUid")}
+                onChange={(e) => set({ assigneeUid: e.target.value })}
+              />
+            </Field>
+          )}
+
+          {step.type === "stop_workflow" && (
+            <Field
+              label="Workflow ID (optional)"
+              hint="Blank stops the workflow containing this action."
+            >
+              <Input
+                value={str("workflowId")}
+                onChange={(e) => set({ workflowId: e.target.value })}
+              />
+            </Field>
+          )}
+
           {step.type === "goal" && (
             <p className="text-muted-foreground text-sm">
               This step ends the workflow — nothing runs after it on this path.

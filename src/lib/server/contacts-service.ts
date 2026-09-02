@@ -221,6 +221,41 @@ export async function updateContactServerSide(opts: {
     }
   }
   if (mode === "live") {
+    const changedFields = Object.keys(opts.patch).filter(
+      (field) => field !== "tags" && field !== "attribution"
+    );
+    if (changedFields.length > 0) {
+      const oldValues = Object.fromEntries(
+        changedFields.map((field) => [field, existing[field] ?? null])
+      );
+      const newValues = Object.fromEntries(
+        changedFields.map((field) => [field, fresh.data()?.[field] ?? null])
+      );
+      const delta = JSON.stringify({ oldValues, newValues });
+      emitWorkflowEvent({
+        eventType: "contact.field.changed",
+        eventId: `${opts.contactId}:field:${Buffer.from(delta).toString("base64url")}`,
+        agencyId: existing.agencyId,
+        subAccountId: existing.subAccountId,
+        contactId: opts.contactId,
+        source: "contacts",
+        payload: { changedFields, oldValues, newValues },
+      });
+      if (changedFields.includes("source")) {
+        emitWorkflowEvent({
+          eventType: "contact.source.changed",
+          eventId: `${opts.contactId}:source:${String(existing.source ?? "")}:${String(fresh.data()?.source ?? "")}`,
+          agencyId: existing.agencyId,
+          subAccountId: existing.subAccountId,
+          contactId: opts.contactId,
+          source: "contacts",
+          payload: {
+            previousSource: existing.source ?? null,
+            newSource: fresh.data()?.source ?? null,
+          },
+        });
+      }
+    }
     emitWorkflowEvent({
       eventType: "contact.updated",
       agencyId: existing.agencyId,

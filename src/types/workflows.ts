@@ -46,6 +46,36 @@ export type WorkflowTriggerType =
   | "offer.access.revoked"
   | "community.member.joined"
   | "community.member.approved"
+  | "contact.field.changed"
+  | "contact.source.changed"
+  | "deal.amount.changed"
+  | "deal.stage.changed"
+  | "deal.updated"
+  | "payment.succeeded"
+  | "payment.failed"
+  | "subscription.created"
+  | "subscription.renewed"
+  | "subscription.cancelled"
+  | "subscription.paused"
+  | "refund.issued"
+  | "community.member.left"
+  | "community.post.created"
+  | "community.comment.created"
+  | "community.event.started"
+  | "community.event.ended"
+  | "community.live.ended"
+  | "community.replay.ready"
+  | "message.sent"
+  | "conversation.assigned"
+  | "conversation.closed"
+  | "conversation.reopened"
+  | "email.delivered"
+  | "email.opened"
+  | "email.clicked"
+  | "email.bounced"
+  | "email.complained"
+  | "scheduled.datetime"
+  | "contact.date.reached"
   | "workflow.completed"
   | "workflow.failed";
 
@@ -133,7 +163,15 @@ export type WorkflowNodeType =
   | "update_deal"
   | "grant_offer_access"
   | "enroll_course"
-  | "start_workflow";
+  | "start_workflow"
+  | "revoke_offer_access"
+  | "remove_course_access"
+  | "grant_community_access"
+  | "notify_community_member"
+  | "assign_conversation"
+  | "close_conversation"
+  | "reopen_conversation"
+  | "stop_workflow";
 
 export interface WorkflowNode {
   id: string;
@@ -296,6 +334,22 @@ export interface NotifyConfig {
 }
 export interface WebhookConfig {
   url: string;
+}
+
+export interface WorkflowAccessConfig {
+  offerId?: string;
+  purchaseId?: string;
+  courseId?: string;
+  enrollmentId?: string;
+}
+export interface CommunityAccessConfig {
+  groupId: string;
+}
+export interface ConversationAssignmentConfig {
+  assigneeUid: string;
+}
+export interface StopWorkflowConfig {
+  workflowId?: string;
 }
 
 export interface CreateContactConfig {

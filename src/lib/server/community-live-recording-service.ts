@@ -21,6 +21,7 @@ import {
 } from "@/lib/server/media-asset-service";
 import { mediaStorageAdapter } from "@/lib/server/media-storage";
 import { getCommunityLiveSessionServerSide } from "@/lib/server/community-live-room-service";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 function egressHost(url: string) {
   return url.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
@@ -348,6 +349,38 @@ export async function reconcileCommunityRecordingEgressServerSide(
         },
         { merge: true }
       );
+    if (roomData.communityPostId) {
+      const post = await postRef(
+        session.subAccountId,
+        roomData.groupId,
+        roomData.communityPostId
+      ).get();
+      const authorMemberId = post.data()?.authorMemberId as string | undefined;
+      const member = authorMemberId
+        ? await getAdminDb()
+            .doc(
+              `subAccounts/${session.subAccountId}/members/${authorMemberId}`
+            )
+            .get()
+        : null;
+      const contactId = member?.data()?.contactId as string | undefined;
+      if (contactId) {
+        emitWorkflowEvent({
+          eventType: "community.replay.ready",
+          eventId: `community.replay.ready:${sessionDoc.id}:${asset.id}`,
+          agencyId: session.agencyId,
+          subAccountId: session.subAccountId,
+          contactId,
+          source: "community-recording",
+          payload: {
+            groupId: roomData.groupId,
+            postId: roomData.communityPostId,
+            liveSessionId: sessionDoc.id,
+            replayAssetId: asset.id,
+          },
+        });
+      }
+    }
     return;
   }
   await Promise.all([

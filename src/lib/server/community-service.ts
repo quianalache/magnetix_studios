@@ -998,6 +998,29 @@ export async function setMembershipStatusServerSide(opts: {
   await memRef.update({ status: opts.status });
   if (wasActive && !willActive) {
     await groupRef.update({ memberCount: FieldValue.increment(-1) });
+    const [memberSnap, subSnap] = await Promise.all([
+      getAdminDb()
+        .doc(`subAccounts/${opts.subAccountId}/members/${opts.memberId}`)
+        .get(),
+      getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get(),
+    ]);
+    const contactId = memberSnap.data()?.contactId as string | undefined;
+    const agencyId = subSnap.data()?.agencyId as string | undefined;
+    if (contactId && agencyId) {
+      emitWorkflowEvent({
+        eventType: "community.member.left",
+        eventId: `${opts.groupId}:${opts.memberId}:left:${opts.status}`,
+        agencyId,
+        subAccountId: opts.subAccountId,
+        contactId,
+        source: "community",
+        payload: {
+          groupId: opts.groupId,
+          memberId: opts.memberId,
+          status: opts.status,
+        },
+      });
+    }
   } else if (!wasActive && willActive) {
     await groupRef.update({ memberCount: FieldValue.increment(1) });
   }

@@ -29,6 +29,7 @@ import type {
 } from "@/types/community";
 import type { MediaAttachment } from "@/types/media-attachment";
 import { ownedAttachmentStoragePath } from "@/lib/community/attachment-provenance";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Server-side feed service (Admin SDK). Members are not Firebase users, so the
@@ -42,6 +43,41 @@ function postsCol(saId: string, groupId: string) {
   return getAdminDb().collection(
     `subAccounts/${saId}/communityGroups/${groupId}/posts`
   );
+}
+
+async function emitCommunityActivity(input: {
+  subAccountId: string;
+  agencyId: string;
+  groupId: string;
+  memberId: string;
+  eventType: "community.post.created" | "community.comment.created";
+  entityId: string;
+  postId?: string;
+  parentId?: string | null;
+}) {
+  try {
+    const member = await getAdminDb()
+      .doc(`subAccounts/${input.subAccountId}/members/${input.memberId}`)
+      .get();
+    const contactId = member.data()?.contactId as string | undefined;
+    if (!contactId) return;
+    emitWorkflowEvent({
+      eventType: input.eventType,
+      eventId: `${input.eventType}:${input.entityId}`,
+      agencyId: input.agencyId,
+      subAccountId: input.subAccountId,
+      contactId,
+      source: "community",
+      payload: {
+        groupId: input.groupId,
+        memberId: input.memberId,
+        postId: input.postId ?? input.entityId,
+        parentId: input.parentId ?? null,
+      },
+    });
+  } catch (err) {
+    console.warn("[community-feed] workflow event failed", err);
+  }
 }
 
 /** Exported for the poll-vote route, which needs to denormalize the
@@ -281,6 +317,14 @@ export async function createPostServerSide(
     updatedAt: FieldValue.serverTimestamp(),
   };
   const ref = await postsCol(input.subAccountId, input.groupId).add(doc);
+  void emitCommunityActivity({
+    subAccountId: input.subAccountId,
+    agencyId: input.agencyId,
+    groupId: input.groupId,
+    memberId: input.authorMemberId,
+    eventType: "community.post.created",
+    entityId: ref.id,
+  });
 
   // Points & Rewards — "share_video" OVERRIDES "create_post" (never both):
   // a qualifying video post earns the video amount total, not video-plus-
@@ -634,6 +678,18 @@ export async function createCommentServerSide(opts: {
   batch.set(commentRef, doc);
   batch.update(postRef, { commentCount: FieldValue.increment(1) });
   await batch.commit();
+  void emitCommunityActivity({
+    subAccountId: opts.subAccountId,
+    agencyId: (
+      await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get()
+    ).data()?.agencyId as string,
+    groupId: opts.groupId,
+    memberId: opts.authorMemberId,
+    eventType: "community.comment.created",
+    entityId: commentRef.id,
+    postId: opts.postId,
+    parentId: effectiveParentId,
+  });
 
   // Points & Rewards — a top-level comment (no effective parent) earns
   // "comment_post"; a reply (attaches under an existing comment, per the

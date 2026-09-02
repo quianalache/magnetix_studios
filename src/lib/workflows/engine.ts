@@ -26,6 +26,9 @@ import {
 } from "@/lib/server/deals-service";
 import { enrollInStandaloneCourseServerSide } from "@/lib/server/standalone-course-service";
 import { grantCourseOfferAccessServerSide } from "@/lib/server/course-offer-purchase-service";
+import { updateConversationWorkflowState } from "@/lib/server/conversations-service";
+import { joinGroupServerSide } from "@/lib/server/community-service";
+import { createNotification } from "@/lib/server/notification-service";
 import {
   resolveMergeTags,
   type MergeTagSubject,
@@ -62,6 +65,9 @@ import type {
   CourseConfig,
   OfferAccessConfig,
   StartWorkflowConfig,
+  CommunityAccessConfig,
+  ConversationAssignmentConfig,
+  StopWorkflowConfig,
 } from "@/types/workflows";
 import type { PipelineStageId, DealPriority } from "@/types/deals";
 
@@ -699,6 +705,102 @@ const execStartWorkflow: NodeExecutor = async (ctx) => {
   };
 };
 
+const execGrantCommunityAccess: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as CommunityAccessConfig;
+  const groupId = requiredString(cfg.groupId, "group_id");
+  const memberId = await memberForContact(ctx.subAccountId, ctx.contact.id);
+  const result = await joinGroupServerSide({
+    subAccountId: ctx.subAccountId,
+    agencyId: ctx.agencyId,
+    groupId,
+    memberId,
+  });
+  if (result.status === "payment_required")
+    throw new Error("community_payment_required");
+  return {
+    result: { kind: "next" },
+    log: `community_access_${result.status}`,
+    execution: {
+      status: result.status === "already" ? "skipped" : "success",
+      referenceId: groupId,
+    },
+  };
+};
+
+const execNotifyCommunityMember: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as { title?: string; body?: string };
+  const memberId = await memberForContact(ctx.subAccountId, ctx.contact.id);
+  const member = await getAdminDb()
+    .doc(`subAccounts/${ctx.subAccountId}/members/${memberId}`)
+    .get();
+  const personId = member.data()?.personId as string | undefined;
+  if (!personId) return { result: { kind: "next" }, log: "skipped:no_person" };
+  await createNotification({
+    personId,
+    subAccountId: ctx.subAccountId,
+    eventType: "community.mention",
+    objectType: "community",
+    objectId: null,
+    actorMemberId: memberId,
+    title: cfg.title?.trim() || "Community update",
+    message: cfg.body?.trim() || null,
+    destination: `/community/${ctx.subAccountId}`,
+    sourceObjectId: `${ctx.runId}:${ctx.node.id}`,
+  });
+  return { result: { kind: "next" }, log: "community_member_notified" };
+};
+
+const execConversationAction: NodeExecutor = async (ctx) => {
+  const type = ctx.node.type;
+  const cfg = ctx.node.config as unknown as ConversationAssignmentConfig;
+  const ok = await updateConversationWorkflowState({
+    contactId: ctx.contact.id,
+    subAccountId: ctx.subAccountId,
+    status:
+      type === "close_conversation"
+        ? "closed"
+        : type === "reopen_conversation"
+          ? "open"
+          : undefined,
+    assigneeUid:
+      type === "assign_conversation"
+        ? requiredString(cfg.assigneeUid, "assignee_uid")
+        : undefined,
+  });
+  if (!ok) throw new Error("conversation_not_found");
+  return {
+    result: { kind: "next" },
+    log: `conversation_${type.replace("_conversation", "")}`,
+  };
+};
+
+const execStopWorkflow: NodeExecutor = async (ctx) => {
+  const cfg = ctx.node.config as unknown as StopWorkflowConfig;
+  const targetId = (cfg.workflowId ?? ctx.workflowId).trim();
+  const snap = await getAdminDb()
+    .collection("workflowRuns")
+    .where("subAccountId", "==", ctx.subAccountId)
+    .where("contactId", "==", ctx.contact.id)
+    .where("workflowId", "==", targetId)
+    .get();
+  const active = snap.docs.filter((d) =>
+    ["running", "waiting"].includes((d.data() as WorkflowRunDoc).status)
+  );
+  await Promise.all(
+    active.map((d) =>
+      d.ref.update({
+        status: "exited",
+        waiting: null,
+        currentNodeId: null,
+        stoppedByWorkflowRunId: ctx.runId,
+        stoppedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    )
+  );
+  return { result: { kind: "next" }, log: `workflow_stopped:${active.length}` };
+};
+
 /** Unimplemented node types pass through (no stall) until their slice lands. */
 const execPassThrough: NodeExecutor = async () => ({
   result: { kind: "next" },
@@ -727,6 +829,12 @@ const REGISTRY: Partial<Record<WorkflowNodeType, NodeExecutor>> = {
   grant_offer_access: execGrantOfferAccess,
   enroll_course: execEnrollCourse,
   start_workflow: execStartWorkflow,
+  grant_community_access: execGrantCommunityAccess,
+  notify_community_member: execNotifyCommunityMember,
+  assign_conversation: execConversationAction,
+  close_conversation: execConversationAction,
+  reopen_conversation: execConversationAction,
+  stop_workflow: execStopWorkflow,
 };
 
 /* ----------------------------- Dispatch -------------------------------- */
@@ -831,6 +939,26 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
         if (
           prior.docs.some(
             (d) => (d.data() as WorkflowRunDoc).context?.eventId === eventId
+          )
+        )
+          continue;
+      }
+
+      const deduplicationKey =
+        typeof input.context?.deduplicationKey === "string"
+          ? input.context.deduplicationKey
+          : null;
+      if (deduplicationKey) {
+        const prior = await db
+          .collection("workflowRuns")
+          .where("workflowId", "==", wf.id)
+          .where("contactId", "==", contact.id)
+          .get();
+        if (
+          prior.docs.some(
+            (d) =>
+              (d.data() as WorkflowRunDoc).context?.deduplicationKey ===
+              deduplicationKey
           )
         )
           continue;

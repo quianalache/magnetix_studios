@@ -94,6 +94,34 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "offer.access.revoked",
   "community.member.joined",
   "community.member.approved",
+  "contact.field.changed",
+  "contact.source.changed",
+  "deal.amount.changed",
+  "deal.updated",
+  "payment.succeeded",
+  "payment.failed",
+  "subscription.created",
+  "subscription.renewed",
+  "subscription.cancelled",
+  "subscription.paused",
+  "refund.issued",
+  "community.member.left",
+  "community.post.created",
+  "community.comment.created",
+  "community.event.started",
+  "community.event.ended",
+  "community.live.ended",
+  "community.replay.ready",
+  "message.sent",
+  "conversation.assigned",
+  "conversation.closed",
+  "conversation.reopened",
+  "email.delivered",
+  "email.opened",
+  "email.clicked",
+  "email.bounced",
+  "email.complained",
+  "scheduled.datetime",
   "workflow.completed",
   "workflow.failed",
 ];
@@ -104,6 +132,54 @@ const MESSAGE_CHANNELS: { value: string; label: string }[] = [
   { value: "messenger", label: "Facebook Messenger" },
   { value: "instagram", label: "Instagram" },
 ];
+
+function triggerCategory(type: WorkflowTriggerType): string {
+  if (type.startsWith("contact.")) return "Contacts & CRM";
+  if (type.startsWith("task.")) return "Tasks";
+  if (type.startsWith("deal.") || type.startsWith("pipeline."))
+    return "Pipelines & Deals";
+  if (type.startsWith("booking.")) return "Bookings";
+  if (
+    type.startsWith("payment.") ||
+    type.startsWith("subscription.") ||
+    type === "refund.issued"
+  )
+    return "Payments & Subscriptions";
+  if (type.startsWith("course.") || type.startsWith("offer."))
+    return "Courses & Offers";
+  if (type.startsWith("community.")) return "Community";
+  if (
+    type.startsWith("conversation.") ||
+    type === "message.sent" ||
+    type === "message.received"
+  )
+    return "Conversations";
+  if (type.startsWith("email.")) return "Email";
+  if (type.startsWith("workflow.")) return "Workflows";
+  if (type.startsWith("scheduled.")) return "Date & Time";
+  return "Forms & Quotes";
+}
+
+function actionCategory(type: WorkflowNodeType): string {
+  if (
+    type.startsWith("send_") ||
+    type === "whatsapp_template" ||
+    type === "notify"
+  )
+    return "Messaging";
+  if (type.includes("contact")) return "Contacts & CRM";
+  if (type.includes("task")) return "Tasks";
+  if (type.includes("deal") || type === "move_stage")
+    return "Pipelines & Deals";
+  if (type.includes("course") || type.includes("offer"))
+    return "Courses & Offers";
+  if (type.includes("community")) return "Community";
+  if (type.includes("conversation")) return "Conversations";
+  if (type.includes("workflow")) return "Workflow Control";
+  if (type === "wait" || type === "wait_for_reply" || type === "if_else")
+    return "Logic & Timing";
+  return "Utilities";
+}
 
 const ICONS: Record<WorkflowNodeType, typeof Mail> = {
   send_email: Mail,
@@ -128,6 +204,14 @@ const ICONS: Record<WorkflowNodeType, typeof Mail> = {
   grant_offer_access: Zap,
   enroll_course: Zap,
   start_workflow: Zap,
+  revoke_offer_access: Zap,
+  remove_course_access: Zap,
+  grant_community_access: Zap,
+  notify_community_member: Bell,
+  assign_conversation: MessageSquare,
+  close_conversation: MessageSquare,
+  reopen_conversation: MessageSquare,
+  stop_workflow: Zap,
 };
 
 export interface BuilderInitial {
@@ -221,6 +305,7 @@ export function WorkflowBuilder({
   const [editing, setEditing] = useState<BuilderStep | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [triggerQuery, setTriggerQuery] = useState("");
 
   /** Recursively replace a step's config by id. */
   function saveConfig(id: string, config: Record<string, unknown>) {
@@ -338,12 +423,34 @@ export function WorkflowBuilder({
             }
             className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
           >
-            {TRIGGER_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TRIGGER_LABELS[t]}
-              </option>
-            ))}
+            {Array.from(new Set(TRIGGER_TYPES.map(triggerCategory))).map(
+              (group) => {
+                const options = TRIGGER_TYPES.filter(
+                  (t) =>
+                    triggerCategory(t) === group &&
+                    TRIGGER_LABELS[t]
+                      .toLowerCase()
+                      .includes(triggerQuery.toLowerCase())
+                );
+                return options.length ? (
+                  <optgroup key={group} label={group}>
+                    {options.map((t) => (
+                      <option key={t} value={t}>
+                        {TRIGGER_LABELS[t]}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null;
+              }
+            )}
           </select>
+          <Input
+            value={triggerQuery}
+            onChange={(e) => setTriggerQuery(e.target.value)}
+            className="mt-2"
+            placeholder="Search triggers…"
+            aria-label="Search workflow triggers"
+          />
 
           {trigger.type === "form.submitted" && (
             <select
@@ -420,6 +527,13 @@ export function WorkflowBuilder({
               "offer.access.revoked",
               "community.member.joined",
               "community.member.approved",
+              "community.member.left",
+              "community.post.created",
+              "community.comment.created",
+              "community.event.started",
+              "community.event.ended",
+              "community.live.ended",
+              "community.replay.ready",
             ] as WorkflowTriggerType[]
           ).includes(trigger.type) && (
             <Input
@@ -759,6 +873,7 @@ function StepCard({
 }
 
 function AddMenu({ onAdd }: { onAdd: (t: WorkflowNodeType) => void }) {
+  const [query, setQuery] = useState("");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -772,13 +887,36 @@ function AddMenu({ onAdd }: { onAdd: (t: WorkflowNodeType) => void }) {
         align="center"
         className="max-h-80 w-56 overflow-y-auto"
       >
-        {ADDABLE_TYPES.map((t) => {
-          const Icon = ICONS[t];
+        <div className="p-2" onKeyDown={(e) => e.stopPropagation()}>
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search actions…"
+            aria-label="Search workflow actions"
+          />
+        </div>
+        {Array.from(new Set(ADDABLE_TYPES.map(actionCategory))).map((group) => {
+          const options = ADDABLE_TYPES.filter(
+            (t) =>
+              actionCategory(t) === group &&
+              NODE_LABELS[t].toLowerCase().includes(query.toLowerCase())
+          );
+          if (!options.length) return null;
           return (
-            <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
-              <Icon className="mr-2 h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap">{NODE_LABELS[t]}</span>
-            </DropdownMenuItem>
+            <div key={group}>
+              <div className="text-muted-foreground px-2 py-1 text-[10px] font-semibold tracking-wide uppercase">
+                {group}
+              </div>
+              {options.map((t) => {
+                const Icon = ICONS[t];
+                return (
+                  <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
+                    <Icon className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap">{NODE_LABELS[t]}</span>
+                  </DropdownMenuItem>
+                );
+              })}
+            </div>
           );
         })}
       </DropdownMenuContent>

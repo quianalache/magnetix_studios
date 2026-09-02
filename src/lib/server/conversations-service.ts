@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 import {
   fireWorkflowTrigger,
   resumeWaitingRunsOnReply,
@@ -49,10 +50,12 @@ export interface UpsertConversationInput {
    * clears any pending AI draft. The bot's own replies pass this false.
    */
   pauseBot?: boolean;
+  /** Durable provider/message-row id; required for message.sent automation. */
+  messageId?: string;
 }
 
 export async function upsertConversationForMessage(
-  input: UpsertConversationInput,
+  input: UpsertConversationInput
 ): Promise<void> {
   try {
     const db = getAdminDb();
@@ -144,9 +147,67 @@ export async function upsertConversationForMessage(
         context: { channel: input.channel },
       });
     }
+    if (input.direction === "outbound" && input.messageId) {
+      emitWorkflowEvent({
+        eventType: "message.sent",
+        eventId: `message:${input.messageId}`,
+        deduplicationKey: `message:${input.messageId}`,
+        agencyId: input.agencyId,
+        subAccountId: input.subAccountId,
+        contactId: input.contactId,
+        source: "conversations",
+        payload: { messageId: input.messageId, channel: input.channel },
+      });
+    }
   } catch (err) {
     console.warn("[conversations/upsert] failed", err);
   }
+}
+
+/** Tenant-checked conversation lifecycle mutation used by workflow actions and
+ * the inbox. Emits only after the state write and never exposes message text. */
+export async function updateConversationWorkflowState(input: {
+  contactId: string;
+  subAccountId: string;
+  status?: "open" | "closed";
+  assigneeUid?: string | null;
+}): Promise<boolean> {
+  const db = getAdminDb();
+  const ref = db.doc(`conversations/${input.contactId}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data()?.subAccountId !== input.subAccountId)
+    return false;
+  const previous = snap.data() ?? {};
+  const patch: Record<string, unknown> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (input.status !== undefined) patch.status = input.status;
+  if (input.assigneeUid !== undefined) patch.assigneeUid = input.assigneeUid;
+  await ref.set(patch, { merge: true });
+  const agencyId = previous.agencyId as string | undefined;
+  const eventType =
+    input.status === "closed"
+      ? "conversation.closed"
+      : input.status === "open" && previous.status === "closed"
+        ? "conversation.reopened"
+        : input.assigneeUid !== undefined
+          ? "conversation.assigned"
+          : null;
+  if (agencyId && eventType) {
+    emitWorkflowEvent({
+      eventType,
+      eventId: `conversation:${input.contactId}:${eventType}:${Date.now()}`,
+      agencyId,
+      subAccountId: input.subAccountId,
+      contactId: input.contactId,
+      source: "conversations",
+      payload: {
+        assignedToUid: input.assigneeUid ?? previous.assigneeUid ?? null,
+        status: input.status ?? previous.status ?? "open",
+      },
+    });
+  }
+  return true;
 }
 
 /**
@@ -155,7 +216,7 @@ export async function upsertConversationForMessage(
  * conversations keep auto-replying exactly as before.
  */
 export async function getConversationControls(
-  contactId: string,
+  contactId: string
 ): Promise<{ botMode: ConversationBotMode; botPausedUntilMs: number | null }> {
   try {
     const snap = await getAdminDb()
@@ -165,7 +226,10 @@ export async function getConversationControls(
     if (!snap.exists) return { botMode: "auto", botPausedUntilMs: null };
     const d = snap.data() ?? {};
     const botMode = (d.botMode as ConversationBotMode) ?? "auto";
-    const bp = d.botPausedUntil as { toMillis?: () => number } | null | undefined;
+    const bp = d.botPausedUntil as
+      | { toMillis?: () => number }
+      | null
+      | undefined;
     const botPausedUntilMs =
       bp && typeof bp.toMillis === "function" ? bp.toMillis() : null;
     return { botMode, botPausedUntilMs };
@@ -211,7 +275,7 @@ export async function setConversationDraft(input: {
           },
           updatedAt: FieldValue.serverTimestamp(),
         },
-        { merge: true },
+        { merge: true }
       );
   } catch (err) {
     console.warn("[conversations/draft] write failed", err);

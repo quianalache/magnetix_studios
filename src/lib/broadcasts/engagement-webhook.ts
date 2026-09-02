@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { BroadcastSendDoc, SendEngagement } from "@/types";
+import { emitWorkflowEvent } from "@/lib/workflows/events";
 
 /**
  * Handles the Resend "engagement" event family — delivered/opened/clicked/
@@ -90,7 +91,9 @@ export async function handleBroadcastEngagementEvent(event: {
           "engagement.delivered": true,
           "engagement.deliveredAt": FieldValue.serverTimestamp(),
         });
-        tx.update(broadcastRef, { "totals.delivered": FieldValue.increment(1) });
+        tx.update(broadcastRef, {
+          "totals.delivered": FieldValue.increment(1),
+        });
         return;
       }
       case "email.opened": {
@@ -113,7 +116,9 @@ export async function handleBroadcastEngagementEvent(event: {
         if (!engagement?.clicked) {
           updates["engagement.clicked"] = true;
           updates["engagement.clickedAt"] = FieldValue.serverTimestamp();
-          tx.update(broadcastRef, { "totals.clicked": FieldValue.increment(1) });
+          tx.update(broadcastRef, {
+            "totals.clicked": FieldValue.increment(1),
+          });
         }
         tx.update(sendRef, updates);
         return;
@@ -147,7 +152,9 @@ export async function handleBroadcastEngagementEvent(event: {
           "engagement.complained": true,
           "engagement.complainedAt": FieldValue.serverTimestamp(),
         });
-        tx.update(broadcastRef, { "totals.complained": FieldValue.increment(1) });
+        tx.update(broadcastRef, {
+          "totals.complained": FieldValue.increment(1),
+        });
         contactIdToSuppress = send.contactId;
         suppressReason = "spam complaint";
         return;
@@ -156,6 +163,33 @@ export async function handleBroadcastEngagementEvent(event: {
         return;
     }
   });
+
+  const broadcast = await broadcastRef.get();
+  const broadcastData = broadcast.data() ?? {};
+  const subAccountId = broadcastData.subAccountId as string | undefined;
+  const agencyId = broadcastData.agencyId as string | undefined;
+  const contactId = (lookup.docs[0].data() as BroadcastSendDoc).contactId;
+  const workflowType = event.type as BroadcastEngagementEventType;
+  if (subAccountId && agencyId && contactId) {
+    emitWorkflowEvent({
+      eventType: workflowType,
+      eventId: `${emailId}:${workflowType}`,
+      agencyId,
+      subAccountId,
+      contactId,
+      source: "resend",
+      occurredAt: event.data.click?.timestamp,
+      deduplicationKey: `${emailId}:${workflowType}`,
+      payload: {
+        emailId,
+        broadcastId: broadcastRef.id,
+        destination:
+          workflowType === "email.clicked"
+            ? (event.data.click?.link ?? null)
+            : null,
+      },
+    });
+  }
 
   if (contactIdToSuppress && suppressReason) {
     const contactRef = db.collection("contacts").doc(contactIdToSuppress);
@@ -177,7 +211,7 @@ export async function handleBroadcastEngagementEvent(event: {
         deliverabilitySuppressedAt: FieldValue.serverTimestamp(),
       })
       .catch((err) =>
-        console.warn("[broadcasts/engagement] opt-out write failed", err),
+        console.warn("[broadcasts/engagement] opt-out write failed", err)
       );
     await contactRef
       .collection("activities")
@@ -189,7 +223,7 @@ export async function handleBroadcastEngagementEvent(event: {
         createdAt: FieldValue.serverTimestamp(),
       })
       .catch((err) =>
-        console.warn("[broadcasts/engagement] activity write failed", err),
+        console.warn("[broadcasts/engagement] activity write failed", err)
       );
   }
 }

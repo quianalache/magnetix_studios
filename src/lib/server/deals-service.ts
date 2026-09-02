@@ -346,6 +346,47 @@ export async function updateDealServerSide(opts: {
     events,
   });
 
+  if (mode === "live" && data.contactId) {
+    const stamp =
+      typeof (data.updatedAt as { toMillis?: () => number } | undefined)
+        ?.toMillis === "function"
+        ? (data.updatedAt as { toMillis: () => number }).toMillis()
+        : Date.now();
+    emitWorkflowEvent({
+      eventType: "deal.updated",
+      eventId: `${fresh.id}:updated:${stamp}`,
+      agencyId: existing.agencyId as string,
+      subAccountId: existing.subAccountId as string,
+      contactId: data.contactId as string,
+      source: "deals",
+      payload: {
+        dealId: fresh.id,
+        pipelineId: data.pipelineId ?? null,
+        stageId: data.stageId ?? null,
+        amount: data.value ?? null,
+        currency: data.currency ?? null,
+      },
+    });
+    if (patch.value !== undefined && patch.value !== existing.value) {
+      emitWorkflowEvent({
+        eventType: "deal.amount.changed",
+        eventId: `${fresh.id}:amount:${stamp}`,
+        agencyId: existing.agencyId as string,
+        subAccountId: existing.subAccountId as string,
+        contactId: data.contactId as string,
+        source: "deals",
+        payload: {
+          dealId: fresh.id,
+          pipelineId: data.pipelineId ?? null,
+          stageId: data.stageId ?? null,
+          previousAmount: existing.value ?? null,
+          newAmount: data.value ?? null,
+          currency: data.currency ?? null,
+        },
+      });
+    }
+  }
+
   if (
     mode === "live" &&
     data.contactId &&
