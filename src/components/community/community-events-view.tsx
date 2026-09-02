@@ -94,6 +94,17 @@ function timezoneLabel(tz: string) {
     .find((p) => p.type === "timeZoneName")?.value;
   return `${tz}${offset ? ` (${offset})` : ""}`;
 }
+function dateInTimezone(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(value);
+  const get = (type: "year" | "month" | "day") =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return new Date(get("year"), get("month") - 1, get("day"));
+}
 
 export function CommunityEventsView({
   saId,
@@ -146,6 +157,10 @@ export function CommunityEventsView({
   const detailHref = (id: string) => `${routeBase}/${id}`;
   const recordingsHref = `${routeBase}/recordings`;
   const now = Date.now();
+  const calendarToday = useMemo(
+    () => dateInTimezone(new Date(), draft.timezone),
+    [draft.timezone]
+  );
   const upcoming = useMemo(
     () =>
       events
@@ -300,70 +315,6 @@ export function CommunityEventsView({
             backgroundColor: "var(--community-surface)",
           }}
         >
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1)
-                )
-              }
-              aria-label="Previous month"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <p className="text-sm font-semibold">
-              {new Intl.DateTimeFormat(undefined, {
-                month: "long",
-                year: "numeric",
-              }).format(cursor)}
-            </p>
-            <button
-              onClick={() =>
-                setCursor(
-                  new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
-                )
-              }
-              aria-label="Next month"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-          <div
-            className="grid grid-cols-7 gap-1 text-center text-[10px]"
-            style={{ color: "var(--community-text-muted)" }}
-          >
-            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-              <span key={`${d}${i}`}>{d}</span>
-            ))}
-            {Array.from({ length: 42 }, (_, i) =>
-              addDays(
-                new Date(cursor.getFullYear(), cursor.getMonth(), 1),
-                -new Date(cursor.getFullYear(), cursor.getMonth(), 1).getDay() +
-                  i
-              )
-            ).map((d) => (
-              <button
-                key={d.toISOString()}
-                onClick={() => {
-                  setCursor(d);
-                  setView("day");
-                }}
-                className="aspect-square rounded-full text-xs"
-                style={
-                  sameDay(d, cursor)
-                    ? {
-                        backgroundColor: "var(--community-primary)",
-                        color: "white",
-                      }
-                    : d.getMonth() === cursor.getMonth()
-                      ? { color: "var(--community-text)" }
-                      : { color: "var(--community-text-muted)" }
-                }
-              >
-                {d.getDate()}
-              </button>
-            ))}
-          </div>
           <div
             className="grid grid-cols-2 rounded-lg p-1"
             style={{ backgroundColor: "var(--community-bg)" }}
@@ -443,7 +394,7 @@ export function CommunityEventsView({
                 <ChevronRight className="h-4 w-4" />
               </button>
               <button
-                onClick={() => setCursor(dayStart(new Date()))}
+                onClick={() => setCursor(calendarToday)}
                 className="rounded-md border px-2 py-1 text-xs"
                 style={{ borderColor: "var(--community-border)" }}
               >
@@ -510,6 +461,7 @@ export function CommunityEventsView({
               const same = events.filter(
                 (e) => e.startAt && sameDay(new Date(e.startAt), d)
               );
+              const today = sameDay(d, calendarToday);
               return (
                 <div
                   key={d.toISOString()}
@@ -526,18 +478,43 @@ export function CommunityEventsView({
                       setView("day");
                     }}
                     className="mb-2 text-xs font-medium"
+                    aria-current={today ? "date" : undefined}
                     style={
                       d.getMonth() === cursor.getMonth() || view !== "month"
                         ? { color: "var(--community-text)" }
                         : { color: "var(--community-text-muted)" }
                     }
                   >
-                    {view === "month"
-                      ? d.getDate()
-                      : new Intl.DateTimeFormat(undefined, {
-                          weekday: "short",
-                          day: "numeric",
-                        }).format(d)}
+                    <span
+                      className={
+                        view === "month" && today
+                          ? "inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1"
+                          : today
+                            ? "font-semibold"
+                            : undefined
+                      }
+                      style={
+                        today
+                          ? {
+                              backgroundColor:
+                                view === "month"
+                                  ? "var(--community-primary)"
+                                  : undefined,
+                              color:
+                                view === "month"
+                                  ? "white"
+                                  : "var(--community-primary)",
+                            }
+                          : undefined
+                      }
+                    >
+                      {view === "month"
+                        ? d.getDate()
+                        : new Intl.DateTimeFormat(undefined, {
+                            weekday: "short",
+                            day: "numeric",
+                          }).format(d)}
+                    </span>
                   </button>
                   <div className="space-y-1">
                     {same.map((e) => (
