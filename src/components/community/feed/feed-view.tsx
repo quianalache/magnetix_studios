@@ -483,7 +483,7 @@ export function FeedView({
             : undefined
         }
       >
-        {p.postType === "live" && (
+        {p.postType === "live" && p.liveStatus === "live" && (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm">
             <span className="font-semibold text-red-700">
               {p.liveStatus === "live" ? "LIVE" : "Live ended"} ·{" "}
