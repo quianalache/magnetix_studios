@@ -12,7 +12,9 @@ import type { BusinessBrain } from "@/types/business-brain";
 import type { YtcsVideoProject, YtcsVoiceNoteRef } from "@/types/ytcs";
 import type { VoiceNote } from "@/types/media-attachment";
 
-const SCRIPT_OUTPUT_TYPES = [
+/** Exported so YTCS Settings can reuse the same 4 real values for its
+ *  Default Script Output Type control — one source of truth. */
+export const SCRIPT_OUTPUT_TYPES = [
   "Full Script",
   "Structured Recording Draft",
   "Talking Point Outline",

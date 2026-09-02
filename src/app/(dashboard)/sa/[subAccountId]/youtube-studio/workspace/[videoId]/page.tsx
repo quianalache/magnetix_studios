@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Lock } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { InputStep } from "@/components/ytcs/input-step";
@@ -15,20 +15,12 @@ import { PublishStep } from "@/components/ytcs/publish-step";
 import { YTCS_STARTING_POINTS, YTCS_STEPS, type YtcsStartingPointType, type YtcsVideoProject } from "@/types/ytcs";
 import type { BusinessBrain } from "@/types/business-brain";
 
-const BUILT_STEPS = new Set([
-  "Input",
-  "Deep Dive",
-  "Script Prompt Builder",
-  "Create Video",
-  "Titles",
-  "Publish",
-]);
-
 /**
  * Video Workspace project detail — the 6-step pipeline shell (migration
- * spec §6/§9-§13). All six steps are now built: Input/Deep Dive/Script
+ * spec §6/§9-§13), fully built end to end: Input/Deep Dive/Script
  * Prompt Builder (Phase 1+2), Create Video (Phase 3A), Titles/Publish
- * (Phase 3B).
+ * (Phase 3B). Every tab in `YTCS_STEPS` is real and clickable — no
+ * locked/"coming in a later phase" state remains.
  */
 export default function VideoProjectPage() {
   const { subAccountId, saPath } = useSubAccount();
@@ -46,8 +38,8 @@ export default function VideoProjectPage() {
   // migrated project sitting at "Deep Dive" or later must still let its
   // Input step be opened and edited via the Input tab; conflating "tab
   // being viewed" with "project's persisted step" would hide that
-  // project's Input data behind the "coming in a later phase" stub for
-  // every one of the 14 real projects not currently on Input.
+  // project's Input data behind another tab for every one of the 14
+  // real projects not currently on Input.
   const [viewingStep, setViewingStep] = useState<string>("Input");
 
   async function load() {
@@ -154,24 +146,17 @@ export default function VideoProjectPage() {
 
       <div className="flex flex-wrap gap-1 overflow-x-auto rounded-xl border bg-muted/30 p-1">
         {YTCS_STEPS.map((step) => {
-          const isBuilt = BUILT_STEPS.has(step);
           const isActive = viewingStep === step;
           return (
             <button
               key={step}
               type="button"
-              disabled={!isBuilt}
-              onClick={() => isBuilt && setViewingStep(step)}
-              title={isBuilt ? step : `${step} — coming in a later phase`}
+              onClick={() => setViewingStep(step)}
+              title={step}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                isActive
-                  ? "bg-background shadow-sm"
-                  : isBuilt
-                    ? "text-muted-foreground hover:text-foreground"
-                    : "cursor-not-allowed text-muted-foreground/50"
+                isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {!isBuilt && <Lock className="h-3 w-3" />}
               {step}
             </button>
           );
@@ -234,17 +219,8 @@ export default function VideoProjectPage() {
           onGenerate={generateTitlePrompt}
           onContinue={() => setViewingStep("Publish")}
         />
-      ) : viewingStep === "Publish" ? (
-        <PublishStep project={project} onSave={saveProject} onMarkPublished={markPublished} />
       ) : (
-        <div className="rounded-2xl border border-dashed p-8 text-center">
-          <Lock className="mx-auto h-5 w-5 text-muted-foreground" />
-          <p className="mt-2 text-sm font-medium">{viewingStep} is coming in a later phase</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            This project&apos;s data for this step is preserved from the original migration
-            and hasn&apos;t been lost — the editor for it just isn&apos;t built yet.
-          </p>
-        </div>
+        <PublishStep project={project} onSave={saveProject} onMarkPublished={markPublished} />
       )}
     </div>
   );
