@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Check, Copy, Loader2, RefreshCw, Save } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Loader2,
+  RefreshCw,
+  Save,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -22,12 +32,18 @@ export const SCRIPT_OUTPUT_TYPES = [
 ];
 
 /**
- * Step 3: Script Prompt Builder. Builds a copy-paste AI prompt — never
- * generates the script in-app (migration spec §9). "Generate Script
- * Prompt" calls the deterministic server route (no AI model call);
- * regenerating only ever touches `generatedScriptPrompt`, never
- * `compiledScript` (Final Script Draft) — enforced server-side too, but
- * this UI never even sends compiledScript in that request.
+ * Step 3: Script Prompt Builder. The deterministic prompt assembly
+ * (regular YouTube Video / Product Showcase / Signature Offer Video,
+ * Business Brain context, selected Stories + Proof / Frameworks,
+ * Script Output Type, Depth Preference — migration spec §9) is
+ * unchanged and still the orchestration layer. What changed (in-app
+ * script generation enhancement): the primary action is now "Generate
+ * Script" — the assembled prompt is sent to the model server-side and
+ * the result lands in `generatedScript`, reviewable/editable, never
+ * auto-written into `compiledScript` (Final Script Draft). The original
+ * copy-paste prompt workflow (View Prompt / Copy Prompt / paste-your-
+ * own-script) still works exactly as before — it's now a secondary,
+ * power-user path, not removed.
  */
 export function ScriptPromptBuilderStep({
   subAccountId,
@@ -49,14 +65,24 @@ export function ScriptPromptBuilderStep({
   const [extraNotes, setExtraNotes] = useState(project.scriptBuilderExtraNotes ?? "");
   const [scriptOutputType, setScriptOutputType] = useState(project.scriptOutputType || "Structured Recording Draft");
   const [depthPreference] = useState("Detailed"); // only real/confirmed value — see Phase 2 addendum
-  const [generating, setGenerating] = useState(false);
   const [savingIngredients, setSavingIngredients] = useState(false);
-  const [copied, setCopied] = useState(false);
+
+  const [generatingScript, setGeneratingScript] = useState(false);
+  const [generatedScript, setGeneratedScript] = useState(project.generatedScript ?? "");
+  const [savingGeneratedScript, setSavingGeneratedScript] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [applyingToFinal, setApplyingToFinal] = useState(false);
+
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
   const [finalScript, setFinalScript] = useState(project.compiledScript ?? "");
   const [savingFinal, setSavingFinal] = useState(false);
 
   useEffect(() => {
     setFinalScript(project.compiledScript ?? "");
+    setGeneratedScript(project.generatedScript ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
@@ -89,8 +115,82 @@ export function ScriptPromptBuilderStep({
     }
   }
 
+  /** Primary action. Saves the current ingredients first (so the
+   *  server-side prompt assembly reflects what's on screen), then asks
+   *  the model to write the script. A failed call never touches the
+   *  previous `generatedScript` — this only updates local state (and
+   *  therefore the textarea) when the request actually succeeds. */
+  async function generateScript() {
+    setGeneratingScript(true);
+    try {
+      await saveIngredients();
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/ytcs/videos/${project.id}/generate-script`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't generate the script");
+      setGeneratedScript(data.project?.generatedScript ?? "");
+      if (data.truncated) {
+        toast.warning("Script generated, but it may be incomplete — it reached the output limit.");
+      } else {
+        toast.success("Script generated.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't generate the script. Your previous script (if any) is unchanged.");
+    } finally {
+      setGeneratingScript(false);
+    }
+  }
+
+  async function saveGeneratedScriptEdits() {
+    setSavingGeneratedScript(true);
+    try {
+      await onSave({ generatedScript });
+      toast.success("Generated Script saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setSavingGeneratedScript(false);
+    }
+  }
+
+  async function copyGeneratedScript() {
+    if (!generatedScript) return;
+    try {
+      await navigator.clipboard.writeText(generatedScript);
+      setCopiedScript(true);
+      setTimeout(() => setCopiedScript(false), 2000);
+    } catch {
+      toast.error("Couldn't copy — select and copy the text manually.");
+    }
+  }
+
+  /** Explicit, never-silent replace of Final Script Draft. */
+  async function useAsFinalScriptDraft() {
+    if (!generatedScript.trim()) return;
+    if (
+      finalScript.trim() &&
+      !confirm("You already have a Final Script Draft. Replace it with the Generated Script?")
+    ) {
+      return;
+    }
+    setApplyingToFinal(true);
+    try {
+      await onSave({ compiledScript: generatedScript });
+      setFinalScript(generatedScript);
+      toast.success("Final Script Draft updated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update the Final Script Draft.");
+    } finally {
+      setApplyingToFinal(false);
+    }
+  }
+
+  /** Secondary/power-user path — unchanged from before generation
+   *  existed: deterministic prompt assembly only, no model call. */
   async function generatePrompt() {
-    setGenerating(true);
+    setGeneratingPrompt(true);
     try {
       await saveIngredients();
       const res = await fetch(
@@ -99,11 +199,11 @@ export function ScriptPromptBuilderStep({
       );
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't generate prompt");
-      toast.success("Script Prompt Built — your custom script prompt is ready to copy.");
+      toast.success("Script Prompt Built — ready to copy.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't generate prompt");
     } finally {
-      setGenerating(false);
+      setGeneratingPrompt(false);
     }
   }
 
@@ -111,8 +211,8 @@ export function ScriptPromptBuilderStep({
     if (!project.generatedScriptPrompt) return;
     try {
       await navigator.clipboard.writeText(project.generatedScriptPrompt);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
     } catch {
       toast.error("Couldn't copy — select and copy the text manually.");
     }
@@ -146,13 +246,16 @@ export function ScriptPromptBuilderStep({
     }
   }
 
+  const meta = project.generatedScriptMeta;
+  const showTruncationWarning = !!meta?.truncated && generatedScript === (project.generatedScript ?? "");
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-base font-semibold">Step 3: Script Prompt Builder</h2>
         <p className="text-sm text-muted-foreground">
-          Build a strong copy-and-paste prompt for ChatGPT, Claude, or your AI tool of
-          choice. This section builds the prompt, not the whole script.
+          Generate your script right here, built from your Business Brain and everything
+          you&apos;ve saved so far. Prefer your own AI tool? The prompt is still available below.
         </p>
       </div>
 
@@ -161,7 +264,7 @@ export function ScriptPromptBuilderStep({
         <p className="mt-1 text-xs text-muted-foreground">
           The studio automatically includes your Audience and Brand Voice when
           available. Choose stories, frameworks, or extra notes to make the generated
-          prompt stronger.
+          script stronger.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -218,8 +321,8 @@ export function ScriptPromptBuilderStep({
         <div className="mt-4 space-y-1.5">
           <Label htmlFor="extra-notes">Extra Script Notes</Label>
           <p className="text-xs text-muted-foreground">
-            High-priority creator direction — add anything the generated prompt should
-            emphasize, include, avoid, or remember.
+            High-priority creator direction — add anything the script should emphasize,
+            include, avoid, or remember.
           </p>
           <Textarea
             id="extra-notes"
@@ -245,7 +348,7 @@ export function ScriptPromptBuilderStep({
 
       <div className="rounded-2xl border bg-card p-4">
         <h3 className="text-sm font-semibold">Script Output Settings</h3>
-        <p className="mt-1 text-xs text-muted-foreground">Tailor the prompt to get the right kind of draft.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Tailor the script to the right kind of draft.</p>
 
         <div className="mt-3 space-y-1.5">
           <Label>Script Output Type</Label>
@@ -277,34 +380,119 @@ export function ScriptPromptBuilderStep({
         </div>
       </div>
 
+      {/* Primary action */}
       <div className="flex justify-center">
-        <Button type="button" onClick={generatePrompt} disabled={generating}>
-          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {project.generatedScriptPrompt ? "Regenerate this prompt" : "Generate Script Prompt"}
+        <Button type="button" size="lg" onClick={generateScript} disabled={generatingScript}>
+          {generatingScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {generatingScript ? "Generating…" : generatedScript ? "Regenerate Script" : "Generate Script"}
         </Button>
       </div>
 
-      {project.generatedScriptPrompt && (
-        <div className="space-y-2">
+      {(generatedScript || generatingScript) && (
+        <div className="rounded-2xl border bg-card p-4">
           <div className="flex items-center justify-between">
-            <Label>Generated Script Prompt</Label>
-            <Button type="button" size="sm" variant="outline" onClick={copyPrompt}>
-              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? "Copied" : "Copy Prompt"}
-            </Button>
+            <h3 className="text-sm font-semibold">Generated Script</h3>
+            {generatedScript && (
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={copyGeneratedScript}>
+                  {copiedScript ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedScript ? "Copied" : "Copy"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={generateScript} disabled={generatingScript}>
+                  {generatingScript ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  Regenerate
+                </Button>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Copy this into ChatGPT, Claude, or your preferred AI tool.
-          </p>
-          <Textarea value={project.generatedScriptPrompt} readOnly rows={12} className="font-mono text-xs" />
+
+          {showTruncationWarning && (
+            <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>This script may be incomplete because the generation reached its output limit.</p>
+            </div>
+          )}
+
+          {generatingScript && !generatedScript ? (
+            <div className="mt-3 flex items-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Writing your script…
+            </div>
+          ) : (
+            <>
+              <Textarea
+                value={generatedScript}
+                onChange={(e) => setGeneratedScript(e.target.value)}
+                rows={16}
+                className="mt-3"
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={saveGeneratedScriptEdits}
+                  disabled={savingGeneratedScript}
+                >
+                  {savingGeneratedScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save Edits
+                </Button>
+                <Button type="button" size="sm" onClick={useAsFinalScriptDraft} disabled={applyingToFinal}>
+                  {applyingToFinal ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Use as Final Script Draft
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
+      {/* Secondary / power-user path — unchanged behavior, just demoted */}
+      <div className="rounded-2xl border border-dashed p-4">
+        <button
+          type="button"
+          onClick={() => setPromptOpen((v) => !v)}
+          className="flex w-full items-center justify-between text-left"
+        >
+          <span className="text-sm font-medium text-muted-foreground">
+            Prefer your own AI tool? View or copy the prompt instead.
+          </span>
+          {promptOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </button>
+
+        {promptOpen && (
+          <div className="mt-4 space-y-3">
+            <div className="flex justify-center">
+              <Button type="button" variant="outline" onClick={generatePrompt} disabled={generatingPrompt}>
+                {generatingPrompt ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {project.generatedScriptPrompt ? "Regenerate this prompt" : "Build Script Prompt"}
+              </Button>
+            </div>
+
+            {project.generatedScriptPrompt && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Generated Script Prompt</Label>
+                  <Button type="button" size="sm" variant="outline" onClick={copyPrompt}>
+                    {copiedPrompt ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedPrompt ? "Copied" : "Copy Prompt"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Copy this into ChatGPT, Claude, or your preferred AI tool.
+                </p>
+                <Textarea value={project.generatedScriptPrompt} readOnly rows={12} className="font-mono text-xs" />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2 border-t pt-4">
-        <Label htmlFor="final-script">Save Final Script</Label>
+        <Label htmlFor="final-script">Final Script Draft</Label>
         <p className="text-xs text-muted-foreground">
-          Paste your finished script here to keep it with the project. This is never
-          overwritten by regenerating the prompt above.
+          This is the script that moves on to Create Video, Titles, and Publish. Paste
+          your own finished script here, or use &quot;Use as Final Script Draft&quot; above.
+          Never overwritten automatically.
         </p>
         <Textarea
           id="final-script"

@@ -26,6 +26,12 @@ export interface AiCompletionResult {
   completionTokens: number;
   totalTokens: number;
   model: string;
+  /** OpenAI/OpenRouter-shaped stop reason ("stop", "length",
+   *  "content_filter", etc.) when the provider returns one. "length" means
+   *  the response was cut off by `maxTokens`, not a natural stop — added
+   *  for YTCS's Generate Script truncation warning; existing callers can
+   *  ignore this field. */
+  finishReason?: string;
 }
 
 export function aiIsConfigured(): boolean {
@@ -38,6 +44,7 @@ export function defaultAiModel(): string {
 
 interface OpenRouterChoice {
   message?: { content?: string };
+  finish_reason?: string;
 }
 
 interface OpenRouterUsage {
@@ -63,6 +70,7 @@ export async function callAi({
   messages,
   maxTokens = 400,
   temperature = 0.5,
+  timeoutMs = 60_000,
 }: {
   model?: string;
   messages: AiChatMessage[];
@@ -70,6 +78,14 @@ export async function callAi({
    *  segments. SMS replies should be short anyway. */
   maxTokens?: number;
   temperature?: number;
+  /** Abort the request after this many ms. Added for YTCS's Generate
+   *  Script (a request that hangs would otherwise run until the
+   *  platform's own function-duration ceiling) — applied to every
+   *  caller since an unbounded request is a latent risk everywhere, not
+   *  just YTCS. 60s comfortably covers even a full-length script
+   *  generation while staying far above a normal SMS reply's latency,
+   *  so existing callers are unaffected in the success path. */
+  timeoutMs?: number;
 }): Promise<AiCompletionResult> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
@@ -80,22 +96,35 @@ export async function callAi({
 
   const chosenModel = model?.trim() || defaultAiModel();
 
-  const res = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      // OpenRouter optional but recommended — helps them attribute usage.
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://leadstack.dev",
-      "X-Title": "LeadStack AI Replies",
-    },
-    body: JSON.stringify({
-      model: chosenModel,
-      messages,
-      max_tokens: maxTokens,
-      temperature,
-    }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        // OpenRouter optional but recommended — helps them attribute usage.
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://leadstack.dev",
+        "X-Title": "LeadStack AI Replies",
+      },
+      body: JSON.stringify({
+        model: chosenModel,
+        messages,
+        max_tokens: maxTokens,
+        temperature,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`OpenRouter request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -121,5 +150,6 @@ export async function callAi({
     completionTokens: usage.completion_tokens ?? 0,
     totalTokens: usage.total_tokens ?? 0,
     model: data.model ?? chosenModel,
+    finishReason: data.choices?.[0]?.finish_reason,
   };
 }
