@@ -58,8 +58,7 @@ const SCHEDULES: ScheduleSpec[] = [
     scheduleId: "leadstack-agents-watchdog",
     path: "/api/agents/watchdog/step",
     cron: "0 * * * *",
-    description:
-      "Hourly Inbox Follow-up Watchdog sweep (Labs custom agent).",
+    description: "Hourly Inbox Follow-up Watchdog sweep (Labs custom agent).",
   },
   {
     scheduleId: "leadstack-google-calendar-sync",
@@ -68,10 +67,18 @@ const SCHEDULES: ScheduleSpec[] = [
     description:
       "Pull in changes from every connected Google Calendar (Phase 1 read-only sync).",
   },
+  {
+    scheduleId: "leadstack-community-recording-reconciliation",
+    path: "/api/cron/community-recording-reconciliation",
+    cron: "*/15 * * * *",
+    description:
+      "Reconcile completed or failed Community recording Egress jobs stuck in processing.",
+  },
 ];
 
 const MARKER_PATH = "system/scheduleRegistration";
 const SKIP_AGE_MS = 24 * 60 * 60 * 1000;
+const SCHEDULE_IDS = SCHEDULES.map((s) => s.scheduleId);
 
 function tsToDate(ts: Timestamp | Date | null | undefined): Date | null {
   if (!ts) return null;
@@ -106,6 +113,8 @@ export async function ensureSchedulesRegistered(): Promise<void> {
       if (
         lastUrl === baseUrl &&
         lastAt &&
+        JSON.stringify(data.scheduleIds ?? []) ===
+          JSON.stringify(SCHEDULE_IDS) &&
         Date.now() - lastAt.getTime() < SKIP_AGE_MS
       ) {
         return;
@@ -133,7 +142,7 @@ export async function ensureSchedulesRegistered(): Promise<void> {
     } catch (err) {
       const message = err instanceof Error ? err.message : "unknown";
       console.warn(
-        `[schedules] failed to register ${s.scheduleId}: ${message}`,
+        `[schedules] failed to register ${s.scheduleId}: ${message}`
       );
       results.push({ id: s.scheduleId, ok: false, error: message });
     }
@@ -148,10 +157,10 @@ export async function ensureSchedulesRegistered(): Promise<void> {
       {
         baseUrl,
         registeredAt: FieldValue.serverTimestamp(),
-        scheduleIds: SCHEDULES.map((s) => s.scheduleId),
+        scheduleIds: SCHEDULE_IDS,
         lastResults: results,
       },
-      { merge: true },
+      { merge: true }
     );
   } catch (err) {
     console.warn("[schedules] marker write failed", err);
