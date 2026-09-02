@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-**Phase 0 (import architecture + data rescue) is COMPLETE.** Channel Brain data has since been **promoted to a shared, sub-account-owned Business Brain architecture** and now has its **first Magnetix-native UI**, live in production at Settings → Business Brain. The owner's real strategic context (Creator Vision, Audience, Offers ×3, Frameworks ×1, Stories+Proof ×1, Brand Voice, Topics ×1, Subtopics ×1, Positioning) is canonically at `subAccounts/xvnedVCmQpEvHrcPhEDI/businessBrain/main`, readable and editable through that UI; the historical `ytcs/brain` location is retained, unmutated except additive deprecation markers. 2 Saved Ideas and 15 Video Projects remain YTCS-specific at `ytcsIdeas`/`ytcsVideos`, unaffected. All 7 real voice recordings remain in Firebase Storage from Phase 0. No YouTube Content Studio UI, no Content Alchemy Lab, no navigation entry for either, and no Phase 1 work has started. See the Phase 0 addendum, the **Business Brain Architecture** section, and the **Business Brain UI** section (after §26) for full details.
+**Phase 0** (import architecture + data rescue), **Business Brain** (shared sub-account architecture + its Settings UI), **YTCS Phase 1** (Content nav, module shell, Dashboard, project foundation, Input step for all 6 starting points), and **YTCS Phase 2** (Deep Dive + Script Prompt Builder) are all **COMPLETE and live in production** at `crm.magnetixstudios.com`. A user can now open/create a Video Workspace project, complete Input, complete Deep Dive (normal or Product/Offer, format-specific), select Script Ingredients from Business Brain, generate a fully-resolved copy-paste Script Prompt, and save an independent Final Script Draft — all against the owner's real migrated data (15 Video Projects, 2 Saved Ideas, 7 voice recordings in Storage, Business Brain with 3 Offers/1 Framework/1 Story/1 Topic/1 Subtopic). Create Video, Titles, Publish, full Saved Ideas, full Video Library, and Content Alchemy Lab are all still locked/not built, per instruction. See the Phase 0/Business Brain/Business Brain UI/**YTCS Phase 1**/**YTCS Phase 2** addenda (after §26) for full details.
 
 ## SOURCE MATERIAL
 
@@ -47,13 +47,15 @@ Where sources disagreed, this document does not silently pick a winner — see *
 
 ## UNRESOLVED DECISIONS
 
-Kept genuinely open — see §20 for full detail:
+Kept genuinely open:
 
-1. Whether to rebuild the partially-designed in-app structured script sub-flow (`hookOptions`, `expectationSetup`, `earlyCtaType`, `generatedOutline`, `dominantPositioning`/`secondaryPositioning`, `topicClarity`) as an active feature, or preserve it as read-only legacy data only.
-2. The exact backend mechanism/prompt behind the one confirmed real internal AI call (Deep Dive Questions) — not recoverable from any of the three sources; must be newly designed.
-3. Whether `communityPost` is a standalone Publish-step field or belongs to a future Content Alchemy Lab / Social Planner integration.
-4. Whether "Balanced" and "Concise" Depth Preference values (asserted only by the dossier) are real, ever-shipped options or aspirational.
-5. Whether voice-note transcription is genuinely implemented anywhere (no transcript text was found attached to any of the 7 real voice-note recordings in the export).
+1. Whether to rebuild the partially-designed in-app structured script sub-flow (`hookOptions`, `expectationSetup`, `earlyCtaType`, `generatedOutline`, `dominantPositioning`/`secondaryPositioning`, `topicClarity`) as an active feature, or preserve it as read-only legacy data only. (§20)
+2. Whether `communityPost` is a standalone Publish-step field or belongs to a future Content Alchemy Lab / Social Planner integration. (§20)
+3. Whether "Balanced" and "Concise" Depth Preference values (asserted only by the dossier) are real, ever-shipped options — **still open after Phase 2**; only "Detailed" is exposed in the UI, since it's the only value ever confirmed by real data or live testing. See the **YTCS Phase 2** addendum.
+4. Whether voice-note transcription is genuinely implemented anywhere — **still open after Phase 2**; Phase 2 implements recording/playback/manual-typed-answers only, no automatic transcription, per instruction not to fake infrastructure that doesn't exist.
+5. Whether an optional Offer/CTA Context picker exists for non-Product/Offer starting points in Script Prompt Builder — no confirmed real field name was found for this (unlike Story/Framework selection, which have confirmed fields), so Phase 2 does not build one; Offer/CTA context is auto-included only for real Product/Offer projects. See the **YTCS Phase 2** addendum.
+
+**RESOLVED in Phase 2** (previously unresolved item 2, "the exact backend mechanism/prompt behind Deep Dive Questions"): the *mechanism* is still unknown, but the *output* is not — a real-data investigation across all 15 migrated projects found the Generic Deep Dive's 9-question set reproduced identically across 7 independent real/live observations, and a distinct, real 10-question Signature Offer Video set cross-confirmed by two separate real projects. Both are now implemented as fixed sets, no AI call needed. See the **YTCS Phase 2** addendum for the full evidence trail.
 
 ## DATA MIGRATION STATUS
 
@@ -63,7 +65,7 @@ Kept genuinely open — see §20 for full detail:
 
 ## NEXT APPROVED TASK
 
-None yet. Business Brain UI is done and live in production; YouTube Content Studio Phase 1 and Content Alchemy Lab both have no approval and should not start automatically. One open item before fully closing this pass: a genuine interactive click-through QA pass (add/edit/delete via the real UI, responsive layout) is still needed from a browser session with working client-side auth — see the **Business Brain UI** section's QA note.
+None yet. YTCS Phase 2 (Deep Dive + Script Prompt Builder) is done and live in production; Create Video, Titles, Publish, and Content Alchemy Lab all have no approval and should not start automatically. Two open items carried forward: (1) a genuine interactive click-through QA pass is still owed from a real authenticated browser session — Phase 1's UI was since visually verified by the owner in production, but Phase 2's Deep Dive/Script Prompt Builder UI has only been QA'd via direct Firestore/logic testing, not clicked through live; (2) the Depth Preference and Offer/CTA-for-non-offer-projects questions noted above remain open product decisions, not silently resolved.
 
 ---
 
@@ -194,6 +196,8 @@ Downstream consumer: auto-included in Script Prompt Builder; drives the "audienc
 **Reconciliation:** dossier proposed `Primary CTA` and `Soft CTA` fields — real export confirms these do **not** exist anywhere in any of the 3 real offers. Confirmed REMOVED, do not restore.
 
 Downstream consumer: Video Workspace's Product/Offer starting point (`productOfferInput.selectedOfferId`/`selectedOfferDetails`); Script Prompt Builder's optional "Offer / CTA Context" picker.
+
+**Future architecture note (2026-09-02, factual only — not acted on):** Business Brain → Offers exists because the original standalone YouTube Content Studio had no access to CRM business data and had to store offer information itself. Now that YTCS lives inside Magnetix, CRM-native business/product/offer data may eventually become the primary source for factual offer information, with Business Brain retaining only strategic/contextual offer framing where useful. This is a documented future direction only — Phase 2 does not redesign, expand, or migrate Offer ownership again; existing Business Brain Offer records and every project's existing offer references are used exactly as they are today.
 
 ### 4.4 Frameworks — repeatable list (`brain.frameworks[]`)
 
@@ -1577,3 +1581,92 @@ Interactive click-through QA (the literal "open the tab, click Edit, type, click
 `src/app/(dashboard)/sa/[subAccountId]/dashboard/settings/page.tsx` (+12 lines: import, TabsTrigger, TabsContent block), `src/app/api/sub-accounts/[id]/business-brain/route.ts` (new), `src/components/settings/sub-account-business-brain-section.tsx` (new, orchestrator), `src/components/settings/business-brain/{field-form,positioning-tab,record-list-editor,topics-tab}.tsx` (new), `src/lib/business-brain/{enums,positioning-elements}.ts` (new).
 
 **Business Brain UI is live in production.** No YouTube Content Studio UI, no Content Alchemy Lab, no navigation entry for either — none started, per instruction.
+
+---
+
+# YTCS Phase 1 (2026-09-01) — Content nav, module shell, Dashboard, project foundation, Input step
+
+Retroactively documented here alongside Phase 2, since this section was not written at the time (a clean QA-closure pass afterward correctly avoided documentation churn with no discrepancy to record).
+
+## Scope delivered
+
+Content nav entry (`Content › Social Planner, Content Library, YouTube Content Studio`); module shell at `subAccounts/{id}` route `/youtube-studio` with Dashboard/Video Workspace/Saved Ideas/Video Library/Settings internal nav (no "Channel Brain" tab — not YTCS-owned); Dashboard with real counts and a Business Brain entry card; Video Workspace project list (create/resume/rename/delete) over the real, already-migrated `ytcsVideos`/`ytcsIdeas` collections; Step 1 Input covering all 6 real starting points distinctly (Brain Dump with the 7 real canned questions + voice notes, Coaching Call, Short-Form Post, Story Bank/Framework/Product-Offer all pulling live from Business Brain); Settings' required Business Brain entry/link.
+
+## Canonical route
+
+`/sa/{subAccountId}/youtube-studio` (+ `/workspace`, `/workspace/[videoId]`, `/ideas`, `/videos`, `/settings`).
+
+## Data layer
+
+`src/types/ytcs.ts` (real field names verbatim from this spec's §4/§18/§20), `src/lib/server/ytcs-service.ts` (list/get/create/update/delete over the real `subAccounts/{id}/ytcsVideos`/`ytcsIdeas` paths — no new collection), `src/app/api/sub-accounts/[id]/ytcs/{videos,ideas,voice-notes}` routes, PATCH allowlisted to only Phase 1-reachable fields.
+
+## QA result
+
+eslint/tsc/build clean; real-data verification (15 projects/2 ideas/Business Brain doc all present, 3 projects' legacy data and all 15 projects' 4 Advanced Details fields confirmed preserved); disposable-QA-project CRUD (11/11 checks passed, real count unchanged after). Interactive browser QA was blocked at the time by a stale Firebase client-auth test profile plus machine disk exhaustion (both since resolved) — **the owner has since visually verified Phase 1 in production directly**, closing that gap.
+
+## One disclosed mistake, corrected transparently
+
+The first Phase 1 commit accidentally absorbed a concurrent session's unrelated sidebar changes (a new Acquisition nav entry) due to an isolation step being interrupted. This was caught via direct diff inspection before reporting success, and corrected with an immediate, honestly-labeled follow-up commit (`dd64d0f`) that restored the concurrent session's work to its original untouched, uncommitted state. Recorded here as the incident this document's own git-safety instructions since reference to avoid repeating.
+
+Commits: `7215ad1`, `dd64d0f` (fix). Deployed and confirmed Ready.
+
+---
+
+# YTCS Phase 2 (2026-09-02) — Deep Dive + Script Prompt Builder
+
+## Scope delivered
+
+Step 2 (Deep Dive, normal + Product/Offer format-specific) and Step 3 (Script Prompt Builder) — completing Input → Deep Dive → Script Prompt Builder. Create Video/Titles/Publish remain locked, shown with a lock icon and "coming in a later phase," never faked.
+
+## Deep Dive — real data resolved what Phase 0 had left as "unknown AI mechanism"
+
+A fresh investigation across all 15 real migrated projects' `generatedDeepDiveQuestions` (not just the 2 partial answer fragments Phase 0 had found) turned up 3 distinct real question sets:
+
+| Set | Question count | Real occurrences | Adopted as |
+|---|---|---|---|
+| Set 1 | 9 | 6 real projects (brain_dump/conversation/framework/one signatureOfferVideo) + 1 independent live-audit reproduction against a different input = 7 total | **Canonical Generic Deep Dive** (Brain Dump, Coaching Call, Short-Form Post, Story Bank, Framework) |
+| Set 2 | 10 | 1 real project's full array, cross-confirmed by a **second, independent** real project whose actually-typed answer began "Question 5: What belief needs to shift before this offer makes sense?" — an exact match to Set 2's item 5 | **Canonical Signature Offer Video Deep Dive** |
+| Set 3 | 7 | 1 real project (a second brain_dump instance) | Not adopted — a genuine historical variant, outweighed 7-to-1 by Set 1's confirmations. Preserved read-only on its own project; not used to overwrite anything. |
+
+Product Showcase has **only one** real recoverable question (from one real project's saved answer: "Who is this product best for, and who is it not for?"). No full set was ever found for this format on either of the 2 real productShowcase projects — implemented honestly as that one question plus a general notes area, not padded out with invented questions. See `src/lib/ytcs/deep-dive-questions.ts` for the full evidence trail and exact real question text.
+
+**No AI model call is made for Deep Dive questions in Phase 2** — all three sets above are fixed, deterministic data, not live-generated.
+
+## Deep Dive voice notes
+
+New `deepDiveVoiceNotes` field — no real historical field name was ever found for generic Deep Dive voice notes (this was migration spec §19's own unresolved item), so this follows the established naming convention (`brainDumpVoiceNotes`, `scriptBuilderVoiceNotes`, `productOfferDeepDiveVoiceNotes`) rather than reusing an unverified guess. Product/Offer Deep Dive reuses the real, pre-existing `productOfferDeepDiveAnswers`/`productOfferDeepDiveVoiceNotes` fields and their real "Question N: ...\nVoice note transcription:\n..." append pattern exactly. No automatic transcription — recording/playback/manual-typed-answer only, per instruction not to fake infrastructure that doesn't exist (§19's transcription question stays open).
+
+## Script Prompt Builder — deterministic, zero AI/OpenRouter calls
+
+`src/lib/ytcs/script-prompt.ts` assembles the prompt entirely server-side from real data. VERIFIED-verbatim vs. adapted, tracked explicitly in code comments:
+
+- **VERIFIED verbatim** (this spec's §9, live-captured): the regular-video opening, YouTube Script Method, Momentum Transitions, Return Structure, Style Rules.
+- **VERIFIED verbatim** (this spec's §9, dossier "EXACT / FINAL APPROVED"): the Product Showcase and Signature Offer Video openings and their method step lists.
+- **Reused across formats, not invented per-format**: "How To Use This Context" and "Style Rules" — the dossier describes both generically, not scoped to the regular-video case.
+- **Disclosed adaptation, not a second verbatim capture**: Product Showcase/Signature Offer Video's Return Structure and Momentum Transitions were never independently captured for those two formats. Return Structure is adapted from the regular template's own shape (outline → proof/CTA plan → final draft → recording notes), naming the correct method by title; Momentum Transitions is omitted entirely for those two formats rather than assumed to apply identically.
+
+Real-data verification (via `tsx`, direct Firestore data, no mocks): 21/21 checks passed across a regular prompt, a Product Showcase prompt, a Signature Offer Video prompt, and a maximally-empty edge case (no Business Brain, no source material at all) — zero cross-contamination between prompt types (confirmed no format's method/opening text leaks into another's prompt), zero `undefined`/`null`/`[object Object]`/empty-heading artifacts even on the empty-project case.
+
+## Script Ingredients
+
+Audience/Brand Voice/Creator Vision auto-included from Business Brain (shown as badges); Stories + Proof and Frameworks are real multi-select from Business Brain's actual records (only selected ones enter the prompt — the Brain is never dumped wholesale); Offer/CTA Context auto-included only for real `productOffer`-starting-point projects, since **no confirmed real field exists for an optional offer picker on other starting points** (unlike Story/Framework selection) — building one would have been inventing a field with zero evidentiary basis, so it wasn't built; disclosed as an open item (§ UNRESOLVED DECISIONS). Extra Script Notes: text + voice note, reusing the pre-existing `scriptBuilderVoiceNotes` field from Phase 0/1.
+
+## Script Output Settings
+
+Script Output Type: all 4 real confirmed values exposed (Full Script, Structured Recording Draft, Talking Point Outline, Hybrid Script + Talking Points). Depth Preference: **only "Detailed" is exposed as selectable** — the sole value ever confirmed by real data or live testing; "Balanced"/"Concise" stay unresolved per this spec's own earlier finding, not silently decided either way in Phase 2. The Script Output Type-specific descriptive paragraph in the generated prompt is only included for "Structured Recording Draft" (the one value with verbatim captured description text) — the other 3 real types get the prompt without that one extra sentence rather than a guessed description.
+
+## Write safety
+
+`generatedScriptPrompt` regeneration goes through its own dedicated route (`generate-script-prompt`) that writes ONLY that one field — verified directly against Firestore that `compiledScript` (Final Script Draft) survives regeneration byte-identically. The PATCH allowlist was extended with exactly the new Deep Dive + Script Prompt Builder fields; Create Video/Titles/Publish fields remain structurally unreachable, same defense-in-depth as Phase 1/Business Brain.
+
+## QA result
+
+eslint clean; `tsc --noEmit` shows zero YTCS-related errors (the only errors present are from a concurrent session's own incomplete, entirely untracked billing/purchases work — confirmed via `git show HEAD:<path>` returning "not in HEAD" for every offending file, meaning they cannot affect any real deployed build); real Firestore round-trip QA (13/13 checks) via a disposable QA project covering Deep Dive save, Script Ingredients save, prompt generation, regeneration, and Final Script Draft preservation; all 15 real projects confirmed byte-identical before/after QA. Interactive browser QA was not performed this phase (no authenticated browser session available) — disclosed as still owed, not claimed as done.
+
+## Files changed
+
+`src/types/ytcs.ts` (+`deepDiveVoiceNotes`), `src/lib/ytcs/deep-dive-questions.ts` (new), `src/lib/ytcs/script-prompt.ts` (new), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts` (PATCH allowlist extended), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/generate-script-prompt/route.ts` (new), `src/components/ytcs/deep-dive-step.tsx` (new), `src/components/ytcs/script-prompt-builder-step.tsx` (new), the project detail page (Deep Dive/Script Prompt Builder tabs unlocked).
+
+Commit: `90386c0`, pushed as `1888878`. Deployed and confirmed Ready on `crm.magnetixstudios.com`.
+
+**YTCS Phase 2 is live in production.** Create Video, Titles, Publish, and Content Alchemy Lab remain untouched, per instruction.
