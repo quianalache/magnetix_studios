@@ -116,11 +116,7 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "conversation.assigned",
   "conversation.closed",
   "conversation.reopened",
-  "email.delivered",
-  "email.opened",
-  "email.clicked",
-  "email.bounced",
-  "email.complained",
+  // Deferred until Resend webhook signing is configured and runtime-tested.
   "scheduled.datetime",
   "workflow.completed",
   "workflow.failed",

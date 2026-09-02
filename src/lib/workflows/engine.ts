@@ -1259,6 +1259,11 @@ export async function runStep(
     updatedAt: FieldValue.serverTimestamp(),
   });
 
+  // An action such as stop_workflow may intentionally terminate this run
+  // while it is executing. Do not advance or complete an already-exited run.
+  const postActionRun = await runRef.get();
+  if (postActionRun.data()?.status === "exited") return;
+
   // Advance control flow.
   let target: string | null = null;
   let delay = 0;
