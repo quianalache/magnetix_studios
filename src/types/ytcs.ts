@@ -188,6 +188,13 @@ export interface YtcsVideoProject {
   brainDumpVoiceNotes?: YtcsVoiceNoteRef[];
   scriptBuilderVoiceNotes?: YtcsVoiceNoteRef[];
   productOfferDeepDiveVoiceNotes?: YtcsVoiceNoteRef[];
+  /** New in Phase 2 — no real historical field name was ever found for
+   *  generic Deep Dive voice notes (migration spec §19's unresolved
+   *  item), so this follows the same naming convention as the other
+   *  three voice-note fields above rather than reusing an unverified
+   *  guess. Each ref's `questionAssociation` ties it to one of the
+   *  fixed Deep Dive questions — see src/lib/ytcs/deep-dive-questions.ts. */
+  deepDiveVoiceNotes?: YtcsVoiceNoteRef[];
 
   /** Historical structured-script-builder / in-app-title-generator /
    *  thumbnail data — preserved, never an active feature. Do not build

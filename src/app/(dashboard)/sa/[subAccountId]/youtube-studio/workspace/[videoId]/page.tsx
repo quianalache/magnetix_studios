@@ -7,14 +7,19 @@ import { ArrowLeft, Loader2, Lock } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { InputStep } from "@/components/ytcs/input-step";
+import { DeepDiveStep } from "@/components/ytcs/deep-dive-step";
+import { ScriptPromptBuilderStep } from "@/components/ytcs/script-prompt-builder-step";
 import { YTCS_STARTING_POINTS, YTCS_STEPS, type YtcsStartingPointType, type YtcsVideoProject } from "@/types/ytcs";
 import type { BusinessBrain } from "@/types/business-brain";
 
+const BUILT_STEPS = new Set(["Input", "Deep Dive", "Script Prompt Builder"]);
+
 /**
  * Video Workspace project detail — the 6-step pipeline shell (migration
- * spec §6/§9-§13). Phase 1 implements only Step 1: Input; the other 5
- * steps show as real, visible navigation with a "coming in a later
- * phase" state — not hidden, not fully built, per instruction.
+ * spec §6/§9-§13). Phase 1 built Input; Phase 2 adds Deep Dive and
+ * Script Prompt Builder. Create Video/Titles/Publish still show as real,
+ * visible navigation with a "coming in a later phase" state — not
+ * hidden, not fully built, per instruction.
  */
 export default function VideoProjectPage() {
   const { subAccountId, saPath } = useSubAccount();
@@ -123,7 +128,7 @@ export default function VideoProjectPage() {
 
       <div className="flex flex-wrap gap-1 overflow-x-auto rounded-xl border bg-muted/30 p-1">
         {YTCS_STEPS.map((step) => {
-          const isBuilt = step === "Input";
+          const isBuilt = BUILT_STEPS.has(step);
           const isActive = viewingStep === step;
           return (
             <button
@@ -179,6 +184,20 @@ export default function VideoProjectPage() {
           businessBrain={businessBrain}
           onSave={saveProject}
           onChangeStartingPoint={() => setChangingStartingPoint(true)}
+        />
+      ) : viewingStep === "Deep Dive" ? (
+        <DeepDiveStep
+          subAccountId={subAccountId}
+          project={project}
+          onSave={saveProject}
+          onContinue={() => setViewingStep("Script Prompt Builder")}
+        />
+      ) : viewingStep === "Script Prompt Builder" ? (
+        <ScriptPromptBuilderStep
+          subAccountId={subAccountId}
+          project={project}
+          businessBrain={businessBrain}
+          onSave={saveProject}
         />
       ) : (
         <div className="rounded-2xl border border-dashed p-8 text-center">
