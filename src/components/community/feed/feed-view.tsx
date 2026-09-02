@@ -499,38 +499,6 @@ export function FeedView({
             )}
           </div>
         )}
-        {p.postType === "live" && p.liveStatus === "live" && p.liveRoomId && (
-          <CommunityLiveStage
-            saId={saId}
-            groupId={groupId}
-            postId={p.id}
-            mode={p.liveMode === "broadcast" ? "broadcast" : "meeting"}
-          />
-        )}
-        {p.postType === "live" &&
-          p.liveStatus === "ended" &&
-          p.replayStatus === "processing" && (
-            <div className="mb-3 flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">
-              Replay processing…
-            </div>
-          )}
-        {p.postType === "live" &&
-          p.liveStatus === "ended" &&
-          p.replayStatus === "ready" &&
-          p.replayAssetId && (
-            <CommunityReplayPlayer
-              saId={saId}
-              groupId={groupId}
-              postId={p.id}
-            />
-          )}
-        {p.postType === "live" && p.thumbnailUrl && (
-          <img
-            src={p.thumbnailUrl}
-            alt=""
-            className="mb-3 aspect-video w-full rounded-lg object-cover"
-          />
-        )}
         {variant === "featured" && (
           <div
             className="mb-2 flex items-center gap-1 text-[11px] font-semibold tracking-wide uppercase"
@@ -617,6 +585,48 @@ export function FeedView({
               staffGroupId={staffGroupId}
               groupSlug={groupSlug}
             />
+            {/* Live/replay media sits below the title+description, above
+                likes/comments (real user QA, 2026-09-02 — it previously
+                rendered above the author row and title, which read like
+                the video WAS the post rather than something attached to
+                it). The small LIVE/"Live ended" status line above stays
+                where it is — a glanceable badge, not the media itself. */}
+            {p.postType === "live" &&
+              p.liveStatus === "live" &&
+              p.liveRoomId && (
+                <CommunityLiveStage
+                  saId={saId}
+                  groupId={groupId}
+                  postId={p.id}
+                  mode={p.liveMode === "broadcast" ? "broadcast" : "meeting"}
+                />
+              )}
+            {p.postType === "live" &&
+              p.liveStatus === "ended" &&
+              p.replayStatus === "processing" && (
+                <div className="mt-2 mb-3 flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">
+                  Replay processing…
+                </div>
+              )}
+            {p.postType === "live" &&
+              p.liveStatus === "ended" &&
+              p.replayStatus === "ready" &&
+              p.replayAssetId && (
+                <div className="mt-2">
+                  <CommunityReplayPlayer
+                    saId={saId}
+                    groupId={groupId}
+                    postId={p.id}
+                  />
+                </div>
+              )}
+            {p.postType === "live" && p.thumbnailUrl && (
+              <img
+                src={p.thumbnailUrl}
+                alt=""
+                className="mt-2 mb-3 aspect-video w-full rounded-lg object-cover"
+              />
+            )}
             {p.attachments && p.attachments.length > 0 && (
               <CommunityPostAttachments
                 attachments={p.attachments}
@@ -784,7 +794,13 @@ export function FeedView({
           filter={filter}
           onClose={() => setGoLiveOpen(false)}
           onCreated={(roomId) => {
-            setGoLiveOpen(false);
+            // Deliberately NOT setGoLiveOpen(false) here (2026-09-02 real
+            // user QA: closing this modal synchronously revealed the bare
+            // feed underneath for the moment it takes the hard navigation
+            // below to actually leave the page — looked like a bounce
+            // through the community feed). QuickGoLiveSetup shows its own
+            // "Starting your live…" state once it calls onCreated, so the
+            // modal keeps covering the feed the whole way through instead.
             const href = staffGroupId
               ? `/sa/${saId}/community/${staffGroupId}/live/${roomId}`
               : pretty

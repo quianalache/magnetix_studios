@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 /**
@@ -20,6 +21,16 @@ import { ArrowLeft } from "lucide-react";
  * import path back to a `"use client"` component living inside
  * `(dashboard)` — same reasoning as this group's `layout.tsx` duplicating
  * SubAccountProvider/BillingGuard instead of sharing them.
+ *
+ * The back-bar itself is skipped on `.../live/[roomId]` (2026-09-02 real
+ * user QA: host video was visibly cropped). CommunityLiveRoomClient
+ * renders its own `h-[100dvh] overflow-hidden` container designed to be
+ * the ONLY thing on the page — it already has a complete exit UX of its
+ * own (End Session for the host, Leave for everyone else), so the bar
+ * was both redundant there and, by consuming real height above a
+ * container sized to exactly 100% of the viewport, pushed the room's own
+ * bottom content past the fold. Every other route in this group keeps it
+ * unchanged.
  */
 export function CommunityImmersiveChrome({
   subAccountId,
@@ -28,6 +39,9 @@ export function CommunityImmersiveChrome({
   subAccountId: string;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
+  const isLiveRoom = /\/live\/[^/]+$/.test(pathname ?? "");
+
   useEffect(() => {
     function onPageShow(e: PageTransitionEvent) {
       if (e.persisted) window.location.reload();
@@ -35,6 +49,8 @@ export function CommunityImmersiveChrome({
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
+
+  if (isLiveRoom) return <>{children}</>;
 
   return (
     // bg-background (a theme token, not a hardcoded color) so this strip

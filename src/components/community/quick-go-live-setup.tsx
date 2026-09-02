@@ -33,6 +33,9 @@ export function QuickGoLiveSetup({
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  // True from the moment the room is created until the hard navigation to
+  // it actually leaves this page — see startLive() and the render below.
+  const [starting, setStarting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cameraOn, setCameraOn] = useState(true);
   const [micOn, setMicOn] = useState(true);
@@ -147,8 +150,36 @@ export function QuickGoLiveSetup({
       cameraId,
       microphoneId,
     });
+    // Keep this modal up (covering the feed) until the hard navigation
+    // below actually takes over the page — see the "Starting your live…"
+    // render branch and feed-view.tsx's onCreated comment for why.
+    setStarting(true);
     onCreated(data.room.id);
   }
+  if (starting)
+    return (
+      <div
+        className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-3"
+        role="dialog"
+        aria-modal="true"
+        aria-live="polite"
+      >
+        <div
+          className="flex w-full max-w-sm flex-col items-center gap-3 rounded-xl border p-8 text-center shadow-2xl"
+          style={{
+            backgroundColor: "var(--community-surface)",
+            borderColor: "var(--community-border)",
+            color: "var(--community-text)",
+          }}
+        >
+          <div
+            className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent"
+            style={{ color: "var(--community-primary-action)" }}
+          />
+          <p className="font-medium">Starting your live…</p>
+        </div>
+      </div>
+    );
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/45 p-3 sm:grid sm:place-items-center sm:p-6"

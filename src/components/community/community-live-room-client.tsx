@@ -9,7 +9,13 @@ import {
   useTracks,
   type TrackReference,
 } from "@livekit/components-react";
-import { Room, RoomEvent, Track, type Participant } from "livekit-client";
+import {
+  DisconnectReason,
+  Room,
+  RoomEvent,
+  Track,
+  type Participant,
+} from "livekit-client";
 import { consumeLivePrejoinMediaState } from "@/lib/community/live-prejoin-state";
 import {
   ChevronDown,
@@ -936,7 +942,7 @@ export default function CommunityLiveRoomClient({
   moderationPath = `/api/community/${saId}/${groupId}/live-rooms/moderation`,
   endPath = `/api/community/${saId}/${groupId}/live-rooms`,
   joinPath = `/api/community/${saId}/${groupId}/live-rooms`,
-  leaveHref = `/c/${saId}`,
+  leaveHref,
 }: {
   saId: string;
   groupId: string;
@@ -944,7 +950,17 @@ export default function CommunityLiveRoomClient({
   moderationPath?: string;
   endPath?: string;
   joinPath?: string;
-  leaveHref?: string;
+  /**
+   * Required, no default — 2026-09-02 wrong-community redirect fix. This
+   * used to default to `/c/{saId}`, the whole sub-account's community
+   * INDEX, not this specific group; for any sub-account running more than
+   * one community, End Session/Leave landed the host in a different
+   * community entirely. Every call site must now compute the correct
+   * group-scoped destination itself (see the three page.tsx call sites for
+   * the pattern) — the compiler catches a future one that forgets, instead
+   * of silently falling back to a plausible-looking wrong default.
+   */
+  leaveHref: string;
 }) {
   const [room, setRoom] = useState<Room | null>(null),
     [info, setInfo] = useState<{
@@ -953,8 +969,21 @@ export default function CommunityLiveRoomClient({
       postId: string | null;
       mode: "meeting" | "broadcast";
     } | null>(null),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [disconnectReason, setDisconnectReason] = useState("");
+  const roomRef = useRef<Room | null>(null);
+  // Idempotency guard (2026-09-02 real user QA: hosts were being booted a
+  // few seconds after joining). If this effect's body ever runs a second
+  // time for the SAME roomId — for any reason — a second join+connect
+  // would mint a second LiveKit connection under the same participant
+  // identity, and LiveKit disconnects the OLDER of the two: from the
+  // host's screen, that looks exactly like an unexplained boot a moment
+  // after joining. This ref makes a second run for the same roomId a
+  // guaranteed no-op regardless of what caused the re-run.
+  const joinedRoomIdRef = useRef<string | null>(null);
   useEffect(() => {
+    if (joinedRoomIdRef.current === roomId) return;
+    joinedRoomIdRef.current = roomId;
     let active = true;
     void (async () => {
       try {
@@ -975,8 +1004,41 @@ export default function CommunityLiveRoomClient({
         if (!r.ok || !x.token || !x.url)
           throw new Error(x.error ?? "Unable to join live room.");
         const next = new Room();
+        // 2026-09-02: surface a real disconnect instead of leaving a
+        // silently frozen room — nothing previously listened for this at
+        // all, so a kicked/dropped host just saw dead video with no
+        // explanation (real user QA: "booted out"). Reported to the same
+        // client-error intake the community pages already use, so the
+        // actual DisconnectReason is visible in production logs rather
+        // than guessed at.
+        next.on(RoomEvent.Disconnected, (reason) => {
+          // CLIENT_INITIATED covers our own room.disconnect() calls (End
+          // Session, Leave) — those already navigate away via onLeave, so
+          // showing a "you've been disconnected" screen for them would be
+          // a confusing flash on a page that's about to unload anyway.
+          if (reason === DisconnectReason.CLIENT_INITIATED) return;
+          const label =
+            reason === DisconnectReason.DUPLICATE_IDENTITY
+              ? "duplicate identity — this session was replaced by another connection joining as the same participant"
+              : reason !== undefined
+                ? DisconnectReason[reason]
+                : "unknown";
+          setDisconnectReason(label);
+          void fetch(`/api/community/${saId}/${groupId}/client-errors`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: "LiveKitDisconnected",
+              message: `Live room disconnected: ${label}`,
+              pathname: window.location.pathname,
+              userAgent: navigator.userAgent,
+              timestamp: new Date().toISOString(),
+            }),
+          }).catch(() => {});
+        });
         await next.connect(x.url, x.token);
         if (!active) return next.disconnect();
+        roomRef.current = next;
         if (x.role === "HOST") {
           // Apply the pre-live camera/mic on-off + device choice BEFORE
           // starting the recording below — 2026-09-02 fix for recordings
@@ -1018,14 +1080,41 @@ export default function CommunityLiveRoomClient({
     })();
     return () => {
       active = false;
+      // A connection already committed to state (setRoom/roomRef) when
+      // this effect's owner unmounts must be disconnected explicitly —
+      // previously nothing did this at all, leaving a live LiveKit
+      // connection under the host's identity around after navigating
+      // away, which could itself cause a later real join to be treated
+      // as a duplicate identity and kicked.
+      roomRef.current?.disconnect();
+      roomRef.current = null;
     };
-  }, [joinPath, roomId]);
+  }, [joinPath, roomId, saId, groupId]);
   if (error)
     return (
       <main className="p-8">
         <p className="rounded-md border border-red-300 bg-red-50 p-4 text-red-800">
           {error}
         </p>
+      </main>
+    );
+  if (disconnectReason)
+    return (
+      <main className="grid h-[100dvh] place-items-center bg-[var(--community-bg,#0b1020)] p-8 text-center text-[var(--community-text,#fff)]">
+        <div>
+          <p className="font-medium">
+            You&apos;ve been disconnected from the live room.
+          </p>
+          <p className="mt-1 text-sm text-white/60">
+            Reason: {disconnectReason}
+          </p>
+          <a
+            href={leaveHref}
+            className="mt-4 inline-block rounded-md border border-white/20 px-4 py-2 text-sm hover:bg-white/10"
+          >
+            Back to the community
+          </a>
+        </div>
       </main>
     );
   if (!room || !info)

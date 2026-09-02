@@ -368,6 +368,20 @@ export function PostDetailView({
                   {currentPost.title}
                 </h1>
               )}
+              <CommunityPostBody
+                html={currentPost.body}
+                brand={accent || brand}
+                className="mt-1"
+                saId={saId}
+                pretty={pretty}
+                staffGroupId={staffGroupId}
+                groupSlug={groupSlug}
+              />
+              {/* Live/replay media below title+description, above
+                  attachments/likes/comments — real user QA, 2026-09-02.
+                  Previously sat between title and body, so the
+                  description read as attached to the video instead of
+                  the other way around. */}
               {currentPost.postType === "live" &&
                 currentPost.liveStatus === "live" &&
                 currentPost.liveRoomId && (
@@ -393,21 +407,14 @@ export function PostDetailView({
                 currentPost.liveStatus === "ended" &&
                 currentPost.replayStatus === "ready" &&
                 currentPost.replayAssetId && (
-                  <CommunityReplayPlayer
-                    saId={saId}
-                    groupId={groupId}
-                    postId={currentPost.id}
-                  />
+                  <div className="mt-3">
+                    <CommunityReplayPlayer
+                      saId={saId}
+                      groupId={groupId}
+                      postId={currentPost.id}
+                    />
+                  </div>
                 )}
-              <CommunityPostBody
-                html={currentPost.body}
-                brand={accent || brand}
-                className="mt-1"
-                saId={saId}
-                pretty={pretty}
-                staffGroupId={staffGroupId}
-                groupSlug={groupSlug}
-              />
               <CommunityPostAttachments
                 attachments={currentPost.attachments}
                 brand={brand}
