@@ -64,6 +64,7 @@ export function CommunityShell({
   children,
   rightRail,
   staffGroupId,
+  embedded = !!staffGroupId,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. Defaults to false so every pre-existing opaque call site keeps working unchanged. */
@@ -76,20 +77,28 @@ export function CommunityShell({
   rightRail?: ReactNode;
   /**
    * Staff Community-in-CRM integration (2026-08-24). When set (the
-   * group's real id), this renders EMBEDDED inside the CRM's own shell
-   * instead of as a full standalone page: no `min-h-screen` background
-   * wrapper (the CRM dashboard layout already provides the page frame),
-   * and no member "Sign out" form (the CRM has its own, signing out of
-   * Community specifically would be a confusing, meaningless action for
-   * a staff visitor mid-CRM-session). Every internal tab/Settings link
-   * automatically resolves to the staff route shape too — see
-   * `CommunityLinkBase.staffGroupId` in routes.ts, the single place that
-   * mapping lives, so no link here needed to change individually. Adds
-   * one staff-only action, "View as Member", opening the real standalone
-   * branded experience in a new tab via the existing Staff -> Member
-   * bridge — the intentional, explicit place to leave the CRM shell.
+   * group's real id), every internal tab/Settings link automatically
+   * resolves to the staff route shape — see `CommunityLinkBase.staffGroupId`
+   * in routes.ts, the single place that mapping lives, so no link here
+   * needed to change individually — and the header shows the staff avatar
+   * (plain profile link + "View as Member") instead of `CommunityAccountMenu`
+   * with its member "Sign out" form (signing out of Community specifically
+   * would be a confusing, meaningless action for a staff visitor). This is
+   * about WHICH LINKS/CONTROLS render, independent of page chrome — see
+   * `embedded` below for that.
    */
   staffGroupId?: string;
+  /**
+   * Full-page CRM Community (2026-09-02): page-chrome only, decoupled from
+   * `staffGroupId` so a staff route can keep staff-shaped links/controls
+   * while still rendering full-page. Defaults to `!!staffGroupId` — every
+   * pre-existing staff call site (still nested under the CRM dashboard
+   * shell) keeps its current embedded/rounded-card treatment unchanged;
+   * only the new `(immersive)` Community routes pass `embedded={false}`
+   * explicitly to opt into the same full `min-h-screen` presentation the
+   * member-facing route already has.
+   */
+  embedded?: boolean;
 }) {
   // Theme parity fix (2026-08-29) — resolved from the SAME shared resolver
   // Branding's live preview is built from, instead of reading `brandColor`
@@ -157,7 +166,7 @@ export function CommunityShell({
       className={cn(
         "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-2",
         "md:h-14 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-x-4 md:px-4 md:py-0 lg:px-6",
-        !staffGroupId && "md:mx-auto md:max-w-7xl"
+        !embedded && "md:mx-auto md:max-w-7xl"
       )}
     >
       <Link
@@ -267,7 +276,7 @@ export function CommunityShell({
     <div
       className={cn(
         "gap-6",
-        staffGroupId ? "py-4" : "mx-auto max-w-7xl px-4 py-6 md:px-6",
+        embedded ? "py-4" : "mx-auto max-w-7xl px-4 py-6 md:px-6",
         rightRail !== undefined && "grid md:grid-cols-[1fr_320px]"
       )}
     >
@@ -280,16 +289,21 @@ export function CommunityShell({
     </div>
   );
 
-  if (staffGroupId) {
-    // Embedded: no min-h-screen page wrapper (the CRM dashboard layout's
-    // own <main> already provides that), no member Sign-out form — just
-    // the Community sub-nav + content, styled to sit inside the CRM's
-    // existing content card. No CSS scoping class needed here (unlike
-    // MomentumOS's Content Library, which overrides shared theme custom
-    // properties) — Community's own components are styled with hardcoded
-    // hex values throughout, not this app's `--background`/`--foreground`
-    // tokens, so they're already visually self-contained regardless of
-    // which CRM theme (light/dark) is active around them.
+  if (embedded) {
+    // Embedded (still the default for every existing staff call site, via
+    // `embedded = !!staffGroupId`): no min-h-screen page wrapper (the CRM
+    // dashboard layout's own <main> already provides that), styled to sit
+    // inside the CRM's existing content card. The full-page CRM Community
+    // routes under `(immersive)` pass `embedded={false}` explicitly to
+    // skip this branch and fall through to the same full-page treatment
+    // as the member-facing route below, while keeping `staffGroupId` set
+    // (still resolves staff-shaped links and the staff avatar/menu). No
+    // CSS scoping class needed here (unlike MomentumOS's Content Library,
+    // which overrides shared theme custom properties) — Community's own
+    // components are styled with hardcoded hex values throughout, not this
+    // app's `--background`/`--foreground` tokens, so they're already
+    // visually self-contained regardless of which CRM theme (light/dark)
+    // is active around them.
     return (
       <div
         className="community-theme border-border overflow-hidden rounded-xl border"
