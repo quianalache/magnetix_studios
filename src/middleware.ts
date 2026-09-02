@@ -43,6 +43,9 @@ const PUBLIC_PATHS = [
   // Workflow Builder step worker — QStash callback, signature-verified inside
   // the route.
   "/api/workflows/step",
+  // One-time scheduled workflow trigger — QStash callback, signature-
+  // verified inside the route.
+  "/api/workflows/scheduled",
   "/api/broadcasts/email/step",
   "/api/checkout",
   "/api/cron/gitpage-heartbeat",
