@@ -122,11 +122,21 @@ export function ScriptPromptBuilderStep({
    *  therefore the textarea) when the request actually succeeds. */
   async function generateScript() {
     setGeneratingScript(true);
+    // Client-side safety net (production incident 2026-09-02): the server
+    // route has its own timeout and a 300s hard function ceiling, and
+    // normally responds with a clean error well before that. This exists
+    // only for the worst case — the connection itself drops silently and
+    // the fetch promise never settles at all — so the spinner still
+    // clears instead of running forever. Set comfortably above the
+    // server's own 300s ceiling so the server's own clean error always
+    // wins the race under normal conditions.
+    const controller = new AbortController();
+    const clientTimeout = setTimeout(() => controller.abort(), 310_000);
     try {
       await saveIngredients();
       const res = await fetch(
         `/api/sub-accounts/${subAccountId}/ytcs/videos/${project.id}/generate-script`,
-        { method: "POST" },
+        { method: "POST", signal: controller.signal },
       );
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't generate the script");
@@ -137,8 +147,16 @@ export function ScriptPromptBuilderStep({
         toast.success("Script generated.");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't generate the script. Your previous script (if any) is unchanged.");
+      const timedOut = err instanceof Error && err.name === "AbortError";
+      toast.error(
+        timedOut
+          ? "Generation timed out. Your previous script (if any) is unchanged — please try again."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't generate the script. Your previous script (if any) is unchanged.",
+      );
     } finally {
+      clearTimeout(clientTimeout);
       setGeneratingScript(false);
     }
   }

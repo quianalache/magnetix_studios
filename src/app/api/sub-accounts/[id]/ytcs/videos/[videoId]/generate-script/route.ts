@@ -42,10 +42,23 @@ function scriptGenerationModel(): string {
  *  Draft ≈ 2,703 tokens; largest real Script Prompt ≈ 8,396 tokens). */
 const MAX_OUTPUT_TOKENS = 6000;
 const TEMPERATURE = 0.7;
-/** A little under the request timeout below, so a genuinely slow model
- *  response still gets a normal AbortError rather than always racing
- *  the function's own duration ceiling. */
-const REQUEST_TIMEOUT_MS = 90_000;
+/**
+ * PRODUCTION INCIDENT (2026-09-02): the original 90s value here left
+ * only a 10s buffer under the old `maxDuration = 100`. On this repo's
+ * single largest real prompt (~8,396 tokens, project c832488e) asking
+ * for the full 6,000-token output cap, the real OpenRouter round trip
+ * plus this route's own setup/Firestore overhead exceeded 100s before
+ * this AbortController-based timeout ever got the chance to fire and
+ * return a clean error — Vercel's platform-level hard kill fired
+ * first ("Task timed out after 100 seconds", confirmed in production
+ * logs), which never runs this route's own catch/finally, so the
+ * client got no response at all (indefinite spinner), no usage
+ * telemetry was recorded, and the `generatingScriptSince` lock was
+ * never cleared. Raised substantially, with `maxDuration` below raised
+ * to match, so a genuinely large/slow generation gets real room to
+ * finish instead of racing the platform ceiling.
+ */
+const REQUEST_TIMEOUT_MS = 240_000;
 
 /** Smallest reasonable duplicate-generation guard: a short-lived lock
  *  field on the project doc itself, not a job queue. A lock older than
@@ -53,10 +66,11 @@ const REQUEST_TIMEOUT_MS = 90_000;
 const LOCK_STALE_MS = 2 * 60_000;
 
 /** Established precedent for a long-running route (see
- *  src/app/api/social/publish/step/route.ts). Comfortably above the
- *  90s AI-call timeout, leaving room for the surrounding Firestore
+ *  src/app/api/social/publish/step/route.ts, which already uses this
+ *  exact value on this deployment). Comfortably above the 240s AI-call
+ *  timeout, leaving a real buffer for the surrounding Firestore
  *  reads/writes. */
-export const maxDuration = 100;
+export const maxDuration = 300;
 
 export async function POST(
   request: Request,
