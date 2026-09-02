@@ -33,6 +33,10 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * empty field; `communityPost` is real but its UI ownership is still
  * an open product question per the migration spec §13/§18 — it must
  * round-trip untouched, not be silently writable by this route).
+ * `archived` (final completion phase, Video Library) is now included.
+ * `sourceIdeaId` stays out of the allowlist deliberately — it's only
+ * ever set once, at creation time by Turn Into Video, never edited
+ * afterward by any UI action.
  */
 
 const EDITABLE_KEYS = [
@@ -91,6 +95,8 @@ const EDITABLE_KEYS = [
   "uploadChecklist",
   "optimizationChecklist",
   "finalReviewChecklist",
+  // Video Library (final completion phase)
+  "archived",
 ] as const;
 
 export async function GET(

@@ -215,6 +215,19 @@ export interface YtcsVideoProject {
 
   migratedFromExport?: string;
   migratedAt?: unknown;
+
+  /** New in the final completion phase — traces a project back to the
+   *  Saved Idea it was created from via "Turn Into Video." No real field
+   *  name existed for this (the real export has no such linkage; Saved
+   *  Ideas and Video Projects were disconnected in the real data). Purely
+   *  additive — never read by any earlier-phase code. */
+  sourceIdeaId?: string;
+  /** New in the final completion phase — Video Library's Archived tab.
+   *  No real field name existed in the export (the legacy tool's Archive
+   *  action was never captured writing to a specific field). A plain
+   *  boolean, independent of `status`, so archiving never collides with
+   *  the real step-name-shaped status values. */
+  archived?: boolean;
 }
 
 export interface YtcsIdea {
@@ -226,4 +239,24 @@ export interface YtcsIdea {
   status?: string;
   lastUpdated?: unknown;
   ideaVoiceNotes?: YtcsVoiceNoteRef[];
+  migratedFromExport?: string;
+  migratedAt?: unknown;
+}
+
+/**
+ * YTCS Settings — final completion phase. Sub-account-wide, matching
+ * migration spec §20's own stated direction (`subAccounts/{id}/ytcs/
+ * settings`, sibling to `ytcs/brain`) and the same scope as Business
+ * Brain — no per-user preference model exists anywhere else in
+ * Magnetix to adapt to instead, so this doesn't invent one. Applied
+ * once, at project-creation time, onto each new project's own fields —
+ * changing a default later never rewrites existing projects.
+ */
+export interface YtcsSettings {
+  defaultScriptOutputType?: string;
+  /** Only "Detailed" is real-confirmed (see Phase 2 findings) — this is
+   *  stored but the Settings UI only ever offers "Detailed" as a
+   *  selectable value, matching Script Prompt Builder's own already-
+   *  established treatment. Balanced/Concise stay unresolved. */
+  defaultDepthPreference?: string;
 }
