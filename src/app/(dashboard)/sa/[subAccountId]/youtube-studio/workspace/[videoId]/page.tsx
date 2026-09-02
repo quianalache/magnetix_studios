@@ -10,17 +10,25 @@ import { InputStep } from "@/components/ytcs/input-step";
 import { DeepDiveStep } from "@/components/ytcs/deep-dive-step";
 import { ScriptPromptBuilderStep } from "@/components/ytcs/script-prompt-builder-step";
 import { CreateVideoStep } from "@/components/ytcs/create-video-step";
+import { TitlesStep } from "@/components/ytcs/titles-step";
+import { PublishStep } from "@/components/ytcs/publish-step";
 import { YTCS_STARTING_POINTS, YTCS_STEPS, type YtcsStartingPointType, type YtcsVideoProject } from "@/types/ytcs";
 import type { BusinessBrain } from "@/types/business-brain";
 
-const BUILT_STEPS = new Set(["Input", "Deep Dive", "Script Prompt Builder", "Create Video"]);
+const BUILT_STEPS = new Set([
+  "Input",
+  "Deep Dive",
+  "Script Prompt Builder",
+  "Create Video",
+  "Titles",
+  "Publish",
+]);
 
 /**
  * Video Workspace project detail — the 6-step pipeline shell (migration
- * spec §6/§9-§13). Phase 1 built Input; Phase 2 adds Deep Dive and
- * Script Prompt Builder. Create Video/Titles/Publish still show as real,
- * visible navigation with a "coming in a later phase" state — not
- * hidden, not fully built, per instruction.
+ * spec §6/§9-§13). All six steps are now built: Input/Deep Dive/Script
+ * Prompt Builder (Phase 1+2), Create Video (Phase 3A), Titles/Publish
+ * (Phase 3B).
  */
 export default function VideoProjectPage() {
   const { subAccountId, saPath } = useSubAccount();
@@ -77,6 +85,23 @@ export default function VideoProjectPage() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't save");
     setProject(data.project);
+  }
+
+  async function generateTitlePrompt() {
+    const res = await fetch(
+      `/api/sub-accounts/${subAccountId}/ytcs/videos/${videoId}/generate-title-prompt`,
+      { method: "POST" },
+    );
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't generate the title prompt");
+    setProject(data.project);
+  }
+
+  async function markPublished() {
+    await saveProject({
+      status: "Published",
+      publishDate: project?.publishDate || new Date().toISOString().slice(0, 10),
+    });
   }
 
   async function changeStartingPoint(next: YtcsStartingPointType) {
@@ -202,6 +227,15 @@ export default function VideoProjectPage() {
         />
       ) : viewingStep === "Create Video" ? (
         <CreateVideoStep project={project} onSave={saveProject} />
+      ) : viewingStep === "Titles" ? (
+        <TitlesStep
+          project={project}
+          onSave={saveProject}
+          onGenerate={generateTitlePrompt}
+          onContinue={() => setViewingStep("Publish")}
+        />
+      ) : viewingStep === "Publish" ? (
+        <PublishStep project={project} onSave={saveProject} onMarkPublished={markPublished} />
       ) : (
         <div className="rounded-2xl border border-dashed p-8 text-center">
           <Lock className="mx-auto h-5 w-5 text-muted-foreground" />

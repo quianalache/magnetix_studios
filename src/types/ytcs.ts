@@ -138,10 +138,21 @@ export interface YtcsVideoProject {
   generatedTitlePrompt?: string;
   selectedTitle?: string;
   backupTitle?: string;
+  /** New in Phase 3B — no real field name was ever found for Titles-step
+   *  notes (same situation as `deepDiveVoiceNotes` in Phase 2); follows
+   *  the existing `[step]Notes` naming convention. */
+  titleNotes?: string;
   finalTitle?: string;
   createVideoStatus?: string;
   recordingChecklist?: Record<string, boolean>;
   editingChecklist?: Record<string, boolean>;
+  /** New in Phase 3B — no real field name was ever found for an Upload
+   *  Checklist; follows the existing `[step]Checklist` naming
+   *  convention (`recordingChecklist`/`editingChecklist`). */
+  uploadChecklist?: Record<string, boolean>;
+  /** New in Phase 3B — same situation as `uploadChecklist` above; no
+   *  real field name was ever found for an Optimization Checklist. */
+  optimizationChecklist?: Record<string, boolean>;
   finalReviewChecklist?: Record<string, boolean>;
   recordingNotes?: string;
   editingNotes?: string;

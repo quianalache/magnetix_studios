@@ -23,12 +23,16 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * allowlist at all. Deliberately still excluded pending their own phase:
  * `compiledScript` (Final Script Draft) IS included — Phase 2 explicitly
  * builds it — createVideoStatus/recordingChecklist/editingChecklist/
- * recordingNotes/editingNotes are now included (Phase 3A), but
- * finalTitle/youtubeDescription/publish assets/etc. are still not.
- * `finalVideoNotes` is deliberately still excluded — Phase 3A's Create
- * Video only specified recording notes, editing notes, checklists,
- * status, and the Edits Lab card; `finalVideoNotes` is a real field in
- * the schema but wasn't named in scope, so it isn't wired up yet.
+ * recordingNotes/editingNotes (Phase 3A) and generatedTitlePrompt/
+ * selectedTitle/backupTitle/titleNotes/finalTitle/youtubeDescription/
+ * tagsKeywords/pinnedComment/uploadNotes/youtubeLink/publishDate/
+ * uploadChecklist/optimizationChecklist/finalReviewChecklist (Phase 3B)
+ * are now included. `finalVideoNotes` and `communityPost` are
+ * deliberately still excluded — neither was named in scope by any
+ * completed phase's instructions (`finalVideoNotes` is a real, always-
+ * empty field; `communityPost` is real but its UI ownership is still
+ * an open product question per the migration spec §13/§18 — it must
+ * round-trip untouched, not be silently writable by this route).
  */
 
 const EDITABLE_KEYS = [
@@ -71,6 +75,22 @@ const EDITABLE_KEYS = [
   "editingChecklist",
   "recordingNotes",
   "editingNotes",
+  // Titles (Phase 3B)
+  "generatedTitlePrompt",
+  "selectedTitle",
+  "backupTitle",
+  "titleNotes",
+  // Publish (Phase 3B)
+  "finalTitle",
+  "youtubeDescription",
+  "tagsKeywords",
+  "pinnedComment",
+  "uploadNotes",
+  "youtubeLink",
+  "publishDate",
+  "uploadChecklist",
+  "optimizationChecklist",
+  "finalReviewChecklist",
 ] as const;
 
 export async function GET(

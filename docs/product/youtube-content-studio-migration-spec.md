@@ -16,7 +16,7 @@ If this document and the live app, the dossier, or the real export ever disagree
 
 ## CURRENT STATUS
 
-**Phase 0** (import architecture + data rescue), **Business Brain** (shared sub-account architecture + its Settings UI), **YTCS Phase 1** (Content nav, module shell, Dashboard, project foundation, Input step for all 6 starting points), **YTCS Phase 2** (Deep Dive + Script Prompt Builder), and **YTCS Phase 3A** (Create Video) are all **COMPLETE and live in production** at `crm.magnetixstudios.com`. A user can now open/create a Video Workspace project, complete Input, complete Deep Dive (normal or Product/Offer, format-specific), select Script Ingredients from Business Brain, generate a fully-resolved copy-paste Script Prompt, save an independent Final Script Draft, and move the video through Create Video (recording/editing checklists, recording/editing notes, status, Edits Lab resource card) — all against the owner's real migrated data (15 Video Projects, 2 Saved Ideas, 7 voice recordings in Storage, Business Brain with 3 Offers/1 Framework/1 Story/1 Topic/1 Subtopic). Titles, Publish, full Saved Ideas, full Video Library, and Content Alchemy Lab are all still locked/not built, per instruction. See the Phase 0/Business Brain/Business Brain UI/**YTCS Phase 1**/**YTCS Phase 2**/**YTCS Phase 3A** addenda (after §26) for full details.
+**Phase 0** (import architecture + data rescue), **Business Brain** (shared sub-account architecture + its Settings UI), **YTCS Phase 1** (Content nav, module shell, Dashboard, project foundation, Input step for all 6 starting points), **YTCS Phase 2** (Deep Dive + Script Prompt Builder), **YTCS Phase 3A** (Create Video), and **YTCS Phase 3B** (Titles + Publish) are all **COMPLETE and live in production** at `crm.magnetixstudios.com`. **All six Video Workspace steps are now real and built end to end.** A user can open/create a Video Workspace project, complete Input, complete Deep Dive, select Script Ingredients and generate a Script Prompt, save a Final Script Draft, move the video through Create Video, build a Title Prompt from that Final Script Draft, save a Selected/Backup Title, and run it through Publish (assets, Upload/Optimization/Final Review checklists, Mark as Published) — all against the owner's real migrated data (15 Video Projects, 2 Saved Ideas, 7 voice recordings in Storage, Business Brain with 3 Offers/1 Framework/1 Story/1 Topic/1 Subtopic). Full Saved Ideas CRUD, full Video Library, YTCS Settings completion, and Content Alchemy Lab are all still locked/not built, per instruction. See the Phase 0/Business Brain/Business Brain UI/**YTCS Phase 1**/**YTCS Phase 2**/**YTCS Phase 3A**/**YTCS Phase 3B** addenda (after §26) for full details.
 
 ## SOURCE MATERIAL
 
@@ -65,7 +65,7 @@ Kept genuinely open:
 
 ## NEXT APPROVED TASK
 
-None yet. YTCS Phase 3A (Create Video) is done and live in production; Titles, Publish, full Saved Ideas CRUD, full Video Library, and Content Alchemy Lab all have no approval and should not start automatically. Open items carried forward: (1) a genuine interactive click-through QA pass is still owed from a real authenticated browser session — Phase 1's UI was since visually verified by the owner in production, but Phase 2's Deep Dive/Script Prompt Builder UI and Phase 3A's Create Video UI have only been QA'd via direct Firestore/logic testing, not clicked through live; (2) the Depth Preference and Offer/CTA-for-non-offer-projects questions noted above remain open product decisions, not silently resolved.
+None yet. YTCS Phase 3B (Titles + Publish) is done and live in production — all six Video Workspace steps are now real. Full Saved Ideas CRUD, full Video Library, YTCS Settings completion, and Content Alchemy Lab all have no approval and should not start automatically. Open items carried forward: (1) a genuine interactive click-through QA pass is still owed from a real authenticated browser session — Phase 1's UI was since visually verified by the owner in production, but Phase 2's Deep Dive/Script Prompt Builder UI, Phase 3A's Create Video UI, and Phase 3B's Titles/Publish UI have only been QA'd via direct Firestore/logic testing, not clicked through live; (2) the Depth Preference and Offer/CTA-for-non-offer-projects questions noted above remain open product decisions, not silently resolved.
 
 ---
 
@@ -1715,3 +1715,55 @@ eslint clean; `tsc --noEmit` shows zero errors in any Phase 3A file (the only re
 `src/lib/ytcs/create-video-checklists.ts` (new), `src/components/ytcs/create-video-step.tsx` (new), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts` (PATCH allowlist extended), the project detail page (`workspace/[videoId]/page.tsx` — Create Video tab unlocked). No changes to `src/types/ytcs.ts` (all 5 fields already existed in the real type from Phase 1) and no changes to `src/components/dashboard/sidebar.tsx` (no new nav entry needed for this phase).
 
 **YTCS Phase 3A is complete.** Titles, Publish, full Saved Ideas CRUD, full Video Library, and Content Alchemy Lab remain untouched, per instruction.
+
+---
+
+# YTCS Phase 3B (2026-09-02) — Titles + Publish
+
+## Scope delivered
+
+Step 5 (Titles) and Step 6 (Publish) — **all six Video Workspace steps are now real and built**: Input → Deep Dive → Script Prompt Builder → Create Video → Titles → Publish. Full Saved Ideas CRUD, full Video Library, YTCS Settings completion, and Content Alchemy Lab were not touched, per instruction.
+
+## Titles — the real captured Title Prompt template, cross-confirmed byte-for-byte
+
+The final active Titles system is the **Title Prompt Builder**, matching this migration's locked decision: a copy-paste AI prompt, never an in-app title generator. Unlike Phase 2's Script Prompt Builder (whose template was reconstructed from the dossier's verbatim capture), Phase 3B found the *exact real template* still sitting in the real export: `generatedTitlePrompt` on 2 of 15 real projects (`86417107-...`, `f4a91664-...`) is **byte-identical**, proving it is genuine deterministic output, not AI-varying content. `src/lib/ytcs/title-prompt.ts` reconstructs it exactly — verified by rebuilding both real projects' prompts from their real `compiledScript` + real Business Brain data and diffing byte-for-byte against the real stored value (0 differences on both). The real template omits "Trend-Jacking" entirely (the dossier lists it as conditional); the real captured version simply never includes it, so it stays out here too.
+
+A third real project (`cf95ee97-...`) has a *different*, older `generatedTitlePrompt` — 15 titles instead of 10, positioning-element references, a "video context" fallback used instead of requiring a Final Script Draft, and a per-title "Thumbnail Angle" (a field the dossier explicitly rejects). This is the pre-pivot legacy generator's real output, outweighed 2-to-1 by the cross-confirmed template above and consistent with this migration's own locked decision to not resurrect the old generator. That real string is still rendered as-is (real, previously-generated data is never hidden or regenerated away on page load), but all new/regenerated prompts use only the canonical template.
+
+**Missing-script guard**, VERIFIED verbatim (spec §12): *"Add your final script first so the title prompt can be based on the actual video… not a vague idea wearing a blazer."* Enforced in both the UI (Generate button disabled, guard message shown) and server-side in the `generate-title-prompt` route (400 if `compiledScript` is empty) — generating from a vague idea instead of the real script is exactly the behavior this migration moved away from, so it's blocked at both layers, not just cosmetically in the UI.
+
+**Generated Title Prompt persistence**: written only by its own dedicated route (`generate-title-prompt`, mirrors Phase 2's `generate-script-prompt`), never by the general PATCH route's client usage — opening a project never silently regenerates it, and regeneration was verified (via a disposable QA project) to leave Selected Title/Backup Title/Notes completely untouched.
+
+**Your Chosen Title**: Selected Title + Backup Title + Notes, one batched "Save Titles" action (matches the established Script Ingredients save pattern). Live character counts shown for both title fields; no arbitrary limit imposed — the migration spec never defines one. `titleNotes` is a **new field name** — no real field for Titles-step notes was ever found in the export (same situation Phase 2 hit with `deepDiveVoiceNotes`), so it follows the existing `[step]Notes` convention rather than reusing an unverified guess.
+
+**Legacy title-generator data** (`generatedTitles`, `top3Titles`, `thumbnailConcept`, `thumbnailText`, `thumbnailCuriosityAngle`) already lives read-only under each real project's `legacy` bucket, per Phase 0's importer classification — confirmed again this phase and left completely untouched; no UI reads or renders it, and it is not in the PATCH allowlist.
+
+## Publish — command center, no invented fields
+
+**Publish Assets**: Final Title, YouTube Description (with Copy button, CTA-first default template pre-filled when empty), Tags/Keywords, Pinned Comment, Upload Notes, YouTube Link, Publish Date — all VERIFIED real fields, one batched "Save Publish Assets" action. `communityPost` (real, but its UI home is an unresolved open question per spec §13/§18) and `finalVideoNotes` (real, always empty, never named in scope) were deliberately **not** built or added to the PATCH allowlist — they round-trip untouched by construction, not by convention alone. No `playlist` field was built — zero real evidence it ever existed.
+
+**Default YouTube Description template**: VERIFIED byte-for-byte against a real export record (`98530527-...`) — 14 of 15 real projects have this exact text seeded as their actual stored `youtubeDescription` value, confirming it's a real seeded default, not just a UI placeholder.
+
+**Upload Checklist (14 items) / Optimization Checklist (12 items)**: verbatim from spec §13. Real-data note: **no real field name was ever found for either checklist** in the export (only `finalReviewChecklist` has real precedent, populated on 1/15 projects with keys matching these Final Review items exactly) — `uploadChecklist`/`optimizationChecklist` are new field names established here, following the same `[step]Checklist` convention as Create Video's checklists. Same auto-save-per-toggle behavior and Firestore nested-merge-based legacy-key preservation as Create Video (Phase 3A) — verified again this phase via a disposable project's multi-toggle round trip.
+
+**Final Review (9 items)**: real field `finalReviewChecklist`, verbatim from spec §13, same auto-save toggle pattern.
+
+**Mark as Published**: sets `status` to `"Published"` and, if `publishDate` isn't already set, defaults it to today. **No real project ever reached a "Published" status in the export** (real `status` values found: Input/Deep Dive/Script Prompt Builder/Create Video/Publish/"Compiled Script Ready" — all step-name-shaped, never a terminal "Published" value) — so this exact string is a documented product decision, not a real-data-confirmed one, made by extending the same step-name-based status convention every other real value already follows to its natural terminal state. Not gated behind checklist completion, per instruction ("do not introduce artificial gates").
+
+## Video Library relationship
+
+No full Video Library was built this phase. Publish writes only to the existing `status` field on the existing `ytcsVideos` collection — no separate published-video collection was created — so a future Video Library's "Published" tab can filter `status === "Published"` directly against real Video Project documents, matching the already-established single-collection architecture.
+
+## Write safety
+
+The PATCH allowlist (`src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts`) was extended with exactly the Titles + Publish fields (`generatedTitlePrompt`, `selectedTitle`, `backupTitle`, `titleNotes`, `finalTitle`, `youtubeDescription`, `tagsKeywords`, `pinnedComment`, `uploadNotes`, `youtubeLink`, `publishDate`, `uploadChecklist`, `optimizationChecklist`, `finalReviewChecklist`). `communityPost`, `finalVideoNotes`, and every `legacy`/`unknownFields` key remain structurally unreachable. Verified via a disposable QA project that Titles/Publish writes never touch Input, Script Prompt Builder, Create Video, `legacy`, or `communityPost` data.
+
+## QA result
+
+eslint clean; `tsc --noEmit` shows zero errors in any Phase 3B file (repo-wide errors present are the same pre-existing, entirely untracked, concurrent-session billing/purchases files already documented in the Phase 2/3A addenda — confirmed again via `git show HEAD:<path>` returning "not in HEAD"). Real Firestore QA (27/27 checks) via a temporary script: real-project render compatibility (both cross-confirmed real Title Prompts, the legacy title-prompt project, real Final Review data), a deterministic rebuild of both real Title Prompts matching the stored values byte-for-byte, a disposable QA project exercising every new Titles/Publish field end-to-end including regeneration-preserves-Selected/Backup/Notes and Mark as Published, full previous-step/legacy/advanced/communityPost preservation, and all 15 real projects confirmed byte-identical (across every field this phase touches) before and after the run. Interactive browser/responsive QA was not performed this phase (no authenticated browser session available) — disclosed as still owed, not claimed as done.
+
+## Files changed
+
+`src/lib/ytcs/title-prompt.ts` (new), `src/lib/ytcs/publish-checklists.ts` (new), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/generate-title-prompt/route.ts` (new), `src/app/api/sub-accounts/[id]/ytcs/videos/[videoId]/route.ts` (PATCH allowlist extended), `src/components/ytcs/titles-step.tsx` (new), `src/components/ytcs/publish-step.tsx` (new), `src/types/ytcs.ts` (+`titleNotes`, `uploadChecklist`, `optimizationChecklist`), the project detail page (`workspace/[videoId]/page.tsx` — Titles/Publish tabs unlocked, all six steps now built). No changes to `src/components/dashboard/sidebar.tsx`.
+
+**YTCS Phase 3B is complete. All six Video Workspace steps are real.** Full Saved Ideas CRUD, full Video Library, YTCS Settings completion, and Content Alchemy Lab remain untouched, per instruction.
