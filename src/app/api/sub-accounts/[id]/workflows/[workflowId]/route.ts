@@ -177,7 +177,9 @@ export async function PATCH(
   ) {
     patch.status = body.status;
   }
-  if (body.trigger && typeof body.trigger === "object") {
+  if (body.trigger === null) {
+    patch.trigger = null;
+  } else if (body.trigger && typeof body.trigger === "object") {
     const trigger = body.trigger as Record<string, unknown>;
     if (
       typeof trigger.type !== "string" ||

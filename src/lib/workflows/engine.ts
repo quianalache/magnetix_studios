@@ -58,6 +58,7 @@ import type {
   WorkflowRunDoc,
   WorkflowRunHistoryEntry,
   WorkflowTriggerType,
+  WorkflowTrigger,
   CreateContactConfig,
   TaskMutationConfig,
   CreateDealConfig,
@@ -875,6 +876,8 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
 
     for (const doc of matches.docs) {
       const wf = { id: doc.id, ...(doc.data() as Omit<WorkflowDoc, "id">) };
+      if (!wf.trigger) continue;
+      const trigger = wf.trigger;
       if (!wf.startNodeId) continue;
       if (
         (input.type === "workflow.completed" ||
@@ -885,27 +888,27 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
 
       // Trigger-specific narrowing.
       if (
-        wf.trigger.type === "form.submitted" &&
-        wf.trigger.formId &&
-        wf.trigger.formId !== input.context?.formId
+        trigger.type === "form.submitted" &&
+        trigger.formId &&
+        trigger.formId !== input.context?.formId
       ) {
         continue;
       }
       if (
-        wf.trigger.type === "pipeline.stage.changed" &&
-        wf.trigger.toStage &&
-        wf.trigger.toStage !== input.context?.toStage
+        trigger.type === "pipeline.stage.changed" &&
+        trigger.toStage &&
+        trigger.toStage !== input.context?.toStage
       ) {
         continue;
       }
       if (
-        wf.trigger.type === "message.received" &&
-        wf.trigger.channel &&
-        wf.trigger.channel !== input.context?.channel
+        trigger.type === "message.received" &&
+        trigger.channel &&
+        trigger.channel !== input.context?.channel
       ) {
         continue;
       }
-      const filterPairs: [keyof WorkflowDoc["trigger"], string][] = [
+      const filterPairs: [keyof WorkflowTrigger, string][] = [
         ["ownerUid", "ownerUid"],
         ["projectId", "projectId"],
         ["pipelineId", "pipelineId"],
@@ -919,11 +922,11 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       if (
         filterPairs.some(
           ([key, contextKey]) =>
-            wf.trigger[key] && wf.trigger[key] !== input.context?.[contextKey]
+            trigger[key] && trigger[key] !== input.context?.[contextKey]
         )
       )
         continue;
-      if (!evalConditionGroup(wf.trigger.filters, contact)) continue;
+      if (!evalConditionGroup(trigger.filters, contact)) continue;
       if (!(await reentryAllows(wf, contact.id))) continue;
 
       const eventId =

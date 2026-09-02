@@ -195,7 +195,8 @@ export interface WorkflowDoc {
   createdByUid: string;
   name: string;
   status: WorkflowStatus;
-  trigger: WorkflowTrigger;
+  /** Null only for a newly-created blank draft before the user chooses a trigger. */
+  trigger: WorkflowTrigger | null;
   /** Re-enrollment policy. Absent = "every_time". */
   reentry?: WorkflowReentry;
   /** Entry node id. Null = empty workflow (won't enroll). */

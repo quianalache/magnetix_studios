@@ -116,7 +116,6 @@ const TRIGGER_TYPES: WorkflowTriggerType[] = [
   "conversation.assigned",
   "conversation.closed",
   "conversation.reopened",
-  // Deferred until Resend webhook signing is configured and runtime-tested.
   "scheduled.datetime",
   "workflow.completed",
   "workflow.failed",
@@ -177,6 +176,52 @@ function actionCategory(type: WorkflowNodeType): string {
   return "Utilities";
 }
 
+function triggerMatchRank(type: WorkflowTriggerType, query: string): number {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return 0;
+  const label = TRIGGER_LABELS[type].toLowerCase();
+  const category = triggerCategory(type).toLowerCase();
+  if (label === normalized) return 0;
+  if (label.startsWith(normalized)) return 1;
+  if (label.split(/\s+/).some((word) => word.startsWith(normalized))) return 2;
+  if (label.includes(normalized)) return 3;
+  if (category.includes(normalized)) return 4;
+  return -1;
+}
+
+function rankedTriggerOptions(
+  query: string,
+  selected: WorkflowTriggerType | null
+): WorkflowTriggerType[] {
+  return TRIGGER_TYPES.filter(
+    (type) => type !== selected && triggerMatchRank(type, query) >= 0
+  ).sort((a, b) => {
+    const rank = triggerMatchRank(a, query) - triggerMatchRank(b, query);
+    return rank || TRIGGER_LABELS[a].localeCompare(TRIGGER_LABELS[b]);
+  });
+}
+
+function actionMatchRank(type: WorkflowNodeType, query: string): number {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return 0;
+  const label = NODE_LABELS[type].toLowerCase();
+  const category = actionCategory(type).toLowerCase();
+  if (label === normalized) return 0;
+  if (label.startsWith(normalized)) return 1;
+  if (label.split(/\s+/).some((word) => word.startsWith(normalized))) return 2;
+  if (label.includes(normalized)) return 3;
+  if (category.includes(normalized)) return 4;
+  return -1;
+}
+
+function rankedActionOptions(query: string): WorkflowNodeType[] {
+  return ADDABLE_TYPES.filter((type) => actionMatchRank(type, query) >= 0).sort(
+    (a, b) =>
+      actionMatchRank(a, query) - actionMatchRank(b, query) ||
+      NODE_LABELS[a].localeCompare(NODE_LABELS[b])
+  );
+}
+
 const ICONS: Record<WorkflowNodeType, typeof Mail> = {
   send_email: Mail,
   send_sms: MessageSquare,
@@ -214,7 +259,7 @@ export interface BuilderInitial {
   id: string;
   name: string;
   status: WorkflowStatus;
-  trigger: WorkflowTrigger;
+  trigger: WorkflowTrigger | null;
   reentry?: WorkflowReentry;
   nodes: Record<string, import("@/types/workflows").WorkflowNode>;
   startNodeId: string | null;
@@ -291,7 +336,9 @@ export function WorkflowBuilder({
   const router = useRouter();
   const [name, setName] = useState(initial.name);
   const [status, setStatus] = useState<WorkflowStatus>(initial.status);
-  const [trigger, setTrigger] = useState<WorkflowTrigger>(initial.trigger);
+  const [trigger, setTrigger] = useState<WorkflowTrigger | null>(
+    initial.trigger
+  );
   const [reentry, setReentry] = useState<WorkflowReentry>(
     initial.reentry ?? "every_time"
   );
@@ -410,23 +457,21 @@ export function WorkflowBuilder({
             <Zap className="h-4 w-4 text-amber-500" /> When this happens
           </div>
           <select
-            value={trigger.type}
-            onChange={(e) =>
-              setTrigger({
-                type: e.target.value as WorkflowTriggerType,
-                filters: trigger.filters ?? { all: [] },
-              })
-            }
+            value={trigger?.type ?? ""}
+            onChange={(e) => {
+              const type = e.target.value as WorkflowTriggerType;
+              setTrigger(
+                type ? { type, filters: trigger?.filters ?? { all: [] } } : null
+              );
+              setTriggerQuery("");
+            }}
             className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
           >
+            <option value="">Choose a trigger</option>
             {Array.from(new Set(TRIGGER_TYPES.map(triggerCategory))).map(
               (group) => {
                 const options = TRIGGER_TYPES.filter(
-                  (t) =>
-                    triggerCategory(t) === group &&
-                    TRIGGER_LABELS[t]
-                      .toLowerCase()
-                      .includes(triggerQuery.toLowerCase())
+                  (t) => triggerCategory(t) === group
                 );
                 return options.length ? (
                   <optgroup key={group} label={group}>
@@ -448,150 +493,197 @@ export function WorkflowBuilder({
             aria-label="Search workflow triggers"
           />
 
-          {trigger.type === "form.submitted" && (
-            <select
-              value={trigger.formId ?? ""}
-              onChange={(e) =>
-                setTrigger({ ...trigger, formId: e.target.value || null })
-              }
-              className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+          {triggerQuery.trim() && (
+            <div
+              className="mt-2 rounded-md border p-1"
+              role="listbox"
+              aria-label="Matching workflow triggers"
             >
-              <option value="">Any form</option>
-              {forms.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
+              {rankedTriggerOptions(triggerQuery, trigger?.type ?? null)
+                .length ? (
+                rankedTriggerOptions(triggerQuery, trigger?.type ?? null).map(
+                  (type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      className="hover:bg-muted w-full rounded px-2 py-1.5 text-left text-sm"
+                      onClick={() => {
+                        setTrigger({
+                          type,
+                          filters: trigger?.filters ?? { all: [] },
+                        });
+                        setTriggerQuery("");
+                      }}
+                    >
+                      {TRIGGER_LABELS[type]}
+                    </button>
+                  )
+                )
+              ) : (
+                <div className="text-muted-foreground px-2 py-2 text-sm">
+                  No triggers found
+                </div>
+              )}
+            </div>
           )}
 
-          {trigger.type === "pipeline.stage.changed" && (
-            <select
-              value={trigger.toStage ?? ""}
-              onChange={(e) =>
-                setTrigger({ ...trigger, toStage: e.target.value || null })
-              }
-              className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
-            >
-              <option value="">Any stage</option>
-              {PIPELINE_STAGES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  Moved to {s.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {trigger.type === "message.received" && (
+          {trigger && (
             <>
-              <select
-                value={trigger.channel ?? ""}
-                onChange={(e) =>
-                  setTrigger({ ...trigger, channel: e.target.value || null })
-                }
-                className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
-              >
-                <option value="">Any channel</option>
-                {MESSAGE_CHANNELS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-              <p className="text-muted-foreground mt-1.5 text-xs">
-                Fires on every inbound message. Set re-entry to &ldquo;Not while
-                already in this workflow&rdquo; below so a chatty contact
-                isn&apos;t enrolled once per message.
-              </p>
+              {trigger?.type === "form.submitted" && (
+                <select
+                  value={trigger.formId ?? ""}
+                  onChange={(e) =>
+                    setTrigger({ ...trigger, formId: e.target.value || null })
+                  }
+                  className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+                >
+                  <option value="">Any form</option>
+                  {forms.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {trigger?.type === "pipeline.stage.changed" && (
+                <select
+                  value={trigger.toStage ?? ""}
+                  onChange={(e) =>
+                    setTrigger({ ...trigger, toStage: e.target.value || null })
+                  }
+                  className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+                >
+                  <option value="">Any stage</option>
+                  {PIPELINE_STAGES.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Moved to {s.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {trigger?.type === "message.received" && (
+                <>
+                  <select
+                    value={trigger.channel ?? ""}
+                    onChange={(e) =>
+                      setTrigger({
+                        ...trigger,
+                        channel: e.target.value || null,
+                      })
+                    }
+                    className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
+                  >
+                    <option value="">Any channel</option>
+                    {MESSAGE_CHANNELS.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-muted-foreground mt-1.5 text-xs">
+                    Fires on every inbound message. Set re-entry to &ldquo;Not
+                    while already in this workflow&rdquo; below so a chatty
+                    contact isn&apos;t enrolled once per message.
+                  </p>
+                </>
+              )}
+
+              {(
+                [
+                  "task.created",
+                  "task.completed",
+                  "deal.created",
+                  "deal.won",
+                  "deal.lost",
+                  "booking.completed",
+                  "booking.no_show",
+                  "course.enrolled",
+                  "course.lesson.completed",
+                  "course.completed",
+                  "offer.purchase.paid",
+                  "offer.access.granted",
+                  "offer.access.revoked",
+                  "community.member.joined",
+                  "community.member.approved",
+                  "community.member.left",
+                  "community.post.created",
+                  "community.comment.created",
+                  "community.event.started",
+                  "community.event.ended",
+                  "community.live.ended",
+                  "community.replay.ready",
+                ] as WorkflowTriggerType[]
+              ).includes(trigger?.type as WorkflowTriggerType) && (
+                <Input
+                  className="mt-2"
+                  placeholder={
+                    trigger?.type.startsWith("course.")
+                      ? "Optional course ID"
+                      : trigger?.type.startsWith("offer.")
+                        ? "Optional offer ID"
+                        : trigger?.type.startsWith("community.")
+                          ? "Optional Community/group ID"
+                          : trigger?.type.startsWith("deal.")
+                            ? "Optional stage ID"
+                            : "Optional entity ID"
+                  }
+                  value={
+                    trigger?.courseId ??
+                    trigger?.offerId ??
+                    trigger?.groupId ??
+                    trigger?.stageId ??
+                    ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value || null;
+                    if (trigger?.type.startsWith("course."))
+                      setTrigger({ ...trigger, courseId: value });
+                    else if (trigger?.type.startsWith("offer."))
+                      setTrigger({ ...trigger, offerId: value });
+                    else if (trigger?.type.startsWith("community."))
+                      setTrigger({ ...trigger, groupId: value });
+                    else if (trigger?.type.startsWith("deal."))
+                      setTrigger({ ...trigger, stageId: value });
+                  }}
+                />
+              )}
+
+              <div className="mt-3 border-t pt-3">
+                <div className="text-muted-foreground mb-1.5 text-xs font-medium">
+                  Only continue if (optional)
+                </div>
+                <ConditionsEditor
+                  value={trigger?.filters ?? { all: [] }}
+                  onChange={(g) =>
+                    trigger && setTrigger({ ...trigger, filters: g })
+                  }
+                />
+              </div>
+
+              <div className="mt-3 border-t pt-3">
+                <div className="text-muted-foreground mb-1.5 text-xs font-medium">
+                  Re-enroll this contact
+                </div>
+                <select
+                  value={reentry}
+                  onChange={(e) =>
+                    setReentry(e.target.value as WorkflowReentry)
+                  }
+                  className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+                >
+                  {REENTRY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </>
           )}
-
-          {(
-            [
-              "task.created",
-              "task.completed",
-              "deal.created",
-              "deal.won",
-              "deal.lost",
-              "booking.completed",
-              "booking.no_show",
-              "course.enrolled",
-              "course.lesson.completed",
-              "course.completed",
-              "offer.purchase.paid",
-              "offer.access.granted",
-              "offer.access.revoked",
-              "community.member.joined",
-              "community.member.approved",
-              "community.member.left",
-              "community.post.created",
-              "community.comment.created",
-              "community.event.started",
-              "community.event.ended",
-              "community.live.ended",
-              "community.replay.ready",
-            ] as WorkflowTriggerType[]
-          ).includes(trigger.type) && (
-            <Input
-              className="mt-2"
-              placeholder={
-                trigger.type.startsWith("course.")
-                  ? "Optional course ID"
-                  : trigger.type.startsWith("offer.")
-                    ? "Optional offer ID"
-                    : trigger.type.startsWith("community.")
-                      ? "Optional Community/group ID"
-                      : trigger.type.startsWith("deal.")
-                        ? "Optional stage ID"
-                        : "Optional entity ID"
-              }
-              value={
-                trigger.courseId ??
-                trigger.offerId ??
-                trigger.groupId ??
-                trigger.stageId ??
-                ""
-              }
-              onChange={(e) => {
-                const value = e.target.value || null;
-                if (trigger.type.startsWith("course."))
-                  setTrigger({ ...trigger, courseId: value });
-                else if (trigger.type.startsWith("offer."))
-                  setTrigger({ ...trigger, offerId: value });
-                else if (trigger.type.startsWith("community."))
-                  setTrigger({ ...trigger, groupId: value });
-                else if (trigger.type.startsWith("deal."))
-                  setTrigger({ ...trigger, stageId: value });
-              }}
-            />
-          )}
-
-          <div className="mt-3 border-t pt-3">
-            <div className="text-muted-foreground mb-1.5 text-xs font-medium">
-              Only continue if (optional)
-            </div>
-            <ConditionsEditor
-              value={trigger.filters ?? { all: [] }}
-              onChange={(g) => setTrigger({ ...trigger, filters: g })}
-            />
-          </div>
-
-          <div className="mt-3 border-t pt-3">
-            <div className="text-muted-foreground mb-1.5 text-xs font-medium">
-              Re-enroll this contact
-            </div>
-            <select
-              value={reentry}
-              onChange={(e) => setReentry(e.target.value as WorkflowReentry)}
-              className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
-            >
-              {REENTRY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Step chain */}
@@ -870,6 +962,7 @@ function StepCard({
 
 function AddMenu({ onAdd }: { onAdd: (t: WorkflowNodeType) => void }) {
   const [query, setQuery] = useState("");
+  const searchedActions = rankedActionOptions(query);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -891,30 +984,52 @@ function AddMenu({ onAdd }: { onAdd: (t: WorkflowNodeType) => void }) {
             aria-label="Search workflow actions"
           />
         </div>
-        {Array.from(new Set(ADDABLE_TYPES.map(actionCategory))).map((group) => {
-          const options = ADDABLE_TYPES.filter(
-            (t) =>
-              actionCategory(t) === group &&
-              NODE_LABELS[t].toLowerCase().includes(query.toLowerCase())
-          );
-          if (!options.length) return null;
-          return (
-            <div key={group}>
-              <div className="text-muted-foreground px-2 py-1 text-[10px] font-semibold tracking-wide uppercase">
-                {group}
-              </div>
-              {options.map((t) => {
-                const Icon = ICONS[t];
-                return (
-                  <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
-                    <Icon className="mr-2 h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap">{NODE_LABELS[t]}</span>
-                  </DropdownMenuItem>
-                );
-              })}
+        {query.trim() ? (
+          searchedActions.length ? (
+            searchedActions.map((t) => {
+              const Icon = ICONS[t];
+              return (
+                <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
+                  <Icon className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">{NODE_LABELS[t]}</span>
+                </DropdownMenuItem>
+              );
+            })
+          ) : (
+            <div className="text-muted-foreground px-2 py-2 text-sm">
+              No actions found
             </div>
-          );
-        })}
+          )
+        ) : (
+          Array.from(new Set(ADDABLE_TYPES.map(actionCategory))).map(
+            (group) => {
+              const options = ADDABLE_TYPES.filter(
+                (t) =>
+                  actionCategory(t) === group &&
+                  NODE_LABELS[t].toLowerCase().includes(query.toLowerCase())
+              );
+              if (!options.length) return null;
+              return (
+                <div key={group}>
+                  <div className="text-muted-foreground px-2 py-1 text-[10px] font-semibold tracking-wide uppercase">
+                    {group}
+                  </div>
+                  {options.map((t) => {
+                    const Icon = ICONS[t];
+                    return (
+                      <DropdownMenuItem key={t} onClick={() => onAdd(t)}>
+                        <Icon className="mr-2 h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap">
+                          {NODE_LABELS[t]}
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </div>
+              );
+            }
+          )
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

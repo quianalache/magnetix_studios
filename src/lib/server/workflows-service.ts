@@ -20,7 +20,9 @@ function toMillis(v: unknown): number {
   return m && typeof m.toMillis === "function" ? m.toMillis() : 0;
 }
 
-export async function listWorkflows(subAccountId: string): Promise<WorkflowDoc[]> {
+export async function listWorkflows(
+  subAccountId: string
+): Promise<WorkflowDoc[]> {
   const snap = await getAdminDb()
     .collection("workflows")
     .where("subAccountId", "==", subAccountId)
@@ -32,7 +34,7 @@ export async function listWorkflows(subAccountId: string): Promise<WorkflowDoc[]
 
 export async function getWorkflow(
   subAccountId: string,
-  workflowId: string,
+  workflowId: string
 ): Promise<WorkflowDoc | null> {
   const snap = await getAdminDb().doc(`workflows/${workflowId}`).get();
   if (!snap.exists) return null;
@@ -215,7 +217,11 @@ function leadNurtureSeed(): Seed {
     n9: {
       id: "n9",
       type: "if_else",
-      config: { conditions: { all: [{ field: "tags", op: "has_tag", value: "replied" }] } },
+      config: {
+        conditions: {
+          all: [{ field: "tags", op: "has_tag", value: "replied" }],
+        },
+      },
       branches: { whenTrue: "n10", whenFalse: "n11" },
     },
     n10: {
@@ -357,7 +363,7 @@ export async function createWorkflowServerSide(opts: {
     opts.template && opts.template !== "blank"
       ? SEEDS[opts.template]()
       : {
-          trigger: { type: "form.submitted" as const, filters: { all: [] } },
+          trigger: null,
           nodes: {},
           startNodeId: null,
         };
@@ -384,7 +390,7 @@ export async function createWorkflowServerSide(opts: {
 export interface WorkflowPatch {
   name?: string;
   status?: WorkflowStatus;
-  trigger?: WorkflowTrigger;
+  trigger?: WorkflowTrigger | null;
   reentry?: WorkflowReentry;
   nodes?: Record<string, WorkflowNode>;
   startNodeId?: string | null;
@@ -404,7 +410,8 @@ export async function updateWorkflowServerSide(opts: {
   const write: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
   };
-  if (patch.name !== undefined) write.name = patch.name.trim() || "Untitled workflow";
+  if (patch.name !== undefined)
+    write.name = patch.name.trim() || "Untitled workflow";
   if (patch.status !== undefined) write.status = patch.status;
   if (patch.trigger !== undefined) write.trigger = patch.trigger;
   if (patch.reentry !== undefined) write.reentry = patch.reentry;
@@ -426,7 +433,7 @@ export interface RunView {
 
 export async function listWorkflowRuns(
   subAccountId: string,
-  workflowId: string,
+  workflowId: string
 ): Promise<RunView[]> {
   const db = getAdminDb();
   const snap = await db
@@ -446,9 +453,9 @@ export async function listWorkflowRuns(
       const c = await db.doc(`contacts/${id}`).get();
       nameById.set(
         id,
-        (c.data()?.name as string) || (c.data()?.email as string) || "Contact",
+        (c.data()?.name as string) || (c.data()?.email as string) || "Contact"
       );
-    }),
+    })
   );
 
   return runs.map((r) => ({
@@ -468,7 +475,7 @@ export async function listWorkflowRuns(
 
 export async function deleteWorkflowServerSide(
   subAccountId: string,
-  workflowId: string,
+  workflowId: string
 ): Promise<boolean> {
   const ref = getAdminDb().doc(`workflows/${workflowId}`);
   const snap = await ref.get();
