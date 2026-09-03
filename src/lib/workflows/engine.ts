@@ -1,6 +1,7 @@
 import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import sanitizeHtml from "sanitize-html";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   sendEmail,
@@ -34,6 +35,13 @@ import {
   type MergeTagSubject,
 } from "@/lib/automations/merge-tags";
 import { buildUnsubscribeUrl } from "@/lib/automations/unsubscribe-token";
+import {
+  emailAddressIsValid,
+  emailAddressListIsValid,
+  emailHtmlToPlainText,
+  plainTextToEmailHtml,
+  splitEmailAddresses,
+} from "@/lib/automations/workflow-email";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
 import { evalConditionGroup } from "./conditions";
 import type { Contact } from "@/types/contacts";
@@ -144,7 +152,14 @@ const execSendEmail: NodeExecutor = async (ctx) => {
   const to = contact.email;
   if (!to) return { result: { kind: "next" }, log: "skipped:no_email" };
   if (!emailIsConfigured()) {
-    return { result: { kind: "next" }, log: "error:email_not_configured" };
+    return {
+      result: { kind: "fail", retryable: false },
+      log: "error:email_not_configured",
+      execution: {
+        status: "terminal_failure",
+        errorCategory: "email_not_configured",
+      },
+    };
   }
 
   const unsubscribeLink = buildUnsubscribeUrl(contact.id);
@@ -152,15 +167,69 @@ const execSendEmail: NodeExecutor = async (ctx) => {
     cfg.subject ?? "",
     mergeSubject(ctx, unsubscribeLink)
   );
-  const text = resolveMergeTags(
-    cfg.body ?? "",
-    mergeSubject(ctx, unsubscribeLink)
+  const rawBody =
+    typeof cfg.body === "string" && cfg.body.trim()
+      ? cfg.body
+      : emailHtmlToPlainText(cfg.bodyHtml ?? "");
+  const text = resolveMergeTags(rawBody, mergeSubject(ctx, unsubscribeLink));
+  const htmlSource = cfg.bodyHtml || plainTextToEmailHtml(rawBody);
+  const htmlInner = sanitizeHtml(
+    resolveMergeTags(
+      htmlSource,
+      mergeSubject(ctx, '<a href="' + unsubscribeLink + '">Unsubscribe</a>')
+    ),
+    {
+      allowedTags: [
+        "p",
+        "br",
+        "strong",
+        "em",
+        "u",
+        "a",
+        "ul",
+        "ol",
+        "li",
+        "div",
+      ],
+      allowedAttributes: { a: ["href", "target", "rel"] },
+      allowedSchemes: ["http", "https", "mailto"],
+    }
   );
-  const htmlInner = resolveMergeTags(
-    cfg.body ?? "",
-    mergeSubject(ctx, `<a href="${unsubscribeLink}">Unsubscribe</a>`)
-  ).replace(/\r?\n/g, "<br>");
-  const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+  const html =
+    '<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">' +
+    htmlInner +
+    "</body></html>";
+  const replyTo = cfg.replyTo?.trim() || undefined;
+  const cc = cfg.cc?.trim() || undefined;
+  const bcc = cfg.bcc?.trim() || undefined;
+  if (
+    !subject.trim() ||
+    !text.trim() ||
+    !rawBody.includes("{{unsubscribeLink}}")
+  ) {
+    return {
+      result: { kind: "fail", retryable: false },
+      log: "error:invalid_email_config",
+      execution: {
+        status: "terminal_failure",
+        errorCategory: "invalid_email_config",
+      },
+    };
+  }
+  if (
+    (replyTo && !emailAddressIsValid(replyTo)) ||
+    (cc && !emailAddressListIsValid(cc)) ||
+    (bcc && !emailAddressListIsValid(bcc))
+  ) {
+    return {
+      result: { kind: "fail", retryable: false },
+      log: "error:invalid_recipient_config",
+      execution: {
+        status: "terminal_failure",
+        errorCategory: "invalid_recipient_config",
+      },
+    };
+  }
 
   try {
     await sendTenantEmail({
@@ -169,12 +238,24 @@ const execSendEmail: NodeExecutor = async (ctx) => {
       subject: subject || "(no subject)",
       text,
       html,
+      fromName: cfg.fromName,
+      replyTo,
+      cc: cc ? splitEmailAddresses(cc) : undefined,
+      bcc: bcc ? splitEmailAddresses(bcc) : undefined,
     });
     return { result: { kind: "next" }, log: "ok" };
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "send_failed";
+    const retryable =
+      /(429|408|5\d\d|timeout|timed out|network|fetch failed)/i.test(message);
     return {
-      result: { kind: "next" },
-      log: "error:send_failed",
+      result: { kind: "fail", retryable },
+      log: "error:" + (retryable ? "provider_retryable" : "send_failed"),
+      execution: {
+        status: retryable ? "retryable_failure" : "terminal_failure",
+        errorCategory: retryable ? "provider_retryable" : "provider_rejected",
+        errorMessage: message,
+      },
     };
   }
 };
@@ -1237,6 +1318,12 @@ export async function runStep(
     },
   };
   if (result.kind === "fail") {
+    if (execution?.status === "retryable_failure") {
+      // Keep the node out of history so a transient provider failure can be
+      // retried by QStash without being mistaken for a completed action.
+      await scheduleNode(runRef, nodeId, 60);
+      return;
+    }
     await runRef.update({
       status: "failed",
       history: FieldValue.arrayUnion(entry),

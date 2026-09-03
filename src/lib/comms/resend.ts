@@ -11,7 +11,7 @@ export function getResend(): Resend {
     const key = process.env.RESEND_API_KEY;
     if (!key) {
       throw new Error(
-        "RESEND_API_KEY is not set. Add it to .env.local to enable email.",
+        "RESEND_API_KEY is not set. Add it to .env.local to enable email."
       );
     }
     _client = new Resend(key);
@@ -41,7 +41,7 @@ export function tenantFrom(
   sub?: {
     resendConfig?: ResendConfig | null;
     emailDomainEnabledByAgency?: boolean;
-  } | null,
+  } | null
 ): string | undefined {
   if (sub?.emailDomainEnabledByAgency !== true) return undefined;
   const cfg = sub.resendConfig;
@@ -66,7 +66,7 @@ export function resolveReplyTo(
     resendConfig?: ResendConfig | null;
     emailDomainEnabledByAgency?: boolean;
     replyToEmail?: string | null;
-  } | null,
+  } | null
 ): string | string[] | undefined {
   const personal = sub?.replyToEmail?.trim() || undefined;
   const domain = tenantFrom(sub);
@@ -83,6 +83,8 @@ export async function sendEmail({
   from,
   attachments,
   headers,
+  cc,
+  bcc,
 }: {
   to: string;
   subject: string;
@@ -100,6 +102,8 @@ export async function sendEmail({
    */
   from?: string;
   attachments?: { filename: string; content: string }[];
+  cc?: string | string[];
+  bcc?: string | string[];
   /**
    * Raw custom headers, passed straight through to Resend. Used for
    * `List-Unsubscribe`/`List-Unsubscribe-Post` on broadcast sends (see
@@ -110,7 +114,7 @@ export async function sendEmail({
   const resolvedFrom = from ?? process.env.EMAIL_FROM;
   if (!resolvedFrom) {
     throw new Error(
-      "EMAIL_FROM is not set. It must be a sender on a Resend-verified domain.",
+      "EMAIL_FROM is not set. It must be a sender on a Resend-verified domain."
     );
   }
   const client = getResend();
@@ -122,6 +126,8 @@ export async function sendEmail({
     ...(html ? { html } : {}),
     replyTo,
     ...(attachments ? { attachments } : {}),
+    ...(cc ? { cc } : {}),
+    ...(bcc ? { bcc } : {}),
     ...(headers ? { headers } : {}),
   });
   if (result.error) {
@@ -139,7 +145,7 @@ export async function sendEmail({
 export class NoTenantDomainError extends Error {
   constructor() {
     super(
-      "This sub-account has no verified dedicated sending domain. Set one up in Settings → Email before sending.",
+      "This sub-account has no verified dedicated sending domain. Set one up in Settings → Email before sending."
     );
     this.name = "NoTenantDomainError";
   }
@@ -167,6 +173,9 @@ export async function sendTenantEmail({
   attachments,
   replyTo,
   headers,
+  cc,
+  bcc,
+  fromName,
 }: {
   sub:
     | {
@@ -186,9 +195,17 @@ export async function sendTenantEmail({
    *  sent them, not the sub-account's general address). */
   replyTo?: string | string[];
   headers?: Record<string, string>;
+  cc?: string | string[];
+  bcc?: string | string[];
+  /** Optional display-name override; the verified tenant address is unchanged. */
+  fromName?: string;
 }): Promise<{ id: string }> {
-  const from = tenantFrom(sub);
-  if (!from) throw new NoTenantDomainError();
+  const tenantSender = tenantFrom(sub);
+  if (!tenantSender) throw new NoTenantDomainError();
+  const address = tenantSender.match(/<([^>]+)>/)?.[1] ?? tenantSender;
+  const from = fromName?.trim()
+    ? fromName.trim() + " <" + address + ">"
+    : tenantSender;
   return sendEmail({
     to,
     subject,
@@ -198,6 +215,8 @@ export async function sendTenantEmail({
     replyTo: replyTo ?? resolveReplyTo(sub),
     attachments,
     headers,
+    cc,
+    bcc,
   });
 }
 
@@ -224,7 +243,7 @@ export async function sendPlainTextBroadcast({
   const resolvedFrom = from ?? process.env.EMAIL_FROM;
   if (!resolvedFrom) {
     throw new Error(
-      "EMAIL_FROM is not set. It must be a sender on a Resend-verified domain.",
+      "EMAIL_FROM is not set. It must be a sender on a Resend-verified domain."
     );
   }
   const client = getResend();
@@ -242,7 +261,7 @@ export async function sendPlainTextBroadcast({
           subject,
           text,
           ...(replyTo ? { replyTo } : {}),
-        })),
+        }))
       );
       if (res.error) {
         failed += chunk.length;

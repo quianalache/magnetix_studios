@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { tenantFrom } from "@/lib/comms/resend";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import {
   deleteWorkflowServerSide,
@@ -11,6 +13,11 @@ import type {
   WorkflowNodeType,
   WorkflowTrigger,
 } from "@/types/workflows";
+import {
+  emailAddressIsValid,
+  emailAddressListIsValid,
+  emailHtmlToPlainText,
+} from "@/lib/automations/workflow-email";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +146,42 @@ function sanitizeNodes(raw: unknown): Record<string, WorkflowNode> | null {
   return out;
 }
 
+function validateActiveEmailSteps(
+  nodes: Record<string, WorkflowNode>
+): string | null {
+  for (const node of Object.values(nodes)) {
+    if (node.type !== "send_email") continue;
+    const config = node.config as Record<string, unknown>;
+    const subject =
+      typeof config.subject === "string" ? config.subject.trim() : "";
+    const body =
+      typeof config.bodyHtml === "string"
+        ? emailHtmlToPlainText(config.bodyHtml)
+        : typeof config.body === "string"
+          ? config.body.trim()
+          : "";
+    if (!subject) return "Send email steps need a subject before activation.";
+    if (!body) return "Send email steps need an email body before activation.";
+    if (!body.includes("{{unsubscribeLink}}")) {
+      return "Send email steps must include {{unsubscribeLink}} for compliance.";
+    }
+    if (
+      (typeof config.replyTo === "string" &&
+        config.replyTo.trim() &&
+        !emailAddressIsValid(config.replyTo)) ||
+      (typeof config.cc === "string" &&
+        config.cc.trim() &&
+        !emailAddressListIsValid(config.cc)) ||
+      (typeof config.bcc === "string" &&
+        config.bcc.trim() &&
+        !emailAddressListIsValid(config.bcc))
+    ) {
+      return "Send email recipient settings contain an invalid email address.";
+    }
+  }
+  return null;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string; workflowId: string }> }
@@ -237,6 +280,26 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid nodes" }, { status: 400 });
     }
     patch.nodes = nodes;
+  }
+
+  if (patch.status === "active" && patch.nodes) {
+    const emailError = validateActiveEmailSteps(patch.nodes);
+    if (emailError)
+      return NextResponse.json({ error: emailError }, { status: 400 });
+    if (Object.values(patch.nodes).some((node) => node.type === "send_email")) {
+      const subSnap = await getAdminDb()
+        .doc("subAccounts/${subAccountId}")
+        .get();
+      if (!tenantFrom(subSnap.data())) {
+        return NextResponse.json(
+          {
+            error:
+              "A verified workspace sending domain is required before activation.",
+          },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const ok = await updateWorkflowServerSide({

@@ -10,7 +10,9 @@ import {
   type BuilderReadiness,
 } from "./workflow-builder";
 import type { WhatsappTemplateOption } from "./node-config-dialog";
+import type { WorkflowEmailTemplateOption } from "./node-config-dialog";
 import type { WhatsappTemplateVariable } from "@/types/whatsapp-templates";
+import type { MessageTemplateDoc } from "@/types/automations";
 
 /**
  * Client loader for the builder. Fetches the workflow via the member-gated API
@@ -35,6 +37,9 @@ export function WorkflowBuilderLoader({
   const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
   const [whatsappTemplates, setWhatsappTemplates] = useState<
     WhatsappTemplateOption[]
+  >([]);
+  const [emailTemplates, setEmailTemplates] = useState<
+    WorkflowEmailTemplateOption[]
   >([]);
   const [error, setError] = useState(false);
 
@@ -97,6 +102,32 @@ export function WorkflowBuilderLoader({
       } catch {
         /* templates optional — picker just shows "no approved templates" */
       }
+      try {
+        const snap = await getDocs(
+          query(
+            collection(getFirebaseDb(), "message_templates"),
+            where("subAccountId", "==", saId),
+            where("type", "==", "email")
+          )
+        );
+        if (alive) {
+          setEmailTemplates(
+            snap.docs
+              .map((doc) => {
+                const data = doc.data() as MessageTemplateDoc;
+                return {
+                  id: doc.id,
+                  name: data.name || "Untitled email template",
+                  subject: data.subject ?? "",
+                  body: data.body ?? "",
+                };
+              })
+              .sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+      } catch {
+        /* templates are optional — composer remains usable */
+      }
     })();
     return () => {
       alive = false;
@@ -120,6 +151,8 @@ export function WorkflowBuilderLoader({
       forms={forms}
       readiness={readiness}
       whatsappTemplates={whatsappTemplates}
+      emailTemplates={emailTemplates}
+      emailDefaults={readiness.emailDefaults}
     />
   );
 }

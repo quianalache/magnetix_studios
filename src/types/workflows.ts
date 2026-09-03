@@ -282,6 +282,14 @@ export interface WorkflowRunDoc {
 export interface SendEmailConfig {
   subject: string;
   body: string;
+  /** Rich email-safe HTML, introduced additively; legacy steps use body. */
+  bodyHtml?: string;
+  /** Optional per-step display name; the verified sender address stays tenant-controlled. */
+  fromName?: string;
+  /** Optional overrides; blank values use the sub-account sending preferences. */
+  replyTo?: string;
+  cc?: string;
+  bcc?: string;
 }
 export interface SendSmsConfig {
   body: string;

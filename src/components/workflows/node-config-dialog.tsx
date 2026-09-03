@@ -15,6 +15,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { PIPELINE_STAGES } from "@/types/deals";
 import { NODE_LABELS } from "@/lib/workflows/catalog";
 import { ConditionsEditor } from "./conditions-editor";
+import {
+  WorkflowEmailComposer,
+  type WorkflowEmailTemplateOption,
+} from "./workflow-email-composer";
+import {
+  emailAddressIsValid,
+  emailAddressListIsValid,
+  emailHtmlToPlainText,
+  plainTextToEmailHtml,
+} from "@/lib/automations/workflow-email";
 import type { BuilderStep } from "@/lib/workflows/builder-tree";
 import type { ConditionGroup, NotifyRecipient } from "@/types/workflows";
 import type { WhatsappTemplateVariable } from "@/types/whatsapp-templates";
@@ -29,6 +39,8 @@ export interface WhatsappTemplateOption {
   variables: WhatsappTemplateVariable[];
 }
 
+export type { WorkflowEmailTemplateOption };
+
 function deriveWait(seconds: number): { value: number; unit: number } {
   if (seconds && seconds % 86_400 === 0)
     return { value: seconds / 86_400, unit: 86_400 };
@@ -40,17 +52,34 @@ function deriveWait(seconds: number): { value: number; unit: number } {
 export function NodeConfigDialog({
   step,
   whatsappTemplates,
+  emailTemplates,
+  emailDefaults,
   onClose,
   onSave,
 }: {
   step: BuilderStep | null;
   whatsappTemplates: WhatsappTemplateOption[];
+  emailTemplates: WorkflowEmailTemplateOption[];
+  emailDefaults: {
+    verifiedFrom: string;
+    fromName: string;
+    replyTo: string;
+  };
   onClose: () => void;
   onSave: (config: Cfg) => void;
 }) {
   const [cfg, setCfg] = useState<Cfg>({});
   useEffect(() => {
-    if (step) setCfg({ ...step.config });
+    if (!step) return;
+    const next = { ...step.config };
+    if (
+      step.type === "send_email" &&
+      !next.bodyHtml &&
+      typeof next.body === "string"
+    ) {
+      next.bodyHtml = plainTextToEmailHtml(next.body);
+    }
+    setCfg(next);
   }, [step]);
 
   if (!step) return null;
@@ -63,6 +92,29 @@ export function NodeConfigDialog({
   const notifyRecipient: NotifyRecipient =
     (cfg.recipient as NotifyRecipient | undefined) ??
     (str("to").trim() ? "custom" : "owner");
+  const emailBody = emailHtmlToPlainText(
+    String(cfg.bodyHtml ?? cfg.body ?? "")
+  );
+  const emailErrors =
+    step.type === "send_email"
+      ? [
+          !emailDefaults.verifiedFrom &&
+            "A verified workspace sender is required before saving this email.",
+          !str("subject").trim() && "Subject is required.",
+          !emailBody.trim() && "Email body is required.",
+          !emailBody.includes("{{unsubscribeLink}}") &&
+            "Email body must include {{unsubscribeLink}} for compliance.",
+          cfg.replyTo &&
+            !emailAddressIsValid(String(cfg.replyTo)) &&
+            "Reply-To must be a valid email address.",
+          cfg.cc &&
+            !emailAddressListIsValid(String(cfg.cc)) &&
+            "CC contains an invalid email address.",
+          cfg.bcc &&
+            !emailAddressListIsValid(String(cfg.bcc)) &&
+            "BCC contains an invalid email address.",
+        ].filter((value): value is string => typeof value === "string")
+      : [];
 
   return (
     <Dialog open={!!step} onOpenChange={(o) => !o && onClose()}>
@@ -73,24 +125,14 @@ export function NodeConfigDialog({
 
         <div className="space-y-3">
           {step.type === "send_email" && (
-            <>
-              <Field label="Subject">
-                <Input
-                  value={str("subject")}
-                  onChange={(e) => set({ subject: e.target.value })}
-                />
-              </Field>
-              <Field
-                label="Body"
-                hint="Supports {{contact.firstName}} etc. Include {{unsubscribeLink}} for compliance."
-              >
-                <Textarea
-                  rows={6}
-                  value={str("body")}
-                  onChange={(e) => set({ body: e.target.value })}
-                />
-              </Field>
-            </>
+            <WorkflowEmailComposer
+              config={cfg}
+              setConfig={set}
+              templates={emailTemplates}
+              verifiedFrom={emailDefaults.verifiedFrom}
+              defaultFromName={emailDefaults.fromName}
+              defaultReplyTo={emailDefaults.replyTo}
+            />
           )}
 
           {step.type === "send_sms" && (
@@ -572,11 +614,20 @@ export function NodeConfigDialog({
           )}
         </div>
 
+        {emailErrors.length > 0 && step.type === "send_email" && (
+          <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-md border p-2 text-xs">
+            {emailErrors.map((error) => (
+              <p key={error}>{error}</p>
+            ))}
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
+            disabled={step.type === "send_email" && emailErrors.length > 0}
             onClick={() => {
               onSave(cfg);
               onClose();

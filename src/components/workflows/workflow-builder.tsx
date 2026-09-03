@@ -45,6 +45,7 @@ import {
   type NodeRequirement,
 } from "@/lib/workflows/catalog";
 import { cn } from "@/lib/utils";
+import { emailHtmlToPlainText } from "@/lib/automations/workflow-email";
 import {
   flattenTree,
   isBranchingType,
@@ -56,6 +57,7 @@ import { ConditionsEditor } from "./conditions-editor";
 import {
   NodeConfigDialog,
   type WhatsappTemplateOption,
+  type WorkflowEmailTemplateOption,
 } from "./node-config-dialog";
 import { TestDialog } from "./test-dialog";
 import type {
@@ -299,6 +301,11 @@ export interface BuilderReadiness {
   smsReady: boolean;
   whatsappReady: boolean;
   detail: ReadinessDetail;
+  emailDefaults: {
+    verifiedFrom: string;
+    fromName: string;
+    replyTo: string;
+  };
 }
 
 export type { WhatsappTemplateOption };
@@ -318,6 +325,11 @@ const ReadinessContext = createContext<BuilderReadiness>({
     whatsappSender: false,
     whatsappTemplate: false,
   },
+  emailDefaults: {
+    verifiedFrom: "",
+    fromName: "",
+    replyTo: "",
+  },
 });
 
 export function WorkflowBuilder({
@@ -326,12 +338,16 @@ export function WorkflowBuilder({
   forms,
   readiness,
   whatsappTemplates,
+  emailTemplates,
+  emailDefaults,
 }: {
   saId: string;
   initial: BuilderInitial;
   forms: { id: string; name: string }[];
   readiness: BuilderReadiness;
   whatsappTemplates: WhatsappTemplateOption[];
+  emailTemplates: WorkflowEmailTemplateOption[];
+  emailDefaults: BuilderReadiness["emailDefaults"];
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial.name);
@@ -376,6 +392,31 @@ export function WorkflowBuilder({
     setSaving(true);
     try {
       const { nodes, startNodeId } = flattenTree(steps);
+      if (effective === "active") {
+        for (const node of Object.values(nodes)) {
+          if (node.type !== "send_email") continue;
+          const config = node.config;
+          const body =
+            typeof config.bodyHtml === "string"
+              ? emailHtmlToPlainText(config.bodyHtml)
+              : String(config.body ?? "").trim();
+          if (!String(config.subject ?? "").trim()) {
+            throw new Error(
+              "Send email steps need a subject before activation."
+            );
+          }
+          if (!body) {
+            throw new Error(
+              "Send email steps need an email body before activation."
+            );
+          }
+          if (!body.includes("{{unsubscribeLink}}")) {
+            throw new Error(
+              "Send email steps must include {{unsubscribeLink}} for compliance."
+            );
+          }
+        }
+      }
       const res = await fetch(
         `/api/sub-accounts/${saId}/workflows/${initial.id}`,
         {
@@ -395,8 +436,10 @@ export function WorkflowBuilder({
       setStatus(effective);
       toast.success("Workflow saved");
       router.refresh();
-    } catch {
-      toast.error("Couldn't save workflow");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't save workflow"
+      );
     } finally {
       setSaving(false);
     }
@@ -692,6 +735,8 @@ export function WorkflowBuilder({
         <NodeConfigDialog
           step={editing}
           whatsappTemplates={whatsappTemplates}
+          emailTemplates={emailTemplates}
+          emailDefaults={emailDefaults}
           onClose={() => setEditing(null)}
           onSave={(config) => editing && saveConfig(editing.id, config)}
         />

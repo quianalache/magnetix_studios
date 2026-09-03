@@ -46,7 +46,8 @@ export default async function WorkflowBuilderPage({
   // tier only counts when the env creds exist AND the agency permits sub-
   // accounts to use the shared sender.
   const smsSub = subAccountTwilioIsConfigured(tc);
-  const smsAgency = smsIsConfigured() && (await agencyAllowsSharedSms(sub?.agencyId));
+  const smsAgency =
+    smsIsConfigured() && (await agencyAllowsSharedSms(sub?.agencyId));
   const emailSub = tenantFrom(sub) !== undefined;
   const emailAgency = emailIsConfigured();
   const whatsappGate = sub?.whatsappEnabledByAgency === true;
@@ -54,7 +55,7 @@ export default async function WorkflowBuilderPage({
   const whatsappTemplate = !approvedWhatsapp.empty;
 
   const readiness: BuilderReadiness = {
-    emailReady: emailAgency,
+    emailReady: emailSub,
     smsReady: smsSub || smsAgency,
     whatsappReady: whatsappGate && whatsappSender && whatsappTemplate,
     detail: {
@@ -65,6 +66,11 @@ export default async function WorkflowBuilderPage({
       whatsappGate,
       whatsappSender,
       whatsappTemplate,
+    },
+    emailDefaults: {
+      verifiedFrom: sub?.resendConfig?.emailFrom ?? "",
+      fromName: sub?.name ?? "",
+      replyTo: sub?.replyToEmail ?? "",
     },
   };
 
