@@ -2,18 +2,18 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Loader2, Save } from "lucide-react";
+import { Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DictateButton } from "@/components/ui/dictate-button";
-import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
+import { LegacyVoiceNotes } from "@/components/ytcs/legacy-voice-notes";
 import {
   GENERIC_DEEP_DIVE_QUESTIONS,
   PRODUCT_SHOWCASE_DEEP_DIVE_QUESTIONS,
   SIGNATURE_OFFER_DEEP_DIVE_QUESTIONS,
 } from "@/lib/ytcs/deep-dive-questions";
-import type { YtcsVideoProject, YtcsVoiceNoteRef } from "@/types/ytcs";
+import type { YtcsVideoProject } from "@/types/ytcs";
 
 /**
  * Step 2: Deep Dive. Two conceptual categories per migration spec §8:
@@ -70,36 +70,6 @@ export function DeepDiveStep({
   }
 
   return <NormalDeepDive project={project} onSave={onSave} onContinue={onContinue} />;
-}
-
-/** Read-only playback for real historical voice-note recordings — never
- *  the primary interaction anymore, just preserved access. Renders
- *  nothing when a project has none (the common case going forward). */
-function LegacyVoiceNotes({ voiceNotes }: { voiceNotes: YtcsVoiceNoteRef[] }) {
-  const [open, setOpen] = useState(false);
-  if (voiceNotes.length === 0) return null;
-
-  return (
-    <div className="rounded-lg border border-dashed p-2.5">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-left text-xs text-muted-foreground"
-      >
-        <span>
-          Legacy voice note{voiceNotes.length === 1 ? "" : "s"} from before dictation ({voiceNotes.length})
-        </span>
-        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-      </button>
-      {open && (
-        <div className="mt-2 space-y-2">
-          {voiceNotes.map((vn) =>
-            vn.url ? <VoiceNotePlayer key={vn.id} url={vn.url} durationMs={0} /> : null,
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function NormalDeepDive({

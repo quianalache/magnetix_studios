@@ -80,7 +80,12 @@ const EDITABLE_KEYS = [
   "scriptBuilderExtraNotes",
   "scriptBuilderSelectedFrameworkIds",
   "scriptBuilderSelectedStoryProofIds",
-  "scriptBuilderVoiceNotes",
+  // scriptBuilderVoiceNotes deliberately removed from this allowlist
+  // (2026-09-03, same change as deepDiveVoiceNotes above) — Extra
+  // Script Notes now uses dictation, which never uploads audio, so no
+  // active UI writes this field anymore. Real historical data (1 real
+  // project) is untouched; GET still returns it for the read-only
+  // legacy playback UI.
   "generatedScriptPrompt",
   "compiledScript",
   "brainDumpVoiceNotes",

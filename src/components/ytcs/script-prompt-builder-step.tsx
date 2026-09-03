@@ -16,11 +16,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
-import { uploadYtcsVoiceNote } from "@/lib/ytcs/upload-voice-note";
+import { DictateButton } from "@/components/ui/dictate-button";
+import { LegacyVoiceNotes } from "@/components/ytcs/legacy-voice-notes";
 import type { BusinessBrain } from "@/types/business-brain";
-import type { YtcsVideoProject, YtcsVoiceNoteRef } from "@/types/ytcs";
-import type { VoiceNote } from "@/types/media-attachment";
+import type { YtcsVideoProject } from "@/types/ytcs";
 
 /** Exported so YTCS Settings can reuse the same 4 real values for its
  *  Default Script Output Type control — one source of truth. */
@@ -248,22 +247,6 @@ export function ScriptPromptBuilderStep({
     }
   }
 
-  async function attachExtraNotesVoice(vn: VoiceNote) {
-    const ref: YtcsVoiceNoteRef = {
-      id: vn.id,
-      storagePath: vn.storagePath,
-      url: vn.url,
-      mimeType: vn.mimeType,
-      sizeBytes: vn.fileSizeBytes,
-    };
-    try {
-      await onSave({ scriptBuilderVoiceNotes: [...(project.scriptBuilderVoiceNotes ?? []), ref] });
-      toast.success("Voice note attached.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't attach voice note.");
-    }
-  }
-
   const meta = project.generatedScriptMeta;
   const showTruncationWarning = !!meta?.truncated && generatedScript === (project.generatedScript ?? "");
 
@@ -337,10 +320,13 @@ export function ScriptPromptBuilderStep({
         </div>
 
         <div className="mt-4 space-y-1.5">
-          <Label htmlFor="extra-notes">Extra Script Notes</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="extra-notes">Extra Script Notes</Label>
+            <DictateButton value={extraNotes} onChange={setExtraNotes} />
+          </div>
           <p className="text-xs text-muted-foreground">
             High-priority creator direction — add anything the script should emphasize,
-            include, avoid, or remember.
+            include, avoid, or remember. Type, paste, or tap the mic to dictate.
           </p>
           <Textarea
             id="extra-notes"
@@ -348,12 +334,9 @@ export function ScriptPromptBuilderStep({
             onChange={(e) => setExtraNotes(e.target.value)}
             rows={3}
           />
-          <VoiceNoteRecorder
-            saId={subAccountId}
-            confirmLabel="Attach"
-            upload={uploadYtcsVoiceNote}
-            onUploaded={attachExtraNotesVoice}
-          />
+          {(project.scriptBuilderVoiceNotes?.length ?? 0) > 0 && (
+            <LegacyVoiceNotes voiceNotes={project.scriptBuilderVoiceNotes!} />
+          )}
         </div>
 
         <div className="mt-4 flex justify-end">
