@@ -122,7 +122,7 @@ export function NodeConfigDialog({
       <DialogContent
         className={
           step.type === "send_email"
-            ? "max-w-[calc(100%-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl"
+            ? "h-[90dvh] max-h-[90dvh] min-h-0 max-w-[calc(100%-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl"
             : "max-w-lg"
         }
       >
@@ -133,7 +133,7 @@ export function NodeConfigDialog({
         <div
           className={
             step.type === "send_email"
-              ? "min-h-0 space-y-3 overflow-y-auto pr-1"
+              ? "min-h-0 min-w-0 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain pr-1"
               : "space-y-3"
           }
         >
