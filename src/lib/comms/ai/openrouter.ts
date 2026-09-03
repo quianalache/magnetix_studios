@@ -32,6 +32,16 @@ export interface AiCompletionResult {
    *  for YTCS's Generate Script truncation warning; existing callers can
    *  ignore this field. */
   finishReason?: string;
+  /** Actual dollar amount OpenRouter charged for this call, in USD
+   *  ("the base currency is US dollars. All of the pricing on our site
+   *  and API is denoted in dollars" — OpenRouter docs). OpenRouter has
+   *  returned this in every response's `usage.cost` by default since
+   *  usage accounting became always-on (the older `usage: {include:
+   *  true}` request flag is deprecated and no longer required) —
+   *  verified 2026-09-03 against OpenRouter's own docs. Undefined only
+   *  if the provider ever omits it; added for YTCS's script-generation
+   *  cost telemetry, existing callers can ignore this field. */
+  cost?: number;
 }
 
 export function aiIsConfigured(): boolean {
@@ -51,6 +61,8 @@ interface OpenRouterUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  /** USD cost of this call — see `AiCompletionResult.cost`'s doc comment. */
+  cost?: number;
 }
 
 interface OpenRouterResponse {
@@ -151,5 +163,6 @@ export async function callAi({
     totalTokens: usage.total_tokens ?? 0,
     model: data.model ?? chosenModel,
     finishReason: data.choices?.[0]?.finish_reason,
+    cost: typeof usage.cost === "number" ? usage.cost : undefined,
   };
 }

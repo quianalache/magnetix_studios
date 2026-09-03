@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -21,11 +21,32 @@ import type { BusinessBrain } from "@/types/business-brain";
  * Prompt Builder (Phase 1+2), Create Video (Phase 3A), Titles/Publish
  * (Phase 3B). Every tab in `YTCS_STEPS` is real and clickable — no
  * locked/"coming in a later phase" state remains.
+ *
+ * `useSearchParams()` requires a Suspense boundary to avoid a static-
+ * render bailout (established convention — see contacts/page.tsx's
+ * `ImportQueryWatcher`), so the real page body lives in
+ * `VideoProjectPageInner` below, wrapped by this thin default export.
  */
 export default function VideoProjectPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading project…
+        </div>
+      }
+    >
+      <VideoProjectPageInner />
+    </Suspense>
+  );
+}
+
+function VideoProjectPageInner() {
   const { subAccountId, saPath } = useSubAccount();
   const params = useParams<{ videoId: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const videoId = params.videoId;
 
   const [project, setProject] = useState<YtcsVideoProject | null>(null);
@@ -33,29 +54,57 @@ export default function VideoProjectPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [changingStartingPoint, setChangingStartingPoint] = useState(false);
-  // Which step TAB is being viewed right now — separate from the
-  // project's own persisted `currentStep` (pipeline progress). A real
-  // migrated project sitting at "Deep Dive" or later must still let its
-  // Input step be opened and edited via the Input tab; conflating "tab
-  // being viewed" with "project's persisted step" would hide that
-  // project's Input data behind another tab for every one of the 14
-  // real projects not currently on Input.
-  const [viewingStep, setViewingStep] = useState<string>("Input");
 
-  // Bug fix (2026-09-03): `viewingStep` was hardcoded to "Input" and
-  // never hydrated from the loaded project at all — every page load or
-  // refresh reset the visible tab to Input regardless of real progress,
-  // even though the underlying data (Deep Dive answers, etc.) was
-  // genuinely saved. This runs once per distinct project (keyed on
-  // `project?.id`, not on every `project` change) so it never fights a
-  // manual tab click or a mid-edit save on an earlier step — clicking
-  // "Input" while `currentStep` is "Deep Dive" must still work, and
-  // saving from there must not snap the view back to Deep Dive.
+  // Bug fix (2026-09-03, exact-view correction pass): the step TAB
+  // being viewed is now the URL's own `?step=` param — not local React
+  // state, and not the project's persisted `currentStep`. These are
+  // two genuinely different concepts:
+  //   - `currentStep` (Firestore) = workflow/resume PROGRESS — how far
+  //     the project has gotten. Written only by a step's own Continue
+  //     action, on successful save.
+  //   - `?step=` (URL) = which tab is being VIEWED right now. A user
+  //     who has progressed to Publish can click back to Script Prompt
+  //     Builder to review it — refreshing there must reopen Script
+  //     Prompt Builder, not snap forward to Publish merely because
+  //     Publish is the furthest step ever reached. Deriving the viewed
+  //     tab from `currentStep` (the prior architecture) could never
+  //     represent that case correctly, because progress and "what I'm
+  //     looking at" aren't the same value.
+  // Putting this in the URL (rather than local state) means refresh,
+  // browser Back/Forward, and deep links all work for free, and tab
+  // clicks never need a Firestore write.
+  const stepParam = searchParams.get("step");
+  const viewingStepFromUrl = stepParam && (YTCS_STEPS as string[]).includes(stepParam) ? stepParam : null;
+  // Fallback used only for the very first paint of a fresh visit (no
+  // `?step=` yet, before the effect below has had a chance to write
+  // one) — resumes from the project's own `currentStep` so that first
+  // paint is already correct, matching what the effect is about to
+  // persist into the URL.
+  const resumeStep =
+    project?.currentStep && (YTCS_STEPS as string[]).includes(project.currentStep)
+      ? project.currentStep
+      : "Input";
+  const viewingStep = viewingStepFromUrl ?? resumeStep;
+
+  function goToStep(step: string, opts: { replace?: boolean } = {}) {
+    const qs = new URLSearchParams(searchParams.toString());
+    qs.set("step", step);
+    const url = `${pathname}?${qs.toString()}`;
+    if (opts.replace) router.replace(url, { scroll: false });
+    else router.push(url, { scroll: false });
+  }
+
+  // Runs once per distinct project (keyed on `project?.id`): if the URL
+  // doesn't already have a valid `step`, seed it from the project's own
+  // resume point via `router.replace` — no new history entry, and no
+  // Firestore write (this only ever touches the URL, never project
+  // data). If the URL already names a valid step (a refresh, a deep
+  // link, or browser Back/Forward), it's left alone — that's the exact
+  // view being restored, not a resume point to override.
   useEffect(() => {
     if (!project) return;
-    if (project.currentStep && (YTCS_STEPS as string[]).includes(project.currentStep)) {
-      setViewingStep(project.currentStep);
-    }
+    if (viewingStepFromUrl) return;
+    goToStep(resumeStep, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
 
@@ -156,7 +205,7 @@ export default function VideoProjectPage() {
         </button>
         <div className="text-center">
           <h2 className="text-base font-semibold">{project.name || "Untitled Video Project"}</h2>
-          <p className="text-xs text-muted-foreground">Currently at: {persistedStep}</p>
+          <p className="text-xs text-muted-foreground">Progress: {persistedStep}</p>
         </div>
         <span />
       </div>
@@ -168,7 +217,7 @@ export default function VideoProjectPage() {
             <button
               key={step}
               type="button"
-              onClick={() => setViewingStep(step)}
+              onClick={() => goToStep(step)}
               title={step}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                 isActive ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -212,14 +261,14 @@ export default function VideoProjectPage() {
           businessBrain={businessBrain}
           onSave={saveProject}
           onChangeStartingPoint={() => setChangingStartingPoint(true)}
-          onContinue={() => setViewingStep("Deep Dive")}
+          onContinue={() => goToStep("Deep Dive")}
         />
       ) : viewingStep === "Deep Dive" ? (
         <DeepDiveStep
           subAccountId={subAccountId}
           project={project}
           onSave={saveProject}
-          onContinue={() => setViewingStep("Script Prompt Builder")}
+          onContinue={() => goToStep("Script Prompt Builder")}
         />
       ) : viewingStep === "Script Prompt Builder" ? (
         <ScriptPromptBuilderStep
@@ -227,20 +276,20 @@ export default function VideoProjectPage() {
           project={project}
           businessBrain={businessBrain}
           onSave={saveProject}
-          onContinue={() => setViewingStep("Create Video")}
+          onContinue={() => goToStep("Create Video")}
         />
       ) : viewingStep === "Create Video" ? (
         <CreateVideoStep
           project={project}
           onSave={saveProject}
-          onContinue={() => setViewingStep("Titles")}
+          onContinue={() => goToStep("Titles")}
         />
       ) : viewingStep === "Titles" ? (
         <TitlesStep
           project={project}
           onSave={saveProject}
           onGenerate={generateTitlePrompt}
-          onContinue={() => setViewingStep("Publish")}
+          onContinue={() => goToStep("Publish")}
         />
       ) : (
         <PublishStep project={project} onSave={saveProject} onMarkPublished={markPublished} />

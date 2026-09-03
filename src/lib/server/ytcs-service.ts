@@ -289,3 +289,78 @@ export async function updateYtcsSettings(
   const settings = await getYtcsSettings(subAccountId);
   return settings ?? {};
 }
+
+/**
+ * Smallest useful internal answer to "how many scripts, how many
+ * tokens, roughly how much did they cost Magnetix" for one sub-account
+ * — reads the `ytcsScriptGenerations` telemetry docs written by the
+ * generate-script route (2026-09-03 AI usage/cost visibility pass).
+ * Not a dashboard, not customer-facing, no UI wired to this yet — a
+ * plain server function future tooling/scripts can call. Cost prefers
+ * each doc's own `providerReportedCostUsd`, falling back to
+ * `estimatedCostUsd` only where the provider didn't report one;
+ * `costedGenerations` discloses how many of `count` actually
+ * contributed a cost figure, so a caller can tell a real total from a
+ * partial one.
+ */
+export async function getYtcsScriptGenerationUsageSummary(subAccountId: string): Promise<{
+  count: number;
+  successCount: number;
+  failedCount: number;
+  truncatedCount: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  totalCostUsd: number;
+  costedGenerations: number;
+  providerReportedCostGenerations: number;
+  estimatedCostGenerations: number;
+}> {
+  const snap = await getAdminDb()
+    .collection(`subAccounts/${subAccountId}/ytcsScriptGenerations`)
+    .get();
+
+  let successCount = 0;
+  let failedCount = 0;
+  let truncatedCount = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let totalTokens = 0;
+  let totalCostUsd = 0;
+  let costedGenerations = 0;
+  let providerReportedCostGenerations = 0;
+  let estimatedCostGenerations = 0;
+
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    if (d.status === "success") successCount++;
+    else if (d.status === "failed") failedCount++;
+    else if (d.status === "truncated") truncatedCount++;
+    totalPromptTokens += typeof d.promptTokens === "number" ? d.promptTokens : 0;
+    totalCompletionTokens += typeof d.completionTokens === "number" ? d.completionTokens : 0;
+    totalTokens += typeof d.totalTokens === "number" ? d.totalTokens : 0;
+    if (typeof d.providerReportedCostUsd === "number") {
+      totalCostUsd += d.providerReportedCostUsd;
+      costedGenerations++;
+      providerReportedCostGenerations++;
+    } else if (typeof d.estimatedCostUsd === "number") {
+      totalCostUsd += d.estimatedCostUsd;
+      costedGenerations++;
+      estimatedCostGenerations++;
+    }
+  }
+
+  return {
+    count: snap.size,
+    successCount,
+    failedCount,
+    truncatedCount,
+    totalPromptTokens,
+    totalCompletionTokens,
+    totalTokens,
+    totalCostUsd,
+    costedGenerations,
+    providerReportedCostGenerations,
+    estimatedCostGenerations,
+  };
+}

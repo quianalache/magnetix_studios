@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleGroupTrigger } from "@/components/ui/collapsible";
 import { DictationTextarea } from "@/components/ui/dictation-textarea";
 import { LegacyVoiceNotes } from "@/components/ytcs/legacy-voice-notes";
 import type { BusinessBrain } from "@/types/business-brain";
@@ -28,6 +29,37 @@ export const SCRIPT_OUTPUT_TYPES = [
   "Structured Recording Draft",
   "Talking Point Outline",
   "Hybrid Script + Talking Points",
+];
+
+/**
+ * Help-disclosure copy for the 4 Script Output Types, restored from the
+ * original product's own screenshots (2026-09-03 UX correction pass —
+ * see the migration spec's "Script Output Settings UX Restoration"
+ * addendum). Kept as a separate export from `SCRIPT_OUTPUT_TYPES`
+ * (which stays a plain string array) so YTCS Settings' own reuse of
+ * that constant is completely unaffected by this addition.
+ */
+export const SCRIPT_OUTPUT_TYPE_DESCRIPTIONS = [
+  {
+    value: "Full Script",
+    description:
+      "Best if you want a complete draft written in full sentences. Use this when you want something you can read, lightly edit, or use as a strong starting script.",
+  },
+  {
+    value: "Structured Recording Draft",
+    description:
+      "Best if you want strong structure, suggested lines, and detailed talking points without feeling like you have to memorize every word. This is the best default for most creators.",
+  },
+  {
+    value: "Talking Point Outline",
+    description:
+      "Best if you like to speak naturally and only need the flow, main ideas, story cues, and CTA direction. This should feel like a recording map, not a word-for-word script.",
+  },
+  {
+    value: "Hybrid Script + Talking Points",
+    description:
+      "Best if you want the hook, intro, momentum transitions, CTA, and watch-next bridge written out, while the teaching body stays in detailed talking points.",
+  },
 ];
 
 /**
@@ -95,6 +127,8 @@ export function ScriptPromptBuilderStep({
   const [extraNotes, setExtraNotes] = useState(project.scriptBuilderExtraNotes ?? "");
   const [scriptOutputType, setScriptOutputType] = useState(project.scriptOutputType || "Structured Recording Draft");
   const [depthPreference, setDepthPreference] = useState(project.depthPreference || "Detailed");
+  const [outputTypeHelpOpen, setOutputTypeHelpOpen] = useState(false);
+  const [depthHelpOpen, setDepthHelpOpen] = useState(false);
   const [savingIngredients, setSavingIngredients] = useState(false);
   const [continuing, setContinuing] = useState(false);
 
@@ -397,44 +431,78 @@ export function ScriptPromptBuilderStep({
         </div>
       </div>
 
+      {/* Script Output Settings — restored (2026-09-03) to match the
+          original product's own screenshots: two real dropdowns,
+          Script Output Type on the left and Depth Preference on the
+          right, each with a collapsible "what does this mean?"
+          disclosure underneath. The prior recreation used a button/pill
+          group for Script Output Type and had no help disclosure for
+          either setting at all — both corrected here. See the migration
+          spec's "Script Output Settings UX Restoration" addendum for
+          the full discrepancy list. */}
       <div className="rounded-2xl border bg-card p-4">
         <h3 className="text-sm font-semibold">Script Output Settings</h3>
-        <p className="mt-1 text-xs text-muted-foreground">Tailor the script to the right kind of draft.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Tailor the prompt to get the right kind of draft.</p>
 
-        <div className="mt-3 space-y-1.5">
-          <Label>Script Output Type</Label>
-          <div className="flex flex-wrap gap-2">
-            {SCRIPT_OUTPUT_TYPES.map((t) => (
-              <Button
-                key={t}
-                type="button"
-                size="sm"
-                variant={scriptOutputType === t ? "default" : "outline"}
-                onClick={() => setScriptOutputType(t)}
-              >
-                {t}
-              </Button>
-            ))}
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="script-output-type">Script Output Type</Label>
+            <select
+              id="script-output-type"
+              value={scriptOutputType}
+              onChange={(e) => setScriptOutputType(e.target.value)}
+              className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground"
+            >
+              {SCRIPT_OUTPUT_TYPE_DESCRIPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.value}
+                </option>
+              ))}
+            </select>
+            <Collapsible open={outputTypeHelpOpen} onOpenChange={setOutputTypeHelpOpen}>
+              <CollapsibleGroupTrigger>What do these script types mean?</CollapsibleGroupTrigger>
+              <CollapsibleContent>
+                <div className="space-y-2.5 pt-1 pb-2 text-xs text-muted-foreground">
+                  {SCRIPT_OUTPUT_TYPE_DESCRIPTIONS.map((t) => (
+                    <p key={t.value}>
+                      <strong className="text-foreground">{t.value}:</strong> {t.description}
+                    </p>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
-        </div>
 
-        <div className="mt-3 space-y-1.5">
-          <Label htmlFor="depth-preference">Depth Preference</Label>
-          <select
-            id="depth-preference"
-            value={depthPreference}
-            onChange={(e) => setDepthPreference(e.target.value)}
-            className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground sm:w-auto"
-          >
-            {DEPTH_PREFERENCES.map((d) => (
-              <option key={d.value} value={d.value}>
-                {d.value}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-muted-foreground">
-            {DEPTH_PREFERENCES.find((d) => d.value === depthPreference)?.description}
-          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="depth-preference">Depth Preference</Label>
+            <select
+              id="depth-preference"
+              value={depthPreference}
+              onChange={(e) => setDepthPreference(e.target.value)}
+              className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground"
+            >
+              {DEPTH_PREFERENCES.map((d) => (
+                <option key={d.value} value={d.value}>
+                  {d.value}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {DEPTH_PREFERENCES.find((d) => d.value === depthPreference)?.description}
+            </p>
+            <Collapsible open={depthHelpOpen} onOpenChange={setDepthHelpOpen}>
+              <CollapsibleGroupTrigger>What does depth preference mean?</CollapsibleGroupTrigger>
+              <CollapsibleContent>
+                <div className="space-y-2.5 pt-1 pb-2 text-xs text-muted-foreground">
+                  {DEPTH_PREFERENCES.map((d) => (
+                    <p key={d.value}>
+                      <strong className="text-foreground">{d.value}:</strong> {d.description}
+                    </p>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
         </div>
       </div>
 

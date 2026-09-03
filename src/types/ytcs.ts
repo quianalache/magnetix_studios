@@ -153,6 +153,19 @@ export interface YtcsVideoProject {
     finishReason?: string;
     truncated: boolean;
     generatedAt: string;
+    /** Wall-clock time for the model call itself (ms) — added for cost/
+     *  usage visibility (2026-09-03), not shown as a UX feature. */
+    durationMs?: number;
+    /** OpenRouter's own real, per-call USD cost when the provider
+     *  reports one (see openrouter.ts) — preferred over `estimatedCostUsd`
+     *  whenever present. */
+    providerReportedCostUsd?: number;
+    /** Fallback estimate (see script-generation-cost.ts) only when
+     *  `providerReportedCostUsd` is unavailable; always paired with the
+     *  pricing source/date it was computed from. */
+    estimatedCostUsd?: number;
+    pricingSource?: string;
+    pricingVerifiedDate?: string;
   };
   /** Short-lived lock set by the generate-script route for the duration
    *  of one generation call — the smallest reasonable server-side

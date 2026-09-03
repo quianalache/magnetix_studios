@@ -8,6 +8,7 @@ import { getVideoProject, updateVideoProject } from "@/lib/server/ytcs-service";
 import { getBusinessBrain } from "@/lib/server/business-brain-service";
 import { buildScriptPrompt } from "@/lib/ytcs/script-prompt";
 import { callAi } from "@/lib/comms/ai/openrouter";
+import { estimateScriptGenerationCostUsd, YTCS_SCRIPT_MODEL_PRICING } from "@/lib/ytcs/script-generation-cost";
 
 /**
  * POST /api/sub-accounts/[id]/ytcs/videos/[videoId]/generate-script
@@ -29,7 +30,21 @@ import { callAi } from "@/lib/comms/ai/openrouter";
  * untouched (the write only happens after a successful model call).
  */
 
-const SCRIPT_GENERATION_MODEL = "anthropic/claude-sonnet-4-6";
+/**
+ * Bug fix (2026-09-03, AI usage/cost visibility pass): this was
+ * "anthropic/claude-sonnet-4-6" (hyphen) — not a real OpenRouter model
+ * id. Verified directly against OpenRouter's own public
+ * `GET /api/v1/models`: the real id is "anthropic/claude-sonnet-4.6"
+ * (dot). OpenRouter was silently normalizing/accepting the incorrect
+ * hyphenated slug — confirmed via this sub-account's own one real
+ * successful generation, whose recorded `generatedScriptMeta.model`
+ * came back as the correct dotted id even though the hyphenated id was
+ * sent — so production was never actually broken, but relying on that
+ * undocumented leniency was a latent risk. Corrected to the canonical
+ * id; this is a model-id string fix only, not a change to prompt
+ * content, script quality, or formatting.
+ */
+const SCRIPT_GENERATION_MODEL = "anthropic/claude-sonnet-4.6";
 /** Server-side model config, mirroring the existing `defaultAiModel()`
  *  idiom (openrouter.ts) — a dedicated env override rather than sharing
  *  AI_SUITE_MODEL, so changing the AI Suite's model can never silently
@@ -117,6 +132,7 @@ export async function POST(
       selectedFrameworks,
     });
 
+    const startedAt = Date.now();
     let completion;
     try {
       completion = await callAi({
@@ -132,14 +148,26 @@ export async function POST(
       void recordScriptGenerationUsage(subAccountId, videoId, {
         status: "failed",
         model: scriptGenerationModel(),
+        durationMs: Date.now() - startedAt,
       });
       return NextResponse.json(
         { error: "Script generation failed — please try again." },
         { status: 502 },
       );
     }
+    const durationMs = Date.now() - startedAt;
 
     const truncated = completion.finishReason === "length";
+    // Cost: prefer OpenRouter's own real, per-call `usage.cost` (USD,
+    // returned automatically on every response). Fall back to a
+    // disclosed estimate, tagged with the pricing source/date it used,
+    // only when the provider doesn't report one.
+    const providerReportedCostUsd = completion.cost;
+    const estimatedCostUsd =
+      providerReportedCostUsd === undefined
+        ? estimateScriptGenerationCostUsd(completion.promptTokens, completion.completionTokens)
+        : undefined;
+
     const generatedScriptMeta = {
       model: completion.model,
       promptTokens: completion.promptTokens,
@@ -148,6 +176,15 @@ export async function POST(
       finishReason: completion.finishReason,
       truncated,
       generatedAt: new Date().toISOString(),
+      durationMs,
+      ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+      ...(estimatedCostUsd !== undefined
+        ? {
+            estimatedCostUsd,
+            pricingSource: YTCS_SCRIPT_MODEL_PRICING.source,
+            pricingVerifiedDate: YTCS_SCRIPT_MODEL_PRICING.verifiedDate,
+          }
+        : {}),
     };
 
     const updated = await updateVideoProject(subAccountId, videoId, {
@@ -161,6 +198,12 @@ export async function POST(
       promptTokens: completion.promptTokens,
       completionTokens: completion.completionTokens,
       totalTokens: completion.totalTokens,
+      finishReason: completion.finishReason,
+      durationMs,
+      providerReportedCostUsd,
+      estimatedCostUsd,
+      pricingSource: estimatedCostUsd !== undefined ? YTCS_SCRIPT_MODEL_PRICING.source : undefined,
+      pricingVerifiedDate: estimatedCostUsd !== undefined ? YTCS_SCRIPT_MODEL_PRICING.verifiedDate : undefined,
     });
 
     return NextResponse.json({ ok: true, project: updated, truncated });
@@ -175,11 +218,18 @@ export async function POST(
 }
 
 /**
- * Usage telemetry only — no cost calculation, no credit enforcement
- * (explicitly deferred per this phase's instruction). One doc per
- * generation attempt, mirroring the shape of the existing
- * `recordAiSuiteUsage()` best-effort-write convention (never blocks
- * the actual response; a telemetry write failure is only logged).
+ * Usage/cost telemetry — internal visibility only (2026-09-03 pass): no
+ * customer-facing credits, limits, or billing are built from this; it
+ * exists so the real per-generation cost to Magnetix can be answered
+ * later. One doc per generation attempt (success, failure, and
+ * truncation all recorded, per the original design), mirroring the
+ * shape of the existing `recordAiSuiteUsage()` best-effort-write
+ * convention (never blocks the actual response; a telemetry write
+ * failure is only logged). Cost prefers OpenRouter's own real,
+ * per-call `usage.cost` (`providerReportedCostUsd`) and falls back to
+ * a disclosed estimate (`estimatedCostUsd` + `pricingSource`/
+ * `pricingVerifiedDate`) only when the provider doesn't report one —
+ * see script-generation-cost.ts.
  */
 async function recordScriptGenerationUsage(
   subAccountId: string,
@@ -190,6 +240,12 @@ async function recordScriptGenerationUsage(
     promptTokens?: number;
     completionTokens?: number;
     totalTokens?: number;
+    finishReason?: string;
+    durationMs?: number;
+    providerReportedCostUsd?: number;
+    estimatedCostUsd?: number;
+    pricingSource?: string;
+    pricingVerifiedDate?: string;
   },
 ): Promise<void> {
   try {
@@ -204,6 +260,12 @@ async function recordScriptGenerationUsage(
         completionTokens: data.completionTokens ?? null,
         totalTokens: data.totalTokens ?? null,
         status: data.status,
+        finishReason: data.finishReason ?? null,
+        durationMs: data.durationMs ?? null,
+        providerReportedCostUsd: data.providerReportedCostUsd ?? null,
+        estimatedCostUsd: data.estimatedCostUsd ?? null,
+        pricingSource: data.pricingSource ?? null,
+        pricingVerifiedDate: data.pricingVerifiedDate ?? null,
         generatedAt: FieldValue.serverTimestamp(),
       });
   } catch (err) {
