@@ -102,7 +102,8 @@ export function NodeConfigDialog({
             "A verified workspace sender is required before saving this email.",
           !str("subject").trim() && "Subject is required.",
           !emailBody.trim() && "Email body is required.",
-          !emailBody.includes("{{unsubscribeLink}}") &&
+          cfg.emailType === "marketing" &&
+            !emailBody.includes("{{unsubscribeLink}}") &&
             "Email body must include {{unsubscribeLink}} for compliance.",
           cfg.replyTo &&
             !emailAddressIsValid(String(cfg.replyTo)) &&
@@ -627,7 +628,6 @@ export function NodeConfigDialog({
             Cancel
           </Button>
           <Button
-            disabled={step.type === "send_email" && emailErrors.length > 0}
             onClick={() => {
               onSave(cfg);
               onClose();

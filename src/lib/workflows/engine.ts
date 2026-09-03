@@ -127,6 +127,8 @@ type NodeExecutor = (
   ctx: NodeContext
 ) => Promise<{ result: StepResult; log: string; execution?: ActionExecution }>;
 
+const EMAIL_RETRY_DELAYS_SECONDS = [60, 5 * 60, 15 * 60] as const;
+
 function mergeSubject(
   ctx: NodeContext,
   unsubscribeLink: string
@@ -147,11 +149,30 @@ function mergeSubject(
 const execSendEmail: NodeExecutor = async (ctx) => {
   const cfg = ctx.node.config as unknown as SendEmailConfig;
   const contact = ctx.contact;
-  if (contact.emailOptedOut)
+  const isLegacy = typeof cfg.emailType === "undefined";
+  const emailType = cfg.emailType ?? "legacy";
+  if (contact.emailOptedOut && emailType !== "transactional")
     return { result: { kind: "next" }, log: "skipped:opt_out" };
+  if (contact.deliverabilitySuppressed)
+    return {
+      result: { kind: "next" },
+      log: "skipped:deliverability_suppressed",
+    };
   const to = contact.email;
   if (!to) return { result: { kind: "next" }, log: "skipped:no_email" };
+  if (!isLegacy && emailType !== "marketing" && emailType !== "transactional") {
+    return {
+      result: { kind: "fail", retryable: false },
+      log: "error:invalid_email_type",
+      execution: {
+        status: "terminal_failure",
+        errorCategory: "invalid_email_type",
+      },
+    };
+  }
   if (!emailIsConfigured()) {
+    if (isLegacy)
+      return { result: { kind: "next" }, log: "error:email_not_configured" };
     return {
       result: { kind: "fail", retryable: false },
       log: "error:email_not_configured",
@@ -205,8 +226,10 @@ const execSendEmail: NodeExecutor = async (ctx) => {
   if (
     !subject.trim() ||
     !text.trim() ||
-    !rawBody.includes("{{unsubscribeLink}}")
+    (emailType === "marketing" && !rawBody.includes("{{unsubscribeLink}}"))
   ) {
+    if (isLegacy)
+      return { result: { kind: "next" }, log: "error:invalid_email_config" };
     return {
       result: { kind: "fail", retryable: false },
       log: "error:invalid_email_config",
@@ -221,12 +244,27 @@ const execSendEmail: NodeExecutor = async (ctx) => {
     (cc && !emailAddressListIsValid(cc)) ||
     (bcc && !emailAddressListIsValid(bcc))
   ) {
+    if (isLegacy)
+      return {
+        result: { kind: "next" },
+        log: "error:invalid_recipient_config",
+      };
     return {
       result: { kind: "fail", retryable: false },
       log: "error:invalid_recipient_config",
       execution: {
         status: "terminal_failure",
         errorCategory: "invalid_recipient_config",
+      },
+    };
+  }
+  if (!isLegacy && !tenantFrom(ctx.subAccount)) {
+    return {
+      result: { kind: "fail", retryable: false },
+      log: "error:email_sender_not_configured",
+      execution: {
+        status: "terminal_failure",
+        errorCategory: "email_sender_not_configured",
       },
     };
   }
@@ -242,12 +280,22 @@ const execSendEmail: NodeExecutor = async (ctx) => {
       replyTo,
       cc: cc ? splitEmailAddresses(cc) : undefined,
       bcc: bcc ? splitEmailAddresses(bcc) : undefined,
+      idempotencyKey: `wf_${ctx.runId}_${ctx.node.id}`,
     });
     return { result: { kind: "next" }, log: "ok" };
   } catch (err) {
+    if (isLegacy) return { result: { kind: "next" }, log: "error:send_failed" };
     const message = err instanceof Error ? err.message : "send_failed";
+    const provider = err as Error & { statusCode?: number; code?: string };
+    const statusCode = provider.statusCode;
     const retryable =
-      /(429|408|5\d\d|timeout|timed out|network|fetch failed)/i.test(message);
+      statusCode === 408 ||
+      statusCode === 429 ||
+      (typeof statusCode === "number" && statusCode >= 500) ||
+      /timeout|timed out|network|fetch failed/i.test(message) ||
+      /rate_limit|internal_server_error|application_error/i.test(
+        provider.code ?? ""
+      );
     return {
       result: { kind: "fail", retryable },
       log: "error:" + (retryable ? "provider_retryable" : "send_failed"),
@@ -1136,13 +1184,14 @@ async function enroll(
 async function scheduleNode(
   runRef: FirebaseFirestore.DocumentReference,
   nodeId: string,
-  delaySeconds: number
+  delaySeconds: number,
+  deduplicationSuffix?: string
 ): Promise<void> {
   const res = await publishCallback({
     pathname: STEP_PATH,
     body: { runId: runRef.id, nodeId },
     delaySeconds,
-    deduplicationId: `wf_${runRef.id}_${nodeId}`,
+    deduplicationId: `wf_${runRef.id}_${nodeId}${deduplicationSuffix ? `_${deduplicationSuffix}` : ""}`,
   });
   if (!res) {
     await runRef.update({
@@ -1187,6 +1236,29 @@ async function completeRun(
         sourceWorkflowId: workflowId,
       },
     });
+}
+
+async function claimEmailAttempt(
+  runRef: FirebaseFirestore.DocumentReference,
+  nodeId: string
+): Promise<number | null> {
+  return runRef.firestore.runTransaction(async (transaction) => {
+    const snap = await transaction.get(runRef);
+    if (!snap.exists) return null;
+    const data = snap.data() as WorkflowRunDoc;
+    if (
+      data.history?.some((entry) => entry.nodeId === nodeId) ||
+      (data.status !== "running" && data.status !== "waiting")
+    ) {
+      return null;
+    }
+    const attempt = (data.actionAttempts?.[nodeId] ?? 0) + 1;
+    transaction.update(runRef, {
+      [`actionAttempts.${nodeId}`]: attempt,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return attempt;
+  });
 }
 
 /** Advance one node of a run. Idempotent on the run's history. */
@@ -1266,6 +1338,20 @@ export async function runStep(
   }
 
   const owner = await loadOwner(agency);
+  const emailConfig = node.type === "send_email" ? node.config : null;
+  const emailAttempt =
+    emailConfig &&
+    (emailConfig.emailType === "marketing" ||
+      emailConfig.emailType === "transactional")
+      ? await claimEmailAttempt(runRef, nodeId)
+      : null;
+  if (
+    emailConfig &&
+    (emailConfig.emailType === "marketing" ||
+      emailConfig.emailType === "transactional") &&
+    emailAttempt === null
+  )
+    return;
   const exec = REGISTRY[node.type] ?? execPassThrough;
   let result: StepResult;
   let log: string;
@@ -1301,7 +1387,7 @@ export async function runStep(
     result: log,
     execution: {
       actionId: nodeId,
-      attempt: 1,
+      attempt: emailAttempt ?? 1,
       status:
         execution?.status ??
         (log.startsWith("skipped:")
@@ -1319,9 +1405,43 @@ export async function runStep(
   };
   if (result.kind === "fail") {
     if (execution?.status === "retryable_failure") {
-      // Keep the node out of history so a transient provider failure can be
-      // retried by QStash without being mistaken for a completed action.
-      await scheduleNode(runRef, nodeId, 60);
+      if (
+        node.type === "send_email" &&
+        emailAttempt !== null &&
+        emailAttempt < EMAIL_RETRY_DELAYS_SECONDS.length
+      ) {
+        // Keep the node out of history while a bounded transient retry is
+        // pending. The durable attempt counter prevents infinite retries.
+        await scheduleNode(
+          runRef,
+          nodeId,
+          EMAIL_RETRY_DELAYS_SECONDS[emailAttempt - 1],
+          `attempt_${emailAttempt + 1}`
+        );
+        return;
+      }
+      if (node.type === "send_email" && emailAttempt !== null) {
+        const exhaustedEntry: WorkflowRunHistoryEntry = {
+          ...entry,
+          execution: {
+            ...entry.execution!,
+            status: "terminal_failure",
+            errorCategory: "retry_exhausted",
+          },
+          result: "error:retry_exhausted",
+        };
+        await runRef.update({
+          status: "failed",
+          history: FieldValue.arrayUnion(exhaustedEntry),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+      await runRef.update({
+        status: "failed",
+        history: FieldValue.arrayUnion(entry),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       return;
     }
     await runRef.update({

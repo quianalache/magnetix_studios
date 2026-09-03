@@ -152,6 +152,17 @@ function validateActiveEmailSteps(
   for (const node of Object.values(nodes)) {
     if (node.type !== "send_email") continue;
     const config = node.config as Record<string, unknown>;
+    // Missing emailType is the pre-upgrade compatibility mode. Do not reject
+    // an already-active legacy workflow merely because it predates this UI.
+    if (typeof config.emailType === "undefined") {
+      continue;
+    }
+    if (
+      config.emailType !== "marketing" &&
+      config.emailType !== "transactional"
+    ) {
+      return "Send email steps have an invalid email type.";
+    }
     const subject =
       typeof config.subject === "string" ? config.subject.trim() : "";
     const body =
@@ -162,7 +173,10 @@ function validateActiveEmailSteps(
           : "";
     if (!subject) return "Send email steps need a subject before activation.";
     if (!body) return "Send email steps need an email body before activation.";
-    if (!body.includes("{{unsubscribeLink}}")) {
+    if (
+      config.emailType === "marketing" &&
+      !body.includes("{{unsubscribeLink}}")
+    ) {
       return "Send email steps must include {{unsubscribeLink}} for compliance.";
     }
     if (
@@ -282,11 +296,25 @@ export async function PATCH(
     patch.nodes = nodes;
   }
 
-  if (patch.status === "active" && patch.nodes) {
-    const emailError = validateActiveEmailSteps(patch.nodes);
+  if (patch.status === "active") {
+    const nodesForActivation =
+      patch.nodes ?? (await getWorkflow(subAccountId, workflowId))?.nodes;
+    if (!nodesForActivation) {
+      return NextResponse.json(
+        { error: "Workflow has no nodes" },
+        { status: 400 }
+      );
+    }
+    const emailError = validateActiveEmailSteps(nodesForActivation);
     if (emailError)
       return NextResponse.json({ error: emailError }, { status: 400 });
-    if (Object.values(patch.nodes).some((node) => node.type === "send_email")) {
+    if (
+      Object.values(nodesForActivation).some(
+        (node) =>
+          node.type === "send_email" &&
+          (node.config as Record<string, unknown>).emailType
+      )
+    ) {
       const subSnap = await getAdminDb()
         .doc("subAccounts/${subAccountId}")
         .get();

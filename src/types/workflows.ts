@@ -273,6 +273,8 @@ export interface WorkflowRunDoc {
   /** Trigger payload snapshot (e.g. { formId, dealId }). */
   context: Record<string, unknown>;
   qstashMessageId: string | null;
+  /** Durable per-node execution attempts; absent on legacy runs. */
+  actionAttempts?: Record<string, number>;
   enrolledAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
@@ -282,6 +284,8 @@ export interface WorkflowRunDoc {
 export interface SendEmailConfig {
   subject: string;
   body: string;
+  /** New actions default to marketing; absent means legacy compatibility mode. */
+  emailType?: "marketing" | "transactional";
   /** Rich email-safe HTML, introduced additively; legacy steps use body. */
   bodyHtml?: string;
   /** Optional per-step display name; the verified sender address stays tenant-controlled. */

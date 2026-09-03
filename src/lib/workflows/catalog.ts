@@ -162,7 +162,7 @@ export const CONDITION_OPS: { value: ConditionOp; label: string }[] = [
 export function defaultConfig(type: WorkflowNodeType): Record<string, unknown> {
   switch (type) {
     case "send_email":
-      return { subject: "", body: "" };
+      return { subject: "", body: "", emailType: "marketing" };
     case "send_sms":
       return { body: "" };
     case "whatsapp_template":

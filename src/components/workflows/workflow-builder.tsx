@@ -396,6 +396,13 @@ export function WorkflowBuilder({
         for (const node of Object.values(nodes)) {
           if (node.type !== "send_email") continue;
           const config = node.config;
+          if (
+            config.emailType !== "marketing" &&
+            config.emailType !== "transactional"
+          ) {
+            if (typeof config.emailType === "undefined") continue;
+            throw new Error("Send email steps have an invalid email type.");
+          }
           const body =
             typeof config.bodyHtml === "string"
               ? emailHtmlToPlainText(config.bodyHtml)
@@ -410,7 +417,10 @@ export function WorkflowBuilder({
               "Send email steps need an email body before activation."
             );
           }
-          if (!body.includes("{{unsubscribeLink}}")) {
+          if (
+            config.emailType === "marketing" &&
+            !body.includes("{{unsubscribeLink}}")
+          ) {
             throw new Error(
               "Send email steps must include {{unsubscribeLink}} for compliance."
             );
@@ -950,6 +960,20 @@ function StepCard({
           ? !readiness.whatsappReady
           : false;
   const warning = unmet ? REQUIREMENT_WARNING[requirement!] : null;
+  const emailConfig = step.config;
+  const emailBody =
+    step.type === "send_email"
+      ? emailHtmlToPlainText(
+          String(emailConfig.bodyHtml ?? emailConfig.body ?? "")
+        )
+      : "";
+  const incompleteEmail =
+    step.type === "send_email" &&
+    (!String(emailConfig.subject ?? "").trim() ||
+      !emailBody.trim() ||
+      (emailConfig.emailType === "marketing" &&
+        !emailBody.includes("{{unsubscribeLink}}")) ||
+      (emailConfig.emailType && !readiness.emailReady));
 
   const Icon = ICONS[step.type];
   return (
@@ -987,7 +1011,11 @@ function StepCard({
               : "text-muted-foreground"
           )}
         >
-          {unmet ? "Won't run — integration not configured" : nodeSummary(step)}
+          {unmet
+            ? "Won't run — integration not configured"
+            : incompleteEmail
+              ? "Incomplete — finish before activation"
+              : nodeSummary(step)}
         </div>
         {requirement && (
           <ReadinessChips requirement={requirement} detail={readiness.detail} />

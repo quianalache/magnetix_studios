@@ -85,6 +85,7 @@ export async function sendEmail({
   headers,
   cc,
   bcc,
+  idempotencyKey,
 }: {
   to: string;
   subject: string;
@@ -104,6 +105,7 @@ export async function sendEmail({
   attachments?: { filename: string; content: string }[];
   cc?: string | string[];
   bcc?: string | string[];
+  idempotencyKey?: string;
   /**
    * Raw custom headers, passed straight through to Resend. Used for
    * `List-Unsubscribe`/`List-Unsubscribe-Post` on broadcast sends (see
@@ -129,9 +131,23 @@ export async function sendEmail({
     ...(cc ? { cc } : {}),
     ...(bcc ? { bcc } : {}),
     ...(headers ? { headers } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
   });
   if (result.error) {
-    throw new Error(result.error.message || "Resend send failed");
+    const providerError = result.error as {
+      message?: string;
+      statusCode?: number;
+      code?: string;
+    };
+    const error = new Error(
+      providerError.message || "Resend send failed"
+    ) as Error & {
+      statusCode?: number;
+      code?: string;
+    };
+    error.statusCode = providerError.statusCode;
+    error.code = providerError.code;
+    throw error;
   }
   if (!result.data?.id) {
     throw new Error("Resend send failed: no message id returned");
@@ -176,6 +192,7 @@ export async function sendTenantEmail({
   cc,
   bcc,
   fromName,
+  idempotencyKey,
 }: {
   sub:
     | {
@@ -199,6 +216,8 @@ export async function sendTenantEmail({
   bcc?: string | string[];
   /** Optional display-name override; the verified tenant address is unchanged. */
   fromName?: string;
+  /** Stable key used by workflow sends so provider retries are deduplicated. */
+  idempotencyKey?: string;
 }): Promise<{ id: string }> {
   const tenantSender = tenantFrom(sub);
   if (!tenantSender) throw new NoTenantDomainError();
@@ -217,6 +236,7 @@ export async function sendTenantEmail({
     headers,
     cc,
     bcc,
+    idempotencyKey,
   });
 }
 

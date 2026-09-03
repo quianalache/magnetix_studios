@@ -78,6 +78,9 @@ export function WorkflowEmailComposer({
   const subject = String(config.subject ?? "");
   const body = String(config.body ?? "");
   const bodyHtml = String(config.bodyHtml ?? plainTextToEmailHtml(body));
+  const isLegacy = !Object.prototype.hasOwnProperty.call(config, "emailType");
+  const emailType =
+    config.emailType === "transactional" ? "transactional" : "marketing";
   const fromName = String(config.fromName ?? defaultFromName);
   const replyTo = String(config.replyTo ?? defaultReplyTo);
   const cc = String(config.cc ?? "");
@@ -150,6 +153,29 @@ export function WorkflowEmailComposer({
 
   return (
     <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="workflow-email-type">Email type</Label>
+        <select
+          id="workflow-email-type"
+          value={emailType}
+          onChange={(event) =>
+            setConfig({
+              emailType: event.target.value as "marketing" | "transactional",
+            })
+          }
+          className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+        >
+          <option value="marketing">Marketing</option>
+          <option value="transactional">Transactional</option>
+        </select>
+        <p className="text-muted-foreground text-[11px]">
+          {isLegacy
+            ? "Legacy email settings are preserved until you choose a new type."
+            : emailType === "marketing"
+              ? "For promotional, nurture, sales, or newsletter messages. Unsubscribe requirements apply."
+              : "For service, receipt, access, account, or appointment messages."}
+        </p>
+      </div>
       <div className="bg-muted/20 rounded-lg border p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -262,10 +288,13 @@ export function WorkflowEmailComposer({
             }}
           />
         </div>
-        <p className="text-muted-foreground text-[11px]">
-          Email bodies must include <code>{"{{unsubscribeLink}}"}</code>.
-          Required by the current Magnetix workflow email policy.
-        </p>
+        {emailType === "marketing" && !isLegacy && (
+          <p className="text-muted-foreground text-[11px]">
+            Marketing email bodies must include{" "}
+            <code>{"{{unsubscribeLink}}"}</code>. Use the personalization picker
+            to insert it.
+          </p>
+        )}
       </div>
 
       <details className="rounded-lg border px-3 py-2">
