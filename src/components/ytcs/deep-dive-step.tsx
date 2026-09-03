@@ -4,9 +4,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DictateButton } from "@/components/ui/dictate-button";
+import { DictationTextarea } from "@/components/ui/dictation-textarea";
 import { LegacyVoiceNotes } from "@/components/ytcs/legacy-voice-notes";
 import {
   GENERIC_DEEP_DIVE_QUESTIONS,
@@ -83,6 +83,7 @@ function NormalDeepDive({
 }) {
   const [answers, setAnswers] = useState(project.deepDiveAnswers ?? "");
   const [saving, setSaving] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const voiceNotes = project.deepDiveVoiceNotes ?? [];
 
   async function save() {
@@ -97,6 +98,31 @@ function NormalDeepDive({
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Bug fix (2026-09-03): the old Continue handler called `save()`
+   *  (which swallows its own errors to show a toast) and then always
+   *  called `onContinue()` regardless — so a failed save still
+   *  navigated away, and `currentStep` was never written at all,
+   *  meaning a refresh always reset the view to Input. Mirrors the
+   *  already-fixed Input step's `continueToDeepDive` pattern: save the
+   *  answer content and `currentStep` in one request, and only
+   *  navigate if that request actually succeeds. */
+  async function continueToScriptPromptBuilder() {
+    setContinuing(true);
+    try {
+      await onSave({
+        deepDiveAnswers: answers,
+        generatedDeepDiveQuestions: GENERIC_DEEP_DIVE_QUESTIONS,
+        currentStep: "Script Prompt Builder",
+      });
+      toast.success("Saved.");
+      onContinue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setContinuing(false);
     }
   }
 
@@ -132,29 +158,20 @@ function NormalDeepDive({
       </div>
 
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="dd-answers">Your Deep Dive answers</Label>
-          <DictateButton value={answers} onChange={setAnswers} />
-        </div>
+        <Label htmlFor="dd-answers">Your Deep Dive answers</Label>
         <p className="text-xs text-muted-foreground">
           Type, paste, or dictate — everything lands here, in one place.
         </p>
-        <Textarea id="dd-answers" value={answers} onChange={(e) => setAnswers(e.target.value)} rows={8} />
+        <DictationTextarea id="dd-answers" value={answers} onChange={setAnswers} rows={8} />
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={save} disabled={saving}>
+        <Button type="button" variant="outline" onClick={save} disabled={saving || continuing}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save
         </Button>
-        <Button
-          type="button"
-          onClick={async () => {
-            await save();
-            onContinue();
-          }}
-          disabled={saving}
-        >
+        <Button type="button" onClick={continueToScriptPromptBuilder} disabled={saving || continuing}>
+          {continuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Continue to Script Prompt Builder
         </Button>
       </div>
@@ -179,6 +196,7 @@ function ProductOfferDeepDive({
 
   const [answers, setAnswers] = useState(project.productOfferDeepDiveAnswers ?? "");
   const [saving, setSaving] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const voiceNotes = project.productOfferDeepDiveVoiceNotes ?? [];
 
   async function save() {
@@ -190,6 +208,21 @@ function ProductOfferDeepDive({
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Same fix as NormalDeepDive's continueToScriptPromptBuilder — see
+   *  its comment for the full explanation. */
+  async function continueToScriptPromptBuilder() {
+    setContinuing(true);
+    try {
+      await onSave({ productOfferDeepDiveAnswers: answers, currentStep: "Script Prompt Builder" });
+      toast.success("Saved.");
+      onContinue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setContinuing(false);
     }
   }
 
@@ -222,32 +255,23 @@ function ProductOfferDeepDive({
       </div>
 
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label htmlFor="po-dd-answers">
-            {isShowcase ? "Deep Dive answers / additional notes" : "Deep Dive answers"}
-          </Label>
-          <DictateButton value={answers} onChange={setAnswers} />
-        </div>
+        <Label htmlFor="po-dd-answers">
+          {isShowcase ? "Deep Dive answers / additional notes" : "Deep Dive answers"}
+        </Label>
         <p className="text-xs text-muted-foreground">
           Type, paste, or dictate — tap the mic next to a question above, or here for
           anything general.
         </p>
-        <Textarea id="po-dd-answers" value={answers} onChange={(e) => setAnswers(e.target.value)} rows={8} />
+        <DictationTextarea id="po-dd-answers" value={answers} onChange={setAnswers} rows={8} />
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={save} disabled={saving}>
+        <Button type="button" variant="outline" onClick={save} disabled={saving || continuing}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save
         </Button>
-        <Button
-          type="button"
-          onClick={async () => {
-            await save();
-            onContinue();
-          }}
-          disabled={saving}
-        >
+        <Button type="button" onClick={continueToScriptPromptBuilder} disabled={saving || continuing}>
+          {continuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Continue to Script Prompt Builder
         </Button>
       </div>

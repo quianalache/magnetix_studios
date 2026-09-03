@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { DictateButton } from "@/components/ui/dictate-button";
+import { DictationTextarea } from "@/components/ui/dictation-textarea";
 import { LegacyVoiceNotes } from "@/components/ytcs/legacy-voice-notes";
 import type { BusinessBrain } from "@/types/business-brain";
 import type { YtcsVideoProject } from "@/types/ytcs";
@@ -28,6 +28,35 @@ export const SCRIPT_OUTPUT_TYPES = [
   "Structured Recording Draft",
   "Talking Point Outline",
   "Hybrid Script + Talking Points",
+];
+
+/**
+ * CONFIRMED (2026-09-03) from direct visual evidence of the original
+ * product's own screenshots — Depth Preference always had these three
+ * active, selectable values. Earlier phases exposed only "Detailed"
+ * because it was the only value real EXPORT DATA or the live audit
+ * ever captured; that was real-data-honest at the time but was never a
+ * claim that Balanced/Concise didn't exist in the product, only that
+ * no evidence of them had been found yet. Superseded now that direct
+ * visual evidence exists. Exported so YTCS Settings can reuse the same
+ * 3 values + copy for its Default Depth Preference control.
+ */
+export const DEPTH_PREFERENCES = [
+  {
+    value: "Detailed",
+    description:
+      "Gives you more depth, examples, nuance, language, and transitions. Best when you want plenty of material to cut down later.",
+  },
+  {
+    value: "Balanced",
+    description:
+      "Gives you enough detail to record confidently without making the draft too huge. Best when you want support without overwhelm.",
+  },
+  {
+    value: "Concise",
+    description:
+      "Keeps the draft lean, focused, and easy to record. Best for quick videos or confident speakers who already know what they want to say.",
+  },
 ];
 
 /**
@@ -49,11 +78,13 @@ export function ScriptPromptBuilderStep({
   project,
   businessBrain,
   onSave,
+  onContinue,
 }: {
   subAccountId: string;
   project: YtcsVideoProject;
   businessBrain: BusinessBrain | null;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
+  onContinue: () => void;
 }) {
   const [selectedStoryIds, setSelectedStoryIds] = useState<string[]>(
     project.scriptBuilderSelectedStoryProofIds ?? [],
@@ -63,8 +94,9 @@ export function ScriptPromptBuilderStep({
   );
   const [extraNotes, setExtraNotes] = useState(project.scriptBuilderExtraNotes ?? "");
   const [scriptOutputType, setScriptOutputType] = useState(project.scriptOutputType || "Structured Recording Draft");
-  const [depthPreference] = useState("Detailed"); // only real/confirmed value — see Phase 2 addendum
+  const [depthPreference, setDepthPreference] = useState(project.depthPreference || "Detailed");
   const [savingIngredients, setSavingIngredients] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   const [generatingScript, setGeneratingScript] = useState(false);
   const [generatedScript, setGeneratedScript] = useState(project.generatedScript ?? "");
@@ -111,6 +143,32 @@ export function ScriptPromptBuilderStep({
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
       setSavingIngredients(false);
+    }
+  }
+
+  /** Bug fix (2026-09-03): this step never had a Continue action at all
+   *  — the workspace's "currentStep" audit found the same gap here that
+   *  Input already had before its own fix. Saves the current ingredients
+   *  plus `currentStep: "Create Video"` in one request, and only
+   *  navigates if that request actually succeeds — same pattern as
+   *  every other Continue action in this workflow. */
+  async function continueToCreateVideo() {
+    setContinuing(true);
+    try {
+      await onSave({
+        scriptBuilderSelectedStoryProofIds: selectedStoryIds,
+        scriptBuilderSelectedFrameworkIds: selectedFrameworkIds,
+        scriptBuilderExtraNotes: extraNotes,
+        scriptOutputType,
+        depthPreference,
+        currentStep: "Create Video",
+      });
+      toast.success("Saved.");
+      onContinue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setContinuing(false);
     }
   }
 
@@ -320,20 +378,12 @@ export function ScriptPromptBuilderStep({
         </div>
 
         <div className="mt-4 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="extra-notes">Extra Script Notes</Label>
-            <DictateButton value={extraNotes} onChange={setExtraNotes} />
-          </div>
+          <Label htmlFor="extra-notes">Extra Script Notes</Label>
           <p className="text-xs text-muted-foreground">
             High-priority creator direction — add anything the script should emphasize,
             include, avoid, or remember. Type, paste, or tap the mic to dictate.
           </p>
-          <Textarea
-            id="extra-notes"
-            value={extraNotes}
-            onChange={(e) => setExtraNotes(e.target.value)}
-            rows={3}
-          />
+          <DictationTextarea id="extra-notes" value={extraNotes} onChange={setExtraNotes} rows={3} />
           {(project.scriptBuilderVoiceNotes?.length ?? 0) > 0 && (
             <LegacyVoiceNotes voiceNotes={project.scriptBuilderVoiceNotes!} />
           )}
@@ -369,14 +419,21 @@ export function ScriptPromptBuilderStep({
         </div>
 
         <div className="mt-3 space-y-1.5">
-          <Label>Depth Preference</Label>
-          <Button type="button" size="sm" variant="default" disabled>
-            Detailed
-          </Button>
+          <Label htmlFor="depth-preference">Depth Preference</Label>
+          <select
+            id="depth-preference"
+            value={depthPreference}
+            onChange={(e) => setDepthPreference(e.target.value)}
+            className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground sm:w-auto"
+          >
+            {DEPTH_PREFERENCES.map((d) => (
+              <option key={d.value} value={d.value}>
+                {d.value}
+              </option>
+            ))}
+          </select>
           <p className="text-xs text-muted-foreground">
-            Detailed gives you more material to work with. It is easier to cut down a
-            rich draft than stretch a thin one. (Balanced/Concise aren&apos;t confirmed
-            as real historical options yet — see the migration spec&apos;s Phase 2 notes.)
+            {DEPTH_PREFERENCES.find((d) => d.value === depthPreference)?.description}
           </p>
         </div>
       </div>
@@ -507,6 +564,13 @@ export function ScriptPromptBuilderStep({
             Save Final Script
           </Button>
         </div>
+      </div>
+
+      <div className="flex justify-center">
+        <Button type="button" onClick={continueToCreateVideo} disabled={continuing}>
+          {continuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Continue to Create Video
+        </Button>
       </div>
     </div>
   );

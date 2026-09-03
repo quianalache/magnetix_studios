@@ -6,7 +6,7 @@ import { ArrowRight, BrainCircuit, Loader2, Save } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { SCRIPT_OUTPUT_TYPES } from "@/components/ytcs/script-prompt-builder-step";
+import { DEPTH_PREFERENCES, SCRIPT_OUTPUT_TYPES } from "@/components/ytcs/script-prompt-builder-step";
 import type { YtcsSettings } from "@/types/ytcs";
 
 /**
@@ -14,10 +14,9 @@ import type { YtcsSettings } from "@/types/ytcs";
  * out to its own shared Settings location — never duplicated here.
  * Default Script Settings (migration spec §16) is the one real
  * YTCS-specific setting: `defaultScriptOutputType` (all 4 real values
- * selectable) and `defaultDepthPreference` (only "Detailed" is
- * real-confirmed — see the migration spec's Phase 2/Final Completion
- * notes — so this stays a single, honestly-labeled fixed value rather
- * than a dead dropdown implying Balanced/Concise are real options).
+ * selectable) and `defaultDepthPreference` (all 3 confirmed values —
+ * Detailed/Balanced/Concise — selectable as of 2026-09-03, per direct
+ * visual evidence from the original product's own screenshots).
  * Sub-account-wide, not per-user — see `YtcsSettings`'s doc comment.
  * Data Management (Export/Clear All Data) and PDF-Enhanced Prompt are
  * deliberately not rebuilt — see this page's own note below.
@@ -26,6 +25,7 @@ export default function YtcsSettingsPage() {
   const { subAccountId, saPath } = useSubAccount();
   const [settings, setSettings] = useState<YtcsSettings | null>(null);
   const [scriptOutputType, setScriptOutputType] = useState("");
+  const [depthPreference, setDepthPreference] = useState("Detailed");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function YtcsSettingsPage() {
       .then((d) => {
         setSettings(d.settings ?? {});
         setScriptOutputType(d.settings?.defaultScriptOutputType ?? "");
+        setDepthPreference(d.settings?.defaultDepthPreference || "Detailed");
       })
       .catch(() => setSettings({}));
   }, [subAccountId]);
@@ -47,7 +48,7 @@ export default function YtcsSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           defaultScriptOutputType: scriptOutputType,
-          defaultDepthPreference: "Detailed",
+          defaultDepthPreference: depthPreference,
         }),
       });
       const data = await res.json();
@@ -112,14 +113,21 @@ export default function YtcsSettingsPage() {
             </div>
 
             <div className="mt-4 space-y-1.5">
-              <Label>Default Depth Preference</Label>
-              <Button type="button" size="sm" variant="default" disabled>
-                Detailed
-              </Button>
+              <Label htmlFor="default-depth-preference">Default Depth Preference</Label>
+              <select
+                id="default-depth-preference"
+                value={depthPreference}
+                onChange={(e) => setDepthPreference(e.target.value)}
+                className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground sm:w-auto"
+              >
+                {DEPTH_PREFERENCES.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.value}
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-muted-foreground">
-                &ldquo;Detailed&rdquo; is the only Depth Preference confirmed by real historical
-                usage — Balanced/Concise stay unavailable rather than being turned on
-                without real evidence they ever worked.
+                {DEPTH_PREFERENCES.find((d) => d.value === depthPreference)?.description}
               </p>
             </div>
 

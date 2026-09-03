@@ -31,9 +31,11 @@ import type { YtcsVideoProject } from "@/types/ytcs";
 export function CreateVideoStep({
   project,
   onSave,
+  onContinue,
 }: {
   project: YtcsVideoProject;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
+  onContinue: () => void;
 }) {
   const recordingChecklist = project.recordingChecklist ?? {};
   const editingChecklist = project.editingChecklist ?? {};
@@ -44,6 +46,7 @@ export function CreateVideoStep({
   const [savingEditingNotes, setSavingEditingNotes] = useState(false);
   const [savingItem, setSavingItem] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
     setRecordingNotes(project.recordingNotes ?? "");
@@ -104,6 +107,22 @@ export function CreateVideoStep({
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
       setSavingStatus(false);
+    }
+  }
+
+  /** Bug fix (2026-09-03): this step never had a Continue action at
+   *  all — every other field here already auto-saves (checklist
+   *  toggles) or has its own explicit Save button (notes), so this only
+   *  needs to write `currentStep` and navigate once that succeeds. */
+  async function continueToTitles() {
+    setContinuing(true);
+    try {
+      await onSave({ currentStep: "Titles" });
+      onContinue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setContinuing(false);
     }
   }
 
@@ -242,6 +261,13 @@ export function CreateVideoStep({
         </div>
         <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
       </a>
+
+      <div className="flex justify-center">
+        <Button type="button" onClick={continueToTitles} disabled={continuing}>
+          {continuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Continue to Titles
+        </Button>
+      </div>
     </div>
   );
 }

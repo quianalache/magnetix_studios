@@ -42,6 +42,23 @@ export default function VideoProjectPage() {
   // real projects not currently on Input.
   const [viewingStep, setViewingStep] = useState<string>("Input");
 
+  // Bug fix (2026-09-03): `viewingStep` was hardcoded to "Input" and
+  // never hydrated from the loaded project at all — every page load or
+  // refresh reset the visible tab to Input regardless of real progress,
+  // even though the underlying data (Deep Dive answers, etc.) was
+  // genuinely saved. This runs once per distinct project (keyed on
+  // `project?.id`, not on every `project` change) so it never fights a
+  // manual tab click or a mid-edit save on an earlier step — clicking
+  // "Input" while `currentStep` is "Deep Dive" must still work, and
+  // saving from there must not snap the view back to Deep Dive.
+  useEffect(() => {
+    if (!project) return;
+    if (project.currentStep && (YTCS_STEPS as string[]).includes(project.currentStep)) {
+      setViewingStep(project.currentStep);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id]);
+
   async function load() {
     setLoading(true);
     try {
@@ -210,9 +227,14 @@ export default function VideoProjectPage() {
           project={project}
           businessBrain={businessBrain}
           onSave={saveProject}
+          onContinue={() => setViewingStep("Create Video")}
         />
       ) : viewingStep === "Create Video" ? (
-        <CreateVideoStep project={project} onSave={saveProject} />
+        <CreateVideoStep
+          project={project}
+          onSave={saveProject}
+          onContinue={() => setViewingStep("Titles")}
+        />
       ) : viewingStep === "Titles" ? (
         <TitlesStep
           project={project}

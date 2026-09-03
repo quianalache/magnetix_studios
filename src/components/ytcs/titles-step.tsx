@@ -34,6 +34,7 @@ export function TitlesStep({
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [continuing, setContinuing] = useState(false);
 
   useEffect(() => {
     setSelectedTitle(project.selectedTitle ?? "");
@@ -76,6 +77,25 @@ export function TitlesStep({
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Bug fix (2026-09-03): this button previously called `onContinue()`
+   *  directly — no save, no `currentStep` write, so nothing on screen
+   *  was guaranteed saved before navigating and a refresh always lost
+   *  track of real progress past Titles. Now saves the current title
+   *  fields plus `currentStep: "Publish"` in one request, and only
+   *  navigates once that request actually succeeds. */
+  async function continueToPublish() {
+    setContinuing(true);
+    try {
+      await onSave({ selectedTitle, backupTitle, titleNotes, currentStep: "Publish" });
+      toast.success("Saved.");
+      onContinue();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    } finally {
+      setContinuing(false);
     }
   }
 
@@ -177,7 +197,8 @@ export function TitlesStep({
       </div>
 
       <div className="flex justify-center">
-        <Button type="button" onClick={onContinue}>
+        <Button type="button" onClick={continueToPublish} disabled={continuing}>
+          {continuing ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Continue to Publish
         </Button>
       </div>

@@ -493,14 +493,30 @@ function buildScriptSettingsSection(project: YtcsVideoProject): string {
 
   lines.push(`SCRIPT OUTPUT TYPE:\n${outputType}`, "", `DEPTH PREFERENCE:\n${depth}`);
 
-  // VERIFIED verbatim, Detailed only — Balanced/Concise have no verified
-  // instruction text (migration spec's Depth Preference discrepancy,
-  // still unresolved — see the Phase 2 addendum). Only "Detailed" is
-  // exposed as a selectable option in the UI for the same reason.
+  // Detailed: VERIFIED verbatim (live-captured real prompt text).
+  // Balanced/Concise: CONFIRMED as real, active product values as of
+  // 2026-09-03 (direct visual evidence from the original product's own
+  // screenshots), but no prompt INSTRUCTION text for these two was ever
+  // independently captured — only their UI explanatory copy was. Per
+  // instruction, this is the smallest obvious deterministic mapping
+  // from that confirmed copy, written in the same imperative register
+  // as the verified Detailed instruction — an implementation
+  // adaptation, disclosed here and in the migration spec, not a second
+  // verbatim capture.
   if (depth === "Detailed") {
     lines.push(
       "",
       "Err on the side of giving me more depth, language, examples, transitions, and usable phrasing than less. I can condense a rich draft later. Do not give me thin content unless I specifically selected Talking Point Outline.",
+    );
+  } else if (depth === "Balanced") {
+    lines.push(
+      "",
+      "Give me a moderate level of depth — enough detail and language to record confidently, without making the draft too long. Balance clarity with efficiency: don't pad it out, but don't strip it down to bare bullet points either.",
+    );
+  } else if (depth === "Concise") {
+    lines.push(
+      "",
+      "Keep this lean and focused. Trim to what's essential — the core points, delivered efficiently, with minimal extra explanation or filler. This should be easy to record quickly.",
     );
   }
 
