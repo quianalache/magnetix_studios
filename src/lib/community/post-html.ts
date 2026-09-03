@@ -1,10 +1,14 @@
 import sanitizeHtml from "sanitize-html";
-import { lessonBodyToEditorHtml } from "@/lib/community/lesson-html-shared";
+import {
+  lessonBodyToEditorHtml,
+  linkifyBareUrls,
+} from "@/lib/community/lesson-html-shared";
 
 export {
   isHtml,
   plainTextToHtml,
   lessonBodyToEditorHtml,
+  linkifyBareUrls,
 } from "@/lib/community/lesson-html-shared";
 
 /**
@@ -144,8 +148,12 @@ export function sanitizeCommunityCommentHtml(html: string): string {
  *  alike) -> sanitized HTML ready to render via dangerouslySetInnerHTML.
  *  This is the ONE read-path call every Community post surface should use
  *  — see CommunityPostBody. */
-export function renderCommunityPostHtml(body: string | null | undefined): string {
-  return sanitizeCommunityPostHtml(lessonBodyToEditorHtml(body));
+export function renderCommunityPostHtml(
+  body: string | null | undefined
+): string {
+  return linkifyBareUrls(
+    sanitizeCommunityPostHtml(lessonBodyToEditorHtml(body))
+  );
 }
 
 /** Same read-path contract as `renderCommunityPostHtml`, for comments —
@@ -153,6 +161,10 @@ export function renderCommunityPostHtml(body: string | null | undefined): string
  *  is still a fully valid comment body: `lessonBodyToEditorHtml` promotes
  *  plain text to a single `<p>` exactly as it already does for legacy
  *  post bodies, so no migration is required to render old comments. */
-export function renderCommunityCommentHtml(body: string | null | undefined): string {
-  return sanitizeCommunityCommentHtml(lessonBodyToEditorHtml(body));
+export function renderCommunityCommentHtml(
+  body: string | null | undefined
+): string {
+  return linkifyBareUrls(
+    sanitizeCommunityCommentHtml(lessonBodyToEditorHtml(body))
+  );
 }

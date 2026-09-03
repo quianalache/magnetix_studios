@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { MessageCircle, Pin, ThumbsUp } from "lucide-react";
@@ -81,7 +81,6 @@ export function PostDetailView({
   post,
   initialComments,
   viewer,
-  commentsOnly = false,
 }: {
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
@@ -103,8 +102,6 @@ export function PostDetailView({
   post: ClientPost;
   initialComments: ClientComment[];
   viewer: Viewer;
-  /** Feed expansion reuses this exact durable thread/composer implementation. */
-  commentsOnly?: boolean;
 }) {
   const router = useRouter();
   const [liked, setLiked] = useState(post.likedByViewer);
@@ -117,6 +114,24 @@ export function PostDetailView({
   const [changingChannel, setChangingChannel] = useState(false);
   const [pinningToCourse, setPinningToCourse] = useState(false);
   const base = `/api/community/${saId}/${groupId}`;
+
+  // Explicit "focus the comment composer" navigation signal — set only by
+  // the feed's Comment action (router.push(`${href}#comment`), see
+  // feed-view.tsx), never inferred from a timer. Read once on mount so a
+  // direct load/refresh of the plain post URL never autofocuses on its
+  // own, per the no-surprise-focus requirement. The hash is stripped
+  // right after being read: it's a one-shot UI signal, not part of the
+  // shareable postId URL.
+  const [focusComposer, setFocusComposer] = useState(false);
+  useEffect(() => {
+    if (window.location.hash !== "#comment") return;
+    setFocusComposer(true);
+    window.history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search
+    );
+  }, []);
 
   const topLevel = comments.filter((c) => !c.parentId);
   const repliesOf = (id: string) => comments.filter((c) => c.parentId === id);
@@ -389,7 +404,6 @@ export function PostDetailView({
         <article
           className={cn(
             "rounded-xl border bg-white p-5",
-            commentsOnly && "hidden",
             (currentPost.pinned || currentPost.pinnedToChannel) && "border-2"
           )}
           style={
@@ -649,6 +663,7 @@ export function PostDetailView({
           replyTarget={replyTarget}
           onCancelReplyTarget={() => setReplyTarget(null)}
           onCreated={(c) => setComments((prev) => [...prev, c])}
+          autoFocus={focusComposer}
         />
       )}
     </div>

@@ -23,16 +23,26 @@ import { GiphyPicker } from "@/components/community/feed/giphy-picker";
 import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
 import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
 import { MemberAvatar } from "@/components/community/member-avatar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { getGiphyFetch } from "@/lib/community/giphy-client";
 import {
   deleteCommunityPostImage,
   uploadCommunityPostImage,
 } from "@/lib/community/upload-community-image";
 import { deleteVoiceNote } from "@/lib/community/upload-voice-note";
-import { deleteCommunityPostFile, uploadCommunityPostFile } from "@/lib/community/upload-community-file";
+import {
+  deleteCommunityPostFile,
+  uploadCommunityPostFile,
+} from "@/lib/community/upload-community-file";
 import { MAX_IMAGES_PER_COMMENT } from "@/lib/community/community-image-mime";
-import { MAX_FILES_PER_COMMENT, formatFileSize } from "@/lib/community/community-file-mime";
+import {
+  MAX_FILES_PER_COMMENT,
+  formatFileSize,
+} from "@/lib/community/community-file-mime";
 import { aboutPlainTextLength } from "@/lib/community/about-html";
 import type {
   FileAttachment,
@@ -105,6 +115,7 @@ export function CommentComposer({
   onCreated,
   onSaved,
   onCancelEdit,
+  autoFocus = false,
 }: {
   saId: string;
   groupId: string;
@@ -126,23 +137,45 @@ export function CommentComposer({
   onCreated?: (comment: ClientComment) => void;
   onSaved?: (comment: ClientComment) => void;
   onCancelEdit?: () => void;
+  /** Explicit "the caller navigated here to comment" signal (e.g. the
+   *  feed's Comment action, see PostDetailView) — expands a
+   *  collapsed-by-default composer and focuses it once the editor is
+   *  ready. Never inferred from a timer; a one-shot ref (below) makes it
+   *  fire exactly once even though `autoFocus` stays true for the life
+   *  of the mount. */
+  autoFocus?: boolean;
 }) {
   const initialAttachments = editingComment?.attachments ?? [];
-  const [open, setOpen] = useState(!collapsedByDefault || !!replyTarget);
+  const [open, setOpen] = useState(
+    !collapsedByDefault || !!replyTarget || autoFocus
+  );
   const [body, setBody] = useState(editingComment?.body ?? "");
   const [saving, setSaving] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const [images, setImages] = useState<ImageAttachment[]>(
-    initialAttachments.filter((a): a is Extract<MediaAttachment, { kind: "image" }> => a.kind === "image").map((a) => a.image),
+    initialAttachments
+      .filter(
+        (a): a is Extract<MediaAttachment, { kind: "image" }> =>
+          a.kind === "image"
+      )
+      .map((a) => a.image)
   );
   const [imageUploading, setImageUploading] = useState(false);
   const [voiceNote, setVoiceNote] = useState<VoiceNote | null>(
-    initialAttachments.find((a): a is Extract<MediaAttachment, { kind: "voice" }> => a.kind === "voice")?.voice ?? null,
+    initialAttachments.find(
+      (a): a is Extract<MediaAttachment, { kind: "voice" }> =>
+        a.kind === "voice"
+    )?.voice ?? null
   );
   const [showRecorder, setShowRecorder] = useState(false);
   const [files, setFiles] = useState<FileAttachment[]>(
-    initialAttachments.filter((a): a is Extract<MediaAttachment, { kind: "file" }> => a.kind === "file").map((a) => a.file),
+    initialAttachments
+      .filter(
+        (a): a is Extract<MediaAttachment, { kind: "file" }> =>
+          a.kind === "file"
+      )
+      .map((a) => a.file)
   );
   const [fileUploading, setFileUploading] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -155,7 +188,7 @@ export function CommentComposer({
   // swapping the SAME popover's content rather than opening a second one.
   const [menuView, setMenuView] = useState<"list" | "gif">("list");
   const existingGif = initialAttachments.find(
-    (a): a is Extract<MediaAttachment, { kind: "gif" }> => a.kind === "gif",
+    (a): a is Extract<MediaAttachment, { kind: "gif" }> => a.kind === "gif"
   )?.gif;
   const [gif, setGif] = useState<IGif | null>(null);
   const [gifResolving, setGifResolving] = useState(!!existingGif);
@@ -185,6 +218,7 @@ export function CommentComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sessionUploadsRef = useRef<SessionUpload[]>([]);
   const insertedMentionForKeyRef = useRef<string | null>(null);
+  const autoFocusedRef = useRef(false);
 
   const editor = useRichTextEditor({
     toolbar: [],
@@ -193,14 +227,15 @@ export function CommentComposer({
     mentions: { fetchItems: mentionFetchItems },
     // Deliberately no channelRefs — comments don't offer #channel
     // references in this phase (product decision, see the report).
-    proseClassName: "text-sm text-[#3a3a44] [&_a]:text-(--comment-link-color) [&_a]:underline [&_span[data-type=mention]]:font-semibold [&_span[data-type=mention]]:text-(--comment-link-color)",
+    proseClassName:
+      "text-sm text-[#3a3a44] [&_a]:text-(--comment-link-color) [&_a]:underline [&_span[data-type=mention]]:font-semibold [&_span[data-type=mention]]:text-(--comment-link-color)",
     minHeightClassName: "min-h-[36px]",
     contentPaddingClassName: "px-3 py-2",
   });
 
   async function mentionFetchItems(query: string) {
     const res = await fetch(
-      `/api/community/${saId}/${groupId}/mention-members?q=${encodeURIComponent(query)}`,
+      `/api/community/${saId}/${groupId}/mention-members?q=${encodeURIComponent(query)}`
     );
     const d = (await res.json().catch(() => ({}))) as {
       members?: { id: string; label: string; avatarUrl: string | null }[];
@@ -221,7 +256,13 @@ export function CommentComposer({
       .chain()
       .focus()
       .insertContentAt(0, [
-        { type: "mention", attrs: { id: replyTarget.mentionMemberId, label: replyTarget.mentionLabel } },
+        {
+          type: "mention",
+          attrs: {
+            id: replyTarget.mentionMemberId,
+            label: replyTarget.mentionLabel,
+          },
+        },
         { type: "text", text: " " },
       ])
       .run();
@@ -242,10 +283,26 @@ export function CommentComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replyTarget?.parentId, replyTarget?.mentionMemberId]);
 
+  // Explicit navigation-driven autofocus (e.g. "Comment" from the feed,
+  // see PostDetailView's `focusComposer`) — same imperative
+  // editor.chain().focus() the mention-insert effect above already uses,
+  // no setTimeout. Fires once per mount via the ref guard, since `open`
+  // toggling true/false again (e.g. a reply target coming and going)
+  // must never re-steal focus the member already moved elsewhere.
+  useEffect(() => {
+    if (!autoFocus || !editor || autoFocusedRef.current) return;
+    autoFocusedRef.current = true;
+    setOpen(true);
+    rootRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    editor.chain().focus().run();
+  }, [autoFocus, editor]);
+
   async function handleImageFiles(fileList: FileList) {
     const remaining = MAX_IMAGES_PER_COMMENT - images.length;
     if (remaining <= 0) {
-      toast.error(`You can attach up to ${MAX_IMAGES_PER_COMMENT} image per comment.`);
+      toast.error(
+        `You can attach up to ${MAX_IMAGES_PER_COMMENT} image per comment.`
+      );
       return;
     }
     const toUpload = Array.from(fileList).slice(0, remaining);
@@ -254,7 +311,11 @@ export function CommentComposer({
       try {
         const img = await uploadCommunityPostImage({ saId, file });
         setImages((prev) => [...prev, img]);
-        if (mode === "edit") sessionUploadsRef.current.push({ storagePath: img.storagePath, kind: "image" });
+        if (mode === "edit")
+          sessionUploadsRef.current.push({
+            storagePath: img.storagePath,
+            kind: "image",
+          });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Image upload failed");
       }
@@ -281,7 +342,9 @@ export function CommentComposer({
   async function handleFileSelect(fileList: FileList) {
     const remaining = MAX_FILES_PER_COMMENT - files.length;
     if (remaining <= 0) {
-      toast.error(`You can attach up to ${MAX_FILES_PER_COMMENT} file per comment.`);
+      toast.error(
+        `You can attach up to ${MAX_FILES_PER_COMMENT} file per comment.`
+      );
       return;
     }
     const toUpload = Array.from(fileList).slice(0, remaining);
@@ -290,7 +353,11 @@ export function CommentComposer({
       try {
         const f = await uploadCommunityPostFile({ saId, file });
         setFiles((prev) => [...prev, f]);
-        if (mode === "edit") sessionUploadsRef.current.push({ storagePath: f.storagePath, kind: "file" });
+        if (mode === "edit")
+          sessionUploadsRef.current.push({
+            storagePath: f.storagePath,
+            kind: "file",
+          });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "File upload failed");
       }
@@ -306,19 +373,28 @@ export function CommentComposer({
   }
 
   function cleanupDraftAttachments() {
-    images.forEach((img) => void deleteCommunityPostImage(saId, img.storagePath).catch(() => {}));
-    if (voiceNote) void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
-    files.forEach((f) => void deleteCommunityPostFile(saId, f.storagePath).catch(() => {}));
+    images.forEach(
+      (img) =>
+        void deleteCommunityPostImage(saId, img.storagePath).catch(() => {})
+    );
+    if (voiceNote)
+      void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
+    files.forEach(
+      (f) => void deleteCommunityPostFile(saId, f.storagePath).catch(() => {})
+    );
   }
 
   async function cleanupSessionUploads(keepStoragePaths: Set<string>) {
-    const orphaned = sessionUploadsRef.current.filter((u) => !keepStoragePaths.has(u.storagePath));
+    const orphaned = sessionUploadsRef.current.filter(
+      (u) => !keepStoragePaths.has(u.storagePath)
+    );
     await Promise.allSettled(
       orphaned.map((u) => {
-        if (u.kind === "image") return deleteCommunityPostImage(saId, u.storagePath);
+        if (u.kind === "image")
+          return deleteCommunityPostImage(saId, u.storagePath);
         if (u.kind === "voice") return deleteVoiceNote(saId, u.storagePath);
         return deleteCommunityPostFile(saId, u.storagePath);
-      }),
+      })
     );
   }
 
@@ -353,14 +429,19 @@ export function CommentComposer({
   function buildAttachments(): MediaAttachment[] {
     return [
       ...images.map((image): MediaAttachment => ({ kind: "image", image })),
-      ...(voiceNote ? [{ kind: "voice", voice: voiceNote } as MediaAttachment] : []),
+      ...(voiceNote
+        ? [{ kind: "voice", voice: voiceNote } as MediaAttachment]
+        : []),
       ...files.map((file): MediaAttachment => ({ kind: "file", file })),
       ...(gif
         ? [
             {
               kind: "gif",
               gif: {
-                id: existingGif?.providerId === String(gif.id) ? existingGif.id : crypto.randomUUID(),
+                id:
+                  existingGif?.providerId === String(gif.id)
+                    ? existingGif.id
+                    : crypto.randomUUID(),
                 provider: "giphy",
                 providerId: String(gif.id),
                 title: gif.title || undefined,
@@ -376,17 +457,26 @@ export function CommentComposer({
   async function submit() {
     const attachments = buildAttachments();
     if (aboutPlainTextLength(body) === 0 && attachments.length === 0) {
-      toast.error("Write something, or attach a photo, voice note, file, or GIF");
+      toast.error(
+        "Write something, or attach a photo, voice note, file, or GIF"
+      );
       return;
     }
     setSaving(true);
     try {
       if (mode === "create") {
-        const res = await fetch(`/api/community/${saId}/${groupId}/posts/${postId}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body, parentId: replyTarget?.parentId ?? null, attachments }),
-        });
+        const res = await fetch(
+          `/api/community/${saId}/${groupId}/posts/${postId}/comments`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              body,
+              parentId: replyTarget?.parentId ?? null,
+              attachments,
+            }),
+          }
+        );
         const d = (await res.json().catch(() => ({}))) as {
           ok?: boolean;
           error?: string;
@@ -421,16 +511,28 @@ export function CommentComposer({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ body, attachments }),
-          },
+          }
         );
-        const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; body?: string };
+        const d = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          error?: string;
+          body?: string;
+        };
         if (!res.ok || !d.ok) {
           throw new Error(d.error ?? "Couldn't save changes");
         }
         const finalPaths = new Set(
           attachments
-            .map((a) => (a.kind === "image" ? a.image.storagePath : a.kind === "file" ? a.file.storagePath : a.kind === "voice" ? a.voice.storagePath : null))
-            .filter((p): p is string => !!p),
+            .map((a) =>
+              a.kind === "image"
+                ? a.image.storagePath
+                : a.kind === "file"
+                  ? a.file.storagePath
+                  : a.kind === "voice"
+                    ? a.voice.storagePath
+                    : null
+            )
+            .filter((p): p is string => !!p)
         );
         await cleanupSessionUploads(finalPaths);
         onSaved?.({
@@ -455,7 +557,12 @@ export function CommentComposer({
         className="flex w-full items-center gap-2 rounded-full border border-[#E4E4E4] bg-white px-3 py-2 text-left text-sm text-[#909090] hover:border-[#d4d4d4]"
       >
         <MemberAvatar
-          author={{ memberId: viewer.memberId, displayName: viewer.displayName, avatarUrl: viewer.avatarUrl, level: viewer.level }}
+          author={{
+            memberId: viewer.memberId,
+            displayName: viewer.displayName,
+            avatarUrl: viewer.avatarUrl,
+            level: viewer.level,
+          }}
           size={24}
           brand={brand}
         />
@@ -468,11 +575,18 @@ export function CommentComposer({
     <div
       ref={rootRef}
       className="space-y-1.5"
-      style={{ ["--comment-link-color" as string]: accent || brand } as React.CSSProperties}
+      style={
+        {
+          ["--comment-link-color" as string]: accent || brand,
+        } as React.CSSProperties
+      }
     >
       {mode === "create" && replyTarget && (
         <div className="flex items-center gap-1.5 rounded-md bg-[#F5F4F2] px-2.5 py-1 text-xs text-[#606060]">
-          Replying to <span className="font-medium text-[#202124]">@{replyTarget.mentionLabel}</span>
+          Replying to{" "}
+          <span className="font-medium text-[#202124]">
+            @{replyTarget.mentionLabel}
+          </span>
           <button
             type="button"
             onClick={() => {
@@ -488,24 +602,37 @@ export function CommentComposer({
 
       <div className="flex items-start gap-2">
         <MemberAvatar
-          author={{ memberId: viewer.memberId, displayName: viewer.displayName, avatarUrl: viewer.avatarUrl, level: viewer.level }}
+          author={{
+            memberId: viewer.memberId,
+            displayName: viewer.displayName,
+            avatarUrl: viewer.avatarUrl,
+            level: viewer.level,
+          }}
           size={28}
           brand={brand}
         />
         <div className="min-w-0 flex-1 rounded-xl border border-[#E4E4E4] bg-white">
-          {editor ? <EditorContent editor={editor} /> : <div className="min-h-[36px] px-3 py-2" />}
+          {editor ? (
+            <EditorContent editor={editor} />
+          ) : (
+            <div className="min-h-[36px] px-3 py-2" />
+          )}
 
           {(images.length > 0 || imageUploading) && (
             <div className="flex flex-wrap gap-1.5 px-3 pb-2">
               {images.map((img) => (
                 <div key={img.id} className="group relative h-16 w-16">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img.url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                  <img
+                    src={img.url}
+                    alt=""
+                    className="h-16 w-16 rounded-lg object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removeImage(img)}
                     title="Remove image"
-                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                   >
                     <X className="h-2.5 w-2.5" />
                   </button>
@@ -522,11 +649,22 @@ export function CommentComposer({
           {(files.length > 0 || fileUploading) && (
             <div className="space-y-1 px-3 pb-2">
               {files.map((f) => (
-                <div key={f.id} className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-2.5 py-1.5">
+                <div
+                  key={f.id}
+                  className="flex items-center gap-2 rounded-lg border border-[#E4E4E4] bg-[#FAFAFA] px-2.5 py-1.5"
+                >
                   <span className="min-w-0 flex-1 truncate text-xs text-[#3a3a44]">
-                    {f.fileName} <span className="text-[#909090]">· {formatFileSize(f.fileSizeBytes)}</span>
+                    {f.fileName}{" "}
+                    <span className="text-[#909090]">
+                      · {formatFileSize(f.fileSizeBytes)}
+                    </span>
                   </span>
-                  <button type="button" onClick={() => removeFile(f)} title="Remove file" className="shrink-0 text-[#909090] hover:text-[#202124]">
+                  <button
+                    type="button"
+                    onClick={() => removeFile(f)}
+                    title="Remove file"
+                    className="shrink-0 text-[#909090] hover:text-[#202124]"
+                  >
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -547,12 +685,18 @@ export function CommentComposer({
                 ) : (
                   gif && (
                     <div className="group relative overflow-hidden rounded-lg">
-                      <Gif gif={gif} width={180} percentWidth="100%" noLink hideAttribution={false} />
+                      <Gif
+                        gif={gif}
+                        width={180}
+                        percentWidth="100%"
+                        noLink
+                        hideAttribution={false}
+                      />
                       <button
                         type="button"
                         onClick={removeGif}
                         title="Remove GIF"
-                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                       >
                         <X className="h-2.5 w-2.5" />
                       </button>
@@ -573,7 +717,11 @@ export function CommentComposer({
                 onUploaded={(vn) => {
                   setVoiceNote(vn);
                   setShowRecorder(false);
-                  if (mode === "edit") sessionUploadsRef.current.push({ storagePath: vn.storagePath, kind: "voice" });
+                  if (mode === "edit")
+                    sessionUploadsRef.current.push({
+                      storagePath: vn.storagePath,
+                      kind: "voice",
+                    });
                 }}
               />
             </div>
@@ -581,7 +729,11 @@ export function CommentComposer({
           {voiceNote && (
             <div className="space-y-1 px-3 pb-2">
               <div className="flex items-center gap-2">
-                <VoiceNotePlayer url={voiceNote.url} durationMs={voiceNote.durationMs} brand={brand} />
+                <VoiceNotePlayer
+                  url={voiceNote.url}
+                  durationMs={voiceNote.durationMs}
+                  brand={brand}
+                />
                 <button
                   type="button"
                   onClick={removeVoiceNote}
@@ -614,7 +766,9 @@ export function CommentComposer({
                 >
                   <Plus className="h-4 w-4" />
                 </PopoverTrigger>
-                <PopoverContent className={menuView === "gif" ? "w-auto p-2" : "w-56 p-1.5"}>
+                <PopoverContent
+                  className={menuView === "gif" ? "w-auto p-2" : "w-56 p-1.5"}
+                >
                   {menuView === "list" ? (
                     <>
                       <button
@@ -623,10 +777,14 @@ export function CommentComposer({
                           setPlusMenuOpen(false);
                           imageInputRef.current?.click();
                         }}
-                        disabled={images.length >= MAX_IMAGES_PER_COMMENT || imageUploading}
+                        disabled={
+                          images.length >= MAX_IMAGES_PER_COMMENT ||
+                          imageUploading
+                        }
                         className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
                       >
-                        <ImageIcon className="h-4 w-4 text-[#909090]" /> Add photo
+                        <ImageIcon className="h-4 w-4 text-[#909090]" /> Add
+                        photo
                       </button>
                       <button
                         type="button"
@@ -637,7 +795,8 @@ export function CommentComposer({
                         disabled={!!voiceNote}
                         className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
                       >
-                        <Mic className="h-4 w-4 text-[#909090]" /> Record voice note
+                        <Mic className="h-4 w-4 text-[#909090]" /> Record voice
+                        note
                       </button>
                       <button
                         type="button"
@@ -645,19 +804,36 @@ export function CommentComposer({
                           setPlusMenuOpen(false);
                           fileInputRef.current?.click();
                         }}
-                        disabled={files.length >= MAX_FILES_PER_COMMENT || fileUploading}
+                        disabled={
+                          files.length >= MAX_FILES_PER_COMMENT || fileUploading
+                        }
                         className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2] disabled:opacity-40"
                       >
-                        <FileUp className="h-4 w-4 text-[#909090]" /> Upload file
+                        <FileUp className="h-4 w-4 text-[#909090]" /> Upload
+                        file
                       </button>
                       {editor && (
                         <LinkPopover
                           editor={editor}
                           renderTrigger={() => (
                             <span className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[#202124] hover:bg-[#F5F4F2]">
-                              <svg viewBox="0 0 24 24" className="h-4 w-4 text-[#909090]" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" strokeLinecap="round" strokeLinejoin="round" />
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-4 w-4 text-[#909090]"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path
+                                  d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                                <path
+                                  d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
                               </svg>
                               Add link
                             </span>
@@ -701,7 +877,8 @@ export function CommentComposer({
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 className="hidden"
                 onChange={(e) => {
-                  if (e.target.files?.length) void handleImageFiles(e.target.files);
+                  if (e.target.files?.length)
+                    void handleImageFiles(e.target.files);
                   e.target.value = "";
                 }}
               />
@@ -711,14 +888,16 @@ export function CommentComposer({
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx"
                 className="hidden"
                 onChange={(e) => {
-                  if (e.target.files?.length) void handleFileSelect(e.target.files);
+                  if (e.target.files?.length)
+                    void handleFileSelect(e.target.files);
                   e.target.value = "";
                 }}
               />
               <EmojiPickerButton editor={editor} />
             </div>
             <div className="flex items-center gap-1.5">
-              {(mode === "edit" || (mode === "create" && (collapsedByDefault || replyTarget))) && (
+              {(mode === "edit" ||
+                (mode === "create" && (collapsedByDefault || replyTarget))) && (
                 <button
                   type="button"
                   onClick={handleCancel}

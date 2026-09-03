@@ -21,7 +21,6 @@ import {
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import { QuickGoLiveSetup } from "@/components/community/quick-go-live-setup";
-import { InlineCommentThread } from "@/components/community/feed/inline-comment-thread";
 import { CommunityLiveStage } from "@/components/community/community-live-stage";
 import { CommunityReplayPlayer } from "@/components/community/community-replay-player";
 import { buildPostActionItems } from "@/lib/community/post-actions";
@@ -275,7 +274,6 @@ export function FeedView({
   const [pinningToCoursePostId, setPinningToCoursePostId] = useState<
     string | null
   >(null);
-  const [expandedComments, setExpandedComments] = useState<string | null>(null);
   const [sort, setSort] = useState<"latest" | "top" | "unanswered">("latest");
   // Category filter is driven by the left nav's `?c=` link (Part 7) rather
   // than an in-feed pill row, so there's one control for it, not two.
@@ -569,7 +567,13 @@ export function FeedView({
       const target = event.target as HTMLElement;
       if (
         target.closest(
-          'a, button, input, textarea, select, label, video, audio, iframe, [role="button"], [data-no-card-open]'
+          // [contenteditable="true"] covers the Tiptap/ProseMirror rich-text
+          // composer (a plain contenteditable div, not matched by any of
+          // the form-control selectors) — belt-and-suspenders now that the
+          // 2026-09-03 fix moved Comment-click to a direct navigation
+          // instead of expanding a composer inline inside this card, in
+          // case any future genuinely-inline editing surface lands here.
+          'a, button, input, textarea, select, label, video, audio, iframe, [role="button"], [contenteditable="true"], [data-no-card-open]'
         )
       )
         return;
@@ -760,32 +764,34 @@ export function FeedView({
                 {p.likeCount}
               </button>
               <button
-                onClick={() =>
-                  setExpandedComments(expandedComments === p.id ? null : p.id)
-                }
+                onClick={(event) => {
+                  // 2026-09-03 fix: this used to expand a full PostDetailView
+                  // instance inline inside this same card (InlineCommentThread,
+                  // now deleted). That nested a Tiptap/ProseMirror
+                  // contenteditable composer inside the card's own
+                  // openIfNotInteractive click region — clicking into the
+                  // editor to type would focus it instantly (the flash of a
+                  // blinking cursor) and then, because a bare contenteditable
+                  // div isn't a link/button/form-control, the click still
+                  // bubbled up and fired the card's own router.push(detail) a
+                  // moment later, so the modal appeared to shove the composer
+                  // away right after it appeared. Fix: no inline composer at
+                  // all — navigate straight to the one real composer, on the
+                  // route-backed post page/modal, and ask it to focus itself
+                  // (PostDetailView's `#comment` signal). event.stopPropagation
+                  // is just hygiene (this button already matches
+                  // openIfNotInteractive's own `button` exclusion, so the card
+                  // handler would no-op anyway) — it guards against a second,
+                  // redundant push if that selector ever changes.
+                  event.stopPropagation();
+                  router.push(`${detail}#comment`);
+                }}
                 className="flex items-center gap-1 hover:text-[#202124]"
-                aria-expanded={expandedComments === p.id}
               >
                 <MessageCircle className="h-4 w-4" />
-                {expandedComments === p.id
-                  ? "Hide comments"
-                  : `${p.commentCount} comments`}
+                {p.commentCount} comments
               </button>
             </div>
-            {expandedComments === p.id && (
-              <InlineCommentThread
-                saId={saId}
-                groupId={groupId}
-                groupSlug={groupSlug}
-                brand={brand}
-                communityName={communityName}
-                categories={categories}
-                pretty={pretty}
-                staffGroupId={staffGroupId}
-                post={p}
-                viewer={viewer}
-              />
-            )}
           </div>
           <ActionsMenu
             items={buildPostActionItems(p, viewer, {

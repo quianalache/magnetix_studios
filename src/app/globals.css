@@ -49,10 +49,24 @@
 .community-theme [class~="text-[#b4b4b4]"] {
   color: var(--community-text-muted) !important;
 }
-.community-theme [class~="text-[#202124]"]:hover,
-.community-theme [class~="text-[#3a3a44]"]:hover {
-  color: var(--community-text) !important;
-}
+/* 2026-09-03 removal (Community Interaction + Live UX Polish) — this used
+   to also carry a `:hover` pair here:
+     .community-theme [class~="text-[#202124]"]:hover,
+     .community-theme [class~="text-[#3a3a44]"]:hover { color: var(--community-text) !important; }
+   `[class~="…"]` does exact whitespace-token matching, so it can only ever
+   match a literal base-color class like `text-[#3a3a44]` — never a
+   `hover:text-[#202124]`-style Tailwind hover utility, which compiles to
+   its own distinct class token (colon included). So this never actually
+   theme-bridged any real `hover:` utility; what it DID do is attach a
+   :hover repaint to every plain element carrying the resting-state class
+   — every post title, post body, and comment (all styled with
+   `text-[#202124]`/`text-[#3a3a44]`) recolored just from a cursor resting
+   over inert text, with no link or action underneath it. Root cause of
+   the "hovering plain Community text changes/fades its color" bug — the
+   card-level `cursor-pointer`/border hover affordance (feed-view.tsx) and
+   every real `hover:` utility already on an actual link/button are
+   untouched by this removal, since those were never reachable through
+   this selector in the first place. */
 
 /* App-like touch behavior (PWA native-feel pass):
    - no gray tap flash on touch (we provide our own press states)

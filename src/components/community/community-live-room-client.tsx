@@ -17,6 +17,7 @@ import {
   type Participant,
 } from "livekit-client";
 import { consumeLivePrejoinMediaState } from "@/lib/community/live-prejoin-state";
+import { linkifyBareUrls } from "@/lib/community/lesson-html-shared";
 import {
   ChevronDown,
   Check,
@@ -52,6 +53,7 @@ function name(p: Participant, self: string) {
 }
 function Tile({
   track,
+  fill,
   self,
   hands,
   mirror,
@@ -62,11 +64,25 @@ function Tile({
   hands: string[];
   mirror: boolean;
   selected?: boolean;
+  /** 2026-09-03 crop fix: the single main/selected tile (speaker mode's
+   *  active speaker, and the screen-share stage) sits inside a flex
+   *  ancestor chain that already gives it a definite width AND height —
+   *  `aspect-video` on THIS div fought that by deriving a height purely
+   *  from width, which overflowed the parent's actual height (clipped by
+   *  the ancestor's `overflow-hidden`) whenever the video area got wider,
+   *  e.g. whenever the chat panel closed. `fill` makes the tile take
+   *  exactly the space its parent already allotted, both dimensions,
+   *  and leaves all letterboxing to `object-contain` on the real
+   *  `<video>` below — correct regardless of the chat panel's width.
+   *  Thumbnail-strip and gallery-grid tiles keep the old aspect-video
+   *  behavior (unset) since THEIR parents are sized by content, not by
+   *  the reverse — they need the ratio to give the row/cell a height. */
+  fill?: boolean;
 }) {
   const mine = track.participant.identity === self;
   return (
     <div
-      className={`relative aspect-video overflow-hidden rounded-xl border bg-black ${selected ? "border-[var(--community-accent)] ring-2 ring-[var(--community-accent)]/30" : "border-white/10"}`}
+      className={`relative overflow-hidden rounded-xl border bg-black ${fill ? "h-full w-full" : "aspect-video"} ${selected ? "border-[var(--community-accent)] ring-2 ring-[var(--community-accent)]/30" : "border-white/10"}`}
     >
       <VideoTrack
         trackRef={track}
@@ -251,22 +267,37 @@ function View({
   async function send() {
     if (!postId || !message.trim()) return;
     const body = message.trim();
+    const escaped = body
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
     const r = await fetch(
       `/api/community/${saId}/${groupId}/posts/${postId}/comments`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          body: `<p>${body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`,
-        }),
+        body: JSON.stringify({ body: `<p>${escaped}</p>` }),
       }
     );
     if (!r.ok) return setNotice("Unable to send message.");
     const x = (await r.json()) as { comment?: { id: string } };
     if (x.comment)
+      // The optimistic echo of your OWN just-sent message renders via
+      // dangerouslySetInnerHTML below, same as every fetched message — it
+      // must go through the exact same escape+linkify treatment the
+      // stored/fetched copy gets (renderCommunityCommentHtml, server-
+      // side), not the raw typed string, both so a literal '<'/'>'/'&' in
+      // what you typed can't break the markup and so your own link shows
+      // clickable immediately instead of only after the next reload. Same
+      // `linkifyBareUrls` the server-side renderer uses — see its report
+      // for why this one function has to be callable from here too.
       setComments((v) => [
         ...v,
-        { id: x.comment!.id, body, author: { displayName: "You" } },
+        {
+          id: x.comment!.id,
+          body: linkifyBareUrls(`<p>${escaped}</p>`),
+          author: { displayName: "You" },
+        },
       ]);
     setMessage("");
   }
@@ -386,6 +417,7 @@ function View({
                         hands={hands}
                         mirror={mirror}
                         selected
+                        fill
                       />
                     </div>
                     {tracks.some((track) => track !== screenShare) && (
@@ -435,6 +467,7 @@ function View({
                           hands={hands}
                           mirror={mirror}
                           selected
+                          fill
                         />
                       )}
                     </div>
@@ -545,7 +578,7 @@ function View({
                     {postId ? (
                       comments.length ? (
                         comments.map((x) => (
-                          <div className="text-sm" key={x.id}>
+                          <div className="min-w-0 text-sm" key={x.id}>
                             <div className="flex items-baseline gap-2">
                               <b>{x.author.displayName}</b>
                               <time className="text-[11px] text-slate-500">
@@ -561,8 +594,14 @@ function View({
                                   : "Now"}
                               </time>
                             </div>
+                            {/* min-w-0 on the row above + break-words here:
+                                a long unbroken URL has no spaces to wrap on,
+                                so without both the chat panel would grow a
+                                horizontal scrollbar instead of wrapping the
+                                link text (mobile's narrow panel makes this
+                                the common case, not the edge case). */}
                             <p
-                              className="text-slate-300"
+                              className="break-words text-slate-300 [&_a]:text-[var(--community-accent,#7dd3fc)] [&_a]:underline"
                               dangerouslySetInnerHTML={{ __html: x.body }}
                             />
                           </div>
