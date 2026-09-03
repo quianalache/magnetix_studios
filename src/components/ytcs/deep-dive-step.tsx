@@ -2,20 +2,18 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Mic, Save } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { VoiceNoteRecorder } from "@/components/community/voice-notes/voice-note-recorder";
+import { DictateButton } from "@/components/ui/dictate-button";
 import { VoiceNotePlayer } from "@/components/community/voice-notes/voice-note-player";
-import { uploadYtcsVoiceNote } from "@/lib/ytcs/upload-voice-note";
 import {
   GENERIC_DEEP_DIVE_QUESTIONS,
   PRODUCT_SHOWCASE_DEEP_DIVE_QUESTIONS,
   SIGNATURE_OFFER_DEEP_DIVE_QUESTIONS,
 } from "@/lib/ytcs/deep-dive-questions";
 import type { YtcsVideoProject, YtcsVoiceNoteRef } from "@/types/ytcs";
-import type { VoiceNote } from "@/types/media-attachment";
 
 /**
  * Step 2: Deep Dive. Two conceptual categories per migration spec §8:
@@ -23,14 +21,30 @@ import type { VoiceNote } from "@/types/media-attachment";
  * Framework) and Product/Offer Deep Dive (dynamic by
  * productOfferVideoFormat). Question sets are FIXED/VERIFIED real data
  * (src/lib/ytcs/deep-dive-questions.ts) — no AI call is made here.
+ *
+ * Dictation product decision (2026-09-03): the per-question "Record
+ * voice note" recorder is no longer the active interaction. Each
+ * question now shows a small dictate mic (the existing, already-shipped
+ * `DictateButton`/`useDictation` — Web Speech API, browser-native, no
+ * audio ever leaves the browser as a file, nothing to store or discard)
+ * pointed at the ONE canonical answer field (`deepDiveAnswers`/
+ * `productOfferDeepDiveAnswers`) this step has always persisted to — no
+ * second per-question answer store was created. Any project with real
+ * historical `deepDiveVoiceNotes`/`productOfferDeepDiveVoiceNotes` still
+ * shows them, read-only, in a collapsed "Legacy voice notes" section —
+ * preserved, never deleted, just no longer the primary interaction.
  */
 export function DeepDiveStep({
-  subAccountId,
   project,
   onSave,
   onContinue,
 }: {
-  subAccountId: string;
+  /** No longer used by this step — dictation is browser-native (no
+   *  upload), so the sub-account-scoped voice-note upload path this
+   *  prop used to feed is gone. Kept optional in the type so the
+   *  parent page's existing `subAccountId={subAccountId}` prop stays
+   *  harmless rather than requiring a matching parent-side edit. */
+  subAccountId?: string;
   project: YtcsVideoProject;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
   onContinue: () => void;
@@ -52,38 +66,47 @@ export function DeepDiveStep({
   }
 
   if (isProductOffer) {
-    return (
-      <ProductOfferDeepDive
-        subAccountId={subAccountId}
-        project={project}
-        format={format!}
-        onSave={onSave}
-        onContinue={onContinue}
-      />
-    );
+    return <ProductOfferDeepDive project={project} format={format!} onSave={onSave} onContinue={onContinue} />;
   }
 
-  return <NormalDeepDive subAccountId={subAccountId} project={project} onSave={onSave} onContinue={onContinue} />;
+  return <NormalDeepDive project={project} onSave={onSave} onContinue={onContinue} />;
 }
 
-function toVoiceNoteRef(vn: VoiceNote, question: string): YtcsVoiceNoteRef {
-  return {
-    id: vn.id,
-    storagePath: vn.storagePath,
-    url: vn.url,
-    mimeType: vn.mimeType,
-    sizeBytes: vn.fileSizeBytes,
-    questionAssociation: question,
-  };
+/** Read-only playback for real historical voice-note recordings — never
+ *  the primary interaction anymore, just preserved access. Renders
+ *  nothing when a project has none (the common case going forward). */
+function LegacyVoiceNotes({ voiceNotes }: { voiceNotes: YtcsVoiceNoteRef[] }) {
+  const [open, setOpen] = useState(false);
+  if (voiceNotes.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-dashed p-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left text-xs text-muted-foreground"
+      >
+        <span>
+          Legacy voice note{voiceNotes.length === 1 ? "" : "s"} from before dictation ({voiceNotes.length})
+        </span>
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {voiceNotes.map((vn) =>
+            vn.url ? <VoiceNotePlayer key={vn.id} url={vn.url} durationMs={0} /> : null,
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function NormalDeepDive({
-  subAccountId,
   project,
   onSave,
   onContinue,
 }: {
-  subAccountId: string;
   project: YtcsVideoProject;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
   onContinue: () => void;
@@ -107,15 +130,6 @@ function NormalDeepDive({
     }
   }
 
-  async function attach(vn: VoiceNote, question: string) {
-    try {
-      await onSave({ deepDiveVoiceNotes: [...voiceNotes, toVoiceNoteRef(vn, question)] });
-      toast.success("Voice note attached.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't attach voice note.");
-    }
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -128,37 +142,33 @@ function NormalDeepDive({
       <div className="space-y-3">
         <Label>Strategic Questions</Label>
         <p className="text-xs text-muted-foreground">
-          Answer these to find the real video inside your raw idea.
+          Answer these to find the real video inside your raw idea. Tap the mic next to
+          any question to dictate your answer straight into the box below.
         </p>
         {GENERIC_DEEP_DIVE_QUESTIONS.map((q, i) => {
           const attached = voiceNotes.filter((vn) => vn.questionAssociation === q);
           return (
             <div key={q} className="rounded-lg border p-3">
-              <p className="text-sm">
-                {i + 1}. {q}
-              </p>
-              {attached.map((vn) =>
-                vn.url ? (
-                  <div key={vn.id} className="mt-2">
-                    <VoiceNotePlayer url={vn.url} durationMs={0} />
-                  </div>
-                ) : null,
-              )}
-              <div className="mt-2">
-                <VoiceNoteRecorder
-                  saId={subAccountId}
-                  confirmLabel="Attach"
-                  upload={uploadYtcsVoiceNote}
-                  onUploaded={(vn) => attach(vn, q)}
-                />
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm">
+                  {i + 1}. {q}
+                </p>
+                <DictateButton value={answers} onChange={setAnswers} className="shrink-0" />
               </div>
+              {attached.length > 0 && <LegacyVoiceNotes voiceNotes={attached} />}
             </div>
           );
         })}
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="dd-answers">Paste your Deep Dive answers or transcript here</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="dd-answers">Your Deep Dive answers</Label>
+          <DictateButton value={answers} onChange={setAnswers} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Type, paste, or dictate — everything lands here, in one place.
+        </p>
         <Textarea id="dd-answers" value={answers} onChange={(e) => setAnswers(e.target.value)} rows={8} />
       </div>
 
@@ -183,13 +193,11 @@ function NormalDeepDive({
 }
 
 function ProductOfferDeepDive({
-  subAccountId,
   project,
   format,
   onSave,
   onContinue,
 }: {
-  subAccountId: string;
   project: YtcsVideoProject;
   format: string;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
@@ -215,20 +223,6 @@ function ProductOfferDeepDive({
     }
   }
 
-  async function attach(vn: VoiceNote, question: string) {
-    try {
-      await onSave({ productOfferDeepDiveVoiceNotes: [...voiceNotes, toVoiceNoteRef(vn, question)] });
-      toast.success("Voice note attached.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't attach voice note.");
-    }
-  }
-
-  function appendAnswer(question: string, text: string) {
-    const block = `Question: ${question}\n${text}`;
-    setAnswers((prev) => (prev ? `${prev}\n\n${block}` : block));
-  }
-
   return (
     <div className="space-y-4">
       <div>
@@ -245,39 +239,28 @@ function ProductOfferDeepDive({
           const attached = voiceNotes.filter((vn) => vn.questionAssociation === q);
           return (
             <div key={q} className="rounded-lg border p-3">
-              <p className="text-sm">
-                Question {i + 1}: {q}
-              </p>
-              {attached.map((vn) =>
-                vn.url ? (
-                  <div key={vn.id} className="mt-2">
-                    <VoiceNotePlayer url={vn.url} durationMs={0} />
-                  </div>
-                ) : null,
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <VoiceNoteRecorder
-                  saId={subAccountId}
-                  confirmLabel="Attach"
-                  upload={uploadYtcsVoiceNote}
-                  onUploaded={(vn) => attach(vn, q)}
-                />
-                <Button type="button" size="sm" variant="ghost" onClick={() => appendAnswer(q, "")}>
-                  <Mic className="h-3.5 w-3.5" /> Add answer line below
-                </Button>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm">
+                  Question {i + 1}: {q}
+                </p>
+                <DictateButton value={answers} onChange={setAnswers} className="shrink-0" />
               </div>
+              {attached.length > 0 && <LegacyVoiceNotes voiceNotes={attached} />}
             </div>
           );
         })}
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="po-dd-answers">
-          {isShowcase ? "Deep Dive answers / additional notes" : "Deep Dive answers"}
-        </Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor="po-dd-answers">
+            {isShowcase ? "Deep Dive answers / additional notes" : "Deep Dive answers"}
+          </Label>
+          <DictateButton value={answers} onChange={setAnswers} />
+        </div>
         <p className="text-xs text-muted-foreground">
-          After listening back to a voice note, type or paste what you said here — there
-          isn&apos;t an automatic transcription step yet.
+          Type, paste, or dictate — tap the mic next to a question above, or here for
+          anything general.
         </p>
         <Textarea id="po-dd-answers" value={answers} onChange={(e) => setAnswers(e.target.value)} rows={8} />
       </div>

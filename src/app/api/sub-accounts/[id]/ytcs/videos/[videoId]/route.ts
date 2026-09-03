@@ -66,9 +66,14 @@ const EDITABLE_KEYS = [
   // Deep Dive (Phase 2)
   "deepDiveAnswers",
   "generatedDeepDiveQuestions",
-  "deepDiveVoiceNotes",
   "productOfferDeepDiveAnswers",
-  "productOfferDeepDiveVoiceNotes",
+  // deepDiveVoiceNotes / productOfferDeepDiveVoiceNotes deliberately
+  // removed from this allowlist (2026-09-03 dictation change) — no
+  // active UI writes them anymore (Deep Dive dictation is browser-
+  // native and never uploads audio), so a client-supplied PATCH can no
+  // longer touch them. Real historical values on existing projects are
+  // untouched — this only affects future writes, and GET still returns
+  // them unchanged for the read-only legacy playback UI.
   // Script Prompt Builder (Phase 2)
   "scriptOutputType",
   "depthPreference",
