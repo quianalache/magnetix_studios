@@ -1408,7 +1408,7 @@ export async function runStep(
       if (
         node.type === "send_email" &&
         emailAttempt !== null &&
-        emailAttempt < EMAIL_RETRY_DELAYS_SECONDS.length
+        emailAttempt <= EMAIL_RETRY_DELAYS_SECONDS.length
       ) {
         // Keep the node out of history while a bounded transient retry is
         // pending. The durable attempt counter prevents infinite retries.
