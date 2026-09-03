@@ -24,6 +24,9 @@ import {
 } from "@/components/community/classroom/lesson-player";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
+import { listCoursePageEmbeddedPosts } from "@/lib/server/community-course-pins-service";
+import { communityPostHref } from "@/lib/community/routes";
+import { CoursePagePinnedPost } from "@/components/community/feed/course-page-pinned-post";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +80,16 @@ export default async function StaffLessonPlayerPage({
   }
 
   const enrollment = await getEnrollment(saId, group.id, courseId, member.id);
+  // "Pin to Course Page" staff-side parity (2026-09-03) — same pin
+  // relationship and canonical Community Post the member lesson page
+  // renders; see community-course-pins-service.ts.
+  const pinnedPosts = await listCoursePageEmbeddedPosts({
+    subAccountId: saId,
+    groupId: group.id,
+    courseId,
+    lessonId,
+    viewerMemberId: member.id,
+  });
 
   // Theme parity (2026-08-29 closeout) — same shared resolver as Community
   // Home; see that page's identical comment for the full rationale.
@@ -134,6 +147,29 @@ export default async function StaffLessonPlayerPage({
         currentLessonId={lessonId}
         completedIds={enrollment?.completedLessonIds ?? []}
       />
+      {/* Pinned Community Post(s) staff parity (2026-09-03) — same
+          placement as the member lesson page: below the player, never
+          inside it, so it can't obscure the lesson content itself.
+          canManage mirrors the member page's own moderator-only gate. */}
+      {pinnedPosts.length > 0 && (
+        <div className="mx-auto mt-8 flex max-w-3xl flex-col gap-3">
+          {pinnedPosts.map((p) => (
+            <CoursePagePinnedPost
+              key={p.pinId}
+              saId={saId}
+              groupId={group.id}
+              postId={p.postId}
+              pinId={p.pinId}
+              post={p}
+              detailHref={communityPostHref(linkBase, group.slug, p.postId)}
+              brand={brand}
+              canManage={membership.role === "moderator"}
+              staffGroupId={groupId}
+              groupSlug={group.slug}
+            />
+          ))}
+        </div>
+      )}
     </CommunityShell>
   );
 }

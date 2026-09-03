@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
+import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { loadCommunityPostDetail } from "@/lib/community/load-post-detail";
 import { COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { PostDetailView } from "@/components/community/feed/post-detail-view";
@@ -18,6 +19,16 @@ export const dynamic = "force-dynamic";
  * page.tsx one directory up instead — Next's intercepting-route
  * convention, not a second, divergent post-detail implementation (same
  * PostDetailView, same loader).
+ *
+ * Also reused directly (2026-09-03) by the pretty/custom-domain mirror's
+ * own intercepted route (@modal/(.)home/[postId] under
+ * /communities/[groupSlug]) the exact same way the existing full-page
+ * mirror already delegates to the opaque full page — see this file's own
+ * `isCommunityPrettyRequest` call, which resolves from the CURRENT
+ * request's host regardless of which route delegated here, so a visitor
+ * on the custom domain gets pretty-shaped internal links (e.g. a
+ * #channelRef inside the post body) even though this component's own
+ * saId/groupSlug params stay opaque-shaped either way.
  */
 export default async function InterceptedPostDetailModal({
   params,
@@ -32,6 +43,7 @@ export default async function InterceptedPostDetailModal({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
+  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership } = access;
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
@@ -53,6 +65,7 @@ export default async function InterceptedPostDetailModal({
     <PostDetailModalShell>
       <PostDetailView
         saId={saId}
+        pretty={pretty}
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}
