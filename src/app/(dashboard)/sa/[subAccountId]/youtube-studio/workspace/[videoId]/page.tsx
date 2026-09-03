@@ -195,6 +195,7 @@ export default function VideoProjectPage() {
           businessBrain={businessBrain}
           onSave={saveProject}
           onChangeStartingPoint={() => setChangingStartingPoint(true)}
+          onContinue={() => setViewingStep("Deep Dive")}
         />
       ) : viewingStep === "Deep Dive" ? (
         <DeepDiveStep

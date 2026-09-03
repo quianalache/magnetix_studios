@@ -50,21 +50,39 @@ export function InputStep({
   businessBrain,
   onSave,
   onChangeStartingPoint,
+  onContinue,
 }: {
   subAccountId: string;
   project: YtcsVideoProject;
   businessBrain: BusinessBrain | null;
   onSave: (updates: Partial<YtcsVideoProject>) => Promise<void>;
   onChangeStartingPoint: () => void;
+  /** Advances the workspace's viewed tab to Deep Dive — only called
+   *  after the save this same click triggers actually succeeds (see
+   *  `continueToDeepDive` below). Bug fix (2026-09-03): this step never
+   *  received an onContinue at all, so "Continue to Deep Dive" only
+   *  ever saved and never navigated, for every starting point. */
+  onContinue: () => void;
 }) {
   const [rawTranscript, setRawTranscript] = useState(project.rawTranscript ?? "");
   const [saving, setSaving] = useState(false);
 
-  async function saveRaw(extra: Partial<YtcsVideoProject> = {}) {
+  /**
+   * The one action every starting point's "Continue to Deep Dive"
+   * button uses: save the given fields plus `currentStep: "Deep Dive"`
+   * in a single atomic request, then — only if that save actually
+   * succeeds — advance the viewed tab. A failed save shows an error
+   * toast and never calls `onContinue()`, so the UI correctly stays on
+   * Input rather than silently moving on. `currentStep` is written in
+   * the very same request that saves the step's own content, so it can
+   * never be advanced ahead of a save that didn't happen.
+   */
+  async function continueToDeepDive(extra: Partial<YtcsVideoProject> = {}) {
     setSaving(true);
     try {
-      await onSave({ rawTranscript, ...extra });
+      await onSave({ ...extra, currentStep: "Deep Dive" });
       toast.success("Saved.");
+      onContinue();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
@@ -140,6 +158,27 @@ export function InputStep({
             Story loaded: <span className="font-medium text-foreground">{selected.name}</span>
           </p>
         )}
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            disabled={!selected || saving}
+            onClick={() =>
+              selected &&
+              continueToDeepDive({
+                storyId: selected.id,
+                storyName: selected.name,
+                storyProblem: selected.problem,
+                storyPursuit: selected.pursuit,
+                storyPayoff: selected.payoff,
+                storyLesson: selected.lesson,
+                storyType: selected.type,
+              })
+            }
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Continue to Deep Dive
+          </Button>
+        </div>
       </div>
     );
   }
@@ -147,6 +186,7 @@ export function InputStep({
   if (project.startingPointType === "framework") {
     const frameworks = businessBrain?.frameworks ?? [];
     const selectedId = project.frameworkId;
+    const selected = frameworks.find((f) => f.id === selectedId);
     return (
       <div className="space-y-4">
         {header}
@@ -172,6 +212,16 @@ export function InputStep({
               <p className="mt-1 text-xs text-muted-foreground">{f.type}</p>
             </button>
           ))}
+        </div>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            disabled={!selected || saving}
+            onClick={() => selected && continueToDeepDive({ framework: selected, frameworkId: selected.id })}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Continue to Deep Dive
+          </Button>
         </div>
       </div>
     );
@@ -243,6 +293,16 @@ export function InputStep({
             </div>
           </div>
         )}
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            disabled={!selectedOfferId || !format || saving}
+            onClick={() => continueToDeepDive({ productOfferInput: project.productOfferInput })}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Continue to Deep Dive
+          </Button>
+        </div>
       </div>
     );
   }
@@ -277,7 +337,7 @@ export function InputStep({
           />
         </div>
         <div className="flex justify-end">
-          <Button type="button" onClick={() => saveRaw()} disabled={saving}>
+          <Button type="button" onClick={() => continueToDeepDive({ rawTranscript })} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Continue to Deep Dive
           </Button>
@@ -348,7 +408,7 @@ export function InputStep({
         />
       </div>
       <div className="flex justify-end">
-        <Button type="button" onClick={() => saveRaw()} disabled={saving}>
+        <Button type="button" onClick={() => continueToDeepDive({ rawTranscript })} disabled={saving}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Continue to Deep Dive
         </Button>
