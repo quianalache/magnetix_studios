@@ -1,23 +1,23 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireStaffGroupPageAccess } from "@/lib/community/member-context";
 import { loadCommunityPostDetail } from "@/lib/community/load-post-detail";
-import {
-  CommunityShell,
-  COMMUNITY_DEFAULT_BRAND,
-} from "@/components/community/community-shell";
+import { COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { PostDetailView } from "@/components/community/feed/post-detail-view";
-import { communityHomeHref } from "@/lib/community/routes";
+import { PostDetailModalShell } from "@/components/community/feed/post-detail-modal-shell";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
-import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
-/** Staff Community-in-CRM — post detail (comments/replies). Close mirror of
- *  /c/[saId]/[groupSlug]/community/[postId]/page.tsx — see the Staff
- *  Community Integration report. */
-export default async function StaffPostDetailPage({
+/**
+ * Intercepted version of .../community/[groupId]/post/[postId] — staff/CRM
+ * mirror of @modal/(.)community/[postId] under /c/[saId]/[groupSlug]. Same
+ * access check and data (loadCommunityPostDetail, shared with the real
+ * page), rendered as an overlay instead of CommunityShell's full-page
+ * chrome. Only reached via client-side navigation from within
+ * /sa/[subAccountId]/community/[groupId]/*; a hard load or refresh hits
+ * the real page.tsx one directory up.
+ */
+export default async function InterceptedStaffPostDetailModal({
   params,
 }: {
   params: Promise<{ subAccountId: string; groupId: string; postId: string }>;
@@ -32,8 +32,6 @@ export default async function StaffPostDetailPage({
   if (access.kind === "redirect") redirect(access.to);
 
   const { group, member, membership } = access;
-  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
-  // Home; see that page's identical comment for the full rationale.
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
@@ -47,33 +45,11 @@ export default async function StaffPostDetailPage({
   if (!detail) notFound();
   const { post, comments } = detail;
 
-  const viewer: AuthorView = {
-    memberId: member.id,
-    displayName:
-      member.displayName?.trim() || member.email.split("@")[0] || "Member",
-    avatarUrl: member.avatarUrl,
-    level: membership.level,
-  };
+  const displayName =
+    member.displayName?.trim() || member.email.split("@")[0] || "Member";
 
   return (
-    <CommunityShell
-      saId={saId}
-      group={group}
-      active="community"
-      viewer={viewer}
-      viewerIsModerator={membership.role === "moderator"}
-      staffGroupId={groupId}
-      embedded={false}
-    >
-      <Link
-        href={communityHomeHref(
-          { saId, pretty: false, staffGroupId: groupId },
-          group.slug
-        )}
-        className="mb-3 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to feed
-      </Link>
+    <PostDetailModalShell>
       <PostDetailView
         saId={saId}
         staffGroupId={groupId}
@@ -89,11 +65,11 @@ export default async function StaffPostDetailPage({
         viewer={{
           memberId: member.id,
           role: membership.role,
-          displayName: viewer.displayName,
-          avatarUrl: viewer.avatarUrl,
-          level: viewer.level,
+          displayName,
+          avatarUrl: member.avatarUrl,
+          level: membership.level,
         }}
       />
-    </CommunityShell>
+    </PostDetailModalShell>
   );
 }

@@ -25,6 +25,9 @@ import {
 } from "@/components/community/classroom/lesson-player";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { AuthorView } from "@/types/community";
+import { listCoursePageEmbeddedPosts } from "@/lib/server/community-course-pins-service";
+import { communityPostHref } from "@/lib/community/routes";
+import { CoursePagePinnedPost } from "@/components/community/feed/course-page-pinned-post";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +78,15 @@ export default async function LessonPlayerPage({
   }
 
   const enrollment = await getEnrollment(saId, group.id, courseId, member.id);
+  // "Pin to Course Page" (2026-09-03) — references, not copies, of real
+  // Community Posts; see community-course-pins-service.ts.
+  const pinnedPosts = await listCoursePageEmbeddedPosts({
+    subAccountId: saId,
+    groupId: group.id,
+    courseId,
+    lessonId,
+    viewerMemberId: member.id,
+  });
 
   // Theme parity (2026-08-29 closeout) — same shared resolver as Community
   // Home; see that page's identical comment for the full rationale.
@@ -131,6 +143,25 @@ export default async function LessonPlayerPage({
         currentLessonId={lessonId}
         completedIds={enrollment?.completedLessonIds ?? []}
       />
+      {pinnedPosts.length > 0 && (
+        <div className="mx-auto mt-8 flex max-w-3xl flex-col gap-3">
+          {pinnedPosts.map((p) => (
+            <CoursePagePinnedPost
+              key={p.pinId}
+              saId={saId}
+              groupId={group.id}
+              postId={p.postId}
+              pinId={p.pinId}
+              post={p}
+              detailHref={communityPostHref(linkBase, groupSlug, p.postId)}
+              brand={brand}
+              canManage={membership.role === "moderator"}
+              pretty={pretty}
+              groupSlug={groupSlug}
+            />
+          ))}
+        </div>
+      )}
     </CommunityShell>
   );
 }

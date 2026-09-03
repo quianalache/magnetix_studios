@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { MessageCircle, Pin, ThumbsUp, Video } from "lucide-react";
 import type { AuthorView, FeedPoll } from "@/types/community";
@@ -21,10 +21,12 @@ import {
 import { communityPostHref } from "@/lib/community/routes";
 import { cn } from "@/lib/utils";
 import { QuickGoLiveSetup } from "@/components/community/quick-go-live-setup";
-import { FocusedPostOverlay } from "@/components/community/feed/focused-post-overlay";
 import { InlineCommentThread } from "@/components/community/feed/inline-comment-thread";
 import { CommunityLiveStage } from "@/components/community/community-live-stage";
 import { CommunityReplayPlayer } from "@/components/community/community-replay-player";
+import { buildPostActionItems } from "@/lib/community/post-actions";
+import { ChangeChannelDialog } from "@/components/community/feed/change-channel-dialog";
+import { PinToCoursePageDialog } from "@/components/community/feed/pin-to-course-page-dialog";
 
 export interface ClientPost {
   id: string;
@@ -258,11 +260,21 @@ export function FeedView({
   viewer: Viewer;
   initialPosts: ClientPost[];
 }) {
+  const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
   const [composerOpen, setComposerOpen] = useState(false);
   const [goLiveOpen, setGoLiveOpen] = useState(false);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
-  const [focusedPost, setFocusedPost] = useState<ClientPost | null>(null);
+  // Change Channel / Pin to Course Page (2026-09-03) — small dialogs, not
+  // full page state; opened post detail is route-backed now (see
+  // communityPostHref navigation below and @modal/(.)community/[postId]),
+  // not local component state.
+  const [changingChannelPostId, setChangingChannelPostId] = useState<
+    string | null
+  >(null);
+  const [pinningToCoursePostId, setPinningToCoursePostId] = useState<
+    string | null
+  >(null);
   const [expandedComments, setExpandedComments] = useState<string | null>(null);
   const [sort, setSort] = useState<"latest" | "top" | "unanswered">("latest");
   // Category filter is driven by the left nav's `?c=` link (Part 7) rather
@@ -405,6 +417,78 @@ export function FeedView({
     );
   }
 
+  /**
+   * Change Channel — moves a post to a different channel/category.
+   * Deliberately NOT the same thing as Pin to Channel (togglePin above):
+   * that features a post at the top of its CURRENT channel without
+   * moving it; this reassigns which channel it belongs to. Same PATCH
+   * endpoint togglePin/deletePost already use (the `edit` shape, not the
+   * `pinned` one) — category reassignment was already fully supported
+   * server-side (category is validated against the group's real channel
+   * list there), this just adds the UI. Resubmits the post's own
+   * existing title/body/attachments unchanged — the same values the
+   * "Edit post" composer already round-trips through this identical
+   * endpoint when a moderator edits someone else's post without
+   * touching its content.
+   */
+  async function changeChannel(post: ClientPost, category: string) {
+    const res = await fetch(`${base}/posts/${post.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        edit: {
+          title: post.title,
+          body: post.body,
+          category,
+          attachments: post.attachments,
+          commentsDisabled: post.commentsDisabled,
+        },
+      }),
+    });
+    const d = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't change channel");
+      return;
+    }
+    setPosts((prev) =>
+      prev.map((p) => (p.id === post.id ? { ...p, category } : p))
+    );
+    setChangingChannelPostId(null);
+    toast.success(`Moved to ${category}`);
+  }
+
+  async function toggleComments(post: ClientPost) {
+    const next = !post.commentsDisabled;
+    const res = await fetch(`${base}/posts/${post.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        edit: {
+          title: post.title,
+          body: post.body,
+          category: post.category,
+          attachments: post.attachments,
+          commentsDisabled: next,
+        },
+      }),
+    });
+    const d = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't update comments");
+      return;
+    }
+    setPosts((prev) =>
+      prev.map((p) => (p.id === post.id ? { ...p, commentsDisabled: next } : p))
+    );
+    toast.success(next ? "Comments turned off" : "Comments turned on");
+  }
+
   async function submitVote(postId: string, optionIds: string[]) {
     const res = await fetch(`${base}/posts/${postId}/poll/vote`, {
       method: "POST",
@@ -470,11 +554,34 @@ export function FeedView({
     // tint/border, not a second color needing its own theme plumbing.
     const highlighted = variant === "featured" || variant === "channelPinned";
 
+    // Whole-card open (2026-09-03) — real user QA: the title alone reading
+    // as the click target was misleading (every other part of the card
+    // looked inert). Semantic event handling, not CSS: `closest()` walks
+    // up from the actual click target and bails if it's inside any real
+    // interactive element (a link, button, form control, video/audio, or
+    // anything explicitly opted out via data-no-card-open) — Like,
+    // Comment, the 3-dot menu, embedded media controls, and links inside
+    // the post body all already ARE one of those, so they need no special
+    // handling here to keep working independently. router.push (not a
+    // hard navigation) so the intercepting-route modal
+    // (@modal/(.)community/[postId]) actually intercepts.
+    function openIfNotInteractive(event: React.MouseEvent<HTMLElement>) {
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          'a, button, input, textarea, select, label, video, audio, iframe, [role="button"], [data-no-card-open]'
+        )
+      )
+        return;
+      router.push(detail);
+    }
+
     return (
       <article
         key={p.id}
+        onClick={openIfNotInteractive}
         className={cn(
-          "rounded-xl border bg-white p-4",
+          "cursor-pointer rounded-xl border bg-white p-4",
           highlighted ? "border-2" : "border-[#E4E4E4]"
         )}
         style={
@@ -549,9 +656,12 @@ export function FeedView({
                   explicit, well-understood affordance (same pattern as
                   Twitter/Reddit/HN) rather than wrapping the whole card
                   body in one giant <a>, which made member-inserted links
-                  inside the body invalid-nested and unclickable. */}
+                  inside the body invalid-nested and unclickable. Real,
+                  functional <button> (not the whole-card handler's
+                  bubbling) since it's itself an interactive element the
+                  card-open handler correctly steps around. */}
               <button
-                onClick={() => setFocusedPost(p)}
+                onClick={() => router.push(detail)}
                 className="text-xs text-[#909090] hover:underline"
               >
                 {timeAgo(p.createdAtMs)}
@@ -560,13 +670,10 @@ export function FeedView({
                 <span className="text-xs text-[#909090]">· {p.category}</span>
               )}
             </div>
+            {/* Plain text (2026-09-03) — the CARD is the click target now,
+                not the title specifically; see openIfNotInteractive above. */}
             {p.title && (
-              <button
-                onClick={() => setFocusedPost(p)}
-                className="mt-1 block text-left hover:underline"
-              >
-                <h3 className="font-semibold text-[#202124]">{p.title}</h3>
-              </button>
+              <h3 className="mt-1 font-semibold text-[#202124]">{p.title}</h3>
             )}
             {/* NOT wrapped in a <Link> — the old "wrap the whole title+body
                 in one <a>" pattern made any link a member inserted into
@@ -680,81 +787,67 @@ export function FeedView({
               />
             )}
           </div>
-          {(canModerate || canDelete || canEdit) && (
-            <ActionsMenu
-              items={[
-                { label: "Open post", onClick: () => setFocusedPost(p) },
-                {
-                  label: "Copy link",
-                  onClick: async () => {
-                    await navigator.clipboard.writeText(
-                      new URL(detail, window.location.origin).toString()
-                    );
-                    toast.success("Link copied");
-                  },
-                },
-                ...(canEdit
-                  ? [
-                      {
-                        label: "Edit post",
-                        onClick: () => setEditingPostId(p.id),
-                      },
-                    ]
-                  : []),
-                ...(canModerate
-                  ? [
-                      {
-                        label: p.pinned
-                          ? "Unpin from All Posts"
-                          : "Pin to All Posts",
-                        onClick: () => togglePin(p, "allPosts"),
-                      },
-                      // A post with no channel/category can't be pinned to
-                      // one — hidden entirely rather than shown disabled.
-                      ...(p.category
-                        ? [
-                            {
-                              label: p.pinnedToChannel
-                                ? "Unpin from Channel"
-                                : "Pin to Channel",
-                              onClick: () => togglePin(p, "channel"),
-                            },
-                          ]
-                        : []),
-                    ]
-                  : []),
-                ...(canDelete
-                  ? [
-                      {
-                        label: "Delete post",
-                        onClick: () => deletePost(p.id),
-                        destructive: true,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )}
+          <ActionsMenu
+            items={buildPostActionItems(p, viewer, {
+              onOpen: () => router.push(detail),
+              onCopyLink: async () => {
+                await navigator.clipboard.writeText(
+                  new URL(detail, window.location.origin).toString()
+                );
+                toast.success("Link copied");
+              },
+              ...(canEdit ? { onEdit: () => setEditingPostId(p.id) } : {}),
+              ...(canModerate
+                ? {
+                    onTogglePin: (target) => void togglePin(p, target),
+                    onChangeChannel: () => setChangingChannelPostId(p.id),
+                    onPinToCourse: () => setPinningToCoursePostId(p.id),
+                    onToggleComments: () => void toggleComments(p),
+                  }
+                : {}),
+              ...(canDelete ? { onDelete: () => void deletePost(p.id) } : {}),
+            })}
+          />
         </div>
       </article>
     );
   }
 
+  const changingChannelPost = changingChannelPostId
+    ? (posts.find((p) => p.id === changingChannelPostId) ?? null)
+    : null;
+  const pinningToCoursePost = pinningToCoursePostId
+    ? (posts.find((p) => p.id === pinningToCoursePostId) ?? null)
+    : null;
+
   return (
     <div className="space-y-4">
-      {focusedPost && (
-        <FocusedPostOverlay
+      {/* Opened post detail (2026-09-03) is route-backed now — a click
+          navigates to the canonical post URL (communityPostHref) via
+          router.push, and the intercepting route
+          (@modal/(.)community/[postId] or .../@modal/(.)post/[postId] on
+          the staff surface) renders it as this exact same overlay
+          presentation on top of this feed, still mounted underneath. No
+          local "which post is open" state here anymore — the URL IS that
+          state, so refresh/copy/Back/direct-load all just work. */}
+      {changingChannelPost && (
+        <ChangeChannelDialog
+          categories={categories}
+          currentCategory={changingChannelPost.category}
+          saving={false}
+          onSelect={(category) =>
+            void changeChannel(changingChannelPost, category)
+          }
+          onClose={() => setChangingChannelPostId(null)}
+        />
+      )}
+      {pinningToCoursePost && (
+        <PinToCoursePageDialog
           saId={saId}
           groupId={groupId}
-          groupSlug={groupSlug}
-          brand={brand}
-          communityName={communityName}
-          categories={categories}
-          pretty={pretty}
-          staffGroupId={staffGroupId}
-          post={focusedPost}
-          viewer={viewer}
-          onClose={() => setFocusedPost(null)}
+          postId={pinningToCoursePost.id}
+          postTitle={pinningToCoursePost.title}
+          onClose={() => setPinningToCoursePostId(null)}
         />
       )}
       {/* Modal composer launcher (Phase D, Part 2) — a lightweight

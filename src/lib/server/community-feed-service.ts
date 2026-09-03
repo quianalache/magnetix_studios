@@ -1190,6 +1190,18 @@ export async function deletePostServerSide(opts: {
   // an inconsistency worth a deliberate decision before any future
   // cross-feature retention/reporting work treats the two as equivalent.
   await getAdminDb().recursiveDelete(ref);
+
+  // Pin to Course Page (2026-09-03) — a deleted post must not leave an
+  // orphaned embed on any course page it was pinned to. Best-effort,
+  // after the post itself is gone: a failure here must never block the
+  // actual deletion the caller asked for.
+  const { removeAllCoursePagePinsForPost } =
+    await import("@/lib/server/community-course-pins-service");
+  await removeAllCoursePagePinsForPost({
+    subAccountId: opts.subAccountId,
+    groupId: opts.groupId,
+    postId: opts.postId,
+  }).catch(() => {});
 }
 
 /** Returns the comment's author id (for the author-or-moderator delete check). */

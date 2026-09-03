@@ -1,26 +1,25 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
-import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityHomeHref } from "@/lib/community/routes";
 import { loadCommunityPostDetail } from "@/lib/community/load-post-detail";
-import {
-  CommunityShell,
-  COMMUNITY_DEFAULT_BRAND,
-} from "@/components/community/community-shell";
+import { COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { PostDetailView } from "@/components/community/feed/post-detail-view";
+import { PostDetailModalShell } from "@/components/community/feed/post-detail-modal-shell";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
-import type { AuthorView } from "@/types/community";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Canonical, shareable, refresh-safe post URL — the direct-load/refresh
- * fallback for the intercepted modal in @modal/(.)community/[postId] (same
- * layout segment). Also what a fresh/copied link resolves to directly.
+ * Intercepted version of .../community/[postId] — same access check and
+ * data (loadCommunityPostDetail, shared with the real page), rendered as
+ * an overlay ON TOP of the feed page still mounted behind it instead of
+ * CommunityShell's own full-page chrome. Only reached via client-side
+ * navigation from within /c/[saId]/[groupSlug]/* (a `<Link>`/router.push
+ * to the canonical post URL); a hard load or refresh always hits the real
+ * page.tsx one directory up instead — Next's intercepting-route
+ * convention, not a second, divergent post-detail implementation (same
+ * PostDetailView, same loader).
  */
-export default async function PostDetailPage({
+export default async function InterceptedPostDetailModal({
   params,
 }: {
   params: Promise<{ saId: string; groupSlug: string; postId: string }>;
@@ -33,10 +32,7 @@ export default async function PostDetailPage({
   if (access.kind === "notFound") notFound();
   if (access.kind === "redirect") redirect(access.to);
 
-  const pretty = await isCommunityPrettyRequest(saId);
   const { group, member, membership } = access;
-  // Theme parity (2026-08-29 closeout) — same shared resolver as Community
-  // Home; see that page's identical comment for the full rationale.
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
 
@@ -50,32 +46,13 @@ export default async function PostDetailPage({
   if (!detail) notFound();
   const { post, comments } = detail;
 
-  const viewer: AuthorView = {
-    memberId: member.id,
-    displayName:
-      member.displayName?.trim() || member.email.split("@")[0] || "Member",
-    avatarUrl: member.avatarUrl,
-    level: membership.level,
-  };
+  const displayName =
+    member.displayName?.trim() || member.email.split("@")[0] || "Member";
 
   return (
-    <CommunityShell
-      saId={saId}
-      pretty={pretty}
-      group={group}
-      active="community"
-      viewer={viewer}
-      viewerIsModerator={membership.role === "moderator"}
-    >
-      <Link
-        href={communityHomeHref({ saId, pretty }, group.slug)}
-        className="mb-3 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to feed
-      </Link>
+    <PostDetailModalShell>
       <PostDetailView
         saId={saId}
-        pretty={pretty}
         groupId={group.id}
         groupSlug={group.slug}
         brand={brand}
@@ -88,11 +65,11 @@ export default async function PostDetailPage({
         viewer={{
           memberId: member.id,
           role: membership.role,
-          displayName: viewer.displayName,
-          avatarUrl: viewer.avatarUrl,
-          level: viewer.level,
+          displayName,
+          avatarUrl: member.avatarUrl,
+          level: membership.level,
         }}
       />
-    </CommunityShell>
+    </PostDetailModalShell>
   );
 }

@@ -29,6 +29,9 @@ import { cn } from "@/lib/utils";
 import type { ClientPost } from "./feed-view";
 import { CommunityLiveStage } from "@/components/community/community-live-stage";
 import { CommunityReplayPlayer } from "@/components/community/community-replay-player";
+import { buildPostActionItems } from "@/lib/community/post-actions";
+import { ChangeChannelDialog } from "@/components/community/feed/change-channel-dialog";
+import { PinToCoursePageDialog } from "@/components/community/feed/pin-to-course-page-dialog";
 
 export interface ClientComment {
   id: string;
@@ -111,6 +114,8 @@ export function PostDetailView({
   const [comments, setComments] = useState(initialComments);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [changingChannel, setChangingChannel] = useState(false);
+  const [pinningToCourse, setPinningToCourse] = useState(false);
   const base = `/api/community/${saId}/${groupId}`;
 
   const topLevel = comments.filter((c) => !c.parentId);
@@ -155,6 +160,63 @@ export function PostDetailView({
         ? { ...prev, pinned: !currentlyPinned }
         : { ...prev, pinnedToChannel: !currentlyPinned }
     );
+  }
+
+  /** Same as feed-view.tsx's changeChannel — see that copy's comment for
+   *  why this is a distinct concept from Pin to Channel above, and why
+   *  it resubmits the post's own existing title/body/attachments. */
+  async function changeChannel(category: string) {
+    const res = await fetch(`${base}/posts/${post.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        edit: {
+          title: currentPost.title,
+          body: currentPost.body,
+          category,
+          attachments: currentPost.attachments,
+          commentsDisabled: currentPost.commentsDisabled,
+        },
+      }),
+    });
+    const d = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't change channel");
+      return;
+    }
+    setCurrentPost((prev) => ({ ...prev, category }));
+    setChangingChannel(false);
+    toast.success(`Moved to ${category}`);
+  }
+
+  async function toggleComments() {
+    const next = !currentPost.commentsDisabled;
+    const res = await fetch(`${base}/posts/${post.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        edit: {
+          title: currentPost.title,
+          body: currentPost.body,
+          category: currentPost.category,
+          attachments: currentPost.attachments,
+          commentsDisabled: next,
+        },
+      }),
+    });
+    const d = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
+    if (!res.ok || !d.ok) {
+      toast.error(d.error ?? "Couldn't update comments");
+      return;
+    }
+    setCurrentPost((prev) => ({ ...prev, commentsDisabled: next }));
+    toast.success(next ? "Comments turned off" : "Comments turned on");
   }
 
   async function deletePost() {
@@ -250,35 +312,28 @@ export function PostDetailView({
   // canModerate/Delete below — not a new permission concept.
   const canEdit =
     canModerate || currentPost.author.memberId === viewer.memberId;
-  const postMenu: MenuItem[] = [
-    ...(canEdit
-      ? [{ label: "Edit post", onClick: () => setEditing(true) }]
-      : []),
+  const canDelete =
+    canModerate || currentPost.author.memberId === viewer.memberId;
+  // ONE canonical action set, shared with feed-view.tsx's card menu
+  // (2026-09-03) — see post-actions.ts's own doc comment for why this
+  // used to drift (this menu was missing "Open post"/"Copy link" the
+  // feed already had). No "Open post" here — the post is already open.
+  const postMenu: MenuItem[] = buildPostActionItems(currentPost, viewer, {
+    onCopyLink: async () => {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Link copied");
+    },
+    ...(canEdit ? { onEdit: () => setEditing(true) } : {}),
     ...(canModerate
-      ? [
-          {
-            label: currentPost.pinned
-              ? "Unpin from All Posts"
-              : "Pin to All Posts",
-            onClick: () => togglePin("allPosts"),
-          },
-          // A post with no channel/category can't be pinned to one.
-          ...(currentPost.category
-            ? [
-                {
-                  label: currentPost.pinnedToChannel
-                    ? "Unpin from Channel"
-                    : "Pin to Channel",
-                  onClick: () => togglePin("channel"),
-                },
-              ]
-            : []),
-        ]
-      : []),
-    ...(canModerate || currentPost.author.memberId === viewer.memberId
-      ? [{ label: "Delete post", onClick: deletePost, destructive: true }]
-      : []),
-  ];
+      ? {
+          onTogglePin: (target) => void togglePin(target),
+          onChangeChannel: () => setChangingChannel(true),
+          onPinToCourse: () => setPinningToCourse(true),
+          onToggleComments: () => void toggleComments(),
+        }
+      : {}),
+    ...(canDelete ? { onDelete: () => void deletePost() } : {}),
+  });
 
   return (
     <div className="space-y-4">
@@ -301,6 +356,24 @@ export function PostDetailView({
             setEditing(false);
           }}
           onCancel={() => setEditing(false)}
+        />
+      )}
+      {changingChannel && (
+        <ChangeChannelDialog
+          categories={categories}
+          currentCategory={currentPost.category}
+          saving={false}
+          onSelect={changeChannel}
+          onClose={() => setChangingChannel(false)}
+        />
+      )}
+      {pinningToCourse && (
+        <PinToCoursePageDialog
+          saId={saId}
+          groupId={groupId}
+          postId={currentPost.id}
+          postTitle={currentPost.title}
+          onClose={() => setPinningToCourse(false)}
         />
       )}
 

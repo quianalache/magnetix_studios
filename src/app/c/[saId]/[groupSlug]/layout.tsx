@@ -26,6 +26,12 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ saId: string; groupSlug: string }>;
+  // Next's generated LayoutProps for this segment requires every
+  // exported function here (not just the default export) to accept the
+  // @modal slot's prop, required (not optional), once that parallel
+  // route exists (2026-09-03) — generateMetadata never reads it, but the
+  // type has to be declared to satisfy the constraint.
+  modal: React.ReactNode;
 }): Promise<Metadata> {
   try {
     const { saId, groupSlug } = await params;
@@ -37,6 +43,22 @@ export async function generateMetadata({
   }
 }
 
-export default function CommunityGroupLayout({ children }: { children: React.ReactNode }) {
-  return children;
+export default function CommunityGroupLayout({
+  children,
+  modal,
+}: {
+  children: React.ReactNode;
+  // Post-detail intercepting route (2026-09-03) — see
+  // @modal/(.)community/[postId]/page.tsx. Empty (default.tsx) on every
+  // URL except a post opened via client-side navigation from within this
+  // community; renders alongside `children`, never replacing it, so the
+  // feed underneath stays mounted.
+  modal: React.ReactNode;
+}) {
+  return (
+    <>
+      {children}
+      {modal}
+    </>
+  );
 }

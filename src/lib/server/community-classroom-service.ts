@@ -37,7 +37,7 @@ function formatPrice(cents: number | null, currency: string | null): string {
 
 function coursesCol(saId: string, groupId: string) {
   return getAdminDb().collection(
-    `subAccounts/${saId}/communityGroups/${groupId}/courses`,
+    `subAccounts/${saId}/communityGroups/${groupId}/courses`
   );
 }
 function courseDoc(saId: string, groupId: string, courseId: string) {
@@ -105,7 +105,8 @@ export async function updateCourseServerSide(opts: {
   };
   const p = opts.patch;
   if (typeof p.title === "string") updates.title = p.title.trim();
-  if (typeof p.description === "string") updates.description = p.description.trim();
+  if (typeof p.description === "string")
+    updates.description = p.description.trim();
   if (p.thumbnailUrl !== undefined) updates.thumbnailUrl = p.thumbnailUrl;
   if (typeof p.published === "boolean") updates.published = p.published;
   if (typeof p.order === "number") updates.order = p.order;
@@ -124,7 +125,9 @@ export async function updateCourseServerSide(opts: {
     if (p.requiredLevel !== undefined) updates.requiredLevel = p.requiredLevel;
     if (p.priceCents !== undefined) updates.priceCents = p.priceCents;
   }
-  await courseDoc(opts.subAccountId, opts.groupId, opts.courseId).update(updates);
+  await courseDoc(opts.subAccountId, opts.groupId, opts.courseId).update(
+    updates
+  );
 }
 
 export async function deleteCourseServerSide(opts: {
@@ -133,18 +136,55 @@ export async function deleteCourseServerSide(opts: {
   courseId: string;
 }): Promise<void> {
   await getAdminDb().recursiveDelete(
-    courseDoc(opts.subAccountId, opts.groupId, opts.courseId),
+    courseDoc(opts.subAccountId, opts.groupId, opts.courseId)
   );
 }
 
 export async function getCourse(
   saId: string,
   groupId: string,
-  courseId: string,
+  courseId: string
 ): Promise<Course | null> {
   const snap = await courseDoc(saId, groupId, courseId).get();
   if (!snap.exists) return null;
   return { id: snap.id, ...(snap.data() as Omit<Course, "id">) };
+}
+
+/**
+ * Every course in this group, each with its own published (or all, for
+ * moderator tooling) lessons — the "Pin to Course Page" picker
+ * (2026-09-03). Deliberately separate from `listCoursesForMember`: that
+ * one adds per-member locking/progress that has no meaning for a
+ * moderator picking a destination to embed a post at, and would need a
+ * real memberId this call site (a picker, not a viewer) doesn't have.
+ */
+export async function listCoursesWithLessons(
+  saId: string,
+  groupId: string,
+  opts: { publishedOnly: boolean }
+): Promise<Array<{ course: Course; lessons: Lesson[] }>> {
+  const coursesSnap = await coursesCol(saId, groupId)
+    .orderBy("order", "asc")
+    .get();
+  const courses = coursesSnap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as Omit<Course, "id">) }) as Course
+  );
+  const filtered = opts.publishedOnly
+    ? courses.filter((c) => c.published)
+    : courses;
+  return Promise.all(
+    filtered.map(async (course) => {
+      const lessonsSnap = await courseDoc(saId, groupId, course.id)
+        .collection("lessons")
+        .orderBy("order", "asc")
+        .get();
+      let lessons = lessonsSnap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<Lesson, "id">) }) as Lesson
+      );
+      if (opts.publishedOnly) lessons = lessons.filter((l) => l.published);
+      return { course, lessons };
+    })
+  );
 }
 
 /* ------------------------------ Sections ------------------------------- */
@@ -155,9 +195,11 @@ export async function createSectionServerSide(opts: {
   courseId: string;
   title: string;
 }): Promise<CourseSection> {
-  const col = courseDoc(opts.subAccountId, opts.groupId, opts.courseId).collection(
-    "sections",
-  );
+  const col = courseDoc(
+    opts.subAccountId,
+    opts.groupId,
+    opts.courseId
+  ).collection("sections");
   const count = (await col.count().get()).data().count;
   const doc = { title: opts.title.trim() || "Untitled section", order: count };
   const ref = await col.add(doc);
@@ -255,7 +297,10 @@ export async function updateLessonServerSide(opts: {
   if (Array.isArray(p.resourceLinks)) {
     updates.resourceLinks = p.resourceLinks
       .filter((r) => r && r.url?.trim())
-      .map((r) => ({ label: r.label?.trim() || r.url.trim(), url: r.url.trim() }))
+      .map((r) => ({
+        label: r.label?.trim() || r.url.trim(),
+        url: r.url.trim(),
+      }))
       .slice(0, 20);
   }
   let videoError = false;
@@ -288,7 +333,9 @@ export async function deleteLessonServerSide(opts: {
   lessonId: string;
 }): Promise<void> {
   await getAdminDb().recursiveDelete(
-    lessonsCol(opts.subAccountId, opts.groupId, opts.courseId).doc(opts.lessonId),
+    lessonsCol(opts.subAccountId, opts.groupId, opts.courseId).doc(
+      opts.lessonId
+    )
   );
 }
 
@@ -306,19 +353,25 @@ export async function getCourseTree(opts: {
   courseId: string;
   includeUnpublished: boolean;
 }): Promise<CourseTree | null> {
-  const course = await getCourse(opts.subAccountId, opts.groupId, opts.courseId);
+  const course = await getCourse(
+    opts.subAccountId,
+    opts.groupId,
+    opts.courseId
+  );
   if (!course) return null;
   const ref = courseDoc(opts.subAccountId, opts.groupId, opts.courseId);
   const [sectionsSnap, lessonsSnap] = await Promise.all([
     ref.collection("sections").orderBy("order", "asc").get(),
     ref.collection("lessons").orderBy("order", "asc").get(),
   ]);
-  const sections = sectionsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<CourseSection, "id">) }),
-  );
-  let lessons = lessonsSnap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as Omit<Lesson, "id">) }),
-  );
+  const sections = sectionsSnap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<CourseSection, "id">),
+  }));
+  let lessons = lessonsSnap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as Omit<Lesson, "id">),
+  }));
   if (!opts.includeUnpublished) lessons = lessons.filter((l) => l.published);
   return { course, sections, lessons };
 }
@@ -329,7 +382,7 @@ function enrollmentDoc(
   saId: string,
   groupId: string,
   courseId: string,
-  memberId: string,
+  memberId: string
 ) {
   return courseDoc(saId, groupId, courseId)
     .collection("enrollments")
@@ -340,7 +393,7 @@ export async function getEnrollment(
   saId: string,
   groupId: string,
   courseId: string,
-  memberId: string,
+  memberId: string
 ): Promise<Enrollment | null> {
   const snap = await enrollmentDoc(saId, groupId, courseId, memberId).get();
   if (!snap.exists) return null;
@@ -360,13 +413,13 @@ export async function markLessonCompleteServerSide(opts: {
     opts.subAccountId,
     opts.groupId,
     opts.courseId,
-    opts.memberId,
+    opts.memberId
   );
   // Total published lessons (the progress denominator).
   const publishedSnap = await lessonsCol(
     opts.subAccountId,
     opts.groupId,
-    opts.courseId,
+    opts.courseId
   )
     .where("published", "==", true)
     .get();
@@ -377,7 +430,10 @@ export async function markLessonCompleteServerSide(opts: {
   const completed = new Set(existing?.completedLessonIds ?? []);
   completed.add(opts.lessonId);
   const completedIds = Array.from(completed);
-  const progressPct = Math.min(100, Math.round((completedIds.length / total) * 100));
+  const progressPct = Math.min(
+    100,
+    Math.round((completedIds.length / total) * 100)
+  );
   const isComplete = progressPct >= 100;
 
   await ref.set(
@@ -390,7 +446,7 @@ export async function markLessonCompleteServerSide(opts: {
       enrolledAt: existing?.enrolledAt ?? FieldValue.serverTimestamp(),
       completedAt: isComplete ? FieldValue.serverTimestamp() : null,
     },
-    { merge: true },
+    { merge: true }
   );
 
   const wasAlreadyComplete = existing?.status === "completed";
@@ -472,7 +528,7 @@ export async function listCoursesForMember(opts: {
         // at the group level, scoped by targetId === courseId).
         const groupPaid = await getAdminDb()
           .collection(
-            `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/purchases`,
+            `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/purchases`
           )
           .where("memberId", "==", opts.memberId)
           .where("scope", "==", "course")
@@ -499,7 +555,7 @@ export async function listCoursesForMember(opts: {
         locked,
         firstLessonId: lessons[0]?.id ?? null,
       } satisfies CourseCardView;
-    }),
+    })
   );
   return cards;
 }
