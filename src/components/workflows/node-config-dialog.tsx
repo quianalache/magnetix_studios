@@ -119,12 +119,24 @@ export function NodeConfigDialog({
 
   return (
     <Dialog open={!!step} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className={
+          step.type === "send_email"
+            ? "max-w-[calc(100%-1rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-3xl"
+            : "max-w-lg"
+        }
+      >
         <DialogHeader>
           <DialogTitle>{NODE_LABELS[step.type]}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div
+          className={
+            step.type === "send_email"
+              ? "min-h-0 space-y-3 overflow-y-auto pr-1"
+              : "space-y-3"
+          }
+        >
           {step.type === "send_email" && (
             <WorkflowEmailComposer
               config={cfg}
@@ -613,15 +625,14 @@ export function NodeConfigDialog({
               This step ends the workflow — nothing runs after it on this path.
             </p>
           )}
+          {emailErrors.length > 0 && step.type === "send_email" && (
+            <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-md border p-2 text-xs">
+              {emailErrors.map((error) => (
+                <p key={error}>{error}</p>
+              ))}
+            </div>
+          )}
         </div>
-
-        {emailErrors.length > 0 && step.type === "send_email" && (
-          <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-md border p-2 text-xs">
-            {emailErrors.map((error) => (
-              <p key={error}>{error}</p>
-            ))}
-          </div>
-        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
