@@ -6,7 +6,7 @@ import { ArrowRight, BrainCircuit, Loader2, Save } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { DEPTH_PREFERENCES, SCRIPT_OUTPUT_TYPES } from "@/components/ytcs/script-prompt-builder-step";
+import { DEPTH_PREFERENCES, SCRIPT_OUTPUT_TYPE_DESCRIPTIONS } from "@/components/ytcs/script-prompt-builder-step";
 import type { YtcsSettings } from "@/types/ytcs";
 
 /**
@@ -16,7 +16,15 @@ import type { YtcsSettings } from "@/types/ytcs";
  * YTCS-specific setting: `defaultScriptOutputType` (all 4 real values
  * selectable) and `defaultDepthPreference` (all 3 confirmed values —
  * Detailed/Balanced/Concise — selectable as of 2026-09-03, per direct
- * visual evidence from the original product's own screenshots).
+ * visual evidence from the original product's own screenshots). Both
+ * controls are real `<select>` dropdowns reusing Script Prompt
+ * Builder's own canonical value/copy arrays — Script Output Type was
+ * a button group until the 2026-09-08 Settings Consistency Pass, left
+ * that way deliberately at the time (the screenshot this pattern was
+ * restored from showed the Script Prompt Builder screen, not this
+ * one); now brought in line on request. No second enum: this file
+ * imports `SCRIPT_OUTPUT_TYPE_DESCRIPTIONS`/`DEPTH_PREFERENCES` from
+ * `script-prompt-builder-step.tsx` rather than redefining them.
  * Sub-account-wide, not per-user — see `YtcsSettings`'s doc comment.
  * Data Management (Export/Clear All Data) and PDF-Enhanced Prompt are
  * deliberately not rebuilt — see this page's own note below.
@@ -24,7 +32,7 @@ import type { YtcsSettings } from "@/types/ytcs";
 export default function YtcsSettingsPage() {
   const { subAccountId, saPath } = useSubAccount();
   const [settings, setSettings] = useState<YtcsSettings | null>(null);
-  const [scriptOutputType, setScriptOutputType] = useState("");
+  const [scriptOutputType, setScriptOutputType] = useState("Structured Recording Draft");
   const [depthPreference, setDepthPreference] = useState("Detailed");
   const [saving, setSaving] = useState(false);
 
@@ -34,7 +42,7 @@ export default function YtcsSettingsPage() {
       .then((r) => r.json())
       .then((d) => {
         setSettings(d.settings ?? {});
-        setScriptOutputType(d.settings?.defaultScriptOutputType ?? "");
+        setScriptOutputType(d.settings?.defaultScriptOutputType || "Structured Recording Draft");
         setDepthPreference(d.settings?.defaultDepthPreference || "Detailed");
       })
       .catch(() => setSettings({}));
@@ -96,20 +104,22 @@ export default function YtcsSettingsPage() {
         ) : (
           <>
             <div className="mt-4 space-y-1.5">
-              <Label>Default Script Output Type</Label>
-              <div className="flex flex-wrap gap-2">
-                {SCRIPT_OUTPUT_TYPES.map((t) => (
-                  <Button
-                    key={t}
-                    type="button"
-                    size="sm"
-                    variant={scriptOutputType === t ? "default" : "outline"}
-                    onClick={() => setScriptOutputType(t)}
-                  >
-                    {t}
-                  </Button>
+              <Label htmlFor="default-script-output-type">Default Script Output Type</Label>
+              <select
+                id="default-script-output-type"
+                value={scriptOutputType}
+                onChange={(e) => setScriptOutputType(e.target.value)}
+                className="h-9 w-full rounded-xl border border-input bg-muted/30 px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring [&_option]:bg-background [&_option]:text-foreground sm:w-auto"
+              >
+                {SCRIPT_OUTPUT_TYPE_DESCRIPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.value}
+                  </option>
                 ))}
-              </div>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {SCRIPT_OUTPUT_TYPE_DESCRIPTIONS.find((t) => t.value === scriptOutputType)?.description}
+              </p>
             </div>
 
             <div className="mt-4 space-y-1.5">
