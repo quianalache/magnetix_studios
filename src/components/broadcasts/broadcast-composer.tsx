@@ -110,7 +110,12 @@ const BLOCK_LABELS: Record<EmailBlock["type"], { label: string; icon: typeof Fil
 function newBlock(type: EmailBlock["type"]): EmailBlock {
   switch (type) {
     case "text":
-      return { id: newBlockId(), type: "text", html: "<p>Write something…</p>" };
+      // Genuinely empty — "Write something…" is shown by TextBlockEditor's
+      // TipTap Placeholder extension, not stored as real content. Seeding
+      // the literal phrase here used to mean typing right after adding a
+      // block appended to it instead of replacing it, and the phrase could
+      // end up in the sent email.
+      return { id: newBlockId(), type: "text", html: "<p></p>" };
     case "image":
       return { id: newBlockId(), type: "image", src: "", alt: "" };
     case "video":

@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
+import Placeholder from "@tiptap/extension-placeholder";
 import {
   Bold,
   Italic,
@@ -54,6 +55,11 @@ export function TextBlockEditor({
         },
       }),
       TextAlign.configure({ types: ["paragraph"] }),
+      // Renders "Write something…" as a ProseMirror decoration on the empty
+      // node — never inserted into the document, so it can't leak into
+      // getHTML()/preview/send the way a literally-seeded string could
+      // (2026-09-09: that's exactly the bug this replaces).
+      Placeholder.configure({ placeholder: "Write something…" }),
     ],
     content: value || "<p></p>",
     onUpdate: ({ editor }) => onChange(editor.getHTML()),
@@ -88,7 +94,7 @@ export function TextBlockEditor({
   }
 
   return (
-    <div className="bg-background overflow-hidden rounded-lg border">
+    <div className="broadcast-text-editor bg-background overflow-hidden rounded-lg border">
       <div className="bg-muted/40 flex flex-wrap items-center gap-0.5 border-b p-1">
         <Tb
           active={editor.isActive("bold")}

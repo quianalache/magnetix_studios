@@ -632,3 +632,15 @@ body {
    ink colors regardless of the app's own theme — like a real chart on a
    real page — so their colors are hardcoded in the components, not
    theme-variable-driven. No CSS here on purpose. */
+
+/* Broadcast Text block placeholder (text-block-editor.tsx). TipTap's
+   Placeholder extension marks the empty paragraph with is-editor-empty +
+   data-placeholder; this is the standard way to actually render it — the
+   extension never inserts the placeholder text into the document itself. */
+.broadcast-text-editor .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
+}
