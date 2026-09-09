@@ -48,10 +48,18 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * `titleThumbnailIdeas`/`generatedTitlesMeta`/`generatingTitlesSince` —
  * all AI-generated/server-managed, written only by generate-script,
  * generate-titles, or the script-generations "Use as Current" route.
+ * `nameSource` (2026-09-10 Titles Polish pass) IS included — both the
+ * rename action and Save Titles' project-name auto-sync are real
+ * client-triggered actions that need to set it, unlike the AI-output
+ * fields above.
  */
 
 const EDITABLE_KEYS = [
   "name",
+  // Titles Polish pass (2026-09-10) — the rename action and Save
+  // Titles' auto-sync both need to set this in the same request as
+  // `name`; see YtcsVideoProject's own doc comment.
+  "nameSource",
   "startingPointType",
   "currentStep",
   "status",

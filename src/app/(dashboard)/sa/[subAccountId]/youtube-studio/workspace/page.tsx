@@ -71,10 +71,14 @@ export default function WorkspaceLandingPage() {
     }
     setBusyId(project.id);
     try {
+      // nameSource: "manual" (2026-09-10 Titles Polish pass) — an
+      // explicit rename via this control is the user's own authoritative
+      // choice; marking it here means a later Save Titles in the
+      // workspace can never silently overwrite it.
       const res = await fetch(`/api/sub-accounts/${subAccountId}/ytcs/videos/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, nameSource: "manual" }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't rename");
