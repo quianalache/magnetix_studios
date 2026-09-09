@@ -9,6 +9,7 @@ import type {
   BroadcastContent,
   BroadcastDoc,
 } from "@/types";
+import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
         subjectPreview: subject.slice(0, 200),
         preheader,
         content,
+        emailDocument: emailDocumentFromBroadcast(content, subject, preheader),
         audienceFilter,
         sourceTemplateId,
         testMode,
@@ -140,6 +142,7 @@ export async function POST(request: Request) {
       channel: "email",
       subjectPreview: subject.slice(0, 200),
       content,
+      emailDocument: emailDocumentFromBroadcast(content, subject, preheader),
       subject,
       preheader,
       sourceTemplateId,

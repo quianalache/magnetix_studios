@@ -62,9 +62,6 @@ export async function POST(request: Request) {
   const subAccountId = payload.subAccountId?.trim();
   const content = payload.content;
   const subject = payload.subject?.trim();
-  // preheader isn't wired into renderBroadcastEmailHtml/Text by the real
-  // send path either (see step/route.ts) — accepted here only so the
-  // composer's request shape matches /email/send's, not currently rendered.
   const testEmail = payload.testEmail?.trim();
 
   if (!subAccountId || !content || !subject || !testEmail) {
@@ -119,8 +116,8 @@ export async function POST(request: Request) {
     mailingAddress: formattedAddress,
     businessName: subAccount.name ?? "",
   };
-  const html = renderBroadcastEmailHtml(content, renderOpts);
-  const text = renderBroadcastEmailText(content, renderOpts);
+  const html = renderBroadcastEmailHtml(content, renderOpts, subject, payload.preheader);
+  const text = renderBroadcastEmailText(content, renderOpts, subject, payload.preheader);
   const unsubscribeHeaders = buildBroadcastUnsubscribeHeaders(subAccount, unsubscribeLink);
 
   try {

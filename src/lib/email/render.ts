@@ -23,6 +23,9 @@ export function renderEmailHtml(
 ): string {
   assertRenderable(document);
   const resolve = options.resolveMergeTags ?? ((value: string) => value);
+  const preheader = document.preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;visibility:hidden;">${esc(resolve(document.preheader))}</div>`
+    : "";
   const rows = document.blocks
     .map((block) => renderBlockRow(block, resolve))
     .join("");
@@ -32,7 +35,7 @@ export function renderEmailHtml(
   return (
     `<!doctype html><html><body style="margin:0;padding:0;background:#f4f4f4;">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;"><tr><td align="center" style="padding:24px 12px;">` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">${rows}${footer}</table>` +
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">${preheader}${rows}${footer}</table>` +
     `</td></tr></table></body></html>`
   );
 }
@@ -43,8 +46,8 @@ export function renderEmailText(
 ): string {
   assertRenderable(document);
   const resolve = options.resolveMergeTags ?? ((value: string) => value);
-  const parts = document.blocks
-    .map((block) => blockToText(block, resolve))
+  const parts = [document.preheader ? resolve(document.preheader) : ""]
+    .concat(document.blocks.map((block) => blockToText(block, resolve)))
     .filter(Boolean);
   if (options.includeComplianceFooter) {
     parts.push(

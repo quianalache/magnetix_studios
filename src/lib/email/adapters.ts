@@ -52,6 +52,15 @@ export function emailDocumentFromBroadcastContent(
   };
 }
 
+/** Compatibility boundary for Broadcast's existing persisted block shape. */
+export function emailDocumentFromBroadcast(
+  content: BroadcastContent,
+  subject = "Broadcast",
+  preheader?: string | null
+): EmailDocument {
+  return emailDocumentFromBroadcastContent(content, subject, preheader);
+}
+
 export function broadcastContentFromEmailDocument(
   document: EmailDocument
 ): BroadcastContent {
@@ -124,7 +133,7 @@ function emailLeafToBroadcastLeaf(
         id: block.id,
         type: "text",
         html: block.html,
-        align: block.align,
+        ...(block.align ? { align: block.align } : {}),
       };
     case "image":
       return {
@@ -132,9 +141,9 @@ function emailLeafToBroadcastLeaf(
         type: "image",
         src: block.src,
         alt: block.alt,
-        href: block.href,
-        widthPx: block.widthPx,
-        align: block.align,
+        ...(block.href ? { href: block.href } : {}),
+        ...(block.widthPx ? { widthPx: block.widthPx } : {}),
+        ...(block.align ? { align: block.align } : {}),
       };
     case "video":
       return {
@@ -150,9 +159,9 @@ function emailLeafToBroadcastLeaf(
         type: "button",
         label: block.label,
         href: block.href,
-        align: block.align,
-        bgColor: block.bgColor,
-        textColor: block.textColor,
+        ...(block.align ? { align: block.align } : {}),
+        ...(block.bgColor ? { bgColor: block.bgColor } : {}),
+        ...(block.textColor ? { textColor: block.textColor } : {}),
       };
     case "divider":
       return { id: block.id, type: "divider" };

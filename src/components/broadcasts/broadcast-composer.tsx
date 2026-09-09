@@ -75,6 +75,7 @@ import {
 import { TemplatePickerDialog } from "@/components/broadcasts/template-picker-dialog";
 import { audienceLabel } from "@/lib/broadcasts/audience-label";
 import { cn } from "@/lib/utils";
+import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 import type { Contact } from "@/types/contacts";
 import type {
   BroadcastAudienceFilter,
@@ -302,7 +303,7 @@ export function BroadcastComposer({
         const res = await fetch("/api/broadcasts/render", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ subAccountId, content }),
+          body: JSON.stringify({ subAccountId, subject, preheader, content }),
         });
         const data = (await res.json()) as { html?: string };
         if (data.html) setPreviewHtml(data.html);
@@ -313,7 +314,7 @@ export function BroadcastComposer({
       }
     }, 400);
     return () => clearTimeout(handle);
-  }, [subAccountId, content]);
+  }, [subAccountId, subject, preheader, content]);
 
   const addBlock = useCallback((type: EmailBlock["type"]) => {
     setBlocks((prev) => [...prev, newBlock(type)]);
@@ -559,6 +560,11 @@ export function BroadcastComposer({
         subject: subject.trim(),
         preheader: preheader.trim() || null,
         content,
+        emailDocument: emailDocumentFromBroadcast(
+          content,
+          subject.trim(),
+          preheader.trim() || null,
+        ),
         createdByUid: user?.uid ?? "",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

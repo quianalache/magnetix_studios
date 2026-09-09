@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   emailDocumentFromBroadcastContent,
+  broadcastContentFromEmailDocument,
   emailDocumentFromMessageTemplate,
   emailDocumentFromWorkflowEmail,
 } from "../src/lib/email/adapters";
@@ -84,4 +85,22 @@ const broadcast = emailDocumentFromBroadcastContent({
   blocks: [{ id: "t", type: "text", html: "<p>Hello</p>" }],
 });
 assert.equal(broadcast.blocks[0].type, "text");
+assert.deepEqual(broadcastContentFromEmailDocument(broadcast), {
+  version: 1,
+  blocks: [{ id: "t", type: "text", html: "<p>Hello</p>" }],
+});
+const withPreheader = renderEmailHtml({
+  ...document,
+  preheader: "Preview text",
+});
+assert.match(withPreheader, /Preview text/);
+assert.match(
+  renderEmailText(document, {
+    includeComplianceFooter: true,
+    businessName: "Example",
+    mailingAddress: "1 Main St",
+    unsubscribeUrl: "https://example.com/unsubscribe",
+  }),
+  /Unsubscribe:/
+);
 console.log("shared email foundation tests passed");

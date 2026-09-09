@@ -7,13 +7,18 @@ import { qstashIsConfigured, verifyQStashSignature } from "@/lib/automations/qst
 import { sendTenantEmail, emailIsConfigured } from "@/lib/comms/resend";
 import { buildUnsubscribeUrl } from "@/lib/automations/unsubscribe-token";
 import {
+  resolveMergeTags,
+  type MergeTagSubject,
+} from "@/lib/automations/merge-tags";
+import {
   formatMailingAddress,
   buildBroadcastUnsubscribeHeaders,
 } from "@/lib/broadcasts/compliance";
 import {
-  renderBroadcastEmailHtml,
-  renderBroadcastEmailText,
+  renderBroadcastEmailDocumentHtml,
+  renderBroadcastEmailDocumentText,
 } from "@/lib/broadcasts/render-email";
+import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 import type {
   BroadcastDoc,
   BroadcastSendDoc,
@@ -181,6 +186,12 @@ export async function POST(request: Request) {
   const subAccount = subAccountSnap.exists
     ? (subAccountSnap.data() as SubAccountDoc)
     : null;
+  const agencySnap = await db.doc(`agencies/${broadcast.agencyId}`).get();
+  const agency = agencySnap.exists ? agencySnap.data() : null;
+  const ownerSnap = agency?.ownerUid
+    ? await db.doc(`users/${agency.ownerUid}`).get()
+    : null;
+  const owner = ownerSnap?.exists ? ownerSnap.data() : null;
 
   // Defensive re-check — the send route already required this at fan-out
   // time, but the address could theoretically be cleared mid-batch.
@@ -196,14 +207,37 @@ export async function POST(request: Request) {
   const formattedAddress = formatMailingAddress(subAccount.mailingAddress);
 
   const unsubscribeLink = buildUnsubscribeUrl(contact.id);
+  const mergeSubject: MergeTagSubject = {
+    contact: {
+      name: contact.name ?? "",
+      email: contact.email ?? "",
+      phone: contact.phone ?? "",
+    },
+    owner: {
+      displayName: (owner?.displayName as string) ?? "",
+      email: (owner?.email as string) ?? "",
+    },
+    workspace: { name: subAccount.name ?? "" },
+    bookingLink: subAccount.bookingLink ?? "",
+    unsubscribeLink,
+  };
+  const resolveBroadcastMergeTags = (value: string) =>
+    resolveMergeTags(value, mergeSubject);
   const renderOpts = {
     unsubscribeUrl: unsubscribeLink,
     mailingAddress: formattedAddress,
     businessName: subAccount?.name ?? "",
   };
-  const subject = broadcast.subject;
-  const html = renderBroadcastEmailHtml(broadcast.content, renderOpts);
-  const text = renderBroadcastEmailText(broadcast.content, renderOpts);
+  const subject = resolveBroadcastMergeTags(broadcast.subject);
+  const emailDocument =
+    broadcast.emailDocument ??
+    emailDocumentFromBroadcast(broadcast.content, subject, broadcast.preheader);
+  const html = renderBroadcastEmailDocumentHtml(emailDocument, renderOpts, {
+    resolveMergeTags: resolveBroadcastMergeTags,
+  });
+  const text = renderBroadcastEmailDocumentText(emailDocument, renderOpts, {
+    resolveMergeTags: resolveBroadcastMergeTags,
+  });
 
   const unsubscribeHeaders = buildBroadcastUnsubscribeHeaders(
     subAccount,

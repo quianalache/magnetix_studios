@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
 interface RenderBody {
   subAccountId?: string;
   content?: BroadcastContent;
+  subject?: string;
+  preheader?: string | null;
 }
 
 /**
@@ -59,8 +61,8 @@ export async function POST(request: Request) {
   const businessName = subAccount?.name ?? "";
 
   const opts = { unsubscribeUrl, mailingAddress, businessName };
-  const html = renderBroadcastEmailHtml(content, opts);
-  const text = renderBroadcastEmailText(content, opts);
+  const html = renderBroadcastEmailHtml(content, opts, payload.subject, payload.preheader);
+  const text = renderBroadcastEmailText(content, opts, payload.subject, payload.preheader);
 
   return NextResponse.json({ html, text });
 }

@@ -119,6 +119,8 @@ export interface BroadcastDoc {
   subjectPreview: string;
   /** Block-schema content, present on every broadcast sent via the composer. */
   content?: import("./broadcast-content").BroadcastContent;
+  /** Canonical representation written for new broadcasts; content remains for compatibility. */
+  emailDocument?: import("./email-document").EmailDocument;
   subject?: string;
   preheader?: string | null;
   /** Which saved template (if any) this broadcast started from — audit only, content is always the source of truth. */

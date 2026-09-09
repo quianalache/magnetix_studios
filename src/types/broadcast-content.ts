@@ -99,6 +99,8 @@ export interface BroadcastTemplateDoc {
   subject: string;
   preheader: string | null;
   content: BroadcastContent;
+  /** Canonical representation written alongside the legacy template shape. */
+  emailDocument?: import("./email-document").EmailDocument;
   createdByUid: string;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;

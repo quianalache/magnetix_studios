@@ -8,6 +8,7 @@ import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
 import { emailIsConfigured } from "@/lib/comms/resend";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
 import { resolveAudience } from "@/lib/broadcasts/audience";
+import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 import {
   requireMailingAddress,
   MissingMailingAddressError,
@@ -308,6 +309,7 @@ export async function POST(request: Request) {
     channel: "email",
     subjectPreview: subject.slice(0, 200),
     content,
+    emailDocument: emailDocumentFromBroadcast(content, subject, preheader),
     subject,
     preheader,
     sourceTemplateId,
