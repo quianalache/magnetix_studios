@@ -84,6 +84,11 @@ export async function createVideoProject(
   const settings = await getYtcsSettings(subAccountId);
   const doc: YtcsVideoProject = {
     name: input.name || "Untitled Video Project",
+    // Titles Polish pass (2026-09-10) — new projects start auto-
+    // manageable so the first Save Titles can name them; `extra` below
+    // can still override this (e.g. duplicateVideoProject inherits the
+    // source's own nameSource as-is via its own `rest` spread).
+    nameSource: "auto",
     currentStep: "Input",
     status: "Input",
     createdDate: now,

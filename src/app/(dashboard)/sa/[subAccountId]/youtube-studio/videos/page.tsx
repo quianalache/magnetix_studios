@@ -73,10 +73,14 @@ export default function VideoLibraryPage() {
     }
     setBusyId(project.id);
     try {
+      // nameSource: "manual" (2026-09-10 Titles Polish pass) — an
+      // explicit rename via this control is the user's own authoritative
+      // choice; marking it here means a later Save Titles in the
+      // workspace can never silently overwrite it.
       const res = await fetch(`/api/sub-accounts/${subAccountId}/ytcs/videos/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, nameSource: "manual" }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't rename");
@@ -198,6 +202,15 @@ export default function VideoLibraryPage() {
       <div className="space-y-2">
         {filtered.map((p) => {
           const displayTitle = p.finalTitle || p.selectedTitle;
+          // Titles Polish pass (2026-09-10): once Save Titles keeps the
+          // project name in sync with the Selected Title, showing the
+          // same text again in quotes right underneath is pure
+          // redundancy. Only show it when it's still telling the reader
+          // something the project name itself doesn't already say —
+          // e.g. the user manually renamed the project to something
+          // else, or `finalTitle` (Publish step) differs from the name.
+          const projectName = (p.name || "Untitled Video Project").trim();
+          const showDisplayTitle = !!displayTitle && displayTitle.trim() !== projectName;
           return (
             <div key={p.id} className="flex items-center gap-3 rounded-xl border bg-card p-4">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
@@ -226,7 +239,7 @@ export default function VideoLibraryPage() {
                       {p.startingPointType ?? "—"} · Step: {p.currentStep ?? "Input"} · Status: {p.status ?? "—"}
                       {p.lastUpdatedDate ? ` · Updated ${new Date(p.lastUpdatedDate).toLocaleDateString()}` : ""}
                     </p>
-                    {displayTitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">&ldquo;{displayTitle}&rdquo;</p>}
+                    {showDisplayTitle && <p className="mt-0.5 truncate text-xs text-muted-foreground">&ldquo;{displayTitle}&rdquo;</p>}
                     {tab === "Published" && p.youtubeLink && (
                       <a
                         href={p.youtubeLink}

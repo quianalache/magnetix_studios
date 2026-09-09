@@ -19,6 +19,35 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  *  render as compact cards instead of one giant textarea. */
 const LONG_FORM_MAX_HEIGHT = "max-h-[560px] overflow-y-auto";
 
+const UNTITLED_PROJECT_NAME = "Untitled Video Project";
+
+/**
+ * Titles Polish pass (2026-09-10) — decides whether Save Titles is
+ * allowed to overwrite this project's name with the current Selected
+ * Title. Exported (not a hook — deliberately not prefixed `use...`) so
+ * it's independently testable.
+ *
+ * `nameSource === "manual"` (set by the rename/pencil action) always
+ * wins — the user's own explicit choice is authoritative forever,
+ * never silently restored to auto-management, per instruction.
+ * `nameSource === "auto"` (the default for every project created after
+ * this pass) always allows the sync.
+ *
+ * Legacy projects (created before this pass, `nameSource` absent
+ * entirely) infer safely from the name itself: blank or still the
+ * literal default "Untitled Video Project" → safe to auto-manage;
+ * ANY other existing name is treated as if it were manually set — a
+ * real project's already-meaningful name must never be silently
+ * overwritten just because this feature didn't exist when it was
+ * named.
+ */
+export function shouldAutoSyncProjectName(project: Pick<YtcsVideoProject, "name" | "nameSource">): boolean {
+  if (project.nameSource === "manual") return false;
+  if (project.nameSource === "auto") return true;
+  const name = (project.name ?? "").trim();
+  return name === "" || name === UNTITLED_PROJECT_NAME;
+}
+
 /**
  * Step 5: Titles. Generate Titles is now the primary, in-app AI action
  * (2026-09-09 Script + Titles AI UX pass) — reuses `buildTitlePrompt()`
@@ -161,11 +190,29 @@ export function TitlesStep({
     }
   }
 
+  /** Selected Title + Backup Title + Notes, plus the project-name
+   *  auto-sync (2026-09-10 Titles Polish pass) bundled into the SAME
+   *  update object — one save, no second button, exactly like every
+   *  other atomic-save pattern already used across YTCS. Shared by
+   *  `saveTitles()` and `continueToPublish()` so both paths behave
+   *  identically instead of only one of them keeping the project name
+   *  in sync. */
+  function titleFieldUpdates(): Partial<YtcsVideoProject> {
+    const updates: Partial<YtcsVideoProject> = { selectedTitle, backupTitle, titleNotes };
+    const trimmedSelected = selectedTitle.trim();
+    if (trimmedSelected && shouldAutoSyncProjectName(project)) {
+      updates.name = trimmedSelected;
+      updates.nameSource = "auto";
+    }
+    return updates;
+  }
+
   async function saveTitles() {
     setSaving(true);
     try {
-      await onSave({ selectedTitle, backupTitle, titleNotes });
-      toast.success("Titles saved.");
+      const updates = titleFieldUpdates();
+      await onSave(updates);
+      toast.success(updates.name ? "Titles saved — project renamed to match." : "Titles saved.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
@@ -182,7 +229,7 @@ export function TitlesStep({
   async function continueToPublish() {
     setContinuing(true);
     try {
-      await onSave({ selectedTitle, backupTitle, titleNotes, currentStep: "Publish" });
+      await onSave({ ...titleFieldUpdates(), currentStep: "Publish" });
       toast.success("Saved.");
       onContinue();
     } catch (err) {
@@ -225,7 +272,13 @@ export function TitlesStep({
             thumbnail ideas. Use as Primary or Backup on whichever fits — you can
             still edit both fields yourself afterward.
           </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {/* items-start (2026-09-10 polish pass): CSS Grid's default
+              align-items is "stretch" — without this, expanding one
+              card's disclosure made the OTHER card in the same row
+              stretch to match its height, leaving a large blank area
+              inside the shorter, still-collapsed card. items-start lets
+              each card size to its own natural content height instead. */}
+          <div className="mt-3 grid items-start gap-2 sm:grid-cols-2">
             {titles.map((option, i) => (
               <TitleCard
                 key={`${option.title}-${i}`}

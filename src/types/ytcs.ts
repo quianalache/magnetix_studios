@@ -118,6 +118,18 @@ export interface YtcsProductOfferInput {
 export interface YtcsVideoProject {
   id: string;
   name?: string;
+  /** Titles Polish pass (2026-09-10) — distinguishes an auto-synced
+   *  project name (kept in sync with Selected Title on every Save
+   *  Titles) from one the user explicitly typed via the rename/pencil
+   *  action, so Save Titles never silently overwrites a manual choice.
+   *  New projects are created with `"auto"`; the rename action sets
+   *  `"manual"` and that choice stays authoritative from then on — see
+   *  `titles-step.tsx`'s `shouldAutoSyncProjectName()`. Absent on every
+   *  project created before this pass; those infer safely from `name`
+   *  itself (blank or "Untitled Video Project" → treated as
+   *  auto-manageable; any other existing custom name → treated as
+   *  manual, never silently overwritten). */
+  nameSource?: "auto" | "manual";
   startingPointType?: YtcsStartingPointType | string;
   currentStep?: YtcsVideoStep | string;
   status?: string;
