@@ -87,7 +87,7 @@ function renderBlockRow(
     const cells = block.columns
       .map(
         (column) =>
-          `<td valign="top" style="width:${width}%;padding:0 8px;">${column.map((child) => renderLeaf(child, resolve)).join("")}</td>`
+          `<td valign="top" style="width:${width}%;padding:0 8px;">${column.blocks.map((child) => renderLeaf(child, resolve)).join("")}</td>`
       )
       .join("");
     return `<tr><td style="padding:12px 16px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></td></tr>`;
@@ -133,7 +133,7 @@ function blockToText(
   if (block.type === "columns")
     return block.columns
       .map((column) =>
-        column
+        column.blocks
           .map((child) => leafToText(child, resolve))
           .filter(Boolean)
           .join("\n")

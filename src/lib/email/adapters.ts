@@ -84,9 +84,9 @@ function broadcastBlockToEmailBlock(block: BroadcastBlock): EmailBlock {
     return {
       id: block.id,
       type: "columns",
-      columns: block.columns.map((column) =>
-        column.map(broadcastLeafToEmailLeaf)
-      ),
+      columns: block.columns.map((column) => ({
+        blocks: column.blocks.map(broadcastLeafToEmailLeaf),
+      })),
     };
   return broadcastLeafToEmailLeaf(block);
 }
@@ -113,9 +113,9 @@ function emailBlockToBroadcastBlock(block: EmailBlock): BroadcastBlock {
     return {
       id: block.id,
       type: "columns",
-      columns: block.columns.map((column) =>
-        column.map(emailLeafToBroadcastLeaf)
-      ),
+      columns: block.columns.map((column) => ({
+        blocks: column.blocks.map(emailLeafToBroadcastLeaf),
+      })),
     };
   if (block.type === "section")
     throw new Error(
@@ -184,7 +184,7 @@ function blockToSimpleHtml(block: EmailBlock): string {
     return block.blocks.map(blockToSimpleHtml).join("");
   if (block.type === "columns")
     return block.columns
-      .map((column) => column.map(blockToSimpleHtml).join(" "))
+      .map((column) => column.blocks.map(blockToSimpleHtml).join(" "))
       .join("\n");
   if (block.type === "image")
     return `<p><img src="${escape(block.src)}" alt="${escape(block.alt)}"></p>`;

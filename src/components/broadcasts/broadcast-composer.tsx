@@ -124,8 +124,8 @@ function newBlock(type: EmailBlock["type"]): EmailBlock {
         id: newBlockId(),
         type: "columns",
         columns: [
-          [{ id: newBlockId(), type: "text", html: "<p></p>" }],
-          [{ id: newBlockId(), type: "text", html: "<p></p>" }],
+          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
+          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
         ],
       };
   }

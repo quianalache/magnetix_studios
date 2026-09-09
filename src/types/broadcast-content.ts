@@ -76,7 +76,15 @@ export type EmailBlockNonColumn =
 export interface ColumnsBlock {
   id: string;
   type: "columns";
-  columns: EmailBlockNonColumn[][];
+  /**
+   * Each column wraps its blocks in an object rather than being a bare
+   * array — Firestore does not support an array whose elements are
+   * themselves arrays ("nested arrays"), and `columns: X[][]` is exactly
+   * that. Writing a doc with a raw array-of-arrays throws at write time
+   * (caught here 2026-09-09: every save of a broadcast containing a
+   * Columns block, even an empty one, was failing with a 500).
+   */
+  columns: { blocks: EmailBlockNonColumn[] }[];
 }
 
 export type EmailBlock = EmailBlockNonColumn | ColumnsBlock;

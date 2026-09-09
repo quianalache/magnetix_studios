@@ -34,8 +34,8 @@ const document = {
       id: "columns",
       type: "columns" as const,
       columns: [
-        [{ id: "left", type: "text" as const, html: "<p>One</p>" }],
-        [{ id: "right", type: "text" as const, html: "<p>Two</p>" }],
+        { blocks: [{ id: "left", type: "text" as const, html: "<p>One</p>" }] },
+        { blocks: [{ id: "right", type: "text" as const, html: "<p>Two</p>" }] },
       ],
     },
   ],

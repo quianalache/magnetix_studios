@@ -67,7 +67,7 @@ export function collectMergeTags(document: EmailDocument): string[] {
         visit(block.videoUrl);
         break;
       case "columns":
-        block.columns.flat().forEach(visitBlock);
+        block.columns.flatMap((c) => c.blocks).forEach(visitBlock);
         break;
       case "section":
         block.blocks.forEach(visitBlock);
@@ -111,7 +111,9 @@ function validateBlock(block: EmailBlock, errors: string[]): void {
     case "columns":
       if (block.columns.length === 0)
         errors.push(`Columns block ${block.id} requires a column.`);
-      block.columns.flat().forEach((child) => validateBlock(child, errors));
+      block.columns
+        .flatMap((c) => c.blocks)
+        .forEach((child) => validateBlock(child, errors));
       break;
     case "section":
       block.blocks.forEach((child) => validateBlock(child, errors));

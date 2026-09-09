@@ -83,7 +83,12 @@ export type EmailBlockLeaf =
 export interface EmailColumnsBlock {
   id: string;
   type: "columns";
-  columns: EmailBlockLeaf[][];
+  /**
+   * Wrapped (not a bare array) because Firestore rejects a nested array
+   * — an array whose elements are themselves arrays — at write time. See
+   * the matching note on broadcast-content.ts's ColumnsBlock.
+   */
+  columns: { blocks: EmailBlockLeaf[] }[];
 }
 
 export interface EmailSectionBlock {

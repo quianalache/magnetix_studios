@@ -243,7 +243,9 @@ export function ColumnsBlockEditor({
   onChange: (next: ColumnsBlock) => void;
 }) {
   function updateColumn(colIdx: number, items: EmailBlockNonColumn[]) {
-    const columns = block.columns.map((c, i) => (i === colIdx ? items : c));
+    const columns = block.columns.map((c, i) =>
+      i === colIdx ? { blocks: items } : c
+    );
     onChange({ ...block, columns });
   }
 
@@ -254,7 +256,7 @@ export function ColumnsBlockEditor({
           <div className="text-[11px] font-medium text-muted-foreground">
             Column {colIdx + 1}
           </div>
-          {col.map((item, itemIdx) => (
+          {col.blocks.map((item, itemIdx) => (
             <div key={item.id} className="rounded border bg-muted/30 p-2">
               <div className="mb-1 flex items-center justify-between">
                 <span className="text-[11px] capitalize text-muted-foreground">
@@ -263,7 +265,10 @@ export function ColumnsBlockEditor({
                 <button
                   type="button"
                   onClick={() =>
-                    updateColumn(colIdx, col.filter((_, i) => i !== itemIdx))
+                    updateColumn(
+                      colIdx,
+                      col.blocks.filter((_, i) => i !== itemIdx)
+                    )
                   }
                   className="text-muted-foreground hover:text-destructive"
                 >
@@ -276,7 +281,7 @@ export function ColumnsBlockEditor({
                   rows={2}
                   value={item.html.replace(/<[^>]+>/g, "")}
                   onChange={(e) => {
-                    const next = [...col];
+                    const next = [...col.blocks];
                     next[itemIdx] = { ...item, html: `<p>${e.target.value}</p>` };
                     updateColumn(colIdx, next);
                   }}
@@ -287,7 +292,7 @@ export function ColumnsBlockEditor({
                   placeholder="Image URL"
                   value={item.src}
                   onChange={(e) => {
-                    const next = [...col];
+                    const next = [...col.blocks];
                     next[itemIdx] = { ...item, src: e.target.value, alt: item.alt || "Image" };
                     updateColumn(colIdx, next);
                   }}
@@ -299,7 +304,7 @@ export function ColumnsBlockEditor({
                     placeholder="Label"
                     value={item.label}
                     onChange={(e) => {
-                      const next = [...col];
+                      const next = [...col.blocks];
                       next[itemIdx] = { ...item, label: e.target.value };
                       updateColumn(colIdx, next);
                     }}
@@ -308,7 +313,7 @@ export function ColumnsBlockEditor({
                     placeholder="URL"
                     value={item.href}
                     onChange={(e) => {
-                      const next = [...col];
+                      const next = [...col.blocks];
                       next[itemIdx] = { ...item, href: e.target.value };
                       updateColumn(colIdx, next);
                     }}
@@ -321,7 +326,9 @@ export function ColumnsBlockEditor({
             <button
               type="button"
               className="flex items-center gap-1 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
-              onClick={() => updateColumn(colIdx, [...col, newColumnBlock()])}
+              onClick={() =>
+                updateColumn(colIdx, [...col.blocks, newColumnBlock()])
+              }
             >
               <Plus className="h-3 w-3" /> Text
             </button>
@@ -330,7 +337,7 @@ export function ColumnsBlockEditor({
               className="flex items-center gap-1 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
               onClick={() =>
                 updateColumn(colIdx, [
-                  ...col,
+                  ...col.blocks,
                   { id: newBlockId(), type: "image", src: "", alt: "" },
                 ])
               }
@@ -342,7 +349,7 @@ export function ColumnsBlockEditor({
               className="flex items-center gap-1 rounded border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted"
               onClick={() =>
                 updateColumn(colIdx, [
-                  ...col,
+                  ...col.blocks,
                   { id: newBlockId(), type: "button", label: "Click here", href: "" },
                 ])
               }
