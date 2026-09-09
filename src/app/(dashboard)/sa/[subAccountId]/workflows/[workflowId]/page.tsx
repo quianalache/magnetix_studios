@@ -3,6 +3,7 @@ import type { BuilderReadiness } from "@/components/workflows/workflow-builder";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agencyAllowsSharedSms } from "@/lib/agency/policy";
 import { emailIsConfigured, tenantFrom } from "@/lib/comms/resend";
+import { formatMailingAddress } from "@/lib/broadcasts/compliance";
 import {
   smsIsConfigured,
   subAccountTwilioIsConfigured,
@@ -71,6 +72,9 @@ export default async function WorkflowBuilderPage({
       verifiedFrom: sub?.resendConfig?.emailFrom ?? "",
       fromName: sub?.name ?? "",
       replyTo: sub?.replyToEmail ?? "",
+      mailingAddress: sub?.mailingAddress
+        ? formatMailingAddress(sub.mailingAddress)
+        : "",
     },
   };
 

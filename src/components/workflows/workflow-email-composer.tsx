@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TextBlockEditor } from "@/components/broadcasts/text-block-editor";
+import { WorkflowEmailDesigner } from "@/components/workflows/workflow-email-designer";
 import { SUPPORTED_TAGS_EMAIL } from "@/lib/automations/merge-tags";
 import {
   emailAddressIsValid,
@@ -54,23 +55,28 @@ function sample(value: string): string {
 }
 
 export function WorkflowEmailComposer({
+  saId,
   config,
   setConfig,
   templates,
   verifiedFrom,
   defaultFromName,
   defaultReplyTo,
+  mailingAddress,
 }: {
+  saId: string;
   config: Config;
   setConfig: (patch: Config) => void;
   templates: WorkflowEmailTemplateOption[];
   verifiedFrom: string;
   defaultFromName: string;
   defaultReplyTo: string;
+  mailingAddress: string;
 }) {
   const [templateQuery, setTemplateQuery] = useState("");
   const [showTemplates, setShowTemplates] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showDesigner, setShowDesigner] = useState(false);
   const [target, setTarget] = useState<"subject" | "body">("body");
   const bodyEditorRef = useRef<Editor | null>(null);
   const subjectRef = useRef<HTMLInputElement | null>(null);
@@ -85,6 +91,11 @@ export function WorkflowEmailComposer({
   const replyTo = String(config.replyTo ?? defaultReplyTo);
   const cc = String(config.cc ?? "");
   const bcc = String(config.bcc ?? "");
+  const emailDocumentId =
+    typeof config.emailDocumentId === "string" && config.emailDocumentId
+      ? config.emailDocumentId
+      : null;
+  const preheader = String(config.preheader ?? "");
 
   const filteredTemplates = useMemo(() => {
     const query = templateQuery.trim().toLowerCase();
@@ -151,6 +162,28 @@ export function WorkflowEmailComposer({
     sample(bodyHtml) +
     "</div></div></body></html>";
 
+  if (showDesigner) {
+    return (
+      <WorkflowEmailDesigner
+        saId={saId}
+        emailDocumentId={emailDocumentId}
+        initialSubject={subject}
+        initialPreheader={preheader}
+        initialBody={body}
+        initialBodyHtml={bodyHtml}
+        emailType={emailType}
+        businessName={defaultFromName}
+        mailingAddress={mailingAddress}
+        templates={templates}
+        onCancel={() => setShowDesigner(false)}
+        onSave={(patch) => {
+          setConfig(patch);
+          setShowDesigner(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -176,6 +209,48 @@ export function WorkflowEmailComposer({
               : "For service, receipt, access, account, or appointment messages."}
         </p>
       </div>
+
+      {emailDocumentId ? (
+        <div className="bg-muted/20 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Email designed ✓</p>
+              <p className="text-muted-foreground truncate text-xs">
+                {subject || "(no subject)"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDesigner(true)}
+            >
+              Edit email
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-muted/20 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Create a designed email</p>
+              <p className="text-muted-foreground text-xs">
+                Rich text, images, buttons, columns, and more — the same
+                designer Broadcasts use.
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setShowDesigner(true)}
+            >
+              Create Email
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!emailDocumentId && (
       <div className="bg-muted/20 rounded-lg border p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -235,6 +310,7 @@ export function WorkflowEmailComposer({
           </div>
         )}
       </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="workflow-email-from-name">From name</Label>
@@ -257,6 +333,7 @@ export function WorkflowEmailComposer({
         </p>
       </div>
 
+      {!emailDocumentId && (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label htmlFor="workflow-email-subject">Subject</Label>
@@ -271,7 +348,9 @@ export function WorkflowEmailComposer({
           placeholder="Welcome, {{contact.firstName}}"
         />
       </div>
+      )}
 
+      {!emailDocumentId && (
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <Label>Email body</Label>
@@ -296,6 +375,7 @@ export function WorkflowEmailComposer({
           </p>
         )}
       </div>
+      )}
 
       <details className="rounded-lg border px-3 py-2">
         <summary className="cursor-pointer text-sm font-medium">
@@ -330,6 +410,7 @@ export function WorkflowEmailComposer({
         </div>
       </details>
 
+      {!emailDocumentId && (
       <div className="bg-muted/20 rounded-lg border p-3">
         <Button
           type="button"
@@ -349,6 +430,7 @@ export function WorkflowEmailComposer({
           />
         )}
       </div>
+      )}
     </div>
   );
 }

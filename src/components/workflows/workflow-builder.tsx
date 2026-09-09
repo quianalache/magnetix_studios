@@ -305,6 +305,8 @@ export interface BuilderReadiness {
     verifiedFrom: string;
     fromName: string;
     replyTo: string;
+    /** Formatted CAN-SPAM mailing address, or "" if unset. */
+    mailingAddress: string;
   };
 }
 
@@ -329,6 +331,7 @@ const ReadinessContext = createContext<BuilderReadiness>({
     verifiedFrom: "",
     fromName: "",
     replyTo: "",
+    mailingAddress: "",
   },
 });
 
@@ -403,15 +406,31 @@ export function WorkflowBuilder({
             if (typeof config.emailType === "undefined") continue;
             throw new Error("Send email steps have an invalid email type.");
           }
-          const body =
-            typeof config.bodyHtml === "string"
-              ? emailHtmlToPlainText(config.bodyHtml)
-              : String(config.body ?? "").trim();
           if (!String(config.subject ?? "").trim()) {
             throw new Error(
               "Send email steps need a subject before activation."
             );
           }
+          // Design Email steps (emailDocumentId set) keep their content in
+          // its own emailDocuments/{id} doc, not inline in body/bodyHtml —
+          // structurally guaranteed non-empty by the designer (it never
+          // hands back a save without at least the subject), and the
+          // renderer's includeComplianceFooter always appends a real
+          // Unsubscribe link, so the {{unsubscribeLink}}-in-body requirement
+          // becomes "the sub-account has a mailing address on file" instead
+          // (same CAN-SPAM gate Broadcasts already enforce).
+          if (typeof config.emailDocumentId === "string" && config.emailDocumentId) {
+            if (config.emailType === "marketing" && !emailDefaults.mailingAddress) {
+              throw new Error(
+                "Send email steps need a business mailing address on file before activation — add it in Settings → Sending preferences."
+              );
+            }
+            continue;
+          }
+          const body =
+            typeof config.bodyHtml === "string"
+              ? emailHtmlToPlainText(config.bodyHtml)
+              : String(config.body ?? "").trim();
           if (!body) {
             throw new Error(
               "Send email steps need an email body before activation."
@@ -743,6 +762,7 @@ export function WorkflowBuilder({
         <Chain steps={steps} onChange={setSteps} onEdit={setEditing} />
 
         <NodeConfigDialog
+          saId={saId}
           step={editing}
           whatsappTemplates={whatsappTemplates}
           emailTemplates={emailTemplates}

@@ -43,8 +43,11 @@ import {
   splitEmailAddresses,
 } from "@/lib/automations/workflow-email";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
+import { renderEmailHtml, renderEmailText } from "@/lib/email/render";
+import { formatMailingAddress } from "@/lib/broadcasts/compliance";
 import { evalConditionGroup } from "./conditions";
 import type { Contact } from "@/types/contacts";
+import type { EmailDocument } from "@/types/email-document";
 import type { AgencyDoc, SubAccountDoc } from "@/types";
 import type { WhatsappTemplateDoc } from "@/types/whatsapp-templates";
 import type {
@@ -188,46 +191,95 @@ const execSendEmail: NodeExecutor = async (ctx) => {
     cfg.subject ?? "",
     mergeSubject(ctx, unsubscribeLink)
   );
-  const rawBody =
-    typeof cfg.body === "string" && cfg.body.trim()
-      ? cfg.body
-      : emailHtmlToPlainText(cfg.bodyHtml ?? "");
-  const text = resolveMergeTags(rawBody, mergeSubject(ctx, unsubscribeLink));
-  const htmlSource = cfg.bodyHtml || plainTextToEmailHtml(rawBody);
-  const htmlInner = sanitizeHtml(
-    resolveMergeTags(
-      htmlSource,
-      mergeSubject(ctx, '<a href="' + unsubscribeLink + '">Unsubscribe</a>')
-    ),
-    {
-      allowedTags: [
-        "p",
-        "br",
-        "strong",
-        "em",
-        "u",
-        "a",
-        "ul",
-        "ol",
-        "li",
-        "div",
-      ],
-      allowedAttributes: { a: ["href", "target", "rel"] },
-      allowedSchemes: ["http", "https", "mailto"],
+  const resolve = (value: string) =>
+    resolveMergeTags(value, mergeSubject(ctx, unsubscribeLink));
+
+  // Design Email (Shared Email Foundation Phase 3): content lives in its own
+  // emailDocuments/{id} doc and renders through the SAME canonical
+  // EmailDocument renderer Broadcasts use — preview and runtime share one
+  // pipeline, per the shared foundation's whole point. Everything below this
+  // branch (opt-out/suppression already checked above; sender validation,
+  // retry classification, sendTenantEmail call) is completely unchanged
+  // either way — only how `text`/`html`/the marketing-compliance check are
+  // produced differs.
+  let rawBody: string;
+  let text: string;
+  let html: string;
+  let marketingComplianceOk: boolean;
+  if (cfg.emailDocumentId) {
+    const refSnap = await getAdminDb()
+      .doc(`emailDocuments/${cfg.emailDocumentId}`)
+      .get();
+    const document = (refSnap.data() as { document?: EmailDocument } | undefined)
+      ?.document;
+    if (!document) {
+      return {
+        result: { kind: "fail", retryable: false },
+        log: "error:email_document_missing",
+        execution: {
+          status: "terminal_failure",
+          errorCategory: "invalid_email_config",
+        },
+      };
     }
-  );
-  const html =
-    '<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">' +
-    htmlInner +
-    "</body></html>";
+    const mailingAddress = ctx.subAccount?.mailingAddress
+      ? formatMailingAddress(ctx.subAccount.mailingAddress)
+      : "";
+    const renderOptions = {
+      resolveMergeTags: resolve,
+      businessName: ctx.subAccount?.name ?? "",
+      mailingAddress,
+      unsubscribeUrl: unsubscribeLink,
+      includeComplianceFooter: emailType === "marketing",
+    };
+    text = renderEmailText(document, renderOptions);
+    html = renderEmailHtml(document, renderOptions);
+    rawBody = text;
+    // The compliance footer (with a real Unsubscribe link) is always
+    // appended structurally when emailType is "marketing" — the equivalent
+    // gate is simply that a mailing address exists to put in it (same rule
+    // Broadcasts enforce), not a literal {{unsubscribeLink}} in the body.
+    marketingComplianceOk = emailType !== "marketing" || !!mailingAddress;
+  } else {
+    rawBody =
+      typeof cfg.body === "string" && cfg.body.trim()
+        ? cfg.body
+        : emailHtmlToPlainText(cfg.bodyHtml ?? "");
+    text = resolve(rawBody);
+    const htmlSource = cfg.bodyHtml || plainTextToEmailHtml(rawBody);
+    const htmlInner = sanitizeHtml(
+      resolveMergeTags(
+        htmlSource,
+        mergeSubject(ctx, '<a href="' + unsubscribeLink + '">Unsubscribe</a>')
+      ),
+      {
+        allowedTags: [
+          "p",
+          "br",
+          "strong",
+          "em",
+          "u",
+          "a",
+          "ul",
+          "ol",
+          "li",
+          "div",
+        ],
+        allowedAttributes: { a: ["href", "target", "rel"] },
+        allowedSchemes: ["http", "https", "mailto"],
+      }
+    );
+    html =
+      '<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">' +
+      htmlInner +
+      "</body></html>";
+    marketingComplianceOk =
+      emailType !== "marketing" || rawBody.includes("{{unsubscribeLink}}");
+  }
   const replyTo = cfg.replyTo?.trim() || undefined;
   const cc = cfg.cc?.trim() || undefined;
   const bcc = cfg.bcc?.trim() || undefined;
-  if (
-    !subject.trim() ||
-    !text.trim() ||
-    (emailType === "marketing" && !rawBody.includes("{{unsubscribeLink}}"))
-  ) {
+  if (!subject.trim() || !text.trim() || !marketingComplianceOk) {
     if (isLegacy)
       return { result: { kind: "next" }, log: "error:invalid_email_config" };
     return {

@@ -50,6 +50,7 @@ function deriveWait(seconds: number): { value: number; unit: number } {
 }
 
 export function NodeConfigDialog({
+  saId,
   step,
   whatsappTemplates,
   emailTemplates,
@@ -57,6 +58,7 @@ export function NodeConfigDialog({
   onClose,
   onSave,
 }: {
+  saId: string;
   step: BuilderStep | null;
   whatsappTemplates: WhatsappTemplateOption[];
   emailTemplates: WorkflowEmailTemplateOption[];
@@ -64,6 +66,7 @@ export function NodeConfigDialog({
     verifiedFrom: string;
     fromName: string;
     replyTo: string;
+    mailingAddress: string;
   };
   onClose: () => void;
   onSave: (config: Cfg) => void;
@@ -95,14 +98,27 @@ export function NodeConfigDialog({
   const emailBody = emailHtmlToPlainText(
     String(cfg.bodyHtml ?? cfg.body ?? "")
   );
+  // A Design Email step (emailDocumentId set) keeps its content in its own
+  // emailDocuments/{id} doc — the designer never hands back a save without
+  // it having at least the subject, and the shared renderer's compliance
+  // footer always appends a real Unsubscribe link, so the body-text and
+  // literal-{{unsubscribeLink}} checks below don't apply; a mailing address
+  // on file is the equivalent compliance gate instead (same as Broadcasts).
+  const hasDesignedEmail =
+    typeof cfg.emailDocumentId === "string" && !!cfg.emailDocumentId;
   const emailErrors =
     step.type === "send_email"
       ? [
           !emailDefaults.verifiedFrom &&
             "A verified workspace sender is required before saving this email.",
           !str("subject").trim() && "Subject is required.",
-          !emailBody.trim() && "Email body is required.",
-          cfg.emailType === "marketing" &&
+          !hasDesignedEmail && !emailBody.trim() && "Email body is required.",
+          hasDesignedEmail &&
+            cfg.emailType === "marketing" &&
+            !emailDefaults.mailingAddress &&
+            "A business mailing address is required for marketing email — add it in Settings → Sending preferences.",
+          !hasDesignedEmail &&
+            cfg.emailType === "marketing" &&
             !emailBody.includes("{{unsubscribeLink}}") &&
             "Email body must include {{unsubscribeLink}} for compliance.",
           cfg.replyTo &&
@@ -139,12 +155,14 @@ export function NodeConfigDialog({
         >
           {step.type === "send_email" && (
             <WorkflowEmailComposer
+              saId={saId}
               config={cfg}
               setConfig={set}
               templates={emailTemplates}
               verifiedFrom={emailDefaults.verifiedFrom}
               defaultFromName={emailDefaults.fromName}
               defaultReplyTo={emailDefaults.replyTo}
+              mailingAddress={emailDefaults.mailingAddress}
             />
           )}
 

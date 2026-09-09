@@ -1404,6 +1404,21 @@ service cloud.firestore {
       }
     }
 
+    // ---------- email documents (Shared Email Foundation Phase 3) ----------
+    // Tenant-owned EmailDocument content, referenced by id from a Workflow
+    // Send Email step's config (SendEmailConfig.emailDocumentId) — the
+    // designer's save target. Same shape as broadcasts: created + mutated
+    // server-side only by /api/email-documents/save (Admin SDK bypasses
+    // these rules); active sub-account members can read so the designer
+    // can load an existing document to edit.
+    match /emailDocuments/{emailDocumentId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow write: if false;
+    }
+
     // ---------- voice campaigns (bulk outbound AI calls) ----------
     // Same shape as broadcasts: top-level campaign + per-recipient rows,
     // created + mutated server-side only by /api/comms/voice/campaign/*

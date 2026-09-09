@@ -288,6 +288,21 @@ export interface SendEmailConfig {
   emailType?: "marketing" | "transactional";
   /** Rich email-safe HTML, introduced additively; legacy steps use body. */
   bodyHtml?: string;
+  /**
+   * Workflow Design Email (Shared Email Foundation Phase 3, 2026-09-09).
+   * References an `emailDocuments/{id}` doc holding the authored
+   * EmailDocument (rich text/image/button/divider/columns/video — the same
+   * canonical model and renderer Broadcasts use). When set, this is the
+   * source of truth for content and `subject`/`preheader` above mirror it
+   * for display (step summary, activation validation) without a fetch;
+   * `body`/`bodyHtml` are kept in sync too, purely so older UI that still
+   * reads them directly (nothing in the runtime does once this is set)
+   * keeps working. Absent means this step still uses the legacy/Quick
+   * Compose subject+body(+bodyHtml) path unchanged.
+   */
+  emailDocumentId?: string | null;
+  /** Only meaningful alongside emailDocumentId. */
+  preheader?: string;
   /** Optional per-step display name; the verified sender address stays tenant-controlled. */
   fromName?: string;
   /** Optional overrides; blank values use the sub-account sending preferences. */
