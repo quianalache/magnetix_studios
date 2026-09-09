@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleGroupTrigger } from "@/components/ui/collapsible";
 import { MISSING_SCRIPT_GUARD } from "@/lib/ytcs/title-prompt";
 import type { GeneratedTitleOption } from "@/lib/ytcs/title-generation";
 import type { YtcsVideoProject } from "@/types/ytcs";
@@ -28,13 +29,23 @@ const LONG_FORM_MAX_HEIGHT = "max-h-[560px] overflow-y-auto";
  * Builder (copy-paste into ChatGPT/Claude) is preserved exactly as it
  * was — now collapsed by default as a secondary/power-user path,
  * matching Script Prompt Builder's own external-prompt treatment.
- * `generatedTitles`/`titleTopPick`/`titleThumbnailIdeas` are the AI's
- * output; `selectedTitle`/`backupTitle` stay the real, independently
- * editable approved fields — cards populate them via "Use as Primary/
- * Backup", they never lock them. The OLD in-app generator's real
- * historical output (`generatedTitles`/`top3Titles` in the `legacy`
- * bucket per migration spec §12/§18) is a completely different,
- * unrelated field and is still never read or rendered here.
+ * `generatedTitles` is the AI's output; `selectedTitle`/`backupTitle`
+ * stay the real, independently editable approved fields — cards
+ * populate them via "Use as Primary/Backup", they never lock them.
+ * The OLD in-app generator's real historical output
+ * (`generatedTitles`/`top3Titles` in the `legacy` bucket per migration
+ * spec §12/§18) is a completely different, unrelated field and is
+ * still never read or rendered here.
+ *
+ * Per-title analysis (2026-09-10 correction pass): each generated
+ * title now carries its own full explanation (why it works / viewer
+ * tension / curiosity, promise, or benefit / why it fits the script)
+ * and its own 3 thumbnail ideas, revealed via a compact disclosure
+ * inside its own card — not one shared "Top Pick"/"Thumbnail Ideas"
+ * section detached at the bottom of the page (removed; see
+ * title-generation.ts for the full root-cause writeup). Cards default
+ * collapsed so 10 titles' worth of analysis doesn't render open at
+ * once.
  */
 export function TitlesStep({
   subAccountId,
@@ -62,8 +73,6 @@ export function TitlesStep({
   // the `project` prop between renders.
   const [generatingTitles, setGeneratingTitles] = useState(false);
   const [titles, setTitles] = useState<GeneratedTitleOption[]>(project.generatedTitles ?? []);
-  const [topPick, setTopPick] = useState(project.titleTopPick ?? null);
-  const [thumbnailIdeas, setThumbnailIdeas] = useState<string[]>(project.titleThumbnailIdeas ?? []);
 
   // External Title Prompt Builder — unchanged logic, now collapsed by
   // default (was always-visible before this pass).
@@ -76,8 +85,6 @@ export function TitlesStep({
     setBackupTitle(project.backupTitle ?? "");
     setTitleNotes(project.titleNotes ?? "");
     setTitles(project.generatedTitles ?? []);
-    setTopPick(project.titleTopPick ?? null);
-    setThumbnailIdeas(project.titleThumbnailIdeas ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
@@ -89,8 +96,12 @@ export function TitlesStep({
    *  already chose until they explicitly pick a different card. */
   async function generateTitles() {
     setGeneratingTitles(true);
+    // Client-side safety net, same pattern as Script Prompt Builder's
+    // Generate Script — set comfortably above the server's own 210s
+    // ceiling (raised 2026-09-10 alongside the larger per-title output)
+    // so the server's own clean error always wins the race normally.
     const controller = new AbortController();
-    const clientTimeout = setTimeout(() => controller.abort(), 150_000);
+    const clientTimeout = setTimeout(() => controller.abort(), 220_000);
     try {
       const res = await fetch(
         `/api/sub-accounts/${subAccountId}/ytcs/videos/${project.id}/generate-titles`,
@@ -99,8 +110,6 @@ export function TitlesStep({
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Couldn't generate titles");
       setTitles(data.project?.generatedTitles ?? []);
-      setTopPick(data.project?.titleTopPick ?? null);
-      setThumbnailIdeas(data.project?.titleThumbnailIdeas ?? []);
       toast.success("Titles generated.");
     } catch (err) {
       const timedOut = err instanceof Error && err.name === "AbortError";
@@ -209,60 +218,26 @@ export function TitlesStep({
       </div>
 
       {titles.length > 0 && (
-        <>
-          <div className="rounded-2xl border bg-card p-4">
-            <h3 className="text-sm font-semibold">Title Options</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The top 3 are marked below. Use as Primary or Backup on whichever fits —
-              you can still edit both fields yourself afterward.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {titles.map((option, i) => (
-                <TitleCard
-                  key={`${option.title}-${i}`}
-                  option={option}
-                  isSelected={selectedTitle === option.title}
-                  isBackup={backupTitle === option.title}
-                  onUsePrimary={() => applyAsPrimaryTitle(option.title)}
-                  onUseBackup={() => applyAsBackupTitle(option.title)}
-                />
-              ))}
-            </div>
+        <div className="rounded-2xl border bg-card p-4">
+          <h3 className="text-sm font-semibold">Title Options</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            The top 3 are marked below. Tap a card to see why it works, plus its own
+            thumbnail ideas. Use as Primary or Backup on whichever fits — you can
+            still edit both fields yourself afterward.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {titles.map((option, i) => (
+              <TitleCard
+                key={`${option.title}-${i}`}
+                option={option}
+                isSelected={selectedTitle === option.title}
+                isBackup={backupTitle === option.title}
+                onUsePrimary={() => applyAsPrimaryTitle(option.title)}
+                onUseBackup={() => applyAsBackupTitle(option.title)}
+              />
+            ))}
           </div>
-
-          {topPick && (
-            <div className="rounded-2xl border bg-card p-4 space-y-2">
-              <h3 className="text-sm font-semibold">Top Pick</h3>
-              <p className="text-sm font-medium">{topPick.title}</p>
-              <div className="space-y-1.5 text-xs text-muted-foreground">
-                <p>
-                  <strong className="text-foreground">Why it works:</strong> {topPick.whyItWorks}
-                </p>
-                <p>
-                  <strong className="text-foreground">Viewer tension:</strong> {topPick.viewerTension}
-                </p>
-                <p>
-                  <strong className="text-foreground">Curiosity, promise, or benefit:</strong>{" "}
-                  {topPick.curiosityPromiseBenefit}
-                </p>
-                <p>
-                  <strong className="text-foreground">Why it fits the script:</strong> {topPick.whyItFitsScript}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {thumbnailIdeas.length > 0 && (
-            <div className="rounded-2xl border bg-card p-4 space-y-2">
-              <h3 className="text-sm font-semibold">Thumbnail Ideas</h3>
-              <ul className="list-disc space-y-1 pl-4 text-sm">
-                {thumbnailIdeas.map((idea, i) => (
-                  <li key={i}>{idea}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
       <div className="rounded-2xl border bg-card p-4">
@@ -382,6 +357,13 @@ export function TitlesStep({
   );
 }
 
+/** Per-card disclosure state defaults closed — 10 of these open at once
+ *  would be exactly the "visually overwhelming" outcome this pattern
+ *  exists to avoid. Only rendered when this specific title actually has
+ *  its own analysis (a real project generated before 2026-09-10 has
+ *  `generatedTitles` entries with no analysis fields at all — legacy
+ *  data, preserved read-only; those cards just don't get a disclosure
+ *  rather than showing an empty one). */
 function TitleCard({
   option,
   isSelected,
@@ -395,6 +377,10 @@ function TitleCard({
   onUsePrimary: () => void;
   onUseBackup: () => void;
 }) {
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const hasAnalysis = !!option.whyItWorks && !!option.viewerTension && !!option.curiosityPromiseBenefit && !!option.whyItFitsScript;
+  const hasThumbnailIdeas = (option.thumbnailIdeas?.length ?? 0) > 0;
+
   return (
     <div className="space-y-2 rounded-lg border p-3 text-sm">
       <div className="flex items-start justify-between gap-2">
@@ -415,6 +401,43 @@ function TitleCard({
           Use as Backup
         </Button>
       </div>
+
+      {(hasAnalysis || hasThumbnailIdeas) && (
+        <Collapsible open={analysisOpen} onOpenChange={setAnalysisOpen}>
+          <CollapsibleGroupTrigger>Why this title works</CollapsibleGroupTrigger>
+          <CollapsibleContent>
+            <div className="space-y-2 pt-1 pb-1 text-xs text-muted-foreground">
+              {hasAnalysis && (
+                <div className="space-y-1.5">
+                  <p>
+                    <strong className="text-foreground">Why it works:</strong> {option.whyItWorks}
+                  </p>
+                  <p>
+                    <strong className="text-foreground">Viewer tension:</strong> {option.viewerTension}
+                  </p>
+                  <p>
+                    <strong className="text-foreground">Curiosity, promise, or benefit:</strong>{" "}
+                    {option.curiosityPromiseBenefit}
+                  </p>
+                  <p>
+                    <strong className="text-foreground">Why it fits the script:</strong> {option.whyItFitsScript}
+                  </p>
+                </div>
+              )}
+              {hasThumbnailIdeas && (
+                <div>
+                  <p className="font-medium text-foreground">Thumbnail ideas for this title:</p>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {option.thumbnailIdeas.map((idea, i) => (
+                      <li key={i}>{idea}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }

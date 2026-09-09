@@ -25,14 +25,24 @@ import { recordTitleGenerationUsage } from "@/lib/server/ytcs-title-generations-
  * (`parseTitleGenerationResponse`) means a malformed model response is
  * never saved — the route returns a clean error instead.
  *
- * Writes ONLY `generatedTitles`/`titleTopPick`/`titleThumbnailIdeas`/
- * `generatedTitlesMeta` — `selectedTitle`/`backupTitle` are never
- * touched here; the user (or a card's "Use as Primary/Backup" action)
- * sets those explicitly. Same model + cost/telemetry architecture as
- * `generate-script`, reusing its pricing constants (same model family)
- * and duplicate-generation-lock pattern, in its own
- * `ytcsTitleGenerations` telemetry collection (feature:
+ * Writes ONLY `generatedTitles`/`generatedTitlesMeta` — `selectedTitle`/
+ * `backupTitle` are never touched here; the user (or a card's "Use as
+ * Primary/Backup" action) sets those explicitly. Same model + cost/
+ * telemetry architecture as `generate-script`, reusing its pricing
+ * constants (same model family) and duplicate-generation-lock pattern,
+ * in its own `ytcsTitleGenerations` telemetry collection (feature:
  * "ytcs_title_generation") — see ytcs-title-generations-service.ts.
+ *
+ * Per-title analysis (2026-09-10): each of the 10 `generatedTitles`
+ * entries now carries its own full explanation + 3 thumbnail ideas
+ * (see title-generation.ts's own doc comment for why this is a
+ * disclosed expansion beyond the real external prompt's own
+ * strategy). The project's old top-level `titleTopPick`/
+ * `titleThumbnailIdeas` fields are no longer written by a new
+ * generation — the per-title data supersedes them — but stay in the
+ * type/schema for backward compatibility with the one real project
+ * that already has them from before this change; nothing reads them
+ * anymore.
  */
 
 const TITLE_GENERATION_MODEL = YTCS_SCRIPT_MODEL_PRICING.model;
@@ -40,17 +50,27 @@ function titleGenerationModel(): string {
   return process.env.YTCS_TITLE_MODEL?.trim() || TITLE_GENERATION_MODEL;
 }
 
-/** 10 titles + a Top Pick explanation + 3 thumbnail ideas as JSON is
- *  far smaller than a full script — real-data-justified against the
- *  script route's own headroom, generously rounded down. */
-const MAX_OUTPUT_TOKENS = 2000;
+/**
+ * Raised from 2000 (2026-09-10) — asking for a full explanation +
+ * 3 thumbnail ideas on all 10 titles instead of just one shared set is
+ * roughly an order of magnitude more generated content than before.
+ * Reuses the script-generation route's own established ceiling rather
+ * than inventing a new number — titles' JSON is still smaller in
+ * practice than a full script, so this is real headroom, not a tight
+ * fit.
+ */
+const MAX_OUTPUT_TOKENS = 6000;
 /** Lower than script generation's 0.7 — this output must parse as
  *  exact-shape JSON; a little less creative variance helps reliability
  *  without meaningfully hurting title quality. */
 const TEMPERATURE = 0.5;
-const REQUEST_TIMEOUT_MS = 120_000;
+/** Raised from 120s/150s (2026-09-10) proportionally to the larger
+ *  expected output — still comfortably under the script route's own
+ *  240s/300s, since titles' JSON remains smaller than a full script
+ *  even at this larger size. */
+const REQUEST_TIMEOUT_MS = 180_000;
 const LOCK_STALE_MS = 2 * 60_000;
-export const maxDuration = 150;
+export const maxDuration = 210;
 
 export async function POST(
   request: Request,
@@ -163,8 +183,6 @@ export async function POST(
 
     const updated = await updateVideoProject(subAccountId, videoId, {
       generatedTitles: titleSet.titles,
-      titleTopPick: titleSet.topPick,
-      titleThumbnailIdeas: titleSet.thumbnailIdeas,
       generatedTitlesMeta,
     });
 

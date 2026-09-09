@@ -182,17 +182,27 @@ export interface YtcsVideoProject {
    *  comparison. Server-managed only, never user-editable. */
   activeScriptGenerationId?: string;
   generatedTitlePrompt?: string;
-  /** In-app Generate Titles (2026-09-09) — the current 10-title result.
+  /** In-app Generate Titles (2026-09-09, per-title analysis expanded
+   *  2026-09-10) — the current 10-title result. Each entry carries its
+   *  own full explanation (why it works / viewer tension / curiosity,
+   *  promise, or benefit / why it fits the script) and its own 3
+   *  thumbnail ideas — see `GeneratedTitleOption`'s own doc comment.
    *  Replaced wholesale on regenerate; no history is kept (product
    *  decision — titles are cheap/fast to regenerate, unlike scripts).
    *  Server-managed only, never user-editable directly; individual
    *  titles are applied to `selectedTitle`/`backupTitle` via the UI's
    *  "Use as Primary/Backup" actions instead. */
   generatedTitles?: GeneratedTitleOption[];
-  /** The AI's #1-ranked Top Pick and its explanation, from the same
-   *  generation as `generatedTitles`. */
+  /** LEGACY shape (2026-09-09 through 2026-09-10) — the AI's #1-ranked
+   *  Top Pick and its explanation as one shared, separate field. No
+   *  longer written by a new generation (superseded by per-title
+   *  analysis directly on `generatedTitles`) — kept only so the one
+   *  real project that already generated titles before 2026-09-10
+   *  keeps loading correctly. Nothing reads this field anymore. */
   titleTopPick?: GeneratedTitleTopPick;
-  /** Exactly 3 thumbnail text ideas from the same generation. */
+  /** LEGACY shape — same situation as `titleTopPick` above: one shared
+   *  set of 3 thumbnail ideas for the whole batch, no longer written
+   *  (each title now carries its own instead). Preserved read-only. */
   titleThumbnailIdeas?: [string, string, string];
   /** Generation metadata for the current title batch — same shape/
    *  purpose as `generatedScriptMeta` above, minus `truncated` (title

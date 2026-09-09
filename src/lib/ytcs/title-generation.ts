@@ -1,16 +1,27 @@
 /**
  * In-app Generate Titles — structured-output contract (2026-09-09
- * Script + Titles AI UX pass). `buildTitlePrompt()` (title-prompt.ts)
- * is completely unchanged and still IS the real, verified-verbatim
- * copy-paste prompt used by the external/secondary path. This file
- * only adds what the copy-paste prompt never needed: an instruction
- * telling the model to answer in a specific JSON shape, plus a strict
- * server-side parser/validator for that shape — so the UI never has to
- * scrape freeform prose. The underlying title strategy (10 titles, the
- * 9 listed types, at least 2 Search-Driven, Top 3 "Top Pick" with a
- * 4-part explanation each, 3 thumbnail ideas) is untouched; this is a
- * disclosed, smallest-possible adaptation for machine-readability, not
- * a new strategy.
+ * Script + Titles AI UX pass; per-title analysis expanded 2026-09-10).
+ * `buildTitlePrompt()` (title-prompt.ts) is completely unchanged and
+ * still IS the real, verified-verbatim copy-paste prompt used by the
+ * external/secondary path. This file only adds what the copy-paste
+ * prompt never needed: an instruction telling the model to answer in a
+ * specific JSON shape, plus a strict server-side parser/validator for
+ * that shape — so the UI never has to scrape freeform prose.
+ *
+ * Per-title analysis (2026-09-10, explicit instruction): the real
+ * verified prompt only asks for a "Why this title works / viewer
+ * tension / curiosity, promise, or benefit / why it fits the script"
+ * explanation on the Top 3 titles, and one SHARED set of 3 thumbnail
+ * ideas for the whole batch — not per-title, not for all 10. The
+ * in-app JSON contract below deliberately asks for MORE than that: a
+ * full explanation and its own 3 thumbnail ideas on EVERY one of the
+ * 10 titles, so each card can carry its own complete analysis instead
+ * of only the single highest-ranked title having one. This is a
+ * disclosed, explicitly-authorized expansion of the in-app generation
+ * experience only — the external copy-paste prompt (`buildTitlePrompt`)
+ * is byte-for-byte unchanged, so a user who prefers pasting into their
+ * own AI tool still gets exactly the real, verified strategy, nothing
+ * added or removed.
  */
 
 import { buildTitlePrompt, type TitlePromptContext } from "@/lib/ytcs/title-prompt";
@@ -22,8 +33,24 @@ export interface GeneratedTitleOption {
   /** 1, 2, or 3 for the three titles the model calls out as "Top Pick";
    *  undefined for the other 7. */
   topPickRank?: 1 | 2 | 3;
+  whyItWorks: string;
+  viewerTension: string;
+  curiosityPromiseBenefit: string;
+  whyItFitsScript: string;
+  /** This title's own 3 thumbnail ideas — distinct from every other
+   *  title's, not one shared set for the whole batch. */
+  thumbnailIdeas: [string, string, string];
 }
 
+export interface GeneratedTitleSet {
+  titles: GeneratedTitleOption[];
+}
+
+/** Legacy shape only (2026-09-09 through 2026-09-10) — no longer
+ *  written by a new generation (superseded by the per-title analysis
+ *  fields on `GeneratedTitleOption` itself), kept only so
+ *  `YtcsVideoProject.titleTopPick`'s type still describes the one real
+ *  project that already has data in this old shape. */
 export interface GeneratedTitleTopPick {
   title: string;
   whyItWorks: string;
@@ -32,39 +59,31 @@ export interface GeneratedTitleTopPick {
   whyItFitsScript: string;
 }
 
-export interface GeneratedTitleSet {
-  titles: GeneratedTitleOption[];
-  /** The rank-1 Top Pick's own explanation — the prompt asks for an
-   *  explanation on all 3 Top Picks; the UI only surfaces the single
-   *  highest-ranked one in its own section (see the Titles step's own
-   *  doc comment for the reasoning), so only that one is kept. */
-  topPick: GeneratedTitleTopPick;
-  thumbnailIdeas: [string, string, string];
-}
-
 const JSON_FORMAT_INSTRUCTIONS = `
 
 Respond with ONLY valid JSON — no markdown code fences, no commentary before or after — matching exactly this shape:
 
 {
   "titles": [
-    { "title": string, "titleType": string, "characterCount": number, "topPickRank": number or null }
-  ],
-  "topPick": {
-    "title": string,
-    "whyItWorks": string,
-    "viewerTension": string,
-    "curiosityPromiseBenefit": string,
-    "whyItFitsScript": string
-  },
-  "thumbnailIdeas": [string, string, string]
+    {
+      "title": string,
+      "titleType": string,
+      "characterCount": number,
+      "topPickRank": number or null,
+      "whyItWorks": string,
+      "viewerTension": string,
+      "curiosityPromiseBenefit": string,
+      "whyItFitsScript": string,
+      "thumbnailIdeas": [string, string, string]
+    }
+  ]
 }
 
 Requirements:
 - "titles" must have exactly 10 entries.
 - Exactly 3 of those entries have "topPickRank" set to 1, 2, or 3 (one each, no repeats) — these are the Top 3 / Top Pick titles. The other 7 entries have "topPickRank": null.
-- "topPick" describes the entry whose "topPickRank" is 1 — its "title" must exactly match that entry's "title" text.
-- "thumbnailIdeas" has exactly 3 entries.
+- EVERY entry (all 10, not just the Top 3) must include its own real "whyItWorks", "viewerTension", "curiosityPromiseBenefit", and "whyItFitsScript" — written specifically about THAT title, not a generic or shared explanation.
+- EVERY entry (all 10) must include its own "thumbnailIdeas" — exactly 3 thumbnail text ideas specific to THAT title, not one shared set for the whole batch.
 - "characterCount" must be the real character count of that title's "title" text.`;
 
 /** Sent to the model for in-app generation only — the copy-paste prompt
@@ -119,11 +138,30 @@ export function parseTitleGenerationResponse(raw: string): GeneratedTitleSet {
     if (rank !== null && rank !== 1 && rank !== 2 && rank !== 3) {
       throw new Error(`Title ${i + 1} has an invalid topPickRank.`);
     }
+    if (!isNonEmptyString(to.whyItWorks)) throw new Error(`Title ${i + 1} is missing "whyItWorks".`);
+    if (!isNonEmptyString(to.viewerTension)) throw new Error(`Title ${i + 1} is missing "viewerTension".`);
+    if (!isNonEmptyString(to.curiosityPromiseBenefit)) {
+      throw new Error(`Title ${i + 1} is missing "curiosityPromiseBenefit".`);
+    }
+    if (!isNonEmptyString(to.whyItFitsScript)) throw new Error(`Title ${i + 1} is missing "whyItFitsScript".`);
+    const thumbs = to.thumbnailIdeas;
+    if (!Array.isArray(thumbs) || thumbs.length !== 3 || !thumbs.every(isNonEmptyString)) {
+      throw new Error(`Title ${i + 1} needs exactly 3 thumbnail ideas of its own.`);
+    }
     return {
       title: to.title.trim(),
       titleType: to.titleType.trim(),
       characterCount: to.characterCount,
       topPickRank: rank === null ? undefined : (rank as 1 | 2 | 3),
+      whyItWorks: to.whyItWorks.trim(),
+      viewerTension: to.viewerTension.trim(),
+      curiosityPromiseBenefit: to.curiosityPromiseBenefit.trim(),
+      whyItFitsScript: to.whyItFitsScript.trim(),
+      thumbnailIdeas: [
+        (thumbs[0] as string).trim(),
+        (thumbs[1] as string).trim(),
+        (thumbs[2] as string).trim(),
+      ],
     };
   });
 
@@ -132,43 +170,5 @@ export function parseTitleGenerationResponse(raw: string): GeneratedTitleSet {
     throw new Error("Expected exactly 3 titles ranked 1, 2, and 3 as Top Picks.");
   }
 
-  const topPickRaw = obj.topPick;
-  if (!topPickRaw || typeof topPickRaw !== "object") {
-    throw new Error("Missing the Top Pick explanation in the AI response.");
-  }
-  const tp = topPickRaw as Record<string, unknown>;
-  if (
-    !isNonEmptyString(tp.title) ||
-    !isNonEmptyString(tp.whyItWorks) ||
-    !isNonEmptyString(tp.viewerTension) ||
-    !isNonEmptyString(tp.curiosityPromiseBenefit) ||
-    !isNonEmptyString(tp.whyItFitsScript)
-  ) {
-    throw new Error("The Top Pick explanation is missing required fields.");
-  }
-  const rank1 = titles.find((t) => t.topPickRank === 1);
-  if (!rank1 || rank1.title !== tp.title.trim()) {
-    throw new Error("The Top Pick explanation doesn't match the #1-ranked title.");
-  }
-
-  const thumbnailIdeasRaw = obj.thumbnailIdeas;
-  if (!Array.isArray(thumbnailIdeasRaw) || thumbnailIdeasRaw.length !== 3 || !thumbnailIdeasRaw.every(isNonEmptyString)) {
-    throw new Error("Expected exactly 3 thumbnail text ideas in the AI response.");
-  }
-
-  return {
-    titles,
-    topPick: {
-      title: tp.title.trim(),
-      whyItWorks: tp.whyItWorks.trim(),
-      viewerTension: tp.viewerTension.trim(),
-      curiosityPromiseBenefit: tp.curiosityPromiseBenefit.trim(),
-      whyItFitsScript: tp.whyItFitsScript.trim(),
-    },
-    thumbnailIdeas: [
-      (thumbnailIdeasRaw[0] as string).trim(),
-      (thumbnailIdeasRaw[1] as string).trim(),
-      (thumbnailIdeasRaw[2] as string).trim(),
-    ],
-  };
+  return { titles };
 }
