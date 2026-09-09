@@ -14,6 +14,7 @@
  */
 
 import type { BusinessBrainFramework, BusinessBrainOffer } from "@/types/business-brain";
+import type { GeneratedTitleOption, GeneratedTitleTopPick } from "@/lib/ytcs/title-generation";
 
 export type YtcsStartingPointType =
   | "brain_dump"
@@ -173,7 +174,46 @@ export interface YtcsVideoProject {
    *  (e.g. a double-submit race the client-side disabled state
    *  missed). Cleared in a `finally` regardless of outcome. */
   generatingScriptSince?: string;
+  /** Which `ytcsScriptGenerations` doc the current `generatedScript`
+   *  came from (2026-09-09 Script + Titles AI UX pass) — written by
+   *  generate-script and by "Use as Current"; lets the UI exclude
+   *  whichever generation is already loaded in the active editor from
+   *  its "Previous Generations" list without relying on fragile text
+   *  comparison. Server-managed only, never user-editable. */
+  activeScriptGenerationId?: string;
   generatedTitlePrompt?: string;
+  /** In-app Generate Titles (2026-09-09) — the current 10-title result.
+   *  Replaced wholesale on regenerate; no history is kept (product
+   *  decision — titles are cheap/fast to regenerate, unlike scripts).
+   *  Server-managed only, never user-editable directly; individual
+   *  titles are applied to `selectedTitle`/`backupTitle` via the UI's
+   *  "Use as Primary/Backup" actions instead. */
+  generatedTitles?: GeneratedTitleOption[];
+  /** The AI's #1-ranked Top Pick and its explanation, from the same
+   *  generation as `generatedTitles`. */
+  titleTopPick?: GeneratedTitleTopPick;
+  /** Exactly 3 thumbnail text ideas from the same generation. */
+  titleThumbnailIdeas?: [string, string, string];
+  /** Generation metadata for the current title batch — same shape/
+   *  purpose as `generatedScriptMeta` above, minus `truncated` (title
+   *  generation's structured-JSON output is validated server-side
+   *  before it's ever saved, so a truncated/malformed response is
+   *  rejected outright rather than saved with a warning flag). */
+  generatedTitlesMeta?: {
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    finishReason?: string;
+    generatedAt: string;
+    durationMs?: number;
+    providerReportedCostUsd?: number;
+    estimatedCostUsd?: number;
+    pricingSource?: string;
+    pricingVerifiedDate?: string;
+  };
+  /** Short-lived lock, same pattern as `generatingScriptSince`. */
+  generatingTitlesSince?: string;
   selectedTitle?: string;
   backupTitle?: string;
   /** New in Phase 3B — no real field name was ever found for Titles-step

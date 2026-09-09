@@ -43,6 +43,11 @@ import type { YtcsVideoProject } from "@/types/ytcs";
  * stay OUT of this allowlist — both are written only by the dedicated
  * generate-script route (directly via `updateVideoProject`, bypassing
  * this filter server-side), never by a client-supplied PATCH body.
+ * Same treatment (2026-09-09 Script + Titles AI UX pass) for
+ * `activeScriptGenerationId`, `generatedTitles`/`titleTopPick`/
+ * `titleThumbnailIdeas`/`generatedTitlesMeta`/`generatingTitlesSince` —
+ * all AI-generated/server-managed, written only by generate-script,
+ * generate-titles, or the script-generations "Use as Current" route.
  */
 
 const EDITABLE_KEYS = [

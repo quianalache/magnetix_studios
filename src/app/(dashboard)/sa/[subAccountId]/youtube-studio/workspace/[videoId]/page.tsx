@@ -286,6 +286,7 @@ function VideoProjectPageInner() {
         />
       ) : viewingStep === "Titles" ? (
         <TitlesStep
+          subAccountId={subAccountId}
           project={project}
           onSave={saveProject}
           onGenerate={generateTitlePrompt}

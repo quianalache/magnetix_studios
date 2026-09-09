@@ -9,6 +9,7 @@ import { getBusinessBrain } from "@/lib/server/business-brain-service";
 import { buildScriptPrompt } from "@/lib/ytcs/script-prompt";
 import { callAi } from "@/lib/comms/ai/openrouter";
 import { estimateScriptGenerationCostUsd, YTCS_SCRIPT_MODEL_PRICING } from "@/lib/ytcs/script-generation-cost";
+import { evictOldScriptGenerations, recordScriptGeneration } from "@/lib/server/ytcs-script-generations-service";
 
 /**
  * POST /api/sub-accounts/[id]/ytcs/videos/[videoId]/generate-script
@@ -23,11 +24,23 @@ import { estimateScriptGenerationCostUsd, YTCS_SCRIPT_MODEL_PRICING } from "@/li
  * model server-side, instead of requiring the user to copy it into an
  * external AI tool.
  *
- * Writes ONLY `generatedScript` + `generatedScriptMeta` — `compiledScript`
- * (Final Script Draft) is never touched here, same critical
- * regeneration-must-not-overwrite rule as `generate-script-prompt`. A
- * failed generation leaves any existing `generatedScript` completely
- * untouched (the write only happens after a successful model call).
+ * Writes ONLY `generatedScript` + `generatedScriptMeta` +
+ * `activeScriptGenerationId` — `compiledScript` (Final Script Draft) is
+ * never touched here, same critical regeneration-must-not-overwrite
+ * rule as `generate-script-prompt`. A failed generation leaves any
+ * existing `generatedScript` completely untouched (the write only
+ * happens after a successful model call).
+ *
+ * Script history (2026-09-09 Script + Titles AI UX pass): every
+ * successful/truncated generation's full text is also written to its
+ * `ytcsScriptGenerations` telemetry doc via
+ * `ytcs-script-generations-service.ts`, capped to the 3 most recently
+ * retained per video (older ones keep their telemetry metadata forever,
+ * just lose the recoverable text) — see that file's own doc comment for
+ * the full architecture. `activeScriptGenerationId` tracks which
+ * generation doc the CURRENT `generatedScript` came from, so the
+ * Script Prompt Builder UI can tell "Previous Generations" apart from
+ * whichever one is already loaded in the active editor.
  */
 
 /**
@@ -145,10 +158,12 @@ export async function POST(
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       console.error(`[ytcs/generate-script] model call failed for ${videoId}: ${msg}`);
-      void recordScriptGenerationUsage(subAccountId, videoId, {
+      void recordScriptGeneration(subAccountId, videoId, {
         status: "failed",
         model: scriptGenerationModel(),
         durationMs: Date.now() - startedAt,
+        scriptOutputType: project.scriptOutputType,
+        depthPreference: project.depthPreference,
       });
       return NextResponse.json(
         { error: "Script generation failed — please try again." },
@@ -187,12 +202,9 @@ export async function POST(
         : {}),
     };
 
-    const updated = await updateVideoProject(subAccountId, videoId, {
-      generatedScript: completion.text,
-      generatedScriptMeta,
-    });
-
-    void recordScriptGenerationUsage(subAccountId, videoId, {
+    // Awaited (not fire-and-forget) — the new doc's id is needed
+    // immediately below to record which generation is now "active".
+    const generationId = await recordScriptGeneration(subAccountId, videoId, {
       status: truncated ? "truncated" : "success",
       model: completion.model,
       promptTokens: completion.promptTokens,
@@ -204,6 +216,18 @@ export async function POST(
       estimatedCostUsd,
       pricingSource: estimatedCostUsd !== undefined ? YTCS_SCRIPT_MODEL_PRICING.source : undefined,
       pricingVerifiedDate: estimatedCostUsd !== undefined ? YTCS_SCRIPT_MODEL_PRICING.verifiedDate : undefined,
+      scriptOutputType: project.scriptOutputType,
+      depthPreference: project.depthPreference,
+      scriptText: completion.text,
+    });
+    // Cleanup only — never blocks the response; see the service's own
+    // doc comment on why a missed eviction is harmless.
+    void evictOldScriptGenerations(subAccountId, videoId);
+
+    const updated = await updateVideoProject(subAccountId, videoId, {
+      generatedScript: completion.text,
+      generatedScriptMeta,
+      activeScriptGenerationId: generationId,
     });
 
     return NextResponse.json({ ok: true, project: updated, truncated });
@@ -214,61 +238,5 @@ export async function POST(
       .collection(`subAccounts/${subAccountId}/ytcsVideos`)
       .doc(videoId)
       .set({ generatingScriptSince: FieldValue.delete() }, { merge: true });
-  }
-}
-
-/**
- * Usage/cost telemetry — internal visibility only (2026-09-03 pass): no
- * customer-facing credits, limits, or billing are built from this; it
- * exists so the real per-generation cost to Magnetix can be answered
- * later. One doc per generation attempt (success, failure, and
- * truncation all recorded, per the original design), mirroring the
- * shape of the existing `recordAiSuiteUsage()` best-effort-write
- * convention (never blocks the actual response; a telemetry write
- * failure is only logged). Cost prefers OpenRouter's own real,
- * per-call `usage.cost` (`providerReportedCostUsd`) and falls back to
- * a disclosed estimate (`estimatedCostUsd` + `pricingSource`/
- * `pricingVerifiedDate`) only when the provider doesn't report one —
- * see script-generation-cost.ts.
- */
-async function recordScriptGenerationUsage(
-  subAccountId: string,
-  videoId: string,
-  data: {
-    status: "success" | "failed" | "truncated";
-    model: string;
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-    finishReason?: string;
-    durationMs?: number;
-    providerReportedCostUsd?: number;
-    estimatedCostUsd?: number;
-    pricingSource?: string;
-    pricingVerifiedDate?: string;
-  },
-): Promise<void> {
-  try {
-    await getAdminDb()
-      .collection(`subAccounts/${subAccountId}/ytcsScriptGenerations`)
-      .add({
-        subAccountId,
-        videoId,
-        feature: "ytcs_script_generation",
-        model: data.model,
-        promptTokens: data.promptTokens ?? null,
-        completionTokens: data.completionTokens ?? null,
-        totalTokens: data.totalTokens ?? null,
-        status: data.status,
-        finishReason: data.finishReason ?? null,
-        durationMs: data.durationMs ?? null,
-        providerReportedCostUsd: data.providerReportedCostUsd ?? null,
-        estimatedCostUsd: data.estimatedCostUsd ?? null,
-        pricingSource: data.pricingSource ?? null,
-        pricingVerifiedDate: data.pricingVerifiedDate ?? null,
-        generatedAt: FieldValue.serverTimestamp(),
-      });
-  } catch (err) {
-    console.warn("[ytcs/generate-script] usage telemetry write failed", err);
   }
 }
