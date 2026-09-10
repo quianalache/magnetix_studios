@@ -13,8 +13,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToProducts } from "@/lib/firestore/products";
+import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import type { Contact } from "@/types/contacts";
 import type { Product } from "@/types/products";
+import type { CourseOffer } from "@/types/course-offers";
 import type { QuoteKind } from "@/types/quotes";
 
 /**
@@ -38,6 +40,7 @@ export default function NewQuotePage() {
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [offers, setOffers] = useState<CourseOffer[]>([]);
   const [contactId, setContactId] = useState<string>(
     searchParams.get("contactId") ?? "",
   );
@@ -53,9 +56,13 @@ export default function NewQuotePage() {
     const unsubP = subscribeToProducts({ agencyId, subAccountId }, (all) =>
       setProducts(all.filter((p) => p.active)),
     );
+    const unsubO = subscribeToCourseOffers(subAccountId, setOffers, () =>
+      setOffers([]),
+    );
     return () => {
       unsubC();
       unsubP();
+      unsubO();
     };
   }, [user, agencyId, subAccountId, authLoading]);
 
@@ -118,7 +125,7 @@ export default function NewQuotePage() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {kind === "invoice"
-            ? "Build the line items and totals. Save as draft now — sending mints a Stripe Payment Link and emails the recipient."
+            ? "Build the line items and totals. Save as draft now — sending generates a payment link and emails the recipient."
             : "Build the line items, totals, and terms. Save as a draft now — send to the recipient when you're ready."}
         </p>
       </div>
@@ -192,6 +199,7 @@ export default function NewQuotePage() {
             contacts={contacts}
             selectedContactId={contactId}
             onContactChange={setContactId}
+            offers={offers}
             products={products}
             onSave={handleCreate}
             onCancel={() => router.push(saPath("/quotes"))}

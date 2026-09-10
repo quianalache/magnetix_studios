@@ -26,7 +26,6 @@ import {
   Send,
   Video,
   Bot,
-  Package,
   ScrollText,
   MessagesSquare,
   Radar,
@@ -180,8 +179,13 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
   {
     label: "Sales",
     items: [
-      { href: "/products", label: "Products", icon: Package, enabled: true },
-      { href: "/quotes", label: "Quotes", icon: FileSignature, enabled: true },
+      // Products Phase 1 retirement (2026-09-10 audit): removed as a
+      // standalone nav destination — the route (/products) and its API
+      // still work, but nothing links to it anymore. Offers are now the
+      // primary sellable entity; Product data + the legacy catalog picker
+      // inside the Invoices/Quotes builder stay fully intact for
+      // backward compatibility. See src/app/(dashboard)/sa/[subAccountId]/products/.
+      { href: "/quotes", label: "Invoices", icon: FileSignature, enabled: true },
     ],
   },
   {

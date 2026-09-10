@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Package, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Package, Plus, Tag, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,12 @@ import { ContactPicker } from "@/components/quotes/contact-picker";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToTerritories } from "@/lib/firestore/territories";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
+import {
+  createCustomLineItem,
+  resolveLineItemSourceType,
+  snapshotOfferAsLineItem,
+  snapshotProductAsLineItem,
+} from "@/lib/quotes/line-items";
 import { formatCurrency, toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type {
@@ -23,6 +29,7 @@ import type {
   QuoteLineItem,
 } from "@/types/quotes";
 import type { Product } from "@/types/products";
+import type { CourseOffer } from "@/types/course-offers";
 import type { Contact } from "@/types/contacts";
 import { GLOBAL_TERRITORY_ID, type TerritoryDoc } from "@/types";
 
@@ -78,9 +85,18 @@ interface QuoteBuilderProps {
   contacts?: Contact[];
   selectedContactId?: string;
   onContactChange?: (contactId: string) => void;
-  /** Active products available to pick from the catalog. Parent loads
-   *  via subscribeToProducts() and passes in. Pass empty array to hide
-   *  the picker entirely. */
+  /** Offers available to attach as a line item — every offer in this
+   *  sub-account, draft or published (matches the existing operator-
+   *  facing precedent in the Course Offer upsell picker: staff can
+   *  already select a draft offer there, so this builder does too).
+   *  Parent loads via subscribeToCourseOffers() and passes in. Pass an
+   *  empty array to hide the picker entirely. */
+  offers?: CourseOffer[];
+  /** Active products available to pick from the LEGACY catalog. Parent
+   *  loads via subscribeToProducts() and passes in. Pass empty array to
+   *  hide the picker entirely. Kept for backward compatibility — no
+   *  longer the primary way to add a line item; see the Offer picker
+   *  and "Add custom line" above it. */
   products?: Product[];
   /** Called when the operator clicks Save. The parent decides whether to
    *  hit the create or update API and handles redirect/state. */
@@ -102,10 +118,13 @@ const COMMON_CURRENCIES = [
   "HKD",
 ] as const;
 
-function newId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+/** Short price/type label for the Offer picker's option text. */
+function offerPriceLabel(offer: CourseOffer): string {
+  if (offer.type === "free" || offer.priceCents == null) return "Free";
+  const price = formatCurrency(offer.priceCents / 100, offer.currency ?? "USD");
+  return offer.type === "recurring"
+    ? `${price}/${offer.recurringInterval ?? "period"}`
+    : price;
 }
 
 function toDateString(value: Quote["validUntil"]): string | null {
@@ -125,6 +144,7 @@ export function QuoteBuilder({
   contacts,
   selectedContactId,
   onContactChange,
+  offers = [],
   products = [],
   onSave,
   onCancel,
@@ -231,6 +251,13 @@ export function QuoteBuilder({
     ? (c: Contact) => labelForTerritory(c.territoryId)
     : undefined;
 
+  // De-emphasized legacy Product picker — collapsed by default so it
+  // never competes with Offer/Custom as the primary way to add a line.
+  // Loading the product catalog itself is unaffected by this (the parent
+  // always subscribes so an existing draft's legacy lines still render
+  // fine); this only hides the ADD control until the operator opens it.
+  const [legacyPickerOpen, setLegacyPickerOpen] = useState(false);
+
   const updateItem = (id: string, patch: Partial<QuoteLineItem>) => {
     setLineItems((items) =>
       items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
@@ -239,26 +266,25 @@ export function QuoteBuilder({
   const removeItem = (id: string) => {
     setLineItems((items) => items.filter((item) => item.id !== id));
   };
+  const addOffer = (offerId: string) => {
+    const offer = offers.find((o) => o.id === offerId);
+    if (!offer) return;
+    setLineItems((items) => [...items, snapshotOfferAsLineItem(offer)]);
+  };
+  const addCustomLine = () => {
+    setLineItems((items) => [...items, createCustomLineItem()]);
+  };
   const addFromCatalog = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
-    const snapshotted: QuoteLineItem = {
-      id: newId(),
-      description: product.description
-        ? `${product.name} — ${product.description}`
-        : product.name,
-      quantity: 1,
-      unitPrice: product.unitPriceCents / 100,
-      productId: product.id,
-    };
-    setLineItems((items) => [...items, snapshotted]);
+    setLineItems((items) => [...items, snapshotProductAsLineItem(product)]);
   };
 
   const handleSave = async () => {
     setError(null);
     // Minimal validation — server will re-check.
     if (lineItems.length === 0) {
-      setError("Add at least one product from the catalog.");
+      setError("Add at least one line item.");
       return;
     }
     const taxNum = taxPercent.trim() === "" ? null : Number(taxPercent);
@@ -409,21 +435,7 @@ export function QuoteBuilder({
         <div className="mt-4 space-y-2">
           {lineItems.length === 0 ? (
             <p className="rounded-md border border-dashed bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">
-              No products added yet. Pick one from the catalog below.
-              {products.length === 0 && (
-                <>
-                  {" "}
-                  <br />
-                  Your catalog is empty —{" "}
-                  <a
-                    href="../products"
-                    className="text-primary underline-offset-4 hover:underline"
-                  >
-                    add a product first
-                  </a>
-                  .
-                </>
-              )}
+              No line items yet. Add an offer or a custom line below.
             </p>
           ) : (
             lineItems.map((item) => (
@@ -438,26 +450,77 @@ export function QuoteBuilder({
           )}
         </div>
 
+        {/* Primary add flow: Offer + custom line item. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {offers.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              <select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addOffer(e.target.value);
+                    e.currentTarget.value = "";
+                  }
+                }}
+                className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
+              >
+                <option value="">Add offer…</option>
+                {offers.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.title} — {offerPriceLabel(o)}
+                    {o.visibility === "draft" ? " (draft)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={addCustomLine}>
+            <Plus className="h-3.5 w-3.5" />
+            Add custom line
+          </Button>
+        </div>
+
+        {/* Legacy Product catalog — de-emphasized, collapsed by default.
+            Kept only for backward compatibility during the transition;
+            Offer + custom line are the primary path now. */}
         {products.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Package className="h-3.5 w-3.5 text-muted-foreground" />
-            <select
-              value=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  addFromCatalog(e.target.value);
-                  e.currentTarget.value = "";
-                }
-              }}
-              className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
+          <div className="mt-3 border-t pt-3">
+            <button
+              type="button"
+              onClick={() => setLegacyPickerOpen((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
             >
-              <option value="">Add product from catalog…</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — {formatCurrency(p.unitPriceCents / 100, p.currency)}
-                </option>
-              ))}
-            </select>
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 transition-transform",
+                  legacyPickerOpen && "rotate-180",
+                )}
+              />
+              Legacy: add from Product catalog
+            </button>
+            {legacyPickerOpen && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      addFromCatalog(e.target.value);
+                      e.currentTarget.value = "";
+                    }
+                  }}
+                  className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
+                >
+                  <option value="">Add product from catalog…</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {formatCurrency(p.unitPriceCents / 100, p.currency)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -686,19 +749,32 @@ function LineItemRow({
   onRemove: () => void;
 }) {
   const lineTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+  // Custom lines are freely editable; offer- and product-backed lines
+  // stay locked to their snapshot (the source of truth once added) —
+  // same rule that already applied to every line item before Phase 1.
+  const isCustom = resolveLineItemSourceType(item) === "custom";
   return (
     <div className="grid gap-2 sm:grid-cols-[1fr_5rem_8rem_8rem_auto] sm:items-center">
-      {/* Description: snapshotted from the catalog; not editable. To
-          change the description, archive + replace the product. */}
-      <div className="min-w-0 rounded-md border border-input/40 bg-muted/30 px-3 py-2 text-sm">
-        <p className="truncate" title={item.description}>
-          {item.description || (
-            <span className="italic text-muted-foreground">Untitled item</span>
-          )}
-        </p>
-      </div>
-      {/* Quantity stays editable — same product can be billed for
-          1 hour or 5 hours, etc. */}
+      {isCustom ? (
+        <Input
+          value={item.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="e.g. Rush fee, travel, strategy session…"
+          className="min-w-0"
+        />
+      ) : (
+        // Description: snapshotted from the offer/catalog at add-time;
+        // not editable. To change it, remove this line and re-add.
+        <div className="min-w-0 rounded-md border border-input/40 bg-muted/30 px-3 py-2 text-sm">
+          <p className="truncate" title={item.description}>
+            {item.description || (
+              <span className="italic text-muted-foreground">Untitled item</span>
+            )}
+          </p>
+        </div>
+      )}
+      {/* Quantity stays editable for every source — same offer/product
+          can be billed for 1 unit or 5, etc. */}
       <Input
         type="number"
         min={0}
@@ -708,11 +784,23 @@ function LineItemRow({
         placeholder="Qty"
         className="sm:col-span-1"
       />
-      {/* Unit price: snapshotted from the catalog; not editable.
-          Discounts go through the quote-level discount control below. */}
-      <p className="rounded-md border border-input/40 bg-muted/30 px-3 py-2 text-right text-sm tabular-nums text-muted-foreground sm:col-span-1">
-        {formatCurrency(item.unitPrice, currency)}
-      </p>
+      {isCustom ? (
+        <Input
+          type="number"
+          min={0}
+          step="0.01"
+          value={item.unitPrice === 0 ? "" : item.unitPrice}
+          onChange={(e) => onChange({ unitPrice: Number(e.target.value) || 0 })}
+          placeholder="0.00"
+          className="text-right sm:col-span-1"
+        />
+      ) : (
+        // Unit price: snapshotted from the offer/catalog; not editable.
+        // Discounts go through the quote-level discount control below.
+        <p className="rounded-md border border-input/40 bg-muted/30 px-3 py-2 text-right text-sm tabular-nums text-muted-foreground sm:col-span-1">
+          {formatCurrency(item.unitPrice, currency)}
+        </p>
+      )}
       <p className="text-right text-sm font-medium tabular-nums sm:col-span-1">
         {formatCurrency(lineTotal, currency)}
       </p>

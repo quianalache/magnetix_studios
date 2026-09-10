@@ -1038,11 +1038,21 @@ service cloud.firestore {
           resource.data.subAccountId,
           resource.data.agencyId
         );
+      // Draft-only (2026-09-10 data-integrity fix — Products/Offers/
+      // Quotes/Invoices audit, Section 10/12): the UI has only ever
+      // exposed the Delete button for status === "draft" quotes/invoices,
+      // but until now these rules allowed a tenant member to delete a
+      // sent/accepted/paid one too via a direct client-SDK call. No
+      // Admin-SDK delete route exists for quotes (deleteQuote() is a
+      // plain client-SDK deleteDoc()), so this rule is the only
+      // enforcement point — tightening it here fully closes the gap.
+      // Same-tenant data-integrity gap only (never cross-tenant); no
+      // territory/tenant protection is loosened.
       allow delete: if canSeeScopedDoc(
         resource.data.subAccountId,
         resource.data.agencyId,
         resource.data.get("territoryId", null)
-      );
+      ) && resource.data.status == "draft";
     }
 
     // Product catalog used by the Quotes + Invoices builder. Reads from

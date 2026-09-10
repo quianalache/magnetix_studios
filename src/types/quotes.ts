@@ -35,13 +35,56 @@ export type QuoteStatus =
 
 /**
  * What the document is for. `quote` = an estimate the recipient
- * accepts/declines; `invoice` = a demand for payment with a Stripe
- * Payment Link. A doc starts as `quote` (default) or `invoice` (operator
- * skipped the estimate). An accepted quote can be converted to an
- * invoice in place via /convert-to-invoice — `kind` flips and a new
- * invoice number is issued.
+ * accepts/declines; `invoice` = a demand for payment with a payment link
+ * (currently a PayPal.me URL — see `paymentLinkUrl`). A doc starts as
+ * `quote` (default) or `invoice` (operator skipped the estimate). An
+ * accepted quote can be converted to an invoice in place via
+ * /convert-to-invoice — `kind` flips and a new invoice number is issued.
  */
 export type QuoteKind = "quote" | "invoice";
+
+/**
+ * Where a line item's description/price came from — Phase 1 of the
+ * Products/Offers/Quotes/Invoices audit's recommended architecture
+ * (2026-09-10). Three sources, all first-class:
+ *
+ *   "offer"         — snapshotted from a Course Offer (`offerId` +
+ *                      `offerSnapshot` set). The canonical, forward path.
+ *   "custom"        — a free-typed ad-hoc line (rush fee, travel, etc.),
+ *                      no catalog reference at all.
+ *   "legacyProduct" — snapshotted from the Product catalog (`productId`
+ *                      set). Kept fully working for old documents and
+ *                      anyone still using it; no longer the primary
+ *                      builder path.
+ *
+ * Optional so every line item created before this field existed keeps
+ * working unchanged — see `resolveLineItemSourceType` in
+ * `src/lib/quotes/line-items.ts` for the exact backward-compat rule
+ * (undefined + productId present → read as "legacyProduct"; undefined +
+ * no productId → read as "custom"). Never rewritten onto historical docs.
+ */
+export type QuoteLineItemSourceType = "offer" | "custom" | "legacyProduct";
+
+/**
+ * Minimal identity/display snapshot of the Course Offer a line item was
+ * added from, captured at add-time — same historical-accuracy discipline
+ * already used for Product-backed lines and for `CourseOfferPurchase`.
+ * Deliberately NOT the offer's full entitlement bundle (courses, booking,
+ * project templates) — that's out of scope until the "show what's
+ * included" phase. Editing or archiving the offer later never changes an
+ * already-added line item.
+ */
+export interface QuoteOfferSnapshot {
+  offerId: string;
+  /** Offer title at the moment it was added. */
+  name: string;
+  /** Offer description at the moment it was added, if it had one. */
+  description: string | null;
+  offerType: "free" | "oneTime" | "recurring";
+  /** Cents, mirrors `CourseOffer.priceCents` — null for a free offer. */
+  priceCents: number | null;
+  currency: string | null;
+}
 
 export interface QuoteLineItem {
   /** Local UUID (client-generated). Not a separate Firestore doc — the
@@ -56,8 +99,24 @@ export interface QuoteLineItem {
   /** Back-reference to the source product when this line was added from
    *  the catalog. Null for ad-hoc lines. The snapshot of name/price (in
    *  `description` + `unitPrice`) is authoritative — editing or archiving
-   *  the product later never changes this line item. */
+   *  the product later never changes this line item. Kept permanently for
+   *  legacy documents; new lines prefer `offerId` or a plain custom line —
+   *  see `QuoteLineItemSourceType`. */
   productId?: string | null;
+  /** See {@link QuoteLineItemSourceType}. Undefined on every line item
+   *  created before Phase 1 shipped — never backfilled. */
+  sourceType?: QuoteLineItemSourceType;
+  /** Back-reference to the source Course Offer when `sourceType ===
+   *  "offer"`. Null/omitted for custom and legacy-Product lines. Like
+   *  `productId`, purely informational after add-time — `offerSnapshot`
+   *  plus `description`/`unitPrice` are what actually render. */
+  offerId?: string | null;
+  /** Snapshot captured at the moment the Offer was added — see
+   *  {@link QuoteOfferSnapshot}. Null/omitted unless `sourceType ===
+   *  "offer"`. Not read by the PDF or detail-page renderer today (both
+   *  still read only `description`/`quantity`/`unitPrice`); kept for a
+   *  future "show what's included" phase and for internal identification. */
+  offerSnapshot?: QuoteOfferSnapshot | null;
 }
 
 /** Global discount applied to the line-item subtotal. */
@@ -153,13 +212,19 @@ export interface Quote {
   convertedFromQuoteAt: Timestamp | FieldValue | null;
 
   // ── Payment link (invoices only) ─────────────────────────────────
-  /** Stripe Payment Link URL — buyer clicks "Pay" on the public invoice
-   *  view or email to land here. Cached so re-sending the same invoice
-   *  reuses the link. Null when the invoice hasn't been sent yet OR when
-   *  the doc is a quote. */
+  /** Payment URL — buyer clicks "Pay" on the public invoice view or
+   *  email to land here. Currently always a PayPal.me URL (see
+   *  `buildPaypalInvoiceUrl` / `/api/sub-accounts/[id]/quotes/[quoteId]/send`);
+   *  the field name is provider-neutral on purpose so a future provider
+   *  can populate it the same way. Regenerated fresh on every send —
+   *  paypal.me links are stateless, nothing to "deactivate." Null when
+   *  the invoice hasn't been sent yet OR when the doc is a quote. */
   paymentLinkUrl: string | null;
-  /** Stripe Payment Link id (plink_…). Used to deactivate the old link
-   *  when the invoice is edited after send and a new link is minted. */
+  /** Provider-specific payment-link id, when the provider has one to
+   *  deactivate/rotate (Stripe Payment Links use one, e.g. `plink_…`).
+   *  Always null today — paypal.me URLs have no id concept, so the
+   *  current send path never sets this. Kept for forward-compatibility,
+   *  not currently read anywhere. */
   paymentLinkId: string | null;
   /** When the cached payment link was created. The send route compares
    *  this to `updatedAt` — if the invoice was edited since mint, the

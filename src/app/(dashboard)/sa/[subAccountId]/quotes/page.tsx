@@ -39,11 +39,11 @@ export default function QuotesPage() {
     <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Quotes &amp; invoices</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Invoices and Quotes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Send branded quotes for review or invoices for payment. Recipients
-            view on a shareable link; quotes get accepted/declined, invoices
-            pay via Stripe.
+            Send branded invoices for payment or quotes for review. Recipients
+            view on a shareable link; invoices include a PayPal payment link,
+            quotes get accepted/declined.
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -13,7 +13,9 @@ import { Separator } from "@/components/ui/separator";
 import { computeQuoteTotals, effectiveQuoteStatus } from "@/lib/quotes/calc";
 import { deleteQuote, updateDraftQuote } from "@/lib/firestore/quotes";
 import { subscribeToProducts } from "@/lib/firestore/products";
+import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import type { Product } from "@/types/products";
+import type { CourseOffer } from "@/types/course-offers";
 import {
   formatContactDate,
   formatCurrency,
@@ -57,7 +59,11 @@ export function QuoteDetail({
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [offers, setOffers] = useState<CourseOffer[]>([]);
 
+  // Only needed while editing — an existing draft's already-added lines
+  // (offer, product, or custom) render entirely from their own stored
+  // snapshot and never need either catalog loaded just to display.
   useEffect(() => {
     if (!editing) return;
     const unsub = subscribeToProducts(scope, (all) =>
@@ -65,6 +71,16 @@ export function QuoteDetail({
     );
     return () => unsub();
   }, [editing, scope]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const unsub = subscribeToCourseOffers(
+      scope.subAccountId,
+      setOffers,
+      () => setOffers([]),
+    );
+    return () => unsub();
+  }, [editing, scope.subAccountId]);
   const [busy, setBusy] = useState<
     null | "send" | "mark-paid" | "delete" | "convert"
   >(null);
@@ -352,6 +368,7 @@ export function QuoteDetail({
           initial={quote}
           kind={quote.kind}
           contactName={contactName}
+          offers={offers}
           products={products}
           onSave={handleSaveEdit}
           onCancel={() => setEditing(false)}
