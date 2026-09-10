@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Loader2, Package, Plus, Tag, Trash2 } from "lucide-react";
+import { Loader2, Plus, Tag, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -18,7 +18,6 @@ import {
   createCustomLineItem,
   resolveLineItemSourceType,
   snapshotOfferAsLineItem,
-  snapshotProductAsLineItem,
 } from "@/lib/quotes/line-items";
 import { formatCurrency, toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -28,7 +27,6 @@ import type {
   QuoteKind,
   QuoteLineItem,
 } from "@/types/quotes";
-import type { Product } from "@/types/products";
 import type { CourseOffer } from "@/types/course-offers";
 import type { Contact } from "@/types/contacts";
 import { GLOBAL_TERRITORY_ID, type TerritoryDoc } from "@/types";
@@ -92,12 +90,6 @@ interface QuoteBuilderProps {
    *  Parent loads via subscribeToCourseOffers() and passes in. Pass an
    *  empty array to hide the picker entirely. */
   offers?: CourseOffer[];
-  /** Active products available to pick from the LEGACY catalog. Parent
-   *  loads via subscribeToProducts() and passes in. Pass empty array to
-   *  hide the picker entirely. Kept for backward compatibility — no
-   *  longer the primary way to add a line item; see the Offer picker
-   *  and "Add custom line" above it. */
-  products?: Product[];
   /** Called when the operator clicks Save. The parent decides whether to
    *  hit the create or update API and handles redirect/state. */
   onSave: (values: QuoteFormValues) => Promise<void>;
@@ -145,7 +137,6 @@ export function QuoteBuilder({
   selectedContactId,
   onContactChange,
   offers = [],
-  products = [],
   onSave,
   onCancel,
   saveLabel = "Save quote",
@@ -251,13 +242,6 @@ export function QuoteBuilder({
     ? (c: Contact) => labelForTerritory(c.territoryId)
     : undefined;
 
-  // De-emphasized legacy Product picker — collapsed by default so it
-  // never competes with Offer/Custom as the primary way to add a line.
-  // Loading the product catalog itself is unaffected by this (the parent
-  // always subscribes so an existing draft's legacy lines still render
-  // fine); this only hides the ADD control until the operator opens it.
-  const [legacyPickerOpen, setLegacyPickerOpen] = useState(false);
-
   const updateItem = (id: string, patch: Partial<QuoteLineItem>) => {
     setLineItems((items) =>
       items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
@@ -273,11 +257,6 @@ export function QuoteBuilder({
   };
   const addCustomLine = () => {
     setLineItems((items) => [...items, createCustomLineItem()]);
-  };
-  const addFromCatalog = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-    setLineItems((items) => [...items, snapshotProductAsLineItem(product)]);
   };
 
   const handleSave = async () => {
@@ -450,7 +429,17 @@ export function QuoteBuilder({
           )}
         </div>
 
-        {/* Primary add flow: Offer + custom line item. */}
+        {/* The only two ways to add a line item: an Offer (tenant-scoped,
+            draft or published — matches the existing Course Offer upsell
+            picker's precedent) or a freely-editable custom line. The
+            Offer picker resets to its placeholder after every selection,
+            so it stays available for Offer B, Offer C, etc. — a document
+            can carry any number of Offer-backed lines, not just one. No
+            Product-related control is exposed here; the legacy catalog
+            picker was retired from this UI (2026-09-10 cleanup) — see
+            `resolveLineItemSourceType` for how an OLD Product-backed line
+            still renders correctly, read-only, if one is already on a
+            document being edited. */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {offers.length > 0 && (
             <div className="flex items-center gap-1.5">
@@ -480,49 +469,6 @@ export function QuoteBuilder({
             Add custom line
           </Button>
         </div>
-
-        {/* Legacy Product catalog — de-emphasized, collapsed by default.
-            Kept only for backward compatibility during the transition;
-            Offer + custom line are the primary path now. */}
-        {products.length > 0 && (
-          <div className="mt-3 border-t pt-3">
-            <button
-              type="button"
-              onClick={() => setLegacyPickerOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 transition-transform",
-                  legacyPickerOpen && "rotate-180",
-                )}
-              />
-              Legacy: add from Product catalog
-            </button>
-            {legacyPickerOpen && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      addFromCatalog(e.target.value);
-                      e.currentTarget.value = "";
-                    }
-                  }}
-                  className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
-                >
-                  <option value="">Add product from catalog…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {formatCurrency(p.unitPriceCents / 100, p.currency)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-        )}
       </Card>
 
       {/* Discount + Tax + Totals preview */}

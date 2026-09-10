@@ -12,10 +12,8 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
-import { subscribeToProducts } from "@/lib/firestore/products";
 import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
 import type { Contact } from "@/types/contacts";
-import type { Product } from "@/types/products";
 import type { CourseOffer } from "@/types/course-offers";
 import type { QuoteKind } from "@/types/quotes";
 
@@ -39,7 +37,6 @@ export default function NewQuotePage() {
   const paypalConnected = !!subAccount?.paypalConfig?.username;
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [offers, setOffers] = useState<CourseOffer[]>([]);
   const [contactId, setContactId] = useState<string>(
     searchParams.get("contactId") ?? "",
@@ -53,15 +50,11 @@ export default function NewQuotePage() {
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
     const unsubC = subscribeToContacts({ agencyId, subAccountId }, setContacts);
-    const unsubP = subscribeToProducts({ agencyId, subAccountId }, (all) =>
-      setProducts(all.filter((p) => p.active)),
-    );
     const unsubO = subscribeToCourseOffers(subAccountId, setOffers, () =>
       setOffers([]),
     );
     return () => {
       unsubC();
-      unsubP();
       unsubO();
     };
   }, [user, agencyId, subAccountId, authLoading]);
@@ -200,7 +193,6 @@ export default function NewQuotePage() {
             selectedContactId={contactId}
             onContactChange={setContactId}
             offers={offers}
-            products={products}
             onSave={handleCreate}
             onCancel={() => router.push(saPath("/quotes"))}
             saveLabel={submitting ? "Creating…" : "Create draft"}

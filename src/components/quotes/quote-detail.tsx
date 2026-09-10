@@ -12,9 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { computeQuoteTotals, effectiveQuoteStatus } from "@/lib/quotes/calc";
 import { deleteQuote, updateDraftQuote } from "@/lib/firestore/quotes";
-import { subscribeToProducts } from "@/lib/firestore/products";
 import { subscribeToCourseOffers } from "@/lib/firestore/course-offers";
-import type { Product } from "@/types/products";
 import type { CourseOffer } from "@/types/course-offers";
 import {
   formatContactDate,
@@ -58,20 +56,15 @@ export function QuoteDetail({
 }: QuoteDetailProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [products, setProducts] = useState<Product[]>([]);
   const [offers, setOffers] = useState<CourseOffer[]>([]);
 
-  // Only needed while editing — an existing draft's already-added lines
-  // (offer, product, or custom) render entirely from their own stored
-  // snapshot and never need either catalog loaded just to display.
-  useEffect(() => {
-    if (!editing) return;
-    const unsub = subscribeToProducts(scope, (all) =>
-      setProducts(all.filter((p) => p.active)),
-    );
-    return () => unsub();
-  }, [editing, scope]);
-
+  // Product catalog is deliberately NOT loaded here (2026-09-10 cleanup):
+  // an existing draft's already-added lines — offer, legacy product, or
+  // custom — render entirely from their own stored snapshot and never
+  // need any live catalog loaded just to display or save unrelated
+  // field edits. The only thing that ever needed the product catalog
+  // was the "add from catalog" picker itself, which no longer exists in
+  // this UI — see quote-builder.tsx.
   useEffect(() => {
     if (!editing) return;
     const unsub = subscribeToCourseOffers(
@@ -369,7 +362,6 @@ export function QuoteDetail({
           kind={quote.kind}
           contactName={contactName}
           offers={offers}
-          products={products}
           onSave={handleSaveEdit}
           onCancel={() => setEditing(false)}
           saveLabel="Save changes"
