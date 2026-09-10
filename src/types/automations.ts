@@ -124,6 +124,21 @@ export interface MessageTemplateDoc {
   /** Email only; ignored on SMS templates. */
   subject: string | null;
   body: string;
+  /**
+   * Unified Email Templates (2026-09-10) — additive, non-destructive
+   * upgrade path for a pre-existing plain-text email template (never set on
+   * SMS templates). Absent means this record is still pure legacy
+   * subject/body; the Email Template Library adapts it to an EmailDocument
+   * on the fly for display (see src/lib/email/template-library.ts) without
+   * writing anything back. Present means someone opened it in the shared
+   * visual editor and saved — from then on `content`/`emailDocument` are
+   * authoritative and `subject`/`body` are kept in sync purely for any
+   * older code path that still reads them directly. The doc's id, `type`,
+   * and collection never change, so every existing reference (Workflow's
+   * stored templateId, direct links) keeps resolving.
+   */
+  content?: import("./broadcast-content").BroadcastContent;
+  emailDocument?: import("./email-document").EmailDocument;
   createdByUid: string;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;

@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronDown, Eye, FileText, Search, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import type { Editor } from "@tiptap/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,12 +16,24 @@ import {
   emailHtmlToPlainText,
   plainTextToEmailHtml,
 } from "@/lib/automations/workflow-email";
+import type { BroadcastContent } from "@/types/broadcast-content";
 
 export interface WorkflowEmailTemplateOption {
   id: string;
   name: string;
   subject: string;
+  preheader: string | null;
+  /** Flattened plain text — every template has one, even a richly designed
+   *  one (images/buttons become plain links). What Quick Compose applies. */
   body: string;
+  /** Flattened HTML counterpart of `body`, same flattening. */
+  bodyHtml: string;
+  /** Real block content — what Design Email applies untouched. */
+  content: BroadcastContent;
+  /** >1 means this template has more than a single text block: Quick
+   *  Compose can still apply it (via `body`/`bodyHtml` above) but the
+   *  result won't look like the original design — callers should warn. */
+  blockCount: number;
 }
 
 type Config = Record<string, unknown>;
@@ -142,9 +155,21 @@ export function WorkflowEmailComposer({
     }
     setConfig({
       subject: template.subject,
+      preheader: template.preheader ?? "",
       body: template.body,
-      bodyHtml: plainTextToEmailHtml(template.body),
+      bodyHtml: template.bodyHtml,
     });
+    // A template with more than one block (images, buttons, columns…) is
+    // still applied — never blocked or silently flattened without warning
+    // — but Quick Compose only ever renders plain text and links, so the
+    // designed layout itself doesn't carry over. Design Email is where
+    // that same template's real content applies unchanged.
+    if (template.blockCount > 1) {
+      toast.message("This template includes more than plain text", {
+        description:
+          "Quick Compose shows images and buttons as plain links. Switch to Design Email for the full layout.",
+      });
+    }
     setShowTemplates(false);
     setTemplateQuery("");
   }

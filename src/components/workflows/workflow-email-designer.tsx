@@ -12,7 +12,6 @@ import { EmailBlocksEditor } from "@/components/email-authoring/email-blocks-edi
 import { newBlockId } from "@/components/broadcasts/block-editors";
 import {
   emailDocumentFromBroadcastContent,
-  emailDocumentFromMessageTemplate,
   broadcastContentFromEmailDocument,
   workflowEmailFromDocument,
 } from "@/lib/email/adapters";
@@ -156,15 +155,14 @@ export function WorkflowEmailDesigner({
     ) {
       return;
     }
-    // Phase 1 adapter: message_templates are plain subject/body today, so
-    // the copy starts as a single Text block — never pretending they carry
-    // visual design data they don't have. It's a genuine copy from here on;
-    // editing it never touches the saved template.
-    const copied = broadcastContentFromEmailDocument(
-      emailDocumentFromMessageTemplate(template)
-    );
-    setContent(copied);
+    // Unified Email Templates (2026-09-10): `template.content` already
+    // carries the template's real blocks, whether it's a from-scratch
+    // visual template or a legacy plain one adapted to a single Text
+    // block — either way this is a genuine copy; editing it here never
+    // touches the saved template.
+    setContent(template.content);
     setSubject(template.subject);
+    setPreheader(template.preheader ?? "");
     setShowTemplates(false);
     setTemplateQuery("");
   }

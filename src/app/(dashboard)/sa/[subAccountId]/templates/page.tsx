@@ -10,14 +10,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import {
-  ArrowLeft,
-  FileText,
-  Mail,
-  MessageSquare,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -26,7 +19,14 @@ import { Button } from "@/components/ui/button";
 import { toDate } from "@/lib/format";
 import type { MessageTemplateDoc } from "@/types";
 
-export default function TemplatesListPage() {
+/**
+ * SMS Templates (2026-09-10) — this surface used to be a generic
+ * Email+SMS "Templates" page; Email Templates now has its own canonical
+ * library under Email, so this narrows to what's left: SMS. Same
+ * `message_templates` collection and records as before, just filtered to
+ * `type === "sms"` — no data moved, nothing else about SMS changed.
+ */
+export default function SmsTemplatesListPage() {
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const [templates, setTemplates] = useState<MessageTemplateDoc[]>([]);
@@ -37,6 +37,7 @@ export default function TemplatesListPage() {
     const q = query(
       collection(getFirebaseDb(), "message_templates"),
       where("subAccountId", "==", subAccountId),
+      where("type", "==", "sms"),
     );
     const unsub = onSnapshot(
       q,
@@ -67,29 +68,20 @@ export default function TemplatesListPage() {
 
   return (
     <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div>
-        <Link
-          href={saPath("/broadcasts")}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Back to automations
-        </Link>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
-            <p className="text-sm text-muted-foreground">
-              Reusable email and SMS bodies, with merge tags resolved at
-              send-time.
-            </p>
-          </div>
-          {isAdmin && (
-            <Button render={<Link href={saPath("/templates/new")} />}>
-              <Plus className="mr-1 h-4 w-4" />
-              New template
-            </Button>
-          )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">SMS Templates</h1>
+          <p className="text-sm text-muted-foreground">
+            Reusable text message bodies, with merge tags resolved at
+            send-time.
+          </p>
         </div>
+        {isAdmin && (
+          <Button render={<Link href={saPath("/templates/new")} />}>
+            <Plus className="mr-1 h-4 w-4" />
+            New template
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -111,18 +103,8 @@ export default function TemplatesListPage() {
               className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <span
-                  className={
-                    t.type === "email"
-                      ? "flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                      : "flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400"
-                  }
-                >
-                  {t.type === "email" ? (
-                    <Mail className="h-4 w-4" />
-                  ) : (
-                    <MessageSquare className="h-4 w-4" />
-                  )}
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                  <MessageSquare className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
                   <Link
@@ -132,9 +114,7 @@ export default function TemplatesListPage() {
                     {t.name}
                   </Link>
                   <p className="truncate text-xs text-muted-foreground">
-                    {t.type === "email" && t.subject
-                      ? `Subject: ${t.subject}`
-                      : t.body.slice(0, 80) + (t.body.length > 80 ? "…" : "")}
+                    {t.body.slice(0, 80) + (t.body.length > 80 ? "…" : "")}
                   </p>
                 </div>
               </div>
@@ -161,11 +141,11 @@ function EmptyState() {
   return (
     <div className="rounded-2xl border border-dashed bg-card/50 p-10 text-center">
       <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <FileText className="h-5 w-5" />
+        <MessageSquare className="h-5 w-5" />
       </div>
-      <h3 className="text-base font-semibold">No templates yet</h3>
+      <h3 className="text-base font-semibold">No SMS templates yet</h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Create an email or SMS template to use in an automation. Tags like{" "}
+        Create a text message template to use in an automation. Tags like{" "}
         <code>{"{{contact.firstName}}"}</code> get filled in at send-time.
       </p>
     </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import {
   doc,
@@ -23,6 +23,7 @@ import type { MessageTemplateDoc } from "@/types";
 export default function EditTemplatePage() {
   const params = useParams<{ templateId: string }>();
   const id = params.templateId;
+  const router = useRouter();
   const { isAdmin, saPath, loading: subLoading } = useSubAccount();
   const [template, setTemplate] = useState<MessageTemplateDoc | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,15 +35,24 @@ export default function EditTemplatePage() {
       (snap) => {
         if (!snap.exists()) {
           setTemplate(null);
-        } else {
-          setTemplate(snap.data() as MessageTemplateDoc);
+          setLoading(false);
+          return;
         }
+        const data = snap.data() as MessageTemplateDoc;
+        // This page is SMS-only now — a bookmark or old link to what used
+        // to be an email template here still needs to land somewhere real,
+        // not a 404. Same id, same record: just a different route.
+        if (data.type === "email") {
+          router.replace(saPath(`/email/templates/${id}?source=legacy`));
+          return;
+        }
+        setTemplate(data);
         setLoading(false);
       },
       () => setLoading(false),
     );
     return () => unsub();
-  }, [id]);
+  }, [id, router, saPath]);
 
   async function handleSubmit(values: TemplateFormValues) {
     await updateDoc(doc(getFirebaseDb(), "message_templates", id), {
@@ -74,7 +84,7 @@ export default function EditTemplatePage() {
           render={<Link href={saPath("/templates")} />}
           className="mt-4"
         >
-          Back to templates
+          Back to SMS Templates
         </Button>
       </div>
     );
@@ -88,14 +98,12 @@ export default function EditTemplatePage() {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to templates
+          Back to SMS Templates
         </Link>
         <h1 className="mt-2 text-2xl font-bold tracking-tight">
           {template.name}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {template.type === "email" ? "Email template" : "SMS template"}
-        </p>
+        <p className="text-sm text-muted-foreground">SMS template</p>
       </div>
 
       <TemplateEditor

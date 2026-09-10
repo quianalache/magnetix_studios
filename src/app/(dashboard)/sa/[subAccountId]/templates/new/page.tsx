@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Mail, MessageSquare, Sparkles } from "lucide-react";
+import { ArrowLeft, MessageSquare, Sparkles } from "lucide-react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,26 +20,19 @@ import { TEMPLATE_PRESETS } from "@/lib/automations/template-presets";
  * Quick-start preset chips. The preset content lives in
  * `lib/automations/template-presets.ts` so server-side seeding (run on
  * sub-account creation) and this client-side "Start from a preset" UI use
- * the same source of truth.
- *
- * The icon mapping is UI-only and stays here.
+ * the same source of truth. This page is SMS-only (2026-09-10) — email
+ * templates have their own canonical library under Email — so email
+ * presets are filtered out here even though the shared list still has them.
  */
-const PRESET_ICONS: Record<string, typeof Mail> = {
-  email: Mail,
-  sms: MessageSquare,
-};
-
 const PRESETS: ReadonlyArray<{
   id: string;
   label: string;
   description: string;
-  icon: typeof Mail;
   values: TemplateFormValues;
-}> = TEMPLATE_PRESETS.map((p) => ({
+}> = TEMPLATE_PRESETS.filter((p) => p.type === "sms").map((p) => ({
   id: p.id,
   label: p.label,
   description: p.description,
-  icon: PRESET_ICONS[p.type] ?? Mail,
   values: {
     type: p.type,
     name: p.label,
@@ -123,11 +116,20 @@ export default function NewTemplatePage() {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3 w-3" />
-          Back to templates
+          Back to SMS Templates
         </Link>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight">New template</h1>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">
+          New SMS template
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Pick a channel, write a body, and use merge tags for personalisation.
+          Write a body and use merge tags for personalisation. Building an
+          email template?{" "}
+          <Link
+            href={saPath("/email/templates/new")}
+            className="text-primary underline"
+          >
+            Use the Email Template Library instead.
+          </Link>
         </p>
       </div>
 
@@ -144,22 +146,19 @@ export default function NewTemplatePage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {PRESETS.map((p) => {
-            const Icon = p.icon;
-            return (
-              <Button
-                key={p.id}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => applyPreset(p.values)}
-                title={p.description}
-              >
-                <Icon className="mr-1 h-3.5 w-3.5" />
-                {p.label}
-              </Button>
-            );
-          })}
+          {PRESETS.map((p) => (
+            <Button
+              key={p.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => applyPreset(p.values)}
+              title={p.description}
+            >
+              <MessageSquare className="mr-1 h-3.5 w-3.5" />
+              {p.label}
+            </Button>
+          ))}
           <Button
             type="button"
             variant="ghost"
@@ -178,6 +177,7 @@ export default function NewTemplatePage() {
         initial={initial}
         submitLabel="Create template"
         onSubmit={handleSubmit}
+        lockType
       />
     </div>
   );

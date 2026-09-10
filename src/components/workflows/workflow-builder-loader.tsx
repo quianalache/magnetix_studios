@@ -5,6 +5,13 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { Loader2 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import {
+  emailDocumentFromBroadcastContent,
+  emailDocumentFromMessageTemplate,
+  broadcastContentFromEmailDocument,
+  workflowEmailFromDocument,
+} from "@/lib/email/adapters";
+import { plainTextToEmailHtml } from "@/lib/automations/workflow-email";
+import {
   WorkflowBuilder,
   type BuilderInitial,
   type BuilderReadiness,
@@ -13,6 +20,7 @@ import type { WhatsappTemplateOption } from "./node-config-dialog";
 import type { WorkflowEmailTemplateOption } from "./node-config-dialog";
 import type { WhatsappTemplateVariable } from "@/types/whatsapp-templates";
 import type { MessageTemplateDoc } from "@/types/automations";
+import type { BroadcastTemplateDoc } from "@/types/broadcast-content";
 
 /**
  * Client loader for the builder. Fetches the workflow via the member-gated API
@@ -103,26 +111,73 @@ export function WorkflowBuilderLoader({
         /* templates optional — picker just shows "no approved templates" */
       }
       try {
-        const snap = await getDocs(
-          query(
-            collection(getFirebaseDb(), "message_templates"),
-            where("subAccountId", "==", saId),
-            where("type", "==", "email")
-          )
-        );
+        const [legacySnap, visualSnap] = await Promise.all([
+          getDocs(
+            query(
+              collection(getFirebaseDb(), "message_templates"),
+              where("subAccountId", "==", saId),
+              where("type", "==", "email")
+            )
+          ),
+          getDocs(
+            query(
+              collection(getFirebaseDb(), "broadcastTemplates"),
+              where("subAccountId", "==", saId)
+            )
+          ),
+        ]);
+        const legacy = legacySnap.docs.map((docSnap) => {
+          const data = docSnap.data() as MessageTemplateDoc;
+          // Already upgraded in place → real blocks; still pure legacy →
+          // adapt on read. Either way `body` is always the flattened text,
+          // kept in sync by the Email Template Library on every save.
+          const content =
+            data.content ??
+            broadcastContentFromEmailDocument(
+              emailDocumentFromMessageTemplate(data)
+            );
+          return {
+            id: docSnap.id,
+            name: data.name || "Untitled email template",
+            subject: data.subject ?? "",
+            preheader: data.emailDocument?.preheader ?? null,
+            body: data.body ?? "",
+            bodyHtml: plainTextToEmailHtml(data.body ?? ""),
+            content,
+            blockCount: content.blocks.length,
+          };
+        });
+        const visual = visualSnap.docs.map((docSnap) => {
+          const data = docSnap.data() as BroadcastTemplateDoc;
+          const content =
+            data.content ??
+            (data.emailDocument
+              ? broadcastContentFromEmailDocument(data.emailDocument)
+              : { version: 1 as const, blocks: [] });
+          const document =
+            data.emailDocument ??
+            emailDocumentFromBroadcastContent(
+              content,
+              data.subject ?? "",
+              data.preheader ?? null
+            );
+          const flattened = workflowEmailFromDocument(document);
+          const bodyHtml =
+            flattened.bodyHtml ?? plainTextToEmailHtml(flattened.body);
+          return {
+            id: docSnap.id,
+            name: data.name || "Untitled email template",
+            subject: data.subject ?? "",
+            preheader: data.preheader ?? null,
+            body: flattened.body,
+            bodyHtml,
+            content,
+            blockCount: content.blocks.length,
+          };
+        });
         if (alive) {
           setEmailTemplates(
-            snap.docs
-              .map((doc) => {
-                const data = doc.data() as MessageTemplateDoc;
-                return {
-                  id: doc.id,
-                  name: data.name || "Untitled email template",
-                  subject: data.subject ?? "",
-                  body: data.body ?? "",
-                };
-              })
-              .sort((a, b) => a.name.localeCompare(b.name))
+            [...legacy, ...visual].sort((a, b) => a.name.localeCompare(b.name))
           );
         }
       } catch {

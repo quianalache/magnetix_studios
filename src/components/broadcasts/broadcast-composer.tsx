@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -72,17 +72,20 @@ import {
   useAudiencePreview,
   type AudienceFilterState,
 } from "@/components/broadcasts/audience-condition-builder";
-import { TemplatePickerDialog } from "@/components/broadcasts/template-picker-dialog";
+import {
+  EmailTemplatePickerDialog,
+  type PickedEmailTemplate,
+} from "@/components/email-authoring/email-template-picker-dialog";
+import { SaveAsTemplateDialog } from "@/components/email-authoring/save-as-template-dialog";
+import { createEmailTemplate } from "@/lib/email/template-library";
 import { audienceLabel } from "@/lib/broadcasts/audience-label";
 import { cn } from "@/lib/utils";
-import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 import type { Contact } from "@/types/contacts";
 import type {
   BroadcastAudienceFilter,
   BroadcastContent,
   BroadcastDoc,
   EmailBlock,
-  BroadcastTemplateDoc,
 } from "@/types";
 
 /** Audience size at/above which the send-confirmation dialog requires
@@ -182,6 +185,7 @@ export function BroadcastComposer({
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
 
   // Production safety controls (2026-08-26) — Test Mode, send confirmation,
   // Test Send. See docs/debug notes on broadcast nf4y6KBytpIAwzO0l17d.
@@ -552,29 +556,21 @@ export function BroadcastComposer({
     }
   }
 
-  async function handleSaveTemplate() {
+  async function handleConfirmSaveTemplate(name: string) {
     if (!agencyId) return;
-    const name = window.prompt("Template name");
-    if (!name || !name.trim()) return;
     setSavingTemplate(true);
     try {
-      await addDoc(collection(getFirebaseDb(), "broadcastTemplates"), {
+      await createEmailTemplate({
         agencyId,
         subAccountId,
-        name: name.trim(),
+        createdByUid: user?.uid ?? "",
+        name,
         subject: subject.trim(),
         preheader: preheader.trim() || null,
         content,
-        emailDocument: emailDocumentFromBroadcast(
-          content,
-          subject.trim(),
-          preheader.trim() || null,
-        ),
-        createdByUid: user?.uid ?? "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
-      toast.success("Saved to your templates.");
+      toast.success("Saved to your Email Templates.");
+      setSaveTemplateOpen(false);
     } catch {
       toast.error("Couldn't save template.");
     } finally {
@@ -582,10 +578,13 @@ export function BroadcastComposer({
     }
   }
 
-  function handlePickTemplate(t: BroadcastTemplateDoc) {
+  function handlePickTemplate(t: PickedEmailTemplate) {
     setSubject(t.subject);
     setPreheader(t.preheader ?? "");
     setBlocks(t.content.blocks);
+    // Provenance only — `sourceTemplateId` is write-through metadata never
+    // re-read server-side to reconstruct content, so recording it here
+    // doesn't create a live link back to the template.
     setSourceTemplateId(t.id);
   }
 
@@ -625,14 +624,10 @@ export function BroadcastComposer({
           <Button
             type="button"
             variant="outline"
-            onClick={handleSaveTemplate}
-            disabled={savingTemplate || blocks.length === 0}
+            onClick={() => setSaveTemplateOpen(true)}
+            disabled={blocks.length === 0}
           >
-            {savingTemplate ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="mr-1 h-4 w-4" />
-            )}
+            <Save className="mr-1 h-4 w-4" />
             Save as template
           </Button>
           <Button
@@ -835,11 +830,19 @@ export function BroadcastComposer({
         </div>
       </div>
 
-      <TemplatePickerDialog
+      <EmailTemplatePickerDialog
         open={templatePickerOpen}
         onOpenChange={setTemplatePickerOpen}
         subAccountId={subAccountId}
         onPick={handlePickTemplate}
+      />
+
+      <SaveAsTemplateDialog
+        open={saveTemplateOpen}
+        onOpenChange={setSaveTemplateOpen}
+        defaultName={subject}
+        saving={savingTemplate}
+        onSave={handleConfirmSaveTemplate}
       />
 
       {/* Production safety controls (2026-08-26) — send confirmation.
