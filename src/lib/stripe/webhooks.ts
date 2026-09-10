@@ -30,6 +30,10 @@ import {
   handleCourseOfferCheckoutCompleted,
   handleCourseOfferSubscriptionDeleted,
 } from "@/lib/server/course-offer-purchase-service";
+import {
+  INVOICE_PAYMENT_KIND,
+  handleInvoiceStripeCheckoutCompleted,
+} from "@/lib/server/invoice-payment-service";
 import type { SubscriptionStatus } from "@/types";
 
 export async function handleCheckoutCompleted(
@@ -78,6 +82,18 @@ export async function handleCheckoutCompleted(
   // mode:"subscription" depending on the offer's type.
   if (session.metadata?.kind === OFFER_CHARGE_KIND) {
     await handleCourseOfferCheckoutCompleted(session);
+    return;
+  }
+
+  // Invoice payment (Phase 2, 2026-09-10) — a recipient paying a Magnetix
+  // Invoice via Stripe Checkout, direct charge on the sub-account's own
+  // Connect account. mode:"payment" only (invoices are one-time charges,
+  // never subscriptions). Also routed here for `.completed` on instant
+  // payment methods; delayed methods (payment_status !== "paid" at this
+  // point) are picked up by `checkout.session.async_payment_succeeded`
+  // instead — see the route's own dispatch for that event.
+  if (session.metadata?.kind === INVOICE_PAYMENT_KIND) {
+    await handleInvoiceStripeCheckoutCompleted(session);
     return;
   }
 

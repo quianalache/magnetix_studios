@@ -380,10 +380,27 @@ export function QuoteDetail({
               />
               <SummaryField label="Currency" value={quote.currency} mono />
               {isInvoice ? (
-                <SummaryField
-                  label="Payment due"
-                  value={formatPaymentDueLabel(quote.paymentDueDays)}
-                />
+                <>
+                  <SummaryField
+                    label="Payment due"
+                    value={formatPaymentDueLabel(quote.paymentDueDays)}
+                  />
+                  {quote.paymentProvider && (
+                    <SummaryField
+                      label="Payment method"
+                      value={
+                        quote.paymentProvider === "stripe"
+                          ? "Stripe"
+                          : "PayPal"
+                      }
+                      secondary={
+                        quote.paymentProvider === "stripe"
+                          ? "Paid status syncs automatically"
+                          : "Confirmed manually via Mark as paid"
+                      }
+                    />
+                  )}
+                </>
               ) : (
                 <SummaryField
                   label="Valid until"

@@ -11,6 +11,8 @@ import type {
   QuoteDiscount,
   QuoteKind,
   QuoteLineItem,
+  QuoteLineItemSourceType,
+  QuoteOfferSnapshot,
 } from "@/types/quotes";
 
 export const dynamic = "force-dynamic";
@@ -169,6 +171,35 @@ interface CreateQuotePayload {
   autoCreateDealOnAccept?: boolean;
 }
 
+/** Whitelist + clamp an Offer snapshot object the client claims to be
+ *  attaching to a line item. Returns null for anything malformed —
+ *  the line item still saves fine without a snapshot, it just reverts
+ *  to rendering as a plain line (see resolveLineItemSourceType). */
+function sanitizeOfferSnapshot(value: unknown): QuoteOfferSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const offerId = typeof v.offerId === "string" ? v.offerId.trim() : "";
+  const name = typeof v.name === "string" ? v.name.trim() : "";
+  if (!offerId || !name) return null;
+  const offerType =
+    v.offerType === "free" || v.offerType === "oneTime" || v.offerType === "recurring"
+      ? v.offerType
+      : "oneTime";
+  const priceCents =
+    typeof v.priceCents === "number" && Number.isFinite(v.priceCents)
+      ? Math.max(0, Math.round(v.priceCents))
+      : null;
+  const currency =
+    typeof v.currency === "string" && v.currency.trim()
+      ? v.currency.trim().toUpperCase().slice(0, 3)
+      : null;
+  const description =
+    typeof v.description === "string" && v.description.trim()
+      ? v.description.trim().slice(0, 5_000)
+      : null;
+  return { offerId, name: name.slice(0, 200), description, offerType, priceCents, currency };
+}
+
 /**
  * Clean + clamp the operator-supplied payload before writing. Trusts
  * the structure (TypeScript-ish typing on the client) but defends
@@ -191,7 +222,34 @@ function sanitizePayload(body: CreateQuotePayload): Partial<Quote> {
           typeof item.productId === "string" && item.productId
             ? item.productId
             : null;
-        return { id, description, quantity, unitPrice, productId };
+        // Phase 1 line-item identity (2026-09-10 fix): these three were
+        // dropped here since Phase 1 shipped — every line item created
+        // via THIS route (not the edit path, which goes through
+        // updateDraftQuote and was never affected) silently lost its
+        // Offer/custom identity, falling back to the legacyProduct/
+        // custom default the moment it was first saved. Whitelisted +
+        // clamped the same way every other field on this payload is.
+        const sourceType: QuoteLineItemSourceType | undefined =
+          item.sourceType === "offer" ||
+          item.sourceType === "custom" ||
+          item.sourceType === "legacyProduct"
+            ? item.sourceType
+            : undefined;
+        const offerId =
+          typeof item.offerId === "string" && item.offerId
+            ? item.offerId
+            : null;
+        const offerSnapshot = sanitizeOfferSnapshot(item.offerSnapshot);
+        return {
+          id,
+          description,
+          quantity,
+          unitPrice,
+          productId,
+          ...(sourceType ? { sourceType } : {}),
+          ...(offerId ? { offerId } : {}),
+          ...(offerSnapshot ? { offerSnapshot } : {}),
+        };
       })
       .filter((x): x is QuoteLineItem => x !== null);
   }

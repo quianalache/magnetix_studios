@@ -65,6 +65,14 @@ export interface QuoteFormValues {
    *  quotes. */
   paymentDueDays: number | null;
   autoCreateDealOnAccept: boolean;
+  /** Invoice-only (Phase 2). Which provider the operator wants this
+   *  invoice's NEXT send to use — only meaningfully choosable when both
+   *  Stripe and PayPal are connected (see the builder's own picker);
+   *  otherwise implicit from whichever one IS connected, and the send
+   *  route falls back sensibly if the stored choice stops being
+   *  available. Null for quotes (no payment collection) and for an
+   *  invoice where neither provider is connected yet. */
+  paymentProvider: "stripe" | "paypal" | null;
 }
 
 interface QuoteBuilderProps {
@@ -146,6 +154,18 @@ export function QuoteBuilder({
   const { subAccountId, subAccount } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
   const [territories, setTerritories] = useState<TerritoryDoc[]>([]);
+
+  // Payment-provider availability (Phase 2, invoices only) — read
+  // directly off the already-subscribed subAccount doc rather than
+  // plumbing new props through both callers.
+  const stripeConnected =
+    !!subAccount?.stripeConnect?.accountId &&
+    subAccount.stripeConnect.chargesEnabled === true;
+  const paypalConnected = !!subAccount?.paypalConfig?.username;
+  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal" | null>(
+    initial?.paymentProvider ??
+      (stripeConnected ? "stripe" : paypalConnected ? "paypal" : null),
+  );
 
   // Territories — only needed to label contacts by territory in the picker
   // + show the read-only "inherited" hint. Subscribe only when scoping is on.
@@ -294,6 +314,7 @@ export function QuoteBuilder({
         validUntilDateString: isInvoice ? null : validUntil || null,
         paymentDueDays: isInvoice ? paymentDueDays : null,
         autoCreateDealOnAccept: autoCreateDeal,
+        paymentProvider: isInvoice ? paymentProvider : null,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -560,6 +581,39 @@ export function QuoteBuilder({
                   <option value="60">Net 60 days</option>
                   <option value="">No specific date</option>
                 </select>
+
+                {/* Payment method — only a real choice when BOTH providers
+                    are connected; otherwise there's nothing to pick and
+                    showing a selector would just be decoration. Neither
+                    connected: Send is blocked server-side with a clear
+                    message, no picker shown here either. */}
+                {stripeConnected && paypalConnected && (
+                  <div className="mt-4">
+                    <Label
+                      htmlFor="payment-provider"
+                      className="text-xs uppercase tracking-wider text-muted-foreground"
+                    >
+                      Payment method
+                    </Label>
+                    <select
+                      id="payment-provider"
+                      value={paymentProvider ?? "stripe"}
+                      onChange={(e) =>
+                        setPaymentProvider(e.target.value as "stripe" | "paypal")
+                      }
+                      className="mt-1 h-9 w-48 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&_option]:bg-background [&_option]:text-foreground"
+                    >
+                      <option value="stripe">Stripe (card, auto-synced)</option>
+                      <option value="paypal">PayPal (manual confirmation)</option>
+                    </select>
+                  </div>
+                )}
+                {!stripeConnected && !paypalConnected && (
+                  <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400">
+                    No payment method connected — connect Stripe or PayPal
+                    under Settings → Payments before sending.
+                  </p>
+                )}
               </div>
             ) : (
               <div>

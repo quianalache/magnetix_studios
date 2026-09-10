@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { fireWorkflowTrigger } from "@/lib/workflows/engine";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { emitDealCreatedById } from "@/lib/server/deals-service";
+import { maybeSendReviewRequest } from "@/lib/reviews/request";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
 import { formatCurrency } from "@/lib/format";
 import type { ActivityType } from "@/types/contacts";
@@ -305,4 +306,96 @@ export async function emitQuoteWebhook(
   } catch (err) {
     console.warn(`[quotes/lifecycle] webhook emit failed for ${event}`, err);
   }
+}
+
+export type MarkQuotePaidResult =
+  | { ok: true; alreadyPaid: boolean }
+  | { ok: false; error: string; status: number };
+
+/**
+ * The ONE canonical path that transitions a quote/invoice to "paid" and
+ * fires every associated side-effect — shared by the operator-facing
+ * manual "Mark as paid" action and the automatic Stripe webhook
+ * confirmation (Phase 2, 2026-09-10: Stripe invoice payments). Extracted
+ * from what was previously inline in the mark-paid route so both callers
+ * go through the exact same status-transition + activity + trigger +
+ * webhook + review-request logic — no duplicated business logic to drift
+ * out of sync.
+ *
+ * Idempotent: calling this on an already-paid document is a safe no-op
+ * that returns `{ alreadyPaid: true }` without re-running any side
+ * effect. This is what makes BOTH of the following safe:
+ *   - a duplicate Stripe webhook delivery (Stripe retries + dashboard
+ *     "Resend" can redeliver the same event, and a legitimate OLD
+ *     Checkout Session that gets paid after a newer one was minted on
+ *     re-send both land here a second time)
+ *   - a manual "Mark as paid" click on an invoice Stripe already paid
+ *     automatically
+ *
+ * Does NOT perform auth/tenancy checks — callers (the mark-paid route,
+ * the Stripe webhook handler) are responsible for verifying the caller
+ * or event is legitimately allowed to act on this specific quote BEFORE
+ * calling this. This function only enforces the quote's own state
+ * machine (which prior statuses are valid to transition from).
+ */
+export async function markQuotePaidServerSide(
+  quoteId: string,
+): Promise<MarkQuotePaidResult> {
+  const db = getAdminDb();
+  const quoteRef = db.collection("quotes").doc(quoteId);
+  const quoteSnap = await quoteRef.get();
+  if (!quoteSnap.exists) {
+    return { ok: false, error: "Quote not found", status: 404 };
+  }
+  const quote = {
+    id: quoteSnap.id,
+    ...(quoteSnap.data() as Omit<Quote, "id">),
+  };
+
+  if (quote.status === "paid") {
+    return { ok: true, alreadyPaid: true };
+  }
+
+  const allowed =
+    quote.kind === "invoice"
+      ? quote.status === "sent" || quote.status === "viewed"
+      : quote.status === "accepted";
+  if (!allowed) {
+    return {
+      ok: false,
+      status: 409,
+      error:
+        quote.kind === "invoice"
+          ? `Only sent invoices can be marked paid. Current status: ${quote.status}`
+          : `Only accepted quotes can be marked paid. Current status: ${quote.status}`,
+    };
+  }
+
+  try {
+    await quoteRef.update({
+      status: "paid",
+      paidAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error(
+      "[quotes/lifecycle] markQuotePaidServerSide write failed",
+      err,
+    );
+    return { ok: false, status: 500, error: "Failed to update quote" };
+  }
+
+  // Side-effects — swallow errors so a stale activity write never
+  // undoes (or masks) the status transition that already committed.
+  await recordQuoteActivity(quote, "quote_marked_paid");
+  await fireQuoteTrigger(quote, "quote_marked_paid");
+  void emitQuoteWebhook(quote, "quote_marked_paid");
+  void maybeSendReviewRequest({
+    subAccountId: quote.subAccountId,
+    agencyId: quote.agencyId,
+    contactId: quote.contactId,
+    trigger: "quote_paid",
+  });
+
+  return { ok: true, alreadyPaid: false };
 }

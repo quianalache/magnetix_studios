@@ -34,7 +34,13 @@ export default function NewQuotePage() {
   const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId, saPath, subAccount } = useSubAccount();
+  // Phase 2: a workspace with Stripe connected is never blocked by a
+  // missing PayPal.me username — only warn when NEITHER is available.
+  const stripeConnected =
+    !!subAccount?.stripeConnect?.accountId &&
+    subAccount.stripeConnect.chargesEnabled === true;
   const paypalConnected = !!subAccount?.paypalConfig?.username;
+  const noPaymentMethodConnected = !stripeConnected && !paypalConnected;
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [offers, setOffers] = useState<CourseOffer[]>([]);
@@ -150,22 +156,22 @@ export default function NewQuotePage() {
         </p>
       </Card>
 
-      {kind === "invoice" && !paypalConnected && (
+      {kind === "invoice" && noPaymentMethodConnected && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="flex-1 text-sm">
             <p className="font-semibold text-amber-700 dark:text-amber-400">
-              PayPal isn&apos;t connected for this workspace.
+              No payment method connected for this workspace.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              You can save this invoice as a draft, but you won&apos;t be able
-              to send it until a PayPal.me username is saved — the payment
-              link is generated at send time.{" "}
+              You can save this invoice as a draft, but you won&apos;t be
+              able to send it until Stripe or PayPal is connected — the
+              payment link is generated at send time.{" "}
               <Link
                 href={saPath("/dashboard/settings")}
                 className="font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-400"
               >
-                Connect PayPal →
+                Connect a payment method →
               </Link>
             </p>
           </div>

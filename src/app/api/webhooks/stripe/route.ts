@@ -5,6 +5,10 @@ import {
   handleSubscriptionUpdated,
   handleSubscriptionDeleted,
 } from "@/lib/stripe/webhooks";
+import {
+  INVOICE_PAYMENT_KIND,
+  handleInvoiceStripeCheckoutCompleted,
+} from "@/lib/server/invoice-payment-service";
 import { handleChargeDispute } from "@/lib/stripe/dispute";
 import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
@@ -119,6 +123,24 @@ export async function POST(request: Request) {
           event.data.object as Stripe.Checkout.Session
         );
         break;
+      // Delayed payment methods (e.g. bank debits) confirm HERE, not at
+      // `.completed` — that event can fire with payment_status:"unpaid"
+      // for these. Routed narrowly to the Invoice-payment handler only:
+      // no other Stripe integration in this repo currently needs this
+      // event, and routing it through the general handleCheckoutCompleted
+      // dispatcher would re-exercise every other kind's `.completed`
+      // logic a second time for an event type those handlers were never
+      // designed to receive. Requires "checkout.session.async_payment_
+      // succeeded" to be added to this webhook endpoint's subscribed
+      // events in the Stripe Dashboard — NOT something this code can
+      // configure remotely.
+      case "checkout.session.async_payment_succeeded": {
+        const asyncSession = event.data.object as Stripe.Checkout.Session;
+        if (asyncSession.metadata?.kind === INVOICE_PAYMENT_KIND) {
+          await handleInvoiceStripeCheckoutCompleted(asyncSession);
+        }
+        break;
+      }
       case "customer.subscription.updated":
         await handleSubscriptionUpdated(
           event.data.object as Stripe.Subscription

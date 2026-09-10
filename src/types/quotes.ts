@@ -221,15 +221,39 @@ export interface Quote {
    *  the invoice hasn't been sent yet OR when the doc is a quote. */
   paymentLinkUrl: string | null;
   /** Provider-specific payment-link id, when the provider has one to
-   *  deactivate/rotate (Stripe Payment Links use one, e.g. `plink_…`).
-   *  Always null today — paypal.me URLs have no id concept, so the
-   *  current send path never sets this. Kept for forward-compatibility,
-   *  not currently read anywhere. */
+   *  deactivate/rotate. Stripe-backed invoices (Phase 2, 2026-09-10)
+   *  store the Checkout Session id here (`cs_…`) — reusing this
+   *  existing field rather than adding a redundant one. Always null for
+   *  PayPal.me-backed invoices (paypal.me URLs have no id concept). */
   paymentLinkId: string | null;
   /** When the cached payment link was created. The send route compares
    *  this to `updatedAt` — if the invoice was edited since mint, the
    *  link is deactivated and a fresh one is minted. */
   paymentLinkMintedAt: Timestamp | FieldValue | null;
+  /** Which provider the CURRENT paymentLinkUrl/paymentLinkId belong to.
+   *  Undefined on every invoice sent before Phase 2 (the PayPal-only
+   *  era) — treat undefined as "paypal" for display purposes. Quotes
+   *  never set this (no payment collection on quotes). Set at send
+   *  time by `/api/sub-accounts/[id]/quotes/[quoteId]/send`, not
+   *  editable directly by the client. */
+  paymentProvider?: "stripe" | "paypal" | null;
+  /** The connected Stripe account (Stripe Connect, `acct_…`) the
+   *  CURRENT `paymentLinkId` ran on — needed to expire/reference that
+   *  exact session later (Connect API calls must target the same
+   *  account they were created on). Null unless `paymentProvider ===
+   *  "stripe"`. See `src/lib/stripe/connect.ts`. */
+  stripePaymentConnectAccountId?: string | null;
+  /** Integer cents the CURRENT `paymentLinkId` (a Stripe Checkout
+   *  Session) was minted to collect — captured once, at mint time, from
+   *  `computeQuoteTotals()`. Independent of any later edit to the
+   *  invoice's line items: if the invoice is edited after a Stripe link
+   *  was minted, this value does NOT change until the invoice is
+   *  re-sent (which mints a fresh session for the new total). The
+   *  webhook compares its reported amount against this value so a
+   *  stale, unexpired session that gets paid is still recognized and
+   *  reconciled correctly rather than silently mismatched. Null unless
+   *  `paymentProvider === "stripe"`. */
+  paymentSessionAmountCents?: number | null;
 
   // ── Public-share token (hash only — never the raw token) ─────────
   /** SHA-256 hex of the HMAC-signed public token. Used so we can verify
@@ -287,6 +311,9 @@ export const DEFAULT_QUOTE: Omit<
   paymentLinkUrl: null,
   paymentLinkId: null,
   paymentLinkMintedAt: null,
+  paymentProvider: null,
+  stripePaymentConnectAccountId: null,
+  paymentSessionAmountCents: null,
 };
 
 /** Shape of the JSON payload the public quote page POSTs when the

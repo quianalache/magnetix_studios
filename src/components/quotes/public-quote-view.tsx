@@ -313,8 +313,9 @@ export function PublicQuoteView({
           {isInvoice ? (
             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Pay securely via PayPal. You&apos;ll receive a receipt by
-                email once payment clears.
+                {quote.paymentProvider === "stripe"
+                  ? "Pay securely via Stripe. Payment is confirmed automatically — no need to notify anyone."
+                  : "Pay securely via PayPal. You'll receive a receipt by email once payment clears."}
               </p>
               {quote.paymentLinkUrl ? (
                 <a
