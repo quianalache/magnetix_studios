@@ -160,6 +160,18 @@ export async function markPurchasePaidServerSide(opts: {
     const memRef = groupRef.collection("memberships").doc(purchase.memberId);
     const existing = await memRef.get();
     const wasActive = existing.exists && existing.data()!.status === "active";
+    // Mixed-source safety (2026-09-11 audit): this purchase is itself an
+    // independent, permanent (no cancellation path exists for it) reason
+    // to be in this group — never leave `origin: "product"` standing
+    // after a native purchase has ALSO granted access, or a later Product
+    // expiry would incorrectly deactivate a membership this purchase is
+    // meant to guarantee. Only overrides "product" specifically; any
+    // other existing origin (manual/staff/import, or genuinely absent)
+    // is left as-is.
+    const origin =
+      existing.data()?.origin === "product"
+        ? "purchase"
+        : existing.data()?.origin;
     await memRef.set(
       {
         subAccountId: opts.subAccountId,
@@ -171,6 +183,7 @@ export async function markPurchasePaidServerSide(opts: {
         points: existing.data()?.points ?? 0,
         level: existing.data()?.level ?? 1,
         joinedAt: existing.data()?.joinedAt ?? FieldValue.serverTimestamp(),
+        ...(origin ? { origin } : {}),
       },
       { merge: true }
     );

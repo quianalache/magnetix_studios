@@ -537,19 +537,35 @@ export interface GroupMembership {
    */
   invitedByMemberId?: string | null;
   /**
-   * Entitlement-lifecycle audit (2026-09-11) — set ONCE, at creation, by
-   * whichever grant path actually created this membership document; never
-   * relabeled on a later grant to an already-existing membership. Absent
-   * on every membership created before this field existed, and on every
-   * membership whose creator doesn't set it — both cases mean "this
-   * membership has an independent reason to exist" for the purposes of
-   * `reconcileCommunityMembershipAccess` (community-access-source-service.ts),
-   * which only ever auto-deactivates a membership where `origin ===
-   * "product"` AND no linked Product still grants access. `"staff"` is
-   * also set whenever a moderator explicitly restores a membership to
-   * "active" (`setMembershipStatusServerSide`) — a deliberate admin act is
-   * its own independent justification, same effect as never having been
-   * `"product"` at all.
+   * Entitlement-lifecycle audit (2026-09-11, revisited for mixed-source
+   * safety same day) — **the current independent reason this membership
+   * is allowed to exist**, not a permanent record of how it was first
+   * created. `"product"` is the single value
+   * `reconcileCommunityMembershipAccess` (community-access-source-service.ts)
+   * treats as auto-deactivatable once no linked Product still grants
+   * access; every other value (and absent, for every membership that
+   * predates this field) is permanently protected.
+   *
+   * Set at creation by whichever grant path creates the doc, and
+   * OVERWRITTEN away from `"product"` — never re-labeled the other
+   * direction — by any independent grant path that later touches an
+   * existing membership, even when that path causes no other visible
+   * change:
+   *   - `joinGroupServerSide`: a join attempt on an already-active/pending
+   *     membership is a no-op for status, but still flips `"product"` ->
+   *     `"manual"` — the attempt itself is independent evidence.
+   *   - `markPurchasePaidServerSide` (native paid-group purchase, scope
+   *     "group"): flips `"product"` -> `"purchase"` — this purchase has no
+   *     cancellation path today, so once granted it's a permanent
+   *     independent reason.
+   *   - `setMembershipStatusServerSide`: an explicit staff restore to
+   *     "active" always stamps `"staff"`.
+   *   - The Skool importer never touches an existing membership at all
+   *     (create-if-absent only), so it can't regress this either way.
+   * A membership's own `origin` therefore always reflects the most
+   * recent independent grant, if any — it does not need to track history
+   * further back than that, since none of these other grant mechanisms
+   * has any expiry/revocation concept of its own to reconcile against.
    */
   origin?: "manual" | "staff" | "purchase" | "product" | "import";
 }

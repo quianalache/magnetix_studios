@@ -21,13 +21,15 @@ import { setMembershipStatusServerSide } from "@/lib/server/community-service";
  * (today: only `kind: "product"`, one per linked Standalone Course —
  * `sourceId = product:{courseId}`, so re-granting or re-revoking the same
  * course's access is always the same doc, never a duplicate). A
- * membership additionally carries `origin` (set once, at creation, by
- * whichever grant path actually created the doc): `"product"` means this
- * membership document would not exist at all if not for a Product grant,
- * and is the ONLY origin `reconcileCommunityMembershipAccess` will ever
- * deactivate — every other origin (manual join, staff grant, native
- * purchase, import, or simply absent on membership docs that predate this
- * field) is left alone unconditionally. This is also the answer to
+ * membership additionally carries `origin` — see that field's own doc
+ * comment (types/community.ts) for the full mixed-source model: it's the
+ * CURRENT independent reason a membership is allowed to exist, kept
+ * correct by every independent grant path overwriting it away from
+ * `"product"` whenever it touches an existing membership, not just a
+ * frozen record of how the doc was first created. `"product"` is the
+ * ONLY origin `reconcileCommunityMembershipAccess` will ever deactivate —
+ * every other origin (or simply absent, on membership docs that predate
+ * this field) is left alone unconditionally. This is also the answer to
  * "existing memberships have no provenance data": rather than guess by
  * backfilling, `origin` is only ever `"product"` on memberships created
  * FROM NOW ON by a Product grant with nothing pre-existing — every

@@ -569,6 +569,19 @@ export async function joinGroupServerSide(opts: {
   if (existing.exists) {
     const data = existing.data() as Omit<GroupMembership, "id">;
     if (data.status !== "removed") {
+      // Mixed-source safety (2026-09-11 audit): a deliberate join attempt
+      // on a membership that already exists is itself independent
+      // evidence this member belongs here for a reason that has nothing
+      // to do with any linked Product — stamp that now, not just on a
+      // genuine status transition, so a membership currently marked
+      // `origin: "product"` (the ONLY origin reconcileCommunityMembershipAccess
+      // will ever auto-deactivate) is protected the moment that
+      // independent intent is expressed, rather than staying silently
+      // eligible for deactivation until some unrelated future write
+      // happens to touch this doc.
+      if (data.origin === "product") {
+        await memRef.update({ origin: "manual" });
+      }
       return { status: "already", membershipStatus: data.status };
     }
   }
