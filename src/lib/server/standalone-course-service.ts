@@ -8,6 +8,10 @@ import {
   notifyCourseAccessGranted,
   notifyCommunityAccessGranted,
 } from "@/lib/server/notification-producers";
+import {
+  upsertProductAccessSourceServerSide,
+  revokeProductAccessSourceServerSide,
+} from "@/lib/server/community-access-source-service";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import {
   ensureUniqueSlug,
@@ -448,6 +452,16 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
     const memRef = groupRef.collection("memberships").doc(opts.memberId);
     const existing = await memRef.get();
     const wasActive = existing.exists && existing.data()!.status === "active";
+    // Entitlement-lifecycle audit (2026-09-11): `origin` is set ONLY on a
+    // brand-new membership doc, and only ever to "product" — an existing
+    // membership (manual join, staff grant, earlier product grant, or
+    // legacy data with no `origin` at all) keeps whatever it already had,
+    // never gets relabeled. This is what makes reconcileCommunityMembershipAccess
+    // safe to ever deactivate: it only ever touches a membership that
+    // would not exist at all if not for a Product grant. Omitted
+    // entirely (not written as `undefined`, which the Admin SDK rejects)
+    // when preserving an already-absent value.
+    const origin = existing.exists ? existing.data()?.origin : "product";
     await memRef.set(
       {
         subAccountId: opts.subAccountId,
@@ -459,9 +473,24 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
         points: existing.data()?.points ?? 0,
         level: existing.data()?.level ?? 1,
         joinedAt: existing.data()?.joinedAt ?? FieldValue.serverTimestamp(),
+        ...(origin ? { origin } : {}),
       },
       { merge: true }
     );
+    // Record (or refresh) this course as one of the sources currently
+    // justifying this member's access to this group — see
+    // community-access-source-service.ts's doc comment for the full
+    // lifecycle model. Recorded regardless of `wasActive`/`origin`: even
+    // on an independently-justified membership, tracking this is inert
+    // bookkeeping (reconcile only ever consults it for `origin ===
+    // "product"` memberships), and it must exist before this course's
+    // subscription can later be canceled and revoked.
+    await upsertProductAccessSourceServerSide({
+      subAccountId: opts.subAccountId,
+      groupId,
+      memberId: opts.memberId,
+      courseId: opts.courseId,
+    });
     if (!wasActive) {
       await groupRef.update({ memberCount: FieldValue.increment(1) });
       void emitWebhookEvent({
@@ -492,6 +521,36 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
         )
       );
     }
+  }
+}
+
+/**
+ * The other end of `grantLinkedCommunityGroupsServerSide` (2026-09-11
+ * entitlement-lifecycle audit) — called when this course's paid access
+ * genuinely ends (today: only a canceled Stripe subscription, direct or
+ * via a Course Offer bundle; see `handleStandaloneCourseSubscriptionDeleted`
+ * and `handleCourseOfferSubscriptionDeleted`). Revokes this course's
+ * access-source record in every group it's linked to, then reconciles
+ * each membership — which only ever deactivates a membership whose
+ * `origin === "product"` AND that has no other active access source left
+ * (another linked Product, a manual join, a staff grant, etc. all leave
+ * the membership untouched). See community-access-source-service.ts's
+ * doc comment for the full model.
+ */
+export async function revokeLinkedCommunityAccessServerSide(opts: {
+  subAccountId: string;
+  courseId: string;
+  memberId: string;
+}): Promise<void> {
+  const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
+  if (!course || course.linkedCommunityGroupIds.length === 0) return;
+  for (const groupId of course.linkedCommunityGroupIds) {
+    await revokeProductAccessSourceServerSide({
+      subAccountId: opts.subAccountId,
+      groupId,
+      memberId: opts.memberId,
+      courseId: opts.courseId,
+    });
   }
 }
 

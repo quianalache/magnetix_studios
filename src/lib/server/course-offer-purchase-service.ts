@@ -10,6 +10,7 @@ import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
   getStandaloneCourse,
   enrollInStandaloneCourseServerSide,
+  revokeLinkedCommunityAccessServerSide,
 } from "@/lib/server/standalone-course-service";
 import { emailIsConfigured, sendTenantEmail } from "@/lib/comms/resend";
 import { renderOfferBookingBundleEmail } from "@/lib/course-offers/booking-bundle-email";
@@ -747,12 +748,14 @@ export async function handleCourseOfferCheckoutCompleted(
  * check treats a canceled purchase's access window as elapsed going
  * forward; enrollment/progress data is kept, never deleted.
  *
- * KNOWN GAP (canonical-course-architecture audit, 2026-09-11, not addressed
- * here — out of scope for the linked-Product Classroom adapter): this only
- * revokes the course-content access window. Any Community Group membership
- * `grantLinkedCommunityGroupsServerSide` granted when the member first
- * enrolled is NOT revoked here — a canceled/expired subscriber keeps their
- * Community membership indefinitely. Needs its own task if that's wanted.
+ * Entitlement-lifecycle fix (2026-09-11, closes the gap the
+ * canonical-course-architecture audit found): also revokes each bundled
+ * course's Community access-source in every group it's linked to — see
+ * `revokeLinkedCommunityAccessServerSide`. Safe by construction even with
+ * multiple bundled courses each linked to the SAME group: revoking one
+ * course's source never deactivates the membership while another
+ * course's source (or a manual join, staff grant, etc.) still justifies
+ * it — see community-access-source-service.ts's doc comment.
  */
 export async function handleCourseOfferSubscriptionDeleted(
   subscription: Stripe.Subscription
@@ -774,6 +777,11 @@ export async function handleCourseOfferSubscriptionDeleted(
       memberId: purchase.memberId,
       beginsAt: null,
       expiresAt,
+    });
+    await revokeLinkedCommunityAccessServerSide({
+      subAccountId,
+      courseId,
+      memberId: purchase.memberId,
     });
   }
   const memberSnap = await getAdminDb()

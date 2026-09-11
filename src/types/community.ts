@@ -536,6 +536,22 @@ export interface GroupMembership {
    * field was necessary here.
    */
   invitedByMemberId?: string | null;
+  /**
+   * Entitlement-lifecycle audit (2026-09-11) — set ONCE, at creation, by
+   * whichever grant path actually created this membership document; never
+   * relabeled on a later grant to an already-existing membership. Absent
+   * on every membership created before this field existed, and on every
+   * membership whose creator doesn't set it — both cases mean "this
+   * membership has an independent reason to exist" for the purposes of
+   * `reconcileCommunityMembershipAccess` (community-access-source-service.ts),
+   * which only ever auto-deactivates a membership where `origin ===
+   * "product"` AND no linked Product still grants access. `"staff"` is
+   * also set whenever a moderator explicitly restores a membership to
+   * "active" (`setMembershipStatusServerSide`) — a deliberate admin act is
+   * its own independent justification, same effect as never having been
+   * `"product"` at all.
+   */
+  origin?: "manual" | "staff" | "purchase" | "product" | "import";
 }
 
 /**

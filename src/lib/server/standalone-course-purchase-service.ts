@@ -9,6 +9,7 @@ import { getStripeServer } from "@/lib/stripe/server";
 import {
   getStandaloneCourse,
   grantLinkedCommunityGroupsServerSide,
+  revokeLinkedCommunityAccessServerSide,
 } from "@/lib/server/standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
 import type { PayPalConfig } from "@/types";
@@ -25,7 +26,7 @@ export const COURSE_CHARGE_KIND = "courseCharge";
 
 function purchasesCol(saId: string, courseId: string) {
   return getAdminDb().collection(
-    `subAccounts/${saId}/standaloneCourses/${courseId}/purchases`,
+    `subAccounts/${saId}/standaloneCourses/${courseId}/purchases`
   );
 }
 
@@ -46,7 +47,7 @@ export async function requestStandaloneCoursePurchaseServerSide(opts: {
   const paypal = sub?.paypalConfig as PayPalConfig | null | undefined;
   if (!paypal?.username) {
     throw new Error(
-      "This course hasn't set up payments yet. Contact the course owner.",
+      "This course hasn't set up payments yet. Contact the course owner."
     );
   }
   const agencyId = (sub?.agencyId as string) ?? "";
@@ -122,15 +123,18 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   if (!course || course.access !== "purchase" || !course.priceCents) {
     throw new Error("This course isn't for sale.");
   }
-  const subSnap = await getAdminDb().doc(`subAccounts/${opts.subAccountId}`).get();
+  const subSnap = await getAdminDb()
+    .doc(`subAccounts/${opts.subAccountId}`)
+    .get();
   const subData = subSnap.data();
   // Real fix (Stripe Connect) when connected — see the matching comment in
   // course-offer-purchase-service.ts for the full reasoning.
   const connectAccountId = subData?.stripeConnect?.accountId ?? null;
-  const useSharedAccount = subData?.stripeCourseCheckoutEnabledByAgency === true;
+  const useSharedAccount =
+    subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
     throw new Error(
-      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay.",
+      "Card payments aren't set up for this business yet. Contact the seller to arrange another way to pay."
     );
   }
   const stripeRequestOptions = connectAccountId
@@ -169,7 +173,9 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
           metadata,
           subscription_data: {
             metadata,
-            ...(course.trialDays ? { trial_period_days: course.trialDays } : {}),
+            ...(course.trialDays
+              ? { trial_period_days: course.trialDays }
+              : {}),
           },
         }
       : {
@@ -190,7 +196,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
           metadata,
           payment_intent_data: { metadata },
         },
-    stripeRequestOptions,
+    stripeRequestOptions
   );
   if (!session.client_secret) {
     throw new Error("Stripe did not return a client secret.");
@@ -223,7 +229,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
 export async function hasPaidStandaloneCourse(
   saId: string,
   courseId: string,
-  memberId: string,
+  memberId: string
 ): Promise<boolean> {
   const snap = await purchasesCol(saId, courseId)
     .where("memberId", "==", memberId)
@@ -250,7 +256,7 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   stripeCustomerId?: string | null;
 }): Promise<{ ok: boolean }> {
   const ref = purchasesCol(opts.subAccountId, opts.courseId).doc(
-    opts.purchaseId,
+    opts.purchaseId
   );
   const snap = await ref.get();
   if (!snap.exists) throw new Error("Purchase not found");
@@ -273,7 +279,7 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   });
 
   const courseRef = getAdminDb().doc(
-    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}`,
+    `subAccounts/${opts.subAccountId}/standaloneCourses/${opts.courseId}`
   );
   const enrollRef = courseRef.collection("enrollments").doc(purchase.memberId);
   const existingEnroll = await enrollRef.get();
@@ -286,10 +292,11 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
         : "enrolled",
       completedLessonIds: existingEnroll.data()?.completedLessonIds ?? [],
       progressPct: existingEnroll.data()?.progressPct ?? 0,
-      enrolledAt: existingEnroll.data()?.enrolledAt ?? FieldValue.serverTimestamp(),
+      enrolledAt:
+        existingEnroll.data()?.enrolledAt ?? FieldValue.serverTimestamp(),
       completedAt: existingEnroll.data()?.completedAt ?? null,
     },
-    { merge: true },
+    { merge: true }
   );
   if (!existingEnroll.exists) {
     await courseRef.update({ enrollmentCount: FieldValue.increment(1) });
@@ -328,12 +335,12 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
  * — Stripe retries webhooks, so this can safely run more than once.
  */
 export async function handleStandaloneCourseCheckoutCompleted(
-  session: Stripe.Checkout.Session,
+  session: Stripe.Checkout.Session
 ): Promise<void> {
   const { subAccountId, courseId } = session.metadata ?? {};
   if (!subAccountId || !courseId) {
     console.error(
-      "[standalone-course] courseCharge checkout completed without metadata",
+      "[standalone-course] courseCharge checkout completed without metadata"
     );
     return;
   }
@@ -343,7 +350,7 @@ export async function handleStandaloneCourseCheckoutCompleted(
     .get();
   if (snap.empty) {
     console.error(
-      `[standalone-course] no pending purchase for session ${session.id}`,
+      `[standalone-course] no pending purchase for session ${session.id}`
     );
     return;
   }
@@ -358,7 +365,9 @@ export async function handleStandaloneCourseCheckoutCompleted(
     purchaseId: snap.docs[0].id,
     grantedByUid: null,
     stripePaymentIntentId:
-      typeof session.payment_intent === "string" ? session.payment_intent : null,
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : null,
     stripeCustomerId:
       typeof session.customer === "string" ? session.customer : null,
   });
@@ -371,9 +380,21 @@ export async function handleStandaloneCourseCheckoutCompleted(
  * Flips the matching purchase to `canceled` and stamps the enrollment's
  * access-expiry so the classroom-access guard denies future entry, without
  * deleting enrollment/progress data.
+ *
+ * Fires exactly when Stripe actually ends the subscription — for a
+ * `cancel_at_period_end` cancellation that's the end of the paid-through
+ * period, not the moment cancellation was scheduled, so access already
+ * naturally continues through what the member paid for; nothing further
+ * needed here for that.
+ *
+ * Entitlement-lifecycle audit (2026-09-11): also revokes this course's
+ * Community access-source in every group it's linked to (no-op if it
+ * isn't linked to any) — see `revokeLinkedCommunityAccessServerSide` and
+ * community-access-source-service.ts's doc comment for why this can never
+ * remove a membership that isn't solely Product-derived.
  */
 export async function handleStandaloneCourseSubscriptionDeleted(
-  subscription: Stripe.Subscription,
+  subscription: Stripe.Subscription
 ): Promise<void> {
   const { subAccountId, courseId } = subscription.metadata ?? {};
   if (!subAccountId || !courseId) return;
@@ -386,7 +407,12 @@ export async function handleStandaloneCourseSubscriptionDeleted(
   await snap.docs[0].ref.update({ status: "canceled" });
   await getAdminDb()
     .doc(
-      `subAccounts/${subAccountId}/standaloneCourses/${courseId}/enrollments/${purchase.memberId}`,
+      `subAccounts/${subAccountId}/standaloneCourses/${courseId}/enrollments/${purchase.memberId}`
     )
     .set({ accessExpiresAt: FieldValue.serverTimestamp() }, { merge: true });
+  await revokeLinkedCommunityAccessServerSide({
+    subAccountId,
+    courseId,
+    memberId: purchase.memberId,
+  });
 }

@@ -980,7 +980,16 @@ export async function setMembershipRoleServerSide(opts: {
 }
 
 /** Staff/moderator: set a membership status (remove / ban / restore to active),
- *  keeping the group's active member count correct. */
+ *  keeping the group's active member count correct.
+ *
+ *  Entitlement-lifecycle note (2026-09-11): an explicit staff restore to
+ *  "active" also stamps `origin: "staff"` — a deliberate administrative
+ *  act is its own independent justification for access, so a membership
+ *  a moderator restores here (even one originally granted by a since-
+ *  expired Product) is never later auto-deactivated by
+ *  `reconcileCommunityMembershipAccess`, which only ever touches
+ *  `origin === "product"`. This function itself never sets "removed" from
+ *  that reconciliation path — only real staff/moderator actions call it. */
 export async function setMembershipStatusServerSide(opts: {
   subAccountId: string;
   groupId: string;
@@ -995,7 +1004,10 @@ export async function setMembershipStatusServerSide(opts: {
   if (!snap.exists) return;
   const wasActive = snap.data()!.status === "active";
   const willActive = opts.status === "active";
-  await memRef.update({ status: opts.status });
+  await memRef.update({
+    status: opts.status,
+    ...(willActive ? { origin: "staff" } : {}),
+  });
   if (wasActive && !willActive) {
     await groupRef.update({ memberCount: FieldValue.increment(-1) });
     const [memberSnap, subSnap] = await Promise.all([
