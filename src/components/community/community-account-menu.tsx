@@ -13,6 +13,7 @@ import { setLastCommunityMenuAction } from "@/lib/community/client-error-reporti
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -62,55 +63,72 @@ export function CommunityAccountMenu({
         <ChevronDown className="ml-0.5 hidden h-3.5 w-3.5 text-[#6B6875] md:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="truncate">
-          {author.displayName}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {/* Plain <a>, not next/link (2026-09-11 — see the investigation
-            report): both targets are Route Handlers
-            (/api/my/bridge-from-member), not pages, and a real browser
-            navigation is the correct way to hit one — it never asks the
-            App Router to parse the redirect response as an RSC/flight
-            payload, unlike a Link (prefetch={false} alone was the
-            2026-09-02 fix's theory, confirmed present but NOT sufficient —
-            real user QA on a fresh reload still crashed). profileHref
-            below is a real page route and keeps next/link. */}
-        <DropdownMenuItem
-          render={
-            <a
-              href={gatewayHref}
-              onClick={() =>
-                setLastCommunityMenuAction("menu-item-click", gatewayHref)
-              }
-            />
-          }
-        >
-          <Home className="mr-2 h-4 w-4" /> Magnetix Home
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          render={
-            <a
-              href={communitiesHref}
-              onClick={() =>
-                setLastCommunityMenuAction("menu-item-click", communitiesHref)
-              }
-            />
-          }
-        >
-          <MessagesSquare className="mr-2 h-4 w-4" /> My Communities
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          render={
-            <Link
-              href={profileHref}
-              onClick={() =>
-                setLastCommunityMenuAction("menu-item-click", profileHref)
-              }
-            />
-          }
-        >
-          <UserRound className="mr-2 h-4 w-4" /> Profile
-        </DropdownMenuItem>
+        {/* DropdownMenuGroup wrapper is load-bearing, not stylistic
+            (2026-09-11 root cause — captured live via the Firestore
+            diagnostic added in the prior deploy): DropdownMenuLabel
+            renders Base UI's Menu.GroupLabel, which unconditionally reads
+            MenuGroupContext and throws ("Base UI: MenuGroupRootContext is
+            missing. Menu group parts must be used within <Menu.Group>.",
+            minified in production as "Base UI error #31") the instant it
+            renders without an ancestor <Menu.Group>/<DropdownMenuGroup> —
+            deterministically, on every single menu-open, regardless of
+            member/session data. This component (added in f26db9a,
+            "restore account navigation from community") rendered
+            DropdownMenuLabel bare; every other DropdownMenuLabel call site
+            in the app (workflows-list.tsx) already wraps it correctly —
+            this was the one place that didn't, not a library regression. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="truncate">
+            {author.displayName}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {/* Plain <a>, not next/link (2026-09-11): both targets are Route
+              Handlers (/api/my/bridge-from-member), not pages, and a real
+              browser navigation is the correct way to hit one — it never
+              asks the App Router to parse the redirect response as an
+              RSC/flight payload, unlike a Link (prefetch={false} alone was
+              the 2026-09-02 fix's theory — necessary for that specific
+              trigger, but unrelated to the Menu.GroupLabel crash above,
+              which is what real user QA was actually hitting).
+              profileHref below is a real page route and keeps
+              next/link. */}
+          <DropdownMenuItem
+            render={
+              <a
+                href={gatewayHref}
+                onClick={() =>
+                  setLastCommunityMenuAction("menu-item-click", gatewayHref)
+                }
+              />
+            }
+          >
+            <Home className="mr-2 h-4 w-4" /> Magnetix Home
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            render={
+              <a
+                href={communitiesHref}
+                onClick={() =>
+                  setLastCommunityMenuAction("menu-item-click", communitiesHref)
+                }
+              />
+            }
+          >
+            <MessagesSquare className="mr-2 h-4 w-4" /> My Communities
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            render={
+              <Link
+                href={profileHref}
+                onClick={() =>
+                  setLastCommunityMenuAction("menu-item-click", profileHref)
+                }
+              />
+            }
+          >
+            <UserRound className="mr-2 h-4 w-4" /> Profile
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <form
           action={logoutAction}
