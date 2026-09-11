@@ -20,6 +20,7 @@ import {
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { CommunityAccountMenu } from "./community-account-menu";
+import { AccountMenuErrorBoundary } from "./account-menu-error-boundary";
 import { CommunityClientErrorReporter } from "./community-client-error-reporter";
 import { DmLauncher } from "./dm/dm-launcher";
 import { communityThemeStyle } from "@/lib/community/community-theme-presets";
@@ -229,12 +230,19 @@ export function CommunityShell({
           </>
         ) : (
           <>
-            <CommunityAccountMenu
-              author={viewer}
-              brand={brand}
-              profileHref={communityProfileHref(linkBase, group.slug)}
-              logoutAction={`/api/community/${saId}/logout`}
-            />
+            {/* Temporary containment (2026-09-11 investigation) — this
+                route has no error.tsx anywhere in its tree, so a
+                render-phase throw here would otherwise take down the
+                whole Community page. Not the fix; see that file's doc
+                comment. */}
+            <AccountMenuErrorBoundary saId={saId} groupId={group.id}>
+              <CommunityAccountMenu
+                author={viewer}
+                brand={brand}
+                profileHref={communityProfileHref(linkBase, group.slug)}
+                logoutAction={`/api/community/${saId}/logout`}
+              />
+            </AccountMenuErrorBoundary>
           </>
         )}
       </div>
@@ -320,7 +328,7 @@ export function CommunityShell({
       className="community-theme bg-background text-foreground min-h-screen"
       style={themeStyle}
     >
-      <CommunityClientErrorReporter saId={saId} />
+      <CommunityClientErrorReporter saId={saId} groupId={group.id} />
       <header className="border-border bg-card border-b">{headerRow}</header>
       {mainContent}
     </div>

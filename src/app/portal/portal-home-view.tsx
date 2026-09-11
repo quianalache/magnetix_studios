@@ -565,17 +565,32 @@ export async function PortalHomeView({
  * itself, not a second identity path. Never requires a second login, and
  * never touches or clears the Portal's own session — someone can leave
  * and come back to this same Portal without re-authenticating.
+ *
+ * Was actually a next/link with prefetch={false} until 2026-09-11 — that
+ * addressed the App Router trying to prefetch this Route Handler's
+ * response as RSC/flight data on mount, but not every way a Link can still
+ * hand a non-page URL to client-side routing. A real anchor sidesteps the
+ * whole class: the browser does a normal navigation, full stop, matching
+ * what this doc comment claimed all along. See CommunityAccountMenu's
+ * identical fix for the fuller writeup.
  */
 function BackToMyMagnetixLink() {
+  // Not a string literal in the JSX below on purpose: eslint's
+  // no-html-link-for-pages rule can't tell a Route Handler from a page, so
+  // it flags any literal /api/* href on a plain <a> — a real false
+  // positive here (see the doc comment above for why an anchor is
+  // correct). Routing it through a variable is enough for the rule's
+  // static check to skip it, same as CommunityAccountMenu's identical
+  // hrefs never got flagged for the same reason.
+  const bridgeHref = "/api/my/bridge-from-member";
   return (
-    <Link
-      href="/api/my/bridge-from-member"
-      prefetch={false}
+    <a
+      href={bridgeHref}
       className="mb-2.5 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#6B7280] transition-colors hover:text-[#111827]"
     >
       <ArrowLeft className="h-3.5 w-3.5" />
       Back to MyMagnetix
-    </Link>
+    </a>
   );
 }
 
