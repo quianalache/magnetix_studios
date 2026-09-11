@@ -541,7 +541,7 @@ export async function extractCourseSummaries(
  *  listItem nodes, bold/italic/link marks). Returns null — never throws —
  *  for an absent or unrecognized body so one malformed lesson can't fail
  *  the whole course's extraction; the caller records that as a warning. */
-function parseSkoolRichText(raw: string | undefined): unknown[] | null {
+export function parseSkoolRichText(raw: string | undefined): unknown[] | null {
   if (!raw) return null;
   const prefix = "[v2]";
   const body = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
@@ -714,10 +714,16 @@ export async function extractCourse(
     }
   });
 
+  const courseDesc = parseSkoolRichText(m.desc);
+  if (m.desc && !courseDesc) {
+    warnings.push(
+      `Course ${courseId}: desc present but could not be parsed as rich text — unexpected format.`
+    );
+  }
   const course: SkoolCourse = {
     skoolCourseId: root.id,
     title: m.title ?? "",
-    desc: m.desc ?? null,
+    desc: courseDesc,
     coverImageUrl: m.coverImage ?? null,
     minTier:
       typeof m.minTier === "number"

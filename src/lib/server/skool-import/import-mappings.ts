@@ -15,8 +15,13 @@ import type { ImportEntity, ImportMappingDoc } from "@/types/import";
 
 const SYSTEM = "skool" as const;
 
-function mappingKey(entity: ImportEntity, externalId: string): string {
-  return `skool:${entity}:${externalId}`.replace(/[/.#$[\]]/g, "_").slice(0, 300);
+/** Exported so the dry-run planner (mapping.ts's planStandaloneCourseImport)
+ *  can show the REAL final key a future executor would write — never a
+ *  separately-reimplemented copy that could silently drift from this one. */
+export function mappingKey(entity: ImportEntity, externalId: string): string {
+  return `skool:${entity}:${externalId}`
+    .replace(/[/.#$[\]]/g, "_")
+    .slice(0, 300);
 }
 
 function col(subAccountId: string) {
@@ -26,9 +31,11 @@ function col(subAccountId: string) {
 export async function getExistingMapping(
   subAccountId: string,
   entity: ImportEntity,
-  externalId: string,
+  externalId: string
 ): Promise<ImportMappingDoc | null> {
-  const snap = await col(subAccountId).doc(mappingKey(entity, externalId)).get();
+  const snap = await col(subAccountId)
+    .doc(mappingKey(entity, externalId))
+    .get();
   return snap.exists ? (snap.data() as ImportMappingDoc) : null;
 }
 
@@ -39,11 +46,13 @@ export async function getExistingMapping(
 export async function getExistingMappingsBulk(
   subAccountId: string,
   entity: ImportEntity,
-  externalIds: string[],
+  externalIds: string[]
 ): Promise<Map<string, ImportMappingDoc>> {
   if (externalIds.length === 0) return new Map();
   const db = getAdminDb();
-  const refs = externalIds.map((id) => col(subAccountId).doc(mappingKey(entity, id)));
+  const refs = externalIds.map((id) =>
+    col(subAccountId).doc(mappingKey(entity, id))
+  );
   const snaps = await db.getAll(...refs);
   const out = new Map<string, ImportMappingDoc>();
   snaps.forEach((snap, i) => {
@@ -67,7 +76,9 @@ export async function writeMapping(opts: {
     parentId: opts.parentId ?? null,
     createdAt: FieldValue.serverTimestamp(),
   };
-  await col(opts.subAccountId).doc(mappingKey(opts.entity, opts.externalId)).set(doc);
+  await col(opts.subAccountId)
+    .doc(mappingKey(opts.entity, opts.externalId))
+    .set(doc);
 }
 
 /**
@@ -88,7 +99,9 @@ export async function writeMapping(opts: {
  * ever target `"ghl"` (or any other system's) mapping docs. There is no
  * "delete everything" code path left anywhere in this module.
  */
-export async function deleteAllSkoolMappings(subAccountId: string): Promise<number> {
+export async function deleteAllSkoolMappings(
+  subAccountId: string
+): Promise<number> {
   const db = getAdminDb();
   const snap = await col(subAccountId).where("system", "==", SYSTEM).get();
   const batch = db.batch();

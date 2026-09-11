@@ -29,7 +29,15 @@ export type ImportEntity =
   | "community_posts"
   | "community_comments"
   | "community_channels"
-  | "community_memberships";
+  | "community_memberships"
+  // Skool Course -> Standalone Product mapping (planning stage only as of
+  // this addition — no executor writes these yet, see
+  // skool-import/mapping.ts's planStandaloneCourseImport). Added here, not
+  // invented ad hoc in the planner, so a future executor's real writes use
+  // this SAME entity/mapping convention from day one.
+  | "standalone_courses"
+  | "standalone_course_sections"
+  | "standalone_course_lessons";
 
 export const IMPORT_ENTITIES: ImportEntity[] = [
   "contacts",
@@ -42,6 +50,9 @@ export const IMPORT_ENTITIES: ImportEntity[] = [
   "community_comments",
   "community_channels",
   "community_memberships",
+  "standalone_courses",
+  "standalone_course_sections",
+  "standalone_course_lessons",
 ];
 
 export type ImportJobStatus = "queued" | "running" | "completed" | "failed";

@@ -123,9 +123,10 @@ export interface SkoolComment {
 export interface SkoolCourse {
   skoolCourseId: string;
   title: string;
-  /** Course-level rich text ("[v2]" JSON body, see SkoolLesson.bodyRichText)
-   *  shown on the course's own landing tile — null when absent. */
-  desc: string | null;
+  /** Course-level rich text, parsed the same way as SkoolLesson.bodyRichText
+   *  (same "[v2]" + JSON-array format) — shown on the course's own landing
+   *  tile. Null when absent or unparseable (see extractCourse's warnings). */
+  desc: unknown[] | null;
   coverImageUrl: string | null;
   /** Raw gating-tier number, passed through unchanged. Skool used TWO
    *  different field names for what appears to be the same concept across
