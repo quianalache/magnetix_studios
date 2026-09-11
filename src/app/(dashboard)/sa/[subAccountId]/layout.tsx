@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { SubAccountProvider } from "@/context/sub-account-context";
 import { BillingGuard } from "@/components/billing/billing-guard";
+import { EmailTemplateProvider } from "@/context/email-template-context";
 
 export default async function SubAccountLayout({
   children,
@@ -12,7 +13,9 @@ export default async function SubAccountLayout({
   const { subAccountId } = await params;
   return (
     <SubAccountProvider subAccountId={subAccountId}>
-      <BillingGuard>{children}</BillingGuard>
+      <EmailTemplateProvider subAccountId={subAccountId}>
+        <BillingGuard>{children}</BillingGuard>
+      </EmailTemplateProvider>
     </SubAccountProvider>
   );
 }

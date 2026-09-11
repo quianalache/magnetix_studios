@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FileText, Loader2, Search } from "lucide-react";
 import {
   Dialog,
@@ -11,11 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  loadEmailTemplate,
-  subscribeToEmailTemplates,
-  type EmailTemplateSummary,
-} from "@/lib/email/template-library";
+import { loadEmailTemplate, type EmailTemplateSummary } from "@/lib/email/template-library";
+import { useEmailTemplateContext } from "@/context/email-template-context";
 import type { BroadcastContent } from "@/types/broadcast-content";
 
 export interface PickedEmailTemplate {
@@ -48,20 +45,12 @@ export function EmailTemplatePickerDialog({
   subAccountId: string;
   onPick: (picked: PickedEmailTemplate) => void;
 }) {
-  const [templates, setTemplates] = useState<EmailTemplateSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { templates, loading } = useEmailTemplateContext();
   const [query, setQuery] = useState("");
   const [pickingId, setPickingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    const unsub = subscribeToEmailTemplates(subAccountId, (list) => {
-      setTemplates(list);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [open, subAccountId]);
+  void open;
+  void subAccountId;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
