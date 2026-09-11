@@ -544,13 +544,24 @@ export async function extractCourseSummaries(
 export function parseSkoolRichText(raw: string | undefined): unknown[] | null {
   if (!raw) return null;
   const prefix = "[v2]";
-  const body = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
-  try {
-    const parsed: unknown = JSON.parse(body);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
+  if (raw.startsWith(prefix)) {
+    try {
+      const parsed: unknown = JSON.parse(raw.slice(prefix.length));
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Had the "[v2]" envelope but still didn't parse — genuinely
+      // malformed, not the plain-text case below. Falls through to null.
+    }
     return null;
   }
+  // No "[v2]" envelope at all — confirmed live on 9 of the 15 real course-
+  // level `desc` fields on the source community (e.g. a bare `"START HERE"`
+  // string): Skool also allows a short plain-text description with no
+  // rich-text wrapper, distinct from the JSON-node format lesson bodies
+  // always use (0 of 169 real lesson bodies ever hit this branch). Wrapped
+  // as a single synthetic paragraph node so every caller gets one uniform
+  // node-array shape regardless of which real format Skool used here.
+  return [{ type: "paragraph", content: [{ type: "text", text: raw }] }];
 }
 
 interface RawResourceItem {
