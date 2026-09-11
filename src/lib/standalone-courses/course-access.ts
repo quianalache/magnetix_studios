@@ -39,13 +39,11 @@ export interface CoursePageAccessOk {
   member: Member | null;
 }
 
-export type CoursePageAccess =
-  | CoursePageAccessOk
-  | { kind: "notFound" };
+export type CoursePageAccess = CoursePageAccessOk | { kind: "notFound" };
 
 export async function requireCoursePageAccess(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<CoursePageAccess> {
   const gate = await getStandaloneCoursesGate(saId);
   if (!gate || !gate.enabled) return { kind: "notFound" };
@@ -58,9 +56,54 @@ export async function requireCoursePageAccess(
 }
 
 export type CourseClassroomAccess =
-  | { kind: "ok"; gate: StandaloneCoursesGate; course: StandaloneCourse; member: Member }
+  | {
+      kind: "ok";
+      gate: StandaloneCoursesGate;
+      course: StandaloneCourse;
+      member: Member;
+    }
   | { kind: "notFound" }
   | { kind: "redirect"; to: string };
+
+/**
+ * The purchase/access-window half of the classroom guard, given a course
+ * already fetched and a member id already resolved — extracted (2026-09-11,
+ * Community-embedded linked Product) so a caller that already has both (the
+ * standalone route below, via its own session lookup; the
+ * Community-embedded product-lesson route, via its already-resolved
+ * Community member — same `Member` identity, different session-resolution
+ * path) doesn't need its own copy of this logic. Same checks, same order,
+ * as this function had inline before the split.
+ */
+export async function checkStandaloneCourseEntitlementForMember(
+  course: StandaloneCourse,
+  memberId: string
+): Promise<boolean> {
+  if (course.access === "purchase") {
+    const paid = await hasPaidStandaloneCourse(
+      course.subAccountId,
+      course.id,
+      memberId
+    );
+    if (!paid) return false;
+  }
+  // Offer Access rules (Course Offers feature) — a course granted via an
+  // Offer with a "begin at date" or "restrict to N days" rule stamps the
+  // enrollment with an access window. Most enrollments have neither field
+  // set and are unaffected.
+  const enrollment = await getStandaloneEnrollment(
+    course.subAccountId,
+    course.id,
+    memberId
+  );
+  const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
+  const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
+  const now = new Date();
+  if ((beginsAt && now < beginsAt) || (expiresAt && now > expiresAt)) {
+    return false;
+  }
+  return true;
+}
 
 /**
  * Stricter guard for the actual lesson player — requires an active member
@@ -70,7 +113,7 @@ export type CourseClassroomAccess =
  */
 export async function requireCourseClassroomAccess(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<CourseClassroomAccess> {
   const gate = await getStandaloneCoursesGate(saId);
   if (!gate || !gate.enabled) return { kind: "notFound" };
@@ -86,22 +129,11 @@ export async function requireCourseClassroomAccess(
     };
   }
 
-  if (course.access === "purchase") {
-    const paid = await hasPaidStandaloneCourse(saId, courseId, member.id);
-    if (!paid) {
-      return { kind: "redirect", to: `/course/${saId}/${courseId}` };
-    }
-  }
-
-  // Offer Access rules (Course Offers feature) — a course granted via an
-  // Offer with a "begin at date" or "restrict to N days" rule stamps the
-  // enrollment with an access window. Most enrollments have neither field
-  // set and are unaffected.
-  const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
-  const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
-  const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
-  const now = new Date();
-  if ((beginsAt && now < beginsAt) || (expiresAt && now > expiresAt)) {
+  const entitled = await checkStandaloneCourseEntitlementForMember(
+    course,
+    member.id
+  );
+  if (!entitled) {
     return { kind: "redirect", to: `/course/${saId}/${courseId}` };
   }
 
@@ -110,12 +142,17 @@ export async function requireCourseClassroomAccess(
 
 /** API-route variant of the classroom guard — structured errors, no redirects. */
 export type CourseApiAccess =
-  | { kind: "ok"; gate: StandaloneCoursesGate; course: StandaloneCourse; member: Member }
+  | {
+      kind: "ok";
+      gate: StandaloneCoursesGate;
+      course: StandaloneCourse;
+      member: Member;
+    }
   | { kind: "error"; status: number; message: string };
 
 export async function requireCourseApiAccess(
   saId: string,
-  courseId: string,
+  courseId: string
 ): Promise<CourseApiAccess> {
   const gate = await getStandaloneCoursesGate(saId);
   if (!gate || !gate.enabled) {

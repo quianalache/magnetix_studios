@@ -11,8 +11,10 @@ import {
 } from "@/lib/server/standalone-course-service";
 import { hasPaidStandaloneCourse } from "@/lib/server/standalone-course-purchase-service";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
+import { checkStandaloneCourseEntitlementForMember } from "@/lib/standalone-courses/course-access";
 import {
   communityLearningLessonHref,
+  communityLearningProductLessonHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import type { GroupMembership } from "@/types/community";
@@ -58,15 +60,6 @@ export interface ClassroomCourseCard {
    *  same "render as an inert card" contract the pre-existing native-only
    *  pages already used via `c.locked || !c.firstLessonId`. */
   href: string | null;
-}
-
-function toDateOrNull(value: unknown): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  return null;
 }
 
 export async function listClassroomCatalogForMember(opts: {
@@ -141,21 +134,36 @@ export async function listClassroomCatalogForMember(opts: {
           locked = { reason: `Buy${price}`, purchasable: true };
         }
       }
-      // Offer Access rules (begin-at-date / restrict-to-N-days) — same
-      // check `requireCourseClassroomAccess` makes at the actual lesson
-      // route, mirrored here so a not-yet-begun or expired window shows
-      // correctly in the catalog instead of a false "unlocked".
+      // Offer Access rules (begin-at-date / restrict-to-N-days) — reuses
+      // the same shared check the actual embedded lesson route enforces
+      // (checkStandaloneCourseEntitlementForMember), rather than a second
+      // copy of the date-window logic, so a not-yet-begun or expired
+      // window shows correctly here instead of a false "unlocked". A
+      // purchase-lock above already short-circuits this — no need to
+      // re-derive the same "not paid" verdict twice.
       if (!locked) {
-        const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
-        const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
-        const now = new Date();
-        if ((beginsAt && now < beginsAt) || (expiresAt && now > expiresAt)) {
+        const entitled = await checkStandaloneCourseEntitlementForMember(
+          course,
+          opts.memberId
+        );
+        if (!entitled) {
           locked = { reason: "Access unavailable", purchasable: false };
         }
       }
 
       const salesHref = `/course/${saId}/${course.id}`;
-      const classroomHref = `/course/${saId}/${course.id}/classroom`;
+      const firstLessonId = tree?.lessons[0]?.id ?? null;
+      // Entitled -> the Community-embedded lesson experience (stays inside
+      // this group's shell); locked+purchasable -> the Product's own
+      // public sales page, its existing purchase destination.
+      const unlockedHref = firstLessonId
+        ? communityLearningProductLessonHref(
+            opts.linkBase,
+            opts.groupSlug,
+            course.id,
+            firstLessonId
+          )
+        : null;
 
       return {
         id: course.id,
@@ -166,7 +174,7 @@ export async function listClassroomCatalogForMember(opts: {
         lessonCount,
         progressPct: enrollment?.progressPct ?? 0,
         locked,
-        href: locked ? (locked.purchasable ? salesHref : null) : classroomHref,
+        href: locked ? (locked.purchasable ? salesHref : null) : unlockedHref,
       };
     })
   );

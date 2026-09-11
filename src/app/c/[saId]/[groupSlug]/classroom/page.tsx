@@ -78,14 +78,15 @@ export default async function ClassroomCatalogPage({
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-[#202124]">{c.title}</h3>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {c.source === "standalone" && (
-                        <span className="rounded-full bg-[#F0F0F0] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#6B6875] uppercase">
-                          Linked Product
-                        </span>
-                      )}
-                      {c.locked && <Lock className="h-3 w-3 text-[#909090]" />}
-                    </div>
+                    {/* No "Linked Product" badge here — that's internal
+                        architecture language members shouldn't need to
+                        understand; they should just see a course. `source`
+                        still exists on the card data (kept for the staff
+                        Classroom's own badge and for the routing/CTA
+                        branches below), it's just not surfaced visually. */}
+                    {c.locked && (
+                      <Lock className="h-3 w-3 shrink-0 text-[#909090]" />
+                    )}
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-[#909090]">
                     {c.description || `${c.lessonCount} lessons`}

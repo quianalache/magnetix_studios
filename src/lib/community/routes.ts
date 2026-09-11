@@ -119,6 +119,32 @@ export function communityLearningLessonHref(
   return `${communityLearningCourseHref(b, groupSlug, courseId)}/${lessonId}`;
 }
 
+/**
+ * A linked Standalone Product rendered inside this Community's Classroom
+ * (2026-09-11) — deliberately a sibling `/product/{courseId}` segment under
+ * the same Classroom base, not a variant of `communityLearningCourseHref`,
+ * so a native course id and a Standalone Course id can never collide in the
+ * route even though both are plain Firestore doc ids drawn from different
+ * collections. The Standalone Course itself is never copied here — see
+ * classroom-catalog-service.ts.
+ */
+export function communityLearningProductHref(
+  b: CommunityLinkBase,
+  groupSlug: string,
+  courseId: string
+): string {
+  return `${communityLearningHref(b, groupSlug)}/product/${courseId}`;
+}
+
+export function communityLearningProductLessonHref(
+  b: CommunityLinkBase,
+  groupSlug: string,
+  courseId: string,
+  lessonId: string
+): string {
+  return `${communityLearningProductHref(b, groupSlug, courseId)}/${lessonId}`;
+}
+
 export function communityMembersHref(
   b: CommunityLinkBase,
   groupSlug: string
