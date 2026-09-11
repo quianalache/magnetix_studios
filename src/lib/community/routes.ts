@@ -287,3 +287,46 @@ export function communityMessageThreadHref(
 ): string {
   return `${communityMessagesHref(b)}/${threadId}`;
 }
+
+/**
+ * Cross-tenant Community switch (2026-09-11, header switcher) — a member
+ * viewing THIS sub-account's Community switching directly into a DIFFERENT
+ * sub-account's Community they also belong to. Same-tenant switches don't
+ * need this: they're just a normal same-origin route (build one with
+ * `communityHomeHref`/etc. against the CURRENT `linkBase`) since the
+ * visitor's existing `ls_member_session` is already scoped to that
+ * sub-account.
+ *
+ * A cross-tenant switch needs a brand-new `ls_member_session` minted for
+ * the OTHER sub-account's Member record — this chains two already-existing,
+ * already-secure bridges rather than inventing a third session-minting
+ * path:
+ *   1. `/api/my/bridge-from-member` — mints/refreshes an `mm_session` from
+ *      the CURRENT tenant's member session (works whether the current page
+ *      is on the platform origin or a custom domain; see that route's own
+ *      doc comment for the cross-domain handoff it does internally).
+ *   2. `/api/my/enter?subAccountId=...&next=...` — given that fresh
+ *      `mm_session`, mints the target sub-account's own `ls_member_session`
+ *      and redirects to `next`.
+ * Nesting #2 as #1's `next` param turns the existing two-click "bridge,
+ * then click a My Communities card" flow into one click, with no new
+ * session logic — only URL composition.
+ *
+ * `targetOpaqueHref` MUST be the opaque `/c/{saId}/{groupSlug}/...` shape
+ * (e.g. from `communityHomeHref({ saId, pretty: false }, groupSlug)` or
+ * `PersonCommunityItem.href`), never a pretty custom-domain path — every
+ * hop in this chain runs on the platform origin, which can't resolve a
+ * DIFFERENT sub-account's custom domain, and `/api/my/enter`'s own `next`
+ * validation only accepts a plain relative path regardless.
+ *
+ * Renders as a plain `<a>`, never a Next `<Link>` — every hop here is a
+ * Route Handler, not a page (see CommunityAccountMenu's doc comment for
+ * why a Link would crash on one of these).
+ */
+export function communityCrossTenantSwitchHref(
+  targetSaId: string,
+  targetOpaqueHref: string
+): string {
+  const enter = `/api/my/enter?subAccountId=${encodeURIComponent(targetSaId)}&next=${encodeURIComponent(targetOpaqueHref)}`;
+  return `/api/my/bridge-from-member?next=${encodeURIComponent(enter)}`;
+}

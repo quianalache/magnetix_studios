@@ -21,6 +21,7 @@ import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import { MemberAvatar } from "./member-avatar";
 import { CommunityAccountMenu } from "./community-account-menu";
 import { AccountMenuErrorBoundary } from "./account-menu-error-boundary";
+import { CommunitySwitcher } from "./community-switcher";
 import { CommunityClientErrorReporter } from "./community-client-error-reporter";
 import { DmLauncher } from "./dm/dm-launcher";
 import { communityThemeStyle } from "@/lib/community/community-theme-presets";
@@ -170,12 +171,27 @@ export function CommunityShell({
         !embedded && "md:mx-auto md:max-w-7xl"
       )}
     >
-      <Link
-        href={about}
-        className="min-w-0 truncate text-sm font-semibold text-[#202124]"
-      >
-        {group.name}
-      </Link>
+      {/* Member-facing only: this is where My Communities' own canonical
+          membership source (via a lazy fetch — see CommunitySwitcher's doc
+          comment) turns the active Community's name into a switcher. The
+          staff CRM view keeps a plain link to About — a staff person's own
+          community memberships aren't the right identity context to
+          surface as a switcher on this surface. */}
+      {staffGroupId ? (
+        <Link
+          href={about}
+          className="min-w-0 truncate text-sm font-semibold text-[#202124]"
+        >
+          {group.name}
+        </Link>
+      ) : (
+        <CommunitySwitcher
+          saId={saId}
+          pretty={pretty}
+          currentGroupId={group.id}
+          currentGroupName={group.name}
+        />
+      )}
 
       <div className="flex items-center gap-1 md:order-3 md:col-start-3 md:row-start-1 md:gap-2">
         {viewerIsModerator && (
