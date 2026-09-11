@@ -6,8 +6,21 @@ import {
   fetchSkoolMembersProps,
   fetchSkoolPageProps,
   fetchSkoolComments,
+  fetchSkoolClassroomProps,
+  fetchSkoolCourseProps,
 } from "./skool-client";
-import type { SkoolAttachment, SkoolComment, SkoolMember, SkoolPost } from "./types";
+import type {
+  SkoolAttachment,
+  SkoolComment,
+  SkoolCourse,
+  SkoolCourseSection,
+  SkoolCourseUnit,
+  SkoolLesson,
+  SkoolLessonResource,
+  SkoolLessonVideo,
+  SkoolMember,
+  SkoolPost,
+} from "./types";
 
 /**
  * Skool's two live sources use TWO DIFFERENT field-naming conventions for
@@ -53,7 +66,11 @@ interface RawMemberUser {
   };
 }
 
-function parseSpData(raw: string | undefined): { pts: number | null; lv: number | null; role: number | null } {
+function parseSpData(raw: string | undefined): {
+  pts: number | null;
+  lv: number | null;
+  role: number | null;
+} {
   if (!raw) return { pts: null, lv: null, role: null };
   try {
     const d = JSON.parse(raw) as { pts?: number; lv?: number; role?: number };
@@ -85,7 +102,7 @@ export function extractEmailFromRawMember(raw: RawMemberUser): string | null {
 async function extractMembersForTab(
   groupSlug: string,
   tab: "active" | "churned" | "cancelling" | "banned",
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<SkoolMember[]> {
   const members: SkoolMember[] = [];
   let page = 1;
@@ -94,22 +111,28 @@ async function extractMembersForTab(
   // pages of 30 in the source community) via the same page-number pattern
   // as the feed.
   for (;;) {
-    const params = [tabQuery, page > 1 ? `p=${page}` : ""].filter(Boolean).join("&");
+    const params = [tabQuery, page > 1 ? `p=${page}` : ""]
+      .filter(Boolean)
+      .join("&");
     const url = `https://www.skool.com/${groupSlug}/-/members${params ? `?${params}` : ""}`;
     const props = await fetchSkoolPageProps(url, session);
-    const users = (Array.isArray(props.users) ? props.users : []) as RawMemberUser[];
+    const users = (
+      Array.isArray(props.users) ? props.users : []
+    ) as RawMemberUser[];
     if (users.length === 0) break;
 
     for (const u of users) {
       const sp = parseSpData(u.metadata?.spData);
       members.push({
         skoolUserId: u.id,
-        name: [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.name,
+        name:
+          [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.name,
         handle: u.name,
         email: extractEmailFromRawMember(u) ?? "",
         bio: u.metadata?.bio ?? "",
         avatarUrl: u.metadata?.pictureProfile ?? null,
-        joinedAtIso: u.member?.approvedAt ?? u.member?.createdAt ?? u.createdAt ?? null,
+        joinedAtIso:
+          u.member?.approvedAt ?? u.member?.createdAt ?? u.createdAt ?? null,
         points: sp.pts,
         level: sp.lv,
         role: sp.role,
@@ -117,7 +140,8 @@ async function extractMembersForTab(
       });
     }
 
-    const totalPages = typeof props.totalPages === "number" ? props.totalPages : 1;
+    const totalPages =
+      typeof props.totalPages === "number" ? props.totalPages : 1;
     if (page >= totalPages) break;
     page += 1;
   }
@@ -134,7 +158,7 @@ async function extractMembersForTab(
  */
 export async function extractAllMembers(
   groupSlug: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<SkoolMember[]> {
   const [active, churned, cancelling, banned] = await Promise.all([
     extractMembersForTab(groupSlug, "active", session),
@@ -145,7 +169,8 @@ export async function extractAllMembers(
   const byId = new Map<string, SkoolMember>();
   // Active wins on id collision (shouldn't happen — the tabs are disjoint —
   // but if Skool ever double-lists someone, prefer the "real" status).
-  for (const m of [...churned, ...cancelling, ...banned, ...active]) byId.set(m.skoolUserId, m);
+  for (const m of [...churned, ...cancelling, ...banned, ...active])
+    byId.set(m.skoolUserId, m);
   void fetchSkoolMembersProps; // kept exported for callers that just want page 1
   return [...byId.values()];
 }
@@ -197,7 +222,10 @@ function parsePinned(v: number | boolean | undefined): boolean {
   return v === 1 || v === true;
 }
 
-function toSkoolPost(raw: RawFeedPost, categories: Map<string, string>): SkoolPost {
+function toSkoolPost(
+  raw: RawFeedPost,
+  categories: Map<string, string>
+): SkoolPost {
   const attachments: SkoolAttachment[] = [];
   if (raw.metadata.videoIds) {
     attachments.push({ kind: "video", url: raw.metadata.videoIds });
@@ -226,7 +254,7 @@ function toSkoolPost(raw: RawFeedPost, categories: Map<string, string>): SkoolPo
 export async function extractAllPosts(
   groupSlug: string,
   session: SkoolSession,
-  categories: Map<string, string>,
+  categories: Map<string, string>
 ): Promise<SkoolPost[]> {
   // Deduped by skoolPostId, not a plain array — confirmed live the same
   // post (pinned posts, specifically) can appear on more than one fetched
@@ -248,7 +276,11 @@ export async function extractAllPosts(
   let page = 1;
   let rawCount = 0;
   for (;;) {
-    const { postTrees, total } = await fetchSkoolFeedPage(groupSlug, page, session);
+    const { postTrees, total } = await fetchSkoolFeedPage(
+      groupSlug,
+      page,
+      session
+    );
     if (postTrees.length === 0) break;
     for (const tree of postTrees as { post?: RawFeedPost }[]) {
       if (!tree.post) continue;
@@ -289,7 +321,9 @@ export async function extractAllPosts(
  * never block the whole import. Deduped by URL so a request is never
  * repeated for the same asset.
  */
-export async function enrichPostImageAttachments(posts: SkoolPost[]): Promise<void> {
+export async function enrichPostImageAttachments(
+  posts: SkoolPost[]
+): Promise<void> {
   const attachmentsByUrl = new Map<string, SkoolAttachment[]>();
   for (const post of posts) {
     for (const a of post.attachments) {
@@ -313,7 +347,7 @@ export async function enrichPostImageAttachments(posts: SkoolPost[]): Promise<vo
       } catch {
         // Best-effort only — a network hiccup here must not block extraction.
       }
-    }),
+    })
   );
 }
 
@@ -392,7 +426,11 @@ function parseAttachmentsData(raw: string | undefined): SkoolAttachment[] {
   }
 }
 
-function flattenCommentTree(nodes: RawCommentNode[], postId: string, out: SkoolComment[]): void {
+function flattenCommentTree(
+  nodes: RawCommentNode[],
+  postId: string,
+  out: SkoolComment[]
+): void {
   for (const node of nodes) {
     const p = node.post;
     out.push({
@@ -414,11 +452,317 @@ export async function extractCommentsForPost(
   postId: string,
   postShortId: string,
   groupId: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<SkoolComment[]> {
-  const raw = await fetchSkoolComments({ postId, postShortId, groupId, session, limit: 25 });
+  const raw = await fetchSkoolComments({
+    postId,
+    postShortId,
+    groupId,
+    session,
+    limit: 25,
+  });
   const out: SkoolComment[] = [];
   const children = (raw.post_tree?.children ?? []) as RawCommentNode[];
   flattenCommentTree(children, postId, out);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Courses / Classroom (embedded __NEXT_DATA__, camelCase — see types.ts's
+// module comment for the Skool "module"/"set" <-> our lesson/section
+// terminology mapping; do not re-derive this from field names alone without
+// re-reading that comment first).
+// ---------------------------------------------------------------------------
+
+/** One row of the classroom index's `allCourses` list — enumeration/summary
+ *  only, never the source of real content counts (see `SkoolCourse.published`
+ *  doc comment for why `numModules` here is unreliable). */
+export interface SkoolCourseSummary {
+  skoolCourseId: string;
+  title: string;
+  /** As reported by the index page itself — kept only for cross-checking
+   *  against the real extracted unit count, never trusted on its own. */
+  indexNumModules: number | null;
+  state: number | null;
+  public: boolean | null;
+}
+
+interface RawCourseUnitNode {
+  course: {
+    id: string;
+    metadata?: {
+      title?: string;
+      desc?: string;
+      hasAccess?: number;
+      resources?: string;
+      videoId?: string;
+      videoLink?: string;
+      videoLenMs?: number;
+      videoThumbnail?: string;
+      coverImage?: string;
+      minTier?: number;
+      minAccessLevel?: number;
+      privacy?: number;
+      numModules?: number;
+    };
+    unitType?: string;
+    state?: number;
+    public?: boolean;
+  };
+  children?: RawCourseUnitNode[];
+}
+
+/** Fetch the real list of courses this session can see (the classroom
+ *  index's own `allCourses`) — confirmed live: 15 real courses, spanning
+ *  both published and draft/unpublished, on the source community. */
+export async function extractCourseSummaries(
+  groupSlug: string,
+  session: SkoolSession
+): Promise<SkoolCourseSummary[]> {
+  const props = await fetchSkoolClassroomProps(groupSlug, session);
+  const raw = (Array.isArray(props.allCourses) ? props.allCourses : []) as {
+    id: string;
+    metadata?: { title?: string; numModules?: number };
+    state?: number;
+    public?: boolean;
+  }[];
+  return raw.map((c) => ({
+    skoolCourseId: c.id,
+    title: c.metadata?.title ?? "",
+    indexNumModules:
+      typeof c.metadata?.numModules === "number" ? c.metadata.numModules : null,
+    state: typeof c.state === "number" ? c.state : null,
+    public: typeof c.public === "boolean" ? c.public : null,
+  }));
+}
+
+/** "[v2]" + JSON-array rich text, confirmed live across every real lesson
+ *  and course-level `desc` sampled (paragraph/heading/text/unorderedList/
+ *  listItem nodes, bold/italic/link marks). Returns null — never throws —
+ *  for an absent or unrecognized body so one malformed lesson can't fail
+ *  the whole course's extraction; the caller records that as a warning. */
+function parseSkoolRichText(raw: string | undefined): unknown[] | null {
+  if (!raw) return null;
+  const prefix = "[v2]";
+  const body = raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+interface RawResourceItem {
+  title?: string;
+  link?: string;
+  file_id?: string;
+  file_name?: string;
+  file_content_type?: string;
+}
+
+/** Confirmed live across all 15 real courses (26 real non-empty lessons,
+ *  always exactly one item each — no course had more than one) — two real
+ *  shapes, a plain external link or a Skool-hosted file. Anything matching
+ *  neither is kept as `unrecognized` (with the raw item preserved) and the
+ *  caller flags it as a warning, exactly like `classifyAttachmentKind`
+ *  above does for a comment attachment it can't classify. */
+function parseResources(raw: string | undefined): SkoolLessonResource[] {
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return (parsed as RawResourceItem[]).map((item) => {
+    if (typeof item.link === "string" && item.link) {
+      return { kind: "external-link", title: item.title ?? "", url: item.link };
+    }
+    if (typeof item.file_id === "string" && item.file_id) {
+      return {
+        kind: "hosted-file",
+        title: item.title ?? "",
+        fileId: item.file_id,
+        fileName: item.file_name ?? null,
+        contentType: item.file_content_type ?? null,
+      };
+    }
+    return { kind: "unrecognized", raw: item };
+  });
+}
+
+function parseLessonVideo(
+  m: RawCourseUnitNode["course"]["metadata"]
+): SkoolLessonVideo {
+  if (typeof m?.videoId === "string" && m.videoId) {
+    return { kind: "native", skoolVideoId: m.videoId };
+  }
+  if (typeof m?.videoLink === "string" && m.videoLink) {
+    return {
+      kind: "external",
+      url: m.videoLink,
+      durationMs: typeof m.videoLenMs === "number" ? m.videoLenMs : null,
+      thumbnailUrl:
+        typeof m.videoThumbnail === "string" ? m.videoThumbnail : null,
+    };
+  }
+  return { kind: "none" };
+}
+
+function toSkoolLesson(
+  node: RawCourseUnitNode,
+  order: number,
+  warnings: string[]
+): SkoolLesson {
+  const c = node.course;
+  const m = c.metadata ?? {};
+  const bodyRichText = parseSkoolRichText(m.desc);
+  if (m.desc && !bodyRichText) {
+    warnings.push(
+      `Lesson ${c.id} ("${m.title ?? "untitled"}"): desc present but could not be parsed as rich text — unexpected format.`
+    );
+  }
+  const resources = parseResources(m.resources);
+  for (const r of resources) {
+    if (r.kind === "unrecognized") {
+      warnings.push(
+        `Lesson ${c.id} ("${m.title ?? "untitled"}"): a resource item matched neither known shape (external-link, hosted-file) — review before mapping.`
+      );
+    }
+  }
+  return {
+    skoolLessonId: c.id,
+    title: m.title ?? "",
+    order,
+    hasAccess: m.hasAccess === 1,
+    video: parseLessonVideo(m),
+    bodyRichText,
+    resources,
+  };
+}
+
+function toSkoolSection(
+  node: RawCourseUnitNode,
+  order: number,
+  warnings: string[]
+): SkoolCourseSection {
+  const c = node.course;
+  const m = c.metadata ?? {};
+  const lessons: SkoolLesson[] = [];
+  (node.children ?? []).forEach((child, i) => {
+    if (child.course.unitType !== "module") {
+      warnings.push(
+        `Section ${c.id} ("${m.title ?? "untitled"}"): child ${child.course.id} has unexpected unitType ` +
+          `"${child.course.unitType}" (expected "module") — treated as a lesson, not confirmed.`
+      );
+    }
+    lessons.push(toSkoolLesson(child, i, warnings));
+  });
+  return {
+    skoolSectionId: c.id,
+    title: m.title ?? "",
+    order,
+    lessons,
+  };
+}
+
+/**
+ * Fetch and parse one real course's full structure via
+ * `fetchSkoolCourseProps`. Confirmed live against 5 real courses of varying
+ * shape (see types.ts's `SkoolCourse` doc comment) — course -> children of
+ * unitType "set" (a section, itself containing only "module" children) or
+ * unitType "module" (a lesson) directly, never deeper. Unexpected shapes are
+ * reported in `warnings`, not thrown — one surprising unit must not fail the
+ * whole course's extraction (matches this file's existing "reported and
+ * skipped EXPLICITLY, never silently" convention for post/comment
+ * attachments).
+ */
+export async function extractCourse(
+  groupSlug: string,
+  courseId: string,
+  session: SkoolSession
+): Promise<{ course: SkoolCourse; warnings: string[] }> {
+  const props = await fetchSkoolCourseProps(groupSlug, courseId, session);
+  const rawRoot = props.course as RawCourseUnitNode | undefined;
+  if (!rawRoot?.course) {
+    throw new Error(
+      `No course tree found for ${courseId} — page shape may have changed`
+    );
+  }
+  const warnings: string[] = [];
+  const root = rawRoot.course;
+  const m = root.metadata ?? {};
+
+  const units: SkoolCourseUnit[] = [];
+  (rawRoot.children ?? []).forEach((child, i) => {
+    const childType = child.course.unitType;
+    if (childType === "set") {
+      units.push({
+        type: "section",
+        section: toSkoolSection(child, i, warnings),
+      });
+    } else if (childType === "module") {
+      units.push({ type: "lesson", lesson: toSkoolLesson(child, i, warnings) });
+    } else {
+      warnings.push(
+        `Course ${courseId}: unrecognized top-level unitType "${childType}" for unit ${child.course.id} ` +
+          `("${child.course.metadata?.title ?? "untitled"}") — treated as a lesson, not confirmed.`
+      );
+      units.push({ type: "lesson", lesson: toSkoolLesson(child, i, warnings) });
+    }
+  });
+
+  const course: SkoolCourse = {
+    skoolCourseId: root.id,
+    title: m.title ?? "",
+    desc: m.desc ?? null,
+    coverImageUrl: m.coverImage ?? null,
+    minTier:
+      typeof m.minTier === "number"
+        ? m.minTier
+        : typeof m.minAccessLevel === "number"
+          ? m.minAccessLevel
+          : null,
+    privacy: typeof m.privacy === "number" ? m.privacy : null,
+    published: root.state === 2 && root.public === true,
+    units,
+  };
+  return { course, warnings };
+}
+
+/**
+ * Fetch every real course this session can see, fully. Sequential (not
+ * Promise.all) — deliberately gentle on the real, already-authenticated
+ * browser tab this all routes through (see cdp-browser-transport.ts), and
+ * this is a small, one-off inventory pass, not a hot path.
+ */
+export async function extractAllCourses(
+  groupSlug: string,
+  session: SkoolSession
+): Promise<{
+  summaries: SkoolCourseSummary[];
+  courses: SkoolCourse[];
+  warnings: string[];
+}> {
+  const summaries = await extractCourseSummaries(groupSlug, session);
+  const courses: SkoolCourse[] = [];
+  const warnings: string[] = [];
+  for (const summary of summaries) {
+    try {
+      const { course, warnings: courseWarnings } = await extractCourse(
+        groupSlug,
+        summary.skoolCourseId,
+        session
+      );
+      courses.push(course);
+      warnings.push(...courseWarnings);
+    } catch (err) {
+      warnings.push(
+        `Course ${summary.skoolCourseId} ("${summary.title}"): extraction failed — ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+  return { summaries, courses, warnings };
 }
