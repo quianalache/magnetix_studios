@@ -13,6 +13,7 @@ import {
   where,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import {
   emailDocumentFromBroadcastContent,
   emailDocumentFromMessageTemplate,
@@ -117,33 +118,43 @@ export function subscribeToEmailTemplates(
     );
   };
 
-  const unsubVisual = onSnapshot(
-    query(
-      collection(getFirebaseDb(), "broadcastTemplates"),
-      where("subAccountId", "==", subAccountId)
-    ),
-    (snap) => {
-      visual = snap.docs.map((d) =>
-        summarizeVisual({ id: d.id, ...d.data() } as BroadcastTemplateDoc)
-      );
-      emit();
-    },
-    () => {}
-  );
-  const unsubLegacy = onSnapshot(
-    query(
-      collection(getFirebaseDb(), "message_templates"),
-      where("subAccountId", "==", subAccountId),
-      where("type", "==", "email")
-    ),
-    (snap) => {
-      legacy = snap.docs.map((d) =>
-        summarizeLegacy({ id: d.id, ...d.data() } as MessageTemplateDoc)
-      );
-      emit();
-    },
-    () => {}
-  );
+  const unsubVisual =
+    safeSubscribe(
+      () =>
+        onSnapshot(
+          query(
+            collection(getFirebaseDb(), "broadcastTemplates"),
+            where("subAccountId", "==", subAccountId)
+          ),
+          (snap) => {
+            visual = snap.docs.map((d) =>
+              summarizeVisual({ id: d.id, ...d.data() } as BroadcastTemplateDoc)
+            );
+            emit();
+          },
+          () => emit()
+        ),
+      () => emit()
+    ) ?? (() => {});
+  const unsubLegacy =
+    safeSubscribe(
+      () =>
+        onSnapshot(
+          query(
+            collection(getFirebaseDb(), "message_templates"),
+            where("subAccountId", "==", subAccountId),
+            where("type", "==", "email")
+          ),
+          (snap) => {
+            legacy = snap.docs.map((d) =>
+              summarizeLegacy({ id: d.id, ...d.data() } as MessageTemplateDoc)
+            );
+            emit();
+          },
+          () => emit()
+        ),
+      () => emit()
+    ) ?? (() => {});
 
   return () => {
     unsubVisual();

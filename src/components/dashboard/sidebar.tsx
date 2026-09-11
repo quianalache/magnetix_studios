@@ -23,6 +23,7 @@ import {
   Globe,
   Compass,
   Lock,
+  Mail,
   Send,
   Video,
   Bot,
@@ -30,6 +31,7 @@ import {
   MessagesSquare,
   Radar,
   Share2,
+  MessageSquare,
   GraduationCap,
   BookOpen,
   Sparkles,
@@ -159,6 +161,19 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Email",
+    items: [
+      { href: "/email", label: "Email", icon: Mail, enabled: true },
+      { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
+      {
+        href: "/email/templates",
+        label: "Email Templates",
+        icon: FileText,
+        enabled: true,
+      },
+    ],
+  },
+  {
     label: "Marketing",
     items: [
       { href: "/forms", label: "Forms", icon: FileText, enabled: true },
@@ -170,9 +185,13 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       },
       { href: "/website", label: "Website", icon: Globe, enabled: true },
       { href: "/workflows", label: "Workflows", icon: Workflow, enabled: true },
-      { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
       { href: "/webinars", label: "Webinars", icon: Video, enabled: true },
-      { href: "/templates", label: "Templates", icon: FileText, enabled: true },
+      {
+        href: "/templates",
+        label: "SMS Templates",
+        icon: MessageSquare,
+        enabled: true,
+      },
       { href: "/qr-codes", label: "QR Codes", icon: QrCode, enabled: true },
     ],
   },
@@ -463,7 +482,9 @@ function SidebarContent({
     const fullHref = `${subRoot ?? `/sa/${linkSubId}`}${item.href}`;
     const isActive =
       pathname === fullHref ||
-      (item.href !== "/dashboard" && pathname.startsWith(fullHref));
+      (item.href !== "/dashboard" &&
+        item.href !== "/email" &&
+        pathname.startsWith(fullHref));
     // Agency-level gate lock. We DO render it when the gate is unknown
     // (gate === null) — assumption: legitimate sub-accounts are enabled,
     // and flashing "Locked" → "Enabled" is worse UX than a brief window
