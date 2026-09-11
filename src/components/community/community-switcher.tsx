@@ -21,9 +21,39 @@ interface SwitcherCommunity {
   groupId: string;
   slug: string;
   name: string;
+  /** Same field the About page/Settings live preview already render as
+   *  this community's brand mark (`CommunityGroup.logoUrl`). Null when
+   *  unset — the row falls back to the generic icon. */
+  logoUrl: string | null;
   /** Opaque `/c/{saId}/{slug}/community` — see communityCrossTenantSwitchHref's
    *  doc comment for why this must stay opaque. */
   href: string;
+}
+
+/** A switcher row's left-side icon: the community's real logo when one is
+ *  configured and loads successfully, the existing generic icon otherwise
+ *  (missing URL, or a broken one — `onError` swaps to the fallback instead
+ *  of leaving the browser's broken-image glyph showing). Same 24px rounded
+ *  container either way, so rows never shift height/width based on which
+ *  branch renders. */
+function SwitcherRowIcon({ logoUrl }: { logoUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (logoUrl && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt=""
+        className="h-6 w-6 shrink-0 rounded-md object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#F0F0F0] text-[#6B6875]">
+      <MessagesSquare className="h-3.5 w-3.5" />
+    </span>
+  );
 }
 
 type LoadState =
@@ -119,9 +149,7 @@ export function CommunitySwitcher({
               c.subAccountId === saId && c.groupId === currentGroupId;
             const row = (
               <>
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#F0F0F0] text-[#6B6875]">
-                  <MessagesSquare className="h-3.5 w-3.5" />
-                </span>
+                <SwitcherRowIcon logoUrl={c.logoUrl} />
                 <span className="min-w-0 flex-1 truncate">{c.name}</span>
                 {isCurrent && (
                   <Check className="h-3.5 w-3.5 shrink-0 text-[#202124]" />

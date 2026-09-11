@@ -5,7 +5,10 @@ import {
   getStandaloneCourse,
   getStandaloneCourseTree,
 } from "@/lib/server/standalone-course-service";
-import { listProjectsForContact, listSteps } from "@/lib/server/project-service";
+import {
+  listProjectsForContact,
+  listSteps,
+} from "@/lib/server/project-service";
 import type { StandaloneEnrollment } from "@/types/standalone-courses";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { eventStatus, type CalendarEvent } from "@/types/events";
@@ -35,7 +38,7 @@ export interface PortalCourse {
 /** Every Standalone Course this member is enrolled in, across the sub-account — not scoped to one community group. */
 export async function listPortalCourses(
   subAccountId: string,
-  memberId: string,
+  memberId: string
 ): Promise<PortalCourse[]> {
   const db = getAdminDb();
   const snap = await db
@@ -48,7 +51,9 @@ export async function listPortalCourses(
     // A member's enrollments collection-group spans every sub-account they
     // belong to (rare, but the doc path alone doesn't scope this query) —
     // filter to this sub-account's own courses via a parent-path check.
-    .filter((_, i) => snap.docs[i].ref.path.startsWith(`subAccounts/${subAccountId}/`));
+    .filter((_, i) =>
+      snap.docs[i].ref.path.startsWith(`subAccounts/${subAccountId}/`)
+    );
 
   const courses = await Promise.all(
     enrollments.map(async (e) => {
@@ -75,7 +80,7 @@ export async function listPortalCourses(
         classroomHref: `/course/${subAccountId}/${course.id}/classroom`,
       };
       return result;
-    }),
+    })
   );
   return courses.filter((c): c is PortalCourse => c !== null);
 }
@@ -83,7 +88,7 @@ export async function listPortalCourses(
 /** This contact's saved Energetic Decoder readings — reusing the same query shape as the Contact profile's own section. */
 export async function listPortalReadings(
   subAccountId: string,
-  contactId: string,
+  contactId: string
 ): Promise<EnergeticDecoderReading[]> {
   const snap = await getAdminDb()
     .collection("energeticDecoderReadings")
@@ -105,7 +110,7 @@ export interface PortalBooking {
 /** This contact's upcoming (not past, not cancelled) booked events. */
 export async function listPortalUpcomingBookings(
   subAccountId: string,
-  contactId: string,
+  contactId: string
 ): Promise<PortalBooking[]> {
   const snap = await getAdminDb()
     .collection("events")
@@ -116,7 +121,9 @@ export async function listPortalUpcomingBookings(
   const now = Date.now();
   return snap.docs
     .map((d) => ({ id: d.id, ...(d.data() as Omit<CalendarEvent, "id">) }))
-    .filter((e) => eventStatus(e) !== "cancelled" && eventStatus(e) !== "completed")
+    .filter(
+      (e) => eventStatus(e) !== "cancelled" && eventStatus(e) !== "completed"
+    )
     .map((e) => ({
       id: e.id,
       title: e.title,
@@ -130,7 +137,7 @@ export async function listPortalUpcomingBookings(
 /** This contact's quotes + invoices (both stored as Quote docs, discriminated by `kind`). */
 export async function listPortalQuotes(
   subAccountId: string,
-  contactId: string,
+  contactId: string
 ): Promise<Quote[]> {
   const snap = await getAdminDb()
     .collection("quotes")
@@ -155,6 +162,12 @@ export interface PortalCommunity {
   name: string;
   slug: string;
   tagline: string;
+  /** Same field the About page and Settings live preview already use as
+   *  this community's small brand mark — see
+   *  {@link CommunityGroup.logoUrl}'s own doc comment. Null when unset;
+   *  every consumer falls back to a generic icon/initial, same convention
+   *  as those two existing call sites. */
+  logoUrl: string | null;
   memberStatus: GroupMembership["status"];
   role: GroupMembership["role"];
   level: number;
@@ -164,7 +177,7 @@ export interface PortalCommunity {
 
 export async function listPortalCommunities(
   subAccountId: string,
-  memberId: string,
+  memberId: string
 ): Promise<PortalCommunity[]> {
   const db = getAdminDb();
   const groupsSnap = await db
@@ -177,7 +190,10 @@ export async function listPortalCommunities(
         id: doc.id,
         ...(doc.data() as Omit<CommunityGroup, "id">),
       };
-      const membershipSnap = await doc.ref.collection("memberships").doc(memberId).get();
+      const membershipSnap = await doc.ref
+        .collection("memberships")
+        .doc(memberId)
+        .get();
       if (!membershipSnap.exists) return null;
       const membership = {
         id: membershipSnap.id,
@@ -189,6 +205,7 @@ export async function listPortalCommunities(
         name: group.name,
         slug: group.slug,
         tagline: group.tagline,
+        logoUrl: group.logoUrl ?? null,
         memberStatus: membership.status,
         role: membership.role,
         level: membership.level,
@@ -196,9 +213,11 @@ export async function listPortalCommunities(
         href: `/c/${subAccountId}/${group.slug}/community`,
       };
       return result;
-    }),
+    })
   );
-  return communities.filter((community): community is PortalCommunity => community !== null);
+  return communities.filter(
+    (community): community is PortalCommunity => community !== null
+  );
 }
 
 /**
@@ -222,7 +241,7 @@ export async function listPortalCommunities(
 export async function listPortalSessionBundles(
   subAccountId: string,
   memberId: string,
-  contactId: string | null,
+  contactId: string | null
 ): Promise<PortalSessionBundle[]> {
   const purchaseSnap = await getAdminDb()
     .collectionGroup("purchases")
@@ -258,26 +277,35 @@ export async function listPortalSessionBundles(
     const e = doc.data() as Omit<CalendarEvent, "id">;
     if (!e.bookingPageSlug || !byPage.has(e.bookingPageSlug)) continue;
     if (eventStatus(e) === "cancelled") continue;
-    usedByPage.set(e.bookingPageSlug, (usedByPage.get(e.bookingPageSlug) ?? 0) + 1);
+    usedByPage.set(
+      e.bookingPageSlug,
+      (usedByPage.get(e.bookingPageSlug) ?? 0) + 1
+    );
   }
 
   return [...byPage.entries()].map(([slug, { name, total }]) => {
     const used = Math.min(total, usedByPage.get(slug) ?? 0);
-    return { bookingPageSlug: slug, bookingPageName: name, total, used, remaining: total - used };
+    return {
+      bookingPageSlug: slug,
+      bookingPageName: name,
+      total,
+      used,
+      remaining: total - used,
+    };
   });
 }
 
 /** This contact's projects (coach-assigned or self-started), each with its steps attached — the Client Portal's "Your projects" section. */
 export async function listPortalProjects(
   subAccountId: string,
-  contactId: string,
+  contactId: string
 ): Promise<(Project & { steps: ProjectStep[] })[]> {
   const projects = await listProjectsForContact(subAccountId, contactId);
   const active = projects
     .filter((p) => p.status === "active")
     .sort((a, b) => tsMillis(b.updatedAt) - tsMillis(a.updatedAt));
   return Promise.all(
-    active.map(async (p) => ({ ...p, steps: await listSteps(p.id) })),
+    active.map(async (p) => ({ ...p, steps: await listSteps(p.id) }))
   );
 }
 

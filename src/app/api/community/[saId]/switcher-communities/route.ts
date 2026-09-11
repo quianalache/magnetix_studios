@@ -50,6 +50,11 @@ export async function GET(
       groupId: c.groupId,
       slug: c.slug,
       name: c.name,
+      // Same field the About page/Settings live preview already render as
+      // this community's brand mark — see PortalCommunity.logoUrl's doc
+      // comment. Null when unset; the switcher row falls back to the
+      // generic icon, same convention as those existing call sites.
+      logoUrl: c.logoUrl,
       href: c.href,
     })),
   });
