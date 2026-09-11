@@ -3,8 +3,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
-import { communityLearningLessonHref } from "@/lib/community/routes";
-import { listCoursesForMember } from "@/lib/server/community-classroom-service";
+import { listClassroomCatalogForMember } from "@/lib/server/classroom-catalog-service";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
@@ -40,15 +39,27 @@ export default async function ClassroomCatalogPage({
     level: membership.level,
   };
 
-  const courses = await listCoursesForMember({
-    subAccountId: saId,
+  // Native Community Courses + linked Standalone Products, one combined
+  // catalog — see classroom-catalog-service.ts's doc comment for the full
+  // architecture. `source` tells the two apart below; neither this page nor
+  // the staff equivalent infers anything from a collection path.
+  const courses = await listClassroomCatalogForMember({
+    linkBase: { saId, pretty },
     groupId: group.id,
+    groupSlug,
     memberId: member.id,
     membership,
   });
 
   return (
-    <CommunityShell saId={saId} pretty={pretty} group={group} active="classroom" viewer={viewer} viewerIsModerator={membership.role === "moderator"}>
+    <CommunityShell
+      saId={saId}
+      pretty={pretty}
+      group={group}
+      active="classroom"
+      viewer={viewer}
+      viewerIsModerator={membership.role === "moderator"}
+    >
       {courses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#E4E4E4] bg-white p-10 text-center text-sm text-[#909090]">
           No courses yet.
@@ -67,17 +78,20 @@ export default async function ClassroomCatalogPage({
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-[#202124]">{c.title}</h3>
-                    {c.locked && (
-                      <span className="flex items-center gap-1 text-xs text-[#909090]">
-                        <Lock className="h-3 w-3" />
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {c.source === "standalone" && (
+                        <span className="rounded-full bg-[#F0F0F0] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#6B6875] uppercase">
+                          Linked Product
+                        </span>
+                      )}
+                      {c.locked && <Lock className="h-3 w-3 text-[#909090]" />}
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-[#909090]">
                     {c.description || `${c.lessonCount} lessons`}
                   </p>
                   {c.locked ? (
-                    c.locked.purchasable ? (
+                    c.source === "native" && c.locked.purchasable ? (
                       <div className="mt-3">
                         <PurchaseButton
                           endpoint={`/api/community/${saId}/${group.id}/purchase`}
@@ -97,7 +111,10 @@ export default async function ClassroomCatalogPage({
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#F0F0F0]">
                         <div
                           className="h-full rounded-full"
-                          style={{ width: `${c.progressPct}%`, backgroundColor: brand }}
+                          style={{
+                            width: `${c.progressPct}%`,
+                            backgroundColor: brand,
+                          }}
                         />
                       </div>
                       <p className="mt-1 text-xs text-[#909090]">
@@ -108,17 +125,14 @@ export default async function ClassroomCatalogPage({
                 </div>
               </div>
             );
-            return c.locked || !c.firstLessonId ? (
+            return c.href ? (
+              <Link key={c.id} href={c.href}>
+                {card}
+              </Link>
+            ) : (
               <div key={c.id} className="cursor-default opacity-80">
                 {card}
               </div>
-            ) : (
-              <Link
-                key={c.id}
-                href={communityLearningLessonHref({ saId, pretty }, groupSlug, c.id, c.firstLessonId!)}
-              >
-                {card}
-              </Link>
             );
           })}
         </div>

@@ -3,12 +3,13 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, BookOpen, ExternalLink, Loader2, Plus } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToCourses } from "@/lib/firestore/community-classroom";
 import { CourseThumb } from "@/components/community/classroom/course-thumb";
 import { CourseSettingsModal } from "@/components/community/classroom/course-settings-modal";
 import type { Course } from "@/types/community";
+import type { StandaloneCourse } from "@/types/standalone-courses";
 
 const PLACEHOLDER_BRAND = "#f59e0b";
 
@@ -31,6 +32,7 @@ export default function ClassroomBuilderPage({
   const [courses, setCourses] = useState<Course[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [linkedProducts, setLinkedProducts] = useState<StandaloneCourse[]>([]);
 
   useEffect(() => {
     return subscribeToCourses(
@@ -42,6 +44,29 @@ export default function ClassroomBuilderPage({
       },
       () => setLoaded(true)
     );
+  }, [subAccountId, groupId]);
+
+  // Read-only awareness of linked Standalone Products (2026-09-11) — these
+  // now appear in the real Classroom (see classroom-catalog-service.ts) but
+  // are never authored here; reusing the existing Standalone Courses list
+  // endpoint rather than adding a new one, filtered client-side to this
+  // group's links.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/standalone-courses`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { courses?: StandaloneCourse[] } | null) => {
+        if (cancelled || !data?.courses) return;
+        setLinkedProducts(
+          data.courses.filter((c) =>
+            c.linkedCommunityGroupIds.includes(groupId)
+          )
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [subAccountId, groupId]);
 
   return (
@@ -104,6 +129,31 @@ export default function ClassroomBuilderPage({
               <Plus className="h-5 w-5" /> New course
             </button>
           )}
+        </div>
+      )}
+
+      {linkedProducts.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-muted-foreground text-sm font-medium">
+            Linked Products
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            Also visible in this Classroom, but authored in Courses → Products,
+            not here — content, entitlement, and progress all stay on the
+            product itself.
+          </p>
+          <div className="space-y-1.5">
+            {linkedProducts.map((p) => (
+              <Link
+                key={p.id}
+                href={`/sa/${subAccountId}/courses/${p.id}`}
+                className="text-muted-foreground hover:text-foreground bg-card flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+              >
+                <span>{p.title}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 

@@ -372,6 +372,27 @@ export async function listStandaloneCourses(
 }
 
 /**
+ * Published Standalone Courses linked to a Community Group — the read side
+ * of `linkedCommunityGroupIds`, consumed by classroom-catalog-service.ts to
+ * surface a linked Product inside that group's Classroom WITHOUT copying it
+ * into `communityGroups/{groupId}/courses`. This is the only new query the
+ * linked-Product Classroom feature needed; content, entitlement, and
+ * progress all keep reading from this same collection unchanged.
+ */
+export async function listStandaloneCoursesLinkedToGroup(
+  saId: string,
+  groupId: string
+): Promise<StandaloneCourse[]> {
+  const snap = await coursesCol(saId)
+    .where("linkedCommunityGroupIds", "array-contains", groupId)
+    .where("published", "==", true)
+    .get();
+  return snap.docs.map((d) =>
+    withCourseDefaults(d.id, d.data() as Omit<StandaloneCourse, "id">)
+  );
+}
+
+/**
  * Link/unlink a Community Group to a Standalone Course — connects a course
  * built "outside" a community to one or more groups "inside" Community.
  * Anyone who enrolls in the course is auto-granted membership in every

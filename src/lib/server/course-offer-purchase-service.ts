@@ -746,6 +746,13 @@ export async function handleCourseOfferCheckoutCompleted(
  * matching purchase to `canceled` — the classroom-access guard's expiry
  * check treats a canceled purchase's access window as elapsed going
  * forward; enrollment/progress data is kept, never deleted.
+ *
+ * KNOWN GAP (canonical-course-architecture audit, 2026-09-11, not addressed
+ * here — out of scope for the linked-Product Classroom adapter): this only
+ * revokes the course-content access window. Any Community Group membership
+ * `grantLinkedCommunityGroupsServerSide` granted when the member first
+ * enrolled is NOT revoked here — a canceled/expired subscriber keeps their
+ * Community membership indefinitely. Needs its own task if that's wanted.
  */
 export async function handleCourseOfferSubscriptionDeleted(
   subscription: Stripe.Subscription

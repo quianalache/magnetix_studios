@@ -22,7 +22,12 @@ import type {
  * courses/*; members read the server-rendered player + mark lessons complete.
  */
 
-function formatPrice(cents: number | null, currency: string | null): string {
+/** Exported for reuse by classroom-catalog-service.ts's linked-Standalone-Product
+ *  lock-reason text — same "Buy — $X" copy for both card sources. */
+export function formatPrice(
+  cents: number | null,
+  currency: string | null
+): string {
   if (cents == null) return "";
   try {
     return new Intl.NumberFormat("en-US", {

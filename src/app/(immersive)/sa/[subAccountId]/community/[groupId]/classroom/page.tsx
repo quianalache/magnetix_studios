@@ -2,8 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { requireStaffGroupPageAccess } from "@/lib/community/member-context";
-import { communityLearningLessonHref } from "@/lib/community/routes";
-import { listCoursesForMember } from "@/lib/server/community-classroom-service";
+import { listClassroomCatalogForMember } from "@/lib/server/classroom-catalog-service";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
@@ -20,7 +19,10 @@ export const dynamic = "force-dynamic";
  * courses" experience, not the course/lesson authoring tool — that moved to
  * `/classroom-builder`, linked from the Manage page). Close mirror of
  * /c/[saId]/[groupSlug]/classroom/page.tsx — see the Staff Community
- * Integration report.
+ * Integration report. Both routes call the same
+ * `listClassroomCatalogForMember` for the native+linked-Standalone-Product
+ * union, so staff and member Classroom can never drift on which courses
+ * appear or how they're gated — see classroom-catalog-service.ts.
  */
 export default async function StaffClassroomCatalogPage({
   params,
@@ -49,9 +51,10 @@ export default async function StaffClassroomCatalogPage({
     level: membership.level,
   };
 
-  const courses = await listCoursesForMember({
-    subAccountId: saId,
+  const courses = await listClassroomCatalogForMember({
+    linkBase: { saId, pretty: false, staffGroupId: groupId },
     groupId: group.id,
+    groupSlug: group.slug,
     memberId: member.id,
     membership,
   });
@@ -84,17 +87,20 @@ export default async function StaffClassroomCatalogPage({
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-[#202124]">{c.title}</h3>
-                    {c.locked && (
-                      <span className="flex items-center gap-1 text-xs text-[#909090]">
-                        <Lock className="h-3 w-3" />
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {c.source === "standalone" && (
+                        <span className="rounded-full bg-[#F0F0F0] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#6B6875] uppercase">
+                          Linked Product
+                        </span>
+                      )}
+                      {c.locked && <Lock className="h-3 w-3 text-[#909090]" />}
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-[#909090]">
                     {c.description || `${c.lessonCount} lessons`}
                   </p>
                   {c.locked ? (
-                    c.locked.purchasable ? (
+                    c.source === "native" && c.locked.purchasable ? (
                       <div className="mt-3">
                         <PurchaseButton
                           endpoint={`/api/community/${saId}/${group.id}/purchase`}
@@ -128,22 +134,14 @@ export default async function StaffClassroomCatalogPage({
                 </div>
               </div>
             );
-            return c.locked || !c.firstLessonId ? (
+            return c.href ? (
+              <Link key={c.id} href={c.href}>
+                {card}
+              </Link>
+            ) : (
               <div key={c.id} className="cursor-default opacity-80">
                 {card}
               </div>
-            ) : (
-              <Link
-                key={c.id}
-                href={communityLearningLessonHref(
-                  { saId, pretty: false, staffGroupId: groupId },
-                  group.slug,
-                  c.id,
-                  c.firstLessonId!
-                )}
-              >
-                {card}
-              </Link>
             );
           })}
         </div>
