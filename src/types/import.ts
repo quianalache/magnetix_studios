@@ -37,7 +37,17 @@ export type ImportEntity =
   // this SAME entity/mapping convention from day one.
   | "standalone_courses"
   | "standalone_course_sections"
-  | "standalone_course_lessons";
+  | "standalone_course_lessons"
+  // Skool-hosted MEDIA migration (2026-09-12) — keyed by the Skool source
+  // file/video id, `parentId` the owning Standalone lesson id. Deterministic
+  // identity for a rerun to resolve "already migrated" without re-downloading
+  // or re-uploading. `standalone_lesson_videos` is added now for type
+  // stability even though no executor writes it yet (video hosting
+  // destination is a pending owner decision, see the delivered report) —
+  // same "declare the entity before the executor needs it" precedent as
+  // standalone_courses above.
+  | "standalone_lesson_resources"
+  | "standalone_lesson_videos";
 
 export const IMPORT_ENTITIES: ImportEntity[] = [
   "contacts",
@@ -53,6 +63,8 @@ export const IMPORT_ENTITIES: ImportEntity[] = [
   "standalone_courses",
   "standalone_course_sections",
   "standalone_course_lessons",
+  "standalone_lesson_resources",
+  "standalone_lesson_videos",
 ];
 
 export type ImportJobStatus = "queued" | "running" | "completed" | "failed";

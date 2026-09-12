@@ -1,10 +1,12 @@
 rules_version = '2';
 
 // Firebase Storage rules. Writer surfaces: Community's group cover/logo/
-// lesson uploads, and Standalone Courses' cover/lesson uploads. Both are
-// PUBLIC reads (the /c/* and /course/* pages are public), writes require a
-// signed-in Firebase user (staff — members/buyers are NOT Firebase users, so
-// they can't write here) plus an image content-type + 5 MB size cap.
+// lesson uploads, and Standalone Courses' cover/lesson uploads (+ rehosted
+// Skool lesson-resource PDFs, Admin-SDK-written only — see that match
+// block's own comment). Both are PUBLIC reads (the /c/* and /course/*
+// pages are public), writes require a signed-in Firebase user (staff —
+// members/buyers are NOT Firebase users, so they can't write here) plus an
+// image (or, standalone-courses only, PDF) content-type + 5 MB size cap.
 //
 // Deploy with: firebase deploy --only storage
 service firebase.storage {
@@ -32,12 +34,19 @@ service firebase.storage {
     }
 
     // Standalone Course cover/lesson images — same rules, independent path
-    // (no groupId; standalone courses have no group).
+    // (no groupId; standalone courses have no group). Also where the Skool
+    // course-media migration's rehosted lesson PDFs live (2026-09-12,
+    // `skool-import-resource-{fileId}.pdf` — same path prefix, uploaded via
+    // Admin SDK, which isn't subject to this rule's write clause at all;
+    // `application/pdf` is allowed here too so this rule stays an honest
+    // description of what's actually stored, and so a future CLIENT
+    // uploader for a lesson resource wouldn't need a second rule).
     match /standalone-courses/{subAccountId}/{courseId}/{fileName} {
       allow read: if true;
       allow write: if request.auth != null
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && (request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf');
       allow delete: if request.auth != null;
     }
 

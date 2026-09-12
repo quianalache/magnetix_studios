@@ -23,14 +23,19 @@ import type { SkoolSession } from "./skool-session";
  */
 export async function fetchSkoolPageProps(
   url: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<Record<string, unknown>> {
   const html = await session.transport.fetchText(url);
   const match = html.match(
-    /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/,
+    /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
   );
-  if (!match) throw new Error(`No __NEXT_DATA__ found at ${url} — page shape may have changed`);
-  const parsed = JSON.parse(match[1]) as { props?: { pageProps?: Record<string, unknown> } };
+  if (!match)
+    throw new Error(
+      `No __NEXT_DATA__ found at ${url} — page shape may have changed`
+    );
+  const parsed = JSON.parse(match[1]) as {
+    props?: { pageProps?: Record<string, unknown> };
+  };
   return parsed.props?.pageProps ?? {};
 }
 
@@ -38,7 +43,7 @@ export async function fetchSkoolPageProps(
 export async function fetchSkoolFeedPage(
   groupSlug: string,
   page: number,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<{ postTrees: unknown[]; total: number; page: number }> {
   const url = `https://www.skool.com/${groupSlug}${page > 1 ? `?p=${page}` : ""}`;
   const props = await fetchSkoolPageProps(url, session);
@@ -53,26 +58,32 @@ export async function fetchSkoolFeedPage(
  *  is almost always redacted to "" by Skool itself. */
 export async function fetchSkoolMembersProps(
   groupSlug: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<Record<string, unknown>> {
-  return fetchSkoolPageProps(`https://www.skool.com/${groupSlug}/-/members`, session);
+  return fetchSkoolPageProps(
+    `https://www.skool.com/${groupSlug}/-/members`,
+    session
+  );
 }
 
 export async function fetchSkoolClassroomProps(
   groupSlug: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<Record<string, unknown>> {
-  return fetchSkoolPageProps(`https://www.skool.com/${groupSlug}/classroom`, session);
+  return fetchSkoolPageProps(
+    `https://www.skool.com/${groupSlug}/classroom`,
+    session
+  );
 }
 
 export async function fetchSkoolCourseProps(
   groupSlug: string,
   courseShortId: string,
-  session: SkoolSession,
+  session: SkoolSession
 ): Promise<Record<string, unknown>> {
   return fetchSkoolPageProps(
     `https://www.skool.com/${groupSlug}/classroom/${courseShortId}`,
-    session,
+    session
   );
 }
 
@@ -93,4 +104,26 @@ export async function fetchSkoolComments(opts: {
     `?group-id=${opts.groupId}&limit=${opts.limit ?? 100}&pinned=true`;
   const text = await opts.session.transport.fetchText(url);
   return JSON.parse(text) as { post_tree?: { children?: unknown[] } };
+}
+
+/**
+ * Resolves a Skool-hosted file's real, permanent-enough-to-download URL —
+ * confirmed live by watching the actual network request Skool's own
+ * classroom UI makes when a member clicks a lesson resource:
+ * `POST https://api2.skool.com/files/{fileId}/download-url?expire=28800`,
+ * which returns the plain-text URL body (not JSON) of a CloudFront-signed
+ * `files.skool.com` link good for the requested `expire` seconds (8 hours
+ * here — comfortably longer than any single download takes). That
+ * CloudFront URL itself does NOT need the authenticated browser (confirmed
+ * live: a plain server-side `fetch` downloaded the real file directly,
+ * 200 OK) — only this resolution step does, same WAF-bypass reason as
+ * every other `www.skool.com`/`api2.skool.com` call in this layer.
+ */
+export async function fetchSkoolFileDownloadUrl(
+  fileId: string,
+  session: SkoolSession
+): Promise<string> {
+  const url = `https://api2.skool.com/files/${fileId}/download-url?expire=28800`;
+  const text = await session.transport.postText(url);
+  return text.trim();
 }

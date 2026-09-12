@@ -1,6 +1,11 @@
 import "server-only";
 
-import { chromium, type Browser, type BrowserContext, type Cookie } from "playwright-core";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type Cookie,
+} from "playwright-core";
 import type { SkoolTransport } from "./cdp-browser-transport";
 
 /**
@@ -73,7 +78,11 @@ export interface ConnectToSkoolResult {
   communityName: string | null;
   /** Product-facing, never a raw Skool/browser error string — see the
    *  Connect route for how this maps to the approved copy. */
-  errorKind: "invalid-credentials" | "not-found-or-inaccessible" | "browser-failure" | null;
+  errorKind:
+    | "invalid-credentials"
+    | "not-found-or-inaccessible"
+    | "browser-failure"
+    | null;
 }
 
 /**
@@ -101,7 +110,7 @@ export interface ConnectToSkoolResult {
 export async function connectToSkool(
   email: string,
   password: string,
-  groupSlug: string,
+  groupSlug: string
 ): Promise<ConnectToSkoolResult> {
   let browser: Browser | null = null;
   try {
@@ -113,7 +122,10 @@ export async function connectToSkool(
     // hydration to catch up without waiting on network activity that may
     // never fully stop ("networkidle" was tried and hard-times-out at 30s
     // on this page every time, confirmed live — see the diagnostic report).
-    await page.goto("https://www.skool.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto("https://www.skool.com/login", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
     await page.waitForTimeout(800);
 
     // Confirmed live, real selectors — see the Connect report.
@@ -137,7 +149,11 @@ export async function connectToSkool(
     let capturedBody: string | null = null;
     const captured = new Promise<void>((resolve) => {
       page.on("response", (res) => {
-        if (capturedBody !== null || !res.url().includes("api2.skool.com/auth/login")) return;
+        if (
+          capturedBody !== null ||
+          !res.url().includes("api2.skool.com/auth/login")
+        )
+          return;
         res
           .text()
           .then((text) => {
@@ -154,7 +170,9 @@ export async function connectToSkool(
     await page.click('button[type="submit"]');
     await Promise.race([
       captured,
-      new Promise<void>((_, reject) => setTimeout(() => reject(new Error("login response timeout")), 30000)),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("login response timeout")), 30000)
+      ),
     ]);
 
     // The response body's `code` field is NOT a trustworthy success/failure
@@ -169,12 +187,17 @@ export async function connectToSkool(
     // interpreted as a verification challenge.
     let bodyJson: { code?: string } | null = null;
     try {
-      bodyJson = capturedBody ? (JSON.parse(capturedBody) as { code?: string }) : null;
+      bodyJson = capturedBody
+        ? (JSON.parse(capturedBody) as { code?: string })
+        : null;
     } catch {
       bodyJson = null;
     }
     if (bodyJson?.code) {
-      console.log("[skool-import] login response included code (informational only):", bodyJson.code);
+      console.log(
+        "[skool-import] login response included code (informational only):",
+        bodyJson.code
+      );
     }
 
     // The one signal confirmed reliable across every real attempt: whether
@@ -188,12 +211,22 @@ export async function connectToSkool(
     await page.waitForTimeout(2500);
 
     if (page.url().includes("/login")) {
-      return { ok: false, cookies: null, communityName: null, errorKind: "invalid-credentials" };
+      return {
+        ok: false,
+        cookies: null,
+        communityName: null,
+        errorKind: "invalid-credentials",
+      };
     }
 
     const cookies = await context.cookies("https://www.skool.com");
     if (cookies.length === 0) {
-      return { ok: false, cookies: null, communityName: null, errorKind: "browser-failure" };
+      return {
+        ok: false,
+        cookies: null,
+        communityName: null,
+        errorKind: "browser-failure",
+      };
     }
 
     // Authenticated — now confirm the SAME account can actually see the
@@ -201,25 +234,45 @@ export async function connectToSkool(
     // closes. Reads the community's own feed page's real `__NEXT_DATA__`
     // (`currentGroup.name`), the same structured source the rest of the
     // importer already relies on (skool-client.ts).
-    const communityResponse = await page.goto(`https://www.skool.com/${groupSlug}`, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-    });
+    const communityResponse = await page.goto(
+      `https://www.skool.com/${groupSlug}`,
+      {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      }
+    );
     if (!communityResponse || !communityResponse.ok()) {
-      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
+      return {
+        ok: false,
+        cookies: null,
+        communityName: null,
+        errorKind: "not-found-or-inaccessible",
+      };
     }
 
     const html = await page.content();
-    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    const match = html.match(
+      /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
+    );
     if (!match) {
-      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
+      return {
+        ok: false,
+        cookies: null,
+        communityName: null,
+        errorKind: "not-found-or-inaccessible",
+      };
     }
     const parsed = JSON.parse(match[1]) as {
       props?: { pageProps?: { currentGroup?: { name?: string } } };
     };
     const name = parsed.props?.pageProps?.currentGroup?.name?.trim();
     if (!name) {
-      return { ok: false, cookies: null, communityName: null, errorKind: "not-found-or-inaccessible" };
+      return {
+        ok: false,
+        cookies: null,
+        communityName: null,
+        errorKind: "not-found-or-inaccessible",
+      };
     }
 
     return { ok: true, cookies, communityName: name, errorKind: null };
@@ -227,8 +280,16 @@ export async function connectToSkool(
     // Sanitized ops log only — Playwright's own errors (timeouts, nav
     // failures) never embed form field VALUES, only selectors/URLs/status
     // codes, so this is safe. Never logs `email`/`password` themselves.
-    console.error("[skool-import] connectToSkool failed:", err instanceof Error ? err.message : String(err));
-    return { ok: false, cookies: null, communityName: null, errorKind: "browser-failure" };
+    console.error(
+      "[skool-import] connectToSkool failed:",
+      err instanceof Error ? err.message : String(err)
+    );
+    return {
+      ok: false,
+      cookies: null,
+      communityName: null,
+      errorKind: "browser-failure",
+    };
   } finally {
     await browser?.close().catch(() => {});
   }
@@ -287,7 +348,7 @@ export class CookieSeededHeadlessTransport implements SkoolTransport {
     await this.ready;
   }
 
-  async fetchText(url: string): Promise<string> {
+  private async request(url: string, method: "GET" | "POST"): Promise<string> {
     await this.ensureReady();
     const page = await this.context!.newPage();
     try {
@@ -298,12 +359,21 @@ export class CookieSeededHeadlessTransport implements SkoolTransport {
       // BOTH SSR HTML pages (__NEXT_DATA__) and api2.skool.com's raw JSON
       // responses identically — a JSON `page.goto` would come back
       // wrapped in Chrome's own JSON-viewer markup instead of raw text.
-      await page.goto("https://www.skool.com", { waitUntil: "domcontentloaded", timeout: 30000 });
-      const result = await page.evaluate(async (targetUrl) => {
-        const res = await fetch(targetUrl, { credentials: "include" });
-        const text = await res.text();
-        return { ok: res.ok, status: res.status, text };
-      }, url);
+      await page.goto("https://www.skool.com", {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+      const result = await page.evaluate(
+        async ({ targetUrl, targetMethod }) => {
+          const res = await fetch(targetUrl, {
+            method: targetMethod,
+            credentials: "include",
+          });
+          const text = await res.text();
+          return { ok: res.ok, status: res.status, text };
+        },
+        { targetUrl: url, targetMethod: method }
+      );
       if (!result.ok) {
         throw new Error(`Skool request failed (${url}): HTTP ${result.status}`);
       }
@@ -311,6 +381,14 @@ export class CookieSeededHeadlessTransport implements SkoolTransport {
     } finally {
       await page.close().catch(() => {});
     }
+  }
+
+  async fetchText(url: string): Promise<string> {
+    return this.request(url, "GET");
+  }
+
+  async postText(url: string): Promise<string> {
+    return this.request(url, "POST");
   }
 
   /** Closes the ONE underlying Chromium process. Safe to call even if
@@ -347,7 +425,7 @@ export interface TriggerVerificationResult {
  */
 export async function triggerSkoolEmailVerification(
   cookies: Cookie[],
-  groupSlug: string,
+  groupSlug: string
 ): Promise<TriggerVerificationResult> {
   let browser: Browser | null = null;
   try {
@@ -368,7 +446,10 @@ export async function triggerSkoolEmailVerification(
 
     const [response] = await Promise.all([
       page
-        .waitForResponse((res) => res.url().includes("api2.skool.com/auth/email-verify-init"), { timeout: 15000 })
+        .waitForResponse(
+          (res) => res.url().includes("api2.skool.com/auth/email-verify-init"),
+          { timeout: 15000 }
+        )
         .catch(() => null),
       exportButton.first().click(),
     ]);
@@ -388,7 +469,7 @@ export async function triggerSkoolEmailVerification(
   } catch (err) {
     console.error(
       "[skool-import] triggerSkoolEmailVerification failed:",
-      err instanceof Error ? err.message : String(err),
+      err instanceof Error ? err.message : String(err)
     );
     return { ok: false, alreadyVerified: false };
   } finally {

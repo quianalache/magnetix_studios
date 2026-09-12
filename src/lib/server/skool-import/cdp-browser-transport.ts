@@ -23,6 +23,13 @@ export interface SkoolTransport {
   /** Fetch a URL through the live browser session and return the raw
    *  response text (HTML or JSON body, caller's choice how to parse it). */
   fetchText(url: string): Promise<string>;
+  /** POST through the live browser session — added for the media migration's
+   *  real, confirmed-live file-resolution endpoint
+   *  (`api2.skool.com/files/{fileId}/download-url`), the first real POST
+   *  need in this layer. Same WAF-bypass rationale as `fetchText`: this
+   *  domain requires real session cookies, unlike the signed CDN URL it
+   *  returns (files.skool.com/stream.mux.com), which don't. */
+  postText(url: string): Promise<string>;
 }
 
 interface CdpMessage {
@@ -41,19 +48,30 @@ interface CdpMessage {
 export class CdpBrowserTransport implements SkoolTransport {
   private ws: WebSocket | null = null;
   private nextId = 1;
-  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private readonly pending = new Map<
+    number,
+    { resolve: (v: unknown) => void; reject: (e: Error) => void }
+  >();
 
   constructor(
     private readonly cdpPort: number,
-    private readonly tabId: string,
+    private readonly tabId: string
   ) {}
 
   private async connect(): Promise<void> {
     if (this.ws) return;
-    const ws = new WebSocket(`ws://localhost:${this.cdpPort}/devtools/page/${this.tabId}`);
+    const ws = new WebSocket(
+      `ws://localhost:${this.cdpPort}/devtools/page/${this.tabId}`
+    );
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener("open", () => resolve());
-      ws.addEventListener("error", () => reject(new Error("Could not connect to the Skool browser tab — is it still open?")));
+      ws.addEventListener("error", () =>
+        reject(
+          new Error(
+            "Could not connect to the Skool browser tab — is it still open?"
+          )
+        )
+      );
     });
     ws.addEventListener("message", (ev) => {
       const data = JSON.parse(ev.data as string) as CdpMessage;
@@ -76,14 +94,14 @@ export class CdpBrowserTransport implements SkoolTransport {
     });
   }
 
-  async fetchText(url: string): Promise<string> {
+  private async request(url: string, method: "GET" | "POST"): Promise<string> {
     await this.connect();
     // Runs INSIDE the real page's own JS context — inherits its real
     // cookies, TLS fingerprint, and browser headers automatically. No
     // credential of any kind is read, stored, or passed by this code.
     const expr = `
       (async () => {
-        const res = await fetch(${JSON.stringify(url)}, { credentials: "include" });
+        const res = await fetch(${JSON.stringify(url)}, { method: ${JSON.stringify(method)}, credentials: "include" });
         const text = await res.text();
         return JSON.stringify({ ok: res.ok, status: res.status, text });
       })()
@@ -92,15 +110,32 @@ export class CdpBrowserTransport implements SkoolTransport {
       expression: expr,
       returnByValue: true,
       awaitPromise: true,
-    })) as { result?: { value?: string }; exceptionDetails?: { text?: string } };
+    })) as {
+      result?: { value?: string };
+      exceptionDetails?: { text?: string };
+    };
     if (!result.result?.value) {
-      throw new Error(`Browser-fetch of ${url} produced no result (page may have navigated away)`);
+      throw new Error(
+        `Browser-${method.toLowerCase()} of ${url} produced no result (page may have navigated away)`
+      );
     }
-    const parsed = JSON.parse(result.result.value) as { ok: boolean; status: number; text: string };
+    const parsed = JSON.parse(result.result.value) as {
+      ok: boolean;
+      status: number;
+      text: string;
+    };
     if (!parsed.ok) {
       throw new Error(`Skool request failed (${url}): HTTP ${parsed.status}`);
     }
     return parsed.text;
+  }
+
+  async fetchText(url: string): Promise<string> {
+    return this.request(url, "GET");
+  }
+
+  async postText(url: string): Promise<string> {
+    return this.request(url, "POST");
   }
 
   close(): void {
