@@ -69,23 +69,22 @@ import {
 } from "../src/lib/server/skool-import/course-importer";
 
 /**
- * Skool course id -> reason. "YouTube By Design" already has a manually-
- * created, non-Skool-mapped Product ("YouTube By Design (Preview)",
- * confirmed live: already published, already linked to the target
- * Community, already bundled into its own manually-created Offer) —
- * creating a second Product for the same real course would produce a
- * confusing duplicate under a near-identical title. Title is not identity:
- * this is a single explicit reconciliation decision for the owner, not
- * something this run resolves unilaterally.
+ * Skool course id -> reason to hold a course back from creation entirely
+ * this run. Empty as of the 2026-09-12 reconciliation: "YouTube By Design"
+ * was held back on the first run because a pre-existing, non-Skool-mapped
+ * Product ("YouTube By Design (Preview)") already used a near-identical
+ * title. Audited and resolved — see that reconciliation's own delivered
+ * report for the full evidence trail: the Preview Product's only
+ * enrollments/purchase all belong to the owner's own accounts and an
+ * "@example.com" QA account (no real third-party customer), but it DOES
+ * carry a real completed Stripe purchase and real member progress, so it
+ * was deliberately left untouched rather than adopted/repurposed/deleted —
+ * a new, separate canonical Product was created instead (Option B), never
+ * touching the Preview Product's own data. Left as an empty map (not
+ * deleted) so a future course needing the same "don't title-merge" treatment
+ * has an obvious, already-proven place to add itself.
  */
-const SKIP_COURSE_IDS = new Map<string, string>([
-  [
-    "5cea3d5dc0364d0981874f790e0055e9",
-    'Pre-existing manually-created Product "YouTube By Design (Preview)" already exists for this ' +
-      "Community with no Skool importMapping — held back pending an explicit reconciliation decision, " +
-      "not auto-merged by title.",
-  ],
-]);
+const SKIP_COURSE_IDS = new Map<string, string>([]);
 
 function summarizeReport(report: CourseImportReport) {
   return {
