@@ -2,9 +2,29 @@
 
 import { useState } from "react";
 import { Check, Video } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { parseVideoUrl } from "@/lib/community/video-embed";
-import type { VideoLinkAttachment } from "@/types/media-attachment";
+import type {
+  VideoLinkAttachment,
+  VideoProviderName,
+} from "@/types/media-attachment";
+
+// Post video attachments still only accept the original four providers —
+// see normalize-post-attachments.ts's own guard (the real, server-side
+// boundary this mirrors for UX only) for why.
+const POST_VIDEO_PROVIDERS: readonly VideoProviderName[] = [
+  "youtube",
+  "vimeo",
+  "loom",
+  "descript",
+];
+function isPostVideoProvider(provider: string): provider is VideoProviderName {
+  return (POST_VIDEO_PROVIDERS as readonly string[]).includes(provider);
+}
 
 /**
  * Composer "Add video/media" action — paste a YouTube/Vimeo/Loom/Descript
@@ -35,12 +55,16 @@ export function AddVideoPopover({
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const parsed = url.trim() ? parseVideoUrl(url) : null;
+  const rawParsed = url.trim() ? parseVideoUrl(url) : null;
+  const parsed =
+    rawParsed && isPostVideoProvider(rawParsed.provider) ? rawParsed : null;
 
   function add() {
     const result = parseVideoUrl(url);
-    if (!result) {
-      setError("That link isn't from a supported provider (YouTube, Vimeo, Loom, or Descript).");
+    if (!result || !isPostVideoProvider(result.provider)) {
+      setError(
+        "That link isn't from a supported provider (YouTube, Vimeo, Loom, or Descript)."
+      );
       return;
     }
     onAdd({
@@ -74,7 +98,9 @@ export function AddVideoPopover({
         {renderTrigger ? renderTrigger(open) : <Video className="h-4 w-4" />}
       </PopoverTrigger>
       <PopoverContent className="w-80 space-y-2.5">
-        <p className="text-xs font-medium text-foreground">Add video or media</p>
+        <p className="text-foreground text-xs font-medium">
+          Add video or media
+        </p>
         <input
           autoFocus
           value={url}
@@ -89,20 +115,20 @@ export function AddVideoPopover({
             }
           }}
           placeholder="Paste a YouTube, Vimeo, Loom, or Descript link"
-          className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm outline-none focus:border-primary"
+          className="border-border bg-background focus:border-primary w-full rounded-md border px-2 py-1.5 text-sm outline-none"
         />
         {parsed && (
           <p className="flex items-center gap-1 text-xs text-emerald-700">
             <Check className="h-3.5 w-3.5" /> Recognized as {parsed.provider}
           </p>
         )}
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {error && <p className="text-destructive text-xs">{error}</p>}
         <div className="flex justify-end">
           <button
             type="button"
             onClick={add}
             disabled={!url.trim()}
-            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
           >
             Add
           </button>

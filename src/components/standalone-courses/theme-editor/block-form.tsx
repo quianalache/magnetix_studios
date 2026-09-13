@@ -133,7 +133,9 @@ export function BlockForm({
             <Label>Go to URL</Label>
             <Input
               value={block.linkUrl ?? ""}
-              onChange={(e) => onChange({ ...block, linkUrl: e.target.value || null })}
+              onChange={(e) =>
+                onChange({ ...block, linkUrl: e.target.value || null })
+              }
               placeholder="Eg: https://abc.com"
             />
           </div>
@@ -145,7 +147,7 @@ export function BlockForm({
       const invalid = !!block.videoUrl && !parsed;
       return (
         <div className="space-y-1.5">
-          <Label>Video URL (YouTube, Vimeo, Loom, or Descript)</Label>
+          <Label>Video URL (YouTube, Vimeo, Loom, Descript, or Wistia)</Label>
           <Input
             value={block.videoUrl ?? ""}
             onChange={(e) => {
@@ -161,13 +163,17 @@ export function BlockForm({
             placeholder="https://youtube.com/watch?v=…"
           />
           {invalid && (
-            <p className="text-xs text-destructive">
-              Not a recognized YouTube, Vimeo, Loom, or Descript link.
+            <p className="text-destructive text-xs">
+              Not a recognized YouTube, Vimeo, Loom, Descript, or Wistia link.
             </p>
           )}
           {parsed && (
             <div className="aspect-video w-full max-w-sm overflow-hidden rounded-lg border bg-black">
-              <iframe src={parsed.embedUrl} title="preview" className="h-full w-full" />
+              <iframe
+                src={parsed.embedUrl}
+                title="preview"
+                className="h-full w-full"
+              />
             </div>
           )}
         </div>
@@ -182,7 +188,9 @@ export function BlockForm({
               <Label>Heading</Label>
               <Input
                 value={block.heading}
-                onChange={(e) => onChange({ ...block, heading: e.target.value })}
+                onChange={(e) =>
+                  onChange({ ...block, heading: e.target.value })
+                }
               />
             </div>
             <ColorInput
@@ -227,7 +235,9 @@ export function BlockForm({
             <input
               type="checkbox"
               checked={block.buttonVisible}
-              onChange={(e) => onChange({ ...block, buttonVisible: e.target.checked })}
+              onChange={(e) =>
+                onChange({ ...block, buttonVisible: e.target.checked })
+              }
               className="h-4 w-4"
             />
             Show button
@@ -238,7 +248,9 @@ export function BlockForm({
                 <Label>Button Text</Label>
                 <Input
                   value={block.buttonText}
-                  onChange={(e) => onChange({ ...block, buttonText: e.target.value })}
+                  onChange={(e) =>
+                    onChange({ ...block, buttonText: e.target.value })
+                  }
                 />
               </div>
               <TypeRadio
@@ -254,8 +266,12 @@ export function BlockForm({
                 borderColor={block.buttonBorderColor ?? block.buttonColor}
                 textColor={block.buttonTextColor}
                 colorHover={block.buttonColorHover ?? block.buttonColor}
-                borderColorHover={block.buttonBorderColorHover ?? block.buttonColor}
-                textColorHover={block.buttonTextColorHover ?? block.buttonTextColor}
+                borderColorHover={
+                  block.buttonBorderColorHover ?? block.buttonColor
+                }
+                textColorHover={
+                  block.buttonTextColorHover ?? block.buttonTextColor
+                }
                 onChange={(next) =>
                   onChange({
                     ...block,
@@ -272,7 +288,9 @@ export function BlockForm({
                 <Label>Go to URL</Label>
                 <Input
                   value={block.linkUrl}
-                  onChange={(e) => onChange({ ...block, linkUrl: e.target.value })}
+                  onChange={(e) =>
+                    onChange({ ...block, linkUrl: e.target.value })
+                  }
                   placeholder="Eg: https://abc.com"
                 />
               </div>
@@ -296,7 +314,7 @@ export function BlockForm({
               onChange={(e) =>
                 onChange({ ...block, targetOfferId: e.target.value || null })
               }
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
             >
               <option value="">Select an offer…</option>
               {otherOffers.map((o) => (
@@ -322,7 +340,9 @@ export function BlockForm({
             <Label>Button Text</Label>
             <Input
               value={block.buttonText}
-              onChange={(e) => onChange({ ...block, buttonText: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...block, buttonText: e.target.value })
+              }
             />
           </div>
           <ButtonColorFields
@@ -354,7 +374,9 @@ export function BlockForm({
             <Label>Button Text</Label>
             <Input
               value={block.buttonText}
-              onChange={(e) => onChange({ ...block, buttonText: e.target.value })}
+              onChange={(e) =>
+                onChange({ ...block, buttonText: e.target.value })
+              }
             />
           </div>
           <TypeRadio
@@ -448,7 +470,9 @@ export function ProgressBlockForm({
         hint="1280×720 recommended."
         value={block.promoImageUrl}
         onChange={(url) => onChange({ ...block, promoImageUrl: url })}
-        onUpload={(file) => uploadCourseThemeImage(file, saId, courseId, "progress-promo")}
+        onUpload={(file) =>
+          uploadCourseThemeImage(file, saId, courseId, "progress-promo")
+        }
       />
     </div>
   );
@@ -480,22 +504,26 @@ export function InstructorBlockForm({
         <input
           type="checkbox"
           checked={block.syncFromProfile}
-          onChange={(e) => onChange({ ...block, syncFromProfile: e.target.checked })}
+          onChange={(e) =>
+            onChange({ ...block, syncFromProfile: e.target.checked })
+          }
           className="h-4 w-4"
         />
         Sync from course Instructor details
       </label>
-      <p className="-mt-2 text-xs text-muted-foreground">
+      <p className="text-muted-foreground -mt-2 text-xs">
         When on, this block shows the Instructor fields from the course&apos;s
-        Settings tab instead of the fields below — unless those are left
-        blank, in which case the fields below (e.g. from an applied template)
-        are used instead.
+        Settings tab instead of the fields below — unless those are left blank,
+        in which case the fields below (e.g. from an applied template) are used
+        instead.
       </p>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"
           checked={block.headshotVisible ?? true}
-          onChange={(e) => onChange({ ...block, headshotVisible: e.target.checked })}
+          onChange={(e) =>
+            onChange({ ...block, headshotVisible: e.target.checked })
+          }
           className="h-4 w-4"
         />
         Show headshot
@@ -506,7 +534,9 @@ export function InstructorBlockForm({
         aspect="square"
         value={block.headshotUrl}
         onChange={(url) => onChange({ ...block, headshotUrl: url })}
-        onUpload={(file) => uploadCourseThemeImage(file, saId, courseId, "instructor-headshot")}
+        onUpload={(file) =>
+          uploadCourseThemeImage(file, saId, courseId, "instructor-headshot")
+        }
       />
       <ColorInput
         label="Background Color"
@@ -671,7 +701,7 @@ export function CourseContentBlockForm({
         />
       </div>
       <div className="space-y-3 border-t pt-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Previous post button
         </p>
         <ButtonStateFields
@@ -680,7 +710,7 @@ export function CourseContentBlockForm({
         />
       </div>
       <div className="space-y-3 border-t pt-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           Next post button
         </p>
         <ButtonStateFields

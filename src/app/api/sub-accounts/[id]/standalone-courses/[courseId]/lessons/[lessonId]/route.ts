@@ -14,7 +14,7 @@ export async function PATCH(
   request: Request,
   ctx: {
     params: Promise<{ id: string; courseId: string; lessonId: string }>;
-  },
+  }
 ) {
   const { id: subAccountId, courseId, lessonId } = await ctx.params;
   const access = await requireStandaloneCoursesStaff(request, subAccountId);
@@ -37,9 +37,9 @@ export async function PATCH(
       {
         ok: false,
         error:
-          "That video link wasn't recognized. Paste a YouTube, Vimeo, Loom, or Descript URL. Other fields were saved.",
+          "That video link wasn't recognized. Paste a YouTube, Vimeo, Loom, Descript, or Wistia URL. Other fields were saved.",
       },
-      { status: 422 },
+      { status: 422 }
     );
   }
   return NextResponse.json({ ok: true });
@@ -49,7 +49,7 @@ export async function DELETE(
   request: Request,
   ctx: {
     params: Promise<{ id: string; courseId: string; lessonId: string }>;
-  },
+  }
 ) {
   const { id: subAccountId, courseId, lessonId } = await ctx.params;
   const access = await requireStandaloneCoursesStaff(request, subAccountId);

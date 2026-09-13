@@ -23,6 +23,24 @@ import { isOwnedCommunityAttachmentStoragePath } from "@/lib/community/attachmen
 
 const MAX_VIDEO_LINKS_PER_POST = 1;
 
+/** Community post video attachments deliberately still only accept the
+ *  original four providers — `parseVideoUrl` (video-embed.ts) now also
+ *  recognizes Wistia (and, once its embed format is confirmed, Adilo) for
+ *  Lesson video, a broader `VideoProvider` union than `VideoProviderName`
+ *  here. Narrowing explicitly, rather than casting, keeps a pasted
+ *  Wistia/Adilo link in a post rejected exactly like any other
+ *  unsupported link today — extending post attachments to more providers
+ *  is a separate, not-yet-made product decision. */
+const POST_VIDEO_PROVIDERS: readonly VideoProviderName[] = [
+  "youtube",
+  "vimeo",
+  "loom",
+  "descript",
+];
+function isPostVideoProvider(provider: string): provider is VideoProviderName {
+  return (POST_VIDEO_PROVIDERS as readonly string[]).includes(provider);
+}
+
 /**
  * Normalize + validate client-supplied attachments — shared by the
  * create/edit POST and COMMENT routes (extracted in Phase D specifically
@@ -230,13 +248,14 @@ function validateVideoLinkItem(
   // Re-derived from the URL, never trusting the client's own provider/
   // providerId/embedUrl claims — see the module comment.
   const parsed = originalUrl ? parseVideoUrl(originalUrl) : null;
-  if (!parsed || !videoLink) return null;
+  if (!parsed || !videoLink || !isPostVideoProvider(parsed.provider))
+    return null;
   return {
     kind: "video-link",
     videoLink: {
       id: typeof videoLink.id === "string" ? videoLink.id : parsed.id,
       originalUrl: originalUrl!,
-      provider: parsed.provider as VideoProviderName,
+      provider: parsed.provider,
       providerId: parsed.id,
       embedUrl: parsed.embedUrl,
       authorMemberId,

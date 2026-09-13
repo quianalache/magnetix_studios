@@ -19,7 +19,7 @@ export async function PATCH(
       courseId: string;
       lessonId: string;
     }>;
-  },
+  }
 ) {
   const { id: subAccountId, groupId, courseId, lessonId } = await ctx.params;
   const access = await requireCommunityStaff(request, subAccountId);
@@ -43,9 +43,9 @@ export async function PATCH(
       {
         ok: false,
         error:
-          "That video link wasn't recognized. Paste a YouTube, Vimeo, Loom, or Descript URL. Other fields were saved.",
+          "That video link wasn't recognized. Paste a YouTube, Vimeo, Loom, Descript, or Wistia URL. Other fields were saved.",
       },
-      { status: 422 },
+      { status: 422 }
     );
   }
   return NextResponse.json({ ok: true });
@@ -60,7 +60,7 @@ export async function DELETE(
       courseId: string;
       lessonId: string;
     }>;
-  },
+  }
 ) {
   const { id: subAccountId, groupId, courseId, lessonId } = await ctx.params;
   const access = await requireCommunityStaff(request, subAccountId);

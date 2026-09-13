@@ -866,7 +866,22 @@ export interface CourseSection {
   order: number;
 }
 
-export type VideoProvider = "youtube" | "vimeo" | "loom" | "descript";
+/**
+ * External video-embed providers a course Lesson (or the inline lesson-body
+ * video block, or a Standalone Course theme's video block) can reference —
+ * see video-embed.ts for the parser/embed-URL table. "wistia" and "adilo"
+ * were added 2026-09-13 for the external-host-first course-video model;
+ * Community POST video attachments deliberately still only accept the
+ * original four (see normalize-post-attachments.ts's own guard) — this
+ * union is intentionally broader than that one feature needs.
+ */
+export type VideoProvider =
+  | "youtube"
+  | "vimeo"
+  | "loom"
+  | "descript"
+  | "wistia"
+  | "adilo";
 
 export interface ResourceLink {
   label: string;
