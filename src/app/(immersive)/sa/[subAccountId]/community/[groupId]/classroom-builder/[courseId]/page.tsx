@@ -83,6 +83,7 @@ function CourseEditorPageInner({
   const [course, setCourse] = useState<Course | null>(null);
   const [sections, setSections] = useState<CourseSection[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessonsLoaded, setLessonsLoaded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -102,7 +103,10 @@ function CourseEditorPageInner({
       courseId,
       setSections
     );
-    const u3 = subscribeToLessons(subAccountId, groupId, courseId, setLessons);
+    const u3 = subscribeToLessons(subAccountId, groupId, courseId, (ls) => {
+      setLessons(ls);
+      setLessonsLoaded(true);
+    });
     return () => {
       u1();
       u2();
@@ -131,8 +135,13 @@ function CourseEditorPageInner({
 
   // Keep the URL's `lesson` param in sync with the selection, so refreshing
   // the page (or copy/pasting the URL) returns to the same lesson instead
-  // of silently defaulting to the first one.
+  // of silently defaulting to the first one. Gated on `lessonsLoaded`: the
+  // Firestore lessons subscription hasn't delivered its first snapshot yet
+  // on initial mount, so `selectedId` starts out null for a moment — synced
+  // too early, that null would overwrite (strip) a real `?lesson=` id from
+  // the URL before the effect above ever gets a chance to read it back.
   useEffect(() => {
+    if (!lessonsLoaded) return;
     if (searchParams.get("lesson") === selectedId) return;
     const qs = new URLSearchParams(searchParams.toString());
     if (selectedId) qs.set("lesson", selectedId);
@@ -142,8 +151,11 @@ function CourseEditorPageInner({
       `/sa/${subAccountId}/community/${groupId}/classroom-builder/${courseId}${query ? `?${query}` : ""}`,
       { scroll: false }
     );
+    // searchParams/router/subAccountId/groupId/courseId intentionally
+    // excluded — this should only re-run when the selection (or its
+    // readiness) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selectedId, lessonsLoaded]);
 
   if (!loaded) {
     return (
