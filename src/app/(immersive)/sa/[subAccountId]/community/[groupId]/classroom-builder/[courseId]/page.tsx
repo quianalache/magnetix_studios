@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -87,6 +87,13 @@ function CourseEditorPageInner({
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Set synchronously (refs have no render lag, unlike state) the instant
+  // the initial-resolution effect below has run once with real lesson
+  // data. Gates the URL-sync effect so it can never fire in the SAME
+  // commit as that first resolution — if it did, it would still see the
+  // pre-resolution `selectedId` (null) and strip a valid `?lesson=` id
+  // back off the URL a render before the resolved value replaces it.
+  const hasResolvedOnceRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -150,16 +157,22 @@ function CourseEditorPageInner({
       }
       return resolved;
     });
+    hasResolvedOnceRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessons, lessonsLoaded]);
 
   // Keep the URL's `lesson` param in sync with later, user-driven selection
   // changes (clicking a different lesson, creating one, drag-and-drop,
-  // deleting the current one) — the effect above already covers the
-  // initial resolution, so this is a no-op whenever the URL already
-  // matches.
+  // deleting the current one). Deliberately NOT gated on `lessonsLoaded` in
+  // the dependency array (only via the ref check below) — `lessonsLoaded`
+  // flipping true fires in the exact same commit as the effect above, and
+  // if this effect re-ran on that same trigger it would still be reading
+  // the pre-resolution `selectedId` from that commit's render (state
+  // updates from the other effect land on the *next* render, not this
+  // one). Depending on `selectedId` alone means this only runs once that
+  // next render actually happens, by which point it's fresh.
   useEffect(() => {
-    if (!lessonsLoaded) return;
+    if (!hasResolvedOnceRef.current) return;
     if (searchParams.get("lesson") === selectedId) return;
     const qs = new URLSearchParams(searchParams.toString());
     if (selectedId) qs.set("lesson", selectedId);
@@ -170,10 +183,9 @@ function CourseEditorPageInner({
       { scroll: false }
     );
     // searchParams/router/subAccountId/groupId/courseId intentionally
-    // excluded — this should only re-run when the selection (or its
-    // readiness) changes.
+    // excluded — this should only re-run when the selection itself changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, lessonsLoaded]);
+  }, [selectedId]);
 
   if (!loaded) {
     return (
