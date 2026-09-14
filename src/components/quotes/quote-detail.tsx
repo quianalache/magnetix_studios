@@ -3,9 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Timestamp } from "firebase/firestore";
-import { ArrowRight, CheckCircle2, Download, Loader2, Send, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Download,
+  Loader2,
+  Send,
+  Trash2,
+} from "lucide-react";
 
-import { QuoteBuilder, type QuoteFormValues } from "@/components/quotes/quote-builder";
+import {
+  QuoteBuilder,
+  type QuoteFormValues,
+} from "@/components/quotes/quote-builder";
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -44,6 +54,7 @@ interface QuoteDetailProps {
   scope: TenantScope;
   /** Recipient contact display name. */
   contactName: string;
+  contactEmail?: string;
   /** Path back to the list — used after delete. */
   listHref: string;
 }
@@ -52,6 +63,7 @@ export function QuoteDetail({
   quote,
   scope,
   contactName,
+  contactEmail,
   listHref,
 }: QuoteDetailProps) {
   const router = useRouter();
@@ -67,10 +79,8 @@ export function QuoteDetail({
   // this UI — see quote-builder.tsx.
   useEffect(() => {
     if (!editing) return;
-    const unsub = subscribeToCourseOffers(
-      scope.subAccountId,
-      setOffers,
-      () => setOffers([]),
+    const unsub = subscribeToCourseOffers(scope.subAccountId, setOffers, () =>
+      setOffers([])
     );
     return () => unsub();
   }, [editing, scope.subAccountId]);
@@ -106,7 +116,7 @@ export function QuoteDetail({
     try {
       const res = await fetch(
         `/api/sub-accounts/${scope.subAccountId}/quotes/${quote.id}/send`,
-        { method: "POST" },
+        { method: "POST" }
       );
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -127,7 +137,7 @@ export function QuoteDetail({
     try {
       const res = await fetch(
         `/api/sub-accounts/${scope.subAccountId}/quotes/${quote.id}/mark-paid`,
-        { method: "POST" },
+        { method: "POST" }
       );
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -144,7 +154,7 @@ export function QuoteDetail({
   const handleConvert = async () => {
     if (
       !confirm(
-        `Convert ${quote.quoteNumber} to an invoice? A new invoice number will be issued and the original quote link will stop working. You'll need to hit Send afterwards to email the invoice + payment link.`,
+        `Convert ${quote.quoteNumber} to an invoice? A new invoice number will be issued and the original quote link will stop working. You'll need to hit Send afterwards to email the invoice + payment link.`
       )
     ) {
       return;
@@ -155,7 +165,7 @@ export function QuoteDetail({
     try {
       const res = await fetch(
         `/api/sub-accounts/${scope.subAccountId}/quotes/${quote.id}/convert-to-invoice`,
-        { method: "POST" },
+        { method: "POST" }
       );
       const body = (await res.json().catch(() => ({}))) as {
         ok?: boolean;
@@ -166,7 +176,7 @@ export function QuoteDetail({
         throw new Error(body.error ?? `Convert failed (HTTP ${res.status})`);
       }
       setFlash(
-        `Converted to invoice ${body.invoiceNumber}. Click Send to email it.`,
+        `Converted to invoice ${body.invoiceNumber}. Click Send to email it.`
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Convert failed");
@@ -177,9 +187,7 @@ export function QuoteDetail({
 
   const handleDelete = async () => {
     if (
-      !confirm(
-        `Delete ${docNoun} ${quote.quoteNumber}? This can't be undone.`,
-      )
+      !confirm(`Delete ${docNoun} ${quote.quoteNumber}? This can't be undone.`)
     ) {
       return;
     }
@@ -199,9 +207,7 @@ export function QuoteDetail({
     // Firestore Timestamp. End-of-day local time so a date picked as
     // "Dec 31" still treats Dec 31 23:59:59 as valid.
     const validUntil = values.validUntilDateString
-      ? Timestamp.fromDate(
-          new Date(`${values.validUntilDateString}T23:59:59`),
-        )
+      ? Timestamp.fromDate(new Date(`${values.validUntilDateString}T23:59:59`))
       : null;
 
     await updateDraftQuote(quote.id, {
@@ -231,12 +237,12 @@ export function QuoteDetail({
             </h1>
             <QuoteStatusBadge status={effStatus} />
             {isInvoice && (
-              <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+              <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wider text-emerald-700 uppercase dark:text-emerald-400">
                 Invoice
               </span>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-muted-foreground mt-1 text-xs">
             Created {formatContactDate(quote.createdAt)} · last updated{" "}
             {formatRelativeTime(quote.updatedAt)}
           </p>
@@ -351,7 +357,7 @@ export function QuoteDetail({
         </p>
       )}
       {error && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-3 py-2 text-xs">
           {error}
         </p>
       )}
@@ -371,7 +377,11 @@ export function QuoteDetail({
           {/* Recipient summary */}
           <Card className="p-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <SummaryField label="Recipient" value={contactName} />
+              <SummaryField
+                label="Recipient"
+                value={contactName}
+                secondary={contactEmail || undefined}
+              />
               <SummaryField
                 label="Billed to"
                 value={quote.billedToOrganization ?? "—"}
@@ -389,9 +399,7 @@ export function QuoteDetail({
                     <SummaryField
                       label="Payment method"
                       value={
-                        quote.paymentProvider === "stripe"
-                          ? "Stripe"
-                          : "PayPal"
+                        quote.paymentProvider === "stripe" ? "Stripe" : "PayPal"
                       }
                       secondary={
                         quote.paymentProvider === "stripe"
@@ -416,7 +424,7 @@ export function QuoteDetail({
 
           {/* Line items + totals */}
           <Card className="p-5">
-            <div className="hidden grid-cols-[1fr_5rem_8rem_8rem] gap-3 border-b pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
+            <div className="text-muted-foreground hidden grid-cols-[1fr_5rem_8rem_8rem] gap-3 border-b pb-2 text-xs font-semibold tracking-wider uppercase sm:grid">
               <div>Description</div>
               <div className="text-right">Qty</div>
               <div className="text-right">Unit price</div>
@@ -425,25 +433,24 @@ export function QuoteDetail({
             <ul className="divide-y">
               {quote.lineItems.map((item) => {
                 const lineTotal =
-                  (Number(item.quantity) || 0) *
-                  (Number(item.unitPrice) || 0);
+                  (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
                 return (
                   <li
                     key={item.id}
                     className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm sm:grid-cols-[1fr_5rem_8rem_8rem] sm:items-baseline"
                   >
-                    <div className="font-medium text-foreground">
+                    <div className="text-foreground font-medium">
                       {item.description || (
                         <span className="text-muted-foreground italic">
                           Untitled item
                         </span>
                       )}
                     </div>
-                    <div className="text-right text-muted-foreground tabular-nums">
+                    <div className="text-muted-foreground text-right tabular-nums">
                       <span className="sm:hidden">Qty </span>
                       {item.quantity}
                     </div>
-                    <div className="hidden text-right text-muted-foreground tabular-nums sm:block">
+                    <div className="text-muted-foreground hidden text-right tabular-nums sm:block">
                       {formatCurrency(item.unitPrice, quote.currency)}
                     </div>
                     <div className="col-span-2 text-right font-medium tabular-nums sm:col-span-1">
@@ -485,10 +492,10 @@ export function QuoteDetail({
           {/* Terms */}
           {quote.termsAndNotes.trim() && (
             <Card className="p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                 Terms &amp; notes
               </p>
-              <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+              <p className="text-foreground mt-2 text-sm whitespace-pre-wrap">
                 {quote.termsAndNotes}
               </p>
             </Card>
@@ -501,12 +508,15 @@ export function QuoteDetail({
             quote.declinedAt ||
             quote.paidAt) && (
             <Card className="p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
                 Timeline
               </p>
               <dl className="mt-2 space-y-1 text-sm">
                 {quote.sentAt && (
-                  <Stamp label="Sent" value={formatRelativeTime(quote.sentAt)} />
+                  <Stamp
+                    label="Sent"
+                    value={formatRelativeTime(quote.sentAt)}
+                  />
                 )}
                 {quote.viewedAt && (
                   <Stamp
@@ -565,14 +575,14 @@ function SummaryField({
 }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">
+      <p className="text-muted-foreground text-xs tracking-wider uppercase">
         {label}
       </p>
       <p className={cn("mt-1 text-sm font-medium", mono && "font-mono")}>
         {value}
       </p>
       {secondary && (
-        <p className="mt-0.5 whitespace-pre-line text-xs text-muted-foreground">
+        <p className="text-muted-foreground mt-0.5 text-xs whitespace-pre-line">
           {secondary}
         </p>
       )}
@@ -593,12 +603,10 @@ function TotalRow({
     <div
       className={cn(
         "flex items-baseline justify-between",
-        strong && "text-base",
+        strong && "text-base"
       )}
     >
-      <span
-        className={cn(strong ? "font-semibold" : "text-muted-foreground")}
-      >
+      <span className={cn(strong ? "font-semibold" : "text-muted-foreground")}>
         {label}
       </span>
       <span
@@ -624,12 +632,12 @@ function Stamp({
       <div>
         <span className="text-muted-foreground">{label}</span>
         {detail && (
-          <p className="mt-0.5 text-xs italic text-muted-foreground">
+          <p className="text-muted-foreground mt-0.5 text-xs italic">
             &ldquo;{detail}&rdquo;
           </p>
         )}
       </div>
-      <span className="text-xs tabular-nums text-muted-foreground">
+      <span className="text-muted-foreground text-xs tabular-nums">
         {value}
       </span>
     </div>

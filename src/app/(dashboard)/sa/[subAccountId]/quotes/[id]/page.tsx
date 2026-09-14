@@ -61,7 +61,7 @@ export default function QuoteDetailPage({ params }: PageProps) {
   if (loadingQuote) {
     return (
       <div className="mx-auto w-full max-w-5xl p-6">
-        <Card className="p-8 text-center text-sm text-muted-foreground">
+        <Card className="text-muted-foreground p-8 text-center text-sm">
           Loading quote…
         </Card>
       </div>
@@ -79,7 +79,7 @@ export default function QuoteDetailPage({ params }: PageProps) {
           <ChevronLeft className="h-4 w-4" />
           Back to quotes
         </Button>
-        <Card className="p-8 text-center text-sm text-muted-foreground">
+        <Card className="text-muted-foreground p-8 text-center text-sm">
           Quote not found. It may have been deleted.
         </Card>
       </div>
@@ -106,6 +106,7 @@ export default function QuoteDetailPage({ params }: PageProps) {
         quote={quote}
         scope={{ agencyId: agencyId ?? "", subAccountId }}
         contactName={contactName}
+        contactEmail={contact?.email || undefined}
         listHref={saPath("/quotes")}
       />
     </div>

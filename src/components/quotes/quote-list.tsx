@@ -46,10 +46,10 @@ interface QuoteListProps {
   scope: TenantScope;
   /** Map of contactId → contact display name. Caller fetches contacts
    *  separately (we don't double-subscribe inside this list). */
-  contactNames: Record<string, string>;
+  contacts: Record<string, { name: string; email: string }>;
 }
 
-export function QuoteList({ scope, contactNames }: QuoteListProps) {
+export function QuoteList({ scope, contacts }: QuoteListProps) {
   const { ready: filterReady, filter: territoryFilter } =
     useEffectiveTerritoryFilter();
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -60,10 +60,14 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
   useEffect(() => {
     if (!filterReady) return;
     setLoading(true);
-    const unsubscribe = subscribeToQuotes(scope, { territoryFilter }, (data) => {
-      setQuotes(data);
-      setLoading(false);
-    });
+    const unsubscribe = subscribeToQuotes(
+      scope,
+      { territoryFilter },
+      (data) => {
+        setQuotes(data);
+        setLoading(false);
+      }
+    );
     return unsubscribe;
   }, [scope, filterReady, territoryFilter]);
 
@@ -92,19 +96,22 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
       const eff = effectiveQuoteStatus(q);
       if (filter !== "all" && eff !== filter) return false;
       if (!term) return true;
-      const contactName = (contactNames[q.contactId] ?? "").toLowerCase();
+      const contact = contacts[q.contactId];
+      const contactName = (contact?.name ?? "").toLowerCase();
+      const contactEmail = (contact?.email ?? "").toLowerCase();
       const billedTo = (q.billedToOrganization ?? "").toLowerCase();
       return (
         q.quoteNumber.toLowerCase().includes(term) ||
         contactName.includes(term) ||
+        contactEmail.includes(term) ||
         billedTo.includes(term)
       );
     });
-  }, [quotes, filter, search, contactNames]);
+  }, [quotes, filter, search, contacts]);
 
   if (loading) {
     return (
-      <Card className="p-8 text-center text-sm text-muted-foreground">
+      <Card className="text-muted-foreground p-8 text-center text-sm">
         Loading quotes…
       </Card>
     );
@@ -113,13 +120,14 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
   if (quotes.length === 0) {
     return (
       <Card className="flex flex-col items-center gap-3 p-10 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <span className="bg-muted text-muted-foreground flex h-12 w-12 items-center justify-center rounded-full">
           <FileText className="h-5 w-5" />
         </span>
         <p className="text-sm font-medium">No quotes or invoices yet</p>
-        <p className="max-w-md text-xs text-muted-foreground">
+        <p className="text-muted-foreground max-w-md text-xs">
           Use &ldquo;New quote&rdquo; to create one. Pick the
-          <strong> Quote</strong> type to send an estimate, or <strong>Invoice</strong> to bill directly.
+          <strong> Quote</strong> type to send an estimate, or{" "}
+          <strong>Invoice</strong> to bill directly.
         </p>
       </Card>
     );
@@ -143,7 +151,7 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
                   "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
                   isActive
                     ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted",
+                    : "border-border bg-background text-muted-foreground hover:bg-muted"
                 )}
               >
                 {chip.label}
@@ -152,7 +160,7 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
                     "rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
                     isActive
                       ? "bg-primary/20 text-primary"
-                      : "bg-muted text-muted-foreground",
+                      : "bg-muted text-muted-foreground"
                   )}
                 >
                   {count}
@@ -171,13 +179,13 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
       </div>
 
       {filtered.length === 0 ? (
-        <Card className="p-6 text-center text-sm text-muted-foreground">
+        <Card className="text-muted-foreground p-6 text-center text-sm">
           No quotes match this filter.
         </Card>
       ) : (
         <Card className="overflow-hidden">
           {/* Header */}
-          <div className="hidden grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] gap-3 border-b bg-muted/40 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
+          <div className="bg-muted/40 text-muted-foreground hidden grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] gap-3 border-b px-4 py-2.5 text-xs font-semibold tracking-wider uppercase sm:grid">
             <div>Number</div>
             <div>Type</div>
             <div>Recipient</div>
@@ -190,34 +198,40 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
             {filtered.map((q) => {
               const eff = effectiveQuoteStatus(q);
               const totals = computeQuoteTotals(q);
+              const contact = contacts[q.contactId];
               const recipient =
-                contactNames[q.contactId] ?? "(deleted contact)";
+                contact?.name || contact?.email || "(deleted contact)";
               const isInvoice = q.kind === "invoice";
               return (
                 <li key={q.id}>
                   <Link
                     href={`/sa/${scope.subAccountId}/quotes/${q.id}`}
-                    className="grid grid-cols-2 gap-2 px-4 py-3 text-sm transition-colors hover:bg-muted/30 sm:grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] sm:items-center"
+                    className="hover:bg-muted/30 grid grid-cols-2 gap-2 px-4 py-3 text-sm transition-colors sm:grid-cols-[1fr_6rem_2fr_1fr_8rem_8rem] sm:items-center"
                   >
-                    <div className="font-mono text-xs font-semibold text-foreground sm:text-sm">
+                    <div className="text-foreground font-mono text-xs font-semibold sm:text-sm">
                       {q.quoteNumber}
                     </div>
                     <div className="sm:order-none">
                       <span
                         className={cn(
-                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase",
                           isInvoice
                             ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                            : "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+                            : "bg-violet-500/10 text-violet-700 dark:text-violet-400"
                         )}
                       >
                         {isInvoice ? "Invoice" : "Quote"}
                       </span>
                     </div>
-                    <div className="truncate text-foreground sm:order-none">
+                    <div className="text-foreground truncate sm:order-none">
                       <p className="truncate font-medium">{recipient}</p>
+                      {contact?.name && contact.email && (
+                        <p className="text-muted-foreground truncate text-[11px]">
+                          {contact.email}
+                        </p>
+                      )}
                       {q.billedToOrganization && (
-                        <p className="truncate text-[11px] text-muted-foreground">
+                        <p className="text-muted-foreground truncate text-[11px]">
                           {q.billedToOrganization}
                         </p>
                       )}
@@ -228,7 +242,7 @@ export function QuoteList({ scope, contactNames }: QuoteListProps) {
                     <div className="text-right font-medium tabular-nums sm:order-none">
                       {formatCurrency(totals.total, q.currency)}
                     </div>
-                    <div className="text-right text-xs text-muted-foreground sm:order-none">
+                    <div className="text-muted-foreground text-right text-xs sm:order-none">
                       {formatRelativeTime(q.updatedAt)}
                     </div>
                   </Link>

@@ -27,10 +27,10 @@ export default function QuotesPage() {
     return () => unsub();
   }, [user, agencyId, subAccountId, authLoading]);
 
-  const contactNames = useMemo(() => {
-    const map: Record<string, string> = {};
+  const contactsById = useMemo(() => {
+    const map: Record<string, { name: string; email: string }> = {};
     for (const c of contacts) {
-      map[c.id] = c.name || c.email || c.phone || "(unnamed contact)";
+      map[c.id] = { name: c.name?.trim() ?? "", email: c.email?.trim() ?? "" };
     }
     return map;
   }, [contacts]);
@@ -39,8 +39,10 @@ export default function QuotesPage() {
     <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Invoices and Quotes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Invoices and Quotes
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
             Send branded invoices for payment or quotes for review. Recipients
             view on a shareable link; invoices include a PayPal payment link,
             quotes get accepted/declined.
@@ -63,7 +65,7 @@ export default function QuotesPage() {
 
       <QuoteList
         scope={{ agencyId: agencyId ?? "", subAccountId }}
-        contactNames={contactNames}
+        contacts={contactsById}
       />
     </div>
   );

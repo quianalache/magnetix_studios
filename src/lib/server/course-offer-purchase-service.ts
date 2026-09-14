@@ -24,6 +24,9 @@ import type { PayPalConfig } from "@/types";
 import type { ContactAttribution } from "@/types/contacts";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { ensureMember } from "@/lib/community/member-account";
+import { resolveLineItemSourceType } from "@/lib/quotes/line-items";
+import type { Quote, InvoiceOfferFulfillmentItem } from "@/types/quotes";
 
 /**
  * Purchases for a Course Offer — generalizes
@@ -696,6 +699,216 @@ export async function grantCourseOfferAccessServerSide(opts: {
   }
 
   return { ok: true };
+}
+
+export async function fulfillInvoiceOfferLinesServerSide(opts: {
+  quote: Quote;
+  stripeCheckoutSessionId: string;
+  stripePaymentIntentId?: string | null;
+}): Promise<void> {
+  const { quote } = opts;
+  const lines = quote.lineItems.filter(
+    (line) =>
+      resolveLineItemSourceType(line) === "offer" &&
+      typeof line.offerId === "string" &&
+      line.offerId.length > 0
+  );
+  const quoteRef = getAdminDb().collection("quotes").doc(quote.id);
+  if (!lines.length) {
+    await quoteRef.set(
+      { offerFulfillmentStatus: "notApplicable", offerFulfilledAt: null },
+      { merge: true }
+    );
+    return;
+  }
+  const items: Record<string, InvoiceOfferFulfillmentItem> = {
+    ...(quote.offerFulfillmentItems ?? {}),
+  };
+  const firstByOffer = new Map<string, string>();
+  for (const line of lines) {
+    const offerId = line.offerId!;
+    const first = firstByOffer.get(offerId);
+    if (first)
+      items[line.id] = {
+        offerId,
+        lineItemId: line.id,
+        status: "skipped",
+        purchaseId: null,
+        duplicateOfLineItemId: first,
+      };
+    else firstByOffer.set(offerId, line.id);
+  }
+  let memberId: string;
+  try {
+    const contactSnap = await getAdminDb()
+      .doc(`contacts/${quote.contactId}`)
+      .get();
+    const contact = contactSnap.data() as
+      | { email?: string; name?: string; subAccountId?: string }
+      | undefined;
+    if (
+      !contactSnap.exists ||
+      contact?.subAccountId !== quote.subAccountId ||
+      !contact.email?.trim()
+    )
+      throw new Error(
+        "Invoice recipient has no usable email/contact identity."
+      );
+    memberId = (
+      await ensureMember({
+        subAccountId: quote.subAccountId,
+        email: contact.email,
+        displayName: contact.name ?? null,
+        source: "course",
+      })
+    ).id;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Recipient member resolution failed.";
+    for (const line of lines)
+      if (!items[line.id]?.duplicateOfLineItemId)
+        items[line.id] = {
+          offerId: line.offerId!,
+          lineItemId: line.id,
+          status: "failed",
+          purchaseId: null,
+          error: message,
+        };
+    await quoteRef.set(
+      {
+        offerFulfillmentStatus: "failed",
+        offerFulfillmentItems: items,
+        offerFulfillmentError: message,
+      },
+      { merge: true }
+    );
+    console.error(`[invoice-fulfillment] ${message} invoice=${quote.id}`);
+    return;
+  }
+  for (const line of lines) {
+    if (
+      items[line.id]?.duplicateOfLineItemId ||
+      items[line.id]?.status === "fulfilled"
+    )
+      continue;
+    const offerId = line.offerId!;
+    const offer = await getCourseOffer(quote.subAccountId, offerId);
+    if (!offer) {
+      items[line.id] = {
+        offerId,
+        lineItemId: line.id,
+        status: "failed",
+        purchaseId: null,
+        error: "Offer no longer exists; access was not granted.",
+      };
+      continue;
+    }
+    if (offer.type === "recurring") {
+      items[line.id] = {
+        offerId,
+        lineItemId: line.id,
+        status: "failed",
+        purchaseId: null,
+        error:
+          "Recurring Offers cannot be fulfilled by a one-time Invoice payment.",
+      };
+      continue;
+    }
+    const purchaseId = `invoice_${quote.id}_${line.id}`
+      .replace(/[^A-Za-z0-9_-]/g, "_")
+      .slice(0, 120);
+    const purchaseRef = purchasesCol(quote.subAccountId, offerId).doc(
+      purchaseId
+    );
+    try {
+      if (!(await purchaseRef.get()).exists)
+        await purchaseRef.create({
+          subAccountId: quote.subAccountId,
+          agencyId: quote.agencyId,
+          offerId,
+          courseIds: offer.courseIds,
+          booking: offer.booking,
+          projectTemplates: offer.projectTemplates,
+          memberId,
+          amountCents: Math.round(
+            Math.max(0, line.unitPrice * line.quantity) * 100
+          ),
+          currency: quote.currency,
+          method: "stripe",
+          paypalUrl: null,
+          stripeCheckoutSessionId: opts.stripeCheckoutSessionId,
+          stripeCustomerId: null,
+          stripeSubscriptionId: null,
+          stripePaymentIntentId: opts.stripePaymentIntentId ?? null,
+          stripeConnectAccountId: null,
+          status: "pending",
+          grantedByUid: null,
+          requestedAt: FieldValue.serverTimestamp(),
+          paidAt: null,
+          billingCity: null,
+          billingState: null,
+          billingCountry: null,
+          purchaseSource: "invoice",
+          invoiceId: quote.id,
+          invoiceNumber: quote.quoteNumber,
+          invoiceLineItemId: line.id,
+          sourcePaymentProvider: "stripe",
+        });
+      await grantCourseOfferAccessServerSide({
+        subAccountId: quote.subAccountId,
+        offerId,
+        purchaseId,
+        grantedByUid: null,
+        stripePaymentIntentId: opts.stripePaymentIntentId ?? null,
+      });
+      items[line.id] = {
+        offerId,
+        lineItemId: line.id,
+        status: "fulfilled",
+        purchaseId,
+        error: null,
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Offer fulfillment failed.";
+      items[line.id] = {
+        offerId,
+        lineItemId: line.id,
+        status: "failed",
+        purchaseId,
+        error: message,
+      };
+      console.error(
+        `[invoice-fulfillment] ${message} invoice=${quote.id} offer=${offerId}`
+      );
+    }
+  }
+  for (const line of lines) {
+    const duplicateOf = items[line.id]?.duplicateOfLineItemId;
+    if (duplicateOf)
+      items[line.id].purchaseId = items[duplicateOf]?.purchaseId ?? null;
+  }
+  const statuses = lines.map((line) => items[line.id]?.status);
+  const status = statuses.every((s) => s === "fulfilled" || s === "skipped")
+    ? "fulfilled"
+    : statuses.some((s) => s === "fulfilled" || s === "skipped")
+      ? "partiallyFulfilled"
+      : "failed";
+  await quoteRef.set(
+    {
+      offerFulfillmentStatus: status,
+      offerFulfillmentItems: items,
+      offerFulfilledAt:
+        status === "fulfilled" ? FieldValue.serverTimestamp() : null,
+      offerFulfillmentError:
+        status === "fulfilled"
+          ? null
+          : "One or more Offer lines were not fulfilled; see offerFulfillmentItems.",
+    },
+    { merge: true }
+  );
 }
 
 /** Webhook: `checkout.session.completed` with `metadata.kind === OFFER_CHARGE_KIND`. */

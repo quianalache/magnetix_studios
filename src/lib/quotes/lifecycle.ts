@@ -13,6 +13,7 @@ import type { ActivityType } from "@/types/contacts";
 import type { WebhookEventType } from "@/types/webhooks";
 import { GLOBAL_TERRITORY_ID, type AutomationTriggerType } from "@/types";
 import type { Quote } from "@/types/quotes";
+import { fulfillInvoiceOfferLinesServerSide } from "@/lib/server/course-offer-purchase-service";
 
 /**
  * Side-effects fired off the back of a quote lifecycle event. Keeps the
@@ -61,7 +62,7 @@ export async function recordQuoteActivity(
     | "kind"
   >,
   event: QuoteLifecycleEvent,
-  opts: RecordActivityOpts = {},
+  opts: RecordActivityOpts = {}
 ): Promise<void> {
   try {
     const content =
@@ -95,7 +96,7 @@ function defaultActivityContent(
     | "kind"
   >,
   event: QuoteLifecycleEvent,
-  extra: string | null,
+  extra: string | null
 ): string {
   const totals = computeQuoteTotals(quote);
   const totalDisplay = formatCurrency(totals.total, quote.currency);
@@ -129,7 +130,7 @@ function defaultActivityContent(
  */
 export async function fireQuoteTrigger(
   quote: Pick<Quote, "agencyId" | "subAccountId" | "contactId">,
-  trigger: Extract<AutomationTriggerType, `quote_${string}`>,
+  trigger: Extract<AutomationTriggerType, `quote_${string}`>
 ): Promise<void> {
   // Workflow Builder triggers: accepted (v1), paid (v2 — covers invoices
   // too; both document kinds share the mark-paid route).
@@ -164,7 +165,7 @@ export async function fireQuoteTrigger(
  * null when the deal wasn't created (flag off, or write failed).
  */
 export async function autoCreateDealForAcceptedQuote(
-  quote: Quote,
+  quote: Quote
 ): Promise<string | null> {
   if (!quote.autoCreateDealOnAccept) return null;
 
@@ -222,10 +223,7 @@ export async function autoCreateDealForAcceptedQuote(
           createdAt: FieldValue.serverTimestamp(),
         });
     } catch (err) {
-      console.warn(
-        "[quotes/lifecycle] auto-deal activity write failed",
-        err,
-      );
+      console.warn("[quotes/lifecycle] auto-deal activity write failed", err);
     }
 
     // The auto-created Won deal is a real deal — fire deal.created like any
@@ -274,7 +272,7 @@ function tsToIsoOrNull(v: unknown): string | null {
  */
 export async function emitQuoteWebhook(
   quote: Quote,
-  event: QuoteLifecycleEvent,
+  event: QuoteLifecycleEvent
 ): Promise<void> {
   try {
     const { type, status } = QUOTE_WEBHOOK_MAP[event];
@@ -311,6 +309,11 @@ export async function emitQuoteWebhook(
 export type MarkQuotePaidResult =
   | { ok: true; alreadyPaid: boolean }
   | { ok: false; error: string; status: number };
+export interface VerifiedStripePaymentContext {
+  source: "stripeVerified";
+  checkoutSessionId: string;
+  paymentIntentId?: string | null;
+}
 
 /**
  * The ONE canonical path that transitions a quote/invoice to "paid" and
@@ -340,6 +343,7 @@ export type MarkQuotePaidResult =
  */
 export async function markQuotePaidServerSide(
   quoteId: string,
+  paymentContext?: VerifiedStripePaymentContext
 ): Promise<MarkQuotePaidResult> {
   const db = getAdminDb();
   const quoteRef = db.collection("quotes").doc(quoteId);
@@ -353,6 +357,14 @@ export async function markQuotePaidServerSide(
   };
 
   if (quote.status === "paid") {
+    if (paymentContext && quote.kind === "invoice")
+      await fulfillInvoiceOfferLinesServerSide({
+        quote,
+        stripeCheckoutSessionId: paymentContext.checkoutSessionId,
+        stripePaymentIntentId: paymentContext.paymentIntentId,
+      }).catch((err) =>
+        console.error("[quotes/lifecycle] invoice Offer retry failed", err)
+      );
     return { ok: true, alreadyPaid: true };
   }
 
@@ -380,7 +392,7 @@ export async function markQuotePaidServerSide(
   } catch (err) {
     console.error(
       "[quotes/lifecycle] markQuotePaidServerSide write failed",
-      err,
+      err
     );
     return { ok: false, status: 500, error: "Failed to update quote" };
   }
@@ -396,6 +408,14 @@ export async function markQuotePaidServerSide(
     contactId: quote.contactId,
     trigger: "quote_paid",
   });
+  if (paymentContext && quote.kind === "invoice")
+    await fulfillInvoiceOfferLinesServerSide({
+      quote: { ...quote, status: "paid" },
+      stripeCheckoutSessionId: paymentContext.checkoutSessionId,
+      stripePaymentIntentId: paymentContext.paymentIntentId,
+    }).catch((err) =>
+      console.error("[quotes/lifecycle] invoice Offer fulfillment failed", err)
+    );
 
   return { ok: true, alreadyPaid: false };
 }

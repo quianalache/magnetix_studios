@@ -42,6 +42,20 @@ export type QuoteStatus =
  * /convert-to-invoice — `kind` flips and a new invoice number is issued.
  */
 export type QuoteKind = "quote" | "invoice";
+export type InvoiceOfferFulfillmentStatus =
+  | "notApplicable"
+  | "pending"
+  | "fulfilled"
+  | "partiallyFulfilled"
+  | "failed";
+export interface InvoiceOfferFulfillmentItem {
+  offerId: string;
+  lineItemId: string;
+  status: "fulfilled" | "failed" | "skipped";
+  purchaseId?: string | null;
+  error?: string | null;
+  duplicateOfLineItemId?: string | null;
+}
 
 /**
  * Where a line item's description/price came from — Phase 1 of the
@@ -230,6 +244,11 @@ export interface Quote {
    *  this to `updatedAt` — if the invoice was edited since mint, the
    *  link is deactivated and a fresh one is minted. */
   paymentLinkMintedAt: Timestamp | FieldValue | null;
+  offerFulfillmentStatus?: InvoiceOfferFulfillmentStatus;
+  offerFulfillmentItems?: Record<string, InvoiceOfferFulfillmentItem>;
+  offerFulfilledAt?: Timestamp | FieldValue | null;
+  offerFulfillmentError?: string | null;
+  offerFulfillmentBlockedAt?: Timestamp | FieldValue | null;
   /** Which provider the CURRENT paymentLinkUrl/paymentLinkId belong to.
    *  Undefined on every invoice sent before Phase 2 (the PayPal-only
    *  era) — treat undefined as "paypal" for display purposes. Quotes

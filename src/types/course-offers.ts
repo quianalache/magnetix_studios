@@ -231,6 +231,11 @@ export interface CourseOfferPurchase {
    *  that offer's own checkout page), so this is deliberately null there —
    *  used to exclude upsells from conversion counts. */
   attribution?: ContactAttribution | null;
+  purchaseSource?: "invoice";
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceLineItemId?: string;
+  sourcePaymentProvider?: "stripe";
 }
 
 /**

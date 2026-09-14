@@ -45,7 +45,7 @@ const MIN_STRIPE_AMOUNT_CENTS = 50;
 export class InvoicePaymentError extends Error {
   constructor(
     message: string,
-    public status: number,
+    public status: number
   ) {
     super(message);
   }
@@ -86,17 +86,20 @@ export async function createInvoiceStripeCheckoutSession(opts: {
   if (!quoteSnap.exists) {
     throw new InvoicePaymentError("Invoice not found.", 404);
   }
-  const quote = { id: quoteSnap.id, ...(quoteSnap.data() as Omit<Quote, "id">) };
+  const quote = {
+    id: quoteSnap.id,
+    ...(quoteSnap.data() as Omit<Quote, "id">),
+  };
   if (quote.subAccountId !== opts.subAccountId) {
     throw new InvoicePaymentError(
       "Invoice belongs to a different sub-account.",
-      403,
+      403
     );
   }
   if (quote.kind !== "invoice") {
     throw new InvoicePaymentError(
       "Stripe payment collection only applies to invoices.",
-      400,
+      400
     );
   }
 
@@ -106,7 +109,7 @@ export async function createInvoiceStripeCheckoutSession(opts: {
   if (!connectAccountId || !chargesEnabled) {
     throw new InvoicePaymentError(
       "Stripe isn't fully connected for this workspace yet — connect it under Settings → Payments before sending invoices via Stripe.",
-      503,
+      503
     );
   }
 
@@ -115,7 +118,7 @@ export async function createInvoiceStripeCheckoutSession(opts: {
   if (amountCents < MIN_STRIPE_AMOUNT_CENTS) {
     throw new InvoicePaymentError(
       `Invoice total is too small to collect via Stripe (minimum ${formatMinAmount(quote.currency)}).`,
-      400,
+      400
     );
   }
 
@@ -162,10 +165,11 @@ export async function createInvoiceStripeCheckoutSession(opts: {
             unit_amount: amountCents,
             product_data: {
               name: `Invoice ${quote.quoteNumber}`,
-              description: `${businessName} — ${quote.lineItems.length} line item${quote.lineItems.length === 1 ? "" : "s"}`.slice(
-                0,
-                500,
-              ),
+              description:
+                `${businessName} — ${quote.lineItems.length} line item${quote.lineItems.length === 1 ? "" : "s"}`.slice(
+                  0,
+                  500
+                ),
             },
           },
           quantity: 1,
@@ -176,7 +180,7 @@ export async function createInvoiceStripeCheckoutSession(opts: {
       metadata,
       payment_intent_data: { metadata },
     },
-    { stripeAccount: connectAccountId },
+    { stripeAccount: connectAccountId }
   );
   if (!session.url) {
     throw new InvoicePaymentError("Stripe did not return a checkout URL.", 502);
@@ -232,13 +236,13 @@ function formatMinAmount(currency: string): string {
  * deliveries, triggered it.
  */
 export async function handleInvoiceStripeCheckoutCompleted(
-  session: Stripe.Checkout.Session,
+  session: Stripe.Checkout.Session
 ): Promise<void> {
   const meta = session.metadata ?? {};
   const { agencyId, subAccountId, quoteId } = meta;
   if (!agencyId || !subAccountId || !quoteId) {
     console.error(
-      `[invoice-payment] checkout session ${session.id} missing required metadata`,
+      `[invoice-payment] checkout session ${session.id} missing required metadata`
     );
     return;
   }
@@ -248,7 +252,10 @@ export async function handleInvoiceStripeCheckoutCompleted(
     console.error(`[invoice-payment] no quote found for id ${quoteId}`);
     return;
   }
-  const quote = { id: quoteSnap.id, ...(quoteSnap.data() as Omit<Quote, "id">) };
+  const quote = {
+    id: quoteSnap.id,
+    ...(quoteSnap.data() as Omit<Quote, "id">),
+  };
 
   if (
     quote.subAccountId !== subAccountId ||
@@ -256,7 +263,7 @@ export async function handleInvoiceStripeCheckoutCompleted(
     quote.kind !== "invoice"
   ) {
     console.error(
-      `[invoice-payment] metadata/tenant mismatch for session ${session.id} — refusing to act (quote subAccountId=${quote.subAccountId} agencyId=${quote.agencyId} kind=${quote.kind}; metadata subAccountId=${subAccountId} agencyId=${agencyId})`,
+      `[invoice-payment] metadata/tenant mismatch for session ${session.id} — refusing to act (quote subAccountId=${quote.subAccountId} agencyId=${quote.agencyId} kind=${quote.kind}; metadata subAccountId=${subAccountId} agencyId=${agencyId})`
     );
     return;
   }
@@ -265,7 +272,7 @@ export async function handleInvoiceStripeCheckoutCompleted(
     // Delayed payment method, not yet confirmed — wait for
     // async_payment_succeeded. Not an error.
     console.log(
-      `[invoice-payment] session ${session.id} completed with payment_status=${session.payment_status} — awaiting confirmation`,
+      `[invoice-payment] session ${session.id} completed with payment_status=${session.payment_status} — awaiting confirmation`
     );
     return;
   }
@@ -273,30 +280,57 @@ export async function handleInvoiceStripeCheckoutCompleted(
   const sessionCurrency = (session.currency ?? "").toUpperCase();
   if (sessionCurrency !== quote.currency.toUpperCase()) {
     console.error(
-      `[invoice-payment] currency mismatch for session ${session.id} on quote ${quoteId} — session=${sessionCurrency} quote=${quote.currency}. Refusing to mark paid.`,
+      `[invoice-payment] currency mismatch for session ${session.id} on quote ${quoteId} — session=${sessionCurrency} quote=${quote.currency}. Refusing to mark paid.`
     );
     return;
   }
 
-  if (
+  const amountMatches =
     typeof quote.paymentSessionAmountCents === "number" &&
-    session.amount_total !== quote.paymentSessionAmountCents
-  ) {
-    console.warn(
-      `[invoice-payment] amount mismatch for session ${session.id} on quote ${quoteId} — session.amount_total=${session.amount_total} expected=${quote.paymentSessionAmountCents}. Likely an older, superseded session paid after the invoice was re-sent for a different amount. Marking paid regardless (real payment was received) — flag for manual reconciliation.`,
+    typeof session.amount_total === "number" &&
+    session.amount_total === quote.paymentSessionAmountCents;
+  if (!amountMatches) {
+    const reason =
+      typeof quote.paymentSessionAmountCents !== "number"
+        ? "Stripe payment session amount was not recorded on the invoice."
+        : `Stripe amount ${session.amount_total ?? "unknown"} does not match expected invoice session amount ${quote.paymentSessionAmountCents}.`;
+    const result = await markQuotePaidServerSide(quoteId);
+    if (result.ok)
+      await getAdminDb()
+        .collection("quotes")
+        .doc(quoteId)
+        .set(
+          {
+            offerFulfillmentStatus: "failed",
+            offerFulfillmentError: `Automatic Offer fulfillment blocked: ${reason}`,
+            offerFulfillmentBlockedAt: new Date(),
+          },
+          { merge: true }
+        );
+    console.error(
+      `[invoice-payment] Offer fulfillment blocked for quote ${quoteId}: ${reason}`
     );
+    return;
   }
+  if (quote.paymentProvider !== "stripe") return;
 
-  const result = await markQuotePaidServerSide(quoteId);
+  const result = await markQuotePaidServerSide(quoteId, {
+    source: "stripeVerified",
+    checkoutSessionId: session.id,
+    paymentIntentId:
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : null,
+  });
   if (!result.ok) {
     console.warn(
-      `[invoice-payment] markQuotePaidServerSide declined for quote ${quoteId} (session ${session.id}): ${result.error}`,
+      `[invoice-payment] markQuotePaidServerSide declined for quote ${quoteId} (session ${session.id}): ${result.error}`
     );
     return;
   }
   if (result.alreadyPaid) {
     console.log(
-      `[invoice-payment] quote ${quoteId} already paid — duplicate webhook/session for ${session.id} safely no-op'd`,
+      `[invoice-payment] quote ${quoteId} already paid — duplicate webhook/session for ${session.id} safely no-op'd`
     );
   }
 }
