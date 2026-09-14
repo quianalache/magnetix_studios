@@ -1,7 +1,47 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+
+/**
+ * The exact phrase `/api/my/login` uses in its password-mismatch error
+ * (see that route's `mode === "password"` failure response). Owner QA
+ * (2026-09-14) found that this phrase promised a specific action ("use the
+ * email sign-in link") with no actual link anywhere near it — the email-
+ * link mode toggle below IS real and already wired to
+ * `/api/my/login`/`mode: "link"`, just visually disconnected from the
+ * error telling people to use it (small, muted, below the submit button).
+ * Rather than invent new backend copy, `renderErrorWithAction` turns this
+ * literal phrase into a real inline button wherever it appears in an error
+ * — the promised action becomes clickable exactly where it's promised.
+ */
+export const SIGN_IN_LINK_PHRASE = "use the email sign-in link";
+
+/** Exported (only) so scripts/test-mymagnetix-login-error-action.tsx can
+ *  verify the real rendered output directly rather than regexing source
+ *  text — not consumed anywhere else. */
+export function renderErrorWithAction(
+  text: string,
+  onUseLink: () => void
+): ReactNode {
+  const idx = text.indexOf(SIGN_IN_LINK_PHRASE);
+  if (idx === -1) return text;
+  const before = text.slice(0, idx);
+  const after = text.slice(idx + SIGN_IN_LINK_PHRASE.length);
+  return (
+    <>
+      {before}
+      <button
+        type="button"
+        onClick={onUseLink}
+        className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800"
+      >
+        {SIGN_IN_LINK_PHRASE}
+      </button>
+      {after}
+    </>
+  );
+}
 
 /**
  * MyMagnetix global sign-in form. Deliberate visual/behavioral sibling of
@@ -39,7 +79,8 @@ export function PersonLoginForm({
       message?: string;
       redirectTo?: string;
     };
-    if (!res.ok) throw new Error(data.error ?? "Something went wrong. Try again.");
+    if (!res.ok)
+      throw new Error(data.error ?? "Something went wrong. Try again.");
     return data;
   }
 
@@ -58,8 +99,13 @@ export function PersonLoginForm({
     setSubmitting(true);
     try {
       if (mode === "reset") {
-        const data = await postJson("/api/my/password/request", { email: email.trim() });
-        setMessage(data.message ?? "If that email belongs to a MyMagnetix account, we'll send password instructions.");
+        const data = await postJson("/api/my/password/request", {
+          email: email.trim(),
+        });
+        setMessage(
+          data.message ??
+            "If that email belongs to a MyMagnetix account, we'll send password instructions."
+        );
         return;
       }
 
@@ -75,10 +121,12 @@ export function PersonLoginForm({
       setMessage(
         mode === "link"
           ? "If that email is valid, we've sent a sign-in link. The link expires in 15 minutes."
-          : "Signed in.",
+          : "Signed in."
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -87,7 +135,7 @@ export function PersonLoginForm({
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-foreground">Email</label>
+        <label className="text-foreground text-sm font-medium">Email</label>
         <input
           type="email"
           autoComplete="email"
@@ -97,7 +145,7 @@ export function PersonLoginForm({
           placeholder="you@example.com"
           required
           autoFocus
-          className="h-10 w-full rounded-[9px] border border-border bg-white px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-offset-1"
+          className="border-border text-foreground placeholder:text-muted-foreground h-10 w-full rounded-[9px] border bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
           style={{ "--tw-ring-color": accentColor } as Record<string, string>}
         />
       </div>
@@ -105,7 +153,9 @@ export function PersonLoginForm({
       {mode === "password" && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
-            <label className="text-sm font-medium text-foreground">Password</label>
+            <label className="text-foreground text-sm font-medium">
+              Password
+            </label>
             <button
               type="button"
               onClick={() => {
@@ -113,7 +163,7 @@ export function PersonLoginForm({
                 setError(null);
                 setMessage(null);
               }}
-              className="ml-auto text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground ml-auto text-[11px] font-medium"
             >
               Forgot password?
             </button>
@@ -126,15 +176,23 @@ export function PersonLoginForm({
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Password"
             required
-            className="h-10 w-full rounded-[9px] border border-border bg-white px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-offset-1"
+            className="border-border text-foreground placeholder:text-muted-foreground h-10 w-full rounded-[9px] border bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
             style={{ "--tw-ring-color": accentColor } as Record<string, string>}
           />
         </div>
       )}
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && (
+        <p className="text-xs text-red-600">
+          {renderErrorWithAction(error, () => {
+            setMode("link");
+            setError(null);
+            setMessage(null);
+          })}
+        </p>
+      )}
       {message && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm text-foreground">
+        <div className="text-foreground rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
           {message}
         </div>
       )}
@@ -147,10 +205,16 @@ export function PersonLoginForm({
       >
         {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
         {mode === "password"
-          ? submitting ? "Signing in..." : "Sign in"
+          ? submitting
+            ? "Signing in..."
+            : "Sign in"
           : mode === "reset"
-            ? submitting ? "Sending..." : "Send password link"
-            : submitting ? "Sending link..." : "Email me a sign-in link"}
+            ? submitting
+              ? "Sending..."
+              : "Send password link"
+            : submitting
+              ? "Sending link..."
+              : "Email me a sign-in link"}
       </button>
 
       <button
@@ -160,9 +224,11 @@ export function PersonLoginForm({
           setError(null);
           setMessage(null);
         }}
-        className="mt-3 w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="text-muted-foreground hover:text-foreground mt-3 w-full text-center text-xs font-medium"
       >
-        {mode === "password" ? "Sign in with email link" : "Back to password sign in"}
+        {mode === "password"
+          ? "Sign in with email link"
+          : "Back to password sign in"}
       </button>
     </form>
   );
