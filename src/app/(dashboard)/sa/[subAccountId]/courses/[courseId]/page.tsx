@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -96,13 +96,28 @@ function StandaloneCourseEditorPageInner({
   const [lessonsLoaded, setLessonsLoaded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Set synchronously (refs have no render lag, unlike state) the instant
-  // the initial-resolution effect below has run once with real lesson
-  // data. Gates the URL-sync effect so it can never fire in the SAME
-  // commit as that first resolution — if it did, it would still see the
-  // pre-resolution `selectedId` (null) and strip a valid `?lesson=` id
-  // back off the URL a render before the resolved value replaces it.
-  const hasResolvedOnceRef = useRef(false);
+
+  // Every place that changes the selected lesson (click, create, drag, or
+  // clear-on-delete) goes through this instead of `setSelectedId` directly,
+  // so the URL is written synchronously with the same user action that
+  // changed the selection — no effect ever has to "notice" `selectedId`
+  // changed on a later render and reconstruct what to write, which is what
+  // made earlier attempts at this fix racy: an effect reacting to
+  // `selectedId` can only see the value as of whichever render it was
+  // scheduled from, and on the initial load that's sometimes still the
+  // pre-resolution `null`, one render before the real value lands — enough
+  // to strip a valid `?lesson=` id off the URL right after it was set.
+  function selectLesson(id: string | null) {
+    setSelectedId(id);
+    const qs = new URLSearchParams(searchParams.toString());
+    if (id) qs.set("lesson", id);
+    else qs.delete("lesson");
+    const query = qs.toString();
+    router.replace(
+      `/sa/${subAccountId}/courses/${courseId}${query ? `?${query}` : ""}`,
+      { scroll: false }
+    );
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -129,84 +144,32 @@ function StandaloneCourseEditorPageInner({
     };
   }, [subAccountId, courseId]);
 
-  // Resolve which lesson is selected: keep the current in-memory selection
-  // if it's still valid, otherwise fall back to the `?lesson=` id from the
-  // URL (this only matters right after a fresh mount — before that, `prev`
-  // is already set), and only fall back to the first lesson if neither
-  // points at a real lesson. Uses the functional setState form so `prev`
-  // is always the freshest pending value, and writes the resolved lesson
-  // straight back into the URL in this SAME pass (reading `searchParams`
-  // fresh here rather than deferring to the effect below) — deferring it
-  // let a stale, not-yet-committed `selectedId` leak into that effect's
-  // closure on the very next render and strip a valid `?lesson=` id right
-  // back off the URL before it was ever used. Gated on `lessonsLoaded`
-  // since the Firestore lessons subscription hasn't delivered its first
-  // snapshot yet on initial mount, so there's nothing real to resolve
-  // against until then.
+  // Resolve which lesson is selected on initial load / whenever the lesson
+  // list changes: keep the current in-memory selection if it's still
+  // valid, otherwise fall back to the `?lesson=` id from the URL, and only
+  // fall back to the first lesson if neither points at a real lesson.
+  // Routed entirely through `selectLesson` (state + URL together, see
+  // above) rather than calling `setSelectedId` here directly — this is the
+  // ONLY place selection is derived rather than explicitly chosen by the
+  // user, so it's also the only place that needs the URL fallback logic;
+  // every other call site already knows the exact id it wants selected.
+  // Gated on `lessonsLoaded` since the Firestore lessons subscription
+  // hasn't delivered its first snapshot yet on initial mount, so there's
+  // nothing real to resolve against until then.
   useEffect(() => {
-    console.log("[DBG-A] fired", {
-      lessonsLoaded,
-      lessonsCount: lessons.length,
-      urlNow: searchParams.toString(),
-    });
     if (!lessonsLoaded) return;
     const ordered = [...lessons].sort((a, b) => a.order - b.order);
-    setSelectedId((prev) => {
-      const fromUrl = searchParams.get("lesson");
-      const candidate = prev ?? fromUrl;
-      const resolved =
-        candidate && ordered.some((l) => l.id === candidate)
-          ? candidate
-          : (ordered[0]?.id ?? null);
-      console.log("[DBG-A] resolving", { prev, fromUrl, candidate, resolved });
-      if (resolved !== fromUrl) {
-        const qs = new URLSearchParams(searchParams.toString());
-        if (resolved) qs.set("lesson", resolved);
-        else qs.delete("lesson");
-        const query = qs.toString();
-        console.log("[DBG-A] WRITING URL", { query });
-        router.replace(
-          `/sa/${subAccountId}/courses/${courseId}${query ? `?${query}` : ""}`,
-          { scroll: false }
-        );
-      }
-      return resolved;
-    });
-    hasResolvedOnceRef.current = true;
+    const fromUrl = searchParams.get("lesson");
+    const candidate = selectedId ?? fromUrl;
+    const resolved =
+      candidate && ordered.some((l) => l.id === candidate)
+        ? candidate
+        : (ordered[0]?.id ?? null);
+    if (resolved !== selectedId || resolved !== fromUrl) {
+      selectLesson(resolved);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessons, lessonsLoaded]);
-
-  // Keep the URL's `lesson` param in sync with later, user-driven selection
-  // changes (clicking a different lesson, creating one, drag-and-drop,
-  // deleting the current one). Deliberately NOT gated on `lessonsLoaded` in
-  // the dependency array (only via the ref check below) — `lessonsLoaded`
-  // flipping true fires in the exact same commit as the effect above, and
-  // if this effect re-ran on that same trigger it would still be reading
-  // the pre-resolution `selectedId` from that commit's render (state
-  // updates from the other effect land on the *next* render, not this
-  // one). Depending on `selectedId` alone means this only runs once that
-  // next render actually happens, by which point it's fresh.
-  useEffect(() => {
-    console.log("[DBG-B] fired", {
-      hasResolvedOnce: hasResolvedOnceRef.current,
-      selectedId,
-      urlLesson: searchParams.get("lesson"),
-    });
-    if (!hasResolvedOnceRef.current) return;
-    if (searchParams.get("lesson") === selectedId) return;
-    const qs = new URLSearchParams(searchParams.toString());
-    if (selectedId) qs.set("lesson", selectedId);
-    else qs.delete("lesson");
-    const query = qs.toString();
-    console.log("[DBG-B] WRITING URL", { query });
-    router.replace(
-      `/sa/${subAccountId}/courses/${courseId}${query ? `?${query}` : ""}`,
-      { scroll: false }
-    );
-    // searchParams/router/subAccountId/courseId intentionally excluded —
-    // this should only re-run when the selection itself changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
 
   if (!loaded) {
     return (
@@ -242,7 +205,7 @@ function StandaloneCourseEditorPageInner({
     const d = (await res.json().catch(() => ({}))) as {
       lesson?: { id: string };
     };
-    if (d.lesson?.id) setSelectedId(d.lesson.id);
+    if (d.lesson?.id) selectLesson(d.lesson.id);
   }
   async function deleteCourse() {
     if (!confirm("Delete this course and all its lessons?")) return;
@@ -282,7 +245,7 @@ function StandaloneCourseEditorPageInner({
         l.id === lessonId ? { ...l, sectionId: target, order: maxOrder + 1 } : l
       )
     );
-    setSelectedId(lessonId);
+    selectLesson(lessonId);
     const res = await fetch(`${apiBase}/lessons/${lessonId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -372,7 +335,7 @@ function StandaloneCourseEditorPageInner({
                 section={section}
                 lessons={lessonsIn(section.id)}
                 selectedId={selectedId}
-                onSelect={setSelectedId}
+                onSelect={selectLesson}
                 onAddLesson={() => addLesson(section.id)}
               />
             ))}
@@ -392,7 +355,7 @@ function StandaloneCourseEditorPageInner({
                     siblings={ungrouped}
                     index={i}
                     selected={selectedId === l.id}
-                    onSelect={() => setSelectedId(l.id)}
+                    onSelect={() => selectLesson(l.id)}
                   />
                 ))}
                 {ungrouped.length === 0 && (
@@ -423,7 +386,7 @@ function StandaloneCourseEditorPageInner({
               saId={subAccountId}
               courseId={courseId}
               lesson={selectedLesson}
-              onDeleted={() => setSelectedId(null)}
+              onDeleted={() => selectLesson(null)}
             />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center">
