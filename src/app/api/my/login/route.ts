@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { signPersonMagicLinkToken, signPersonSessionToken } from "@/lib/server/person-auth";
+import {
+  signPersonMagicLinkToken,
+  signPersonSessionToken,
+} from "@/lib/server/person-auth";
 import { setPersonSessionCookie } from "@/lib/server/person-session";
 import { authenticatePersonWithPassword } from "@/lib/server/person-password";
 import { verifyFirebasePassword } from "@/lib/server/firebase-rest-auth";
@@ -36,7 +39,11 @@ export const dynamic = "force-dynamic";
  *  needs to validate a CLIENT-supplied `next` (every other route only ever
  *  forwards one it already validated itself). */
 function safeNext(next: unknown): string | null {
-  return typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : null;
+  return typeof next === "string" &&
+    next.startsWith("/") &&
+    !next.startsWith("//")
+    ? next
+    : null;
 }
 
 export async function POST(request: Request) {
@@ -71,7 +78,7 @@ export async function POST(request: Request) {
     if (!allowed) {
       return NextResponse.json(
         { error: "Too many attempts. Try again in a few minutes." },
-        { status: 429 },
+        { status: 429 }
       );
     }
     const password = typeof body.password === "string" ? body.password : "";
@@ -79,7 +86,10 @@ export async function POST(request: Request) {
     // Authority 1: MyMagnetix-only password (member-only Person path,
     // unaffected — checked first since it's the common case and needs no
     // external call).
-    const personResult = await authenticatePersonWithPassword({ email, password });
+    const personResult = await authenticatePersonWithPassword({
+      email,
+      password,
+    });
     if (personResult.ok) {
       await setPersonSessionCookie(personResult.sessionToken);
       return NextResponse.json({ ok: true, redirectTo: next });
@@ -93,7 +103,9 @@ export async function POST(request: Request) {
     // enumeration signal escapes either path.
     const firebaseResult = await verifyFirebasePassword(email, password);
     if (firebaseResult) {
-      const userSnap = await getAdminDb().doc(`users/${firebaseResult.uid}`).get();
+      const userSnap = await getAdminDb()
+        .doc(`users/${firebaseResult.uid}`)
+        .get();
       const user = userSnap.data();
       if (userSnap.exists && user?.status === "active") {
         const personId = await ensurePersonLinkForStaffUser({
@@ -111,10 +123,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
+        // Deliberately no longer tells people to "use the email sign-in
+        // link" as if that phrase itself were the action — the login form
+        // now shows a permanently visible "Email me a sign-in link" button
+        // regardless of whether this error ever fires (see
+        // person-login-form.tsx). This just needs to be accurate, not a
+        // discovery mechanism.
         error:
-          "Email or password is incorrect. If you have not set a MyMagnetix password yet, use the email sign-in link.",
+          "Email or password is incorrect. If you haven't set a password yet, use the email sign-in option below.",
       },
-      { status: 401 },
+      { status: 401 }
     );
   }
 
@@ -149,7 +167,10 @@ If you didn't request this, you can safely ignore it.
       });
     }
   } catch (err) {
-    console.error("[my/login] Send failed", err instanceof Error ? err.message : err);
+    console.error(
+      "[my/login] Send failed",
+      err instanceof Error ? err.message : err
+    );
   }
 
   return NextResponse.json({

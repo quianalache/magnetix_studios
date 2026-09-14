@@ -1,47 +1,28 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 
-/**
- * The exact phrase `/api/my/login` uses in its password-mismatch error
- * (see that route's `mode === "password"` failure response). Owner QA
- * (2026-09-14) found that this phrase promised a specific action ("use the
- * email sign-in link") with no actual link anywhere near it — the email-
- * link mode toggle below IS real and already wired to
- * `/api/my/login`/`mode: "link"`, just visually disconnected from the
- * error telling people to use it (small, muted, below the submit button).
- * Rather than invent new backend copy, `renderErrorWithAction` turns this
- * literal phrase into a real inline button wherever it appears in an error
- * — the promised action becomes clickable exactly where it's promised.
- */
-export const SIGN_IN_LINK_PHRASE = "use the email sign-in link";
+type LoginMode = "password" | "link" | "reset";
 
-/** Exported (only) so scripts/test-mymagnetix-login-error-action.tsx can
- *  verify the real rendered output directly rather than regexing source
- *  text — not consumed anywhere else. */
-export function renderErrorWithAction(
-  text: string,
-  onUseLink: () => void
-): ReactNode {
-  const idx = text.indexOf(SIGN_IN_LINK_PHRASE);
-  if (idx === -1) return text;
-  const before = text.slice(0, idx);
-  const after = text.slice(idx + SIGN_IN_LINK_PHRASE.length);
-  return (
-    <>
-      {before}
-      <button
-        type="button"
-        onClick={onUseLink}
-        className="font-semibold text-red-700 underline underline-offset-2 hover:text-red-800"
-      >
-        {SIGN_IN_LINK_PHRASE}
-      </button>
-      {after}
-    </>
-  );
-}
+/**
+ * The secondary action shown below the primary submit button, per mode.
+ * Owner QA (2026-09-15): the email-link option must be a permanently
+ * visible, obviously-interactive secondary CTA on the normal password
+ * view — NOT something discovered only after a failed password attempt,
+ * and NOT hidden inside clickable text inside an error message (the prior
+ * fix, 2026-09-14, made the error's own wording clickable; this replaces
+ * that pattern entirely per this task's explicit instruction not to
+ * maintain two competing interaction patterns).
+ */
+const SECONDARY_ACTION: Record<
+  LoginMode,
+  { label: string; nextMode: LoginMode }
+> = {
+  password: { label: "Email me a sign-in link", nextMode: "link" },
+  link: { label: "Use password instead", nextMode: "password" },
+  reset: { label: "Back to password sign in", nextMode: "password" },
+};
 
 /**
  * MyMagnetix global sign-in form. Deliberate visual/behavioral sibling of
@@ -52,6 +33,7 @@ export function renderErrorWithAction(
 export function PersonLoginForm({
   accentColor = "#5E2574",
   next,
+  initialMode = "password",
 }: {
   accentColor?: string;
   /** Where to land after sign-in — a specific course/community/etc. from a
@@ -59,13 +41,25 @@ export function PersonLoginForm({
    *  this form. Threaded into both the password and magic-link paths so
    *  neither one ever strands the person on the generic gateway. */
   next?: string | null;
+  /** Test-only escape hatch: every real caller renders the default
+   *  ("password") and reaches the other modes exclusively via the secondary
+   *  button click, exactly like a real user — this just lets
+   *  scripts/test-mymagnetix-login-ux.tsx render "link" and "reset" mode's
+   *  actual output directly, without a DOM to click through. */
+  initialMode?: LoginMode;
 }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"password" | "link" | "reset">("password");
+  const [mode, setMode] = useState<LoginMode>(initialMode);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function switchMode(nextMode: LoginMode) {
+    setMode(nextMode);
+    setError(null);
+    setMessage(null);
+  }
 
   async function postJson(url: string, body: Record<string, unknown>) {
     const res = await fetch(url, {
@@ -132,6 +126,8 @@ export function PersonLoginForm({
     }
   }
 
+  const secondary = SECONDARY_ACTION[mode];
+
   return (
     <form onSubmit={handleSubmit} className="mt-6 space-y-4">
       <div className="space-y-1.5">
@@ -158,11 +154,7 @@ export function PersonLoginForm({
             </label>
             <button
               type="button"
-              onClick={() => {
-                setMode("reset");
-                setError(null);
-                setMessage(null);
-              }}
+              onClick={() => switchMode("reset")}
               className="text-muted-foreground hover:text-foreground ml-auto text-[11px] font-medium"
             >
               Forgot password?
@@ -182,15 +174,7 @@ export function PersonLoginForm({
         </div>
       )}
 
-      {error && (
-        <p className="text-xs text-red-600">
-          {renderErrorWithAction(error, () => {
-            setMode("link");
-            setError(null);
-            setMessage(null);
-          })}
-        </p>
-      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
       {message && (
         <div className="text-foreground rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
           {message}
@@ -217,18 +201,16 @@ export function PersonLoginForm({
               : "Email me a sign-in link"}
       </button>
 
+      {/* Permanently visible secondary action — this is the ONLY way the
+       *  email-link option is discoverable now; it must look like a real,
+       *  clickable button, not a muted afterthought, and it must be here
+       *  on every render of this mode, not conditional on an error. */}
       <button
         type="button"
-        onClick={() => {
-          setMode(mode === "password" ? "link" : "password");
-          setError(null);
-          setMessage(null);
-        }}
-        className="text-muted-foreground hover:text-foreground mt-3 w-full text-center text-xs font-medium"
+        onClick={() => switchMode(secondary.nextMode)}
+        className="border-border text-foreground hover:bg-muted flex w-full items-center justify-center rounded-[9px] border px-3 py-2.5 text-sm font-semibold transition-colors"
       >
-        {mode === "password"
-          ? "Sign in with email link"
-          : "Back to password sign in"}
+        {secondary.label}
       </button>
     </form>
   );
