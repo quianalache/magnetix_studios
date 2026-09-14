@@ -144,6 +144,11 @@ function StandaloneCourseEditorPageInner({
   // snapshot yet on initial mount, so there's nothing real to resolve
   // against until then.
   useEffect(() => {
+    console.log("[DBG-A] fired", {
+      lessonsLoaded,
+      lessonsCount: lessons.length,
+      urlNow: searchParams.toString(),
+    });
     if (!lessonsLoaded) return;
     const ordered = [...lessons].sort((a, b) => a.order - b.order);
     setSelectedId((prev) => {
@@ -153,11 +158,13 @@ function StandaloneCourseEditorPageInner({
         candidate && ordered.some((l) => l.id === candidate)
           ? candidate
           : (ordered[0]?.id ?? null);
+      console.log("[DBG-A] resolving", { prev, fromUrl, candidate, resolved });
       if (resolved !== fromUrl) {
         const qs = new URLSearchParams(searchParams.toString());
         if (resolved) qs.set("lesson", resolved);
         else qs.delete("lesson");
         const query = qs.toString();
+        console.log("[DBG-A] WRITING URL", { query });
         router.replace(
           `/sa/${subAccountId}/courses/${courseId}${query ? `?${query}` : ""}`,
           { scroll: false }
@@ -180,12 +187,18 @@ function StandaloneCourseEditorPageInner({
   // one). Depending on `selectedId` alone means this only runs once that
   // next render actually happens, by which point it's fresh.
   useEffect(() => {
+    console.log("[DBG-B] fired", {
+      hasResolvedOnce: hasResolvedOnceRef.current,
+      selectedId,
+      urlLesson: searchParams.get("lesson"),
+    });
     if (!hasResolvedOnceRef.current) return;
     if (searchParams.get("lesson") === selectedId) return;
     const qs = new URLSearchParams(searchParams.toString());
     if (selectedId) qs.set("lesson", selectedId);
     else qs.delete("lesson");
     const query = qs.toString();
+    console.log("[DBG-B] WRITING URL", { query });
     router.replace(
       `/sa/${subAccountId}/courses/${courseId}${query ? `?${query}` : ""}`,
       { scroll: false }
