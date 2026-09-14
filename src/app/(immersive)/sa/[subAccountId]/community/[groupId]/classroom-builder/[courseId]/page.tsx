@@ -1,8 +1,8 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { Suspense, use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -48,7 +48,28 @@ import type {
 
 const UNGROUPED = "__ungrouped__";
 
-export default function CourseEditorPage({
+/**
+ * `useSearchParams` requires a Suspense boundary around anything that reads
+ * it during the initial render, so the actual page body lives in `Inner`
+ * and this default export just wraps it.
+ */
+export default function CourseEditorPage(props: {
+  params: Promise<{ subAccountId: string; groupId: string; courseId: string }>;
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        </div>
+      }
+    >
+      <CourseEditorPageInner {...props} />
+    </Suspense>
+  );
+}
+
+function CourseEditorPageInner({
   params,
 }: {
   params: Promise<{ subAccountId: string; groupId: string; courseId: string }>;
@@ -56,6 +77,7 @@ export default function CourseEditorPage({
   const { groupId, courseId } = use(params);
   const { subAccountId } = useSubAccount();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const apiBase = `/api/sub-accounts/${subAccountId}/community/${groupId}/courses/${courseId}`;
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -88,14 +110,40 @@ export default function CourseEditorPage({
     };
   }, [subAccountId, groupId, courseId]);
 
+  // Resolve which lesson is selected: keep the current in-memory selection
+  // if it's still valid, otherwise fall back to the `?lesson=` id from the
+  // URL (this only matters right after a fresh mount — before that, `prev`
+  // is already set), and only fall back to the first lesson if neither
+  // points at a real lesson. Deliberately excludes `searchParams` from the
+  // deps — re-running this every time the URL changes would fight the next
+  // effect, which is what drives those URL changes in the first place.
   useEffect(() => {
     const ordered = [...lessons].sort((a, b) => a.order - b.order);
-    setSelectedId((prev) =>
-      prev && ordered.some((l) => l.id === prev)
-        ? prev
-        : (ordered[0]?.id ?? null)
-    );
+    const fromUrl = searchParams.get("lesson");
+    setSelectedId((prev) => {
+      const candidate = prev ?? fromUrl;
+      return candidate && ordered.some((l) => l.id === candidate)
+        ? candidate
+        : (ordered[0]?.id ?? null);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessons]);
+
+  // Keep the URL's `lesson` param in sync with the selection, so refreshing
+  // the page (or copy/pasting the URL) returns to the same lesson instead
+  // of silently defaulting to the first one.
+  useEffect(() => {
+    if (searchParams.get("lesson") === selectedId) return;
+    const qs = new URLSearchParams(searchParams.toString());
+    if (selectedId) qs.set("lesson", selectedId);
+    else qs.delete("lesson");
+    const query = qs.toString();
+    router.replace(
+      `/sa/${subAccountId}/community/${groupId}/classroom-builder/${courseId}${query ? `?${query}` : ""}`,
+      { scroll: false }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   if (!loaded) {
     return (
