@@ -118,28 +118,46 @@ function CourseEditorPageInner({
   // if it's still valid, otherwise fall back to the `?lesson=` id from the
   // URL (this only matters right after a fresh mount — before that, `prev`
   // is already set), and only fall back to the first lesson if neither
-  // points at a real lesson. Deliberately excludes `searchParams` from the
-  // deps — re-running this every time the URL changes would fight the next
-  // effect, which is what drives those URL changes in the first place.
+  // points at a real lesson. Uses the functional setState form so `prev`
+  // is always the freshest pending value, and writes the resolved lesson
+  // straight back into the URL in this SAME pass (reading `searchParams`
+  // fresh here rather than deferring to the effect below) — deferring it
+  // let a stale, not-yet-committed `selectedId` leak into that effect's
+  // closure on the very next render and strip a valid `?lesson=` id right
+  // back off the URL before it was ever used. Gated on `lessonsLoaded`
+  // since the Firestore lessons subscription hasn't delivered its first
+  // snapshot yet on initial mount, so there's nothing real to resolve
+  // against until then.
   useEffect(() => {
+    if (!lessonsLoaded) return;
     const ordered = [...lessons].sort((a, b) => a.order - b.order);
-    const fromUrl = searchParams.get("lesson");
     setSelectedId((prev) => {
+      const fromUrl = searchParams.get("lesson");
       const candidate = prev ?? fromUrl;
-      return candidate && ordered.some((l) => l.id === candidate)
-        ? candidate
-        : (ordered[0]?.id ?? null);
+      const resolved =
+        candidate && ordered.some((l) => l.id === candidate)
+          ? candidate
+          : (ordered[0]?.id ?? null);
+      if (resolved !== fromUrl) {
+        const qs = new URLSearchParams(searchParams.toString());
+        if (resolved) qs.set("lesson", resolved);
+        else qs.delete("lesson");
+        const query = qs.toString();
+        router.replace(
+          `/sa/${subAccountId}/community/${groupId}/classroom-builder/${courseId}${query ? `?${query}` : ""}`,
+          { scroll: false }
+        );
+      }
+      return resolved;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lessons]);
+  }, [lessons, lessonsLoaded]);
 
-  // Keep the URL's `lesson` param in sync with the selection, so refreshing
-  // the page (or copy/pasting the URL) returns to the same lesson instead
-  // of silently defaulting to the first one. Gated on `lessonsLoaded`: the
-  // Firestore lessons subscription hasn't delivered its first snapshot yet
-  // on initial mount, so `selectedId` starts out null for a moment — synced
-  // too early, that null would overwrite (strip) a real `?lesson=` id from
-  // the URL before the effect above ever gets a chance to read it back.
+  // Keep the URL's `lesson` param in sync with later, user-driven selection
+  // changes (clicking a different lesson, creating one, drag-and-drop,
+  // deleting the current one) — the effect above already covers the
+  // initial resolution, so this is a no-op whenever the URL already
+  // matches.
   useEffect(() => {
     if (!lessonsLoaded) return;
     if (searchParams.get("lesson") === selectedId) return;
