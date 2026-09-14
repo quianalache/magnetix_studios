@@ -377,13 +377,15 @@ export interface RichTextMappingResult {
    *  text inside an unrecognized wrapper isn't silently lost), never
    *  thrown on. Empty on every real body across all 169 real lessons + 15
    *  real course-level `desc` fields on the source community, confirmed by
-   *  running this over all of them: paragraph, heading, orderedList,
-   *  unorderedList, listItem, hardBreak, text with bold/italic/link marks —
-   *  nothing else appeared. (The first, smaller 5-course sample this
-   *  converter was originally written against had only seen unorderedList,
-   *  not orderedList/hardBreak — both added after the real full 15-course
-   *  run surfaced them, exactly the kind of thing this field exists to
-   *  catch instead of silently dropping.) */
+   *  re-running this over all of them (2026-09-15 lesson-text audit):
+   *  paragraph, heading, orderedList, unorderedList, listItem, blockquote,
+   *  hardBreak, text with bold/italic/link marks — nothing else appeared.
+   *  (Each addition here was made only after a real run surfaced it, never
+   *  guessed ahead of evidence: the original 5-course sample only had
+   *  unorderedList; orderedList/hardBreak were added once the full
+   *  15-course run surfaced them; blockquote was added once the full
+   *  169-lesson lesson-text audit surfaced it — exactly the kind of thing
+   *  this field exists to catch instead of silently dropping.) */
   unsupportedTypes: string[];
 }
 
@@ -439,6 +441,8 @@ function renderRichTextNode(
       return `<ol>${renderRichTextChildren(node, unsupported)}</ol>`;
     case "listItem":
       return `<li>${renderRichTextChildren(node, unsupported)}</li>`;
+    case "blockquote":
+      return `<blockquote>${renderRichTextChildren(node, unsupported)}</blockquote>`;
     case "hardBreak":
       return "<br>";
     case "text":

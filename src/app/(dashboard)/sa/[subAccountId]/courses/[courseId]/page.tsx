@@ -39,7 +39,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { cn } from "@/lib/utils";
-import { COURSE_GATE_CHART_RULE_ATTRIBUTES, CHART_RULE_OPERATORS, type ChartRuleCondition } from "@/lib/energetics/chart-rules";
+import {
+  COURSE_GATE_CHART_RULE_ATTRIBUTES,
+  CHART_RULE_OPERATORS,
+  type ChartRuleCondition,
+} from "@/lib/energetics/chart-rules";
 import type { ResourceLink } from "@/types/community";
 import type {
   StandaloneCourse,
@@ -72,7 +76,7 @@ export default function StandaloneCourseEditorPage({
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   useEffect(() => {
@@ -80,7 +84,11 @@ export default function StandaloneCourseEditorPage({
       setCourse(c);
       setLoaded(true);
     });
-    const u2 = subscribeToStandaloneSections(subAccountId, courseId, setSections);
+    const u2 = subscribeToStandaloneSections(
+      subAccountId,
+      courseId,
+      setSections
+    );
     const u3 = subscribeToStandaloneLessons(subAccountId, courseId, setLessons);
     return () => {
       u1();
@@ -94,20 +102,20 @@ export default function StandaloneCourseEditorPage({
     setSelectedId((prev) =>
       prev && ordered.some((l) => l.id === prev)
         ? prev
-        : (ordered[0]?.id ?? null),
+        : (ordered[0]?.id ?? null)
     );
   }, [lessons]);
 
   if (!loaded) {
     return (
       <div className="flex justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       </div>
     );
   }
   if (!course) {
     return (
-      <div className="p-6 text-center text-sm text-muted-foreground">
+      <div className="text-muted-foreground p-6 text-center text-sm">
         Course not found.{" "}
         <Link href={`/sa/${subAccountId}/courses`} className="underline">
           Back to Courses
@@ -129,7 +137,9 @@ export default function StandaloneCourseEditorPage({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "New lesson", sectionId }),
     });
-    const d = (await res.json().catch(() => ({}))) as { lesson?: { id: string } };
+    const d = (await res.json().catch(() => ({}))) as {
+      lesson?: { id: string };
+    };
     if (d.lesson?.id) setSelectedId(d.lesson.id);
   }
   async function deleteCourse() {
@@ -161,13 +171,14 @@ export default function StandaloneCourseEditorPage({
     const lesson = lessons.find((l) => l.id === lessonId);
     if (!lesson) return;
     const target = overId === UNGROUPED ? null : overId;
-    const current = containerOf(lesson) === UNGROUPED ? null : containerOf(lesson);
+    const current =
+      containerOf(lesson) === UNGROUPED ? null : containerOf(lesson);
     if (current === target) return;
     const maxOrder = lessons.reduce((m, l) => Math.max(m, l.order), 0);
     setLessons((prev) =>
       prev.map((l) =>
-        l.id === lessonId ? { ...l, sectionId: target, order: maxOrder + 1 } : l,
-      ),
+        l.id === lessonId ? { ...l, sectionId: target, order: maxOrder + 1 } : l
+      )
     );
     setSelectedId(lessonId);
     const res = await fetch(`${apiBase}/lessons/${lessonId}`, {
@@ -183,7 +194,7 @@ export default function StandaloneCourseEditorPage({
       <div className="flex items-center justify-between gap-4">
         <Link
           href={`/sa/${subAccountId}/courses`}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="h-4 w-4" /> Courses
         </Link>
@@ -209,7 +220,9 @@ export default function StandaloneCourseEditorPage({
               Theme
             </Button>
           </Link>
-          <Link href={`/sa/${subAccountId}/courses/${courseId}/community-groups`}>
+          <Link
+            href={`/sa/${subAccountId}/courses/${courseId}/community-groups`}
+          >
             <Button variant="outline" size="sm">
               Community Groups
             </Button>
@@ -265,7 +278,7 @@ export default function StandaloneCourseEditorPage({
             {(ungrouped.length > 0 || sections.length > 0) && (
               <DropZone id={UNGROUPED}>
                 {sections.length > 0 && (
-                  <p className="px-1 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <p className="text-muted-foreground px-1 py-1 text-xs font-medium tracking-wide uppercase">
                     Other lessons
                   </p>
                 )}
@@ -281,7 +294,7 @@ export default function StandaloneCourseEditorPage({
                   />
                 ))}
                 {ungrouped.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-muted-foreground">
+                  <p className="text-muted-foreground px-1 py-2 text-xs">
                     Drop a lesson here to remove it from its section.
                   </p>
                 )}
@@ -312,8 +325,8 @@ export default function StandaloneCourseEditorPage({
             />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center">
-              <GraduationCap className="h-8 w-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
+              <GraduationCap className="text-muted-foreground h-8 w-8" />
+              <p className="text-muted-foreground text-sm">
                 {hasLessons
                   ? "Select a lesson to edit."
                   : "No lessons yet. Create your first lesson to get started."}
@@ -327,26 +340,19 @@ export default function StandaloneCourseEditorPage({
           )}
         </div>
       </div>
-
     </div>
   );
 }
 
 /** A droppable container that highlights while a lesson hovers over it. */
-function DropZone({
-  id,
-  children,
-}: {
-  id: string;
-  children: React.ReactNode;
-}) {
+function DropZone({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border bg-card p-2 transition-colors",
-        isOver && "border-primary ring-1 ring-primary",
+        "bg-card rounded-lg border p-2 transition-colors",
+        isOver && "border-primary ring-primary ring-1"
       )}
     >
       {children}
@@ -389,8 +395,8 @@ function SectionBlock({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-lg border bg-card p-2 transition-colors",
-        isOver && "border-primary ring-1 ring-primary",
+        "bg-card rounded-lg border p-2 transition-colors",
+        isOver && "border-primary ring-primary ring-1"
       )}
     >
       <div className="mb-1 flex items-center gap-1">
@@ -398,7 +404,7 @@ function SectionBlock({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={rename}
-          className="h-7 border-0 bg-transparent px-1 text-xs font-semibold uppercase tracking-wide focus-visible:ring-1"
+          className="h-7 border-0 bg-transparent px-1 text-xs font-semibold tracking-wide uppercase focus-visible:ring-1"
         />
         <button
           onClick={remove}
@@ -421,7 +427,7 @@ function SectionBlock({
       ))}
       <button
         onClick={onAddLesson}
-        className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+        className="text-muted-foreground hover:bg-muted mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs"
       >
         <Plus className="h-3.5 w-3.5" /> Lesson
       </button>
@@ -477,13 +483,13 @@ function LessonNavRow({
       className={cn(
         "group flex items-center gap-1 rounded-md px-1",
         selected && "bg-primary/10",
-        isDragging && "opacity-50",
+        isDragging && "opacity-50"
       )}
     >
       <button
         {...attributes}
         {...listeners}
-        className="cursor-grab touch-none text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
+        className="text-muted-foreground/60 hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
         title="Drag to a section"
       >
         <GripVertical className="h-3.5 w-3.5" />
@@ -508,12 +514,12 @@ function LessonNavRow({
         onClick={onSelect}
         className={cn(
           "flex-1 truncate py-1.5 text-left text-sm",
-          selected ? "font-medium text-primary" : "text-foreground",
+          selected ? "text-primary font-medium" : "text-foreground"
         )}
       >
         {lesson.title}
         {!lesson.published && (
-          <span className="ml-1.5 text-xs text-muted-foreground">(draft)</span>
+          <span className="text-muted-foreground ml-1.5 text-xs">(draft)</span>
         )}
       </button>
     </div>
@@ -537,10 +543,11 @@ function LessonEditor({
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl ?? "");
   const [body, setBody] = useState(lesson.bodyHtml);
   const [published, setPublished] = useState(lesson.published);
-  const [links, setLinks] = useState<ResourceLink[]>(lesson.resourceLinks ?? []);
-  const [unlockCondition, setUnlockCondition] = useState<ChartRuleCondition | null>(
-    lesson.chartUnlockCondition ?? null,
+  const [links, setLinks] = useState<ResourceLink[]>(
+    lesson.resourceLinks ?? []
   );
+  const [unlockCondition, setUnlockCondition] =
+    useState<ChartRuleCondition | null>(lesson.chartUnlockCondition ?? null);
   const [saving, setSaving] = useState(false);
 
   const parsed = videoUrl.trim() ? parseVideoUrl(videoUrl) : null;
@@ -548,7 +555,9 @@ function LessonEditor({
 
   async function save() {
     if (!videoValid) {
-      toast.error("Paste a valid YouTube, Vimeo, Loom, or Descript URL");
+      toast.error(
+        "Paste a valid YouTube, Vimeo, Loom, Descript, Wistia, or Adilo URL"
+      );
       return;
     }
     setSaving(true);
@@ -583,9 +592,9 @@ function LessonEditor({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border bg-card p-4">
+    <div className="bg-card space-y-4 rounded-xl border p-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
           <GraduationCap className="h-4 w-4" /> Lesson
         </div>
         <Button
@@ -604,15 +613,18 @@ function LessonEditor({
       </div>
 
       <div className="space-y-1.5">
-        <Label>Video URL (YouTube, Vimeo, Loom, or Descript)</Label>
+        <Label>
+          Video URL (YouTube, Vimeo, Loom, Descript, Wistia, or Adilo)
+        </Label>
         <Input
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
           placeholder="https://youtube.com/watch?v=…"
         />
         {!videoValid && (
-          <p className="text-xs text-destructive">
-            Not a recognized YouTube, Vimeo, Loom, or Descript link.
+          <p className="text-destructive text-xs">
+            Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo
+            link.
           </p>
         )}
         {parsed && (
@@ -640,7 +652,10 @@ function LessonEditor({
 
       <ResourceLinksEditor links={links} onChange={setLinks} />
 
-      <ChartUnlockEditor value={unlockCondition} onChange={setUnlockCondition} />
+      <ChartUnlockEditor
+        value={unlockCondition}
+        onChange={setUnlockCondition}
+      />
 
       <div className="flex items-center justify-between border-t pt-3">
         <label className="flex items-center gap-2 text-sm">
@@ -688,7 +703,7 @@ function ChartUnlockEditor({
             onChange(
               e.target.checked
                 ? { attribute: "profileLines", operator: "contains", value: "" }
-                : null,
+                : null
             )
           }
           className="h-4 w-4"
@@ -699,20 +714,34 @@ function ChartUnlockEditor({
         <div className="grid grid-cols-1 gap-2 pl-6 sm:grid-cols-3">
           <select
             value={value.attribute}
-            onChange={(e) => onChange({ ...value, attribute: e.target.value as ChartRuleCondition["attribute"] })}
-            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
+            onChange={(e) =>
+              onChange({
+                ...value,
+                attribute: e.target.value as ChartRuleCondition["attribute"],
+              })
+            }
+            className="border-input bg-background rounded-lg border px-2.5 py-1.5 text-sm"
           >
             {COURSE_GATE_CHART_RULE_ATTRIBUTES.map((a) => (
-              <option key={a.value} value={a.value}>{a.label}</option>
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
             ))}
           </select>
           <select
             value={value.operator}
-            onChange={(e) => onChange({ ...value, operator: e.target.value as ChartRuleCondition["operator"] })}
-            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
+            onChange={(e) =>
+              onChange({
+                ...value,
+                operator: e.target.value as ChartRuleCondition["operator"],
+              })
+            }
+            className="border-input bg-background rounded-lg border px-2.5 py-1.5 text-sm"
           >
             {CHART_RULE_OPERATORS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
           <Input
@@ -723,8 +752,9 @@ function ChartUnlockEditor({
         </div>
       )}
       {enabled && (
-        <p className="pl-6 text-xs text-muted-foreground">
-          Students see this lesson only if their own chart matches. A course with any gated lesson asks for birth details at checkout.
+        <p className="text-muted-foreground pl-6 text-xs">
+          Students see this lesson only if their own chart matches. A course
+          with any gated lesson asks for birth details at checkout.
         </p>
       )}
     </div>
