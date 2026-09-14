@@ -1,8 +1,7 @@
 /**
  * Targeted correctness check for video-embed.ts's provider table
  * (parseVideoUrl/embedUrlFor) — YouTube/Vimeo/Loom/Descript (regression),
- * Wistia (new), and Adilo (new, but no real pattern confirmed yet — see
- * that module's own comment).
+ * Wistia, and Adilo (including the owner's own real video URL).
  *
  * This repo has no test runner configured (no Jest/Vitest, no `test`
  * script) — confirmed by inspection, not assumed. Adding one is a real
@@ -129,18 +128,32 @@ check(
 );
 
 // ---------------------------------------------------------------------------
-// Adilo — NOT YET SUPPORTED. Confirms no false positive occurs (a plausible
-// Adilo-shaped URL is correctly NOT recognized until a real pattern is
-// added), and that embedUrlFor safely returns null rather than guessing.
+// Adilo — new. The first case is the owner's REAL video URL.
 // ---------------------------------------------------------------------------
 check(
-  "Adilo URL is not (yet) recognized by any pattern",
-  parseVideoUrl("https://adilo.bigcommand.com/watch/abc123"),
+  "Adilo real owner video URL",
+  parseVideoUrl("https://adilo.bigcommand.com/watch/Ok2zBWdW"),
+  {
+    provider: "adilo",
+    id: "Ok2zBWdW",
+    embedUrl: "https://adilo.bigcommand.com/watch/Ok2zBWdW",
+  }
+);
+check(
+  "embedUrlFor adilo",
+  embedUrlFor("adilo", "Ok2zBWdW"),
+  "https://adilo.bigcommand.com/watch/Ok2zBWdW"
+);
+check(
+  "Adilo: unrelated bigcommand.com subdomain is NOT mistaken for a video (help.bigcommand.com)",
+  parseVideoUrl(
+    "https://help.bigcommand.com/en/article/embedding-adilo-videos-4q8z6m/"
+  ),
   null
 );
 check(
-  "embedUrlFor adilo returns null (no table entry yet)",
-  embedUrlFor("adilo", "abc123"),
+  "Adilo: unrelated bigcommand.com subdomain is NOT mistaken for a video (encoding.bigcommand.com)",
+  parseVideoUrl("https://encoding.bigcommand.com/api/v1.0/api.php"),
   null
 );
 

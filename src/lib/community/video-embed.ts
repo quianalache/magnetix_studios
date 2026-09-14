@@ -25,14 +25,19 @@ import type { VideoProvider } from "@/types/community";
  * `embedUrl` function is one more fixed template, not because anything
  * gets allow-listed elsewhere.
  *
- * Adilo is intentionally NOT in the table yet (2026-09-13): Adilo supports
- * white-labeled/custom embed domains per account, so the standard
- * `adilo.bigcommand.com`-style pattern found by research cannot be
- * hardcoded as if every account used it — a real embed URL/code from the
- * owner's own Adilo dashboard is needed first. `VideoProvider` already
- * includes `"adilo"` (types/community.ts) so lesson data can reference it
- * once the pattern is confirmed; `embedUrlFor` returns null for it until
- * then rather than guessing a host.
+ * Adilo (2026-09-14): confirmed live against the owner's own real video
+ * (`adilo.bigcommand.com/watch/Ok2zBWdW`, privacy "people with the private
+ * link" / embeddable on any website) — her account uses the standard
+ * `adilo.bigcommand.com` domain, and Adilo's own real oEmbed endpoint
+ * (`adilo.bigcommand.com/web/oembed`) confirms the canonical embed iframe
+ * src for that exact video is the SAME `/watch/{id}` URL, not a separate
+ * `/embed/` path. Loaded it in a real cross-origin iframe: no
+ * X-Frame-Options/CSP block (confirmed via response headers and live
+ * render), no Adilo session/login required, real HLS segments fetched
+ * successfully. If a future customer's Adilo account uses a white-labeled
+ * embed domain instead of `adilo.bigcommand.com`, that account's videos
+ * won't match this pattern yet — a real, separate gap to close later if it
+ * comes up, not guessed at here.
  */
 export interface ParsedVideo {
   provider: VideoProvider;
@@ -88,7 +93,18 @@ const VIDEO_PROVIDERS: VideoProviderDefinition[] = [
     patterns: [/wistia\.(?:net|com)\/(?:embed\/iframe|medias)\/([A-Za-z0-9]+)/],
     embedUrl: (id) => `https://fast.wistia.net/embed/iframe/${id}`,
   },
-  // adilo: no entry yet — see module comment above.
+  {
+    // adilo.bigcommand.com/watch/{id} — confirmed live to be both the
+    // shareable link AND the correct iframe embed src (Adilo's own oEmbed
+    // response for a real video returns this exact URL as `html`'s iframe
+    // src). Anchored to the literal "adilo." subdomain so a real
+    // `bigcommand.com` URL for something else (e.g. `help.bigcommand.com`,
+    // `encoding.bigcommand.com` — both real, unrelated hosts on the same
+    // parent domain) is never mistaken for a video id.
+    provider: "adilo",
+    patterns: [/adilo\.bigcommand\.com\/watch\/([A-Za-z0-9]+)/],
+    embedUrl: (id) => `https://adilo.bigcommand.com/watch/${id}`,
+  },
 ];
 
 export function parseVideoUrl(raw: string): ParsedVideo | null {
@@ -134,8 +150,8 @@ export function embedUrlFor(
 ): string | null {
   if (!provider || !id) return null;
   const def = VIDEO_PROVIDERS.find((d) => d.provider === provider);
-  // Falls through to null for a provider with no table entry yet (adilo) —
-  // the player's `{embedUrl && <iframe .../>}` pattern already renders
-  // nothing rather than a broken iframe for that case.
+  // Falls through to null for any provider with no table entry (e.g. a
+  // future one not yet added) — the player's `{embedUrl && <iframe .../>}`
+  // pattern already renders nothing rather than a broken iframe for that case.
   return def ? def.embedUrl(id) : null;
 }
