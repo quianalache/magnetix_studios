@@ -40,19 +40,43 @@ export default async function MyMagnetixLoginPage({
     typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
       ? email
       : "";
+  // An `email` param means a caller (the mismatch screen's "Switch"
+  // action, or GatewayMyMagnetixButton's no-relationships-yet redirect)
+  // is asking for a SPECIFIC identity, not "whichever session happens to
+  // already be active." Both real callers exist precisely because the
+  // active session is wrong/absent for this person — never let anything
+  // below silently substitute a different one.
+  const hasExplicitIdentityRequest = prefillEmail !== "";
 
   // Already has a MyMagnetix session — skip the form entirely, straight to
-  // the originally requested destination if one survived this far.
+  // the originally requested destination if one survived this far. When an
+  // explicit identity was requested, only take this shortcut if the active
+  // session is ALREADY that same person (harmless, avoids a redundant
+  // login) — otherwise fall through and show the form so they can actually
+  // sign in as the identity they asked for.
   const existingPerson = await getCurrentPerson();
-  if (existingPerson) redirect(destination ?? "/gateway");
+  if (existingPerson) {
+    const alreadyCorrectIdentity =
+      hasExplicitIdentityRequest &&
+      existingPerson.primaryEmail.toLowerCase() === prefillEmail.toLowerCase();
+    if (!hasExplicitIdentityRequest || alreadyCorrectIdentity) {
+      redirect(destination ?? "/gateway");
+    }
+  }
 
   // Portal Member -> MyMagnetix bridge (2026-08-16): attempt the
-  // automatic bridge ONLY when no error is already showing — this is
-  // the loop-safety guard. A stale/expired/invalid ls_member_session
-  // fails the bridge exactly once (it comes back here WITH
-  // `error=bridge_unavailable`), and this check stops it from being
-  // retried on every subsequent render of this same page.
-  if (!error) {
+  // automatic bridge ONLY when no error is already showing AND no explicit
+  // identity was requested — this bridge silently mints an mm_session for
+  // whatever Person an UNRELATED ls_member_session cookie happens to
+  // resolve to, which is exactly the silent-cross-identity behavior an
+  // explicit identity request (2026-09-16 fix) exists to prevent. Without
+  // this guard, switching MyMagnetix accounts while an old, unrelated
+  // ls_member_session cookie is also sitting in the browser would
+  // immediately re-establish a DIFFERENT mismatched mm_session and bounce
+  // straight back to /gateway's mismatch screen — the exact bug this
+  // guard closes. The original loop-safety guard (skip when `error` is
+  // already showing) is unchanged.
+  if (!error && !hasExplicitIdentityRequest) {
     const cookieStore = await cookies();
     const hasMemberCookie = !!cookieStore.get(MEMBER_SESSION_COOKIE)?.value;
     if (hasMemberCookie) {
