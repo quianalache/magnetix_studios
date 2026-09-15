@@ -2,8 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { getCurrentStaffUser } from "@/lib/auth/current-staff";
-import { resolvePersonDisplayName, listPersonMemberships } from "@/lib/server/mymagnetix-service";
+import {
+  resolvePersonDisplayName,
+  listPersonMemberships,
+} from "@/lib/server/mymagnetix-service";
+import { resolveStaffPersonId } from "@/lib/server/person-identity-service";
 import { GatewayMyMagnetixButton } from "@/components/auth/gateway-mymagnetix-button";
+import { MyMagnetixIdentityMismatch } from "@/components/auth/mymagnetix-identity-mismatch";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +47,18 @@ export const dynamic = "force-dynamic";
  * MyMagnetix button below establishes one on click via the existing
  * staff->Person bridge instead of linking straight to a page that would
  * just bounce them to a login screen.
+ *
+ * Cross-identity session fix (2026-09-15 incident): when BOTH sessions
+ * exist, the existing `mm_session` cookie is only sometimes the same
+ * human as the current staff login (e.g. an old MyMagnetix session from
+ * testing a different email, still sitting in the browser). Previously
+ * this page always linked straight into /my, silently using whichever
+ * Person happened to already be in the cookie — now it resolves which
+ * Person the CURRENT staff login actually corresponds to
+ * (resolveStaffPersonId) and compares; a mismatch shows an explicit
+ * choice (MyMagnetixIdentityMismatch) instead of crossing over silently.
+ * Neither session is ever destroyed just by detecting this — only the
+ * person's own explicit choice does that.
  */
 export default async function GatewayPage() {
   const [staffUser, person] = await Promise.all([
@@ -55,9 +72,7 @@ export default async function GatewayPage() {
     redirect("/login");
   }
 
-  const memberships = person
-    ? await listPersonMemberships(person.id)
-    : [];
+  const memberships = person ? await listPersonMemberships(person.id) : [];
   const hasMember = memberships.length > 0;
   const hasStaff = !!staffUser;
 
@@ -68,8 +83,26 @@ export default async function GatewayPage() {
   }
 
   const displayName = person
-    ? await resolvePersonDisplayName(person.id, person.primaryEmail, memberships)
-    : (staffUser!.email.split("@")[0] || "there");
+    ? await resolvePersonDisplayName(
+        person.id,
+        person.primaryEmail,
+        memberships
+      )
+    : staffUser!.email.split("@")[0] || "there";
+
+  // Cross-identity session fix (2026-09-15 incident): an existing
+  // `mm_session` cookie belongs to a real, specific Person — but that
+  // Person is only sometimes the same human as the CRM staff identity
+  // currently authenticated. Resolve which Person THIS staff login
+  // actually corresponds to and compare, rather than trusting whichever
+  // mm_session happens to already be in the browser. Only meaningful when
+  // both sessions exist; a lone staff session has nothing to mismatch
+  // against yet (handled by GatewayMyMagnetixButton's own bridge/prefill
+  // path below).
+  const staffPersonId = person
+    ? await resolveStaffPersonId(staffUser!.uid, staffUser!.email)
+    : null;
+  const mismatched = !!person && !!staffPersonId && staffPersonId !== person.id;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-6 py-16">
@@ -77,7 +110,9 @@ export default async function GatewayPage() {
         <h1 className="font-serif text-2xl font-semibold text-[#202124]">
           Welcome back, {displayName}.
         </h1>
-        <p className="mt-2 text-sm text-[#909090]">Where would you like to go?</p>
+        <p className="mt-2 text-sm text-[#909090]">
+          Where would you like to go?
+        </p>
         <div className="mt-8 flex flex-col gap-3">
           <Link
             href="/login?redirect=/dashboard"
@@ -85,7 +120,12 @@ export default async function GatewayPage() {
           >
             Business Center
           </Link>
-          {person ? (
+          {mismatched ? (
+            <MyMagnetixIdentityMismatch
+              crmEmail={staffUser!.email}
+              mymagnetixEmail={person!.primaryEmail}
+            />
+          ) : person ? (
             <Link
               href="/my"
               className="rounded-[9px] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
@@ -94,7 +134,7 @@ export default async function GatewayPage() {
               MyMagnetix
             </Link>
           ) : (
-            <GatewayMyMagnetixButton />
+            <GatewayMyMagnetixButton staffEmail={staffUser!.email} />
           )}
         </div>
       </div>

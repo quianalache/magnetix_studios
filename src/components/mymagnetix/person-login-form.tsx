@@ -34,6 +34,7 @@ export function PersonLoginForm({
   accentColor = "#5E2574",
   next,
   initialMode = "password",
+  initialEmail = "",
 }: {
   accentColor?: string;
   /** Where to land after sign-in — a specific course/community/etc. from a
@@ -47,8 +48,15 @@ export function PersonLoginForm({
    *  scripts/test-mymagnetix-login-ux.tsx render "link" and "reset" mode's
    *  actual output directly, without a DOM to click through. */
   initialMode?: LoginMode;
+  /** Cross-identity session fix (2026-09-15): pre-fills the email field
+   *  when the caller already knows which address should sign in here —
+   *  e.g. /gateway sending a CRM staff identity to /my/login?email=... so
+   *  they aren't stuck retyping the same email they're already logged
+   *  into Business Center with. Never submitted automatically — the
+   *  person still has to choose password or email-link and act on it. */
+  initialEmail?: string;
 }) {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<LoginMode>(initialMode);
   const [submitting, setSubmitting] = useState(false);

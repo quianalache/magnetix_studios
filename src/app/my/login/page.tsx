@@ -8,10 +8,12 @@ export const dynamic = "force-dynamic";
 
 const ERROR_MESSAGES: Record<string, string> = {
   missing_token: "That sign-in link was incomplete. Request a new one below.",
-  expired: "That sign-in link has expired or was already used. Request a new one below.",
+  expired:
+    "That sign-in link has expired or was already used. Request a new one below.",
   error: "Something went wrong signing you in. Request a new link below.",
   no_access: "That account doesn't have any MyMagnetix relationships yet.",
-  bridge_unavailable: "Your business portal session couldn't be used to sign in here automatically. Sign in below.",
+  bridge_unavailable:
+    "Your business portal session couldn't be used to sign in here automatically. Sign in below.",
 };
 
 /** Same relative-path-only validation `/api/my/enter` and the bridge routes
@@ -24,10 +26,20 @@ function safeNext(next: string | undefined): string | null {
 export default async function MyMagnetixLoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; email?: string }>;
 }) {
-  const { error, next } = await searchParams;
+  const { error, next, email } = await searchParams;
   const destination = safeNext(next);
+  // Cross-identity session fix (2026-09-15): /gateway passes this when it
+  // already knows which email should sign in here (a CRM staff identity
+  // switching MyMagnetix accounts, or one with no Member relationships
+  // yet) — a lightweight prefill only, never trusted as proof of anything;
+  // the real identity check still happens entirely inside the form's own
+  // password/email-link submission.
+  const prefillEmail =
+    typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      ? email
+      : "";
 
   // Already has a MyMagnetix session — skip the form entirely, straight to
   // the originally requested destination if one survived this far.
@@ -44,7 +56,9 @@ export default async function MyMagnetixLoginPage({
     const cookieStore = await cookies();
     const hasMemberCookie = !!cookieStore.get(MEMBER_SESSION_COOKIE)?.value;
     if (hasMemberCookie) {
-      redirect(`/api/my/bridge-from-member?next=${encodeURIComponent(destination ?? "/gateway")}`);
+      redirect(
+        `/api/my/bridge-from-member?next=${encodeURIComponent(destination ?? "/gateway")}`
+      );
     }
   }
 
@@ -62,7 +76,7 @@ export default async function MyMagnetixLoginPage({
         <h1 className="font-serif text-[18px] font-semibold text-balance text-[#202124]">
           {destination ? "Welcome to MyMagnetix" : "Sign in to MyMagnetix"}
         </h1>
-        <p className="mb-5 mt-1.5 text-[12px] leading-relaxed text-[#909090]">
+        <p className="mt-1.5 mb-5 text-[12px] leading-relaxed text-[#909090]">
           {destination
             ? "Confirm your email to continue — we'll take you straight to what you clicked."
             : "One account for everything you’re part of across Magnetix — courses, communities, and every business you work with."}
@@ -72,7 +86,11 @@ export default async function MyMagnetixLoginPage({
             {errorMessage}
           </div>
         )}
-        <PersonLoginForm accentColor="#5E2574" next={destination} />
+        <PersonLoginForm
+          accentColor="#5E2574"
+          next={destination}
+          initialEmail={prefillEmail}
+        />
       </div>
     </div>
   );

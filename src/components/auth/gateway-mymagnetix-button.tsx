@@ -10,11 +10,26 @@ import { useState } from "react";
  * bounce back to a login screen with nothing established), this uses the
  * exact same "switch to MyMagnetix" bridge the header's own control
  * already uses (/api/my/bridge-from-staff) to mint the session first,
- * then navigates. A 404 there is not an error — it means this staff
- * identity genuinely has no MyMagnetix relationships anywhere yet, shown
- * as a small inline note rather than a dead link or a confusing crash.
+ * then navigates.
+ *
+ * 2026-09-15 correction: a 404 here (this staff identity's linked Person
+ * has no Member relationship anywhere yet) previously dead-ended with an
+ * inline "nothing here" note and no way forward. That's not actually a
+ * dead end — the person can still sign in through the normal MyMagnetix
+ * login (password, or the existing email-link option) with THIS SAME
+ * email; a real Member relationship just hasn't been linked to their
+ * Person yet (see person-identity-service.ts's lazy-reconciliation
+ * design). So a 404 now sends them to /my/login with this staff email
+ * prefilled instead — never auto-creates a Person or grants anything on
+ * its own, just removes the retyping step. Any OTHER failure (network,
+ * unexpected error) still shows an inline retry message, since that one
+ * genuinely isn't actionable by navigating anywhere.
  */
-export function GatewayMyMagnetixButton() {
+export function GatewayMyMagnetixButton({
+  staffEmail,
+}: {
+  staffEmail: string;
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,11 +47,11 @@ export function GatewayMyMagnetixButton() {
         window.location.href = data.redirectTo;
         return;
       }
-      setError(
-        res.status === 404
-          ? "Nothing in MyMagnetix for this account yet."
-          : (data.error ?? "Couldn't open MyMagnetix. Try again."),
-      );
+      if (res.status === 404) {
+        window.location.href = `/my/login?email=${encodeURIComponent(staffEmail)}`;
+        return;
+      }
+      setError(data.error ?? "Couldn't open MyMagnetix. Try again.");
     } catch {
       setError("Couldn't open MyMagnetix. Try again.");
     } finally {

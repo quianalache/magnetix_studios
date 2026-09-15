@@ -92,7 +92,10 @@ function normalizeEmail(email: string): string {
  */
 export async function ensurePersonIdentity(email: string): Promise<string> {
   const normalized = normalizeEmail(email);
-  const existing = await col().where("primaryEmail", "==", normalized).limit(1).get();
+  const existing = await col()
+    .where("primaryEmail", "==", normalized)
+    .limit(1)
+    .get();
   if (!existing.empty) return existing.docs[0].id;
 
   const ref = await col().add({
@@ -129,7 +132,7 @@ export async function ensurePersonIdentity(email: string): Promise<string> {
  */
 export async function ensurePersonLinkForMember(
   subAccountId: string,
-  member: { id: string; email: string; personId?: string | null },
+  member: { id: string; email: string; personId?: string | null }
 ): Promise<string | null | undefined> {
   if (member.personId) return member.personId;
 
@@ -137,10 +140,16 @@ export async function ensurePersonLinkForMember(
     const personId = await ensurePersonIdentity(member.email);
     await getAdminDb()
       .doc(`subAccounts/${subAccountId}/members/${member.id}`)
-      .set({ personId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      .set(
+        { personId, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
     return personId;
   } catch (err) {
-    console.warn("[person-identity-service] ensurePersonLinkForMember failed", err);
+    console.warn(
+      "[person-identity-service] ensurePersonLinkForMember failed",
+      err
+    );
     return member.personId;
   }
 }
@@ -169,12 +178,48 @@ export async function ensurePersonLinkForStaffUser(staffUser: {
     const personId = await ensurePersonIdentity(staffUser.email);
     await getAdminDb()
       .doc(`users/${staffUser.uid}`)
-      .set({ personId, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      .set(
+        { personId, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
     return personId;
   } catch (err) {
-    console.warn("[person-identity-service] ensurePersonLinkForStaffUser failed", err);
+    console.warn(
+      "[person-identity-service] ensurePersonLinkForStaffUser failed",
+      err
+    );
     return staffUser.personId;
   }
+}
+
+/**
+ * Cross-identity session mismatch fix (2026-09-15) — reads `users/{uid}`
+ * for its own already-linked `personId` (falling through to
+ * `ensurePersonLinkForStaffUser`'s idempotent resolve-or-create only when
+ * one isn't set yet) so callers get a plain `string | null` for "the
+ * MyMagnetix identity THIS staff login actually corresponds to" — without
+ * needing to read the users doc themselves first.
+ *
+ * The one real caller today is `/gateway`, which uses this to compare
+ * against whatever `mm_session` cookie the browser already happens to be
+ * carrying: an existing MyMagnetix session belongs to a real, specific
+ * Person, and that Person is only sometimes the same human as the
+ * currently-authenticated staff login — this is the read that lets
+ * `/gateway` tell the two cases apart instead of silently trusting
+ * whichever `mm_session` happens to already be in the browser.
+ */
+export async function resolveStaffPersonId(
+  uid: string,
+  email: string
+): Promise<string | null> {
+  const snap = await getAdminDb().doc(`users/${uid}`).get();
+  const existing = (snap.data()?.personId as string | null | undefined) ?? null;
+  const resolved = await ensurePersonLinkForStaffUser({
+    uid,
+    email,
+    personId: existing,
+  });
+  return resolved ?? null;
 }
 
 /**
@@ -210,7 +255,9 @@ export async function personHasStaffAccess(personId: string): Promise<boolean> {
  * and deployed alongside this change — see the Build Log). This is the
  * one piece of "genuinely necessary" infrastructure Step 5 asked for.
  */
-export async function personHasMemberRelationships(personId: string): Promise<boolean> {
+export async function personHasMemberRelationships(
+  personId: string
+): Promise<boolean> {
   const snap = await getAdminDb()
     .collectionGroup("members")
     .where("personId", "==", personId)
