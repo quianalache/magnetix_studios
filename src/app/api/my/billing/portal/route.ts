@@ -6,6 +6,7 @@ import {
   createPersonBillingPortalSession,
   MyMagnetixPortalError,
 } from "@/lib/server/mymagnetix-billing-portal-service";
+import { listPersonMemberships } from "@/lib/server/mymagnetix-service";
 import { getAuthEmailOrigin } from "@/lib/server/app-origin";
 
 export async function POST(request: Request) {
@@ -34,8 +35,9 @@ export async function POST(request: Request) {
   }
 
   try {
+    const ownerMemberships = await listPersonMemberships(person.id);
     const url = await createPersonBillingPortalSession({
-      personId: person.id,
+      ownerMemberships,
       subscriptionId: body.subscriptionId,
       // Cross-identity/Stripe-return-URL fix (2026-09-16): this used to
       // trust NEXT_PUBLIC_APP_URL directly — the same env var behind the

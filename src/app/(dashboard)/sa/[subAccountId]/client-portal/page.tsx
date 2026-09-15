@@ -151,11 +151,20 @@ export default function ClientPortalSettingsPage() {
 
   const portalDisplayName =
     branding.portalName || subAccount?.name || "Your Portal";
-  const portalHomeUrl = buildPortalHomeUrl({ subAccount, subAccountId });
-  const portalEntryUrl = buildPortalLoginUrl({ subAccount, subAccountId });
+  const portalHomeUrl = buildPortalHomeUrl({
+    subAccount,
+    subAccountId,
+    slug: subAccount?.slug,
+  });
+  const portalEntryUrl = buildPortalLoginUrl({
+    subAccount,
+    subAccountId,
+    slug: subAccount?.slug,
+  });
   const portalLoginPageUrl = buildPortalLoginPageUrl({
     subAccount,
     subAccountId,
+    slug: subAccount?.slug,
   });
   const hasVerifiedPortalDomain =
     subAccount?.customDomain?.status === "verified";

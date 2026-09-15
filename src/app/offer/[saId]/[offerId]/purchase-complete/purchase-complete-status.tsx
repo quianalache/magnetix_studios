@@ -53,9 +53,14 @@ function formatPrice(cents: number | null, currency: string): string {
  */
 export function PurchaseCompleteStatus({
   saId,
+  spaceSlug,
   offerId,
 }: {
   saId: string;
+  /** Branded Space URLs (2026-09-16) — the sub-account's canonical slug,
+   *  resolved server-side by the caller; falls back to `saId` itself if
+   *  resolution somehow failed, so this never produces a broken link. */
+  spaceSlug: string;
   offerId: string;
   /** Kept in the prop signature for the caller's own doc-comment
    *  continuity (which course this offer's first bundled item is) — no
@@ -69,7 +74,7 @@ export function PurchaseCompleteStatus({
   const [upsellBusy, setUpsellBusy] = useState(false);
   const startedAt = useRef(Date.now());
 
-  const continueUrl = `/api/my/bridge-from-member?next=${encodeURIComponent(`/portal/${saId}`)}`;
+  const continueUrl = `/api/my/bridge-from-member?next=${encodeURIComponent(`/portal/${spaceSlug}`)}`;
 
   useEffect(() => {
     let cancelled = false;

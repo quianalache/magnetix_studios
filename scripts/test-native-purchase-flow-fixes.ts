@@ -137,8 +137,10 @@ function main() {
     purchaseCompleteSrc.includes("/api/my/bridge-from-member?next=")
   );
   check(
-    "Destination is the Space (/portal/{saId}), not a bare classroom jump",
-    /encodeURIComponent\(`\/portal\/\$\{saId\}`\)/.test(purchaseCompleteSrc)
+    "Destination is the Space's canonical slug URL (/portal/{spaceSlug}), not a bare classroom jump — updated 2026-09-16 for branded Space URLs, see test-space-experience.ts",
+    /encodeURIComponent\(`\/portal\/\$\{spaceSlug\}`\)/.test(
+      purchaseCompleteSrc
+    )
   );
   check(
     "Navigation to continueUrl uses a real browser navigation (window.location.href), not router.push — this route sets a cookie and redirects, which client-side routing can't reliably do (all 3 call sites: poll success, upsell accept, upsell decline)",

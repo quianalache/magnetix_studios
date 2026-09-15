@@ -3,8 +3,8 @@ import "server-only";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getStripeServer } from "@/lib/stripe/server";
 import {
-  listPersonMemberships,
   subscriptionBelongsToMembership,
+  type PersonMembership,
 } from "@/lib/server/mymagnetix-service";
 import type {
   ExternalBillingCustomer,
@@ -58,9 +58,19 @@ function stripeFailure(error: unknown): MyMagnetixPortalError {
   );
 }
 
-/** Creates a Stripe-hosted portal session for one verified person-owned subscription. */
+/**
+ * Creates a Stripe-hosted portal session for one verified owner-owned
+ * subscription. Ownership is proven entirely by `ownerMemberships` — the
+ * caller resolves that list however its OWN identity system works
+ * (MyMagnetix: `listPersonMemberships(personId)`, across every business;
+ * Space Billing: a single synthetic membership built straight from the
+ * current Member session, scoped to just that one sub-account — see
+ * /api/portal/[saId]/billing/portal/route.ts). This function itself
+ * doesn't know or care which; `subscriptionBelongsToMembership` is the
+ * same real boundary either way, never weakened for either caller.
+ */
 export async function createPersonBillingPortalSession(input: {
-  personId: string;
+  ownerMemberships: PersonMembership[];
   subscriptionId: string;
   returnUrl: string;
 }): Promise<string> {
@@ -95,9 +105,8 @@ export async function createPersonBillingPortalSession(input: {
     );
   }
 
-  const memberships = await listPersonMemberships(input.personId);
   if (
-    !memberships.some((membership) =>
+    !input.ownerMemberships.some((membership) =>
       subscriptionBelongsToMembership(subscription, membership)
     )
   ) {

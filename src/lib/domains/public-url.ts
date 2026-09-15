@@ -128,33 +128,42 @@ export function buildOfferUrl(opts: {
 export function buildPortalLoginUrl(opts: {
   subAccount: HasCustomDomain | null | undefined;
   subAccountId: string;
+  /** Branded Space URLs (2026-09-16) — the sub-account's canonical slug.
+   *  Optional/falls back to `subAccountId` so an existing caller that
+   *  hasn't been updated to pass it yet still produces a working
+   *  (if unbranded) link, never a broken one. */
+  slug?: string | null;
 }): string {
   const domain = verifiedDomain(opts.subAccount);
   return domain
     ? `https://${domain}/portal`
-    : `${platformOrigin()}/portal/${opts.subAccountId}/login`;
+    : `${platformOrigin()}/portal/${opts.slug || opts.subAccountId}/login`;
 }
 
 /** The member-facing Portal home/entry destination for admin "View Portal" actions. */
 export function buildPortalHomeUrl(opts: {
   subAccount: HasCustomDomain | null | undefined;
   subAccountId: string;
+  /** See buildPortalLoginUrl's identical doc comment on this param. */
+  slug?: string | null;
 }): string {
   const domain = verifiedDomain(opts.subAccount);
   return domain
     ? `https://${domain}/portal`
-    : `${platformOrigin()}/portal/${opts.subAccountId}`;
+    : `${platformOrigin()}/portal/${opts.slug || opts.subAccountId}`;
 }
 
 /** The explicit Portal login page, used when the admin wants to open the login screen itself. */
 export function buildPortalLoginPageUrl(opts: {
   subAccount: HasCustomDomain | null | undefined;
   subAccountId: string;
+  /** See buildPortalLoginUrl's identical doc comment on this param. */
+  slug?: string | null;
 }): string {
   const domain = verifiedDomain(opts.subAccount);
   return domain
     ? `https://${domain}/portal/login`
-    : `${platformOrigin()}/portal/${opts.subAccountId}/login`;
+    : `${platformOrigin()}/portal/${opts.slug || opts.subAccountId}/login`;
 }
 
 /**

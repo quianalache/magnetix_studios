@@ -14,7 +14,11 @@ export function ContactPortalAccess({ contact }: { contact: Contact }) {
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const portalUrl = buildPortalLoginUrl({ subAccount, subAccountId });
+  const portalUrl = buildPortalLoginUrl({
+    subAccount,
+    subAccountId,
+    slug: subAccount?.slug,
+  });
 
   async function handleCopy() {
     await navigator.clipboard.writeText(portalUrl);

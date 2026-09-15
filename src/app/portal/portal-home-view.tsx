@@ -25,9 +25,11 @@ import {
   buildOfferUrl,
 } from "@/lib/domains/public-url";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
+import { resolveSpaceIdentifier } from "@/lib/server/space-slug-service";
 import {
   listPortalCommunities,
   listPortalCourses,
+  listPortalPastBookings,
   listPortalProjects,
   listPortalQuotes,
   listPortalReadings,
@@ -38,6 +40,12 @@ import {
   type PortalCourse,
   type PortalSessionBundle,
 } from "@/lib/server/portal-service";
+import {
+  listSubscriptionsForPerson,
+  listPaymentHistoryForPerson,
+  type PersonSubscriptionPurchase,
+  type PersonPaymentHistoryItem,
+} from "@/lib/server/mymagnetix-service";
 import { getStandaloneCourse } from "@/lib/server/standalone-course-service";
 import { formatCurrency } from "@/lib/format";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
@@ -50,6 +58,7 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { Quote } from "@/types/quotes";
 import { PortalLogoutButton } from "./[saId]/logout-button";
 import { PortalProjectsPanel } from "./[saId]/projects-panel";
+import { SpaceBillingSection } from "./space-billing-section";
 
 /**
  * Client Portal Home — approved production visual direction.
@@ -301,11 +310,40 @@ export async function PortalHomeView({
   basePath = `/portal/${saId}`,
   section = "home",
 }: {
+  /** Whatever the URL segment actually was — a real subAccountId (the
+   *  pre-existing form) OR a branded slug. Resolved immediately below;
+   *  `basePath`'s default above deliberately captures THIS raw value
+   *  before that happens, since by the time this function does anything
+   *  else, either it already equals the canonical slug or this render
+   *  never completes (redirected away first) — see the resolution step
+   *  right below for why that invariant holds. */
   saId: string;
   loginPath: string;
   basePath?: string;
   section?: PortalSection;
 }) {
+  // Branded Space URLs (2026-09-16): resolve whichever form the URL used
+  // to the real subAccountId (required for every Firestore/session check
+  // below — getCurrentMember does an EXACT match against the real id
+  // embedded in the signed session token, so nothing past this point may
+  // ever see the slug) and the CURRENT canonical slug. A mismatch (a
+  // visitor on the old raw-ID URL, or a stale/non-canonical slug) redirects
+  // to the canonical URL rather than silently rendering under the old one
+  // — old links keep working, they just land on the pretty URL. `saId` is
+  // reassigned to the real id here so every one of the ~30 existing
+  // Firestore/service-call sites below (unchanged) keeps working exactly
+  // as it already did; only this one spot needed to change.
+  const resolved = await resolveSpaceIdentifier(saId);
+  if (!resolved) notFound();
+  if (saId !== resolved.canonicalSlug) {
+    redirect(
+      section === "home"
+        ? `/portal/${resolved.canonicalSlug}`
+        : `/portal/${resolved.canonicalSlug}/${section}`
+    );
+  }
+  saId = resolved.subAccountId;
+
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists) notFound();
   const sub = subSnap.data() as SubAccountDoc;
@@ -322,10 +360,13 @@ export async function PortalHomeView({
     courses,
     readings,
     bookings,
+    pastBookings,
     quotes,
     projects,
     sessionBundles,
     communities,
+    spaceSubscriptions,
+    spacePaymentHistory,
   ] = await Promise.all([
     branding.modules.courses
       ? listPortalCourses(saId, member.id)
@@ -335,6 +376,14 @@ export async function PortalHomeView({
       : Promise.resolve([]),
     branding.modules.appointments && member.contactId
       ? listPortalUpcomingBookings(saId, member.contactId)
+      : Promise.resolve([]),
+    // Past appointments (2026-09-16) -- only needed on the Appointments
+    // page itself, same "only fetch what this section renders" discipline
+    // as the Billing reads below.
+    branding.modules.appointments &&
+      member.contactId &&
+      section === "appointments"
+      ? listPortalPastBookings(saId, member.contactId)
       : Promise.resolve([]),
     branding.modules.invoices && member.contactId
       ? listPortalQuotes(saId, member.contactId)
@@ -347,6 +396,39 @@ export async function PortalHomeView({
       : Promise.resolve([]),
     branding.modules.community
       ? listPortalCommunities(saId, member.id)
+      : Promise.resolve([]),
+    // Space Billing fix (2026-09-16): the SAME canonical
+    // ExternalSubscription/ExternalPayment ledger MyMagnetix Purchases
+    // already reads, scoped to just THIS sub-account via a single
+    // synthetic membership built from the current Member session — never
+    // listPersonMemberships (which would aggregate every OTHER business
+    // this Person also belongs to; Space Billing must never do that). No
+    // dependency on this Member ever having been personId-linked — see
+    // listSubscriptionsForPerson's own personId param, which is
+    // deliberately unused/decorative; the real isolation boundary is the
+    // membership's own subAccountId+contactId. Only fetched for the
+    // Billing page itself.
+    branding.modules.invoices && member.contactId && section === "billing"
+      ? listSubscriptionsForPerson(member.personId ?? "", [
+          {
+            subAccountId: saId,
+            memberId: member.id,
+            contactId: member.contactId,
+            email: member.email,
+            displayName: member.displayName,
+          },
+        ])
+      : Promise.resolve([]),
+    branding.modules.invoices && member.contactId && section === "billing"
+      ? listPaymentHistoryForPerson(member.personId ?? "", [
+          {
+            subAccountId: saId,
+            memberId: member.id,
+            contactId: member.contactId,
+            email: member.email,
+            displayName: member.displayName,
+          },
+        ])
       : Promise.resolve([]),
   ]);
 
@@ -530,10 +612,14 @@ export async function PortalHomeView({
                 section={section}
                 saId={saId}
                 bookings={bookings}
+                pastBookings={pastBookings}
+                sessionBundles={sessionBundles}
                 communities={communities}
                 courses={courses}
                 projects={projects}
                 quotes={quotes}
+                subscriptions={spaceSubscriptions}
+                paymentHistory={spacePaymentHistory}
               />
             )}
           </main>
@@ -1094,18 +1180,26 @@ function PortalDestination({
   section,
   saId,
   bookings,
+  pastBookings,
+  sessionBundles,
   communities,
   courses,
   projects,
   quotes,
+  subscriptions,
+  paymentHistory,
 }: {
   section: Exclude<PortalSection, "home">;
   saId: string;
   bookings: PortalBooking[];
+  pastBookings: PortalBooking[];
+  sessionBundles: PortalSessionBundle[];
   communities: PortalCommunity[];
   courses: PortalCourse[];
   projects: (Project & { steps: ProjectStep[] })[];
   quotes: Quote[];
+  subscriptions: PersonSubscriptionPurchase[];
+  paymentHistory: PersonPaymentHistoryItem[];
 }) {
   const copy = {
     appointments: {
@@ -1130,36 +1224,111 @@ function PortalDestination({
   );
 
   if (section === "appointments") {
+    // Appointments UX fix (2026-09-16 owner QA): this page used to show
+    // ONLY scheduled calendar events (`bookings`) — a real, unused
+    // booking/session entitlement (the same sessionBundles data the Home
+    // page's "1 Session remaining" card already reads, not a second
+    // source) never appeared here at all, so a Person who'd paid for
+    // sessions but hadn't scheduled one yet saw a page that looked
+    // completely empty. Now three sections, in priority order: what you
+    // can book, what's actually scheduled, then history.
+    const availableBundles = sessionBundles.filter((b) => b.remaining > 0);
+    const hasAnything =
+      availableBundles.length > 0 ||
+      bookings.length > 0 ||
+      pastBookings.length > 0;
     return (
       <>
         {heading}
-        {bookings.length === 0 ? (
+        {!hasAnything ? (
           <PortalEmptyState message={copy.empty} />
         ) : (
-          <div className="space-y-3">
-            {bookings.map((booking) => (
-              <section
-                key={booking.id}
-                className="flex flex-col gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="text-[16px] font-bold text-[#111217]">
-                    {booking.title}
-                  </p>
-                  <p className="mt-1 text-[13px] text-[#4F5565]">
-                    {booking.startAt
-                      ? formatDateTime(booking.startAt)
-                      : "Scheduled session"}
-                  </p>
+          <div className="space-y-7">
+            {availableBundles.length > 0 && (
+              <section>
+                <h2 className="text-[11px] font-bold tracking-[0.1em] text-[#8A87A0] uppercase">
+                  Available to book
+                </h2>
+                <div className="mt-3 space-y-3">
+                  {availableBundles.map((bundle) => (
+                    <section
+                      key={bundle.bookingPageSlug}
+                      className="flex flex-col gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-[16px] font-bold text-[#111217]">
+                          {bundle.bookingPageName}
+                        </p>
+                        <p className="mt-1 text-[13px] text-[#4F5565]">
+                          {bundle.remaining} session
+                          {bundle.remaining === 1 ? "" : "s"} remaining
+                        </p>
+                      </div>
+                      <PortalButton href={`/b/${saId}/${bundle.bookingPageSlug}`}>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Book session
+                      </PortalButton>
+                    </section>
+                  ))}
                 </div>
-                {booking.meetingUrl && (
-                  <PortalButton href={booking.meetingUrl} external>
-                    <Video className="h-3.5 w-3.5" />
-                    Join meeting
-                  </PortalButton>
-                )}
               </section>
-            ))}
+            )}
+
+            {bookings.length > 0 && (
+              <section>
+                <h2 className="text-[11px] font-bold tracking-[0.1em] text-[#8A87A0] uppercase">
+                  Upcoming appointments
+                </h2>
+                <div className="mt-3 space-y-3">
+                  {bookings.map((booking) => (
+                    <section
+                      key={booking.id}
+                      className="flex flex-col gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <p className="text-[16px] font-bold text-[#111217]">
+                          {booking.title}
+                        </p>
+                        <p className="mt-1 text-[13px] text-[#4F5565]">
+                          {booking.startAt
+                            ? formatDateTime(booking.startAt)
+                            : "Scheduled session"}
+                        </p>
+                      </div>
+                      {booking.meetingUrl && (
+                        <PortalButton href={booking.meetingUrl} external>
+                          <Video className="h-3.5 w-3.5" />
+                          Join meeting
+                        </PortalButton>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {pastBookings.length > 0 && (
+              <section>
+                <h2 className="text-[11px] font-bold tracking-[0.1em] text-[#8A87A0] uppercase">
+                  Past appointments
+                </h2>
+                <div className="mt-3 space-y-3">
+                  {pastBookings.map((booking) => (
+                    <section
+                      key={booking.id}
+                      className="flex flex-col gap-1 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
+                      <p className="text-[15px] font-semibold text-[#111217]">
+                        {booking.title}
+                      </p>
+                      <p className="text-[13px] text-[#4F5565]">
+                        {booking.startAt ? formatDateTime(booking.startAt) : ""}
+                      </p>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         )}
       </>
@@ -1279,38 +1448,26 @@ function PortalDestination({
     );
   }
 
+  // Space Billing fix (2026-09-16 owner QA): this page used to read ONLY
+  // `quotes` (one-off Quote/Invoice docs a business sends manually) — a
+  // real, active, native Stripe subscription to THIS sub-account (already
+  // correctly visible in MyMagnetix -> Purchases) never appeared here at
+  // all, because this page never read the ExternalSubscription/
+  // ExternalPayment ledger. Delegates to SpaceBillingSection (its own
+  // Client Component — the "View details" drawer needs interactive state,
+  // which a Server Component like this one can't hold) reusing the exact
+  // same SubscriptionCard/PaymentHistoryTable/SubscriptionDetailsSheet
+  // components MyMagnetix Purchases already uses, per this task's own
+  // "reuse Purchases UI primitives" instruction.
   return (
     <>
       {heading}
-      {quotes.length === 0 ? (
-        <PortalEmptyState message={copy.empty} />
-      ) : (
-        <div className="space-y-3">
-          {quotes.map((quote) => {
-            const total = computeQuoteTotals(quote).total;
-            const isInvoice = quote.kind === "invoice";
-            return (
-              <a
-                key={quote.id}
-                href={`/api/portal/${saId}/quotes/${quote.id}/view`}
-                className="flex items-center justify-between gap-4 rounded-[12px] border border-[#DFE2EA] bg-white p-4 shadow-[0_12px_34px_rgba(18,18,18,0.035)] hover:border-[var(--portal-accent)]"
-              >
-                <div>
-                  <p className="text-[16px] font-bold text-[#111217]">
-                    {isInvoice ? "Invoice" : "Quote"} {quote.quoteNumber}
-                  </p>
-                  <p className="mt-1 text-[13px] text-[#4F5565] capitalize">
-                    {quote.status}
-                  </p>
-                </div>
-                <p className="shrink-0 text-[16px] font-bold text-[#111217]">
-                  {formatCurrency(total, quote.currency)}
-                </p>
-              </a>
-            );
-          })}
-        </div>
-      )}
+      <SpaceBillingSection
+        saId={saId}
+        subscriptions={subscriptions}
+        paymentHistory={paymentHistory}
+        quotes={quotes}
+      />
     </>
   );
 }

@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { resolveSpaceIdentifier } from "@/lib/server/space-slug-service";
 import { resolvePortalBranding } from "@/types/portal-branding";
 import type { SubAccountDoc } from "@/types/tenancy";
 import { PortalLoginView } from "../../portal-login-view";
@@ -12,7 +13,19 @@ interface PageProps {
 }
 
 export default async function PortalLoginPage({ params, searchParams }: PageProps) {
-  const { saId } = await params;
+  let { saId } = await params;
+  // Branded Space URLs (2026-09-16) — same resolve-and-redirect contract
+  // as PortalHomeView's own identical comment; see that one for the full
+  // reasoning. `saId` is reassigned to the real subAccountId so the
+  // Firestore read below and everything this page passes to
+  // PortalLoginView keeps behaving exactly as it already did.
+  const resolved = await resolveSpaceIdentifier(saId);
+  if (!resolved) notFound();
+  if (saId !== resolved.canonicalSlug) {
+    redirect(`/portal/${resolved.canonicalSlug}/login`);
+  }
+  saId = resolved.subAccountId;
+
   const subSnap = await getAdminDb().doc(`subAccounts/${saId}`).get();
   if (!subSnap.exists) notFound();
   const sub = subSnap.data() as SubAccountDoc;

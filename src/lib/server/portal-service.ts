@@ -134,6 +134,39 @@ export async function listPortalUpcomingBookings(
     .sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0));
 }
 
+/**
+ * This contact's past booked events (2026-09-16, Space Appointments
+ * fix) — the "PAST APPOINTMENTS" section. Same query/shape as
+ * listPortalUpcomingBookings, just the opposite time filter, and
+ * INCLUDING completed events (a genuinely past appointment is exactly
+ * what "completed" means here) while still excluding cancelled ones.
+ * Capped at 10 — a customer-facing history list, not a full export.
+ */
+export async function listPortalPastBookings(
+  subAccountId: string,
+  contactId: string
+): Promise<PortalBooking[]> {
+  const snap = await getAdminDb()
+    .collection("events")
+    .where("subAccountId", "==", subAccountId)
+    .where("contactId", "==", contactId)
+    .get();
+
+  const now = Date.now();
+  return snap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<CalendarEvent, "id">) }))
+    .filter((e) => eventStatus(e) !== "cancelled")
+    .map((e) => ({
+      id: e.id,
+      title: e.title,
+      startAt: tsToDate(e.startAt),
+      meetingUrl: e.meetingUrl ?? null,
+    }))
+    .filter((e) => e.startAt !== null && e.startAt.getTime() < now)
+    .sort((a, b) => (b.startAt?.getTime() ?? 0) - (a.startAt?.getTime() ?? 0))
+    .slice(0, 10);
+}
+
 /** This contact's quotes + invoices (both stored as Quote docs, discriminated by `kind`). */
 export async function listPortalQuotes(
   subAccountId: string,

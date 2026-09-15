@@ -29,9 +29,14 @@ import {
 export function SubscriptionDetailsSheet({
   subscription,
   onClose,
+  manageEndpoint,
 }: {
   subscription: PersonSubscriptionPurchase | null;
   onClose: () => void;
+  /** Threaded straight through to ManageSubscriptionButton — see that
+   *  component's own doc comment on why Space Billing needs a different
+   *  (Member-authenticated) endpoint than MyMagnetix's default. */
+  manageEndpoint?: string;
 }) {
   return (
     <Sheet open={!!subscription} onOpenChange={(open) => !open && onClose()}>
@@ -78,7 +83,10 @@ export function SubscriptionDetailsSheet({
 
             {subscription.canManage && (
               <div className="border-t border-[#F1EFF7] pt-4">
-                <ManageSubscriptionButton subscriptionId={subscription.id} />
+                <ManageSubscriptionButton
+                  subscriptionId={subscription.id}
+                  {...(manageEndpoint ? { endpoint: manageEndpoint } : {})}
+                />
               </div>
             )}
           </div>

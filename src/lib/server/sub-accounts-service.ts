@@ -4,6 +4,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { seedDefaultTemplates } from "@/lib/automations/seed-templates";
 import { createInviteServerSide } from "@/lib/server/members-service";
+import {
+  deriveSlugFromName,
+  resolveUniqueSlug,
+} from "@/lib/server/space-slug-service";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 
 /**
@@ -218,6 +222,22 @@ export async function createSubAccountForAgency(
   const subAccountId = subRef.id;
   const counterRef = db.doc(`agencies/${agencyId}/counters/subAccount`);
 
+  // Branded Space URLs (2026-09-16): a real, unique, human-readable slug
+  // now, instead of silently falling back to an opaque id fragment when
+  // the creator left it blank — see space-slug-service.ts's own doc
+  // comment for why this existing-but-previously-unused field is the
+  // right place for this. Resolved OUTSIDE the transaction below (a
+  // uniqueness check doesn't mix with Firestore's read-before-write
+  // transaction rules), so there's a vanishingly small window where two
+  // simultaneous creates with the same derived name could both pass the
+  // check — the same accepted tiny race already documented elsewhere in
+  // this codebase (e.g. ensurePersonIdentity's identical tradeoff), named
+  // here rather than silently ignored, not something this task needed to
+  // add real distributed locking for.
+  const resolvedSlug = await resolveUniqueSlug(
+    slug || deriveSlugFromName(name)
+  );
+
   // Transactional counter increment so two simultaneous creates can't
   // collide on the same account number. Fallback to 1000 lets older
   // agencies (no counter doc yet) pick up smoothly.
@@ -234,7 +254,7 @@ export async function createSubAccountForAgency(
       agencyId,
       accountNumber: current,
       name,
-      slug: slug || subAccountId.slice(0, 8),
+      slug: resolvedSlug,
       status: "active",
       timezone,
       createdByUid: uid,

@@ -176,13 +176,20 @@ export async function listSpacesForPerson(
         name: branding.portalName || sub.name,
         logoUrl: branding.logoUrl,
         accentColor: branding.accentColor,
-        // Deliberately the opaque `/portal/{id}` path, NOT
+        // Deliberately the platform-domain `/portal/{slug}` path, NOT
         // buildPortalHomeUrl's custom-domain-aware pretty URL: the
         // ls_member_session cookie /api/my/enter mints is only ever set
         // on the CURRENT (platform) domain, so redirecting straight to a
         // business's own custom domain here would leave the visitor
         // cookie-less there and bounce them to a login screen anyway.
-        enterHref: `/api/my/enter?subAccountId=${sub.id}&next=${encodeURIComponent(`/portal/${sub.id}`)}`,
+        // Branded Space URLs (2026-09-16): uses the sub-account's
+        // canonical slug rather than its raw id for the URL PATH — the
+        // `subAccountId` QUERY PARAM stays the real id (that's what
+        // /api/my/enter's own logic reads to resolve the bridge). The old
+        // `/portal/{id}` form still resolves via PortalHomeView's own
+        // redirect-to-canonical-slug handling, so this is never a broken
+        // link even for a sub-account somehow still missing a slug.
+        enterHref: `/api/my/enter?subAccountId=${sub.id}&next=${encodeURIComponent(`/portal/${sub.slug || sub.id}`)}`,
         pinKey: `space:${sub.id}`,
       };
     })
