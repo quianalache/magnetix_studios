@@ -44,25 +44,31 @@ export interface CreateSubAccountResult {
   name: string;
   agencyId: string;
   /**
-   * Outcome of auto-inviting `accountContact.email` as this sub-account's
-   * admin — see {@link inviteAccountContactIfProvided}. Sub-account creation
-   * always succeeds regardless of what happened here; the caller surfaces
-   * this so a failed/undelivered invite doesn't go unnoticed.
+   * Outcome of the one-shot {@link ensureSubAccountClientOwnerAccess} call
+   * run right after creation, for whatever email was given as the account
+   * contact. Sub-account creation always succeeds regardless of what
+   * happened here; the caller surfaces this so a failed/undelivered
+   * provisioning attempt doesn't go unnoticed. Kept as `invite` (not
+   * renamed) since it's already read by that field name in
+   * billing-service.ts and the agency create route.
    */
-  invite: InviteOutcome;
+  invite: ClientOwnerAccessResult;
 }
 
 /**
- * Result of the best-effort "invite the account contact" step run right
- * after a sub-account is created. `attempted: false` means no email was
- * given (the normal case for internal/personal sub-accounts) — nothing
- * failed, there was just nothing to do.
+ * Result of ensuring one email has CRM/Business Center access to one
+ * sub-account — see {@link ensureSubAccountClientOwnerAccess}. `attempted:
+ * false` means no email was given (the normal case for internal/personal
+ * sub-accounts) — nothing failed, there was just nothing to do.
  */
-export interface InviteOutcome {
+export interface ClientOwnerAccessResult {
   attempted: boolean;
   email: string | null;
-  /** True once a real email actually went out (new pending invite OR an
-   *  existing-user "added" notice) — mirrors `CreateInviteResult.mailed`. */
+  /** True once a real email actually went out (new pending invite, a
+   *  resend, or an existing-user "you now have access" notice) — mirrors
+   *  `CreateInviteResult.mailed`. False (with no error) when the person was
+   *  already an active member of this exact sub-account — nothing to
+   *  notify them of, so nothing is sent. */
   mailed: boolean;
   /** Non-fatal delivery failure from inside the invite system itself
    *  (e.g. Resend send failed) — the invite/membership was still written. */
@@ -70,10 +76,18 @@ export interface InviteOutcome {
   /** True when the email already had a Firebase Auth account and was added
    *  to this sub-account directly, rather than getting a pending invite. */
   added: boolean;
-  /** Set when the invite step failed outright (e.g. the contact's email
-   *  belongs to a removed/disabled account, or an unexpected error) — the
-   *  sub-account itself was still created; this just means onboarding for
-   *  that email needs manual attention (Settings → Members). */
+  /** True when a pending invite for this exact (email, subAccountId) pair
+   *  already existed and was reused/resent rather than duplicated. */
+  reused: boolean;
+  /** True when this email was ALREADY an active member of this exact
+   *  sub-account — the safe idempotent no-op case; calling this function
+   *  again for someone who already has access never duplicates anything
+   *  or re-notifies them. */
+  alreadyMember: boolean;
+  /** Set when provisioning failed outright (e.g. the email belongs to a
+   *  removed/disabled account, or an unexpected error) — the sub-account
+   *  itself was still created/unaffected; this just means access for that
+   *  email needs manual attention (Settings → Admin's own retry action). */
   error: string | null;
 }
 
@@ -85,19 +99,20 @@ export interface InviteOutcome {
  * counts as "clean". Each entry maps a collection to the human label shown to
  * the agency owner when a delete is blocked.
  */
-const USAGE_COLLECTIONS: ReadonlyArray<{ collection: string; label: string }> = [
-  { collection: "contacts", label: "contacts" },
-  { collection: "deals", label: "deals" },
-  { collection: "tasks", label: "tasks" },
-  { collection: "events", label: "calendar events" },
-  { collection: "forms", label: "forms" },
-  { collection: "quotes", label: "quotes / invoices" },
-  { collection: "products", label: "products" },
-  { collection: "automations", label: "automations" },
-  { collection: "broadcasts", label: "broadcasts" },
-  { collection: "socialPosts", label: "social posts" },
-  { collection: "voiceCampaigns", label: "voice campaigns" },
-];
+const USAGE_COLLECTIONS: ReadonlyArray<{ collection: string; label: string }> =
+  [
+    { collection: "contacts", label: "contacts" },
+    { collection: "deals", label: "deals" },
+    { collection: "tasks", label: "tasks" },
+    { collection: "events", label: "calendar events" },
+    { collection: "forms", label: "forms" },
+    { collection: "quotes", label: "quotes / invoices" },
+    { collection: "products", label: "products" },
+    { collection: "automations", label: "automations" },
+    { collection: "broadcasts", label: "broadcasts" },
+    { collection: "socialPosts", label: "social posts" },
+    { collection: "voiceCampaigns", label: "voice campaigns" },
+  ];
 
 /**
  * Thrown by {@link deleteSubAccountForAgency} when the sub-account still holds
@@ -156,7 +171,7 @@ export async function deleteSubAccountForAgency(input: {
         .limit(1)
         .get();
       return snap.empty ? null : label;
-    }),
+    })
   );
   const blockers = probes.filter((l): l is string => l !== null);
   if (blockers.length > 0) throw new SubAccountNotEmptyError(blockers);
@@ -185,10 +200,18 @@ export async function deleteSubAccountForAgency(input: {
 }
 
 export async function createSubAccountForAgency(
-  input: CreateSubAccountInput,
+  input: CreateSubAccountInput
 ): Promise<CreateSubAccountResult> {
-  const { agencyId, uid, email, displayName, name, slug, timezone, accountContact } =
-    input;
+  const {
+    agencyId,
+    uid,
+    email,
+    displayName,
+    name,
+    slug,
+    timezone,
+    accountContact,
+  } = input;
 
   const db = getAdminDb();
   const subRef = db.collection("subAccounts").doc();
@@ -201,8 +224,8 @@ export async function createSubAccountForAgency(
   const accountNumber = await db.runTransaction<number>(async (tx) => {
     const counterSnap = await tx.get(counterRef);
     const current = counterSnap.exists
-      ? (counterSnap.data()?.next as number | undefined) ??
-        STARTING_ACCOUNT_NUMBER
+      ? ((counterSnap.data()?.next as number | undefined) ??
+        STARTING_ACCOUNT_NUMBER)
       : STARTING_ACCOUNT_NUMBER;
     tx.set(counterRef, { next: current + 1 });
 
@@ -294,16 +317,14 @@ export async function createSubAccountForAgency(
     return current;
   });
 
-  // Best-effort: invite the account contact (if one was given) into the new
-  // sub-account as its admin. Deliberately OUTSIDE the transaction above —
-  // it needs to call Firebase Auth (auth.getUserByEmail) and send a real
-  // email, neither of which belongs inside a Firestore transaction. Reuses
-  // the exact same invite system Settings → Members already uses (see
-  // members-service.ts) — no second onboarding/auth path. Never throws:
-  // the sub-account is already created and committed by this point, so a
-  // failed invite is reported back to the caller, not treated as a failed
-  // create.
-  const invite = await inviteAccountContactIfProvided({
+  // Best-effort: provision the account contact (if one was given) with real
+  // CRM/Business Center access to the new sub-account. Deliberately OUTSIDE
+  // the transaction above — it needs to call Firebase Auth
+  // (auth.getUserByEmail) and send a real email, neither of which belongs
+  // inside a Firestore transaction. Never throws: the sub-account is
+  // already created and committed by this point, so a failed attempt is
+  // reported back to the caller, not treated as a failed create.
+  const invite = await ensureSubAccountClientOwnerAccess({
     subAccountId,
     invitedByUid: uid,
     email: accountContact?.email ?? null,
@@ -313,28 +334,58 @@ export async function createSubAccountForAgency(
 }
 
 /**
- * Invite `email` into `subAccountId` as admin via the shared invite system,
- * normalizing every outcome (including failures) into an {@link InviteOutcome}
- * so the caller can always report something sensible instead of an unhandled
- * rejection. `email` blank/absent → `attempted: false`, nothing happens —
- * the normal case for internal/personal sub-accounts with no named contact.
+ * Canonical, idempotent "this email is (or should become) the primary
+ * client/business owner of this sub-account" provisioning step. The ONE
+ * place that decision gets turned into real CRM staff access — called from
+ * three places today: right after a sub-account is created (above, for
+ * whatever `accountContact.email` was supplied at that moment), from the
+ * deliberate "Grant Business Center access" / "Resend invite" action in
+ * Settings → Admin (see the `client-owner-access` route) when an account
+ * contact is added or changed AFTER creation, and from the one-time
+ * reconciliation script for pre-existing sub-accounts that predate this.
+ *
+ * Reuses the exact same invite system Settings → Members already uses (see
+ * members-service.ts's `createInviteServerSide`) — no second onboarding/
+ * auth path, and no interaction with the MyMagnetix Person/Member identity
+ * system at all (this file never imports it). Fixed `role: "admin"` — the
+ * account contact becomes this sub-account's admin, not a collaborator, and
+ * that role is sub-account-scoped only (never agency-level) by
+ * construction — see `CreateInviteInput.role`'s own type.
+ *
+ * Idempotent and safe to call repeatedly for the same (email, subAccountId)
+ * pair — every case createInviteServerSide already distinguishes is
+ * surfaced here rather than re-implemented:
+ *   - brand-new email                    -> pending invite created, mailed
+ *   - existing Firebase Auth user        -> added directly (no 2nd account)
+ *   - existing pending invite            -> reused/resent, not duplicated
+ *   - already an active member here      -> `alreadyMember: true`, no email
+ *
+ * `email` blank/absent -> `attempted: false`, nothing happens — the normal
+ * case for internal/personal sub-accounts with no named contact.
  */
-async function inviteAccountContactIfProvided(params: {
+export async function ensureSubAccountClientOwnerAccess(params: {
   subAccountId: string;
   invitedByUid: string;
   email: string | null;
-}): Promise<InviteOutcome> {
+}): Promise<ClientOwnerAccessResult> {
   const email = params.email?.trim().toLowerCase() || null;
   if (!email) {
-    return { attempted: false, email: null, mailed: false, mailError: null, added: false, error: null };
+    return {
+      attempted: false,
+      email: null,
+      mailed: false,
+      mailError: null,
+      added: false,
+      reused: false,
+      alreadyMember: false,
+      error: null,
+    };
   }
   try {
     const res = await createInviteServerSide({
       subAccountId: params.subAccountId,
       invitedByUid: params.invitedByUid,
       email,
-      // The account contact becomes this sub-account's admin, not a
-      // collaborator — they're the customer this workspace belongs to.
       role: "admin",
     });
     return {
@@ -343,20 +394,76 @@ async function inviteAccountContactIfProvided(params: {
       mailed: res.mailed,
       mailError: res.mailError,
       added: res.added,
+      reused: res.reused,
+      alreadyMember: res.alreadyMember,
       error: null,
     };
   } catch (err) {
     // Covers MemberAddBlockedError (e.g. the email belongs to a removed/
     // disabled account or a different agency) and any unexpected failure.
     // The sub-account itself still exists — surface this so the agency
-    // owner knows onboarding needs manual attention (Settings → Members)
-    // instead of silently having no idea the invite never went out.
+    // owner knows onboarding needs manual attention (Settings → Admin's
+    // own retry action) instead of silently having no idea it never went
+    // out.
     console.error(
-      `[sub-accounts] auto-invite failed for ${params.subAccountId} (${email})`,
-      err,
+      `[sub-accounts] client-owner provisioning failed for ${params.subAccountId} (${email})`,
+      err
     );
     const message =
-      err instanceof Error ? err.message : "Could not invite the account contact.";
-    return { attempted: true, email, mailed: false, mailError: null, added: false, error: message };
+      err instanceof Error
+        ? err.message
+        : "Could not provision access for the account contact.";
+    return {
+      attempted: true,
+      email,
+      mailed: false,
+      mailError: null,
+      added: false,
+      reused: false,
+      alreadyMember: false,
+      error: message,
+    };
   }
+}
+
+export type ClientOwnerAccessStatus = "active" | "pending" | "none";
+
+/**
+ * Read-only status check for one email's CRM/Business Center access to one
+ * sub-account — the single source of truth behind both the Settings →
+ * Admin status line and `scripts/audit-client-owner-access.ts`, so the two
+ * can never disagree about what "provisioned" means.
+ *
+ *   "active"  — an active subAccountMembers doc exists for this email here.
+ *   "pending" — no active membership, but an unaccepted, unrevoked invite
+ *               for this exact (email, subAccountId) pair exists.
+ *   "none"    — neither. Includes a blank/absent email.
+ */
+export async function getClientOwnerAccessStatus(
+  subAccountId: string,
+  email: string | null | undefined
+): Promise<ClientOwnerAccessStatus> {
+  const normalized = email?.trim().toLowerCase() || null;
+  if (!normalized) return "none";
+  const db = getAdminDb();
+
+  const memberSnap = await db
+    .collection(`subAccounts/${subAccountId}/subAccountMembers`)
+    .where("email", "==", normalized)
+    .where("status", "==", "active")
+    .limit(1)
+    .get();
+  if (!memberSnap.empty) return "active";
+
+  const inviteSnap = await db
+    .collection("invites")
+    .where("email", "==", normalized)
+    .where("subAccountId", "==", subAccountId)
+    .where("acceptedByUid", "==", null)
+    .where("revokedAt", "==", null)
+    .limit(1)
+    .get();
+  if (!inviteSnap.empty) return "pending";
+
+  return "none";
 }
