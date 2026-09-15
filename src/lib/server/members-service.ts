@@ -6,6 +6,7 @@ import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { resolveBrandName } from "@/lib/landing/resolve-brand";
+import { getAuthEmailOrigin } from "@/lib/server/app-origin";
 
 /**
  * Server-side member invites — the single write path shared by the invite
@@ -49,6 +50,17 @@ export interface CreateInviteInput {
   role: "admin" | "collaborator";
   /** Raw territory ids — validated against the sub-account in here. */
   assignedTerritoryIds?: unknown;
+  /**
+   * Which email copy to send — same secure invite/setup mechanics either
+   * way, different framing. Defaults to "staff" so every existing caller
+   * (Settings → Members, the AI Suite `invite_member` capability) is
+   * unaffected. `ensureSubAccountClientOwnerAccess`
+   * (sub-accounts-service.ts) is the one caller that passes
+   * "client_owner" — provisioning the primary business owner into their
+   * own workspace should never read like "so-and-so invited you" the way
+   * a real collaborator invite correctly does.
+   */
+  context?: "staff" | "client_owner";
 }
 
 export interface CreateInviteResult {
@@ -78,9 +90,9 @@ export interface CreateInviteResult {
 }
 
 export async function createInviteServerSide(
-  input: CreateInviteInput,
+  input: CreateInviteInput
 ): Promise<CreateInviteResult> {
-  const { subAccountId, invitedByUid, email, role } = input;
+  const { subAccountId, invitedByUid, email, role, context = "staff" } = input;
 
   const auth = getAdminAuth();
   const db = getAdminDb();
@@ -183,30 +195,51 @@ export async function createInviteServerSide(
       const roleLabel = role === "admin" ? "Admin" : "Collaborator";
       const brandName = await resolveBrandName();
 
-      await sendEmail({
-        to: email,
-        subject: `${inviterName} invited you to ${subAccountName} on ${brandName}`,
-        text: renderInviteText({
-          inviterName,
-          subAccountName,
-          roleLabel,
-          inviteUrl,
-          brandName,
-        }),
-        html: renderInviteHtml({
-          inviterName,
-          subAccountName,
-          roleLabel,
-          inviteUrl,
-          brandName,
-        }),
-      });
+      if (context === "client_owner") {
+        // Same secure invite/setup link, deliberately different framing —
+        // this person is the primary owner of their OWN workspace, not a
+        // collaborator being invited into someone else's. See
+        // ensureSubAccountClientOwnerAccess (sub-accounts-service.ts).
+        await sendEmail({
+          to: email,
+          subject: `Set up your ${brandName} account`,
+          text: renderClientOwnerSetupText({
+            subAccountName,
+            inviteUrl,
+            brandName,
+          }),
+          html: renderClientOwnerSetupHtml({
+            subAccountName,
+            inviteUrl,
+            brandName,
+          }),
+        });
+      } else {
+        await sendEmail({
+          to: email,
+          subject: `${inviterName} invited you to ${subAccountName} on ${brandName}`,
+          text: renderInviteText({
+            inviterName,
+            subAccountName,
+            roleLabel,
+            inviteUrl,
+            brandName,
+          }),
+          html: renderInviteHtml({
+            inviterName,
+            subAccountName,
+            roleLabel,
+            inviteUrl,
+            brandName,
+          }),
+        });
+      }
       mailed = true;
     } catch (err) {
       mailError = err instanceof Error ? err.message : String(err);
       console.warn(
         "[invite] sendEmail failed — invite still created",
-        mailError,
+        mailError
       );
     }
   }
@@ -290,7 +323,7 @@ async function addExistingUserAsMember(params: {
   // until it's reactivated, so a membership row alone would be a dead entry.
   if (existingUser.disabled || claims.status === "removed") {
     throw new MemberAddBlockedError(
-      "This person's account was removed or disabled. Reactivate it before adding them to a workspace.",
+      "This person's account was removed or disabled. Reactivate it before adding them to a workspace."
     );
   }
   // Never add someone from a different agency. One agency per deployment in
@@ -298,12 +331,12 @@ async function addExistingUserAsMember(params: {
   // the guard honest.
   if (claims.agencyId && claims.agencyId !== agencyId) {
     throw new MemberAddBlockedError(
-      "This email belongs to a different agency and can't be added to this workspace.",
+      "This email belongs to a different agency and can't be added to this workspace."
     );
   }
 
   const memberRef = db.doc(
-    `subAccounts/${subAccountId}/subAccountMembers/${uid}`,
+    `subAccounts/${subAccountId}/subAccountMembers/${uid}`
   );
   const userDocRef = db.doc(`users/${uid}`);
   const [memberSnap, userDocSnap] = await Promise.all([
@@ -344,7 +377,7 @@ async function addExistingUserAsMember(params: {
         displayName: existingUser.displayName ?? "",
         assignedTerritoryIds,
       },
-      { merge: true },
+      { merge: true }
     );
   } else {
     batch.set(memberRef, {
@@ -403,7 +436,7 @@ async function addExistingUserAsMember(params: {
     try {
       const inviterName = await resolveInviterName(db, invitedByUid);
       const roleLabel = role === "admin" ? "Admin" : "Collaborator";
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+      const appUrl = getAuthEmailOrigin();
       const brandName = await resolveBrandName();
       await sendEmail({
         to: recipient,
@@ -428,7 +461,7 @@ async function addExistingUserAsMember(params: {
       mailError = err instanceof Error ? err.message : String(err);
       console.warn(
         "[invite] added-member email failed — membership still written",
-        mailError,
+        mailError
       );
     }
   }
@@ -451,7 +484,7 @@ async function addExistingUserAsMember(params: {
 
 async function resolveInviterName(
   db: FirebaseFirestore.Firestore,
-  invitedByUid: string,
+  invitedByUid: string
 ): Promise<string> {
   const snap = await db.doc(`users/${invitedByUid}`).get();
   const data = snap.data() ?? {};
@@ -467,7 +500,7 @@ async function resolveInviterName(
 async function validateTerritoryIds(
   db: FirebaseFirestore.Firestore,
   subAccountId: string,
-  raw: unknown,
+  raw: unknown
 ): Promise<string[]> {
   if (!Array.isArray(raw) || raw.length === 0) return [];
   const wanted = [
@@ -476,7 +509,7 @@ async function validateTerritoryIds(
   if (wanted.length === 0) return [];
 
   const refs = wanted.map((tid) =>
-    db.doc(`subAccounts/${subAccountId}/territories/${tid}`),
+    db.doc(`subAccounts/${subAccountId}/territories/${tid}`)
   );
   const snaps = await db.getAll(...refs);
   return snaps
@@ -484,10 +517,10 @@ async function validateTerritoryIds(
     .map((s) => s.id);
 }
 
-function buildInviteUrl(email: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "";
+export function buildInviteUrl(email: string): string {
+  const appUrl = getAuthEmailOrigin();
   const path = `/signup?email=${encodeURIComponent(email)}`;
-  return appUrl ? `${appUrl}${path}` : path;
+  return `${appUrl}${path}`;
 }
 
 interface InviteContext {
@@ -498,7 +531,7 @@ interface InviteContext {
   brandName: string;
 }
 
-function renderInviteText({
+export function renderInviteText({
   inviterName,
   subAccountName,
   roleLabel,
@@ -515,7 +548,7 @@ function renderInviteText({
   ].join("\n");
 }
 
-function renderInviteHtml({
+export function renderInviteHtml({
   inviterName,
   subAccountName,
   roleLabel,
@@ -586,6 +619,100 @@ function renderInviteHtml({
 </html>`;
 }
 
+interface ClientOwnerSetupContext {
+  subAccountName: string;
+  inviteUrl: string;
+  brandName: string;
+}
+
+/**
+ * SaaS account-activation framing for the primary business owner of their
+ * own workspace — NOT "so-and-so invited you", and no role callout (they're
+ * always the admin of their own workspace; saying so reads as boilerplate,
+ * not useful information). Same secure link underneath as
+ * renderInviteText/Html — see createInviteServerSide's `context` branch.
+ */
+export function renderClientOwnerSetupText({
+  subAccountName,
+  inviteUrl,
+  brandName,
+}: ClientOwnerSetupContext): string {
+  return [
+    `Your workspace, ${subAccountName}, is ready on ${brandName}.`,
+    "",
+    `Set up your account to access your Business Center:`,
+    inviteUrl,
+    "",
+    `If you weren't expecting this email, you can safely ignore it.`,
+  ].join("\n");
+}
+
+export function renderClientOwnerSetupHtml({
+  subAccountName,
+  inviteUrl,
+  brandName,
+}: ClientOwnerSetupContext): string {
+  const sub = escapeHtml(subAccountName);
+  const url = escapeHtml(inviteUrl);
+  const brand = escapeHtml(brandName);
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up your ${brand} account</title>
+</head>
+<body style="margin:0; padding:0; background:#f6f6f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color:#0a0a0f;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f6f9; padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px; background:#ffffff; border-radius:16px; padding:32px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <tr>
+            <td style="padding-bottom:20px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle; padding-right:8px;">
+                    <svg width="22" height="22" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                      <defs>
+                        <linearGradient id="ls-setup-1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6366f1"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
+                        <linearGradient id="ls-setup-2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#8b5cf6"/><stop offset="100%" stop-color="#a855f7"/></linearGradient>
+                        <linearGradient id="ls-setup-3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#c026d3"/><stop offset="100%" stop-color="#ec4899"/></linearGradient>
+                      </defs>
+                      <path d="M 56 8 L 18 8 L 8 16 L 18 24 L 56 24 Z" fill="url(#ls-setup-1)"/>
+                      <path d="M 8 28 L 46 28 L 56 36 L 46 44 L 8 44 Z" fill="url(#ls-setup-2)"/>
+                      <path d="M 56 48 L 18 48 L 8 56 L 18 60 L 56 60 Z" fill="url(#ls-setup-3)"/>
+                    </svg>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <span style="font-size:18px; font-weight:700; color:#0a0a0f; letter-spacing:-0.01em;">${brand}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <h1 style="margin:0 0 12px 0; font-size:22px; font-weight:600; color:#0a0a0f; letter-spacing:-0.01em;">Your ${brand} workspace is ready</h1>
+              <p style="margin:0 0 24px 0; font-size:15px; line-height:1.5; color:#4a4a55;">Your workspace, <strong style="color:#0a0a0f;">${sub}</strong>, is ready. Set up your account to access your Business Center.</p>
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td>
+                    <a href="${url}" style="display:inline-block; background:#7c3aed; color:#ffffff; text-decoration:none; padding:12px 24px; border-radius:8px; font-size:14px; font-weight:600;">Set up your account</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0 0; font-size:13px; line-height:1.5; color:#8a8a95;">Or paste this link into your browser:<br/><a href="${url}" style="color:#7c3aed; word-break:break-all;">${url}</a></p>
+              <p style="margin:24px 0 0 0; font-size:12px; line-height:1.5; color:#8a8a95;">If you weren't expecting this email, you can safely ignore it.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -599,7 +726,8 @@ interface AddedContext {
   inviterName: string;
   subAccountName: string;
   roleLabel: string;
-  /** Deployment URL for the "Open" button. May be "". */
+  /** Deployment URL for the "Open" button — always a real origin now (see
+   *  getAuthEmailOrigin), never empty. */
   appUrl: string;
   brandName: string;
 }

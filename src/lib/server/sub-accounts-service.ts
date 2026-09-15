@@ -387,6 +387,9 @@ export async function ensureSubAccountClientOwnerAccess(params: {
       invitedByUid: params.invitedByUid,
       email,
       role: "admin",
+      // SaaS account-activation framing, not "so-and-so invited you" — see
+      // renderClientOwnerSetupText/Html in members-service.ts.
+      context: "client_owner",
     });
     return {
       attempted: true,
