@@ -157,6 +157,8 @@ export async function POST(
       offerId,
       memberId: member.id,
       memberEmail: member.email,
+      memberName: member.displayName || name,
+      memberPhone: collectPhoneNumber ? member.phone : null,
       returnUrl,
       attribution,
     });

@@ -31,17 +31,37 @@ function formatPrice(cents: number | null, currency: string): string {
 /**
  * Polls `/purchase-status` until the Stripe webhook grants access, mirroring
  * the Standalone Course version. If the purchased offer has a published
- * One-Click Upsell, shows an accept/skip interstitial before continuing to
- * the classroom.
+ * One-Click Upsell, shows an accept/skip interstitial before continuing.
+ *
+ * Post-checkout destination fix (2026-09-16 owner QA): a Course Offer can
+ * bundle more than one course, a booking/session, and community access —
+ * jumping straight into just the FIRST bundled course's classroom hid
+ * everything else the buyer just paid for. The Space (`/portal/{saId}`)
+ * is the one destination that surfaces all of it, so that's always the
+ * target now, matching the task's own priority ("If the Offer grants one
+ * clear Space relationship: prefer that Space" — a Course Offer purchase
+ * always resolves to exactly one subAccountId).
+ *
+ * Routed through `/api/my/bridge-from-member` rather than a bare link:
+ * the buyer already has a valid ls_member_session (set at /signup, before
+ * Stripe Checkout ever started) — this mints their global mm_session from
+ * that SAME already-proven identity and lands them on the Space in one
+ * hop, with no second login of any kind. If the bridge ever can't resolve
+ * (edge case — see that route's own fail-closed design), it falls back to
+ * /my/login itself; that's an acceptable, pre-existing fallback, not a
+ * loop, since it never redirects back through this page again.
  */
 export function PurchaseCompleteStatus({
   saId,
   offerId,
-  firstCourseId,
 }: {
   saId: string;
   offerId: string;
-  firstCourseId: string | null;
+  /** Kept in the prop signature for the caller's own doc-comment
+   *  continuity (which course this offer's first bundled item is) — no
+   *  longer used to pick the destination, see this component's own doc
+   *  comment above for why. */
+  firstCourseId?: string | null;
 }) {
   const router = useRouter();
   const [timedOut, setTimedOut] = useState(false);
@@ -49,9 +69,7 @@ export function PurchaseCompleteStatus({
   const [upsellBusy, setUpsellBusy] = useState(false);
   const startedAt = useRef(Date.now());
 
-  const continueUrl = firstCourseId
-    ? `/course/${saId}/${firstCourseId}/classroom`
-    : `/portal/${saId}`;
+  const continueUrl = `/api/my/bridge-from-member?next=${encodeURIComponent(`/portal/${saId}`)}`;
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +88,11 @@ export function PurchaseCompleteStatus({
           if (data.oneClickUpsell) {
             setUpsell(data.oneClickUpsell);
           } else {
-            router.push(continueUrl);
+            // A real HTTP navigation, not router.push — continueUrl now
+            // points at /api/my/bridge-from-member, which sets a cookie
+            // and issues a real redirect; Next's client-side router isn't
+            // the right tool for that.
+            window.location.href = continueUrl;
           }
           return;
         }
@@ -105,7 +127,7 @@ export function PurchaseCompleteStatus({
         needsManualCheckout?: boolean;
       };
       if (data.ok) {
-        router.push(continueUrl);
+        window.location.href = continueUrl;
         return;
       }
       if (data.needsManualCheckout) {
@@ -142,7 +164,9 @@ export function PurchaseCompleteStatus({
             Yes, add it
           </button>
           <button
-            onClick={() => router.push(continueUrl)}
+            onClick={() => {
+              window.location.href = continueUrl;
+            }}
             className="text-sm font-medium text-[#909090] underline"
           >
             No thanks, continue

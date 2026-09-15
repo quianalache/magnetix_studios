@@ -29,6 +29,7 @@ import {
   OFFER_CHARGE_KIND,
   handleCourseOfferCheckoutCompleted,
   handleCourseOfferSubscriptionDeleted,
+  syncCourseOfferSubscriptionStatusServerSide,
 } from "@/lib/server/course-offer-purchase-service";
 import {
   INVOICE_PAYMENT_KIND,
@@ -467,6 +468,16 @@ export async function handleSubscriptionUpdated(
   // the legacy users/{uid} lookup below.
   if (subscription.metadata?.kind === SUB_ACCOUNT_PLAN_KIND) {
     await handleSubAccountSubscriptionEvent(subscription, { deleted: false });
+    return;
+  }
+
+  // MyMagnetix -> Purchases fix (2026-09-16): a recurring Course Offer
+  // subscription's own lifecycle changes (trialing -> active, past_due,
+  // cancel_at_period_end) — routed the same way every other kind here is,
+  // by metadata.kind, so this never touches the legacy users/{uid} path
+  // below (which has no record of a course-offer subscription at all).
+  if (subscription.metadata?.kind === OFFER_CHARGE_KIND) {
+    await syncCourseOfferSubscriptionStatusServerSide(subscription);
     return;
   }
 

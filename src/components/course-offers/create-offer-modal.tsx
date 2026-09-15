@@ -142,7 +142,16 @@ export function CreateOfferModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      {/* Viewport-safe scroll (2026-09-16 owner QA: this form's full field
+       *  set — title, products, booking page, client projects, type,
+       *  price — was regularly taller than the viewport, and the fixed-
+       *  position dialog had no scroll container at all, so lower fields
+       *  and the Save button were simply unreachable). Same
+       *  max-h/overflow-y-auto convention already used by every other
+       *  long dialog in this codebase (sub-account-manage-dialog.tsx,
+       *  content-item-dialog.tsx, plan-editor-dialog.tsx, etc.) — not a
+       *  new pattern invented for this fix. */}
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Offers</DialogTitle>
           <p className="text-muted-foreground text-[13px]">

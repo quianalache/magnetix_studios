@@ -9,6 +9,11 @@ import {
   INVOICE_PAYMENT_KIND,
   handleInvoiceStripeCheckoutCompleted,
 } from "@/lib/server/invoice-payment-service";
+import {
+  syncExternalStripeInvoicePayment,
+  syncExternalStripePaymentIntent,
+  syncExternalStripeChargeRefund,
+} from "@/lib/server/external-payment-sync-service";
 import { handleChargeDispute } from "@/lib/stripe/dispute";
 import { handleStripeConnectAccountUpdated } from "@/lib/stripe/connect";
 import type Stripe from "stripe";
@@ -159,8 +164,56 @@ export async function POST(request: Request) {
       case "charge.dispute.created":
         await handleChargeDispute(event.data.object as Stripe.Dispute);
         break;
+      // MyMagnetix -> Purchases fix (2026-09-16): these four event types
+      // are what keep the customer-facing billing ledger
+      // (externalSubscriptions/externalPayments) live for every purchase
+      // origin these sync functions recognize — currently native Course
+      // Offer/Standalone Course purchases (via metadata.kind) and any
+      // already-imported/reconciled subscription. Each call is a genuine
+      // no-op ({outcome:"no_match"}) for every OTHER kind of Stripe event
+      // this endpoint receives (Client Billing, Founders, Invoices,
+      // platform signup) — resolveRelationship in
+      // external-payment-sync-service.ts only ever matches those two
+      // specific sources, so this is safe to route unconditionally rather
+      // than needing its own metadata.kind branch here.
+      case "invoice.paid":
+        await syncExternalStripeInvoicePayment({
+          invoice: event.data.object as Stripe.Invoice,
+          eventAccountId: event.account ?? null,
+          eventCreated: event.created,
+          outcome: "succeeded",
+        });
+        break;
+      case "invoice.payment_failed":
+        await syncExternalStripeInvoicePayment({
+          invoice: event.data.object as Stripe.Invoice,
+          eventAccountId: event.account ?? null,
+          eventCreated: event.created,
+          outcome: "failed",
+        });
+        break;
+      case "payment_intent.succeeded":
+        await syncExternalStripePaymentIntent({
+          paymentIntent: event.data.object as Stripe.PaymentIntent,
+          eventAccountId: event.account ?? null,
+          eventCreated: event.created,
+          outcome: "succeeded",
+        });
+        break;
       case "payment_intent.payment_failed":
+        await syncExternalStripePaymentIntent({
+          paymentIntent: event.data.object as Stripe.PaymentIntent,
+          eventAccountId: event.account ?? null,
+          eventCreated: event.created,
+          outcome: "failed",
+        });
+        break;
       case "charge.refunded":
+        await syncExternalStripeChargeRefund({
+          charge: event.data.object as Stripe.Charge,
+          eventAccountId: event.account ?? null,
+          eventCreated: event.created,
+        });
         break;
       // Fires whenever a connected sub-account's capabilities change —
       // keeps stripeConnect.chargesEnabled/payoutsEnabled in sync after

@@ -27,6 +27,11 @@ import { emitWorkflowEvent } from "@/lib/workflows/events";
 import { ensureMember } from "@/lib/community/member-account";
 import { resolveLineItemSourceType } from "@/lib/quotes/line-items";
 import type { Quote, InvoiceOfferFulfillmentItem } from "@/types/quotes";
+import {
+  syncNativeOneTimePurchaseServerSide,
+  syncNativeSubscriptionPurchaseServerSide,
+  syncNativeSubscriptionStatusServerSide,
+} from "@/lib/server/native-purchase-billing-sync";
 
 /**
  * Purchases for a Course Offer — generalizes
@@ -248,6 +253,12 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   offerId: string;
   memberId: string;
   memberEmail: string;
+  /** Real name Magnetix's own pre-checkout form just collected — passed
+   *  into a real Stripe Customer (see below) so Stripe Checkout can show
+   *  it back to the buyer instead of asking for it again. */
+  memberName: string;
+  /** Only set when the offer's checkoutSettings.collectPhoneNumber is on. */
+  memberPhone?: string | null;
   returnUrl: string;
   /** Captured from the offer's checkout page at landing time. Deliberately
    *  NOT passed by the one-click-upsell path (see `grantCourseOfferAccessServerSide`
@@ -294,12 +305,44 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     memberId: opts.memberId,
   };
 
+  // Checkout redundancy fix (2026-09-16 owner QA): Magnetix's own
+  // pre-checkout form already collected name + email — passing only
+  // `customer_email` (the prior code) still made Stripe Checkout ask for
+  // the buyer's name again as a brand-new, anonymous customer. Reusing (or
+  // creating) a real Stripe Customer with that name pre-set means Checkout
+  // shows it back to the buyer instead of asking again — email is still
+  // the one thing Stripe treats as authoritative once tied to a Customer
+  // (unchanged: `ensureMember`/Contact/Member creation, entitlement
+  // linkage, and the Stripe customer association this file already
+  // builds off of `stripeCustomerId` are all untouched — this only
+  // changes what a NEW checkout session starts from). Searches by email
+  // within this SAME Stripe account context (shared platform account or
+  // this sub-account's own Connect account — Customers don't cross that
+  // boundary either) so a returning buyer's existing Customer is reused,
+  // never duplicated.
+  const existingCustomers = await stripe.customers.list(
+    { email: opts.memberEmail, limit: 1 },
+    stripeRequestOptions
+  );
+  const customerId = existingCustomers.data[0]
+    ? existingCustomers.data[0].id
+    : (
+        await stripe.customers.create(
+          {
+            email: opts.memberEmail,
+            name: opts.memberName,
+            ...(opts.memberPhone ? { phone: opts.memberPhone } : {}),
+          },
+          stripeRequestOptions
+        )
+      ).id;
+
   const session = await stripe.checkout.sessions.create(
     offer.type === "recurring"
       ? {
           mode: "subscription",
           ui_mode: "embedded",
-          customer_email: opts.memberEmail,
+          customer: customerId,
           billing_address_collection: "required",
           line_items: [
             {
@@ -323,8 +366,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
       : {
           mode: "payment",
           ui_mode: "embedded",
-          customer_email: opts.memberEmail,
-          customer_creation: "always",
+          customer: customerId,
           billing_address_collection: "required",
           payment_intent_data: {
             metadata,
@@ -364,7 +406,9 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
     stripeConnectAccountId: connectAccountId,
-    stripeCustomerId: null,
+    // Known upfront now (see the pre-created/reused Customer above) rather
+    // than only learned later from the checkout-completed webhook.
+    stripeCustomerId: customerId,
     stripeSubscriptionId: null,
     stripePaymentIntentId: null,
     status: "pending",
@@ -518,6 +562,55 @@ async function sendOfferBookingBundleEmail(opts: {
  * also gates on its own `access:"purchase"`. Called from both the Stripe
  * webhook and staff's PayPal "Mark as paid" action.
  */
+/**
+ * Native-purchase -> MyMagnetix billing-ledger sync (2026-09-16 fix), for
+ * the Course Offer path specifically. Best-effort by design (see
+ * native-purchase-billing-sync.ts's own doc comment) — reads the buyer's
+ * Member doc for the contactId/personId the ledger's tenant-isolation
+ * boundary requires (never falls back to email-only matching), then syncs
+ * either the recurring subscription or the one-time payment, whichever
+ * this purchase actually is. A Member with no contactId yet (should not
+ * happen post-ensureMember, but defensively checked) simply skips the
+ * sync rather than writing an ambiguous ledger record.
+ */
+async function syncCourseOfferPurchaseLedger(input: {
+  subAccountId: string;
+  agencyId: string;
+  memberId: string;
+  stripeSubscriptionId: string | null;
+  stripePaymentIntentId: string | null;
+  stripeConnectAccountId: string | null;
+}): Promise<void> {
+  const memberSnap = await getAdminDb()
+    .doc(`subAccounts/${input.subAccountId}/members/${input.memberId}`)
+    .get();
+  const member = memberSnap.data();
+  const contactId = member?.contactId as string | undefined;
+  if (!memberSnap.exists || !contactId) return;
+  const personId = (member?.personId as string | undefined) ?? null;
+  const memberEmail = (member?.email as string | undefined) ?? "";
+  if (!memberEmail) return;
+
+  if (input.stripeSubscriptionId) {
+    await syncNativeSubscriptionPurchaseServerSide({
+      agencyId: input.agencyId,
+      subAccountId: input.subAccountId,
+      memberId: input.memberId,
+      contactId,
+      personId,
+      memberEmail,
+      stripeSubscriptionId: input.stripeSubscriptionId,
+      stripeConnectAccountId: input.stripeConnectAccountId,
+      fallbackProductName: null,
+    });
+  } else if (input.stripePaymentIntentId) {
+    await syncNativeOneTimePurchaseServerSide({
+      stripePaymentIntentId: input.stripePaymentIntentId,
+      stripeConnectAccountId: input.stripeConnectAccountId,
+    });
+  }
+}
+
 export async function grantCourseOfferAccessServerSide(opts: {
   subAccountId: string;
   offerId: string;
@@ -556,6 +649,21 @@ export async function grantCourseOfferAccessServerSide(opts: {
         { merge: true }
       );
     }
+    // Best-effort retry: a webhook redelivery for an already-paid purchase
+    // is also this ledger sync's only other chance to repair itself if its
+    // first attempt (below) failed transiently — upserts are idempotent,
+    // so calling this again here is always safe.
+    void syncCourseOfferPurchaseLedger({
+      subAccountId: opts.subAccountId,
+      agencyId: purchase.agencyId,
+      memberId: purchase.memberId,
+      stripeSubscriptionId: purchase.stripeSubscriptionId,
+      stripePaymentIntentId:
+        opts.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
+      stripeConnectAccountId: purchase.stripeConnectAccountId,
+    }).catch((err) =>
+      console.warn("[course-offer] ledger sync retry failed", err)
+    );
     return { ok: true };
   }
 
@@ -582,6 +690,23 @@ export async function grantCourseOfferAccessServerSide(opts: {
       ? { billingCountry: opts.billingCountry }
       : {}),
   });
+
+  // MyMagnetix -> Purchases fix (2026-09-16): sync this native purchase
+  // into the customer-facing ExternalSubscription/ExternalPayment ledger
+  // right away, in the same synchronous flow that grants course access —
+  // "Current subscriptions"/"Payment history" then appear the instant
+  // checkout completes, with no dependency on any other webhook event
+  // arriving. Best-effort (see native-purchase-billing-sync.ts) — never
+  // blocks a real, already-paid purchase from finishing.
+  void syncCourseOfferPurchaseLedger({
+    subAccountId: opts.subAccountId,
+    agencyId: purchase.agencyId,
+    memberId: purchase.memberId,
+    stripeSubscriptionId: purchase.stripeSubscriptionId,
+    stripePaymentIntentId:
+      opts.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
+    stripeConnectAccountId: purchase.stripeConnectAccountId,
+  }).catch((err) => console.warn("[course-offer] ledger sync failed", err));
 
   // Only real checkout-page landings carry attribution (see
   // startCourseOfferStripeCheckoutServerSide) — one-click upsell purchases
@@ -956,6 +1081,54 @@ export async function handleCourseOfferCheckoutCompleted(
 }
 
 /**
+ * Webhook: `customer.subscription.updated` for a recurring Offer — keeps
+ * the MyMagnetix billing-ledger's subscription status/period/
+ * cancel-at-period-end current for every lifecycle transition Stripe
+ * reports (trialing -> active, active -> past_due, cancel_at_period_end
+ * toggled, etc). Deliberately does NOT touch `CourseOfferPurchase.status`
+ * (that field's coarse pending/paid/canceled/void vocabulary is an
+ * ENTITLEMENT state, not a billing-lifecycle one — access stays granted
+ * through trialing/active/past_due exactly as it always has; only
+ * `.deleted`, handled separately, ever revokes it). Best-effort by
+ * design; safe to call even for a subscription this webhook doesn't
+ * recognize (a no-op query miss, not a thrown error).
+ */
+export async function syncCourseOfferSubscriptionStatusServerSide(
+  subscription: Stripe.Subscription
+): Promise<void> {
+  try {
+    const { subAccountId, offerId } = subscription.metadata ?? {};
+    if (!subAccountId || !offerId) return;
+    const snap = await purchasesCol(subAccountId, offerId)
+      .where("stripeSubscriptionId", "==", subscription.id)
+      .limit(1)
+      .get();
+    if (snap.empty) return;
+    const purchase = snap.docs[0].data() as Omit<CourseOfferPurchase, "id">;
+    const memberSnap = await getAdminDb()
+      .doc(`subAccounts/${subAccountId}/members/${purchase.memberId}`)
+      .get();
+    const contactId = memberSnap.data()?.contactId as string | undefined;
+    const memberEmail = memberSnap.data()?.email as string | undefined;
+    if (!memberSnap.exists || !contactId || !memberEmail) return;
+
+    await syncNativeSubscriptionStatusServerSide({
+      agencyId: purchase.agencyId,
+      subAccountId,
+      memberId: purchase.memberId,
+      contactId,
+      personId: (memberSnap.data()?.personId as string | undefined) ?? null,
+      memberEmail,
+      stripeConnectAccountId: purchase.stripeConnectAccountId,
+      fallbackProductName: null,
+      subscription,
+    });
+  } catch (err) {
+    console.warn("[course-offer] subscription status webhook sync failed", err);
+  }
+}
+
+/**
  * Webhook: `customer.subscription.deleted` for a recurring Offer. Flips the
  * matching purchase to `canceled` — the classroom-access guard's expiry
  * check treats a canceled purchase's access window as elapsed going
@@ -1001,6 +1174,28 @@ export async function handleCourseOfferSubscriptionDeleted(
     .doc(`subAccounts/${subAccountId}/members/${purchase.memberId}`)
     .get();
   const contactId = memberSnap.data()?.contactId as string | undefined;
+  // MyMagnetix -> Purchases fix (2026-09-16): keep the ledger's own
+  // subscription status current too — .deleted means Stripe has fully
+  // ended the subscription (as opposed to cancel_at_period_end, which
+  // arrives via .updated and is handled there instead).
+  if (contactId) {
+    const memberEmail = memberSnap.data()?.email as string | undefined;
+    if (memberEmail) {
+      void syncNativeSubscriptionStatusServerSide({
+        agencyId: purchase.agencyId,
+        subAccountId,
+        memberId: purchase.memberId,
+        contactId,
+        personId: (memberSnap.data()?.personId as string | undefined) ?? null,
+        memberEmail,
+        stripeConnectAccountId: purchase.stripeConnectAccountId,
+        fallbackProductName: null,
+        subscription,
+      }).catch((err) =>
+        console.warn("[course-offer] ledger status sync failed", err)
+      );
+    }
+  }
   if (contactId)
     emitWorkflowEvent({
       eventType: "offer.access.revoked",
