@@ -14,7 +14,16 @@
 export interface MyMagnetixNavItem {
   href: string;
   label: string;
-  icon: "home" | "courses" | "communities" | "messages" | "projects" | "spaces" | "purchases" | "saved" | "readings";
+  icon:
+    | "home"
+    | "courses"
+    | "communities"
+    | "messages"
+    | "projects"
+    | "spaces"
+    | "purchases"
+    | "saved"
+    | "readings";
   disabled?: boolean;
 }
 
@@ -30,6 +39,10 @@ export const MYMAGNETIX_NAV_ITEMS: MyMagnetixNavItem[] = [
   { href: "/my#messages", label: "Messages", icon: "messages", disabled: true },
   { href: "/my#projects", label: "Projects", icon: "projects", disabled: true },
   { href: "/my#spaces", label: "My Spaces", icon: "spaces" },
-  { href: "/my#purchases", label: "Purchases", icon: "purchases", disabled: true },
+  // Purchases (2026-09-16): a real page (src/app/my/(app)/purchases/page.tsx)
+  // backed by the Stripe reconciliation ledger's Person-safe read layer
+  // already existed, fully built, before this nav item was ever wired to
+  // it — this was the only piece left disconnected. See the Build Log.
+  { href: "/my/purchases", label: "Purchases", icon: "purchases" },
   { href: "/my#saved", label: "Saved", icon: "saved", disabled: true },
 ];

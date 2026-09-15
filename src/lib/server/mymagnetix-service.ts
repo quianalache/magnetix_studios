@@ -106,6 +106,46 @@ export async function resolvePersonDisplayName(
   return primaryEmail.split("@")[0] ?? "there";
 }
 
+/**
+ * First-name-only variant of `resolvePersonDisplayName`, for the Home
+ * page's "Good afternoon, X!" greeting specifically (2026-09-16 owner QA:
+ * "Good afternoon, quianalache!" reads like a username, not a person).
+ * Reuses the exact same resolution chain (Member displayName -> staff
+ * displayName -> email local-part) — no new data source, no schema change
+ * — and takes just the first whitespace-separated token, so "Sarah
+ * Johnson" greets as "Sarah" instead of the full name.
+ *
+ * Deliberately does NOT truncate further when the resolved value already
+ * IS the email local-part (the final-fallback case: there is genuinely no
+ * real name anywhere in the chain yet for this Person) — splitting an
+ * email handle like "quianalache" wouldn't produce a first name, it would
+ * just mangle a username. That's a real data-propagation gap (no Contact/
+ * Member/staff record carries this Person's actual first name yet), not
+ * something to guess around here; `resolvePersonDisplayName` itself is
+ * untouched and still used as-is everywhere else (e.g. /gateway's "Welcome
+ * back," which wants the fuller name, not a truncated one).
+ */
+export async function resolvePersonFirstName(
+  personId: string,
+  primaryEmail: string,
+  memberships?: PersonMembership[]
+): Promise<string> {
+  const full = await resolvePersonDisplayName(
+    personId,
+    primaryEmail,
+    memberships
+  );
+  const emailLocalPart = primaryEmail.split("@")[0]?.trim() ?? "";
+  if (
+    emailLocalPart &&
+    full.trim().toLowerCase() === emailLocalPart.toLowerCase()
+  ) {
+    return full;
+  }
+  const firstToken = full.trim().split(/\s+/)[0];
+  return firstToken || full;
+}
+
 export interface PersonSpace {
   subAccountId: string;
   name: string;

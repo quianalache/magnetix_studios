@@ -4,7 +4,7 @@ import { Calendar, RefreshCw, DollarSign, FolderKanban, PlayCircle, MessagesSqua
 import { getCurrentPerson } from "@/lib/server/person-session";
 import {
   listPersonMemberships,
-  resolvePersonDisplayName,
+  resolvePersonFirstName,
   listSpacesForPerson,
   listCoursesForPerson,
   listComingUpForPerson,
@@ -59,8 +59,8 @@ export default async function MyMagnetixHomePage() {
 
   const memberships = await listPersonMemberships(person.id);
 
-  const [displayName, spaces, courses, comingUp, attention, payments, pinned] = await Promise.all([
-    resolvePersonDisplayName(person.id, person.primaryEmail, memberships),
+  const [firstName, spaces, courses, comingUp, attention, payments, pinned] = await Promise.all([
+    resolvePersonFirstName(person.id, person.primaryEmail, memberships),
     listSpacesForPerson(memberships),
     listCoursesForPerson(memberships),
     listComingUpForPerson(memberships),
@@ -107,7 +107,7 @@ export default async function MyMagnetixHomePage() {
     <div className="mx-auto flex max-w-[1180px] flex-col gap-6">
       <div>
         <h1 className="text-[24px] font-bold text-[#1D1B27]">
-          {greeting()}, {displayName}! <span aria-hidden>👋</span>
+          {greeting()}, {firstName}! <span aria-hidden>👋</span>
         </h1>
         <p className="mt-1 text-[13.5px] text-[#84809A]">Here&rsquo;s what&rsquo;s happening across your spaces.</p>
       </div>
