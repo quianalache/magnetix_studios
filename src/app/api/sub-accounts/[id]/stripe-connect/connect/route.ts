@@ -9,6 +9,8 @@ import {
   stripeConnectAppConfigured,
   stripeConnectRedirectUri,
 } from "@/lib/stripe/connect";
+import { getStripeEnvironment } from "@/lib/stripe/server";
+import type { StripeEnvironment } from "@/types/tenancy";
 
 /**
  * Kick off Stripe Connect for a sub-account — admin-only (linking a bank
@@ -26,13 +28,20 @@ function appBase(request: Request): string {
 
 export async function GET(
   request: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
   const access = await requireSubAccountAdmin(request, id);
   if (access instanceof NextResponse) return access;
 
   const settingsUrl = new URL(`/sa/${id}/dashboard/settings`, appBase(request));
+  const requestedEnvironment = new URL(request.url).searchParams.get(
+    "environment"
+  );
+  const environment: StripeEnvironment =
+    requestedEnvironment === "live" || requestedEnvironment === "test"
+      ? requestedEnvironment
+      : getStripeEnvironment();
 
   if (!stripeConnectAppConfigured()) {
     settingsUrl.searchParams.set("stripeconnect", "not_configured");
@@ -46,8 +55,8 @@ export async function GET(
   }
 
   const nonce = crypto.randomBytes(16).toString("hex");
-  const state = signStripeConnectState(id, access.uid, nonce);
+  const state = signStripeConnectState(id, access.uid, nonce, environment);
   return NextResponse.redirect(
-    buildStripeConnectOAuthUrl({ redirectUri, state }),
+    buildStripeConnectOAuthUrl({ redirectUri, state })
   );
 }

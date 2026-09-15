@@ -2,7 +2,11 @@ import "server-only";
 
 import type Stripe from "stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
 import type {
   DiscoveredStripeCustomer,
   DiscoveredStripeSubscription,
@@ -71,9 +75,12 @@ async function connectedAccountFor(subAccountId: string): Promise<string> {
       404
     );
   }
-  const accountId = (
-    snap.data()?.stripeConnect?.accountId as string | undefined
-  )?.trim();
+  const environment = getStripeEnvironment();
+  const connection = getStripeConnectionForEnvironment(
+    snap.data()?.stripeConnect,
+    environment
+  );
+  const accountId = connection?.accountId?.trim();
   if (!accountId) {
     throw new StripeDiscoveryError(
       "STRIPE_NOT_CONNECTED",

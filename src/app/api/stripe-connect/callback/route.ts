@@ -23,10 +23,9 @@ import type { StripeConnectAccount } from "@/types";
  */
 
 function appBase(request: Request): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin).replace(
-    /\/$/,
-    "",
-  );
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin
+  ).replace(/\/$/, "");
 }
 
 export async function GET(request: Request) {
@@ -37,16 +36,16 @@ export async function GET(request: Request) {
 
   if (!state) {
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request)),
+      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
     );
   }
   const verified = verifyStripeConnectState(state);
   if (!verified) {
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request)),
+      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
     );
   }
-  const { subAccountId: id, uid: connectingUid } = verified;
+  const { subAccountId: id, uid: connectingUid, environment } = verified;
 
   const access = await requireSubAccountAdmin(request, id);
   if (access instanceof NextResponse) return access;
@@ -54,7 +53,7 @@ export async function GET(request: Request) {
   // Same session that started the flow must be the one completing it.
   if (access.uid !== connectingUid) {
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request)),
+      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
     );
   }
 
@@ -72,7 +71,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const linked = await exchangeStripeConnectCode(code);
+    const linked = await exchangeStripeConnectCode(code, environment);
     const connection: StripeConnectAccount = {
       accountId: linked.accountId,
       email: linked.email,
@@ -82,7 +81,13 @@ export async function GET(request: Request) {
     };
     await getAdminDb()
       .doc(`subAccounts/${id}`)
-      .set({ stripeConnect: connection, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      .set(
+        {
+          [`stripeConnect.${environment}`]: connection,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
     return finish("connected");
   } catch (err) {
     console.error(`[stripe-connect/callback] connect failed sa=${id}`, err);

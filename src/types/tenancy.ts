@@ -20,7 +20,10 @@ export type AppTheme = "leadstack" | "green" | "neutral" | "magnetix";
 
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { SubscriptionStatus, MemberStatus } from "./firebase";
-import type { EnergeticDecoderTheme, EnergeticDecoderReportConfig } from "./energetic-decoder";
+import type {
+  EnergeticDecoderTheme,
+  EnergeticDecoderReportConfig,
+} from "./energetic-decoder";
 import type { PortalBranding } from "./portal-branding";
 
 export interface AgencyDoc {
@@ -816,7 +819,9 @@ export interface PayPalConfig {
   connectedAt: Date;
 }
 
-export interface StripeConnectAccount {
+export type StripeEnvironment = "test" | "live";
+
+export interface StripeConnectConnection {
   /** The connected account's id, e.g. "acct_...". Returned as `stripe_user_id` from the OAuth token exchange. */
   accountId: string;
   /** The connected account's own email, shown in Settings so the operator can confirm which account it is. */
@@ -825,6 +830,16 @@ export interface StripeConnectAccount {
   /** Mirrors Stripe's own account flags — a freshly-connected Standard account can take a moment to finish its own onboarding before it can actually accept charges. */
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
+}
+
+/**
+ * Environment-aware Stripe Connect state. The flat fields are retained for
+ * older sub-account documents; new connections are written into `test` or
+ * `live` only.
+ */
+export interface StripeConnectAccount extends StripeConnectConnection {
+  test?: StripeConnectConnection | null;
+  live?: StripeConnectConnection | null;
 }
 
 /**

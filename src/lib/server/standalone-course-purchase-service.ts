@@ -5,7 +5,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
 import {
   getStandaloneCourse,
   grantLinkedCommunityGroupsServerSide,
@@ -129,7 +133,11 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   const subData = subSnap.data();
   // Real fix (Stripe Connect) when connected — see the matching comment in
   // course-offer-purchase-service.ts for the full reasoning.
-  const connectAccountId = subData?.stripeConnect?.accountId ?? null;
+  const connectAccountId =
+    getStripeConnectionForEnvironment(
+      subData?.stripeConnect,
+      getStripeEnvironment()
+    )?.accountId ?? null;
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {

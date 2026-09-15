@@ -90,7 +90,12 @@ export function SubAccountStripeReconciliationSection({
   contacts: Contact[];
 }) {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
-  const connected = !!subAccount?.stripeConnect?.accountId;
+  const stripeConnect = subAccount?.stripeConnect;
+  const connected = !!(
+    stripeConnect?.accountId ||
+    stripeConnect?.test?.accountId ||
+    stripeConnect?.live?.accountId
+  );
   const [query, setQuery] = useState("");
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);

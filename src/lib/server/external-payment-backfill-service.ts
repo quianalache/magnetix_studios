@@ -11,7 +11,11 @@ import {
   syncExternalStripeInvoicePayment,
   type ExternalPaymentRelationship,
 } from "@/lib/server/external-payment-sync-service";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
 import type { ExternalSubscription } from "@/types/external-billing";
 
 const HISTORY_WINDOW_DAYS = 730;
@@ -111,7 +115,10 @@ async function assertBackfillRelationship(
       subscription.externalBillingCustomerId
     ),
   ]);
-  const currentConnectAccount = subAccountSnap.data()?.stripeConnect?.accountId;
+  const currentConnectAccount = getStripeConnectionForEnvironment(
+    subAccountSnap.data()?.stripeConnect,
+    getStripeEnvironment()
+  )?.accountId;
   if (
     !subAccountSnap.exists ||
     subAccountSnap.data()?.agencyId !== subscription.agencyId ||
@@ -143,9 +150,10 @@ async function assertBackfillRelationship(
 
 async function invoiceCharge(
   invoice: Stripe.Invoice,
-  providerAccountId: string
+  providerAccountId: string,
+  environment: "test" | "live"
 ): Promise<Stripe.Charge | null> {
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(environment);
   const payments = await stripe.invoicePayments.list(
     { invoice: invoice.id, limit: 10 },
     stripeOptions(providerAccountId)
@@ -189,7 +197,9 @@ export async function backfillStripePaymentsForExternalSubscription(input: {
   );
   const createdAtGte = Math.floor(windowStartedAt.getTime() / 1000);
   const relationship = relationshipFromSubscription(subscription);
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(
+    subscription.providerEnvironment ?? getStripeEnvironment()
+  );
   const options = stripeOptions(subscription.providerAccountId);
   const summary: ExternalPaymentBackfillSummary = {
     externalSubscriptionRecordId: subscription.id,
@@ -250,7 +260,8 @@ export async function backfillStripePaymentsForExternalSubscription(input: {
           try {
             charge = await invoiceCharge(
               invoice,
-              subscription.providerAccountId
+              subscription.providerAccountId,
+              subscription.providerEnvironment ?? getStripeEnvironment()
             );
           } catch (error) {
             // Refund/receipt enrichment is optional. The verified invoice is

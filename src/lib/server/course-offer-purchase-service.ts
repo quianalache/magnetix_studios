@@ -5,7 +5,11 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
   getStandaloneCourse,
@@ -282,7 +286,11 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   // comment in types/tenancy.ts) — everyone else must connect Stripe or
   // use PayPal (requestCourseOfferPaypalServerSide, below — already
   // correctly per-sub-account, unaffected by any of this).
-  const connectAccountId = subData?.stripeConnect?.accountId ?? null;
+  const connectAccountId =
+    getStripeConnectionForEnvironment(
+      subData?.stripeConnect,
+      getStripeEnvironment()
+    )?.accountId ?? null;
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {

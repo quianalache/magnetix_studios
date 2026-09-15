@@ -8,6 +8,10 @@ import {
   StripeDiscoveryError,
 } from "@/lib/stripe/discovery";
 import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+} from "@/lib/stripe/server";
+import {
   findExternalBillingCustomerByProviderCustomer,
   findExternalSubscriptionByProviderSubscription,
   upsertExternalBillingCustomer,
@@ -101,9 +105,10 @@ async function readTenant(subAccountId: string): Promise<{
       404
     );
   }
-  const providerAccountId = (
-    snap.data()?.stripeConnect?.accountId as string | undefined
-  )?.trim();
+  const providerAccountId = getStripeConnectionForEnvironment(
+    snap.data()?.stripeConnect,
+    getStripeEnvironment()
+  )?.accountId?.trim();
   if (!providerAccountId) {
     throw new StripeDiscoveryError(
       "STRIPE_NOT_CONNECTED",
@@ -198,6 +203,7 @@ export async function importStripeSubscriptionForContact(input: {
   );
   const contactId = required(input.request?.contactId, "contactId");
 
+  const environment = getStripeEnvironment();
   const { agencyId, providerAccountId } = await readTenant(subAccountId);
   const contact = await readContact(subAccountId, contactId);
 
@@ -279,6 +285,7 @@ export async function importStripeSubscriptionForContact(input: {
     subAccountId,
     provider: "stripe",
     providerAccountId,
+    providerEnvironment: environment,
     externalCustomerId,
     contactId,
     personId,
@@ -296,6 +303,7 @@ export async function importStripeSubscriptionForContact(input: {
     subAccountId,
     provider: "stripe",
     providerAccountId,
+    providerEnvironment: environment,
     externalCustomerId,
     externalSubscriptionId,
     externalBillingCustomerId: externalBillingCustomer.id,

@@ -1,10 +1,14 @@
 import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
 import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
+import {
+  listPersonMemberships,
   subscriptionBelongsToMembership,
-  type PersonMembership,
 } from "@/lib/server/mymagnetix-service";
 import type {
   ExternalBillingCustomer,
@@ -58,19 +62,9 @@ function stripeFailure(error: unknown): MyMagnetixPortalError {
   );
 }
 
-/**
- * Creates a Stripe-hosted portal session for one verified owner-owned
- * subscription. Ownership is proven entirely by `ownerMemberships` — the
- * caller resolves that list however its OWN identity system works
- * (MyMagnetix: `listPersonMemberships(personId)`, across every business;
- * Space Billing: a single synthetic membership built straight from the
- * current Member session, scoped to just that one sub-account — see
- * /api/portal/[saId]/billing/portal/route.ts). This function itself
- * doesn't know or care which; `subscriptionBelongsToMembership` is the
- * same real boundary either way, never weakened for either caller.
- */
+/** Creates a Stripe-hosted portal session for one verified person-owned subscription. */
 export async function createPersonBillingPortalSession(input: {
-  ownerMemberships: PersonMembership[];
+  personId: string;
   subscriptionId: string;
   returnUrl: string;
 }): Promise<string> {
@@ -105,8 +99,9 @@ export async function createPersonBillingPortalSession(input: {
     );
   }
 
+  const memberships = await listPersonMemberships(input.personId);
   if (
-    !input.ownerMemberships.some((membership) =>
+    !memberships.some((membership) =>
       subscriptionBelongsToMembership(subscription, membership)
     )
   ) {
@@ -147,10 +142,15 @@ export async function createPersonBillingPortalSession(input: {
       409
     );
   }
+  const environment =
+    subscription.providerEnvironment ?? getStripeEnvironment();
+  const connection = getStripeConnectionForEnvironment(
+    subAccountSnap.data()?.stripeConnect,
+    environment
+  );
   if (
     !subAccountSnap.exists ||
-    subAccountSnap.data()?.stripeConnect?.accountId !==
-      subscription.providerAccountId
+    connection?.accountId !== subscription.providerAccountId
   ) {
     throw new MyMagnetixPortalError(
       "STRIPE_ACCOUNT_UNAVAILABLE",
@@ -159,7 +159,7 @@ export async function createPersonBillingPortalSession(input: {
     );
   }
 
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(environment);
   const options = { stripeAccount: subscription.providerAccountId };
   try {
     const stripeCustomer = await stripe.customers.retrieve(

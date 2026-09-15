@@ -1,4 +1,5 @@
 import type { FieldValue, Timestamp } from "firebase/firestore";
+import type { StripeEnvironment } from "@/types/tenancy";
 
 /** Provider names are open-ended so adding a provider does not require a type redesign. */
 export type ExternalBillingProvider = "stripe" | "paypal" | (string & {});
@@ -60,6 +61,7 @@ export interface ExternalBillingCustomer {
   provider: ExternalBillingProvider;
   /** Stripe Connect account id, or the equivalent provider account boundary. */
   providerAccountId: string;
+  providerEnvironment?: StripeEnvironment | null;
   externalCustomerId: string;
   contactId: string;
   personId: string | null;
@@ -85,6 +87,7 @@ export interface ExternalSubscription {
   subAccountId: string;
   provider: ExternalBillingProvider;
   providerAccountId: string;
+  providerEnvironment?: StripeEnvironment | null;
   externalCustomerId: string;
   externalSubscriptionId: string;
   externalBillingCustomerId: string;

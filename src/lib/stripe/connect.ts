@@ -2,7 +2,8 @@ import "server-only";
 
 import crypto from "node:crypto";
 import type Stripe from "stripe";
-import { getStripeServer } from "@/lib/stripe/server";
+import { getStripeEnvironment, getStripeServer } from "@/lib/stripe/server";
+import type { StripeEnvironment } from "@/types/tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -66,8 +67,9 @@ export function signStripeConnectState(
   subAccountId: string,
   uid: string,
   nonce: string,
+  environment = getStripeEnvironment()
 ): string {
-  const payload = `${subAccountId}.${uid}.${nonce}`;
+  const payload = `${subAccountId}.${uid}.${nonce}.${environment}`;
   const sig = crypto
     .createHmac("sha256", stateSecret())
     .update(`stripeconnectstate:${payload}`)
@@ -75,15 +77,26 @@ export function signStripeConnectState(
   return `${payload}.${sig}`;
 }
 
-export function verifyStripeConnectState(
-  state: string,
-): { subAccountId: string; uid: string } | null {
+export function verifyStripeConnectState(state: string): {
+  subAccountId: string;
+  uid: string;
+  environment: StripeEnvironment;
+} | null {
   const parts = state.split(".");
-  if (parts.length !== 4) return null;
-  const [subAccountId, uid, nonce, sig] = parts;
+  if (parts.length !== 4 && parts.length !== 5) return null;
+  const [subAccountId, uid, nonce] = parts;
+  const environment = (
+    parts.length === 5 ? parts[3] : getStripeEnvironment()
+  ) as StripeEnvironment;
+  if (environment !== "test" && environment !== "live") return null;
+  const sig = parts.length === 5 ? parts[4] : parts[3];
+  const signedPayload =
+    parts.length === 5
+      ? `${subAccountId}.${uid}.${nonce}.${environment}`
+      : `${subAccountId}.${uid}.${nonce}`;
   const expected = crypto
     .createHmac("sha256", stateSecret())
-    .update(`stripeconnectstate:${subAccountId}.${uid}.${nonce}`)
+    .update(`stripeconnectstate:${signedPayload}`)
     .digest("hex");
   if (sig.length !== expected.length) return null;
   try {
@@ -93,7 +106,7 @@ export function verifyStripeConnectState(
   } catch {
     return null;
   }
-  return { subAccountId, uid };
+  return { subAccountId, uid, environment };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,8 +123,9 @@ export interface StripeConnectLinkResult {
 /** Exchange the OAuth `code` for the connected account's id, then fetch its email + capability flags. */
 export async function exchangeStripeConnectCode(
   code: string,
+  environment = getStripeEnvironment()
 ): Promise<StripeConnectLinkResult> {
-  const stripe = getStripeServer();
+  const stripe = getStripeServer(environment);
   const response = await stripe.oauth.token({
     grant_type: "authorization_code",
     code,
@@ -141,33 +155,40 @@ export async function exchangeStripeConnectCode(
  * connected account re-syncs here.
  */
 export async function handleStripeConnectAccountUpdated(
-  account: Stripe.Account,
+  account: Stripe.Account
 ): Promise<void> {
-  const snap = await getAdminDb()
-    .collection("subAccounts")
-    .where("stripeConnect.accountId", "==", account.id)
-    .limit(1)
-    .get();
-  if (snap.empty) return;
+  const environment = getStripeEnvironment();
+  const snap = await getAdminDb().collection("subAccounts").get();
+  const match = snap.docs.find((doc) => {
+    const connection = doc.data().stripeConnect;
+    return (
+      connection?.[environment]?.accountId === account.id ||
+      connection?.accountId === account.id
+    );
+  });
+  if (!match) return;
 
-  await snap.docs[0].ref.set(
+  await match.ref.set(
     {
-      stripeConnect: {
+      [`stripeConnect.${environment}`]: {
+        accountId: account.id,
+        email: account.email ?? null,
         chargesEnabled: account.charges_enabled === true,
         payoutsEnabled: account.payouts_enabled === true,
       },
       updatedAt: FieldValue.serverTimestamp(),
     },
-    { merge: true },
+    { merge: true }
   );
 }
 
 /** Best-effort deauthorize on disconnect — the connection doc is cleared regardless. */
 export async function deauthorizeStripeConnect(
   accountId: string,
+  environment = getStripeEnvironment()
 ): Promise<void> {
   try {
-    const stripe = getStripeServer();
+    const stripe = getStripeServer(environment);
     await stripe.oauth.deauthorize({
       client_id: process.env.STRIPE_CONNECT_CLIENT_ID ?? "",
       stripe_user_id: accountId,

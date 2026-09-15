@@ -8,7 +8,11 @@ import {
   upsertExternalPayment,
   type UpsertExternalPaymentInput,
 } from "@/lib/server/external-payment-service";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeConnectionForEnvironment,
+  getStripeEnvironment,
+  getStripeServer,
+} from "@/lib/stripe/server";
 import type { ExternalPayment } from "@/types/external-billing";
 
 const PLATFORM_PROVIDER_ACCOUNT_ID = "platform";
@@ -132,7 +136,10 @@ async function resolveNativeMetadataRelationship(input: {
   const member = memberSnap.data();
   const agencyId = subAccount?.agencyId;
   const contactId = member?.contactId;
-  const connectedAccountId = subAccount?.stripeConnect?.accountId;
+  const connectedAccountId = getStripeConnectionForEnvironment(
+    subAccount?.stripeConnect,
+    getStripeEnvironment()
+  )?.accountId;
   if (
     !subAccountSnap.exists ||
     !memberSnap.exists ||
