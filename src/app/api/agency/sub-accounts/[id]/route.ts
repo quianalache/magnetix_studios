@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/require-tenancy";
 import {
   deleteSubAccountForAgency,
+  syncSubAccountNameToMemberships,
   SubAccountNotEmptyError,
   SubAccountNotFoundError,
 } from "@/lib/server/sub-accounts-service";
@@ -250,6 +251,13 @@ export async function PATCH(
 
   const db = getAdminDb();
   await db.doc(`subAccounts/${subAccountId}`).update(update);
+
+  // The sidebar/header sub-account switcher reads a denormalized `name`
+  // snapshot on each member's userMemberships index, not this doc — keep it
+  // in sync so a rename doesn't go stale there.
+  if (typeof update.name === "string") {
+    await syncSubAccountNameToMemberships(subAccountId, update.name);
+  }
 
   return NextResponse.json({ ok: true });
 }

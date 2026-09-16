@@ -66,6 +66,7 @@ interface Props {
 }
 
 export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props) {
+  const initialName = subAccount?.name ?? "";
   const initialEmail = subAccount?.emailDomainEnabledByAgency === true;
   const initialApi = subAccount?.apiAccessEnabledByAgency === true;
   const initialBroadcasts = subAccount?.broadcastsEnabledByAgency === true;
@@ -115,6 +116,8 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     subAccount?.aiSuiteHiddenWhenDisabled !== false;
   const initialLabsHidden = subAccount?.labsHiddenWhenDisabled !== false;
   const hasLiveDomain = !!subAccount?.resendConfig;
+  const [name, setName] = useState(initialName);
+  const [savingName, setSavingName] = useState(false);
   const [emailDomainEnabled, setEmailDomainEnabled] = useState(initialEmail);
   const [apiAccessEnabled, setApiAccessEnabled] = useState(initialApi);
   const [broadcastsEnabled, setBroadcastsEnabled] = useState(initialBroadcasts);
@@ -186,6 +189,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   // changes, so consecutive opens don't show stale toggle state.
   useEffect(() => {
     if (open) {
+      setName(initialName);
       setEmailDomainEnabled(initialEmail);
       setApiAccessEnabled(initialApi);
       setBroadcastsEnabled(initialBroadcasts);
@@ -216,6 +220,7 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
     }
   }, [
     open,
+    initialName,
     initialEmail,
     initialApi,
     initialBroadcasts,
@@ -246,6 +251,9 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   ]);
 
   if (!subAccount) return null;
+
+  const trimmedName = name.trim();
+  const nameDirty = trimmedName !== subAccount.name;
 
   const willTearDown =
     initialEmail && !emailDomainEnabled && hasLiveDomain;
@@ -311,6 +319,36 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
   // two Meta gates when unconfigured — but still allow turning an already-on
   // gate OFF (don't trap a legacy enabled state).
   const metaUnconfigured = metaConfigured === false;
+
+  async function handleSaveName() {
+    if (!subAccount) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error("Name cannot be empty.");
+      return;
+    }
+    setSavingName(true);
+    try {
+      const res = await fetch(`/api/agency/sub-accounts/${subAccount.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error ?? "Failed to save.");
+      }
+      setName(trimmed);
+      toast.success("Workspace name updated.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save.");
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   async function handleSave() {
     if (!subAccount) return;
@@ -612,6 +650,55 @@ export function SubAccountManageDialog({ subAccount, open, onOpenChange }: Props
             can&apos;t flip these — that&apos;s the point.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Workspace / business name — the display name shown across the
+            agency's own surfaces (this dialog's title, the sub-accounts
+            list, MyMagnetix, checkout/business labeling wherever it's
+            sourced dynamically). Editing this does NOT touch the doc id,
+            the `slug` (the public Space URL stays put), Stripe Connect
+            config, or billing records — see PATCH /api/agency/sub-accounts/[id]. */}
+        <div className="rounded-lg border bg-card p-3">
+          <label
+            htmlFor="sub-account-name"
+            className="text-sm font-medium text-foreground"
+          >
+            Workspace / business name
+          </label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Shown wherever this sub-account&apos;s name appears. The public
+            Space URL (
+            <code className="rounded bg-muted px-1">
+              /portal/{subAccount.slug}
+            </code>
+            ) doesn&apos;t change when you rename it.
+          </p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              id="sub-account-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={savingName}
+              maxLength={120}
+              className="h-8 text-sm sm:max-w-xs"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 shrink-0"
+              disabled={savingName || !nameDirty || trimmedName.length === 0}
+              onClick={handleSaveName}
+            >
+              {savingName ? (
+                <>
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                "Save name"
+              )}
+            </Button>
+          </div>
+        </div>
 
         {/* Client Billing v1 — plan assignment + checkout links. Lives above
             the gates because an assigned plan MANAGES the gates below (they

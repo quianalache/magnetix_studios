@@ -203,6 +203,35 @@ export async function deleteSubAccountForAgency(input: {
   await db.recursiveDelete(subRef);
 }
 
+/**
+ * Keeps the denormalized `name` snapshot on every active member's
+ * `userMemberships/{uid}/subAccounts/{subAccountId}` index doc in sync after
+ * a rename. That index — not the live `subAccounts` doc — is what the
+ * sidebar/header sub-account switcher reads (see `useAuth()`'s
+ * `memberships[]`), so skipping this leaves the switcher showing the old
+ * name until a member is removed and re-added. Call after any write that
+ * changes `subAccounts/{id}.name`.
+ */
+export async function syncSubAccountNameToMemberships(
+  subAccountId: string,
+  name: string,
+): Promise<void> {
+  const db = getAdminDb();
+  const membersSnap = await db
+    .collection(`subAccounts/${subAccountId}/subAccountMembers`)
+    .get();
+  if (membersSnap.empty) return;
+  const batch = db.batch();
+  for (const memberDoc of membersSnap.docs) {
+    batch.set(
+      db.doc(`userMemberships/${memberDoc.id}/subAccounts/${subAccountId}`),
+      { name },
+      { merge: true },
+    );
+  }
+  await batch.commit();
+}
+
 export async function createSubAccountForAgency(
   input: CreateSubAccountInput
 ): Promise<CreateSubAccountResult> {
