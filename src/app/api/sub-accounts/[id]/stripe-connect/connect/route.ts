@@ -43,7 +43,7 @@ export async function GET(
       ? requestedEnvironment
       : getStripeEnvironment();
 
-  if (!stripeConnectAppConfigured()) {
+  if (!stripeConnectAppConfigured(environment)) {
     settingsUrl.searchParams.set("stripeconnect", "not_configured");
     return NextResponse.redirect(settingsUrl);
   }
@@ -57,6 +57,6 @@ export async function GET(
   const nonce = crypto.randomBytes(16).toString("hex");
   const state = signStripeConnectState(id, access.uid, nonce, environment);
   return NextResponse.redirect(
-    buildStripeConnectOAuthUrl({ redirectUri, state })
+    buildStripeConnectOAuthUrl({ redirectUri, state, environment })
   );
 }

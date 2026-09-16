@@ -24,8 +24,23 @@ import { FieldValue } from "firebase-admin/firestore";
 
 const OAUTH_AUTHORIZE_URL = "https://connect.stripe.com/oauth/authorize";
 
-export function stripeConnectAppConfigured(): boolean {
-  return !!process.env.STRIPE_CONNECT_CLIENT_ID?.trim();
+function stripeConnectClientId(environment: StripeEnvironment): string | null {
+  const configured =
+    process.env[
+      environment === "test"
+        ? "STRIPE_CONNECT_CLIENT_ID_TEST"
+        : "STRIPE_CONNECT_CLIENT_ID_LIVE"
+    ]?.trim();
+  if (configured) return configured;
+  return environment === "test"
+    ? process.env.STRIPE_CONNECT_CLIENT_ID?.trim() || null
+    : null;
+}
+
+export function stripeConnectAppConfigured(
+  environment = getStripeEnvironment()
+): boolean {
+  return !!stripeConnectClientId(environment);
 }
 
 /**
@@ -43,10 +58,18 @@ export function stripeConnectRedirectUri(): string | null {
 export function buildStripeConnectOAuthUrl(opts: {
   redirectUri: string;
   state: string;
+  environment?: StripeEnvironment;
 }): string {
+  const environment = opts.environment ?? getStripeEnvironment();
+  const clientId = stripeConnectClientId(environment);
+  if (!clientId) {
+    throw new Error(
+      `Stripe Connect ${environment} client id is not configured.`
+    );
+  }
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: process.env.STRIPE_CONNECT_CLIENT_ID ?? "",
+    client_id: clientId,
     scope: "read_write",
     redirect_uri: opts.redirectUri,
     state: opts.state,
@@ -190,7 +213,7 @@ export async function deauthorizeStripeConnect(
   try {
     const stripe = getStripeServer(environment);
     await stripe.oauth.deauthorize({
-      client_id: process.env.STRIPE_CONNECT_CLIENT_ID ?? "",
+      client_id: stripeConnectClientId(environment) ?? "",
       stripe_user_id: accountId,
     });
   } catch (err) {

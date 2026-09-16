@@ -66,7 +66,7 @@ export async function GET(request: Request) {
   if (declined || !code) {
     return finish("cancelled");
   }
-  if (!stripeConnectAppConfigured()) {
+  if (!stripeConnectAppConfigured(environment)) {
     return finish("not_configured");
   }
 
