@@ -140,7 +140,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { href: "/agency/sub-accounts/new", label: "Create sub-account", Icon: Plus },
   { href: "/agency/billing", label: "Manage plans & billing", Icon: Wallet },
   { href: "/agency/sub-accounts", label: "View sub-accounts", Icon: Users },
-  { href: "/agency/acquisition", label: "View acquisition", Icon: Radar },
+  { href: "/agency/acquisition", label: "View traffic & signups", Icon: Radar },
 ];
 
 export function AgencyHomeDashboard({
@@ -478,7 +478,7 @@ export function AgencyHomeDashboard({
                   <h2 className="text-sm font-semibold">Top sources</h2>
                   <p className="text-xs text-muted-foreground">
                     <Link href="/agency/acquisition" className="underline">
-                      Full acquisition report
+                      Full traffic & signups report
                     </Link>
                   </p>
                 </div>

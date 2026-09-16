@@ -75,8 +75,8 @@ export default function AgencySettingsPage() {
       <BrandingSection />
 
       {/* No-code pointer to the agency's own SaaS sales page + the copy-
-          paste acquisition-tracking snippet — see Agency → Acquisition for
-          what it measures. */}
+          paste acquisition-tracking snippet — see Agency → Traffic &
+          Signups for what it measures. */}
       <SalesPageSection />
 
       {/* Home-screen icon for the installable app (PWA) — pairs with the

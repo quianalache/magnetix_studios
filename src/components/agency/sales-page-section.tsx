@@ -160,7 +160,7 @@ export function SalesPageSection() {
         <p className="text-[11px] text-muted-foreground">
           This doesn&apos;t change or rebuild anything at that URL — it just
           tells Magnetix which page is your storefront, so it shows up here
-          and in Agency → Acquisition.
+          and in Agency → Traffic & Signups.
         </p>
       </form>
 
@@ -191,7 +191,7 @@ function TrackingSnippetCard() {
       <p className="mt-1 text-[11px] text-muted-foreground">
         Paste this once into your sales page&apos;s HTML (right before{" "}
         <code>&lt;/body&gt;</code>) to see visits, checkout starts, and
-        conversions in Agency → Acquisition. It also automatically carries
+        conversions in Agency → Traffic & Signups. It also automatically carries
         UTM/referral params through to your &ldquo;Get started&rdquo;
         button&apos;s link — no extra code needed on the button itself.
       </p>

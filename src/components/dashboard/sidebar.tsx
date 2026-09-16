@@ -730,7 +730,7 @@ function SidebarContent({
             {agencyRole === "owner" && (
               <Link
                 href="/agency/acquisition"
-                title={collapsed ? "Acquisition" : undefined}
+                title={collapsed ? "Traffic & Signups" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                   collapsed && "justify-center",
@@ -740,7 +740,7 @@ function SidebarContent({
                 )}
               >
                 <TrendingUp className="h-4 w-4 shrink-0" />
-                {!collapsed && "Acquisition"}
+                {!collapsed && "Traffic & Signups"}
               </Link>
             )}
             {/* Hidden until the owner enables it under Agency → Settings —

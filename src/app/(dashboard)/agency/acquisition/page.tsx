@@ -58,7 +58,7 @@ export default function AgencyAcquisitionPage() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
           <Rocket className="mx-auto mb-2 h-6 w-6" />
-          Acquisition data is managed by the agency owner.
+          Traffic & signups data is managed by the agency owner.
         </div>
       </div>
     );
@@ -67,7 +67,7 @@ export default function AgencyAcquisitionPage() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Acquisition</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Traffic & Signups</h1>
         <p className="text-sm text-muted-foreground">
           How people find and buy Magnetix — from your sales page through
           checkout to a paying customer.
