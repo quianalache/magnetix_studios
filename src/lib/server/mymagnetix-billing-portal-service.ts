@@ -9,6 +9,7 @@ import {
 import {
   listPersonMemberships,
   subscriptionBelongsToMembership,
+  type PersonMembership,
 } from "@/lib/server/mymagnetix-service";
 import type {
   ExternalBillingCustomer,
@@ -64,7 +65,8 @@ function stripeFailure(error: unknown): MyMagnetixPortalError {
 
 /** Creates a Stripe-hosted portal session for one verified person-owned subscription. */
 export async function createPersonBillingPortalSession(input: {
-  personId: string;
+  personId?: string;
+  ownerMemberships?: PersonMembership[];
   subscriptionId: string;
   returnUrl: string;
 }): Promise<string> {
@@ -99,7 +101,9 @@ export async function createPersonBillingPortalSession(input: {
     );
   }
 
-  const memberships = await listPersonMemberships(input.personId);
+  const memberships =
+    input.ownerMemberships ??
+    (input.personId ? await listPersonMemberships(input.personId) : []);
   if (
     !memberships.some((membership) =>
       subscriptionBelongsToMembership(subscription, membership)
