@@ -8,6 +8,7 @@ import { useOptionalSubAccount } from "@/context/sub-account-context";
 import {
   Home,
   Users,
+  ArrowLeft,
   GitBranch,
   Calendar,
   CalendarClock,
@@ -438,21 +439,17 @@ function SidebarContent({
 
   useEffect(() => {
     if (usingSharedSubAccount) return;
-    const linkSubIdLocal = activeSubId ?? memberships[0]?.subAccountId ?? null;
-    if (!linkSubIdLocal) {
+    if (!activeSubId) {
       clearGateData();
       return;
     }
     // Defensive try/catch (2026-08-30, same reasoning as
-    // SubAccountProvider's own listener): this fallback path only runs on
-    // agency-level pages, where no SubAccountProvider is mounted, but it's
-    // still layout-level — above every route's error.tsx — so a
-    // synchronous throw here (the confirmed-real firebase-js-sdk#9267
-    // failure mode) would crash the whole app shell rather than being
-    // gracefully contained.
+    // SubAccountProvider's own listener): a synchronous throw here (the
+    // confirmed-real firebase-js-sdk#9267 failure mode) would crash the
+    // whole app shell — it's layout-level, above every route's error.tsx.
     try {
       return onSnapshot(
-        doc(getFirebaseDb(), "subAccounts", linkSubIdLocal),
+        doc(getFirebaseDb(), "subAccounts", activeSubId),
         (snap) => applyGateData(snap.data()),
         () => clearGateData()
       );
@@ -460,13 +457,14 @@ function SidebarContent({
       clearGateData();
       return undefined;
     }
-  }, [activeSubId, memberships, usingSharedSubAccount]);
+  }, [activeSubId, usingSharedSubAccount]);
 
-  // When no sub-account is active (agency-level pages), fall back to the
-  // user's first membership for sub-account-scoped link templating.
-  const fallbackSub = memberships[0]?.subAccountId ?? null;
-  const linkSubId = activeSubId ?? fallbackSub;
-  const showSubNav = !!linkSubId;
+  // Agency mode and Sub-account mode are never stacked — the sub-account nav
+  // renders only while the URL is actually inside /sa/[id]/..., never as a
+  // "last known workspace" fallback on Agency pages (2026-09-16 shell
+  // separation; see the "PREVIOUS SHELL ARCHITECTURE" note in the task this
+  // shipped under for what this replaced and why it was wrong).
+  const showSubNav = !!activeSubId;
   const activeMembership = activeSubId
     ? memberships.find((m) => m.subAccountId === activeSubId)
     : null;
@@ -479,7 +477,9 @@ function SidebarContent({
     : "Sub-account";
 
   function renderNavItem(item: NavItem) {
-    const fullHref = `${subRoot ?? `/sa/${linkSubId}`}${item.href}`;
+    // renderNavItem is only ever called from inside the {showSubNav && ...}
+    // block below, where activeSubId (and therefore subRoot) is guaranteed set.
+    const fullHref = `${subRoot}${item.href}`;
     const isActive =
       pathname === fullHref ||
       (item.href !== "/dashboard" &&
@@ -648,9 +648,17 @@ function SidebarContent({
       )}
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {/* Agency-level nav — visible to agency owners always; everyone with
-            access to /agency sees the entry. */}
-        {(agencyRole === "owner" || memberships.length > 1) && (
+        {/* Agency-level nav — owner-only, AND only while not inside a
+            specific sub-account (`!showSubNav`). Agency mode and
+            Sub-account mode are two distinct application shells that must
+            never stack in the same sidebar — that mutual exclusion is the
+            actual fix; the "Back to Agency" link below is what makes going
+            the other direction possible once this section is hidden. A
+            non-owner staff member who belongs to multiple sub-accounts
+            switches between them via the header's workspace switcher; they
+            never see this section or "Agency" as a switcher option at all
+            (2026-09-16 shell separation). */}
+        {agencyRole === "owner" && !showSubNav && (
           <div className="mb-3">
             {!collapsed && (
               <p className="text-sidebar-foreground/60 mb-1 px-3 text-[10px] tracking-wider uppercase">
@@ -706,7 +714,7 @@ function SidebarContent({
             {agencyRole === "owner" && (
               <Link
                 href="/agency/billing"
-                title={collapsed ? "Client billing" : undefined}
+                title={collapsed ? "Billing" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                   collapsed && "justify-center",
@@ -716,7 +724,7 @@ function SidebarContent({
                 )}
               >
                 <CreditCard className="h-4 w-4 shrink-0" />
-                {!collapsed && "Client billing"}
+                {!collapsed && "Billing"}
               </Link>
             )}
             {agencyRole === "owner" && (
@@ -756,7 +764,7 @@ function SidebarContent({
             {agencyRole === "owner" && (
               <Link
                 href="/agency/settings"
-                title={collapsed ? "Settings Agency" : undefined}
+                title={collapsed ? "Agency Settings" : undefined}
                 className={cn(
                   "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
                   collapsed && "justify-center",
@@ -766,7 +774,7 @@ function SidebarContent({
                 )}
               >
                 <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && "Settings Agency"}
+                {!collapsed && "Agency Settings"}
               </Link>
             )}
           </div>
@@ -774,6 +782,25 @@ function SidebarContent({
 
         {showSubNav && (
           <div>
+            {/* Sub-account mode never stacks Agency nav above it — this is
+                the owner's obvious way back (task: "the owner must still
+                have an obvious way to return to Agency mode"). Non-owners
+                never had Agency, so they don't get this link — the header's
+                workspace switcher already covers moving between the
+                sub-accounts they're actually authorized in. */}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency"
+                title={collapsed ? "Back to Agency" : undefined}
+                className={cn(
+                  "mb-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                  collapsed && "justify-center"
+                )}
+              >
+                <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                {!collapsed && "Back to Agency"}
+              </Link>
+            )}
             {(agencyRole === "owner" || memberships.length > 1) &&
               !collapsed && (
                 <p
@@ -819,13 +846,12 @@ function SidebarContent({
           </div>
         )}
 
-        {!showSubNav && !loading && !collapsed && (
+        {/* Owners in this state already see the Agency section above —
+            this hint is only for non-owners who've landed on the bare
+            workspace picker without an active sub-account selected. */}
+        {!showSubNav && agencyRole !== "owner" && !loading && !collapsed && (
           <p className="border-sidebar-border/40 text-sidebar-foreground/80 rounded-md border border-dashed px-3 py-3 text-xs">
-            Pick a sub-account from{" "}
-            <Link href="/agency" className="text-sidebar-foreground underline">
-              Agency home
-            </Link>{" "}
-            to see its data.
+            Pick a workspace from the switcher above to see its data.
           </p>
         )}
       </nav>

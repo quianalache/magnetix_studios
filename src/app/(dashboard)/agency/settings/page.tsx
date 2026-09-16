@@ -12,6 +12,7 @@ import { AiModelSection } from "@/components/agency/ai-model-section";
 import { AgencyAssistantSection } from "@/components/agency/agency-assistant-section";
 import { AgencyAiKbSection } from "@/components/agency/agency-ai-kb-section";
 import { SeedDemoSection } from "@/components/agency/seed-demo-section";
+import { StatusTab } from "@/components/agency/status-tab";
 import { PasswordSection } from "@/components/settings/password-section";
 import { LANDING_VARIANT } from "@/config/landing";
 
@@ -63,6 +64,13 @@ export default function AgencySettingsPage() {
           Open
         </Button>
       </section>
+
+      {/* Deployment/integration health (Stripe, Resend, Twilio, Firebase…) —
+          moved here from Agency Home's "Status" tab (2026-09-16 shell
+          cleanup): it's a devops/config diagnostic, not a SaaS-business
+          metric, so it belongs next to the rest of the deployment config
+          rather than on the operator's business overview dashboard. */}
+      <StatusTab />
 
       <BrandingSection />
 

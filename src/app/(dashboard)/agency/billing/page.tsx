@@ -207,7 +207,7 @@ export default function AgencyBillingPage() {
       <div className="mx-auto w-full max-w-5xl">
         <div className="rounded-2xl border bg-card p-12 text-center text-muted-foreground">
           <CreditCard className="mx-auto mb-2 h-6 w-6" />
-          Client billing is managed by the agency owner.
+          Billing is managed by the agency owner.
         </div>
       </div>
     );
@@ -218,7 +218,7 @@ export default function AgencyBillingPage() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            Client billing
+            Billing
             {/* Same Beta pill as the beta feature gates in the Manage dialog. */}
             <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
               Beta

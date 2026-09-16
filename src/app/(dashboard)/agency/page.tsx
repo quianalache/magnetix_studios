@@ -21,10 +21,7 @@ import { useAgency } from "@/hooks/use-agency";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatusTab } from "@/components/agency/status-tab";
 import { AgencyHomeDashboard } from "@/components/agency/agency-home-dashboard";
-import { SubAccountManageDialog } from "@/components/agency/sub-account-manage-dialog";
 import { LANDING_VARIANT } from "@/config/landing";
 import type { SubAccountDoc } from "@/types";
 
@@ -54,12 +51,15 @@ function AgencyHomeContent() {
     m.name.toLowerCase().includes(filter.trim().toLowerCase()),
   );
 
-  // Full sub-account docs (owner only) — needed so the Manage dialog has the
-  // current feature-gate state. The cards themselves render from memberships.
+  // Owner-only: real subAccounts docs feeding the Overview dashboard's
+  // metrics/charts. This is a DIRECT `subAccounts` query (agencyId ==), not
+  // the `memberships` (userMemberships index) list above — that index is
+  // scoped to "workspaces THIS viewer belongs to" and can go stale (see the
+  // canonical-visibility note in agency-home-dashboard.tsx); this query is
+  // the source of truth for "which sub-accounts actually exist," the same
+  // one the dedicated /agency/sub-accounts page uses.
   const [subs, setSubs] = useState<SubAccountDoc[]>([]);
   const [subsLoading, setSubsLoading] = useState(true);
-  const [managingId, setManagingId] = useState<string | null>(null);
-  const managing = subs.find((s) => s.id === managingId) ?? null;
 
   useEffect(() => {
     if (!isOwner || !agencyId) {
@@ -109,96 +109,15 @@ function AgencyHomeContent() {
     );
   }
 
-  const subAccountsPicker = (
-    <section className="rounded-2xl border bg-card p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-            <Building2 className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="text-sm font-semibold">Your sub-accounts</h2>
-            <p className="text-xs text-muted-foreground">
-              {memberships.length} total
-            </p>
-          </div>
-        </div>
-        {memberships.length > 4 && (
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter…"
-            className="h-8 w-48"
-          />
-        )}
-      </div>
-
-      {memberships.length === 0 ? (
-        <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
-          You don&apos;t have access to any sub-accounts yet.
-          {isOwner && (
-            <>
-              {" "}
-              <Link
-                href="/agency/sub-accounts/new"
-                className="text-primary underline"
-              >
-                Create one
-              </Link>{" "}
-              to get started.
-            </>
-          )}
-        </div>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((m) => (
-            <li key={m.subAccountId} className="relative">
-              <Link
-                href={`/sa/${m.subAccountId}/dashboard`}
-                className="group flex h-full flex-col justify-between gap-3 rounded-xl border bg-background p-4 transition-colors hover:border-primary/40 hover:bg-muted/30"
-              >
-                <div>
-                  <div className="flex items-baseline gap-2 pr-16">
-                    <p className="text-sm font-medium">
-                      {m.name || "Untitled"}
-                    </p>
-                    {m.accountNumber !== undefined && (
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        #{m.accountNumber}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {m.role}
-                  </p>
-                </div>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-foreground">
-                  Open <ArrowRight className="h-3 w-3" />
-                </span>
-              </Link>
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => setManagingId(m.subAccountId)}
-                  className="absolute right-3 top-3 z-10 rounded-full border bg-background px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  Manage
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-
   // Non-owners (including staff who happen to belong to multiple
-  // sub-accounts) keep exactly today's experience — a plain picker. The
-  // SaaS operator dashboard below is owner-only: it surfaces platform
-  // revenue/customer data that has no reason to be visible to anyone else,
-  // reusing the same `agencyRole === "owner"` check every other real
-  // Agency control in this app already gates on (no parallel permission
-  // system).
+  // sub-accounts) get a plain picker — nothing else. The SaaS operator
+  // dashboard below is owner-only: it surfaces platform revenue/customer
+  // data that has no reason to be visible to anyone else, reusing the same
+  // `agencyRole === "owner"` check every other real Agency control in this
+  // app already gates on (no parallel permission system). This is also the
+  // ONLY place `memberships` (the per-viewer userMemberships index) drives
+  // what's shown — it's correct here because it's answering "which
+  // workspaces can *I* open," not "how many sub-accounts exist."
   if (!isOwner) {
     return (
       <div className="space-y-6">
@@ -211,7 +130,65 @@ function AgencyHomeContent() {
         <Suspense fallback={null}>
           <ErrorBanner />
         </Suspense>
-        {subAccountsPicker}
+        <section className="rounded-2xl border bg-card p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                <Building2 className="h-4 w-4" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold">Your sub-accounts</h2>
+                <p className="text-xs text-muted-foreground">
+                  {memberships.length} total
+                </p>
+              </div>
+            </div>
+            {memberships.length > 4 && (
+              <Input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter…"
+                className="h-8 w-48"
+              />
+            )}
+          </div>
+
+          {memberships.length === 0 ? (
+            <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
+              You don&apos;t have access to any sub-accounts yet.
+            </div>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {visible.map((m) => (
+                <li key={m.subAccountId}>
+                  <Link
+                    href={`/sa/${m.subAccountId}/dashboard`}
+                    className="group flex h-full flex-col justify-between gap-3 rounded-xl border bg-background p-4 transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  >
+                    <div>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-sm font-medium">
+                          {m.name || "Untitled"}
+                        </p>
+                        {m.accountNumber !== undefined && (
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            #{m.accountNumber}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {m.role}
+                      </p>
+                    </div>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-foreground">
+                      Open <ArrowRight className="h-3 w-3" />
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     );
   }
@@ -224,57 +201,35 @@ function AgencyHomeContent() {
         <ErrorBanner />
       </Suspense>
 
-      <Tabs defaultValue="overview">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="sub-accounts">Sub-accounts</TabsTrigger>
-            <TabsTrigger value="status">Status</TabsTrigger>
-          </TabsList>
-          {LANDING_VARIANT === "leadstack" && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                render={<Link href="/agency/landing" />}
-              >
-                <FlaskConical className="mr-1 h-4 w-4" />
-                A/B/C test
-              </Button>
-              <Button
-                variant="outline"
-                render={<Link href="/agency/affiliates" />}
-              >
-                <Users className="mr-1 h-4 w-4" />
-                Affiliates
-              </Button>
-            </div>
-          )}
+      {/* LeadStack-template-only surfaces (the underlying template's own
+          A/B landing test + reseller affiliate program) — dead/hidden on
+          Magnetix's own "custom" deployment; see the Agency Architecture
+          audit. Kept generic so a LANDING_VARIANT="leadstack" deployment
+          still has them. */}
+      {LANDING_VARIANT === "leadstack" && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" render={<Link href="/agency/landing" />}>
+            <FlaskConical className="mr-1 h-4 w-4" />
+            A/B/C test
+          </Button>
+          <Button variant="outline" render={<Link href="/agency/affiliates" />}>
+            <Users className="mr-1 h-4 w-4" />
+            Affiliates
+          </Button>
         </div>
+      )}
 
-        <TabsContent value="overview" className="mt-0">
-          <AgencyHomeDashboard
-            firstName={firstName}
-            agencyName={agency.name}
-            subs={subs}
-            subsLoading={subsLoading}
-          />
-        </TabsContent>
-
-        <TabsContent value="sub-accounts" className="mt-0">
-          {subAccountsPicker}
-        </TabsContent>
-
-        <TabsContent value="status" className="mt-0">
-          <StatusTab />
-        </TabsContent>
-      </Tabs>
-
-      <SubAccountManageDialog
-        subAccount={managing}
-        open={!!managingId}
-        onOpenChange={(open) => {
-          if (!open) setManagingId(null);
-        }}
+      {/* Agency Home = the SaaS/operator overview dashboard, full stop.
+          Sub-account management lives at the dedicated /agency/sub-accounts
+          page (linked from Quick Actions below); integration/deployment
+          health lives at Agency Settings. Neither is duplicated here
+          anymore (2026-09-16 shell cleanup — see the task's "AGENCY HOME
+          TAB CLEANUP" note for why both were removed). */}
+      <AgencyHomeDashboard
+        firstName={firstName}
+        agencyName={agency.name}
+        subs={subs}
+        subsLoading={subsLoading}
       />
     </div>
   );

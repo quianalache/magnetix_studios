@@ -57,6 +57,20 @@ import type { AcquisitionSummary } from "@/types/billing";
  * on reactivation, so reconstructing a monthly MRR history from it would
  * understate real past revenue. Customer Growth IS a real time series,
  * because `createdAt` is set once and never changes.
+ *
+ * CANONICAL VISIBILITY RULE (2026-09-16 shell-separation fix): every count
+ * on this dashboard comes from a direct `subAccounts` query, never from
+ * `memberships` (the per-viewer `userMemberships` index the workspace
+ * switcher renders from). That index is scoped to "workspaces THIS viewer
+ * belongs to" and can go stale if a sub-account is ever deleted through a
+ * path that doesn't prune it — which is exactly what happened to a QA
+ * fixture ("QA Acquisition Foundation Test", #1010): its `subAccounts` doc
+ * was gone, but a `userMemberships` pointer to it lingered, so the switcher
+ * and this dashboard's old "Sub-accounts" tab (since removed — see below)
+ * showed 3 workspaces while the dedicated /agency/sub-accounts page,
+ * already querying `subAccounts` directly, correctly showed 2. Any new
+ * "how many sub-accounts exist" surface must query `subAccounts` by
+ * `agencyId`, not read `memberships`.
  */
 
 const AGENCY_DONUT_COLORS = [

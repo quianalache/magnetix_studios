@@ -33,6 +33,13 @@ export default function SubAccountsListPage() {
     // Filter by agencyId only; sort client-side. Adding orderBy here would
     // require a composite (agencyId, createdAt) index, which is friction we
     // don't need for what's typically a small list per agency.
+    //
+    // This IS the canonical sub-account list — a direct query against
+    // `subAccounts`, not the `memberships` (userMemberships index) the
+    // workspace switcher renders from. See agency-home-dashboard.tsx's
+    // "CANONICAL VISIBILITY RULE" for why that distinction matters (a
+    // stale userMemberships pointer once made the switcher disagree with
+    // this page about how many sub-accounts exist).
     const q = query(
       collection(getFirebaseDb(), "subAccounts"),
       where("agencyId", "==", agencyId),

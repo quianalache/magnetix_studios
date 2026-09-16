@@ -384,7 +384,7 @@ export function SubAccountBillingSection({ subAccount, disabled }: Props) {
           <p className="text-xs text-muted-foreground">
             No plans yet — create one under{" "}
             <span className="font-medium text-foreground">
-              Agency → Client billing
+              Agency → Billing
             </span>{" "}
             first.
           </p>
