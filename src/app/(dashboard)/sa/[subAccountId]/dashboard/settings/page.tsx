@@ -11,6 +11,7 @@ import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { serializeCsv, downloadCsv } from "@/lib/csv";
 import { toDate } from "@/lib/format";
 import { LANDING_VARIANT } from "@/config/landing";
+import { SubAccountWorkspaceNameSection } from "@/components/settings/sub-account-workspace-name-section";
 import { SubAccountBrandingSection } from "@/components/settings/sub-account-branding-section";
 import { SubAccountContactSection } from "@/components/settings/sub-account-contact-section";
 import { SubAccountMembersSection } from "@/components/settings/sub-account-members-section";
@@ -149,6 +150,12 @@ export default function SettingsPage() {
         {/* ---------- Admin: contact, branding, plan, members, territories,
             calendar, payments, data ---------- */}
         <TabsContent value="admin" className="mt-6 space-y-6">
+          {/* Workspace / business name — self-service rename, admin-only.
+              Same canonical field + membership sync as the Agency-side
+              rename dialog; only the slug (the public Space URL) is off
+              limits here. */}
+          <SubAccountWorkspaceNameSection />
+
           {/* Account contact — the human at the client this sub-account belongs to. */}
           <SubAccountContactSection />
 
