@@ -40,16 +40,31 @@ export interface CommunityLinkBase {
    * builder that receives a `groupSlug` param ignores it in staff mode.
    */
   staffGroupId?: string;
+  /**
+   * Agency Community (2026-09-16) — the agency-owner analog of
+   * `staffGroupId`: when set, every builder below emits an
+   * `/agency/community/[groupId]/...` path instead, so the SAME shared
+   * components (FeedView, CommunityLeftNav, etc.) work unmodified for an
+   * agency-owned group. `saId` is meaningless in this mode (an agency
+   * group has none) — never set both `staffGroupId` and `agencyGroupId`;
+   * this one is checked first wherever both branches exist.
+   */
+  agencyGroupId?: string;
 }
 
 function staffBase(b: CommunityLinkBase): string {
   return `/sa/${b.saId}/community/${b.staffGroupId}`;
 }
 
+function agencyBase(b: CommunityLinkBase): string {
+  return `/agency/community/${b.agencyGroupId}`;
+}
+
 export function communityAboutHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/about`;
   if (b.staffGroupId) return `${staffBase(b)}/about`;
   return b.pretty
     ? `/communities/${groupSlug}/about`
@@ -67,6 +82,7 @@ export function communityAboutEditHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/about/edit`;
   if (b.staffGroupId) return `${staffBase(b)}/about/edit`;
   return b.pretty
     ? `/communities/${groupSlug}/about/edit`
@@ -77,6 +93,7 @@ export function communityHomeHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return agencyBase(b);
   if (b.staffGroupId) return staffBase(b);
   return b.pretty
     ? `/communities/${groupSlug}/home`
@@ -88,6 +105,7 @@ export function communityPostHref(
   groupSlug: string,
   postId: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/post/${postId}`;
   if (b.staffGroupId) return `${staffBase(b)}/post/${postId}`;
   return `${communityHomeHref(b, groupSlug)}/${postId}`;
 }
@@ -96,6 +114,7 @@ export function communityLearningHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/classroom`;
   if (b.staffGroupId) return `${staffBase(b)}/classroom`;
   return b.pretty
     ? `/communities/${groupSlug}/learning`
@@ -149,6 +168,7 @@ export function communityMembersHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/members-directory`;
   if (b.staffGroupId) return `${staffBase(b)}/members-directory`;
   return b.pretty
     ? `/communities/${groupSlug}/members`
@@ -159,6 +179,7 @@ export function communityLeaderboardHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/leaderboard`;
   if (b.staffGroupId) return `${staffBase(b)}/leaderboard`;
   return b.pretty
     ? `/communities/${groupSlug}/leaderboard`
@@ -171,6 +192,7 @@ export function communityProfileHref(
 ): string {
   // Real staff-shell profile editor (2026-08-24 navigation cleanup pass) —
   // see /sa/[subAccountId]/community/[groupId]/profile/page.tsx.
+  if (b.agencyGroupId) return `${agencyBase(b)}/profile`;
   if (b.staffGroupId) return `${staffBase(b)}/profile`;
   return b.pretty
     ? `/communities/${groupSlug}/profile`
@@ -182,6 +204,7 @@ export function communitySettingsHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/settings`;
   if (b.staffGroupId) return `${staffBase(b)}/settings`;
   return b.pretty
     ? `/communities/${groupSlug}/settings`
@@ -192,6 +215,7 @@ export function communityEventsHref(
   b: CommunityLinkBase,
   groupSlug: string
 ): string {
+  if (b.agencyGroupId) return `${agencyBase(b)}/events`;
   if (b.staffGroupId) return `${staffBase(b)}/events`;
   return b.pretty
     ? `/communities/${groupSlug}/events`

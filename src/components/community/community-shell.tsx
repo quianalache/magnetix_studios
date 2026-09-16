@@ -66,6 +66,7 @@ export function CommunityShell({
   children,
   rightRail,
   staffGroupId,
+  agencyGroupId,
   embedded = !!staffGroupId,
 }: {
   saId: string;
@@ -91,6 +92,14 @@ export function CommunityShell({
    */
   staffGroupId?: string;
   /**
+   * Agency Community (2026-09-16) — see CommunityLinkBase in routes.ts.
+   * Like `staffGroupId`, resolves every tab/Settings link to the
+   * agency-scoped route shape, but with NO "View as Member" link (there's
+   * no member-facing surface for an agency group) and no DM launcher (DMs
+   * aren't built for agency scope — see community-agency-service.ts).
+   */
+  agencyGroupId?: string;
+  /**
    * Full-page CRM Community (2026-09-02): page-chrome only, decoupled from
    * `staffGroupId` so a staff route can keep staff-shaped links/controls
    * while still rendering full-page. Defaults to `!!staffGroupId` — every
@@ -112,7 +121,7 @@ export function CommunityShell({
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const themeStyle = communityThemeStyle(group.theme);
-  const linkBase = { saId, pretty, staffGroupId };
+  const linkBase = { saId, pretty, staffGroupId, agencyGroupId };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label
   // (Part 16 of the Navigation task: "do not turn label customization into
@@ -177,7 +186,7 @@ export function CommunityShell({
           staff CRM view keeps a plain link to About — a staff person's own
           community memberships aren't the right identity context to
           surface as a switcher on this surface. */}
-      {staffGroupId ? (
+      {staffGroupId || agencyGroupId ? (
         <Link
           href={about}
           className="min-w-0 truncate text-sm font-semibold text-[#202124]"
@@ -213,14 +222,18 @@ export function CommunityShell({
             <span className="hidden md:inline">Settings</span>
           </Link>
         )}
-        <DmLauncher
-          saId={saId}
-          viewerId={viewer.memberId}
-          brand={brand}
-          primaryAction={resolvedTheme.primaryAction}
-          accent={resolvedTheme.accent}
-        />
-        {staffGroupId ? (
+        {!agencyGroupId && (
+          <DmLauncher
+            saId={saId}
+            viewerId={viewer.memberId}
+            brand={brand}
+            primaryAction={resolvedTheme.primaryAction}
+            accent={resolvedTheme.accent}
+          />
+        )}
+        {agencyGroupId ? (
+          <MemberAvatar author={viewer} size={28} brand={brand} />
+        ) : staffGroupId ? (
           <>
             <Link
               href={communityProfileHref(linkBase, group.slug)}

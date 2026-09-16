@@ -43,6 +43,7 @@ export function CreateChannelSectionModal({
   onOpenChange,
   saId,
   groupId,
+  agencyGroupId,
   sections,
   editingChannel,
   editingSection,
@@ -53,6 +54,9 @@ export function CreateChannelSectionModal({
   onOpenChange: (open: boolean) => void;
   saId: string;
   groupId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. When set, saves
+   *  go to the agency-scoped API tree instead of the tenant one. */
+  agencyGroupId?: string;
   sections: CommunitySection[];
   /** Present = editing this exact channel (kind fixed to "channel"). */
   editingChannel?: CommunityChannel;
@@ -74,6 +78,9 @@ export function CreateChannelSectionModal({
 
   const trimmedName = name.trim();
   const canSubmit = !!trimmedName && !!icon && !saving;
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
 
   function handleCancel() {
     onOpenChange(false);
@@ -85,8 +92,8 @@ export function CreateChannelSectionModal({
     try {
       if (kind === "channel") {
         const url = editingChannel
-          ? `/api/community/${saId}/${groupId}/channels/${editingChannel.id}`
-          : `/api/community/${saId}/${groupId}/channels`;
+          ? `${apiBase}/channels/${editingChannel.id}`
+          : `${apiBase}/channels`;
         const res = await fetch(url, {
           method: editingChannel ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -109,8 +116,8 @@ export function CreateChannelSectionModal({
         toast.success(editingChannel ? "Channel updated" : "Channel created");
       } else {
         const url = editingSection
-          ? `/api/community/${saId}/${groupId}/sections/${editingSection.id}`
-          : `/api/community/${saId}/${groupId}/sections`;
+          ? `${apiBase}/sections/${editingSection.id}`
+          : `${apiBase}/sections`;
         const res = await fetch(url, {
           method: editingSection ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },

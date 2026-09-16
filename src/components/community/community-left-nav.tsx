@@ -39,6 +39,7 @@ export function CommunityLeftNav({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   brand,
@@ -47,10 +48,17 @@ export function CommunityLeftNav({
   initialChannels,
   initialSections,
 }: {
+  /** Meaningless when `agencyGroupId` is set (an agency group has no
+   *  sub-account) — still required on the type since every tenant/staff
+   *  caller passes a real one; agency callers pass `""`. */
   saId: string;
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. When set, every
+   *  nav link and API call this component makes targets the agency-scoped
+   *  route/API tree instead of the tenant one. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   /** Selected/active state — All Posts, the active channel row. Same role
@@ -69,7 +77,13 @@ export function CommunityLeftNav({
 }) {
   const searchParams = useSearchParams();
   const active = searchParams.get("c") ?? "All";
-  const base = communityHomeHref({ saId, pretty, staffGroupId }, groupSlug);
+  const base = communityHomeHref(
+    { saId, pretty, staffGroupId, agencyGroupId },
+    groupSlug,
+  );
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
   const isModerator = viewer.role === "moderator";
 
   const [channels, setChannels] = useState(initialChannels);
@@ -94,7 +108,7 @@ export function CommunityLeftNav({
 
   async function deleteChannel(c: CommunityChannel) {
     if (!confirm(`Delete "${c.name}"? This can't be undone.`)) return;
-    const res = await fetch(`/api/community/${saId}/${groupId}/channels/${c.id}`, { method: "DELETE" });
+    const res = await fetch(`${apiBase}/channels/${c.id}`, { method: "DELETE" });
     const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     if (!res.ok || !d.ok) {
       toast.error(d.error ?? "Couldn't delete channel");
@@ -106,7 +120,7 @@ export function CommunityLeftNav({
 
   async function deleteSection(s: CommunitySection) {
     if (!confirm(`Delete "${s.name}"? Its channels will become unsectioned — they and their posts are not deleted.`)) return;
-    const res = await fetch(`/api/community/${saId}/${groupId}/sections/${s.id}`, { method: "DELETE" });
+    const res = await fetch(`${apiBase}/sections/${s.id}`, { method: "DELETE" });
     const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     if (!res.ok || !d.ok) {
       toast.error(d.error ?? "Couldn't delete section");
@@ -171,6 +185,8 @@ export function CommunityLeftNav({
           {unsectioned.map((c) => (
             <ChannelRow
               key={c.id}
+              saId={saId}
+              agencyGroupId={agencyGroupId}
               channel={c}
               base={base}
               active={active}
@@ -226,6 +242,8 @@ export function CommunityLeftNav({
                   {sectionChannels.map((c) => (
                     <ChannelRow
                       key={c.id}
+                      saId={saId}
+                      agencyGroupId={agencyGroupId}
                       channel={c}
                       base={base}
                       active={active}
@@ -250,6 +268,7 @@ export function CommunityLeftNav({
           open={createOpen}
           onOpenChange={setCreateOpen}
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           sections={sections}
           onChannelSaved={upsertChannel}
@@ -261,6 +280,7 @@ export function CommunityLeftNav({
           open={!!editingChannel}
           onOpenChange={(o) => !o && setEditingChannel(null)}
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           sections={sections}
           editingChannel={editingChannel}
@@ -275,6 +295,7 @@ export function CommunityLeftNav({
           open={!!editingSection}
           onOpenChange={(o) => !o && setEditingSection(null)}
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           sections={sections}
           editingSection={editingSection}
@@ -317,6 +338,8 @@ function NavLink({
 }
 
 function ChannelRow({
+  saId,
+  agencyGroupId,
   channel,
   base,
   active,
@@ -328,6 +351,8 @@ function ChannelRow({
   onDelete,
   onMoved,
 }: {
+  saId: string;
+  agencyGroupId?: string;
   channel: CommunityChannel;
   base: string;
   active: string;
@@ -389,7 +414,8 @@ function ChannelRow({
                 Edit Channel
               </button>
               <ChannelMovePopover
-                saId={channel.subAccountId}
+                saId={saId}
+                agencyGroupId={agencyGroupId}
                 groupId={channel.groupId}
                 channel={channel}
                 siblingChannels={siblingChannels}

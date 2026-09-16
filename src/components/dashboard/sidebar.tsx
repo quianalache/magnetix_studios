@@ -743,6 +743,26 @@ function SidebarContent({
                 {!collapsed && "Traffic & Signups"}
               </Link>
             )}
+            {/* Agency Community (2026-09-16) — Agency-owned communities,
+                distinct from any sub-account's own Community. Only added
+                because a real destination exists now; Communications/
+                Courses/Referrals stay omitted until they have one too. */}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/community"
+                title={collapsed ? "Community" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
+                  pathname.startsWith("/agency/community")
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <MessagesSquare className="h-4 w-4 shrink-0" />
+                {!collapsed && "Community"}
+              </Link>
+            )}
             {/* Hidden until the owner enables it under Agency → Settings —
                 the Agency Assistant ships OFF by default. */}
             {agencyRole === "owner" && agency.agencyAssistantEnabled && (

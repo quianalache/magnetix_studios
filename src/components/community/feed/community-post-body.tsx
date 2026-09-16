@@ -39,6 +39,7 @@ export function CommunityPostBody({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupSlug,
 }: {
   html: string;
@@ -51,6 +52,8 @@ export function CommunityPostBody({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupSlug?: string;
 }) {
   const router = useRouter();
@@ -66,10 +69,10 @@ export function CommunityPostBody({
   function handleClick(e: MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
     const channelEl = target.closest<HTMLElement>('[data-type="channelRef"]');
-    if (channelEl && saId && groupSlug) {
+    if (channelEl && (saId || agencyGroupId) && groupSlug) {
       const category = channelEl.getAttribute("data-id");
       if (category) {
-        router.push(`${communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}?c=${encodeURIComponent(category)}`);
+        router.push(`${communityHomeHref({ saId: saId ?? "", pretty, staffGroupId, agencyGroupId }, groupSlug)}?c=${encodeURIComponent(category)}`);
       }
       return;
     }

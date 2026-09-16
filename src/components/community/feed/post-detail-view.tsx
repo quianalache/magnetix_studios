@@ -71,6 +71,7 @@ export function PostDetailView({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   brand,
@@ -87,6 +88,8 @@ export function PostDetailView({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -113,7 +116,9 @@ export function PostDetailView({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [changingChannel, setChangingChannel] = useState(false);
   const [pinningToCourse, setPinningToCourse] = useState(false);
-  const base = `/api/community/${saId}/${groupId}`;
+  const base = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
 
   // Explicit "focus the comment composer" navigation signal — set only by
   // the feed's Comment action (router.push(`${href}#comment`), see
@@ -239,7 +244,7 @@ export function PostDetailView({
     const res = await fetch(`${base}/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Post deleted");
-      router.push(communityHomeHref({ saId, pretty, staffGroupId }, groupSlug));
+      router.push(communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId }, groupSlug));
     } else {
       toast.error("Couldn't delete");
     }
@@ -358,6 +363,7 @@ export function PostDetailView({
       {editing && (
         <PostComposer
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           brand={brand}
           communityName={communityName}
@@ -460,6 +466,7 @@ export function PostDetailView({
                 brand={accent || brand}
                 className="mt-1"
                 saId={saId}
+                agencyGroupId={agencyGroupId}
                 pretty={pretty}
                 staffGroupId={staffGroupId}
                 groupSlug={groupSlug}
@@ -552,6 +559,7 @@ export function PostDetailView({
               {editingCommentId === c.id ? (
                 <CommentComposer
                   saId={saId}
+                  agencyGroupId={agencyGroupId}
                   groupId={groupId}
                   postId={post.id}
                   brand={brand}
@@ -571,6 +579,7 @@ export function PostDetailView({
               ) : (
                 <CommentBubble
                   saId={saId}
+                  agencyGroupId={agencyGroupId}
                   pretty={pretty}
                   staffGroupId={staffGroupId}
                   groupSlug={groupSlug}
@@ -591,6 +600,7 @@ export function PostDetailView({
                   <CommentComposer
                     key={r.id}
                     saId={saId}
+                    agencyGroupId={agencyGroupId}
                     groupId={groupId}
                     postId={post.id}
                     brand={brand}
@@ -611,6 +621,7 @@ export function PostDetailView({
                   <CommentBubble
                     key={r.id}
                     saId={saId}
+                    agencyGroupId={agencyGroupId}
                     pretty={pretty}
                     staffGroupId={staffGroupId}
                     groupSlug={groupSlug}
@@ -652,6 +663,7 @@ export function PostDetailView({
       ) : (
         <CommentComposer
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           postId={post.id}
           brand={brand}
@@ -674,6 +686,7 @@ function CommentBubble({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupSlug,
   comment,
   viewer,
@@ -692,6 +705,8 @@ function CommentBubble({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupSlug: string;
   comment: ClientComment;
   viewer: Viewer;
@@ -771,6 +786,7 @@ function CommentBubble({
           brand={accent || brand}
           className="mt-0.5"
           saId={saId}
+          agencyGroupId={agencyGroupId}
           pretty={pretty}
           staffGroupId={staffGroupId}
           groupSlug={groupSlug}

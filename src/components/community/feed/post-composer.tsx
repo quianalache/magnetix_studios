@@ -172,6 +172,7 @@ function existingGifAttachment(attachments: MediaAttachment[]) {
 export function PostComposer({
   saId,
   groupId,
+  agencyGroupId,
   brand,
   communityName,
   categories,
@@ -186,6 +187,11 @@ export function PostComposer({
 }: {
   saId: string;
   groupId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. When set,
+   *  posts save to the agency-scoped API tree, and photo/voice/file upload
+   *  + mentions are hidden (no upload pipeline or member roster built for
+   *  agency groups yet — see the Agency Community task's "remaining work"). */
+  agencyGroupId?: string;
   brand: string;
   /** Part 3's "for [Community Name]" header line. */
   communityName: string;
@@ -486,9 +492,12 @@ export function PostComposer({
       return;
     }
     setSaving(true);
+    const apiBase = agencyGroupId
+      ? `/api/agency/community/${agencyGroupId}`
+      : `/api/community/${saId}/${groupId}`;
     try {
       if (mode === "create") {
-        const res = await fetch(`/api/community/${saId}/${groupId}/posts`, {
+        const res = await fetch(`${apiBase}/posts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -543,7 +552,7 @@ export function PostComposer({
         });
       } else {
         if (!editingPost) return;
-        const res = await fetch(`/api/community/${saId}/${groupId}/posts/${editingPost.id}`, {
+        const res = await fetch(`${apiBase}/posts/${editingPost.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -835,12 +844,14 @@ export function PostComposer({
               tooltipped icon button (Part 5). No more "+" popover. */}
           <TooltipProvider>
             <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-[#f0f0f0] pt-3">
-              <ComposerActionIconButton
-                icon={ImagePlus}
-                label="Add photo"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
-              />
+              {!agencyGroupId && (
+                <ComposerActionIconButton
+                  icon={ImagePlus}
+                  label="Add photo"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
+                />
+              )}
               <AddVideoPopover
                 authorMemberId={viewer.memberId}
                 disabled={videoLinks.length >= 1}
@@ -858,25 +869,31 @@ export function PostComposer({
                   </Tooltip>
                 )}
               />
-              <ComposerActionIconButton
-                icon={Mic}
-                label="Record voice note"
-                onClick={() => setShowRecorder(true)}
-                disabled={!!voiceNote}
-              />
-              <ComposerActionIconButton
-                icon={FileUp}
-                label="Upload file"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
-              />
+              {!agencyGroupId && (
+                <ComposerActionIconButton
+                  icon={Mic}
+                  label="Record voice note"
+                  onClick={() => setShowRecorder(true)}
+                  disabled={!!voiceNote}
+                />
+              )}
+              {!agencyGroupId && (
+                <ComposerActionIconButton
+                  icon={FileUp}
+                  label="Upload file"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
+                />
+              )}
               <GiphyPickerButton label="Add GIF" disabled={!!gif || gifResolving} onSelect={setGif} />
-              <ComposerActionIconButton
-                icon={AtSign}
-                label="Mention someone"
-                onClick={insertMentionTrigger}
-                disabled={!editor}
-              />
+              {!agencyGroupId && (
+                <ComposerActionIconButton
+                  icon={AtSign}
+                  label="Mention someone"
+                  onClick={insertMentionTrigger}
+                  disabled={!editor}
+                />
+              )}
               <ComposerActionIconButton
                 icon={Hash}
                 label="Reference a channel"

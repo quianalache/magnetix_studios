@@ -102,6 +102,7 @@ export function CommentComposer({
   saId,
   groupId,
   postId,
+  agencyGroupId,
   brand,
   primaryAction,
   accent,
@@ -120,6 +121,8 @@ export function CommentComposer({
   saId: string;
   groupId: string;
   postId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   brand: string;
   /** Theme parity (2026-08-29 closeout) — the submit ("Comment"/"Reply"/
    *  "Save") button is a genuine CTA. Optional, falls back to `brand`. */
@@ -463,10 +466,13 @@ export function CommentComposer({
       return;
     }
     setSaving(true);
+    const apiBase = agencyGroupId
+      ? `/api/agency/community/${agencyGroupId}`
+      : `/api/community/${saId}/${groupId}`;
     try {
       if (mode === "create") {
         const res = await fetch(
-          `/api/community/${saId}/${groupId}/posts/${postId}/comments`,
+          `${apiBase}/posts/${postId}/comments`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -506,7 +512,7 @@ export function CommentComposer({
       } else {
         if (!editingComment) return;
         const res = await fetch(
-          `/api/community/${saId}/${groupId}/posts/${postId}/comments/${editingComment.id}`,
+          `${apiBase}/posts/${postId}/comments/${editingComment.id}`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },

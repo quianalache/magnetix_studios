@@ -19,6 +19,7 @@ import type { CommunityChannel, CommunitySection } from "@/types/community";
 export function ChannelMovePopover({
   saId,
   groupId,
+  agencyGroupId,
   channel,
   siblingChannels,
   sections,
@@ -26,6 +27,8 @@ export function ChannelMovePopover({
 }: {
   saId: string;
   groupId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   channel: CommunityChannel;
   /** Every OTHER channel currently in the same group (any section) — used
    *  to compute the next order value when moving up/down within the
@@ -36,11 +39,14 @@ export function ChannelMovePopover({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
 
   async function patch(body: Record<string, unknown>) {
     setBusy(true);
     try {
-      const res = await fetch(`/api/community/${saId}/${groupId}/channels/${channel.id}`, {
+      const res = await fetch(`${apiBase}/channels/${channel.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -65,7 +71,7 @@ export function ChannelMovePopover({
     // Swap order values — a simple, deterministic two-write reorder that
     // survives reload without renumbering the whole group.
     void patch({ order: swapWith.order });
-    void fetch(`/api/community/${saId}/${groupId}/channels/${swapWith.id}`, {
+    void fetch(`${apiBase}/channels/${swapWith.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ order: channel.order }),

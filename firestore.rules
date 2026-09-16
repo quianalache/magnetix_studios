@@ -196,6 +196,22 @@ service cloud.firestore {
       match /plans/{planId} {
         allow read, write: if false;
       }
+
+      // Agency Community (2026-09-16) — Agency-owned communities, the
+      // agency-scoped sibling of subAccounts/{id}/communityGroups (see that
+      // block below for the tenant version). Fully closed like `plans`
+      // above: no client reads at all, everything through the owner-only
+      // /api/agency/community/* routes via the Admin SDK. Unlike the tenant
+      // version, there's no "member" to grant a read to yet — agency
+      // communities have no login/session system of their own (see
+      // community-agency-service.ts's module comment) — so there's nothing
+      // narrower than "closed" to express here.
+      match /communityGroups/{groupId} {
+        allow read, write: if false;
+        match /{document=**} {
+          allow read, write: if false;
+        }
+      }
     }
 
     // ---------- sub-accounts ----------

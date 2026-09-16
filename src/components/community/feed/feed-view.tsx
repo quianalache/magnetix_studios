@@ -237,6 +237,7 @@ export function FeedView({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   brand,
@@ -250,6 +251,8 @@ export function FeedView({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -290,7 +293,9 @@ export function FeedView({
     setEditingPostId(null);
   }
 
-  const base = `/api/community/${saId}/${groupId}`;
+  const base = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
   const isAllPostsView = filter === "All";
   const filtered = isAllPostsView
     ? posts
@@ -543,7 +548,7 @@ export function FeedView({
     // permission concept.
     const canEdit = canModerate || p.authorMemberId === viewer.memberId;
     const detail = communityPostHref(
-      { saId, pretty, staffGroupId },
+      { saId, pretty, staffGroupId, agencyGroupId },
       groupSlug,
       p.id
     );
@@ -692,6 +697,7 @@ export function FeedView({
               clamp
               className={cn(p.title ? "mt-0.5" : "mt-1")}
               saId={saId}
+              agencyGroupId={agencyGroupId}
               pretty={pretty}
               staffGroupId={staffGroupId}
               groupSlug={groupSlug}
@@ -875,7 +881,7 @@ export function FeedView({
             What do you want to share today?
           </span>
         </button>
-        {viewer.role === "moderator" && (
+        {viewer.role === "moderator" && !agencyGroupId && (
           <button
             type="button"
             onClick={() => setGoLiveOpen(true)}
@@ -885,7 +891,10 @@ export function FeedView({
           </button>
         )}
       </div>
-      {goLiveOpen && viewer.role === "moderator" && (
+      {/* Live rooms aren't wired for agency-owned groups yet (see the
+          Agency Community task's "remaining work") — the button above is
+          hidden for them, so this never opens in agency scope. */}
+      {goLiveOpen && viewer.role === "moderator" && !agencyGroupId && (
         <QuickGoLiveSetup
           saId={saId}
           groupId={groupId}
@@ -912,6 +921,7 @@ export function FeedView({
       {composerOpen && (
         <PostComposer
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           brand={brand}
           communityName={communityName}
@@ -996,6 +1006,7 @@ export function FeedView({
         <PostComposer
           key={editingPost.id}
           saId={saId}
+          agencyGroupId={agencyGroupId}
           groupId={groupId}
           brand={brand}
           communityName={communityName}

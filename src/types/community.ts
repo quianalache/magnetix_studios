@@ -260,7 +260,10 @@ export type ChannelType = "feed" | "chat";
 
 export interface CommunityChannel {
   id: string;
-  subAccountId: string;
+  /** Absent for an agency-owned group's channel — see
+   *  {@link CommunityGroupOwnerScope}. Tenancy is inferred from the parent
+   *  group, never re-derived here. */
+  subAccountId?: string;
   groupId: string;
   /** The exact string every associated post's `category` field holds.
    *  Renaming a channel cascades a batch rename across those posts' own
@@ -297,7 +300,9 @@ export interface CommunityChannel {
 
 export interface CommunitySection {
   id: string;
-  subAccountId: string;
+  /** Absent for an agency-owned group's section — see
+   *  {@link CommunityGroupOwnerScope}. */
+  subAccountId?: string;
   groupId: string;
   name: string;
   icon: string;
@@ -313,9 +318,32 @@ export interface CommunitySection {
   updatedAt: Timestamp | FieldValue | null;
 }
 
+/**
+ * Ownership scope (2026-09-16, Agency Community). Absent/undefined ===
+ * "subAccount" — every group created before this field existed is a tenant
+ * group and must keep behaving exactly as it always did; only a group this
+ * new field explicitly marks `"agency"` lives under `agencies/{agencyId}/
+ * communityGroups/{groupId}` instead of `subAccounts/{subAccountId}/
+ * communityGroups/{groupId}` (see community-agency-service.ts). Never infer
+ * scope from whether `subAccountId` happens to be set — always read
+ * `ownerScope` explicitly, since a legacy doc's absence of the field is
+ * itself the "subAccount" signal.
+ */
+export type CommunityGroupOwnerScope = "subAccount" | "agency";
+
 export interface CommunityGroup {
   id: string;
-  subAccountId: string;
+  /**
+   * Present only for `ownerScope !== "agency"` (i.e. absent or
+   * `"subAccount"`). An agency-owned group has no sub-account at all — never
+   * populate this with an agency id or any other stand-in value; that's
+   * exactly the "fake subAccountId" this field's optionality exists to
+   * avoid. See {@link CommunityGroupOwnerScope}.
+   */
+  subAccountId?: string;
+  /** Owning scope — see {@link CommunityGroupOwnerScope}. Absent = legacy
+   *  tenant group (backward-compatible default, never migrated). */
+  ownerScope?: CommunityGroupOwnerScope;
   agencyId: string;
   createdByUid: string;
   name: string;
@@ -604,10 +632,23 @@ export interface CommunityReviewView extends CommunityReview {
  */
 export interface CommunityPost {
   id: string;
-  subAccountId: string;
+  /** Absent for an agency-owned group's post — see
+   *  {@link CommunityGroupOwnerScope}. */
+  subAccountId?: string;
   agencyId: string;
   groupId: string;
+  /** For an agency-owned group's post this is the author's Firebase Auth
+   *  uid (the agency owner), NOT a `Member` doc id — agency communities
+   *  don't have a Member/session identity yet (see the Agency Community
+   *  task's "remaining work" note on membership). Display name/avatar for
+   *  an agency post are denormalized directly onto the post at write time
+   *  instead of hydrated from a Member doc — see community-agency-service.ts. */
   authorMemberId: string;
+  /** Denormalized author display, agency-scoped posts only (see
+   *  `authorMemberId` above) — absent on every tenant post, which hydrates
+   *  its author from a real Member doc instead. */
+  authorDisplayName?: string;
+  authorAvatarUrl?: string | null;
   title: string;
   body: string;
   /** Phase C — image/voice attachments, rendered below the rich-text body,
@@ -752,6 +793,10 @@ export interface CommunityComment {
   groupId: string;
   postId: string;
   authorMemberId: string;
+  /** Denormalized author display, agency-scoped comments only — see
+   *  {@link CommunityPost.authorDisplayName}. Absent on every tenant comment. */
+  authorDisplayName?: string;
+  authorAvatarUrl?: string | null;
   /** Sanitized HTML (2026-08-19) — a much tighter allowlist than post
    *  bodies: no formatting marks/nodes at all, just paragraphs/line
    *  breaks, links, and @mention spans (never #channelRef — comments
