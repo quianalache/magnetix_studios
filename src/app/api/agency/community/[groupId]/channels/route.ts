@@ -2,23 +2,30 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
+import { resolveAgencyCommunityCaller } from "@/lib/server/agency-community-access";
 import {
   createAgencyChannelServerSide,
-  listAgencyChannelsAndSections,
+  listAgencyChannelsAndSectionsForViewer,
 } from "@/lib/server/community-agency-service";
 
 export const dynamic = "force-dynamic";
 
-/** Agency Community — list channels + sections. Owner-only. */
+/** Agency Community — list channels + sections, filtered for the viewer
+ *  (private channels/sections a non-moderator can't see are never even
+ *  sent to the client). Owner OR an active member. */
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ groupId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
 
-  const result = await listAgencyChannelsAndSections(caller.agencyId!, groupId);
+  const result = await listAgencyChannelsAndSectionsForViewer({
+    agencyId: caller.agencyId,
+    groupId,
+    isModerator: caller.kind === "owner",
+  });
   return NextResponse.json(result);
 }
 

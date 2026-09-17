@@ -10,7 +10,10 @@ import {
   listAgencyComments,
   isAgencyPostLikedByViewer,
   isAgencyCommentLikedByViewer,
+  viewerAgencyPollVotes,
 } from "@/lib/server/community-agency-service";
+import { buildFeedPoll } from "@/lib/server/community-feed-service";
+import { normalizePollDraft } from "@/lib/community/normalize-poll";
 import { renderCommunityPostHtml, renderCommunityCommentHtml } from "@/lib/community/post-html";
 import type { MediaAttachment } from "@/types/media-attachment";
 
@@ -31,14 +34,18 @@ export async function GET(
   const caller = await resolveAgencyCommunityCaller(request, groupId);
   if (caller instanceof NextResponse) return caller;
   const viewerId = caller.kind === "owner" ? caller.uid : caller.personId;
+  const isModerator = caller.kind === "owner";
 
-  const post = await getAgencyPost(caller.agencyId, groupId, postId);
+  const post = await getAgencyPost(caller.agencyId, groupId, postId, isModerator);
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [likedByViewer, comments, brandName] = await Promise.all([
+  const [likedByViewer, comments, brandName, pollVotes] = await Promise.all([
     isAgencyPostLikedByViewer(caller.agencyId, groupId, postId, viewerId),
     listAgencyComments(caller.agencyId, groupId, postId),
     resolveBrandName(),
+    post.poll
+      ? viewerAgencyPollVotes(caller.agencyId, groupId, [postId], viewerId)
+      : Promise.resolve(new Map<string, string[]>()),
   ]);
 
   const clientPost = {
@@ -63,6 +70,7 @@ export async function GET(
       level: 1,
     },
     likedByViewer,
+    poll: post.poll ? buildFeedPoll(post.poll, pollVotes.get(postId) ?? null, isModerator) : undefined,
   };
 
   const clientComments = await Promise.all(
@@ -125,6 +133,7 @@ export async function PATCH(
     commentsDisabled?: boolean;
     pinned?: boolean;
     pinTarget?: "allPosts" | "channel";
+    poll?: unknown;
     // The feed's "change channel" action re-submits the post's existing
     // fields wrapped in `edit` — same shape the tenant route accepts.
     edit?: {
@@ -133,6 +142,7 @@ export async function PATCH(
       category?: string | null;
       attachments?: MediaAttachment[];
       commentsDisabled?: boolean;
+      poll?: unknown;
     };
   };
   try {
@@ -149,6 +159,22 @@ export async function PATCH(
   }
 
   const patch = body.edit ?? body;
+  const pollRaw = patch.poll;
+  if (pollRaw !== undefined && caller.kind === "member") {
+    return NextResponse.json({ error: "Only the owner can manage a poll" }, { status: 403 });
+  }
+  let poll: ReturnType<typeof normalizePollDraft> | undefined;
+  if (pollRaw !== undefined) {
+    try {
+      poll = pollRaw === null ? null : normalizePollDraft(pollRaw);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Invalid poll" },
+        { status: 400 },
+      );
+    }
+  }
+
   try {
     const post = await updateAgencyPostServerSide(caller.agencyId, groupId, postId, {
       title: patch.title,
@@ -158,6 +184,7 @@ export async function PATCH(
       commentsDisabled: patch.commentsDisabled,
       pinned: body.pinned,
       pinTarget: body.pinTarget,
+      poll,
     });
     return NextResponse.json({ ok: true, post });
   } catch (err) {

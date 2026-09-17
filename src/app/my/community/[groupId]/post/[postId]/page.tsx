@@ -9,7 +9,9 @@ import {
   listAgencyComments,
   isAgencyPostLikedByViewer,
   isAgencyCommentLikedByViewer,
+  viewerAgencyPollVotes,
 } from "@/lib/server/community-agency-service";
+import { buildFeedPoll } from "@/lib/server/community-feed-service";
 import { agencyMemberDisplayName } from "@/lib/server/agency-community-access";
 import { renderCommunityPostHtml, renderCommunityCommentHtml } from "@/lib/community/post-html";
 import {
@@ -68,7 +70,7 @@ export default async function MyAgencyCommunityPostPage({
     await activateAgencyMembershipServerSide(agencyId, groupId, membership.id);
   }
 
-  const post = await getAgencyPost(agencyId, groupId, postId);
+  const post = await getAgencyPost(agencyId, groupId, postId, false);
   if (!post) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center text-sm text-muted-foreground">
@@ -77,10 +79,13 @@ export default async function MyAgencyCommunityPostPage({
     );
   }
 
-  const [comments, likedByViewer, brandName] = await Promise.all([
+  const [comments, likedByViewer, brandName, pollVotes] = await Promise.all([
     listAgencyComments(agencyId, groupId, postId),
     isAgencyPostLikedByViewer(agencyId, groupId, postId, person.id),
     resolveBrandName(),
+    post.poll
+      ? viewerAgencyPollVotes(agencyId, groupId, [postId], person.id)
+      : Promise.resolve(new Map<string, string[]>()),
   ]);
 
   const clientPost: ClientPost = {
@@ -105,6 +110,7 @@ export default async function MyAgencyCommunityPostPage({
       level: 1,
     },
     likedByViewer,
+    poll: post.poll ? buildFeedPoll(post.poll, pollVotes.get(postId) ?? null, false) : undefined,
   };
 
   const clientComments: ClientComment[] = await Promise.all(

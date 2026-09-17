@@ -56,7 +56,7 @@ import {
   deleteCommunityPostImage,
   uploadCommunityPostImage,
 } from "@/lib/community/upload-community-image";
-import { deleteVoiceNote } from "@/lib/community/upload-voice-note";
+import { deleteVoiceNote, uploadVoiceNote } from "@/lib/community/upload-voice-note";
 import { deleteCommunityPostFile, uploadCommunityPostFile } from "@/lib/community/upload-community-file";
 import { MAX_IMAGES_PER_POST } from "@/lib/community/community-image-mime";
 import { MAX_FILES_PER_POST, formatFileSize } from "@/lib/community/community-file-mime";
@@ -187,10 +187,11 @@ export function PostComposer({
 }: {
   saId: string;
   groupId: string;
-  /** Agency Community — see CommunityLinkBase in routes.ts. When set,
-   *  posts save to the agency-scoped API tree, and photo/voice/file upload
-   *  + mentions are hidden (no upload pipeline or member roster built for
-   *  agency groups yet — see the Agency Community task's "remaining work"). */
+  /** Agency Community — see CommunityLinkBase in routes.ts. When set, posts
+   *  save to the agency-scoped API tree (photo/voice/file upload and @
+   *  mentions all have agency-scoped equivalents — see
+   *  /api/agency/community/[groupId]/{post-images,post-files,voice-notes,
+   *  mention-members}). */
   agencyGroupId?: string;
   brand: string;
   /** Part 3's "for [Community Name]" header line. */
@@ -293,6 +294,9 @@ export function PostComposer({
   );
   const pollLocked = (editingPost?.poll?.voterCount ?? 0) > 0;
   const canManagePoll = viewer.role === "moderator";
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -303,9 +307,7 @@ export function PostComposer({
   const sessionUploadsRef = useRef<SessionUpload[]>([]);
 
   async function mentionFetchItems(query: string): Promise<MentionSuggestionItem[]> {
-    const res = await fetch(
-      `/api/community/${saId}/${groupId}/mention-members?q=${encodeURIComponent(query)}`,
-    );
+    const res = await fetch(`${apiBase}/mention-members?q=${encodeURIComponent(query)}`);
     const d = (await res.json().catch(() => ({}))) as {
       members?: { id: string; label: string; avatarUrl: string | null }[];
     };
@@ -347,7 +349,7 @@ export function PostComposer({
     setImageUploading(true);
     for (const file of toUpload) {
       try {
-        const img = await uploadCommunityPostImage({ saId, file });
+        const img = await uploadCommunityPostImage({ saId, agencyGroupId, file });
         setImages((prev) => [...prev, img]);
         if (mode === "edit") sessionUploadsRef.current.push({ storagePath: img.storagePath, kind: "image" });
       } catch (err) {
@@ -363,7 +365,7 @@ export function PostComposer({
       // Eager cleanup — the whole point of uploading immediately in
       // create mode is that nothing must be left orphaned if the member
       // changes their mind before ever submitting the post.
-      void deleteCommunityPostImage(saId, img.storagePath).catch(() => {});
+      void deleteCommunityPostImage(saId, img.storagePath, agencyGroupId).catch(() => {});
     }
     // edit mode: deliberately deferred — see the module comment.
   }
@@ -371,7 +373,7 @@ export function PostComposer({
   function removeVoiceNote() {
     if (!voiceNote) return;
     if (mode === "create") {
-      void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
+      void deleteVoiceNote(saId, voiceNote.storagePath, agencyGroupId).catch(() => {});
     }
     setVoiceNote(null);
   }
@@ -386,7 +388,7 @@ export function PostComposer({
     setFileUploading(true);
     for (const file of toUpload) {
       try {
-        const f = await uploadCommunityPostFile({ saId, file });
+        const f = await uploadCommunityPostFile({ saId, agencyGroupId, file });
         setFiles((prev) => [...prev, f]);
         if (mode === "edit") sessionUploadsRef.current.push({ storagePath: f.storagePath, kind: "file" });
       } catch (err) {
@@ -399,7 +401,7 @@ export function PostComposer({
   function removeFile(f: FileAttachment) {
     setFiles((prev) => prev.filter((x) => x.id !== f.id));
     if (mode === "create") {
-      void deleteCommunityPostFile(saId, f.storagePath).catch(() => {});
+      void deleteCommunityPostFile(saId, f.storagePath, agencyGroupId).catch(() => {});
     }
   }
 
@@ -414,18 +416,18 @@ export function PostComposer({
     // whatever's STILL in local state (anything already removed was
     // already deleted eagerly by the remove handlers above). GIF is
     // deliberately absent here — there's no Storage object behind one.
-    images.forEach((img) => void deleteCommunityPostImage(saId, img.storagePath).catch(() => {}));
-    if (voiceNote) void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
-    files.forEach((f) => void deleteCommunityPostFile(saId, f.storagePath).catch(() => {}));
+    images.forEach((img) => void deleteCommunityPostImage(saId, img.storagePath, agencyGroupId).catch(() => {}));
+    if (voiceNote) void deleteVoiceNote(saId, voiceNote.storagePath, agencyGroupId).catch(() => {});
+    files.forEach((f) => void deleteCommunityPostFile(saId, f.storagePath, agencyGroupId).catch(() => {}));
   }
 
   async function cleanupSessionUploads(keepStoragePaths: Set<string>) {
     const orphaned = sessionUploadsRef.current.filter((u) => !keepStoragePaths.has(u.storagePath));
     await Promise.allSettled(
       orphaned.map((u) => {
-        if (u.kind === "image") return deleteCommunityPostImage(saId, u.storagePath);
-        if (u.kind === "voice") return deleteVoiceNote(saId, u.storagePath);
-        return deleteCommunityPostFile(saId, u.storagePath);
+        if (u.kind === "image") return deleteCommunityPostImage(saId, u.storagePath, agencyGroupId);
+        if (u.kind === "voice") return deleteVoiceNote(saId, u.storagePath, agencyGroupId);
+        return deleteCommunityPostFile(saId, u.storagePath, agencyGroupId);
       }),
     );
   }
@@ -492,9 +494,6 @@ export function PostComposer({
       return;
     }
     setSaving(true);
-    const apiBase = agencyGroupId
-      ? `/api/agency/community/${agencyGroupId}`
-      : `/api/community/${saId}/${groupId}`;
     try {
       if (mode === "create") {
         const res = await fetch(`${apiBase}/posts`, {
@@ -803,6 +802,7 @@ export function PostComposer({
                 brand={brand}
                 confirmLabel="Attach"
                 confirmIcon={Check}
+                upload={(opts) => uploadVoiceNote({ ...opts, agencyGroupId })}
                 onUploaded={(vn) => {
                   setVoiceNote(vn);
                   setShowRecorder(false);
@@ -844,14 +844,12 @@ export function PostComposer({
               tooltipped icon button (Part 5). No more "+" popover. */}
           <TooltipProvider>
             <div className="mt-3 flex flex-wrap items-center gap-1 border-t border-[#f0f0f0] pt-3">
-              {!agencyGroupId && (
-                <ComposerActionIconButton
-                  icon={ImagePlus}
-                  label="Add photo"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
-                />
-              )}
+              <ComposerActionIconButton
+                icon={ImagePlus}
+                label="Add photo"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={images.length >= MAX_IMAGES_PER_POST || imageUploading}
+              />
               <AddVideoPopover
                 authorMemberId={viewer.memberId}
                 disabled={videoLinks.length >= 1}
@@ -869,31 +867,25 @@ export function PostComposer({
                   </Tooltip>
                 )}
               />
-              {!agencyGroupId && (
-                <ComposerActionIconButton
-                  icon={Mic}
-                  label="Record voice note"
-                  onClick={() => setShowRecorder(true)}
-                  disabled={!!voiceNote}
-                />
-              )}
-              {!agencyGroupId && (
-                <ComposerActionIconButton
-                  icon={FileUp}
-                  label="Upload file"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
-                />
-              )}
+              <ComposerActionIconButton
+                icon={Mic}
+                label="Record voice note"
+                onClick={() => setShowRecorder(true)}
+                disabled={!!voiceNote}
+              />
+              <ComposerActionIconButton
+                icon={FileUp}
+                label="Upload file"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={files.length >= MAX_FILES_PER_POST || fileUploading}
+              />
               <GiphyPickerButton label="Add GIF" disabled={!!gif || gifResolving} onSelect={setGif} />
-              {!agencyGroupId && (
-                <ComposerActionIconButton
-                  icon={AtSign}
-                  label="Mention someone"
-                  onClick={insertMentionTrigger}
-                  disabled={!editor}
-                />
-              )}
+              <ComposerActionIconButton
+                icon={AtSign}
+                label="Mention someone"
+                onClick={insertMentionTrigger}
+                disabled={!editor}
+              />
               <ComposerActionIconButton
                 icon={Hash}
                 label="Reference a channel"

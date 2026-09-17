@@ -13,6 +13,7 @@ import type { VoiceNote } from "@/types/media-attachment";
  */
 export async function uploadVoiceNote(opts: {
   saId: string;
+  agencyGroupId?: string;
   blob: Blob;
   mimeType: string;
   durationMs: number;
@@ -22,10 +23,10 @@ export async function uploadVoiceNote(opts: {
   form.append("file", opts.blob, `voice-note.${ext}`);
   form.append("durationMs", String(Math.round(opts.durationMs)));
 
-  const res = await fetch(`/api/community/${opts.saId}/voice-notes`, {
-    method: "POST",
-    body: form,
-  });
+  const url = opts.agencyGroupId
+    ? `/api/agency/community/${opts.agencyGroupId}/voice-notes`
+    : `/api/community/${opts.saId}/voice-notes`;
+  const res = await fetch(url, { method: "POST", body: form });
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     voiceNote?: VoiceNote;
@@ -44,8 +45,15 @@ export async function uploadVoiceNote(opts: {
  * repeats the existing image-upload flows' mistake of never being able to
  * clean up an orphaned file.
  */
-export async function deleteVoiceNote(saId: string, storagePath: string): Promise<void> {
-  const res = await fetch(`/api/community/${saId}/voice-notes`, {
+export async function deleteVoiceNote(
+  saId: string,
+  storagePath: string,
+  agencyGroupId?: string,
+): Promise<void> {
+  const url = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/voice-notes`
+    : `/api/community/${saId}/voice-notes`;
+  const res = await fetch(url, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ storagePath }),

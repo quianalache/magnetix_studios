@@ -40,6 +40,7 @@ export function CommunityLeftNav({
   pretty = false,
   staffGroupId,
   agencyGroupId,
+  agencyMemberView = false,
   groupId,
   groupSlug,
   brand,
@@ -59,6 +60,8 @@ export function CommunityLeftNav({
    *  nav link and API call this component makes targets the agency-scoped
    *  route/API tree instead of the tenant one. */
   agencyGroupId?: string;
+  /** Real Agency Community member access — see CommunityLinkBase in routes.ts. */
+  agencyMemberView?: boolean;
   groupId: string;
   groupSlug: string;
   /** Selected/active state — All Posts, the active channel row. Same role
@@ -78,7 +81,7 @@ export function CommunityLeftNav({
   const searchParams = useSearchParams();
   const active = searchParams.get("c") ?? "All";
   const base = communityHomeHref(
-    { saId, pretty, staffGroupId, agencyGroupId },
+    { saId, pretty, staffGroupId, agencyGroupId, agencyMemberView },
     groupSlug,
   );
   const apiBase = agencyGroupId

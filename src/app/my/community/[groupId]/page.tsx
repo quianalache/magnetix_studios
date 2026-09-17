@@ -7,14 +7,18 @@ import {
   activateAgencyMembershipServerSide,
   listAgencyFeed,
   isAgencyPostLikedByViewer,
+  viewerAgencyPollVotes,
+  listAgencyChannelsAndSectionsForViewer,
 } from "@/lib/server/community-agency-service";
 import { agencyMemberDisplayName } from "@/lib/server/agency-community-access";
+import { buildFeedPoll } from "@/lib/server/community-feed-service";
 import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import {
   CommunityShell,
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
+import { CommunityLeftNav } from "@/components/community/community-left-nav";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 
 export const dynamic = "force-dynamic";
@@ -78,10 +82,13 @@ export default async function MyAgencyCommunityPage({
     await activateAgencyMembershipServerSide(agencyId, groupId, membership.id);
   }
 
-  const [posts, brandName] = await Promise.all([
-    listAgencyFeed(agencyId, groupId),
+  const [posts, brandName, { channels, sections }] = await Promise.all([
+    listAgencyFeed(agencyId, groupId, false),
     resolveBrandName(),
+    listAgencyChannelsAndSectionsForViewer({ agencyId, groupId, isModerator: false }),
   ]);
+  const pollPostIds = posts.filter((p) => p.poll).map((p) => p.id);
+  const pollVotes = await viewerAgencyPollVotes(agencyId, groupId, pollPostIds, person.id);
   const clientPosts: ClientPost[] = await Promise.all(
     posts.map(async (p) => ({
       id: p.id,
@@ -105,6 +112,7 @@ export default async function MyAgencyCommunityPage({
         level: 1,
       },
       likedByViewer: await isAgencyPostLikedByViewer(agencyId, groupId, p.id, person.id),
+      poll: p.poll ? buildFeedPoll(p.poll, pollVotes.get(p.id) ?? null, false) : undefined,
     })),
   );
 
@@ -128,19 +136,35 @@ export default async function MyAgencyCommunityPage({
       viewerIsModerator={false}
       embedded={false}
     >
-      <div className="mx-auto max-w-3xl">
-        <FeedView
-          saId=""
-          agencyGroupId={groupId}
-          agencyMemberView
-          groupId={group.id}
-          groupSlug={group.slug}
-          brand={brand}
-          communityName={group.name}
-          categories={group.categories}
-          viewer={{ ...viewer, role: "member" }}
-          initialPosts={clientPosts}
-        />
+      <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+        <div className="min-w-0">
+          <CommunityLeftNav
+            saId=""
+            agencyGroupId={groupId}
+            agencyMemberView
+            groupId={group.id}
+            groupSlug={group.slug}
+            brand={brand}
+            primaryAction={resolvedTheme.primaryAction}
+            viewer={{ memberId: viewer.memberId, role: "member" }}
+            initialChannels={channels}
+            initialSections={sections}
+          />
+        </div>
+        <div className="min-w-0">
+          <FeedView
+            saId=""
+            agencyGroupId={groupId}
+            agencyMemberView
+            groupId={group.id}
+            groupSlug={group.slug}
+            brand={brand}
+            communityName={group.name}
+            categories={group.categories}
+            viewer={{ ...viewer, role: "member" }}
+            initialPosts={clientPosts}
+          />
+        </div>
       </div>
     </CommunityShell>
   );

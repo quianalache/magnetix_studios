@@ -7,15 +7,16 @@ import type { FileAttachment } from "@/types/media-attachment";
  */
 export async function uploadCommunityPostFile(opts: {
   saId: string;
+  agencyGroupId?: string;
   file: File;
 }): Promise<FileAttachment> {
   const form = new FormData();
   form.append("file", opts.file);
 
-  const res = await fetch(`/api/community/${opts.saId}/community-files`, {
-    method: "POST",
-    body: form,
-  });
+  const url = opts.agencyGroupId
+    ? `/api/agency/community/${opts.agencyGroupId}/post-files`
+    : `/api/community/${opts.saId}/community-files`;
+  const res = await fetch(url, { method: "POST", body: form });
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     file?: FileAttachment;
@@ -28,8 +29,15 @@ export async function uploadCommunityPostFile(opts: {
 }
 
 /** Deletes the underlying Storage object for a file the caller owns. */
-export async function deleteCommunityPostFile(saId: string, storagePath: string): Promise<void> {
-  const res = await fetch(`/api/community/${saId}/community-files`, {
+export async function deleteCommunityPostFile(
+  saId: string,
+  storagePath: string,
+  agencyGroupId?: string,
+): Promise<void> {
+  const url = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/post-files`
+    : `/api/community/${saId}/community-files`;
+  const res = await fetch(url, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ storagePath }),

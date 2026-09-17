@@ -353,7 +353,10 @@ export function PostDetailView({
       ? {
           onTogglePin: (target) => void togglePin(target),
           onChangeChannel: () => setChangingChannel(true),
-          onPinToCourse: () => setPinningToCourse(true),
+          // Native Classroom courses aren't wired for Agency scope yet
+          // (Agency Courses doesn't exist) — omitting the callback hides
+          // the menu item entirely rather than showing a dead control.
+          ...(agencyGroupId ? {} : { onPinToCourse: () => setPinningToCourse(true) }),
           onToggleComments: () => void toggleComments(),
         }
       : {}),

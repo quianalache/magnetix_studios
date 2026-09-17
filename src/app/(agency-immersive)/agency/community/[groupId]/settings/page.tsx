@@ -9,19 +9,38 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SettingsImageRow } from "@/components/community/settings/settings-image-row";
 import type { CommunityGroup } from "@/types/community";
 
+async function uploadAgencySettingsImage(
+  groupId: string,
+  file: File,
+  kind: "logo" | "cover" | "favicon",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`/api/agency/community/${groupId}/settings/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+  return data.url;
+}
+
 /**
- * Agency Community settings — deliberately a small, bespoke form (name /
- * about / published-status) rather than reusing the full tenant
- * `settings-workspace.tsx` (446 lines: General + image/logo/favicon
- * upload + Branding theme + Navigation + Points & Rewards + Skool Import
- * tabs). Image upload needs its own Storage upload pipeline this pass
- * doesn't build (see community-agency-service.ts's module comment), and
- * the other tabs don't apply to a fresh agency group at all — a bespoke
- * subset form for the fields that DO work is more honest than wiring the
- * full workspace and leaving most of it non-functional. See the Agency
- * Community task's "remaining work" for full settings parity.
+ * Agency Community settings — General + image/logo/favicon/branding-color
+ * (2026-09-17 parity pass). Reuses the SAME `SettingsImageRow` component
+ * and Admin-SDK upload pattern the tenant Settings → General page uses
+ * (see /api/agency/community/[groupId]/settings/upload) rather than a
+ * separate uploader. Deliberately still without the tenant's Branding
+ * theme presets / Navigation drag-reorder UI / Points & Rewards / Skool
+ * Import tabs — the underlying data model (`UpdateAgencyGroupPatch`) is
+ * already extended to accept navigation/theme/etc., but those workspaces'
+ * own UI shells assume a tenant Settings sub-nav (linking to pages that
+ * don't exist for agency groups) and weren't ported this pass — see the
+ * Agency Community Parity report's "remaining true dependencies."
  */
 export default function AgencyCommunitySettingsPage({
   params,
@@ -34,8 +53,13 @@ export default function AgencyCommunitySettingsPage({
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
   const [name, setName] = useState("");
+  const [tagline, setTagline] = useState("");
   const [about, setAbout] = useState("");
   const [published, setPublished] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [brandColor, setBrandColor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -46,8 +70,13 @@ export default function AgencyCommunitySettingsPage({
         if (!d.group) return;
         setGroup(d.group);
         setName(d.group.name);
+        setTagline(d.group.tagline ?? "");
         setAbout(d.group.about);
         setPublished(d.group.status === "published");
+        setLogoUrl(d.group.logoUrl ?? null);
+        setFaviconUrl(d.group.faviconUrl ?? null);
+        setCoverUrl(d.group.coverUrl ?? null);
+        setBrandColor(d.group.brandColor ?? null);
       });
   }, [isOwner, groupId]);
 
@@ -63,8 +92,13 @@ export default function AgencyCommunitySettingsPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
+          tagline,
           about,
           status: published ? "published" : "draft",
+          logoUrl,
+          faviconUrl,
+          coverUrl,
+          brandColor,
         }),
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -116,6 +150,17 @@ export default function AgencyCommunitySettingsPage({
           />
         </div>
         <div className="space-y-1.5">
+          <Label htmlFor="group-tagline">Tagline</Label>
+          <Input
+            id="group-tagline"
+            value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            maxLength={100}
+            placeholder="Short one-line description"
+            disabled={saving}
+          />
+        </div>
+        <div className="space-y-1.5">
           <Label htmlFor="group-about">About</Label>
           <Textarea
             id="group-about"
@@ -124,6 +169,26 @@ export default function AgencyCommunitySettingsPage({
             rows={4}
             disabled={saving}
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="group-brand-color">Brand color</Label>
+          <div className="flex items-center gap-2">
+            <input
+              id="group-brand-color"
+              type="color"
+              value={brandColor || "#202124"}
+              onChange={(e) => setBrandColor(e.target.value)}
+              disabled={saving}
+              className="h-9 w-9 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
+            />
+            <Input
+              value={brandColor ?? ""}
+              onChange={(e) => setBrandColor(e.target.value || null)}
+              placeholder="#202124"
+              disabled={saving}
+              className="max-w-[140px]"
+            />
+          </div>
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -134,25 +199,57 @@ export default function AgencyCommunitySettingsPage({
           />
           Published (visible/usable — unpublished stays a private draft)
         </label>
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              "Save"
-            )}
-          </Button>
-        </div>
+      </div>
+
+      <div className="divide-y rounded-2xl border bg-card p-5">
+        <SettingsImageRow
+          label="Community logo"
+          description="Shown in the header and About page."
+          guidance={["Recommended: 512×512px", "PNG or JPG, up to 5MB"]}
+          value={logoUrl}
+          onChange={setLogoUrl}
+          onUpload={(file) => uploadAgencySettingsImage(groupId, file, "logo")}
+          shape="square"
+        />
+        <SettingsImageRow
+          label="Favicon"
+          description="Browser-tab icon."
+          guidance={["PNG or ICO, up to 5MB"]}
+          value={faviconUrl}
+          onChange={setFaviconUrl}
+          onUpload={(file) => uploadAgencySettingsImage(groupId, file, "favicon")}
+          shape="tiny"
+        />
+        <SettingsImageRow
+          label="Cover image"
+          description="Home banner and About page hero."
+          guidance={["Recommended: 1600×400px", "PNG or JPG, up to 5MB"]}
+          value={coverUrl}
+          onChange={setCoverUrl}
+          onUpload={(file) => uploadAgencySettingsImage(groupId, file, "cover")}
+          shape="wide"
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving || !name.trim()}>
+          {saving ? (
+            <>
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save"
+          )}
+        </Button>
       </div>
 
       <div className="rounded-2xl border border-dashed bg-card p-5 text-xs text-muted-foreground">
-        Logo/cover image, brand color, and full Branding presets aren&apos;t
-        wired for Agency communities yet — see the Agency Community task&apos;s
-        remaining-work notes. Channels and Sections are managed from the
-        community feed itself (the ⋯ menu next to Channels).
+        Full Branding theme presets, Navigation drag-reorder, and Points &amp;
+        Rewards settings aren&apos;t ported to Agency communities yet — see
+        the Agency Community Parity report. Channels and Sections are
+        managed from the community feed itself (the ⋯ menu next to
+        Channels).
       </div>
     </div>
   );

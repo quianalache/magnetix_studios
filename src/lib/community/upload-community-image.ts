@@ -24,9 +24,15 @@ function readImageDimensions(file: File): Promise<{ width: number; height: numbe
  * The shared Community post image upload path — member-session
  * authenticated on the server (see the route for why: members have no
  * Firebase Auth). Mirrors uploadVoiceNote's shape exactly.
+ *
+ * Agency Community (2026-09-17) — pass `agencyGroupId` to target the
+ * agency-scoped upload route/Storage path instead of the tenant one; same
+ * function, same UI, no separate uploader (see
+ * /api/agency/community/[groupId]/post-images).
  */
 export async function uploadCommunityPostImage(opts: {
   saId: string;
+  agencyGroupId?: string;
   file: File;
 }): Promise<ImageAttachment> {
   const dims = await readImageDimensions(opts.file);
@@ -37,10 +43,10 @@ export async function uploadCommunityPostImage(opts: {
     form.append("height", String(dims.height));
   }
 
-  const res = await fetch(`/api/community/${opts.saId}/community-images`, {
-    method: "POST",
-    body: form,
-  });
+  const url = opts.agencyGroupId
+    ? `/api/agency/community/${opts.agencyGroupId}/post-images`
+    : `/api/community/${opts.saId}/community-images`;
+  const res = await fetch(url, { method: "POST", body: form });
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     image?: ImageAttachment;
@@ -56,8 +62,15 @@ export async function uploadCommunityPostImage(opts: {
  *  (server re-verifies the storagePath belongs to the requesting
  *  member). Used both for draft-removal (before a post is ever created)
  *  and, indirectly via the server, for post-deletion cleanup. */
-export async function deleteCommunityPostImage(saId: string, storagePath: string): Promise<void> {
-  const res = await fetch(`/api/community/${saId}/community-images`, {
+export async function deleteCommunityPostImage(
+  saId: string,
+  storagePath: string,
+  agencyGroupId?: string,
+): Promise<void> {
+  const url = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/post-images`
+    : `/api/community/${saId}/community-images`;
+  const res = await fetch(url, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ storagePath }),

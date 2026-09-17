@@ -33,7 +33,7 @@ import {
   deleteCommunityPostImage,
   uploadCommunityPostImage,
 } from "@/lib/community/upload-community-image";
-import { deleteVoiceNote } from "@/lib/community/upload-voice-note";
+import { deleteVoiceNote, uploadVoiceNote } from "@/lib/community/upload-voice-note";
 import {
   deleteCommunityPostFile,
   uploadCommunityPostFile,
@@ -148,6 +148,9 @@ export function CommentComposer({
    *  of the mount. */
   autoFocus?: boolean;
 }) {
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
   const initialAttachments = editingComment?.attachments ?? [];
   const [open, setOpen] = useState(
     !collapsedByDefault || !!replyTarget || autoFocus
@@ -237,9 +240,7 @@ export function CommentComposer({
   });
 
   async function mentionFetchItems(query: string) {
-    const res = await fetch(
-      `/api/community/${saId}/${groupId}/mention-members?q=${encodeURIComponent(query)}`
-    );
+    const res = await fetch(`${apiBase}/mention-members?q=${encodeURIComponent(query)}`);
     const d = (await res.json().catch(() => ({}))) as {
       members?: { id: string; label: string; avatarUrl: string | null }[];
     };
@@ -312,7 +313,7 @@ export function CommentComposer({
     setImageUploading(true);
     for (const file of toUpload) {
       try {
-        const img = await uploadCommunityPostImage({ saId, file });
+        const img = await uploadCommunityPostImage({ saId, agencyGroupId, file });
         setImages((prev) => [...prev, img]);
         if (mode === "edit")
           sessionUploadsRef.current.push({
@@ -329,7 +330,7 @@ export function CommentComposer({
   function removeImage(img: ImageAttachment) {
     setImages((prev) => prev.filter((i) => i.id !== img.id));
     if (mode === "create") {
-      void deleteCommunityPostImage(saId, img.storagePath).catch(() => {});
+      void deleteCommunityPostImage(saId, img.storagePath, agencyGroupId).catch(() => {});
     }
     // edit mode: deferred — see the module comment / PostComposer's own.
   }
@@ -337,7 +338,7 @@ export function CommentComposer({
   function removeVoiceNote() {
     if (!voiceNote) return;
     if (mode === "create") {
-      void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
+      void deleteVoiceNote(saId, voiceNote.storagePath, agencyGroupId).catch(() => {});
     }
     setVoiceNote(null);
   }
@@ -354,7 +355,7 @@ export function CommentComposer({
     setFileUploading(true);
     for (const file of toUpload) {
       try {
-        const f = await uploadCommunityPostFile({ saId, file });
+        const f = await uploadCommunityPostFile({ saId, agencyGroupId, file });
         setFiles((prev) => [...prev, f]);
         if (mode === "edit")
           sessionUploadsRef.current.push({
@@ -371,19 +372,19 @@ export function CommentComposer({
   function removeFile(f: FileAttachment) {
     setFiles((prev) => prev.filter((x) => x.id !== f.id));
     if (mode === "create") {
-      void deleteCommunityPostFile(saId, f.storagePath).catch(() => {});
+      void deleteCommunityPostFile(saId, f.storagePath, agencyGroupId).catch(() => {});
     }
   }
 
   function cleanupDraftAttachments() {
     images.forEach(
       (img) =>
-        void deleteCommunityPostImage(saId, img.storagePath).catch(() => {})
+        void deleteCommunityPostImage(saId, img.storagePath, agencyGroupId).catch(() => {})
     );
     if (voiceNote)
-      void deleteVoiceNote(saId, voiceNote.storagePath).catch(() => {});
+      void deleteVoiceNote(saId, voiceNote.storagePath, agencyGroupId).catch(() => {});
     files.forEach(
-      (f) => void deleteCommunityPostFile(saId, f.storagePath).catch(() => {})
+      (f) => void deleteCommunityPostFile(saId, f.storagePath, agencyGroupId).catch(() => {})
     );
   }
 
@@ -394,9 +395,9 @@ export function CommentComposer({
     await Promise.allSettled(
       orphaned.map((u) => {
         if (u.kind === "image")
-          return deleteCommunityPostImage(saId, u.storagePath);
-        if (u.kind === "voice") return deleteVoiceNote(saId, u.storagePath);
-        return deleteCommunityPostFile(saId, u.storagePath);
+          return deleteCommunityPostImage(saId, u.storagePath, agencyGroupId);
+        if (u.kind === "voice") return deleteVoiceNote(saId, u.storagePath, agencyGroupId);
+        return deleteCommunityPostFile(saId, u.storagePath, agencyGroupId);
       })
     );
   }
@@ -466,9 +467,6 @@ export function CommentComposer({
       return;
     }
     setSaving(true);
-    const apiBase = agencyGroupId
-      ? `/api/agency/community/${agencyGroupId}`
-      : `/api/community/${saId}/${groupId}`;
     try {
       if (mode === "create") {
         const res = await fetch(
@@ -720,6 +718,7 @@ export function CommentComposer({
                 brand={brand}
                 confirmLabel="Attach"
                 confirmIcon={Check}
+                upload={(opts) => uploadVoiceNote({ ...opts, agencyGroupId })}
                 onUploaded={(vn) => {
                   setVoiceNote(vn);
                   setShowRecorder(false);

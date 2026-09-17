@@ -7,6 +7,7 @@ import { resolveBrandName } from "@/lib/landing/resolve-brand";
 import {
   getAgencyGroupById,
   updateAgencyGroupServerSide,
+  type UpdateAgencyGroupPatch,
 } from "@/lib/server/community-agency-service";
 
 export const dynamic = "force-dynamic";
@@ -37,14 +38,7 @@ export async function PATCH(
   if (caller instanceof NextResponse) return caller;
   const { groupId } = await ctx.params;
 
-  let body: {
-    name?: string;
-    about?: string;
-    status?: "draft" | "published";
-    logoUrl?: string | null;
-    coverUrl?: string | null;
-    brandColor?: string | null;
-  };
+  let body: UpdateAgencyGroupPatch;
   try {
     body = await request.json();
   } catch {

@@ -10,7 +10,12 @@ import {
   createAgencyPostServerSide,
   listAgencyFeed,
   isAgencyPostLikedByViewer,
+  viewerAgencyPollVotes,
+  getAgencyInaccessibleChannelNames,
+  getAgencyChannelByName,
 } from "@/lib/server/community-agency-service";
+import { buildFeedPoll } from "@/lib/server/community-feed-service";
+import { normalizePollDraft } from "@/lib/community/normalize-poll";
 import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import type { MediaAttachment } from "@/types/media-attachment";
 
@@ -31,9 +36,12 @@ export async function GET(
   const caller = await resolveAgencyCommunityCaller(request, groupId);
   if (caller instanceof NextResponse) return caller;
   const viewerId = caller.kind === "owner" ? caller.uid : caller.personId;
+  const isModerator = caller.kind === "owner";
 
-  const posts = await listAgencyFeed(caller.agencyId, groupId);
+  const posts = await listAgencyFeed(caller.agencyId, groupId, isModerator);
   const brandName = await resolveBrandName();
+  const pollPostIds = posts.filter((p) => p.poll).map((p) => p.id);
+  const votes = await viewerAgencyPollVotes(caller.agencyId, groupId, pollPostIds, viewerId);
   const clientPosts = await Promise.all(
     posts.map(async (p) => ({
       id: p.id,
@@ -62,6 +70,7 @@ export async function GET(
         p.id,
         viewerId,
       ),
+      poll: p.poll ? buildFeedPoll(p.poll, votes.get(p.id) ?? null, isModerator) : undefined,
     })),
   );
   return NextResponse.json({ posts: clientPosts });
@@ -86,15 +95,29 @@ export async function POST(
     category?: string | null;
     attachments?: MediaAttachment[];
     commentsDisabled?: boolean;
-    // Polls are intentionally accepted-and-ignored in v1 — see the Agency
-    // Community task's "remaining work" (create/display isn't wired,
-    // voting isn't either, so accepting the field would misrepresent a
-    // post as having a real poll it can't actually serve votes for).
+    poll?: unknown;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const isModerator = caller.kind === "owner";
+
+  // Polls — owner/moderator-only, enforced here regardless of whether the
+  // composer's Poll icon was correctly hidden for a member.
+  if (body.poll != null && !isModerator) {
+    return NextResponse.json({ error: "Only the owner can create a poll" }, { status: 403 });
+  }
+  let poll;
+  try {
+    poll = normalizePollDraft(body.poll);
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Invalid poll" },
+      { status: 400 },
+    );
   }
 
   const title = (body.title ?? "").trim();
@@ -103,11 +126,30 @@ export async function POST(
   }
   const text = (body.body ?? "").trim();
   const attachments = body.attachments ?? [];
-  if (!text && attachments.length === 0) {
+  if (!text && attachments.length === 0 && !poll) {
     return NextResponse.json(
-      { error: "Write something or attach media." },
+      { error: "Write something, attach media, or add a poll." },
       { status: 400 },
     );
+  }
+
+  // Channel enforcement (Read Only / Private) — server-side regardless of
+  // the composer's own client-side gating.
+  const category =
+    body.category && body.category.trim() ? body.category : null;
+  if (category && !isModerator) {
+    const inaccessible = await getAgencyInaccessibleChannelNames({
+      agencyId: caller.agencyId,
+      groupId,
+      isModerator: false,
+    });
+    if (inaccessible.has(category)) {
+      return NextResponse.json({ error: "You don't have access to this channel" }, { status: 403 });
+    }
+    const channel = await getAgencyChannelByName(caller.agencyId, groupId, category);
+    if (channel?.readOnly) {
+      return NextResponse.json({ error: "Only the owner can post in this channel" }, { status: 403 });
+    }
   }
 
   const post = await createAgencyPostServerSide({
@@ -123,9 +165,10 @@ export async function POST(
           },
     title,
     body: body.body ?? "",
-    category: body.category ?? null,
+    category,
     attachments,
     commentsDisabled: body.commentsDisabled,
+    poll,
   });
   return NextResponse.json({ ok: true, post });
 }

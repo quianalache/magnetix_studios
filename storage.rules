@@ -33,6 +33,23 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Agency Community group cover/logo/favicon images — the agency-scope
+    // sibling of the rule above, rooted at a literal "agency" segment
+    // (never a real subAccountId) so the two ownership scopes can never
+    // collide. Public read for the same reason (the About page renders
+    // publicly). The real write/delete path is Admin-SDK-only (the agency
+    // owner has no Firebase-Storage-writable client identity here, and a
+    // Community member is never a Firebase user at all — see
+    // /api/agency/community/[groupId]/settings/upload), which bypasses
+    // this rule regardless; kept for parity/defense-in-depth only.
+    match /community/agency/{agencyId}/{groupId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null;
+    }
+
     // Standalone Course cover/lesson images — same rules, independent path
     // (no groupId; standalone courses have no group). Also where the Skool
     // course-media migration's rehosted lesson PDFs live (2026-09-12,

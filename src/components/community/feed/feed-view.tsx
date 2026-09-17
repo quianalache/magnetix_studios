@@ -820,7 +820,11 @@ export function FeedView({
                 ? {
                     onTogglePin: (target) => void togglePin(p, target),
                     onChangeChannel: () => setChangingChannelPostId(p.id),
-                    onPinToCourse: () => setPinningToCoursePostId(p.id),
+                    // Native Classroom courses aren't wired for Agency scope
+                    // yet (Agency Courses doesn't exist) — omitting the
+                    // callback hides the menu item entirely rather than
+                    // showing a control that would error on click.
+                    ...(agencyGroupId ? {} : { onPinToCourse: () => setPinningToCoursePostId(p.id) }),
                     onToggleComments: () => void toggleComments(p),
                   }
                 : {}),

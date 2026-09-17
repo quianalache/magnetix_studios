@@ -1,12 +1,18 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import { resolveBrandName, resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
+import { buildFeedPoll } from "@/lib/server/community-feed-service";
+import { extractMentionedMemberIds } from "@/lib/server/notification-producers";
+import { createNotification } from "@/lib/server/notification-service";
+import { ownedAgencyAttachmentStoragePath } from "@/lib/community/attachment-provenance";
+import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
   CommunityGroup,
   CommunityChannel,
@@ -14,6 +20,14 @@ import type {
   CommunityPost,
   CommunityComment,
   ChannelType,
+  CommunityPoll,
+  FeedPoll,
+  CommunityTheme,
+  CommunityAboutMediaItem,
+  CommunityAboutBenefit,
+  ResourceLink,
+  CommunitySidebarCard,
+  NavItem,
 } from "@/types/community";
 import type { MediaAttachment } from "@/types/media-attachment";
 
@@ -245,13 +259,38 @@ export async function getAgencyGroupById(
   return { id: snap.id, ...snap.data() } as CommunityGroup;
 }
 
+/**
+ * Settings/branding parity (2026-09-17) — every field the tenant Community
+ * Settings surface (General/Branding/Navigation) already lets an owner
+ * configure, now also patchable for an agency-owned group. Deliberately
+ * excludes `access`/`priceCents`/`currency`/`joinPolicy`/`pointsEnabled`:
+ * paid access needs Agency Billing/entitlements (doesn't exist — see the
+ * Agency Community Parity task's "remaining true dependencies"), and
+ * self-serve join/points have no agency-scoped flow to back them yet
+ * (membership is owner-invite-only; there's no points ledger for agency
+ * groups). Adding those later is additive, not a breaking change to this
+ * type.
+ */
 export interface UpdateAgencyGroupPatch {
   name?: string;
   about?: string;
+  aboutHtml?: string;
+  tagline?: string;
   status?: "draft" | "published";
   logoUrl?: string | null;
+  faviconUrl?: string | null;
   coverUrl?: string | null;
+  cardImageUrl?: string | null;
+  showBanner?: boolean;
   brandColor?: string | null;
+  theme?: CommunityTheme;
+  aboutMedia?: CommunityAboutMediaItem[];
+  aboutBenefits?: CommunityAboutBenefit[];
+  showAboutBenefits?: boolean;
+  guidelinesHtml?: string;
+  links?: ResourceLink[];
+  sidebarCards?: CommunitySidebarCard[];
+  navigation?: NavItem[];
 }
 
 export async function updateAgencyGroupServerSide(opts: {
@@ -259,13 +298,34 @@ export async function updateAgencyGroupServerSide(opts: {
   groupId: string;
   patch: UpdateAgencyGroupPatch;
 }): Promise<CommunityGroup> {
+  const p = opts.patch;
   const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (opts.patch.name !== undefined) update.name = opts.patch.name.trim().slice(0, 80);
-  if (opts.patch.about !== undefined) update.about = opts.patch.about.trim().slice(0, ABOUT_MAX_CHARS);
-  if (opts.patch.status !== undefined) update.status = opts.patch.status;
-  if (opts.patch.logoUrl !== undefined) update.logoUrl = opts.patch.logoUrl;
-  if (opts.patch.coverUrl !== undefined) update.coverUrl = opts.patch.coverUrl;
-  if (opts.patch.brandColor !== undefined) update.brandColor = opts.patch.brandColor;
+  if (p.name !== undefined) update.name = p.name.trim().slice(0, 80);
+  if (p.about !== undefined) update.about = p.about.trim().slice(0, ABOUT_MAX_CHARS);
+  if (p.aboutHtml !== undefined) update.aboutHtml = p.aboutHtml.trim().slice(0, ABOUT_MAX_CHARS);
+  if (p.tagline !== undefined) update.tagline = p.tagline.trim().slice(0, 100);
+  if (p.status !== undefined) update.status = p.status;
+  if (p.logoUrl !== undefined) update.logoUrl = p.logoUrl;
+  if (p.faviconUrl !== undefined) update.faviconUrl = p.faviconUrl;
+  if (p.coverUrl !== undefined) update.coverUrl = p.coverUrl;
+  if (p.cardImageUrl !== undefined) update.cardImageUrl = p.cardImageUrl;
+  if (p.showBanner !== undefined) update.showBanner = p.showBanner;
+  if (p.brandColor !== undefined) update.brandColor = p.brandColor;
+  if (p.theme !== undefined) {
+    update.theme = p.theme;
+    // Same derivation the tenant Branding workspace performs on save — every
+    // existing surface that reads `brandColor` picks up the new primary for
+    // free (see CommunityGroup.brandColor's own doc comment).
+    if (p.theme.light?.primary) update.brandColor = p.theme.light.primary;
+  }
+  if (p.aboutMedia !== undefined) update.aboutMedia = p.aboutMedia;
+  if (p.aboutBenefits !== undefined) update.aboutBenefits = p.aboutBenefits;
+  if (p.showAboutBenefits !== undefined) update.showAboutBenefits = p.showAboutBenefits;
+  if (p.guidelinesHtml !== undefined) update.guidelinesHtml = p.guidelinesHtml.trim().slice(0, 2000);
+  if (p.links !== undefined) update.links = p.links;
+  if (p.sidebarCards !== undefined) update.sidebarCards = p.sidebarCards;
+  if (p.navigation !== undefined) update.navigation = normalizeNavigation(p.navigation);
+
   await groupDoc(opts.agencyId, opts.groupId).update(update);
   const updated = await getAgencyGroupById(opts.agencyId, opts.groupId);
   if (!updated) throw new Error("Group not found after update");
@@ -301,6 +361,69 @@ export async function listAgencyChannelsAndSections(
       .map((d) => ({ id: d.id, ...d.data() }) as CommunitySection)
       .sort((a, b) => a.order - b.order),
   };
+}
+
+/**
+ * The left rail's one read — sections + channels, already filtered for the
+ * viewer. Mirrors `listChannelsAndSectionsForViewer` in
+ * community-channels-service.ts (tenant): a non-moderator never sees a
+ * private Section's heading, never sees a Channel nested inside a private
+ * Section (regardless of that Channel's OWN `private` value), and never
+ * sees a Channel whose own `private` is true.
+ */
+export async function listAgencyChannelsAndSectionsForViewer(opts: {
+  agencyId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<{ channels: CommunityChannel[]; sections: CommunitySection[] }> {
+  const { channels, sections: allSections } = await listAgencyChannelsAndSections(
+    opts.agencyId,
+    opts.groupId,
+  );
+  if (opts.isModerator) return { channels, sections: allSections };
+
+  const privateSectionIds = new Set(allSections.filter((s) => s.private).map((s) => s.id));
+  const sections = allSections.filter((s) => !s.private);
+  const filteredChannels = channels.filter(
+    (c) => !c.private && !(c.sectionId && privateSectionIds.has(c.sectionId)),
+  );
+  return { channels: filteredChannels, sections };
+}
+
+/**
+ * Every channel NAME a non-moderator viewer must never see a post from —
+ * private channels, plus every channel nested in a private section. Mirrors
+ * `getInaccessibleChannelNames` (tenant) — used at the actual post-read
+ * layer (listAgencyFeed/getAgencyPost), not just to hide the left-rail link.
+ */
+export async function getAgencyInaccessibleChannelNames(opts: {
+  agencyId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<Set<string>> {
+  if (opts.isModerator) return new Set();
+  const [{ channels: visible }, { channels: all }] = await Promise.all([
+    listAgencyChannelsAndSectionsForViewer(opts),
+    listAgencyChannelsAndSections(opts.agencyId, opts.groupId),
+  ]);
+  const visibleNames = new Set(visible.map((c) => c.name));
+  const inaccessible = new Set<string>();
+  for (const c of all) {
+    if (!visibleNames.has(c.name)) inaccessible.add(c.name);
+  }
+  return inaccessible;
+}
+
+/** Single-channel lookup by name — the post create route's Read-Only/
+ *  Private enforcement point, mirrors `getChannelByName` (tenant). */
+export async function getAgencyChannelByName(
+  agencyId: string,
+  groupId: string,
+  name: string,
+): Promise<CommunityChannel | null> {
+  const snap = await channelsCol(agencyId, groupId).where("name", "==", name).limit(1).get();
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as CommunityChannel;
 }
 
 export async function createAgencyChannelServerSide(
@@ -503,6 +626,10 @@ export interface CreateAgencyPostInput {
   category: string | null;
   attachments?: MediaAttachment[];
   commentsDisabled?: boolean;
+  /** Already permission-checked (moderator-only) AND shape-validated
+   *  (`normalizePollDraft`) by the API route — this layer just stores it,
+   *  same convention as `attachments`. */
+  poll?: CommunityPoll | null;
 }
 
 export async function createAgencyPostServerSide(
@@ -524,10 +651,25 @@ export async function createAgencyPostServerSide(
     pinnedToChannel: false,
     likeCount: 0,
     commentCount: 0,
+    poll: input.poll ?? undefined,
+    hasPoll: !!input.poll,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
   const ref = await postsCol(input.agencyId, input.groupId).add(doc);
+
+  const mentionedIds = extractMentionedMemberIds(doc.body);
+  if (mentionedIds.length > 0) {
+    await notifyAgencyCommunityMentions({
+      agencyId: input.agencyId,
+      groupId: input.groupId,
+      postId: ref.id,
+      contentObjectId: ref.id,
+      authorId: author.authorId,
+      mentionedIds,
+    }).catch((err) => console.error("[createAgencyPostServerSide] mention notification failed", err));
+  }
+
   return { id: ref.id, ...doc } as CommunityPost;
 }
 
@@ -542,6 +684,9 @@ export interface UpdateAgencyPostInput {
   /** Pin/unpin — `target` selects which pin flag flips. */
   pinned?: boolean;
   pinTarget?: "allPosts" | "channel";
+  /** `undefined` = leave as-is; `null` = remove the poll. Same convention
+   *  as the tenant `updatePostServerSide`. */
+  poll?: CommunityPoll | null;
 }
 
 export async function updateAgencyPostServerSide(
@@ -577,10 +722,41 @@ export async function updateAgencyPostServerSide(
   if (input.commentsDisabled !== undefined) {
     update.commentsDisabled = input.commentsDisabled ? true : FieldValue.delete();
   }
+  if (input.poll !== undefined) {
+    update.poll = input.poll ?? FieldValue.delete();
+    update.hasPoll = !!input.poll;
+  }
 
   await ref.update(update);
   const after = await ref.get();
   return { id: after.id, ...after.data() } as CommunityPost;
+}
+
+/** Best-effort Storage cleanup for a deleted post/comment's attachments —
+ *  mirrors `deleteAttachmentStorage` (tenant). A Storage hiccup here must
+ *  never block deleting the Firestore doc itself. */
+async function deleteAgencyAttachmentStorage(
+  attachments: MediaAttachment[] | undefined,
+  agencyId: string,
+): Promise<void> {
+  if (!attachments?.length) return;
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  if (!bucketName) return;
+  const bucket = getStorage().bucket(bucketName);
+  await Promise.allSettled(
+    attachments.map(async (a) => {
+      const storagePath = ownedAgencyAttachmentStoragePath(a, agencyId);
+      if (!storagePath) return;
+      try {
+        await bucket.file(storagePath).delete();
+      } catch (err) {
+        console.warn(
+          "[community-agency-service] attachment cleanup: object missing or already removed",
+          err,
+        );
+      }
+    }),
+  );
 }
 
 export async function deleteAgencyPostServerSide(
@@ -588,15 +764,43 @@ export async function deleteAgencyPostServerSide(
   groupId: string,
   postId: string,
 ): Promise<void> {
-  await getAdminDb().recursiveDelete(postsCol(agencyId, groupId).doc(postId));
+  const ref = postsCol(agencyId, groupId).doc(postId);
+  const snap = await ref.get();
+  const attachments = (snap.data() as CommunityPost | undefined)?.attachments;
+  await deleteAgencyAttachmentStorage(attachments, agencyId);
+
+  const commentsSnap = await ref.collection("comments").get();
+  const commentAttachments = commentsSnap.docs.flatMap(
+    (d) => (d.data() as { attachments?: MediaAttachment[] }).attachments ?? [],
+  );
+  await deleteAgencyAttachmentStorage(commentAttachments, agencyId);
+
+  await getAdminDb().recursiveDelete(ref);
 }
 
+/** `isModerator` defaults to true (owner-safe) since every pre-existing
+ *  caller was owner-only; the member routes pass `false` explicitly. */
 export async function listAgencyFeed(
   agencyId: string,
   groupId: string,
+  isModerator = true,
 ): Promise<CommunityPost[]> {
   const snap = await postsCol(agencyId, groupId).get();
-  const posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CommunityPost);
+  let posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CommunityPost);
+  // Channels (left rail) — a non-moderator viewer must never see a post
+  // from a private channel or one nested in a private section, at the
+  // actual read layer, not just by the left rail hiding the link. Mirrors
+  // listFeed's own enforcement (community-feed-service.ts).
+  if (!isModerator) {
+    const inaccessible = await getAgencyInaccessibleChannelNames({
+      agencyId,
+      groupId,
+      isModerator: false,
+    });
+    if (inaccessible.size > 0) {
+      posts = posts.filter((p) => !p.category || !inaccessible.has(p.category));
+    }
+  }
   posts.sort((a, b) => {
     const am = a.createdAt as { toMillis?: () => number } | null;
     const bm = b.createdAt as { toMillis?: () => number } | null;
@@ -609,10 +813,22 @@ export async function getAgencyPost(
   agencyId: string,
   groupId: string,
   postId: string,
+  isModerator = true,
 ): Promise<CommunityPost | null> {
   const snap = await postsCol(agencyId, groupId).doc(postId).get();
   if (!snap.exists) return null;
-  return { id: snap.id, ...snap.data() } as CommunityPost;
+  const post = { id: snap.id, ...snap.data() } as CommunityPost;
+  // Same "must not be able to navigate directly to it by URL" enforcement
+  // as listAgencyFeed above, applied to a single-post direct fetch.
+  if (!isModerator && post.category) {
+    const inaccessible = await getAgencyInaccessibleChannelNames({
+      agencyId,
+      groupId,
+      isModerator: false,
+    });
+    if (inaccessible.has(post.category)) return null;
+  }
+  return post;
 }
 
 export async function isAgencyPostLikedByViewer(
@@ -665,6 +881,114 @@ export async function toggleAgencyPostLikeServerSide(
   });
 }
 
+// -------------------------------------------------------------- Polls --
+
+function toMillisOrNull(v: unknown): number | null {
+  const m = v as { toMillis?: () => number } | null;
+  return typeof m?.toMillis === "function" ? m.toMillis() : null;
+}
+
+/** Batch-read this viewer's own vote (if any) for each post that has a
+ *  poll — mirrors `viewerPollVotes` (tenant), keyed by the caller's opaque
+ *  identity id (Firebase uid for the owner, personId for a member — same
+ *  identity `toggleAgencyPostLikeServerSide` already keys likes by). */
+export async function viewerAgencyPollVotes(
+  agencyId: string,
+  groupId: string,
+  postIdsWithPolls: string[],
+  viewerId: string,
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (postIdsWithPolls.length === 0) return result;
+  const db = getAdminDb();
+  const refs = postIdsWithPolls.map((id) =>
+    postsCol(agencyId, groupId).doc(id).collection("pollVotes").doc(viewerId),
+  );
+  const snaps = await db.getAll(...refs);
+  snaps.forEach((s, i) => {
+    if (s.exists) {
+      const optionIds = (s.data()?.optionIds as string[] | undefined) ?? [];
+      result.set(postIdsWithPolls[i], optionIds);
+    }
+  });
+  return result;
+}
+
+/** Cast or change a vote on a poll — one doc per voter at
+ *  `posts/{postId}/pollVotes/{viewerId}`, mirroring `votePollServerSide`
+ *  (tenant) exactly, keyed by the same opaque identity id likes use. */
+export async function voteAgencyPollServerSide(opts: {
+  agencyId: string;
+  groupId: string;
+  postId: string;
+  viewerId: string;
+  viewerDisplayName: string;
+  viewerIsModerator: boolean;
+  optionIds: string[];
+}): Promise<{ ok: true; poll: FeedPoll } | { ok: false; error: string }> {
+  const db = getAdminDb();
+  const postRef = postsCol(opts.agencyId, opts.groupId).doc(opts.postId);
+  const voteRef = postRef.collection("pollVotes").doc(opts.viewerId);
+
+  return db.runTransaction(async (tx) => {
+    const [postSnap, voteSnap] = await Promise.all([tx.get(postRef), tx.get(voteRef)]);
+    if (!postSnap.exists) return { ok: false, error: "Post not found" };
+    const poll = (postSnap.data() as CommunityPost).poll;
+    if (!poll) return { ok: false, error: "This post has no poll" };
+
+    const endsAtMs = toMillisOrNull(poll.endsAt);
+    if (endsAtMs !== null && endsAtMs <= Date.now()) {
+      return { ok: false, error: "This poll is closed" };
+    }
+
+    const validIds = new Set(poll.options.map((o) => o.id));
+    const requested = Array.from(new Set(opts.optionIds)).filter((id) => validIds.has(id));
+    if (requested.length === 0) {
+      return { ok: false, error: "Choose at least one option" };
+    }
+    if (!poll.allowMultiple && requested.length > 1) {
+      return { ok: false, error: "This poll only allows one answer" };
+    }
+
+    const previous: string[] = voteSnap.exists
+      ? ((voteSnap.data()?.optionIds as string[] | undefined) ?? [])
+      : [];
+    const optionCounts = { ...poll.optionCounts };
+    for (const id of previous) {
+      if (!requested.includes(id)) {
+        optionCounts[id] = Math.max(0, (optionCounts[id] ?? 0) - 1);
+      }
+    }
+    for (const id of requested) {
+      if (!previous.includes(id)) {
+        optionCounts[id] = (optionCounts[id] ?? 0) + 1;
+      }
+    }
+    const voterCount = poll.voterCount + (voteSnap.exists ? 0 : 1);
+    const now = FieldValue.serverTimestamp();
+
+    tx.set(voteRef, {
+      viewerId: opts.viewerId,
+      viewerDisplayName: opts.viewerDisplayName,
+      agencyId: opts.agencyId,
+      groupId: opts.groupId,
+      postId: opts.postId,
+      optionIds: requested,
+      votedAt: voteSnap.exists ? voteSnap.data()!.votedAt : now,
+      updatedAt: now,
+    });
+    tx.update(postRef, {
+      "poll.optionCounts": optionCounts,
+      "poll.voterCount": voterCount,
+    });
+
+    return {
+      ok: true,
+      poll: buildFeedPoll({ ...poll, optionCounts, voterCount }, requested, opts.viewerIsModerator),
+    };
+  });
+}
+
 // --------------------------------------------------------------- Comments --
 
 export interface CreateAgencyCommentInput {
@@ -709,6 +1033,41 @@ export async function createAgencyCommentServerSide(
   };
   const ref = await commentsCol(input.agencyId, input.groupId, input.postId).add(doc);
   await postRef.update({ commentCount: FieldValue.increment(1) });
+
+  // A reply notifies whoever this comment is actually replying TO: the
+  // parent comment's author for a nested reply, otherwise the post's own
+  // author — mirrors notifyCommunityReply's tenant call site exactly.
+  const [postSnapForNotify, parentCommentSnapForNotify] = await Promise.all([
+    parentId ? null : postRef.get(),
+    parentId ? commentsCol(input.agencyId, input.groupId, input.postId).doc(parentId).get() : null,
+  ]);
+  const recipientId = parentId
+    ? (parentCommentSnapForNotify?.data()?.authorMemberId as string | undefined)
+    : (postSnapForNotify?.data()?.authorMemberId as string | undefined);
+  if (recipientId) {
+    await notifyAgencyCommunityReply({
+      agencyId: input.agencyId,
+      groupId: input.groupId,
+      postId: input.postId,
+      commentId: ref.id,
+      commenterId: author.authorId,
+      recipientId,
+      isReplyToComment: !!parentId,
+    }).catch((err) => console.error("[createAgencyCommentServerSide] reply notification failed", err));
+  }
+
+  const mentionedIds = extractMentionedMemberIds(doc.body);
+  if (mentionedIds.length > 0) {
+    await notifyAgencyCommunityMentions({
+      agencyId: input.agencyId,
+      groupId: input.groupId,
+      postId: input.postId,
+      contentObjectId: ref.id,
+      authorId: author.authorId,
+      mentionedIds,
+    }).catch((err) => console.error("[createAgencyCommentServerSide] mention notification failed", err));
+  }
+
   return { id: ref.id, ...doc } as CommunityComment;
 }
 
@@ -760,7 +1119,12 @@ export async function deleteAgencyCommentServerSide(
   commentId: string,
 ): Promise<void> {
   const postRef = postsCol(agencyId, groupId).doc(postId);
-  await getAdminDb().recursiveDelete(commentsCol(agencyId, groupId, postId).doc(commentId));
+  const commentRef = commentsCol(agencyId, groupId, postId).doc(commentId);
+  const snap = await commentRef.get();
+  const attachments = (snap.data() as CommunityComment | undefined)?.attachments;
+  await deleteAgencyAttachmentStorage(attachments, agencyId);
+
+  await getAdminDb().recursiveDelete(commentRef);
   await postRef.update({ commentCount: FieldValue.increment(-1) });
 }
 
@@ -826,6 +1190,156 @@ export async function listAgencyGroupMembers(
 ): Promise<AgencyGroupMemberRoster[]> {
   const snap = await membersCol(agencyId, groupId).get();
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AgencyGroupMemberRoster);
+}
+
+/**
+ * Search this group's own active members for the @ mention autocomplete —
+ * mirrors `searchGroupMembersServerSide` (tenant), but simpler: the agency
+ * roster doc already IS the denormalized display record (no separate
+ * Member-doc join needed, unlike tenant's members+memberships join).
+ */
+export async function searchAgencyGroupMembersServerSide(opts: {
+  agencyId: string;
+  groupId: string;
+  query: string;
+  limit?: number;
+}): Promise<{ id: string; label: string; avatarUrl: string | null }[]> {
+  const snap = await membersCol(opts.agencyId, opts.groupId)
+    .where("status", "==", "active")
+    .limit(500)
+    .get();
+  const q = opts.query.trim().toLowerCase();
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as AgencyGroupMemberRoster)
+    .map((m) => ({
+      id: m.personId ?? m.id,
+      label: agencyMemberLabel(m),
+      avatarUrl: null,
+    }))
+    .filter((a) => !q || a.label.toLowerCase().includes(q))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(0, opts.limit ?? 8);
+}
+
+function agencyMemberLabel(m: AgencyGroupMemberRoster): string {
+  return m.displayName?.trim() || m.email.split("@")[0] || "Member";
+}
+
+// ------------------------------------------------------ Notifications --
+
+/**
+ * MyMagnetix Notifications — real in-app bell events for Agency Community
+ * replies/mentions, reusing the SAME shared, already Person-native
+ * notification model (`createNotification`, `notification-service.ts`) the
+ * tenant Community's `notifyCommunityReply`/`notifyCommunityMentions`
+ * already use, with `subAccountId: null` (this activity has no
+ * originating sub-account). Simpler than the tenant producers: the agency
+ * roster doc already carries `personId` directly, so no separate Member->
+ * Person lookup is needed. Only a real MEMBER (an active roster entry) has
+ * a MyMagnetix notification bell to receive this on — the owner
+ * authenticates via Firebase, not a Person, and has no notification
+ * surface here in v1 (their own Agency dashboard is a separate concern,
+ * out of this pass's scope — see the Agency Community Parity report).
+ * Email delivery is deliberately NOT wired (the email channel needs a
+ * verified per-sub-account sending domain that has no agency analog —
+ * see notification-email-service.ts's `subAccountId` guard); this creates
+ * the in-app notification only.
+ */
+async function resolveAgencyNotifyRecipientPersonId(
+  agencyId: string,
+  groupId: string,
+  candidateId: string,
+): Promise<string | null> {
+  const membership = await getAgencyMembershipForPerson(agencyId, groupId, candidateId);
+  if (!membership || membership.status === "removed" || !membership.personId) return null;
+  return membership.personId;
+}
+
+async function resolveAgencyActorName(
+  agencyId: string,
+  groupId: string,
+  actorId: string,
+): Promise<string> {
+  const membership = await getAgencyMembershipForPerson(agencyId, groupId, actorId);
+  if (membership) return agencyMemberLabel(membership);
+  return resolveBrandName();
+}
+
+async function notifyAgencyCommunityReply(opts: {
+  agencyId: string;
+  groupId: string;
+  postId: string;
+  commentId: string;
+  commenterId: string;
+  /** The post's author (always) or the parent comment's author (nested
+   *  reply) — whichever this reply is actually replying TO. */
+  recipientId: string;
+  isReplyToComment: boolean;
+}): Promise<void> {
+  if (opts.recipientId === opts.commenterId) return;
+  const personId = await resolveAgencyNotifyRecipientPersonId(opts.agencyId, opts.groupId, opts.recipientId);
+  if (!personId) return;
+
+  const [commenterName, group] = await Promise.all([
+    resolveAgencyActorName(opts.agencyId, opts.groupId, opts.commenterId),
+    getAgencyGroupById(opts.agencyId, opts.groupId),
+  ]);
+  const communityName = group?.name || "a Community";
+
+  await createNotification({
+    personId,
+    subAccountId: null,
+    eventType: "community.reply",
+    objectType: "comment",
+    objectId: opts.commentId,
+    actorMemberId: opts.commenterId,
+    title: opts.isReplyToComment
+      ? `${commenterName} replied to you in ${communityName}`
+      : `${commenterName} replied to your post in ${communityName}`,
+    destination: `/my/community/${opts.groupId}/post/${opts.postId}`,
+    meta: { communityName, actorName: commenterName },
+    sourceObjectId: opts.commentId,
+  });
+}
+
+async function notifyAgencyCommunityMentions(opts: {
+  agencyId: string;
+  groupId: string;
+  postId: string;
+  /** The post itself when the mention is in a post body, or the comment id
+   *  when it's in a comment/reply. */
+  contentObjectId: string;
+  authorId: string;
+  mentionedIds: string[];
+}): Promise<void> {
+  const targets = opts.mentionedIds.filter((id) => id !== opts.authorId);
+  if (targets.length === 0) return;
+
+  const [authorName, group] = await Promise.all([
+    resolveAgencyActorName(opts.agencyId, opts.groupId, opts.authorId),
+    getAgencyGroupById(opts.agencyId, opts.groupId),
+  ]);
+  const communityName = group?.name || "a Community";
+  const destination = `/my/community/${opts.groupId}/post/${opts.postId}`;
+
+  await Promise.all(
+    targets.map(async (candidateId) => {
+      const personId = await resolveAgencyNotifyRecipientPersonId(opts.agencyId, opts.groupId, candidateId);
+      if (!personId) return;
+      await createNotification({
+        personId,
+        subAccountId: null,
+        eventType: "community.mention",
+        objectType: "comment",
+        objectId: opts.contentObjectId,
+        actorMemberId: opts.authorId,
+        title: `${authorName} mentioned you in ${communityName}`,
+        destination,
+        meta: { communityName, actorName: authorName },
+        sourceObjectId: `${opts.contentObjectId}:${candidateId}`,
+      });
+    }),
+  );
 }
 
 export async function getAgencyMembershipForPerson(
