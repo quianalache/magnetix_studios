@@ -28,50 +28,119 @@ function appBase(request: Request): string {
   ).replace(/\/$/, "");
 }
 
+function safeErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown_error";
+  return error.message.replace(/[\r\n]+/g, " ").slice(0, 240);
+}
+
+function callbackLog(event: string, fields: Record<string, unknown> = {}) {
+  console.info("[stripe-connect/callback]", JSON.stringify({ event, ...fields }));
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const declined = url.searchParams.get("error");
+  const errorDescription = url.searchParams.get("error_description");
+
+  callbackLog("received", {
+    hasCode: Boolean(code),
+    hasState: Boolean(state),
+    error: declined ?? null,
+    hasErrorDescription: Boolean(errorDescription),
+  });
 
   if (!state) {
+    callbackLog("state_failed", { reason: "missing_state" });
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
+      new URL(
+        "/agency/sub-accounts?stripeconnect=error&reason=state_missing",
+        appBase(request)
+      )
     );
   }
   const verified = verifyStripeConnectState(state);
   if (!verified) {
+    callbackLog("state_failed", { reason: "invalid_state" });
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
+      new URL(
+        "/agency/sub-accounts?stripeconnect=error&reason=state_invalid",
+        appBase(request)
+      )
     );
   }
   const { subAccountId: id, uid: connectingUid, environment } = verified;
+  callbackLog("state_verified", {
+    environment,
+    subAccountId: id,
+    hasConnectingUid: Boolean(connectingUid),
+  });
 
   const access = await requireSubAccountAdmin(request, id);
-  if (access instanceof NextResponse) return access;
+  if (access instanceof NextResponse) {
+    callbackLog("auth_failed", { environment, subAccountId: id });
+    return NextResponse.redirect(
+      new URL(
+        "/agency/sub-accounts?stripeconnect=error&reason=auth_failed",
+        appBase(request)
+      )
+    );
+  }
 
   // Same session that started the flow must be the one completing it.
   if (access.uid !== connectingUid) {
+    callbackLog("auth_failed", { environment, subAccountId: id, reason: "uid_mismatch" });
     return NextResponse.redirect(
-      new URL("/agency/sub-accounts?stripeconnect=bad_state", appBase(request))
+      new URL(
+        "/agency/sub-accounts?stripeconnect=error&reason=uid_mismatch",
+        appBase(request)
+      )
     );
   }
 
   const settingsUrl = new URL(`/sa/${id}/dashboard/settings`, appBase(request));
-  const finish = (status: string) => {
+  const finish = (status: string, reason?: string) => {
     settingsUrl.searchParams.set("stripeconnect", status);
+    if (reason) settingsUrl.searchParams.set("reason", reason);
+    callbackLog("redirect", {
+      status,
+      reason: reason ?? null,
+      environment,
+      subAccountId: id,
+    });
     return NextResponse.redirect(settingsUrl);
   };
 
   if (declined || !code) {
-    return finish("cancelled");
+    return finish("cancelled", declined ? "stripe_declined" : "missing_code");
   }
   if (!stripeConnectAppConfigured(environment)) {
-    return finish("not_configured");
+    callbackLog("configuration_failed", { environment, subAccountId: id });
+    return finish("error", "client_not_configured");
   }
 
   try {
-    const linked = await exchangeStripeConnectCode(code, environment);
+    callbackLog("exchange_started", { environment, subAccountId: id });
+    let linked: Awaited<ReturnType<typeof exchangeStripeConnectCode>>;
+    try {
+      linked = await exchangeStripeConnectCode(code, environment);
+    } catch (err) {
+      callbackLog("exchange_failed", {
+        environment,
+        subAccountId: id,
+        errorType: err instanceof Error ? err.name : "unknown",
+        errorMessage: safeErrorMessage(err),
+      });
+      return finish("error", "exchange_failed");
+    }
+    callbackLog("exchange_succeeded", {
+      environment,
+      subAccountId: id,
+      accountId: linked.accountId,
+      chargesEnabled: linked.chargesEnabled,
+      payoutsEnabled: linked.payoutsEnabled,
+    });
     const connection: StripeConnectAccount = {
       accountId: linked.accountId,
       email: linked.email,
@@ -79,18 +148,39 @@ export async function GET(request: Request) {
       payoutsEnabled: linked.payoutsEnabled,
       connectedAt: FieldValue.serverTimestamp(),
     };
-    await getAdminDb()
-      .doc(`subAccounts/${id}`)
-      .set(
-        {
-          [`stripeConnect.${environment}`]: connection,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+    try {
+      await getAdminDb()
+        .doc(`subAccounts/${id}`)
+        .set(
+          {
+            [`stripeConnect.${environment}`]: connection,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+    } catch (err) {
+      callbackLog("firestore_write_failed", {
+        environment,
+        subAccountId: id,
+        accountId: linked.accountId,
+        errorType: err instanceof Error ? err.name : "unknown",
+        errorMessage: safeErrorMessage(err),
+      });
+      return finish("error", "firestore_write_failed");
+    }
+    callbackLog("firestore_write_succeeded", {
+      environment,
+      subAccountId: id,
+      accountId: linked.accountId,
+    });
     return finish("connected");
   } catch (err) {
-    console.error(`[stripe-connect/callback] connect failed sa=${id}`, err);
-    return finish("error");
+    callbackLog("failed", {
+      environment,
+      subAccountId: id,
+      errorType: err instanceof Error ? err.name : "unknown",
+      errorMessage: safeErrorMessage(err),
+    });
+    return finish("error", "exchange_or_write_failed");
   }
 }
