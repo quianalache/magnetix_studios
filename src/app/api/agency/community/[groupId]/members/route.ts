@@ -10,11 +10,10 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Agency Community — membership roster. Owner-only. NOTE: this is a
- * roster of eligible people for a future login/access system, not a
- * working authorization grant — see community-agency-service.ts's module
- * comment. Adding someone here does not currently let them sign in or
- * post; only the agency owner can do that today.
+ * Agency Community — membership. Owner-only (inviting/managing members is
+ * an owner action; the resulting membership itself is what grants the
+ * invited person real access — see community-agency-service.ts and
+ * agency-community-access.ts).
  */
 export async function GET(
   request: Request,
@@ -53,6 +52,7 @@ export async function POST(
       email: body.email,
       displayName: body.displayName,
       invitedByUid: caller.uid,
+      origin: new URL(request.url).origin,
     });
     return NextResponse.json({ ok: true, member });
   } catch (err) {

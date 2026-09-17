@@ -67,6 +67,7 @@ export function CommunityShell({
   rightRail,
   staffGroupId,
   agencyGroupId,
+  agencyMemberView = false,
   embedded = !!staffGroupId,
 }: {
   saId: string;
@@ -100,6 +101,14 @@ export function CommunityShell({
    */
   agencyGroupId?: string;
   /**
+   * Real Agency Community MEMBER access (2026-09-17) — when true (always
+   * alongside `agencyGroupId`), every internal tab/Settings link resolves
+   * to the `/my/community/[groupId]/...` member-facing route shape instead
+   * of the owner-admin `/agency/community/...` one. See
+   * `CommunityLinkBase.agencyMemberView` in routes.ts.
+   */
+  agencyMemberView?: boolean;
+  /**
    * Full-page CRM Community (2026-09-02): page-chrome only, decoupled from
    * `staffGroupId` so a staff route can keep staff-shaped links/controls
    * while still rendering full-page. Defaults to `!!staffGroupId` — every
@@ -121,7 +130,7 @@ export function CommunityShell({
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const themeStyle = communityThemeStyle(group.theme);
-  const linkBase = { saId, pretty, staffGroupId, agencyGroupId };
+  const linkBase = { saId, pretty, staffGroupId, agencyGroupId, agencyMemberView };
   const about = communityAboutHref(linkBase, group.slug);
   // Route builders per key never change based on the admin's custom label
   // (Part 16 of the Navigation task: "do not turn label customization into

@@ -50,6 +50,17 @@ export interface CommunityLinkBase {
    * this one is checked first wherever both branches exist.
    */
   agencyGroupId?: string;
+  /**
+   * Real Agency Community MEMBER access (2026-09-17) — when true alongside
+   * `agencyGroupId`, every builder below emits a `/my/community/[groupId]/...`
+   * member-facing path instead of the owner-admin `/agency/community/...`
+   * shape, per the explicit instruction that a real member's normal route
+   * must never be `/agency/community/...`. `agencyGroupId` itself stays set
+   * either way — it's still what makes CommunityShell/FeedView/etc. hide
+   * agency-scope-only affordances (DM, live rooms) regardless of viewer.
+   * Meaningless without `agencyGroupId` also set.
+   */
+  agencyMemberView?: boolean;
 }
 
 function staffBase(b: CommunityLinkBase): string {
@@ -57,7 +68,9 @@ function staffBase(b: CommunityLinkBase): string {
 }
 
 function agencyBase(b: CommunityLinkBase): string {
-  return `/agency/community/${b.agencyGroupId}`;
+  return b.agencyMemberView
+    ? `/my/community/${b.agencyGroupId}`
+    : `/agency/community/${b.agencyGroupId}`;
 }
 
 export function communityAboutHref(

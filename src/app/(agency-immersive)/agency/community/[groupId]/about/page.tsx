@@ -23,12 +23,16 @@ export default function AgencyCommunityAboutPage({
   const { agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const [group, setGroup] = useState<CommunityGroup | null>(null);
+  const [brandName, setBrandName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOwner) return;
     void fetch(`/api/agency/community/${groupId}`)
       .then((r) => r.json())
-      .then((d: { group?: CommunityGroup }) => setGroup(d.group ?? null));
+      .then((d: { group?: CommunityGroup; brandName?: string }) => {
+        setGroup(d.group ?? null);
+        setBrandName(d.brandName ?? null);
+      });
   }, [isOwner, groupId]);
 
   if (authLoading) return null;
@@ -53,6 +57,11 @@ export default function AgencyCommunityAboutPage({
 
       <div className="rounded-2xl border bg-card p-6">
         <h1 className="text-xl font-bold tracking-tight">{group.name}</h1>
+        {brandName && (
+          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Presented by {brandName}
+          </p>
+        )}
         {group.about ? (
           <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
             {group.about}

@@ -1,8 +1,12 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
-import { getAdminDb, getAdminAuth } from "@/lib/firebase/admin";
+import { getAdminDb } from "@/lib/firebase/admin";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
+import { resolveBrandName, resolveCustomBrand } from "@/lib/landing/resolve-brand";
+import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
+import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
+import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import type {
   CommunityGroup,
   CommunityChannel,
@@ -44,14 +48,21 @@ import type { MediaAttachment } from "@/types/media-attachment";
  * for an agency-owned group yet. See the Agency Community task's
  * "remaining work" section for the full list.
  *
- * Membership: agency communities have no Member/session identity system
- * (the existing one is hard-bound to a subAccountId — see
- * member-session.ts). The only real "user" of an agency community today is
- * the agency owner, authenticated the same way as every other Agency
- * route (`requireAgencyOwnerAny`) — no separate Member doc, no
- * GroupMembership, no session cookie. `members/{id}` below is a ROSTER of
- * eligible people for a FUTURE login/access system, not a working
- * authorization mechanism — do not treat its presence as granting access.
+ * Membership + real access (2026-09-17) — an agency community has no
+ * Member/session identity system of its own (the tenant one is hard-bound
+ * to a subAccountId — see member-session.ts), so real member access is
+ * built on top of the existing, genuinely tenant-agnostic MyMagnetix
+ * Person/`mm_session` identity (person-identity-service.ts,
+ * person-session.ts) instead of inventing a parallel one. `members/{id}`
+ * is now a real membership record (not just a roster): it carries a
+ * `personId` (resolved/created via `ensurePersonIdentity` at invite time,
+ * the same email-equality primitive every other identity link in this
+ * codebase uses) and a `pending -> active` status lifecycle. The security
+ * gate itself lives in `agency-community-access.ts`, which mirrors
+ * `/api/my/enter`'s pattern: verify `mm_session` -> independently
+ * re-derive this exact membership doc by `personId` -> only proceed if it
+ * exists and isn't removed. The agency OWNER keeps their existing
+ * `requireAgencyOwnerAny` access on top of this, unrelated and unaffected.
  */
 
 const ABOUT_MAX_CHARS = 1000;
@@ -100,21 +111,34 @@ async function uniqueSlug(agencyId: string, base: string): Promise<string> {
   return `${root}-${Date.now()}`;
 }
 
-/** Resolves the agency owner's display name/avatar once, for denormalizing
- *  onto posts/comments — agency communities have no Member doc to hydrate
- *  authors from (see module comment), so this is captured at write time. */
-async function resolveAuthorDisplay(
-  uid: string,
-): Promise<{ displayName: string; avatarUrl: string | null }> {
-  try {
-    const user = await getAdminAuth().getUser(uid);
+/**
+ * Who a post/comment is denormalized as coming from — resolved once at
+ * write time (agency communities have no Member doc to hydrate authors
+ * from later). Owner-authored content is branded as the AGENCY (Magnetix
+ * Studios), never the owner's personal Firebase identity or any
+ * sub-account's name — this is the fix for the "must not inherit branding
+ * from Quiana LaChé, or show the owner's personal name" requirement.
+ * Member-authored content shows the member's own roster displayName.
+ */
+export type AgencyPostAuthor =
+  | { kind: "owner"; uid: string }
+  | { kind: "member"; personId: string; displayName: string; avatarUrl?: string | null };
+
+async function resolveAgencyAuthor(
+  author: AgencyPostAuthor,
+): Promise<{ authorId: string; displayName: string; avatarUrl: string | null }> {
+  if (author.kind === "member") {
     return {
-      displayName: user.displayName || user.email || "Agency owner",
-      avatarUrl: user.photoURL ?? null,
+      authorId: author.personId,
+      displayName: author.displayName.trim() || "Member",
+      avatarUrl: author.avatarUrl ?? null,
     };
-  } catch {
-    return { displayName: "Agency owner", avatarUrl: null };
   }
+  // Agency-level branding is the ONLY source here — never a sub-account's
+  // name/logo (resolveCustomBrand never reads sub-account data; see its
+  // own doc comment in resolve-brand.ts).
+  const brand = await resolveCustomBrand();
+  return { authorId: author.uid, displayName: brand.name, avatarUrl: brand.logoUrl };
 }
 
 // ---------------------------------------------------------------- Groups --
@@ -473,7 +497,7 @@ export async function deleteAgencySectionServerSide(
 export interface CreateAgencyPostInput {
   agencyId: string;
   groupId: string;
-  authorUid: string;
+  author: AgencyPostAuthor;
   title: string;
   body: string;
   category: string | null;
@@ -484,11 +508,11 @@ export interface CreateAgencyPostInput {
 export async function createAgencyPostServerSide(
   input: CreateAgencyPostInput,
 ): Promise<CommunityPost> {
-  const author = await resolveAuthorDisplay(input.authorUid);
+  const author = await resolveAgencyAuthor(input.author);
   const doc = {
     agencyId: input.agencyId,
     groupId: input.groupId,
-    authorMemberId: input.authorUid,
+    authorMemberId: author.authorId,
     authorDisplayName: author.displayName,
     authorAvatarUrl: author.avatarUrl,
     title: input.title.trim(),
@@ -647,7 +671,7 @@ export interface CreateAgencyCommentInput {
   agencyId: string;
   groupId: string;
   postId: string;
-  authorUid: string;
+  author: AgencyPostAuthor;
   body: string;
   parentId?: string | null;
   attachments?: MediaAttachment[];
@@ -656,7 +680,7 @@ export interface CreateAgencyCommentInput {
 export async function createAgencyCommentServerSide(
   input: CreateAgencyCommentInput,
 ): Promise<CommunityComment> {
-  const author = await resolveAuthorDisplay(input.authorUid);
+  const author = await resolveAgencyAuthor(input.author);
   const postRef = postsCol(input.agencyId, input.groupId).doc(input.postId);
 
   // A reply always resolves to the SAME top-level parent — same rule the
@@ -673,7 +697,7 @@ export async function createAgencyCommentServerSide(
   const doc = {
     groupId: input.groupId,
     postId: input.postId,
-    authorMemberId: input.authorUid,
+    authorMemberId: author.authorId,
     authorDisplayName: author.displayName,
     authorAvatarUrl: author.avatarUrl,
     body: sanitizeCommunityCommentHtml(input.body.trim()),
@@ -764,14 +788,23 @@ export async function toggleAgencyCommentLikeServerSide(
   });
 }
 
-// ---------------------------------------------------- Membership roster --
+// -------------------------------------------------------- Membership --
 
 /**
- * A roster entry — NOT a working login/access grant (see module comment).
- * `source` is the seam section 9 of the Agency Community task asked for:
- * a future automatic-enrollment system (all customers, all affiliates)
- * writes the same shape with a different `source`, without this type
- * needing to change.
+ * A real membership record. `source` is the seam section 9 of the Agency
+ * Community task asked for: a future automatic-enrollment system (all
+ * customers, all affiliates) writes the same shape with a different
+ * `source`, without this type needing to change. `personId` is resolved/
+ * created at invite time via `ensurePersonIdentity` — the same email-
+ * equality identity primitive every other Person link in this codebase
+ * uses, so an invite to an email that already has a MyMagnetix/Member/
+ * staff identity links to that SAME person, never a duplicate.
+ * `status: "pending"` means invited (a Person + membership doc exist, an
+ * invite email was sent) but the person hasn't actually entered the
+ * community yet; it flips to `"active"` the first time they do (see
+ * `activateAgencyMembershipServerSide`, called by the access gate in
+ * agency-community-access.ts). `"removed"` is a revoke — soft-deleted, not
+ * erased, so history/audit and a possible future re-invite aren't lossy.
  */
 export interface AgencyGroupMemberRoster {
   id: string;
@@ -779,10 +812,12 @@ export interface AgencyGroupMemberRoster {
   groupId: string;
   email: string;
   displayName: string | null;
+  personId: string | null;
   source: "manual" | "customer" | "affiliate" | "plan_cohort";
-  status: "active" | "removed";
+  status: "pending" | "active" | "removed";
   invitedByUid: string;
   createdAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue | null;
+  activatedAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue | null;
 }
 
 export async function listAgencyGroupMembers(
@@ -793,12 +828,97 @@ export async function listAgencyGroupMembers(
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as AgencyGroupMemberRoster);
 }
 
+export async function getAgencyMembershipForPerson(
+  agencyId: string,
+  groupId: string,
+  personId: string,
+): Promise<AgencyGroupMemberRoster | null> {
+  const snap = await membersCol(agencyId, groupId)
+    .where("personId", "==", personId)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as AgencyGroupMemberRoster;
+}
+
+/** Flips a pending membership to active on the person's first real entry
+ *  (called by the access gate, not by any client-trusted call). No-op
+ *  shape mirrors the rest of this codebase's idempotent link/activate
+ *  helpers — safe to call even if already active. */
+export async function activateAgencyMembershipServerSide(
+  agencyId: string,
+  groupId: string,
+  memberId: string,
+): Promise<void> {
+  await membersCol(agencyId, groupId).doc(memberId).update({
+    status: "active",
+    activatedAt: FieldValue.serverTimestamp(),
+  });
+}
+
+/**
+ * Transactional-only invite email — never marketing — sent from the
+ * shared platform sender (no tenant `from` override, same convention as
+ * every other MyMagnetix email) and branded ONLY with agency-level
+ * branding (`resolveBrandName`, backed by `AgencyDoc.name` — never a
+ * sub-account's name). Reuses the EXISTING, already-secure magic-link
+ * verify endpoint (`/api/my/login/verify`) unmodified — this only mints
+ * the token and composes different copy around it; the token
+ * creates-or-resolves the same Person `ensurePersonIdentity` already
+ * would, and lands the visitor at this specific community on success.
+ * Best-effort: a failure here must not fail the invite/resend action
+ * itself (the membership doc already exists either way, and the owner can
+ * always resend).
+ */
+async function sendAgencyCommunityInviteEmail(opts: {
+  email: string;
+  groupId: string;
+  groupName: string;
+  origin: string;
+}): Promise<void> {
+  if (!emailIsConfigured()) return;
+  try {
+    const brandName = await resolveBrandName();
+    const token = signPersonMagicLinkToken(opts.email);
+    const next = `/my/community/${opts.groupId}`;
+    const link = `${opts.origin.replace(/\/$/, "")}/api/my/login/verify?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next)}`;
+    await sendEmail({
+      to: opts.email,
+      subject: `You're invited to ${opts.groupName}`,
+      text: `Hi,
+
+You've been invited to join ${opts.groupName} on ${brandName}.
+
+Click the link below to get started. The link expires in 15 minutes and can only be used once.
+
+${link}
+
+If you didn't expect this invite, you can safely ignore it.
+
+— ${brandName}
+`,
+      html: `<!DOCTYPE html>
+<html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:32px auto;padding:0 16px;color:#202124;line-height:1.6;">
+  <h1 style="font-size:20px;font-weight:600;margin:0 0 16px;">You're invited to ${opts.groupName}</h1>
+  <p style="margin:0 0 24px;color:#3a3a44;">You've been invited to join ${opts.groupName} on ${brandName}. Click the button below to get started. The link expires in 15 minutes.</p>
+  <p style="margin:0 0 24px;">
+    <a href="${link}" style="display:inline-block;background:#202124;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:500;">Join ${opts.groupName}</a>
+  </p>
+  <p style="margin:24px 0 0;font-size:12px;color:#909090;">If you didn't expect this invite, you can safely ignore it.</p>
+</body></html>`,
+    });
+  } catch (err) {
+    console.error("[community-agency-service] invite email failed", err);
+  }
+}
+
 export async function addAgencyGroupMemberServerSide(opts: {
   agencyId: string;
   groupId: string;
   email: string;
   displayName?: string | null;
   invitedByUid: string;
+  origin: string;
 }): Promise<AgencyGroupMemberRoster> {
   const email = opts.email.trim().toLowerCase();
   if (!email || !email.includes("@")) throw new Error("A valid email is required");
@@ -808,30 +928,77 @@ export async function addAgencyGroupMemberServerSide(opts: {
     .get();
   if (!existing.empty) throw new Error("Already on the roster");
 
+  // Resolve-or-create the SAME global Person a Member/staff login with
+  // this email would resolve to — never a new, agency-only identity. See
+  // this file's module comment.
+  const personId = await ensurePersonIdentity(email);
+
   const doc = {
     agencyId: opts.agencyId,
     groupId: opts.groupId,
     email,
     displayName: opts.displayName?.trim() || null,
+    personId,
     source: "manual" as const,
-    status: "active" as const,
+    status: "pending" as const,
     invitedByUid: opts.invitedByUid,
     createdAt: FieldValue.serverTimestamp(),
+    activatedAt: null,
   };
   const ref = await membersCol(opts.agencyId, opts.groupId).add(doc);
   await groupDoc(opts.agencyId, opts.groupId).update({
     memberCount: FieldValue.increment(1),
   });
+
+  const group = await getAgencyGroupById(opts.agencyId, opts.groupId);
+  await sendAgencyCommunityInviteEmail({
+    email,
+    groupId: opts.groupId,
+    groupName: group?.name ?? "the community",
+    origin: opts.origin,
+  });
+
   return { id: ref.id, ...doc } as AgencyGroupMemberRoster;
 }
 
+/** Owner-triggered resend for a still-pending (or already-active, e.g. the
+ *  person lost the original email) invite — same email, a fresh token. */
+export async function resendAgencyGroupInviteServerSide(
+  agencyId: string,
+  groupId: string,
+  memberId: string,
+  origin: string,
+): Promise<void> {
+  const snap = await membersCol(agencyId, groupId).doc(memberId).get();
+  if (!snap.exists) throw new Error("Not found");
+  const data = snap.data() as Omit<AgencyGroupMemberRoster, "id">;
+  if (data.status === "removed") {
+    throw new Error("This person's access has been revoked");
+  }
+  const group = await getAgencyGroupById(agencyId, groupId);
+  await sendAgencyCommunityInviteEmail({
+    email: data.email,
+    groupId,
+    groupName: group?.name ?? "the community",
+    origin,
+  });
+}
+
+/** Revoke access — soft-delete (status "removed"), never a hard delete, so
+ *  a membership's history/audit trail survives and a future re-invite
+ *  isn't ambiguous with "never invited." Access is enforced by status, not
+ *  document existence — see agency-community-access.ts. */
 export async function removeAgencyGroupMemberServerSide(
   agencyId: string,
   groupId: string,
   memberId: string,
 ): Promise<void> {
-  await membersCol(agencyId, groupId).doc(memberId).delete();
-  await groupDoc(agencyId, groupId).update({
-    memberCount: FieldValue.increment(-1),
-  });
+  const ref = membersCol(agencyId, groupId).doc(memberId);
+  const snap = await ref.get();
+  if (!snap.exists) return;
+  const wasActive = (snap.data()?.status as string) !== "removed";
+  await ref.update({ status: "removed", removedAt: FieldValue.serverTimestamp() });
+  if (wasActive) {
+    await groupDoc(agencyId, groupId).update({ memberCount: FieldValue.increment(-1) });
+  }
 }

@@ -6,7 +6,8 @@ import { removeAgencyGroupMemberServerSide } from "@/lib/server/community-agency
 
 export const dynamic = "force-dynamic";
 
-/** Agency Community — remove a roster entry. Owner-only. */
+/** Agency Community — revoke a member's access. Owner-only. Soft-delete
+ *  (status "removed") — see removeAgencyGroupMemberServerSide. */
 export async function DELETE(
   request: Request,
   ctx: { params: Promise<{ groupId: string; memberId: string }> },

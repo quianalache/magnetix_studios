@@ -26,6 +26,7 @@ export default function AgencyCommunityPostPage({
   const isOwner = agencyRole === "owner";
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
+  const [brandName, setBrandName] = useState<string | null>(null);
   const [post, setPost] = useState<ClientPost | null>(null);
   const [comments, setComments] = useState<ClientComment[]>([]);
   const [notFound, setNotFound] = useState(false);
@@ -37,7 +38,10 @@ export default function AgencyCommunityPostPage({
         if (!r.ok) throw new Error();
         return r.json();
       })
-      .then((d: { group: CommunityGroup }) => setGroup(d.group))
+      .then((d: { group: CommunityGroup; brandName?: string }) => {
+        setGroup(d.group);
+        setBrandName(d.brandName ?? null);
+      })
       .catch(() => setNotFound(true));
     void fetch(`/api/agency/community/${groupId}/posts/${postId}`)
       .then((r) => {
@@ -72,7 +76,7 @@ export default function AgencyCommunityPostPage({
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const viewer = {
     memberId: user?.uid ?? "",
-    displayName: user?.displayName || user?.email || "Agency owner",
+    displayName: brandName || "Agency owner",
     avatarUrl: user?.photoURL ?? null,
     level: 1,
   };

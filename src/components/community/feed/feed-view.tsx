@@ -238,6 +238,7 @@ export function FeedView({
   pretty = false,
   staffGroupId,
   agencyGroupId,
+  agencyMemberView = false,
   groupId,
   groupSlug,
   brand,
@@ -253,6 +254,8 @@ export function FeedView({
   staffGroupId?: string;
   /** Agency Community — see CommunityLinkBase in routes.ts. */
   agencyGroupId?: string;
+  /** Real Agency Community member access — see CommunityLinkBase in routes.ts. */
+  agencyMemberView?: boolean;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -293,6 +296,10 @@ export function FeedView({
     setEditingPostId(null);
   }
 
+  // Member and owner share the SAME `/api/agency/community/{groupId}`
+  // route tree — each route's own auth widened (see
+  // agency-community-access.ts) to accept either, rather than a second API
+  // tree. Only the NAV route base (below, via agencyMemberView) differs.
   const base = agencyGroupId
     ? `/api/agency/community/${agencyGroupId}`
     : `/api/community/${saId}/${groupId}`;
@@ -548,7 +555,7 @@ export function FeedView({
     // permission concept.
     const canEdit = canModerate || p.authorMemberId === viewer.memberId;
     const detail = communityPostHref(
-      { saId, pretty, staffGroupId, agencyGroupId },
+      { saId, pretty, staffGroupId, agencyGroupId, agencyMemberView },
       groupSlug,
       p.id
     );

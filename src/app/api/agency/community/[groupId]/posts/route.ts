@@ -1,7 +1,11 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
+import {
+  resolveAgencyCommunityCaller,
+  agencyMemberDisplayName,
+} from "@/lib/server/agency-community-access";
+import { resolveBrandName } from "@/lib/landing/resolve-brand";
 import {
   createAgencyPostServerSide,
   listAgencyFeed,
@@ -17,16 +21,19 @@ function toMillis(v: unknown): number | null {
   return typeof m?.toMillis === "function" ? m.toMillis() : null;
 }
 
-/** Agency Community — list the feed. Owner-only. */
+/** Agency Community — list the feed. Owner OR an active member (real
+ *  access — see agency-community-access.ts). */
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ groupId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
+  const viewerId = caller.kind === "owner" ? caller.uid : caller.personId;
 
-  const posts = await listAgencyFeed(caller.agencyId!, groupId);
+  const posts = await listAgencyFeed(caller.agencyId, groupId);
+  const brandName = await resolveBrandName();
   const clientPosts = await Promise.all(
     posts.map(async (p) => ({
       id: p.id,
@@ -45,30 +52,33 @@ export async function GET(
       createdAtMs: toMillis(p.createdAt),
       author: {
         memberId: p.authorMemberId,
-        displayName: p.authorDisplayName ?? "Agency owner",
+        displayName: p.authorDisplayName ?? brandName,
         avatarUrl: p.authorAvatarUrl ?? null,
         level: 1,
       },
       likedByViewer: await isAgencyPostLikedByViewer(
-        caller.agencyId!,
+        caller.agencyId,
         groupId,
         p.id,
-        caller.uid,
+        viewerId,
       ),
     })),
   );
   return NextResponse.json({ posts: clientPosts });
 }
 
-/** Agency Community — create a post. Owner-only (the only real "author" an
- *  agency community has today — see community-agency-service.ts). */
+/** Agency Community — create a post. Owner OR an active member of THIS
+ *  specific community (real access — see agency-community-access.ts).
+ *  Owner-authored posts are branded as the agency (Magnetix Studios), never
+ *  the owner's personal identity — see resolveAgencyAuthor in
+ *  community-agency-service.ts. */
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ groupId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
 
   let body: {
     title?: string;
@@ -101,9 +111,16 @@ export async function POST(
   }
 
   const post = await createAgencyPostServerSide({
-    agencyId: caller.agencyId!,
+    agencyId: caller.agencyId,
     groupId,
-    authorUid: caller.uid,
+    author:
+      caller.kind === "owner"
+        ? { kind: "owner", uid: caller.uid }
+        : {
+            kind: "member",
+            personId: caller.personId,
+            displayName: agencyMemberDisplayName(caller.membership),
+          },
     title,
     body: body.body ?? "",
     category: body.category ?? null,

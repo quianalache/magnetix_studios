@@ -1,20 +1,24 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
+import {
+  resolveAgencyCommunityCaller,
+  agencyMemberDisplayName,
+} from "@/lib/server/agency-community-access";
 import { createAgencyCommentServerSide } from "@/lib/server/community-agency-service";
 import type { MediaAttachment } from "@/types/media-attachment";
 
 export const dynamic = "force-dynamic";
 
-/** Agency Community — create a comment/reply. Owner-only. */
+/** Agency Community — create a comment/reply. Owner OR an active member of
+ *  THIS specific community (real access — see agency-community-access.ts). */
 export async function POST(
   request: Request,
   ctx: { params: Promise<{ groupId: string; postId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId, postId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
 
   let body: {
     body?: string;
@@ -34,10 +38,17 @@ export async function POST(
   }
 
   const comment = await createAgencyCommentServerSide({
-    agencyId: caller.agencyId!,
+    agencyId: caller.agencyId,
     groupId,
     postId,
-    authorUid: caller.uid,
+    author:
+      caller.kind === "owner"
+        ? { kind: "owner", uid: caller.uid }
+        : {
+            kind: "member",
+            personId: caller.personId,
+            displayName: agencyMemberDisplayName(caller.membership),
+          },
     body: body.body ?? "",
     parentId: body.parentId,
     attachments,

@@ -2,6 +2,8 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
+import { resolveAgencyCommunityCaller } from "@/lib/server/agency-community-access";
+import { resolveBrandName } from "@/lib/landing/resolve-brand";
 import {
   getAgencyGroupById,
   updateAgencyGroupServerSide,
@@ -9,18 +11,22 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** Agency Community — get/update one Agency-owned community. Owner-only. */
+/** Agency Community — get one Agency-owned community. Owner OR an active
+ *  member of it (real access — see agency-community-access.ts). Includes
+ *  the resolved agency brand name for member-facing "presented by" chrome
+ *  (About page) — always agency-level branding, never a sub-account's. */
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ groupId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
 
-  const group = await getAgencyGroupById(caller.agencyId!, groupId);
+  const group = await getAgencyGroupById(caller.agencyId, groupId);
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ group });
+  const brandName = await resolveBrandName();
+  return NextResponse.json({ group, brandName });
 }
 
 export async function PATCH(

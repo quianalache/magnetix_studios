@@ -72,6 +72,7 @@ export function PostDetailView({
   pretty = false,
   staffGroupId,
   agencyGroupId,
+  agencyMemberView = false,
   groupId,
   groupSlug,
   brand,
@@ -90,6 +91,8 @@ export function PostDetailView({
   staffGroupId?: string;
   /** Agency Community — see CommunityLinkBase in routes.ts. */
   agencyGroupId?: string;
+  /** Real Agency Community member access — see CommunityLinkBase in routes.ts. */
+  agencyMemberView?: boolean;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -244,7 +247,9 @@ export function PostDetailView({
     const res = await fetch(`${base}/posts/${post.id}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Post deleted");
-      router.push(communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId }, groupSlug));
+      router.push(
+        communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId, agencyMemberView }, groupSlug),
+      );
     } else {
       toast.error("Couldn't delete");
     }

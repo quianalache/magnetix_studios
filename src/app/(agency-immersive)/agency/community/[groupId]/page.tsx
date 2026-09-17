@@ -36,6 +36,7 @@ export default function AgencyCommunityFeedPage({
   const isOwner = agencyRole === "owner";
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
+  const [brandName, setBrandName] = useState<string | null>(null);
   const [channels, setChannels] = useState<CommunityChannel[]>([]);
   const [sections, setSections] = useState<CommunitySection[]>([]);
   const [posts, setPosts] = useState<ClientPost[] | null>(null);
@@ -48,7 +49,10 @@ export default function AgencyCommunityFeedPage({
         if (!r.ok) throw new Error();
         return r.json();
       })
-      .then((d: { group: CommunityGroup }) => setGroup(d.group))
+      .then((d: { group: CommunityGroup; brandName?: string }) => {
+        setGroup(d.group);
+        setBrandName(d.brandName ?? null);
+      })
       .catch(() => setNotFound(true));
     void fetch(`/api/agency/community/${groupId}/channels`)
       .then((r) => r.json())
@@ -84,9 +88,14 @@ export default function AgencyCommunityFeedPage({
 
   const resolvedTheme = resolveCommunityTheme(group);
   const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
+  // The owner's own posts are attributed as the agency brand ("Magnetix
+  // Studios"), never their personal Firebase identity — see
+  // resolveAgencyAuthor in community-agency-service.ts. This local viewer
+  // preview matches that so the composer never shows a name the saved
+  // post won't actually have.
   const viewer = {
     memberId: user?.uid ?? "",
-    displayName: user?.displayName || user?.email || "Agency owner",
+    displayName: brandName || "Agency owner",
     avatarUrl: user?.photoURL ?? null,
     level: 1,
   };

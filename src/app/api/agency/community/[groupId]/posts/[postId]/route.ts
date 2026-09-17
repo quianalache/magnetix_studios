@@ -1,7 +1,8 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
+import { resolveAgencyCommunityCaller } from "@/lib/server/agency-community-access";
+import { resolveBrandName } from "@/lib/landing/resolve-brand";
 import {
   getAgencyPost,
   updateAgencyPostServerSide,
@@ -20,21 +21,24 @@ function toMillis(v: unknown): number | null {
   return typeof m?.toMillis === "function" ? m.toMillis() : null;
 }
 
-/** Agency Community — get one post + its comments. Owner-only. */
+/** Agency Community — get one post + its comments. Owner OR an active
+ *  member (real access — see agency-community-access.ts). */
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ groupId: string; postId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId, postId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
+  const viewerId = caller.kind === "owner" ? caller.uid : caller.personId;
 
-  const post = await getAgencyPost(caller.agencyId!, groupId, postId);
+  const post = await getAgencyPost(caller.agencyId, groupId, postId);
   if (!post) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [likedByViewer, comments] = await Promise.all([
-    isAgencyPostLikedByViewer(caller.agencyId!, groupId, postId, caller.uid),
-    listAgencyComments(caller.agencyId!, groupId, postId),
+  const [likedByViewer, comments, brandName] = await Promise.all([
+    isAgencyPostLikedByViewer(caller.agencyId, groupId, postId, viewerId),
+    listAgencyComments(caller.agencyId, groupId, postId),
+    resolveBrandName(),
   ]);
 
   const clientPost = {
@@ -54,7 +58,7 @@ export async function GET(
     createdAtMs: toMillis(post.createdAt),
     author: {
       memberId: post.authorMemberId,
-      displayName: post.authorDisplayName ?? "Agency owner",
+      displayName: post.authorDisplayName ?? brandName,
       avatarUrl: post.authorAvatarUrl ?? null,
       level: 1,
     },
@@ -67,11 +71,11 @@ export async function GET(
       body: renderCommunityCommentHtml(c.body),
       likeCount: c.likeCount,
       likedByViewer: await isAgencyCommentLikedByViewer(
-        caller.agencyId!,
+        caller.agencyId,
         groupId,
         postId,
         c.id,
-        caller.uid,
+        viewerId,
       ),
       createdAtMs: toMillis(c.createdAt),
       parentId: c.parentId,
@@ -79,7 +83,7 @@ export async function GET(
       edited: !!c.editedAt,
       author: {
         memberId: c.authorMemberId,
-        displayName: c.authorDisplayName ?? "Agency owner",
+        displayName: c.authorDisplayName ?? brandName,
         avatarUrl: c.authorAvatarUrl ?? null,
         level: 1,
       },
@@ -89,14 +93,29 @@ export async function GET(
   return NextResponse.json({ post: clientPost, comments: clientComments });
 }
 
-/** Agency Community — update (edit/pin) or delete a post. Owner-only. */
+/**
+ * Agency Community — update (edit/pin) or delete a post. Owner can act on
+ * ANY post (unrestricted, same as before). A member may only edit/delete
+ * their OWN post (`authorMemberId === personId`) and may NOT pin — pinning
+ * is a moderation action, owner-only. This is a NEW ownership check: until
+ * now this route trusted every caller completely because only the owner
+ * could ever reach it.
+ */
 export async function PATCH(
   request: Request,
   ctx: { params: Promise<{ groupId: string; postId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId, postId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
+
+  if (caller.kind === "member") {
+    const existing = await getAgencyPost(caller.agencyId, groupId, postId);
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (existing.authorMemberId !== caller.personId) {
+      return NextResponse.json({ error: "You can only edit your own post" }, { status: 403 });
+    }
+  }
 
   let body: {
     title?: string;
@@ -122,9 +141,16 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // Pinning is a moderation action — never available to a member editing
+  // their own post, even though they're allowed past the ownership check
+  // above for everything else.
+  if (caller.kind === "member" && body.pinned !== undefined) {
+    return NextResponse.json({ error: "Only the owner can pin posts" }, { status: 403 });
+  }
+
   const patch = body.edit ?? body;
   try {
-    const post = await updateAgencyPostServerSide(caller.agencyId!, groupId, postId, {
+    const post = await updateAgencyPostServerSide(caller.agencyId, groupId, postId, {
       title: patch.title,
       body: patch.body,
       category: patch.category,
@@ -142,14 +168,24 @@ export async function PATCH(
   }
 }
 
+/** Delete a post. Owner can delete any post; a member may only delete
+ *  their own. */
 export async function DELETE(
   request: Request,
   ctx: { params: Promise<{ groupId: string; postId: string }> },
 ) {
-  const caller = await requireAgencyOwnerAny(request);
-  if (caller instanceof NextResponse) return caller;
   const { groupId, postId } = await ctx.params;
+  const caller = await resolveAgencyCommunityCaller(request, groupId);
+  if (caller instanceof NextResponse) return caller;
 
-  await deleteAgencyPostServerSide(caller.agencyId!, groupId, postId);
+  if (caller.kind === "member") {
+    const existing = await getAgencyPost(caller.agencyId, groupId, postId);
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (existing.authorMemberId !== caller.personId) {
+      return NextResponse.json({ error: "You can only delete your own post" }, { status: 403 });
+    }
+  }
+
+  await deleteAgencyPostServerSide(caller.agencyId, groupId, postId);
   return NextResponse.json({ ok: true });
 }
