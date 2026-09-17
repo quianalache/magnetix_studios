@@ -60,6 +60,7 @@ import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { cn } from "@/lib/utils";
+import { WorkspaceSwitcher } from "@/components/dashboard/workspace-switcher";
 import {
   Sheet,
   SheetContent,
@@ -300,9 +301,13 @@ function activeSubAccountFromPath(pathname: string): string | null {
 function SidebarContent({
   collapsed = false,
   onToggleCollapsed,
+  onSwitched,
+  showWorkspaceSwitcher = false,
 }: {
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  onSwitched?: () => void;
+  showWorkspaceSwitcher?: boolean;
 }) {
   const pathname = usePathname();
   const dueToday = useDueTodayCount();
@@ -648,6 +653,12 @@ function SidebarContent({
       )}
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        {showWorkspaceSwitcher && (
+          <WorkspaceSwitcher
+            className="mb-3 flex w-full justify-between"
+            onSwitched={onSwitched}
+          />
+        )}
         {/* Agency-level nav — owner-only, AND only while not inside a
             specific sub-account (`!showSubNav`). Agency mode and
             Sub-account mode are two distinct application shells that must
@@ -965,7 +976,10 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
-          <SidebarContent />
+          <SidebarContent
+            onSwitched={() => onOpenChange(false)}
+            showWorkspaceSwitcher
+          />
         </SheetContent>
       </Sheet>
     </>

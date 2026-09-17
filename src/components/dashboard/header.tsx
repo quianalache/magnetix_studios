@@ -2,20 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   Menu,
   LogOut,
   User,
   CreditCard,
   Search,
-  ChevronDown,
-  Check,
-  Building2,
   ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { useAgency } from "@/hooks/use-agency";
 import { CUSTOM_BRAND } from "@/config/landing";
 import { signOutUser } from "@/lib/firebase/auth";
 import { maskEmail } from "@/lib/format";
@@ -23,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { WorkspaceSwitcher } from "@/components/dashboard/workspace-switcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,10 +83,7 @@ function activeSubAccountFromPath(pathname: string): string | null {
 }
 
 export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
-  const { user, memberships, agencyRole } = useAuth();
-  const agency = useAgency();
-  const isAgencyOwner = agencyRole === "owner";
-  const router = useRouter();
+  const { user } = useAuth();
   const pathname = usePathname();
   const title = titleFor(pathname);
   const activeSubId = activeSubAccountFromPath(pathname);
@@ -101,15 +95,6 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
   // post-hydration re-render avoids the mismatch.
   const [authReady, setAuthReady] = useState(false);
   useEffect(() => setAuthReady(true), []);
-  // `memberships` (the userMemberships index) answers "which workspaces can
-  // THIS viewer open" — correct for a personal switcher, but NOT a
-  // canonical sub-account count/list (that's a direct `subAccounts` query;
-  // see agency-home-dashboard.tsx's "CANONICAL VISIBILITY RULE"). This
-  // index can go stale if a sub-account is deleted through a path that
-  // doesn't prune it — a real, found instance of that is documented there.
-  const activeMembership = memberships.find(
-    (m) => m.subAccountId === activeSubId,
-  );
   // Avatar dropdown links:
   //   - "Your account" → /me/settings (user-level: profile, password,
   //     appearance, sign out — global, same across every sub-account).
@@ -157,16 +142,6 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
     if (res.ok) window.location.href = "/my";
   }
 
-  function handleSwitchSubAccount(targetSubId: string) {
-    if (!activeSubId) {
-      router.push(`/sa/${targetSubId}/dashboard`);
-      return;
-    }
-    // Preserve the current section (contacts/pipeline/...) when switching.
-    const tail = pathname.replace(/^\/sa\/[^/]+/, "");
-    router.push(`/sa/${targetSubId}${tail || "/dashboard"}`);
-  }
-
   // Gated on `authReady` (2026-08-30 hydration-mismatch fix) — the SAME
   // reason as the sub-account switcher above: `user` is client-only and
   // starts `null` on the server, but Firebase Auth's persisted session can
@@ -200,89 +175,7 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
 
       <h1 className="text-lg font-semibold">{title}</h1>
 
-      {authReady && (isAgencyOwner || memberships.length > 0) && (activeSubId || memberships.length > 1 || isAgencyOwner) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden gap-2 md:inline-flex"
-              />
-            }
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            <span className="max-w-[160px] truncate">
-              {!activeSubId && isAgencyOwner
-                ? "Agency"
-                : activeMembership
-                  ? `${
-                      activeMembership.accountNumber !== undefined
-                        ? `#${activeMembership.accountNumber} `
-                        : ""
-                    }${activeMembership.name}`
-                  : "Pick workspace"}
-            </span>
-            <ChevronDown className="h-3 w-3" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64">
-            {/* Agency mode and Sub-account mode are two distinct application
-                shells — this entry switches the WHOLE shell, not just the
-                page, and only the agency owner ever sees it (2026-09-16
-                shell separation). */}
-            {isAgencyOwner && (
-              <>
-                <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Agency
-                </div>
-                <DropdownMenuItem
-                  onClick={() => router.push("/agency")}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <Building2 className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{agency.name}</span>
-                  </span>
-                  {!activeSubId && (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            <div className="px-2 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Workspaces
-            </div>
-            {memberships.length === 0 ? (
-              <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                No workspaces yet.
-              </p>
-            ) : (
-              memberships.map((m) => (
-                <DropdownMenuItem
-                  key={m.subAccountId}
-                  onClick={() => handleSwitchSubAccount(m.subAccountId)}
-                  className="flex items-center justify-between gap-2"
-                >
-                  <span className="flex min-w-0 items-baseline gap-2">
-                    {m.accountNumber !== undefined && (
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        #{m.accountNumber}
-                      </span>
-                    )}
-                    <span className="truncate">
-                      {m.name || m.subAccountId}
-                    </span>
-                  </span>
-                  {m.subAccountId === activeSubId && (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
-                  )}
-                </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <WorkspaceSwitcher className="hidden md:inline-flex" />
 
       <button
         type="button"
