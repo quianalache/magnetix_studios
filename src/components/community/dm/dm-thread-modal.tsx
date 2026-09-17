@@ -18,6 +18,7 @@ import type { DmMemberView, DmMessageView } from "@/types/community";
  */
 export function DmThreadModal({
   saId,
+  agencyScope,
   viewerId,
   other,
   brand,
@@ -26,6 +27,10 @@ export function DmThreadModal({
   onBack,
 }: {
   saId: string;
+  /** Agency Community — targets /api/agency/dm/... (Person-identified,
+   *  agency-wide) instead of /api/community/{saId}/dm/... `saId` is
+   *  ignored in this mode. */
+  agencyScope?: boolean;
   viewerId: string;
   other: DmMemberView;
   brand: string;
@@ -36,6 +41,7 @@ export function DmThreadModal({
   /** Optional: render a back arrow that returns to the Chats panel. */
   onBack?: () => void;
 }) {
+  const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
   const threadId = useMemo(
     () => [viewerId, other.memberId].sort().join("__"),
     [viewerId, other.memberId],
@@ -49,9 +55,7 @@ export function DmThreadModal({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/community/${saId}/dm/threads/${threadId}/messages`,
-        );
+        const res = await fetch(`${apiBase}/threads/${threadId}/messages`);
         if (!cancelled && res.ok) {
           const d = (await res.json()) as {
             messages?: DmMessageView[];
@@ -69,7 +73,7 @@ export function DmThreadModal({
     return () => {
       cancelled = true;
     };
-  }, [saId, threadId]);
+  }, [apiBase, threadId]);
 
   // Close on Escape.
   useEffect(() => {
@@ -114,6 +118,7 @@ export function DmThreadModal({
           </span>
           <ThreadActions
             saId={saId}
+            agencyScope={agencyScope}
             otherId={other.memberId}
             initialBlocked={initialBlocked}
             ready={loaded}
@@ -131,6 +136,7 @@ export function DmThreadModal({
         {loaded ? (
           <ThreadBody
             saId={saId}
+            agencyScope={agencyScope}
             threadId={threadId}
             viewerId={viewerId}
             other={other}
@@ -152,15 +158,18 @@ export function DmThreadModal({
 /** Block/un-block menu, hoisted so it has its own state independent of load. */
 function ThreadActions({
   saId,
+  agencyScope,
   otherId,
   initialBlocked,
   ready,
 }: {
   saId: string;
+  agencyScope?: boolean;
   otherId: string;
   initialBlocked: boolean;
   ready: boolean;
 }) {
+  const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
   const [blocked, setBlocked] = useState(initialBlocked);
   useEffect(() => {
     if (ready) setBlocked(initialBlocked);
@@ -169,7 +178,7 @@ function ThreadActions({
   async function toggleBlock() {
     const next = !blocked;
     setBlocked(next);
-    const res = await fetch(`/api/community/${saId}/dm/block`, {
+    const res = await fetch(`${apiBase}/block`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ otherId, blocked: next }),
@@ -197,6 +206,7 @@ function ThreadActions({
 
 function ThreadBody({
   saId,
+  agencyScope,
   threadId,
   viewerId,
   other,
@@ -206,6 +216,7 @@ function ThreadBody({
   initialBlocked,
 }: {
   saId: string;
+  agencyScope?: boolean;
   threadId: string;
   viewerId: string;
   other: DmMemberView;
@@ -214,7 +225,8 @@ function ThreadBody({
   initialMessages: DmMessageView[];
   initialBlocked: boolean;
 }) {
-  const { messages, addLocal } = useThreadMessages(saId, threadId, initialMessages);
+  const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
+  const { messages, addLocal } = useThreadMessages(saId, threadId, initialMessages, agencyScope);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -229,18 +241,18 @@ function ThreadBody({
     const last = messages[messages.length - 1];
     if (last && last.senderId !== viewerId && lastReadId.current !== last.id) {
       lastReadId.current = last.id;
-      void fetch(`/api/community/${saId}/dm/threads/${threadId}/read`, {
+      void fetch(`${apiBase}/threads/${threadId}/read`, {
         method: "POST",
       });
     }
-  }, [messages, saId, threadId, viewerId]);
+  }, [messages, apiBase, threadId, viewerId]);
 
   async function send() {
     const body = draft.trim();
     if (!body) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/community/${saId}/dm/send`, {
+      const res = await fetch(`${apiBase}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ otherId: other.memberId, body }),

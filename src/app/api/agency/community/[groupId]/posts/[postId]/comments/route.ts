@@ -6,6 +6,7 @@ import {
   agencyMemberDisplayName,
 } from "@/lib/server/agency-community-access";
 import { createAgencyCommentServerSide } from "@/lib/server/community-agency-service";
+import { awardAgencyPoints } from "@/lib/server/agency-community-points-service";
 import type { MediaAttachment } from "@/types/media-attachment";
 
 export const dynamic = "force-dynamic";
@@ -48,10 +49,23 @@ export async function POST(
             kind: "member",
             personId: caller.personId,
             displayName: agencyMemberDisplayName(caller.membership),
+            membershipId: caller.membership.id,
           },
     body: body.body ?? "",
     parentId: body.parentId,
     attachments,
   });
+
+  if (caller.kind === "member") {
+    await awardAgencyPoints({
+      agencyId: caller.agencyId,
+      groupId,
+      recipientMembershipId: caller.membership.id,
+      actorId: caller.personId,
+      action: comment.parentId ? "reply_comment" : "comment_post",
+      sourceEntityId: comment.id,
+    }).catch((err) => console.error("[agency comments] point award failed", err));
+  }
+
   return NextResponse.json({ ok: true, comment });
 }

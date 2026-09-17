@@ -93,3 +93,25 @@ export async function resolveAgencyCommunityCaller(
 export function agencyMemberDisplayName(membership: AgencyGroupMemberRoster): string {
   return membership.displayName?.trim() || membership.email.split("@")[0] || "Member";
 }
+
+/**
+ * Agency-WIDE Person auth for DMs (2026-09-17) — DM eligibility is never
+ * one specific community's concern (mirrors tenant's own `requireMemberApi
+ * (saId)`, which is sub-account-wide, not group-scoped): this only proves
+ * "a real, signed-in Person" — the actual "can this Person message that
+ * Person" security boundary is enforced per-operation by
+ * `canDm`/`shareAnAgencyGroup` in agency-community-dm-service.ts (which
+ * independently re-derives a real active roster membership for both
+ * sides), never by this gate alone. The agency owner does not participate
+ * in Agency Community DMs in this pass — they authenticate via Firebase,
+ * not a Person, and no fake Member/Person identity is invented for them.
+ */
+export async function requireAgencyPerson(): Promise<
+  { person: { id: string; primaryEmail: string }; agencyId: string } | NextResponse
+> {
+  const agencyId = await resolveFirstAgencyId();
+  if (!agencyId) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const person = await getCurrentPerson();
+  if (!person) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  return { person, agencyId };
+}

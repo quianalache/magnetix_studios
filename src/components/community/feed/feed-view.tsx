@@ -615,7 +615,11 @@ export function FeedView({
             {p.liveStatus === "live" && p.liveRoomId && (
               <Link
                 className="font-medium text-red-700 underline"
-                href={`/c/${saId}/${groupSlug}/live/${p.liveRoomId}`}
+                href={
+                  agencyGroupId
+                    ? `${agencyMemberView ? `/my/community/${agencyGroupId}` : `/agency/community/${agencyGroupId}`}/live-rooms/${p.liveRoomId}`
+                    : `/c/${saId}/${groupSlug}/live/${p.liveRoomId}`
+                }
               >
                 Join Live
               </Link>
@@ -715,9 +719,15 @@ export function FeedView({
                 the video WAS the post rather than something attached to
                 it). The small LIVE/"Live ended" status line above stays
                 where it is — a glanceable badge, not the media itself. */}
+            {/* Agency scope shows the "Join Live" banner above instead of
+                this inline embedded player — CommunityLiveStage hardcodes
+                tenant URLs with no override props (see the Agency
+                Community Parity report's remaining-work notes); joining
+                still works fully via the dedicated live-room page. */}
             {p.postType === "live" &&
               p.liveStatus === "live" &&
-              p.liveRoomId && (
+              p.liveRoomId &&
+              !agencyGroupId && (
                 <CommunityLiveStage
                   saId={saId}
                   groupId={groupId}
@@ -892,7 +902,7 @@ export function FeedView({
             What do you want to share today?
           </span>
         </button>
-        {viewer.role === "moderator" && !agencyGroupId && (
+        {viewer.role === "moderator" && (
           <button
             type="button"
             onClick={() => setGoLiveOpen(true)}
@@ -902,13 +912,11 @@ export function FeedView({
           </button>
         )}
       </div>
-      {/* Live rooms aren't wired for agency-owned groups yet (see the
-          Agency Community task's "remaining work") — the button above is
-          hidden for them, so this never opens in agency scope. */}
-      {goLiveOpen && viewer.role === "moderator" && !agencyGroupId && (
+      {goLiveOpen && viewer.role === "moderator" && (
         <QuickGoLiveSetup
           saId={saId}
           groupId={groupId}
+          agencyGroupId={agencyGroupId}
           categories={categories}
           filter={filter}
           onClose={() => setGoLiveOpen(false)}
@@ -920,11 +928,13 @@ export function FeedView({
             // through the community feed). QuickGoLiveSetup shows its own
             // "Starting your live…" state once it calls onCreated, so the
             // modal keeps covering the feed the whole way through instead.
-            const href = staffGroupId
-              ? `/sa/${saId}/community/${staffGroupId}/live/${roomId}`
-              : pretty
-                ? `/communities/${groupSlug}/live/${roomId}`
-                : `/c/${saId}/${groupSlug}/live/${roomId}`;
+            const href = agencyGroupId
+              ? `/agency/community/${agencyGroupId}/live-rooms/${roomId}`
+              : staffGroupId
+                ? `/sa/${saId}/community/${staffGroupId}/live/${roomId}`
+                : pretty
+                  ? `/communities/${groupSlug}/live/${roomId}`
+                  : `/c/${saId}/${groupSlug}/live/${roomId}`;
             window.location.assign(href);
           }}
         />

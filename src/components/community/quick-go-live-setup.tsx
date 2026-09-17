@@ -9,6 +9,7 @@ type Source = "meeting" | "streaming";
 export function QuickGoLiveSetup({
   saId,
   groupId,
+  agencyGroupId,
   categories,
   filter,
   onClose,
@@ -16,11 +17,20 @@ export function QuickGoLiveSetup({
 }: {
   saId: string;
   groupId: string;
+  /** Agency Community — targets /api/agency/community/[groupId]/live-rooms
+   *  instead of /api/community/{saId}/{groupId}/live-rooms. Agency live
+   *  rooms don't keep a companion feed post or notify members yet (no
+   *  recording/feed pipeline built for agency scope) — those two options
+   *  are hidden in this mode rather than silently doing nothing. */
+  agencyGroupId?: string;
   categories: string[];
   filter: string;
   onClose: () => void;
   onCreated: (roomId: string) => void;
 }) {
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
   const [source, setSource] = useState<Source>("meeting");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -93,10 +103,10 @@ export function QuickGoLiveSetup({
     const form = new FormData();
     form.append("file", file);
     form.append("kind", "live");
-    const response = await fetch(
-      `/api/community/${saId}/${groupId}/settings/upload`,
-      { method: "POST", body: form }
-    );
+    const response = await fetch(`${apiBase}/settings/upload`, {
+      method: "POST",
+      body: form,
+    });
     const data = (await response.json().catch(() => ({}))) as {
       url?: string;
       error?: string;
@@ -115,23 +125,20 @@ export function QuickGoLiveSetup({
     if (!description.trim()) return setError("Description is required.");
     setSaving(true);
     setError("");
-    const response = await fetch(
-      `/api/community/${saId}/${groupId}/live-rooms`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create",
-          title,
-          description,
-          channel: channel || null,
-          mode,
-          keepAsPost,
-          notifyMembers,
-          thumbnailUrl: thumbnailUrl || null,
-        }),
-      }
-    );
+    const response = await fetch(`${apiBase}/live-rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "create",
+        title,
+        description,
+        channel: channel || null,
+        mode,
+        keepAsPost,
+        notifyMembers,
+        thumbnailUrl: thumbnailUrl || null,
+      }),
+    });
     const data = (await response.json()) as {
       room?: { id: string };
       error?: string;
@@ -476,22 +483,29 @@ export function QuickGoLiveSetup({
                 Recommended: 1280 × 720
               </p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={keepAsPost}
-                onChange={(e) => setKeepAsPost(e.target.checked)}
-              />{" "}
-              Keep live as a post
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={notifyMembers}
-                onChange={(e) => setNotifyMembers(e.target.checked)}
-              />{" "}
-              Notify members
-            </label>
+            {/* Agency live rooms don't keep a companion feed post or send
+                notifications yet — omit rather than show a control that
+                silently does nothing. */}
+            {!agencyGroupId && (
+              <>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={keepAsPost}
+                    onChange={(e) => setKeepAsPost(e.target.checked)}
+                  />{" "}
+                  Keep live as a post
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={notifyMembers}
+                    onChange={(e) => setNotifyMembers(e.target.checked)}
+                  />{" "}
+                  Notify members
+                </label>
+              </>
+            )}
             {error && <p className="text-sm text-red-700">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button

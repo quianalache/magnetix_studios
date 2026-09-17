@@ -69,6 +69,7 @@ export function NavigationWorkspace({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   navigation: initialNavigation,
@@ -78,11 +79,18 @@ export function NavigationWorkspace({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   navigation: NavItem[] | undefined;
   brand: string;
 }) {
+  // Agency's PATCH route lives at .../community/[groupId] directly (no
+  // /settings suffix) — see /api/agency/community/[groupId]/route.ts.
+  const settingsApiUrl = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}/settings`;
   const [saved, setSaved] = useState(() => normalizeNavigation(initialNavigation));
   const [draft, setDraft] = useState(saved);
   const [saving, setSaving] = useState(false);
@@ -102,8 +110,13 @@ export function NavigationWorkspace({
 
   function toggleVisible(key: NavItemKey) {
     if (MANDATORY_NAV_KEYS.includes(key)) return; // defense in depth — the row itself is already disabled
+    // Classroom is genuinely blocked for Agency Community until Agency
+    // Courses exists — never let it become visible, even via this generic
+    // toggle (defense in depth; the row itself is already excluded below).
+    if (agencyGroupId && key === "classroom") return;
     setDraft((d) => d.map((item) => (item.key === key ? { ...item, visible: !item.visible } : item)));
   }
+  const visibleRows = agencyGroupId ? draft.filter((item) => item.key !== "classroom") : draft;
 
   function rename(key: NavItemKey, label: string) {
     setDraft((d) => d.map((item) => (item.key === key ? { ...item, label } : item)));
@@ -117,7 +130,7 @@ export function NavigationWorkspace({
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch(`/api/community/${saId}/${groupId}/settings`, {
+      const res = await fetch(settingsApiUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ navigation: draft }),
@@ -147,7 +160,7 @@ export function NavigationWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -174,7 +187,7 @@ export function NavigationWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav brand={brand} active="navigation" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
+        <SettingsNav brand={brand} active="navigation" link={{ saId, pretty, staffGroupId, agencyGroupId }} groupSlug={groupSlug} />
 
         <section className="rounded-xl border border-[#E4E4E4] bg-white p-5">
           <h2 className="text-base font-semibold text-[#202124]">Navigation</h2>
@@ -188,9 +201,9 @@ export function NavigationWorkspace({
 
             <TooltipProvider>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={draft.map((i) => i.key)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={visibleRows.map((i) => i.key)} strategy={verticalListSortingStrategy}>
                   <div className="mt-4 space-y-2">
-                    {draft.map((item) => (
+                    {visibleRows.map((item) => (
                       <NavRow
                         key={item.key}
                         item={item}

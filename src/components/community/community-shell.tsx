@@ -231,9 +231,14 @@ export function CommunityShell({
             <span className="hidden md:inline">Settings</span>
           </Link>
         )}
-        {!agencyGroupId && (
+        {/* Real Agency Community DMs (2026-09-17) — member view only. The
+            owner authenticates via Firebase, not a Person, and doesn't
+            participate in Agency Community DMs (see
+            agency-community-dm-service.ts's module comment). */}
+        {(!agencyGroupId || agencyMemberView) && (
           <DmLauncher
             saId={saId}
+            agencyScope={agencyMemberView}
             viewerId={viewer.memberId}
             brand={brand}
             primaryAction={resolvedTheme.primaryAction}

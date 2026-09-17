@@ -4,9 +4,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   sendTenantEmail,
+  sendEmail,
   NoTenantDomainError,
   emailIsConfigured,
 } from "@/lib/comms/resend";
+import { resolveBrandName } from "@/lib/landing/resolve-brand";
 import type {
   NotificationDoc,
   NotificationEventType,
@@ -116,7 +118,6 @@ export async function dispatchNotificationEmail(
 ): Promise<void> {
   try {
     if (!isEmailEligibleEventType(notification.eventType)) return;
-    if (!notification.subAccountId) return; // every V1-eligible type has one; defensive only
     if (!emailIsConfigured()) return; // local/dev without Resend configured — silent no-op, matches emailIsConfigured's existing use elsewhere
 
     const ref = deliveryCol().doc(notification.id);
@@ -133,9 +134,20 @@ export async function dispatchNotificationEmail(
       return;
     }
 
+    // Agency Community activity (subAccountId: null) has no tenant to
+    // resolve a sending domain from — it's Magnetix's OWN platform email,
+    // same sender/branding source as the Community invite email
+    // (resolveBrandName + the shared EMAIL_FROM sender), never
+    // sendTenantEmail (which always resolves a TENANT domain and would be
+    // wrong here even if `sub` were coerced to null — see that helper's
+    // own "never a Magnestix-managed fallback for tenant email" contract).
+    const isAgencyOwned = !notification.subAccountId;
+
     const [personSnap, subSnap] = await Promise.all([
       getAdminDb().doc(`people/${notification.personId}`).get(),
-      getAdminDb().doc(`subAccounts/${notification.subAccountId}`).get(),
+      isAgencyOwned
+        ? Promise.resolve(null)
+        : getAdminDb().doc(`subAccounts/${notification.subAccountId}`).get(),
     ]);
 
     const recipientEmail =
@@ -149,15 +161,18 @@ export async function dispatchNotificationEmail(
       return;
     }
 
-    const sub = subSnap.exists
-      ? (subSnap.data() as {
-          name?: string;
-          resendConfig?: ResendConfig | null;
-          emailDomainEnabledByAgency?: boolean;
-          replyToEmail?: string | null;
-        })
-      : null;
-    const businessName = sub?.name?.trim() || "Magnetix";
+    const sub =
+      subSnap?.exists
+        ? (subSnap.data() as {
+            name?: string;
+            resendConfig?: ResendConfig | null;
+            emailDomainEnabledByAgency?: boolean;
+            replyToEmail?: string | null;
+          })
+        : null;
+    const businessName = isAgencyOwned
+      ? await resolveBrandName()
+      : sub?.name?.trim() || "Magnetix";
 
     const rendered = renderNotificationEmail(
       { ...notification, eventType: notification.eventType },
@@ -165,18 +180,25 @@ export async function dispatchNotificationEmail(
     );
 
     try {
-      const result = await sendTenantEmail({
-        sub,
-        to: recipientEmail,
-        subject: rendered.subject,
-        text: rendered.text,
-        html: rendered.html,
-      });
+      const result = isAgencyOwned
+        ? await sendEmail({
+            to: recipientEmail,
+            subject: rendered.subject,
+            text: rendered.text,
+            html: rendered.html,
+          })
+        : await sendTenantEmail({
+            sub,
+            to: recipientEmail,
+            subject: rendered.subject,
+            text: rendered.text,
+            html: rendered.html,
+          });
       await ref.update({
         status: "sent",
         providerMessageId: result.id,
         recipientEmail,
-        senderEmail: sub?.resendConfig?.emailFrom ?? null,
+        senderEmail: isAgencyOwned ? null : (sub?.resendConfig?.emailFrom ?? null),
         sentAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });

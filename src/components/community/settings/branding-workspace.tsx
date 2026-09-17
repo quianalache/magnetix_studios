@@ -86,6 +86,7 @@ export function BrandingWorkspace({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   theme: initialTheme,
@@ -95,11 +96,18 @@ export function BrandingWorkspace({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   theme: CommunityTheme | undefined;
   brand: string;
 }) {
+  // Agency's PATCH route lives at .../community/[groupId] directly (no
+  // /settings suffix) — see /api/agency/community/[groupId]/route.ts.
+  const settingsApiUrl = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}/settings`;
   const [savedTheme, setSavedTheme] = useState(() =>
     normalizeCommunityTheme(initialTheme)
   );
@@ -147,7 +155,7 @@ export function BrandingWorkspace({
   async function save() {
     setSaving(true);
     try {
-      const res = await fetch(`/api/community/${saId}/${groupId}/settings`, {
+      const res = await fetch(settingsApiUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: draft }),
@@ -181,7 +189,7 @@ export function BrandingWorkspace({
             Community Settings
           </h1>
           <Link
-            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -211,7 +219,7 @@ export function BrandingWorkspace({
         <SettingsNav
           brand={brand}
           active="branding"
-          link={{ saId, pretty, staffGroupId }}
+          link={{ saId, pretty, staffGroupId, agencyGroupId }}
           groupSlug={groupSlug}
         />
 

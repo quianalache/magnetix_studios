@@ -16,6 +16,7 @@ import {
 } from "@/lib/server/community-agency-service";
 import { buildFeedPoll } from "@/lib/server/community-feed-service";
 import { normalizePollDraft } from "@/lib/community/normalize-poll";
+import { awardAgencyPoints } from "@/lib/server/agency-community-points-service";
 import { renderCommunityPostHtml } from "@/lib/community/post-html";
 import type { MediaAttachment } from "@/types/media-attachment";
 
@@ -162,6 +163,7 @@ export async function POST(
             kind: "member",
             personId: caller.personId,
             displayName: agencyMemberDisplayName(caller.membership),
+            membershipId: caller.membership.id,
           },
     title,
     body: body.body ?? "",
@@ -170,5 +172,17 @@ export async function POST(
     commentsDisabled: body.commentsDisabled,
     poll,
   });
+
+  if (caller.kind === "member") {
+    await awardAgencyPoints({
+      agencyId: caller.agencyId,
+      groupId,
+      recipientMembershipId: caller.membership.id,
+      actorId: caller.personId,
+      action: "create_post",
+      sourceEntityId: post.id,
+    }).catch((err) => console.error("[agency posts] point award failed", err));
+  }
+
   return NextResponse.json({ ok: true, post });
 }

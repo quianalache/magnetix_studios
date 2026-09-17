@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsImageRow } from "@/components/community/settings/settings-image-row";
+import { SettingsNav } from "@/components/community/settings/settings-nav";
+import { COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import type { CommunityGroup } from "@/types/community";
 
 async function uploadAgencySettingsImage(
@@ -60,6 +62,7 @@ export default function AgencyCommunitySettingsPage({
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [brandColor, setBrandColor] = useState<string | null>(null);
+  const [pointsEnabled, setPointsEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function AgencyCommunitySettingsPage({
         setFaviconUrl(d.group.faviconUrl ?? null);
         setCoverUrl(d.group.coverUrl ?? null);
         setBrandColor(d.group.brandColor ?? null);
+        setPointsEnabled(d.group.pointsEnabled === true);
       });
   }, [isOwner, groupId]);
 
@@ -99,6 +103,7 @@ export default function AgencyCommunitySettingsPage({
           faviconUrl,
           coverUrl,
           brandColor,
+          pointsEnabled,
         }),
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
@@ -121,8 +126,10 @@ export default function AgencyCommunitySettingsPage({
   }
   if (!group) return <div className="mx-auto max-w-2xl p-8" />;
 
+  const brand = group.brandColor?.trim() || COMMUNITY_DEFAULT_BRAND;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <Link
         href={`/agency/community/${groupId}`}
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -138,6 +145,14 @@ export default function AgencyCommunitySettingsPage({
         </p>
       </div>
 
+      <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+        <SettingsNav
+          brand={brand}
+          active="general"
+          link={{ saId: "", pretty: false, agencyGroupId: groupId }}
+          groupSlug={group.slug}
+        />
+        <div className="max-w-2xl space-y-6">
       <div className="space-y-4 rounded-2xl border bg-card p-5">
         <div className="space-y-1.5">
           <Label htmlFor="group-name">Community name</Label>
@@ -199,6 +214,16 @@ export default function AgencyCommunitySettingsPage({
           />
           Published (visible/usable — unpublished stays a private draft)
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={pointsEnabled}
+            onChange={(e) => setPointsEnabled(e.target.checked)}
+            disabled={saving}
+          />
+          Points &amp; Leaderboard (members earn points for posting/commenting;
+          uses the standard point values and levels)
+        </label>
       </div>
 
       <div className="divide-y rounded-2xl border bg-card p-5">
@@ -245,11 +270,13 @@ export default function AgencyCommunitySettingsPage({
       </div>
 
       <div className="rounded-2xl border border-dashed bg-card p-5 text-xs text-muted-foreground">
-        Full Branding theme presets, Navigation drag-reorder, and Points &amp;
-        Rewards settings aren&apos;t ported to Agency communities yet — see
-        the Agency Community Parity report. Channels and Sections are
-        managed from the community feed itself (the ⋯ menu next to
+        Custom Points &amp; Rewards editing (point values, levels, prize
+        redemption) and Skool Import aren&apos;t ported to Agency communities
+        yet — see the Agency Community Parity report. Channels and Sections
+        are managed from the community feed itself (the ⋯ menu next to
         Channels).
+      </div>
+        </div>
       </div>
     </div>
   );

@@ -59,13 +59,46 @@ export function SettingsNav({
   link: CommunityLinkBase;
   groupSlug: string;
 }) {
+  // Skool Import is architecturally tied to creating tenant Member/
+  // Contact/GroupMembership records via CRM contact reconciliation —
+  // agency membership uses the separate Person/mm_session model with no
+  // such records, so it isn't ported for agency scope (see the Agency
+  // Community Parity report). Shown as inert rather than a dead link,
+  // same convention as the other not-yet-built sections below.
   const sections: { key: SettingsSection; label: string; icon: typeof SettingsIcon; href: string }[] = [
     { key: "general", label: "General", icon: SettingsIcon, href: communitySettingsHref(link, groupSlug) },
     { key: "branding", label: "Branding", icon: Palette, href: communitySettingsBrandingHref(link, groupSlug) },
     { key: "navigation", label: "Navigation", icon: LayoutGrid, href: communitySettingsNavigationHref(link, groupSlug) },
-    { key: "points-rewards", label: "Points & Rewards", icon: Trophy, href: communitySettingsPointsRewardsHref(link, groupSlug) },
-    { key: "skool-import", label: "Skool Import", icon: Download, href: communitySettingsSkoolImportHref(link, groupSlug) },
+    ...(link.agencyGroupId
+      ? []
+      : [
+          {
+            key: "points-rewards" as const,
+            label: "Points & Rewards",
+            icon: Trophy,
+            href: communitySettingsPointsRewardsHref(link, groupSlug),
+          },
+          {
+            key: "skool-import" as const,
+            label: "Skool Import",
+            icon: Download,
+            href: communitySettingsSkoolImportHref(link, groupSlug),
+          },
+        ]),
   ];
+  // Agency scope: Points & Rewards customization and Skool Import aren't
+  // ported (see the Agency Community Parity report) — shown as inert
+  // rather than a dead link, same convention as the sections below. Points
+  // & Leaderboard themselves DO work for agency (General's toggle + the
+  // real Leaderboard nav tab) — only the CUSTOM rules/levels/rewards
+  // editing workspace is what's missing here.
+  const inertSections = link.agencyGroupId
+    ? [
+        { key: "points-rewards", label: "Points & Rewards", icon: Trophy },
+        { key: "skool-import", label: "Skool Import", icon: Download },
+        ...INERT_SECTIONS,
+      ]
+    : INERT_SECTIONS;
 
   return (
     <nav className="space-y-0.5">
@@ -103,7 +136,7 @@ export function SettingsNav({
           </Link>
         );
       })}
-      {INERT_SECTIONS.map((s) => {
+      {inertSections.map((s) => {
         const Icon = s.icon;
         return (
           <div

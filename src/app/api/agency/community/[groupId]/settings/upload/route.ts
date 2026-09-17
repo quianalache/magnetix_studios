@@ -39,7 +39,10 @@ export async function POST(
     const f = form.get("file");
     if (f instanceof File) file = f;
     const k = form.get("kind");
-    if (typeof k === "string" && (k === "logo" || k === "cover" || k === "favicon" || k === "card")) {
+    if (
+      typeof k === "string" &&
+      (k === "logo" || k === "cover" || k === "favicon" || k === "card" || k === "event" || k === "live")
+    ) {
       kind = k;
     }
   } catch {

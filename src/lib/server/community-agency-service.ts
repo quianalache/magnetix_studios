@@ -136,7 +136,18 @@ async function uniqueSlug(agencyId: string, base: string): Promise<string> {
  */
 export type AgencyPostAuthor =
   | { kind: "owner"; uid: string }
-  | { kind: "member"; personId: string; displayName: string; avatarUrl?: string | null };
+  | {
+      kind: "member";
+      personId: string;
+      displayName: string;
+      avatarUrl?: string | null;
+      /** Points & Leaderboard (2026-09-17) — the roster doc's own id,
+       *  needed to award points onto the right doc. Optional only so
+       *  existing call sites that don't care about points still compile;
+       *  every real caller (the API routes) always has it via
+       *  `caller.membership.id`. */
+      membershipId?: string;
+    };
 
 async function resolveAgencyAuthor(
   author: AgencyPostAuthor,
@@ -201,9 +212,11 @@ export async function createAgencyGroupServerSide(
     // visible since the roster page is real.
     navigation: [
       { key: "community", label: "Community", visible: true, order: 0 },
+      // Classroom stays hidden — genuinely blocked on Agency Courses, which
+      // doesn't exist yet (see the Agency Community Parity task).
       { key: "classroom", label: "Classroom", visible: false, order: 1 },
-      { key: "events", label: "Events", visible: false, order: 2 },
-      { key: "leaderboards", label: "Leaderboard", visible: false, order: 3 },
+      { key: "events", label: "Events", visible: true, order: 2 },
+      { key: "leaderboards", label: "Leaderboard", visible: true, order: 3 },
       { key: "members", label: "Members", visible: true, order: 4 },
       { key: "about", label: "About", visible: true, order: 5 },
     ],
@@ -261,15 +274,14 @@ export async function getAgencyGroupById(
 
 /**
  * Settings/branding parity (2026-09-17) — every field the tenant Community
- * Settings surface (General/Branding/Navigation) already lets an owner
- * configure, now also patchable for an agency-owned group. Deliberately
- * excludes `access`/`priceCents`/`currency`/`joinPolicy`/`pointsEnabled`:
- * paid access needs Agency Billing/entitlements (doesn't exist — see the
+ * Settings surface (General/Branding/Navigation/Points) already lets an
+ * owner configure, now also patchable for an agency-owned group.
+ * Deliberately excludes `access`/`priceCents`/`currency`/`joinPolicy`: paid
+ * access needs Agency Billing/entitlements (doesn't exist — see the
  * Agency Community Parity task's "remaining true dependencies"), and
- * self-serve join/points have no agency-scoped flow to back them yet
- * (membership is owner-invite-only; there's no points ledger for agency
- * groups). Adding those later is additive, not a breaking change to this
- * type.
+ * self-serve join has no agency-scoped flow to back it yet (membership is
+ * owner-invite-only). Adding those later is additive, not a breaking
+ * change to this type.
  */
 export interface UpdateAgencyGroupPatch {
   name?: string;
@@ -291,6 +303,9 @@ export interface UpdateAgencyGroupPatch {
   links?: ResourceLink[];
   sidebarCards?: CommunitySidebarCard[];
   navigation?: NavItem[];
+  /** Points & Leaderboard master switch — see
+   *  agency-community-points-service.ts. */
+  pointsEnabled?: boolean;
 }
 
 export async function updateAgencyGroupServerSide(opts: {
@@ -325,6 +340,7 @@ export async function updateAgencyGroupServerSide(opts: {
   if (p.links !== undefined) update.links = p.links;
   if (p.sidebarCards !== undefined) update.sidebarCards = p.sidebarCards;
   if (p.navigation !== undefined) update.navigation = normalizeNavigation(p.navigation);
+  if (p.pointsEnabled !== undefined) update.pointsEnabled = p.pointsEnabled;
 
   await groupDoc(opts.agencyId, opts.groupId).update(update);
   const updated = await getAgencyGroupById(opts.agencyId, opts.groupId);
@@ -630,6 +646,16 @@ export interface CreateAgencyPostInput {
    *  (`normalizePollDraft`) by the API route — this layer just stores it,
    *  same convention as `attachments`. */
   poll?: CommunityPoll | null;
+  /** Live Rooms companion post (2026-09-17) — set only by
+   *  agency-community-live-room-service.ts's `createAgencyLiveRoomServerSide`,
+   *  mirroring the tenant `createPostServerSide`'s own live fields exactly
+   *  so the SAME feed-card rendering (feed-view.tsx) picks it up unchanged. */
+  postType?: "live";
+  liveSessionId?: string | null;
+  liveRoomId?: string | null;
+  liveMode?: "meeting" | "broadcast";
+  liveStatus?: "live" | "ended";
+  thumbnailUrl?: string | null;
 }
 
 export async function createAgencyPostServerSide(
@@ -653,6 +679,12 @@ export async function createAgencyPostServerSide(
     commentCount: 0,
     poll: input.poll ?? undefined,
     hasPoll: !!input.poll,
+    ...(input.postType ? { postType: input.postType } : {}),
+    ...(input.liveSessionId !== undefined ? { liveSessionId: input.liveSessionId } : {}),
+    ...(input.liveRoomId !== undefined ? { liveRoomId: input.liveRoomId } : {}),
+    ...(input.liveMode !== undefined ? { liveMode: input.liveMode } : {}),
+    ...(input.liveStatus !== undefined ? { liveStatus: input.liveStatus } : {}),
+    ...(input.thumbnailUrl !== undefined ? { thumbnailUrl: input.thumbnailUrl } : {}),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -687,6 +719,9 @@ export interface UpdateAgencyPostInput {
   /** `undefined` = leave as-is; `null` = remove the poll. Same convention
    *  as the tenant `updatePostServerSide`. */
   poll?: CommunityPoll | null;
+  /** Live Rooms companion post lifecycle — set only by
+   *  agency-community-live-room-service.ts on end. */
+  liveStatus?: "live" | "ended";
 }
 
 export async function updateAgencyPostServerSide(
@@ -726,6 +761,7 @@ export async function updateAgencyPostServerSide(
     update.poll = input.poll ?? FieldValue.delete();
     update.hasPoll = !!input.poll;
   }
+  if (input.liveStatus !== undefined) update.liveStatus = input.liveStatus;
 
   await ref.update(update);
   const after = await ref.get();
@@ -1182,6 +1218,13 @@ export interface AgencyGroupMemberRoster {
   invitedByUid: string;
   createdAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue | null;
   activatedAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue | null;
+  /** Points & Leaderboard (2026-09-17) — see agency-community-points-service.ts
+   *  for why these live directly on the roster doc instead of a second
+   *  `memberships` collection like tenant. Absent = 0/level 1 (never
+   *  earned points yet), same "absent means default" convention used
+   *  throughout this codebase. */
+  points?: number;
+  level?: number;
 }
 
 export async function listAgencyGroupMembers(

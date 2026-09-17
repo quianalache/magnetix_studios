@@ -27,12 +27,15 @@ function timeAgo(ms: number | null): string {
  */
 export function DmLauncher({
   saId,
+  agencyScope,
   viewerId,
   brand,
   primaryAction,
   accent,
 }: {
   saId: string;
+  /** Agency Community — see DmThreadModal's own doc comment. */
+  agencyScope?: boolean;
   viewerId: string;
   brand: string;
   /** Theme parity (2026-08-29 closeout) — the thread modal's Send button.
@@ -41,7 +44,8 @@ export function DmLauncher({
   /** Unread-count badge + unread dot. Optional, falls back to `brand`. */
   accent?: string;
 }) {
-  const count = useUnreadCount(saId, 0);
+  const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
+  const count = useUnreadCount(saId, 0, agencyScope);
   const [panelOpen, setPanelOpen] = useState(false);
   const [active, setActive] = useState<DmMemberView | null>(null);
 
@@ -59,7 +63,7 @@ export function DmLauncher({
     setInboxLoading(true);
     (async () => {
       try {
-        const res = await fetch(`/api/community/${saId}/dm/inbox`);
+        const res = await fetch(`${apiBase}/inbox`);
         if (!cancelled && res.ok) {
           const d = (await res.json()) as { items?: DmInboxItem[] };
           setInbox(Array.isArray(d.items) ? d.items : []);
@@ -73,7 +77,7 @@ export function DmLauncher({
     return () => {
       cancelled = true;
     };
-  }, [panelOpen, saId]);
+  }, [panelOpen, apiBase]);
 
   // Debounced member search.
   useEffect(() => {
@@ -86,9 +90,7 @@ export function DmLauncher({
     setSearching(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `/api/community/${saId}/dm/members?q=${encodeURIComponent(term)}`,
-        );
+        const res = await fetch(`${apiBase}/members?q=${encodeURIComponent(term)}`);
         if (res.ok) {
           const d = (await res.json()) as { members?: DmMemberView[] };
           setResults(Array.isArray(d.members) ? d.members : []);
@@ -100,7 +102,7 @@ export function DmLauncher({
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [q, panelOpen, saId]);
+  }, [q, panelOpen, apiBase]);
 
   function openThread(other: DmMemberView) {
     setActive(other);
@@ -176,6 +178,7 @@ export function DmLauncher({
       {active && (
         <DmThreadModal
           saId={saId}
+          agencyScope={agencyScope}
           viewerId={viewerId}
           other={active}
           brand={brand}

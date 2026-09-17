@@ -46,11 +46,20 @@ function usePoll(
   }, [intervalMs, immediate]);
 }
 
-export function useUnreadCount(saId: string, initial: number) {
+/** Agency Community (2026-09-17) — `agencyScope: true` targets
+ *  `/api/agency/dm/...` (agency-wide, Person-identified) instead of
+ *  `/api/community/{saId}/dm/...` (tenant, Member-identified). `saId` is
+ *  meaningless/ignored in that mode, same convention as `agencyGroupId`
+ *  elsewhere in this codebase. */
+function dmApiBase(saId: string, agencyScope?: boolean): string {
+  return agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
+}
+
+export function useUnreadCount(saId: string, initial: number, agencyScope?: boolean) {
   const [count, setCount] = useState(initial);
   usePoll(
     async () => {
-      const res = await fetch(`/api/community/${saId}/dm/unread`);
+      const res = await fetch(`${dmApiBase(saId, agencyScope)}/unread`);
       if (!res.ok) return;
       const d = (await res.json()) as { count?: number };
       if (typeof d.count === "number") setCount(d.count);
@@ -61,10 +70,10 @@ export function useUnreadCount(saId: string, initial: number) {
   return count;
 }
 
-export function useInbox(saId: string, initial: DmInboxItem[]) {
+export function useInbox(saId: string, initial: DmInboxItem[], agencyScope?: boolean) {
   const [items, setItems] = useState(initial);
   usePoll(async () => {
-    const res = await fetch(`/api/community/${saId}/dm/inbox`);
+    const res = await fetch(`${dmApiBase(saId, agencyScope)}/inbox`);
     if (!res.ok) return;
     const d = (await res.json()) as { items?: DmInboxItem[] };
     if (Array.isArray(d.items)) setItems(d.items);
@@ -76,6 +85,7 @@ export function useThreadMessages(
   saId: string,
   threadId: string,
   initial: DmMessageView[],
+  agencyScope?: boolean,
 ) {
   const [messages, setMessages] = useState(initial);
   const lastMsRef = useRef(
@@ -97,7 +107,7 @@ export function useThreadMessages(
 
   usePoll(async () => {
     const res = await fetch(
-      `/api/community/${saId}/dm/threads/${threadId}/messages?since=${lastMsRef.current}`,
+      `${dmApiBase(saId, agencyScope)}/threads/${threadId}/messages?since=${lastMsRef.current}`,
     );
     if (!res.ok) return;
     const d = (await res.json()) as { messages?: DmMessageView[] };

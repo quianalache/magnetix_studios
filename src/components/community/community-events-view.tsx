@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { validateCommunityEventSchedule } from "@/lib/community/event-scheduling";
+import { communityEventsHref } from "@/lib/community/routes";
 
 export interface CommunityEventViewModel {
   id: string;
@@ -112,6 +113,8 @@ export function CommunityEventsView({
   groupSlug,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
+  agencyMemberView = false,
   categories,
   initialEvents,
   moderator,
@@ -121,6 +124,9 @@ export function CommunityEventsView({
   groupSlug: string;
   pretty?: boolean;
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. */
+  agencyGroupId?: string;
+  agencyMemberView?: boolean;
   categories: string[];
   initialEvents: CommunityEventViewModel[];
   moderator: boolean;
@@ -149,11 +155,13 @@ export function CommunityEventsView({
     hideAttendees: false,
     reminderEnabled: false,
   }));
-  const routeBase = staffGroupId
-    ? `/sa/${saId}/community/${staffGroupId}/events`
-    : pretty
-      ? `/communities/${groupSlug}/events`
-      : `/c/${saId}/${groupSlug}/events`;
+  const routeBase = communityEventsHref(
+    { saId, pretty, staffGroupId, agencyGroupId, agencyMemberView },
+    groupSlug,
+  );
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}`
+    : `/api/community/${saId}/${groupId}`;
   const detailHref = (id: string) => `${routeBase}/${id}`;
   const recordingsHref = `${routeBase}/recordings`;
   const now = Date.now();
@@ -208,10 +216,10 @@ export function CommunityEventsView({
     const form = new FormData();
     form.append("file", file);
     form.append("kind", "event");
-    const response = await fetch(
-      `/api/community/${saId}/${groupId}/settings/upload`,
-      { method: "POST", body: form }
-    );
+    const response = await fetch(`${apiBase}/settings/upload`, {
+      method: "POST",
+      body: form,
+    });
     const data = (await response.json().catch(() => ({}))) as {
       url?: string;
       error?: string;
@@ -230,7 +238,7 @@ export function CommunityEventsView({
       return setError("An external event needs a meeting URL.");
     setSaving(true);
     setError("");
-    const response = await fetch(`/api/community/${saId}/${groupId}/events`, {
+    const response = await fetch(`${apiBase}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -270,16 +278,21 @@ export function CommunityEventsView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={recordingsHref}
-            className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium"
-            style={{
-              borderColor: "var(--community-border)",
-              backgroundColor: "var(--community-surface)",
-            }}
-          >
-            <MonitorPlay className="h-4 w-4" /> Recordings
-          </Link>
+          {/* Agency live rooms don't record yet (no recording-asset pipeline
+              built for agency scope) — omit rather than link to a page with
+              nothing to show, matching the "no dead destinations" rule. */}
+          {!agencyGroupId && (
+            <Link
+              href={recordingsHref}
+              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium"
+              style={{
+                borderColor: "var(--community-border)",
+                backgroundColor: "var(--community-surface)",
+              }}
+            >
+              <MonitorPlay className="h-4 w-4" /> Recordings
+            </Link>
+          )}
           {moderator && (
             <button
               onClick={() => {
