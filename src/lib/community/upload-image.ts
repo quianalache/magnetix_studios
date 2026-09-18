@@ -35,7 +35,7 @@ export async function uploadCommunitySettingsImage(
   file: File,
   saId: string,
   groupId: string,
-  kind: "logo" | "cover" | "favicon" | "about" | "card",
+  kind: "logo" | "cover" | "favicon" | "about" | "card" | "course",
   agencyGroupId?: string,
 ): Promise<string> {
   const form = new FormData();

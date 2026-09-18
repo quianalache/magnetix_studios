@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/community/image-upload";
-import { uploadCommunityImage } from "@/lib/community/upload-image";
+import { uploadCommunityImage, uploadCommunitySettingsImage } from "@/lib/community/upload-image";
 import type { Course, CourseAccess } from "@/types/community";
 
 const SELECT =
@@ -30,6 +30,7 @@ export function CourseSettingsModal({
   mode,
   saId,
   groupId,
+  agencyGroupId,
   course,
   open,
   onOpenChange,
@@ -38,6 +39,9 @@ export function CourseSettingsModal({
   mode: "create" | "edit";
   saId: string;
   groupId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. Branches the
+   *  save URL and image-upload path only. */
+  agencyGroupId?: string;
   course?: Course | null;
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -84,8 +88,11 @@ export function CourseSettingsModal({
             : null,
         published,
       };
-      const url =
-        mode === "create"
+      const url = agencyGroupId
+        ? mode === "create"
+          ? `/api/agency/community/${agencyGroupId}/courses`
+          : `/api/agency/community/${agencyGroupId}/courses/${course!.id}`
+        : mode === "create"
           ? `/api/sub-accounts/${saId}/community/${groupId}/courses`
           : `/api/sub-accounts/${saId}/community/${groupId}/courses/${course!.id}`;
       const res = await fetch(url, {
@@ -127,7 +134,11 @@ export function CourseSettingsModal({
             value={thumbnailUrl}
             onChange={setThumbnailUrl}
             onUploadingChange={setImgUploading}
-            onUpload={(file) => uploadCommunityImage(file, saId, groupId, "course")}
+            onUpload={(file) =>
+              agencyGroupId
+                ? uploadCommunitySettingsImage(file, saId, groupId, "course", agencyGroupId)
+                : uploadCommunityImage(file, saId, groupId, "course")
+            }
             aspect="video"
           />
           <div className="space-y-1.5">
