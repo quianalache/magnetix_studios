@@ -41,7 +41,7 @@ export async function POST(
     const k = form.get("kind");
     if (
       typeof k === "string" &&
-      (k === "logo" || k === "cover" || k === "favicon" || k === "card" || k === "event" || k === "live")
+      (k === "logo" || k === "cover" || k === "favicon" || k === "card" || k === "event" || k === "live" || k === "about")
     ) {
       kind = k;
     }

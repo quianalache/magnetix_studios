@@ -75,6 +75,21 @@ export async function POST(request: Request, ctx: { params: Promise<{ groupId: s
     return NextResponse.json({ error: "Live room is not active" }, { status: 404 });
   }
 
+  if (body.action === "start-recording") {
+    if (!isModerator) return NextResponse.json({ error: "Owner access required" }, { status: 403 });
+    const { startAgencyLiveRecordingServerSide } = await import("@/lib/server/agency-community-live-recording-service");
+    try {
+      const result = await startAgencyLiveRecordingServerSide({
+        agencyId: caller.agencyId,
+        groupId,
+        roomId: body.roomId,
+      });
+      return NextResponse.json(result);
+    } catch {
+      return NextResponse.json({ error: "Unable to start recording." }, { status: 502 });
+    }
+  }
+
   if (!isModerator && found.room.channel) {
     const inaccessible = await getAgencyInaccessibleChannelNames({
       agencyId: caller.agencyId,

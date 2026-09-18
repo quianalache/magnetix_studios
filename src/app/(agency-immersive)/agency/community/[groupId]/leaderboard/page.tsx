@@ -7,13 +7,14 @@ import { LeaderboardView, type ViewerLevelInfo } from "@/components/community/le
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { LeaderboardRow, LeaderboardWindow } from "@/lib/server/community-leaderboard-service";
 import type { MemberPointStats } from "@/lib/server/community-points-service";
+import type { RewardWithEffectiveStatus } from "@/lib/server/community-rewards-service";
 import type { CommunityLevel, PointRuleMap } from "@/types/points-rewards";
 import type { CommunityGroup } from "@/types/community";
 
 interface LeaderboardResponse {
   viewer: ViewerLevelInfo;
   rowsByWindow: Record<LeaderboardWindow, LeaderboardRow[]>;
-  activeRewards: [];
+  activeRewards: RewardWithEffectiveStatus[];
   levels: CommunityLevel[];
   rules: PointRuleMap;
   stats: MemberPointStats;

@@ -722,6 +722,11 @@ export interface UpdateAgencyPostInput {
   /** Live Rooms companion post lifecycle — set only by
    *  agency-community-live-room-service.ts on end. */
   liveStatus?: "live" | "ended";
+  /** Live Rooms replay lifecycle — set only by
+   *  agency-community-live-recording-service.ts as the egress webhook
+   *  resolves. Mirrors the tenant post's `replayStatus`/`replayAssetId`. */
+  replayStatus?: "processing" | "ready" | "failed" | "unavailable";
+  replayAssetId?: string | null;
 }
 
 export async function updateAgencyPostServerSide(
@@ -762,6 +767,8 @@ export async function updateAgencyPostServerSide(
     update.hasPoll = !!input.poll;
   }
   if (input.liveStatus !== undefined) update.liveStatus = input.liveStatus;
+  if (input.replayStatus !== undefined) update.replayStatus = input.replayStatus;
+  if (input.replayAssetId !== undefined) update.replayAssetId = input.replayAssetId;
 
   await ref.update(update);
   const after = await ref.get();
@@ -894,17 +901,20 @@ export async function isAgencyCommentLikedByViewer(
 
 /** Toggle like — idempotent per-uid doc, same pattern as the tenant
  *  `likes/{memberId}` subcollection, keyed by Firebase uid instead. */
+/** Returns `authorId` (the post's `authorMemberId`) alongside `liked` so
+ *  the caller can award/revoke "receive_like" points to the right person —
+ *  mirrors tenant `toggleLikeServerSide`'s own shape. */
 export async function toggleAgencyPostLikeServerSide(
   agencyId: string,
   groupId: string,
   postId: string,
   uid: string,
-): Promise<{ liked: boolean }> {
+): Promise<{ liked: boolean; authorId: string | null }> {
   const db = getAdminDb();
   const postRef = postsCol(agencyId, groupId).doc(postId);
   const likeRef = postRef.collection("likes").doc(uid);
   return db.runTransaction(async (tx) => {
-    const likeSnap = await tx.get(likeRef);
+    const [likeSnap, postSnap] = await Promise.all([tx.get(likeRef), tx.get(postRef)]);
     const liked = !likeSnap.exists;
     if (liked) {
       tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
@@ -913,7 +923,8 @@ export async function toggleAgencyPostLikeServerSide(
       tx.delete(likeRef);
       tx.update(postRef, { likeCount: FieldValue.increment(-1) });
     }
-    return { liked };
+    const authorId = (postSnap.data()?.authorMemberId as string | undefined) ?? null;
+    return { liked, authorId };
   });
 }
 
@@ -1170,12 +1181,12 @@ export async function toggleAgencyCommentLikeServerSide(
   postId: string,
   commentId: string,
   uid: string,
-): Promise<{ liked: boolean }> {
+): Promise<{ liked: boolean; authorId: string | null }> {
   const db = getAdminDb();
   const commentRef = commentsCol(agencyId, groupId, postId).doc(commentId);
   const likeRef = commentRef.collection("likes").doc(uid);
   return db.runTransaction(async (tx) => {
-    const likeSnap = await tx.get(likeRef);
+    const [likeSnap, commentSnap] = await Promise.all([tx.get(likeRef), tx.get(commentRef)]);
     const liked = !likeSnap.exists;
     if (liked) {
       tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
@@ -1184,7 +1195,8 @@ export async function toggleAgencyCommentLikeServerSide(
       tx.delete(likeRef);
       tx.update(commentRef, { likeCount: FieldValue.increment(-1) });
     }
-    return { liked };
+    const authorId = (commentSnap.data()?.authorMemberId as string | undefined) ?? null;
+    return { liked, authorId };
   });
 }
 

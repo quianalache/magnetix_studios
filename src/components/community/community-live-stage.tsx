@@ -149,24 +149,26 @@ function ConnectedStage({
   groupId,
   postId,
   mode,
+  agencyGroupId,
   onEnded,
 }: {
   saId: string;
   groupId: string;
   postId: string;
   mode: LiveMode;
+  agencyGroupId?: string;
   onEnded: () => void;
 }) {
   const [room] = useState(() => new Room());
   const [error, setError] = useState("");
+  const liveWatchUrl = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/posts/${postId}/live-watch`
+    : `/api/community/${saId}/${groupId}/posts/${postId}/live-watch`;
   useEffect(() => {
     let disposed = false;
     void (async () => {
       try {
-        const response = await fetch(
-          `/api/community/${saId}/${groupId}/posts/${postId}/live-watch`,
-          { method: "POST" }
-        );
+        const response = await fetch(liveWatchUrl, { method: "POST" });
         const data = (await response.json()) as {
           token?: string;
           url?: string;
@@ -191,13 +193,12 @@ function ConnectedStage({
       disposed = true;
       void room.disconnect();
     };
-  }, [groupId, onEnded, postId, room, saId]);
+  }, [groupId, onEnded, postId, room, saId, liveWatchUrl]);
   useEffect(() => {
     let disposed = false;
-    const endpoint = `/api/community/${saId}/${groupId}/posts/${postId}/live-watch`;
     const verifyStillActive = async () => {
       try {
-        const response = await fetch(endpoint);
+        const response = await fetch(liveWatchUrl);
         if (!disposed && [401, 403, 404].includes(response.status)) onEnded();
       } catch {
         /* transient network failures do not end a live stage */
@@ -208,7 +209,7 @@ function ConnectedStage({
       disposed = true;
       window.clearInterval(interval);
     };
-  }, [groupId, onEnded, postId, saId]);
+  }, [onEnded, liveWatchUrl]);
   if (error)
     return (
       <div className="flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">
@@ -228,12 +229,16 @@ export function CommunityLiveStage({
   groupId,
   postId,
   mode,
+  agencyGroupId,
   onEnded,
 }: {
   saId: string;
   groupId: string;
   postId: string;
   mode: LiveMode;
+  /** Agency Community — see CommunityLinkBase in routes.ts. Branches the
+   *  live-watch fetch URLs only; everything else is scope-agnostic. */
+  agencyGroupId?: string;
   onEnded?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -264,6 +269,7 @@ export function CommunityLiveStage({
           groupId={groupId}
           postId={postId}
           mode={mode}
+          agencyGroupId={agencyGroupId}
           onEnded={() => {
             setEnded(true);
             onEnded?.();

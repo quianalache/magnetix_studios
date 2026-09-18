@@ -719,20 +719,15 @@ export function FeedView({
                 the video WAS the post rather than something attached to
                 it). The small LIVE/"Live ended" status line above stays
                 where it is — a glanceable badge, not the media itself. */}
-            {/* Agency scope shows the "Join Live" banner above instead of
-                this inline embedded player — CommunityLiveStage hardcodes
-                tenant URLs with no override props (see the Agency
-                Community Parity report's remaining-work notes); joining
-                still works fully via the dedicated live-room page. */}
             {p.postType === "live" &&
               p.liveStatus === "live" &&
-              p.liveRoomId &&
-              !agencyGroupId && (
+              p.liveRoomId && (
                 <CommunityLiveStage
                   saId={saId}
                   groupId={groupId}
                   postId={p.id}
                   mode={p.liveMode === "broadcast" ? "broadcast" : "meeting"}
+                  agencyGroupId={agencyGroupId}
                 />
               )}
             {p.postType === "live" &&
@@ -751,6 +746,7 @@ export function FeedView({
                     saId={saId}
                     groupId={groupId}
                     postId={p.id}
+                    agencyGroupId={agencyGroupId}
                   />
                 </div>
               )}

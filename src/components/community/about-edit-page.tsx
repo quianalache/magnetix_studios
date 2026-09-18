@@ -88,6 +88,7 @@ export function AboutEditPage({
   saId,
   pretty,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   initial,
@@ -95,12 +96,18 @@ export function AboutEditPage({
   saId: string;
   pretty: boolean;
   staffGroupId?: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. Branches the
+   *  save PATCH URL and image-upload URL only; everything else in this
+   *  editor is scope-agnostic (the agency group PATCH route already
+   *  accepts every field this editor saves — see
+   *  updateAgencyGroupServerSide). */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   initial: AboutEditInitial;
 }) {
   const router = useRouter();
-  const link: CommunityLinkBase = { saId, pretty, staffGroupId };
+  const link: CommunityLinkBase = { saId, pretty, staffGroupId, agencyGroupId };
 
   const [tagline, setTagline] = useState(initial.tagline ?? "");
   const [cardImageUrl, setCardImageUrl] = useState<string | null>(initial.cardImageUrl ?? null);
@@ -175,7 +182,10 @@ export function AboutEditPage({
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/community/${saId}/${groupId}/settings`, {
+      const saveUrl = agencyGroupId
+        ? `/api/agency/community/${agencyGroupId}`
+        : `/api/community/${saId}/${groupId}/settings`;
+      const res = await fetch(saveUrl, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -265,7 +275,7 @@ export function AboutEditPage({
               value={cardImageUrl}
               onChange={setCardImageUrl}
               onUploadingChange={setImgUploading}
-              onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "card")}
+              onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "card", agencyGroupId)}
               aspect="video"
             />
           </div>
@@ -323,6 +333,7 @@ export function AboutEditPage({
                       item={item}
                       saId={saId}
                       groupId={groupId}
+                      agencyGroupId={agencyGroupId}
                       onChange={(patch) => updateMedia(item.id, patch)}
                       onRemove={() => setAboutMedia((prev) => prev.filter((m) => m.id !== item.id))}
                       onUploadingChange={setImgUploading}
@@ -407,6 +418,7 @@ function MediaEditRow({
   item,
   saId,
   groupId,
+  agencyGroupId,
   onChange,
   onRemove,
   onUploadingChange,
@@ -414,6 +426,7 @@ function MediaEditRow({
   item: CommunityAboutMediaItem;
   saId: string;
   groupId: string;
+  agencyGroupId?: string;
   onChange: (patch: Partial<CommunityAboutMediaItem>) => void;
   onRemove: () => void;
   onUploadingChange: (uploading: boolean) => void;
@@ -449,7 +462,7 @@ function MediaEditRow({
             value={item.url || null}
             onChange={(url) => onChange({ url: url ?? "" })}
             onUploadingChange={onUploadingChange}
-            onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "about")}
+            onUpload={(file) => uploadCommunitySettingsImage(file, saId, groupId, "about", agencyGroupId)}
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted text-muted-foreground">

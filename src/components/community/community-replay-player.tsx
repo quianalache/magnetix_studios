@@ -9,16 +9,23 @@ export function CommunityReplayPlayer({
   saId,
   groupId,
   postId,
+  agencyGroupId,
 }: {
   saId: string;
   groupId: string;
   postId: string;
+  /** Agency Community — see CommunityLinkBase in routes.ts. Branches the
+   *  replay-URL fetch only; everything else is scope-agnostic. */
+  agencyGroupId?: string;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void fetch(`/api/community/${saId}/${groupId}/posts/${postId}/replay`)
+    const replayUrl = agencyGroupId
+      ? `/api/agency/community/${agencyGroupId}/posts/${postId}/replay`
+      : `/api/community/${saId}/${groupId}/posts/${postId}/replay`;
+    void fetch(replayUrl)
       .then(async (response) => {
         const data = (await response.json()) as {
           url?: string;
@@ -38,7 +45,7 @@ export function CommunityReplayPlayer({
     return () => {
       active = false;
     };
-  }, [groupId, postId, saId]);
+  }, [groupId, postId, saId, agencyGroupId]);
   if (error)
     return (
       <div className="mb-3 flex aspect-video items-center justify-center rounded-lg bg-slate-950 px-5 text-center text-sm text-white/80">

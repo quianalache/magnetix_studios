@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { resolveFirstAgencyId, resolveBrandName } from "@/lib/landing/resolve-brand";
 import {
@@ -9,11 +7,8 @@ import {
   activateAgencyMembershipServerSide,
 } from "@/lib/server/community-agency-service";
 import { agencyMemberDisplayName } from "@/lib/server/agency-community-access";
-import {
-  CommunityShell,
-  COMMUNITY_DEFAULT_BRAND,
-} from "@/components/community/community-shell";
-import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
+import { CommunityShell } from "@/components/community/community-shell";
+import { AgencyAboutView } from "@/components/community/agency-about-view";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +54,6 @@ export default async function MyAgencyCommunityAboutPage({
   }
 
   const brandName = await resolveBrandName();
-  const resolvedTheme = resolveCommunityTheme(group);
   const viewer = {
     memberId: person.id,
     displayName: agencyMemberDisplayName(membership),
@@ -78,30 +72,12 @@ export default async function MyAgencyCommunityAboutPage({
       viewerIsModerator={false}
       embedded={false}
     >
-      <div className="mx-auto max-w-2xl space-y-6">
-        <Link
-          href={`/my/community/${groupId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          style={{ color: resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND }}
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to community
-        </Link>
-
-        <div className="rounded-2xl border bg-card p-6">
-          <h1 className="text-xl font-bold tracking-tight">{group.name}</h1>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Presented by {brandName}
-          </p>
-          {group.about ? (
-            <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
-              {group.about}
-            </p>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">No description yet.</p>
-          )}
-        </div>
-      </div>
+      <AgencyAboutView
+        link={{ saId: "", pretty: false, agencyGroupId: groupId, agencyMemberView: true }}
+        group={group}
+        brandName={brandName}
+        isModerator={false}
+      />
     </CommunityShell>
   );
 }

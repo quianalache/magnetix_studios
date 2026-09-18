@@ -14,6 +14,7 @@ import type { DmMemberView, DmMessageView } from "@/types/community";
 export function DmThread({
   saId,
   pretty = false,
+  agencyScope,
   threadId,
   viewerId,
   other,
@@ -25,6 +26,9 @@ export function DmThread({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Agency Community — see DmThreadModal's own doc comment. `saId` is
+   *  meaningless/ignored in this mode. */
+  agencyScope?: boolean;
   threadId: string;
   viewerId: string;
   other: DmMemberView;
@@ -35,7 +39,9 @@ export function DmThread({
   initialMessages: DmMessageView[];
   blockedByMe: boolean;
 }) {
-  const { messages, addLocal } = useThreadMessages(saId, threadId, initialMessages);
+  const apiBase = agencyScope ? "/api/agency/dm" : `/api/community/${saId}/dm`;
+  const backHref = agencyScope ? "/my/messages" : communityMessagesHref({ saId, pretty });
+  const { messages, addLocal } = useThreadMessages(saId, threadId, initialMessages, agencyScope);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [blocked, setBlocked] = useState(initialBlocked);
@@ -56,18 +62,18 @@ export function DmThread({
       lastReadId.current !== last.id
     ) {
       lastReadId.current = last.id;
-      void fetch(`/api/community/${saId}/dm/threads/${threadId}/read`, {
+      void fetch(`${apiBase}/threads/${threadId}/read`, {
         method: "POST",
       });
     }
-  }, [messages, saId, threadId, viewerId]);
+  }, [messages, apiBase, threadId, viewerId]);
 
   async function send() {
     const body = draft.trim();
     if (!body) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/community/${saId}/dm/send`, {
+      const res = await fetch(`${apiBase}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ otherId: other.memberId, body }),
@@ -90,7 +96,7 @@ export function DmThread({
   async function toggleBlock() {
     const next = !blocked;
     setBlocked(next);
-    const res = await fetch(`/api/community/${saId}/dm/block`, {
+    const res = await fetch(`${apiBase}/block`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ otherId: other.memberId, blocked: next }),
@@ -108,7 +114,7 @@ export function DmThread({
       <header className="border-b border-[#E4E4E4] bg-white">
         <div className="mx-auto flex h-14 max-w-2xl items-center gap-3 px-4">
           <Link
-            href={communityMessagesHref({ saId, pretty })}
+            href={backHref}
             className="text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-4 w-4" />

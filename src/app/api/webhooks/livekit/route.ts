@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { WebhookReceiver } from "livekit-server-sdk";
 import { livekitConfig } from "@/lib/livekit/config";
 import { reconcileCommunityRecordingEgressServerSide } from "@/lib/server/community-live-recording-service";
+import { reconcileAgencyRecordingEgressServerSide } from "@/lib/server/agency-community-live-recording-service";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
       event.egressInfo
     ) {
       await reconcileCommunityRecordingEgressServerSide(event.egressInfo);
+      await reconcileAgencyRecordingEgressServerSide(event.egressInfo);
       console.info("[livekit-webhook] finalization complete", {
         eventType,
         providerEgressId,

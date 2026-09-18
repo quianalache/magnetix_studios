@@ -8,23 +8,21 @@ import {
   updateLiveSessionLifecycleServerSide,
 } from "@/lib/server/live-session-service";
 import { createAgencyPostServerSide, updateAgencyPostServerSide } from "@/lib/server/community-agency-service";
+import { createAgencyLiveRecordingAsset } from "@/lib/server/agency-community-live-recording-service";
+import { stopCommunityLiveRecordingServerSide } from "@/lib/server/community-live-recording-service";
 import type { CommunityLiveRoom, CommunityLiveRoomStatus } from "@/types/community";
 import type { AgencyPostAuthor } from "@/lib/server/community-agency-service";
 
 /**
  * Agency Community Live Rooms — the agency-scope sibling of
  * community-live-room-service.ts, rooted at `agencies/{agencyId}/
- * communityGroups/{groupId}/liveRooms`. Deliberately does NOT build a
- * recording/replay pipeline (no `createCommunityLiveRecordingAsset`
- * equivalent) — `recordingStatus` stays permanently "unavailable" — but
- * DOES still create the companion feed post when `keepAsPost` (default
- * true), because that post is the ONLY existing mechanism a member has to
- * discover and join a live room (feed-view.tsx's `postType === "live"`
- * card) — skipping it would leave members with no way to find an active
- * room at all. The inline embedded live player on that card is agency-
- * scope-disabled (see feed-view.tsx) in favor of a "Join Live" link to the
- * dedicated live-room page, since CommunityLiveStage itself hardcodes
- * tenant URLs with no override props.
+ * communityGroups/{groupId}/liveRooms`. Now has full recording/replay
+ * parity (see agency-community-live-recording-service.ts) — creates a
+ * recording asset alongside the companion feed post when `keepAsPost`
+ * (default true), same as tenant. `stopCommunityLiveRecordingServerSide`
+ * is reused directly, unchanged — the LiveKit egress stop call only needs
+ * a `sessionId` and touches nothing tenant-scoped (see that file's own
+ * doc comment).
  */
 
 function roomCollection(agencyId: string, groupId: string) {
@@ -75,6 +73,7 @@ export async function createAgencyLiveRoomServerSide(input: {
   });
   const keepAsPost = input.keepAsPost !== false;
   let communityPostId: string | null = null;
+  let recordingAssetId: string | null = null;
   if (keepAsPost) {
     const post = await createAgencyPostServerSide({
       agencyId: input.agencyId,
@@ -91,6 +90,23 @@ export async function createAgencyLiveRoomServerSide(input: {
       thumbnailUrl: input.thumbnailUrl ?? null,
     });
     communityPostId = post.id;
+    try {
+      const asset = await createAgencyLiveRecordingAsset({
+        agencyId: input.agencyId,
+        groupId: input.groupId,
+        roomId: roomRef.id,
+        sessionId: session.id,
+      });
+      recordingAssetId = asset.id;
+    } catch {
+      // Starting a live room must not fail because recording storage is
+      // temporarily unavailable — mirrors tenant's own fallback exactly.
+      await getAdminDb().collection("liveSessions").doc(session.id).set(
+        { recordingStatus: "failed", updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+      await updateAgencyPostServerSide(input.agencyId, input.groupId, post.id, { replayStatus: "unavailable" });
+    }
   }
   const doc = {
     agencyId: input.agencyId,
@@ -106,8 +122,8 @@ export async function createAgencyLiveRoomServerSide(input: {
     keepAsPost,
     notifyMembers: false,
     communityPostId,
-    recordingAssetId: null,
-    recordingStatus: "unavailable" as const,
+    recordingAssetId,
+    recordingStatus: recordingAssetId ? ("pending" as const) : ("unavailable" as const),
     scheduledStartAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -123,13 +139,32 @@ export async function endAgencyLiveRoomServerSide(
 ): Promise<boolean> {
   const room = await getAgencyLiveRoomServerSide(agencyId, groupId, roomId);
   if (!room) return false;
+  // A processing status is only set after LiveKit accepted an egress. The
+  // stop request allows its verified terminal webhook to finalize the
+  // asset — mirrors tenant `endCommunityLiveRoomServerSide` exactly.
+  if (room.status === "live") {
+    try {
+      await stopCommunityLiveRecordingServerSide(room.liveSessionId);
+    } catch {
+      // Do not erase a confirmed processing state: LiveKit may still send
+      // the terminal webhook after a transient stop request failure.
+    }
+  }
+  const recordingProcessing = room.recordingStatus === "processing";
   await Promise.all([
     room.status === "live" ? updateLiveSessionLifecycleServerSide(room.liveSessionId, "ended") : Promise.resolve(),
     roomCollection(agencyId, groupId)
       .doc(roomId)
       .update({ status: "ended" as CommunityLiveRoomStatus, updatedAt: FieldValue.serverTimestamp() }),
     room.communityPostId
-      ? updateAgencyPostServerSide(agencyId, groupId, room.communityPostId, { liveStatus: "ended" })
+      ? updateAgencyPostServerSide(agencyId, groupId, room.communityPostId, {
+          liveStatus: "ended",
+          ...(recordingProcessing
+            ? { replayStatus: "processing" as const }
+            : room.recordingStatus === "failed" || room.recordingStatus === "unavailable"
+              ? { replayStatus: room.recordingStatus }
+              : {}),
+        })
       : Promise.resolve(),
   ]);
   return true;

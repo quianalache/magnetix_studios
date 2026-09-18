@@ -114,7 +114,7 @@ function galleryForGroup(group: CommunityGroup): CommunityAboutMediaItem[] {
   return group.aboutMedia?.length ? group.aboutMedia : [];
 }
 
-function CommunityAboutStyles() {
+export function CommunityAboutStyles() {
   return (
     <style
       dangerouslySetInnerHTML={{

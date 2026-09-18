@@ -18,10 +18,11 @@ export function QuickGoLiveSetup({
   saId: string;
   groupId: string;
   /** Agency Community — targets /api/agency/community/[groupId]/live-rooms
-   *  instead of /api/community/{saId}/{groupId}/live-rooms. Agency live
-   *  rooms don't keep a companion feed post or notify members yet (no
-   *  recording/feed pipeline built for agency scope) — those two options
-   *  are hidden in this mode rather than silently doing nothing. */
+   *  instead of /api/community/{saId}/{groupId}/live-rooms. "Keep as post"
+   *  has full parity (companion post + recording/replay, see
+   *  agency-community-live-recording-service.ts) — only "Notify members"
+   *  stays hidden for agency (no live-started notification producer exists
+   *  for agency scope yet; the route hardcodes notifyMembers: false). */
   agencyGroupId?: string;
   categories: string[];
   filter: string;
@@ -483,28 +484,26 @@ export function QuickGoLiveSetup({
                 Recommended: 1280 × 720
               </p>
             </div>
-            {/* Agency live rooms don't keep a companion feed post or send
-                notifications yet — omit rather than show a control that
-                silently does nothing. */}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={keepAsPost}
+                onChange={(e) => setKeepAsPost(e.target.checked)}
+              />{" "}
+              Keep live as a post
+            </label>
+            {/* Agency live rooms have no live-started notification producer
+                yet — omit rather than show a control that silently does
+                nothing (the route hardcodes notifyMembers: false). */}
             {!agencyGroupId && (
-              <>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={keepAsPost}
-                    onChange={(e) => setKeepAsPost(e.target.checked)}
-                  />{" "}
-                  Keep live as a post
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={notifyMembers}
-                    onChange={(e) => setNotifyMembers(e.target.checked)}
-                  />{" "}
-                  Notify members
-                </label>
-              </>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={notifyMembers}
+                  onChange={(e) => setNotifyMembers(e.target.checked)}
+                />{" "}
+                Notify members
+              </label>
             )}
             {error && <p className="text-sm text-red-700">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">

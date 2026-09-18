@@ -139,7 +139,7 @@ export function validateLevels(levels: CommunityLevel[]): void {
   }
 }
 
-function validateRules(rules: PointRuleMap): void {
+export function validateRules(rules: PointRuleMap): void {
   for (const action of Object.keys(DEFAULT_POINT_RULES) as PointActionKey[]) {
     const rule = rules[action];
     if (!rule) throw new Error(`Missing rule for "${action}".`);

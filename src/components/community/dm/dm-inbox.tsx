@@ -7,6 +7,14 @@ import { communityMessageThreadHref } from "@/lib/community/routes";
 import { DmAvatar } from "./dm-avatar";
 import type { DmInboxItem } from "@/types/community";
 
+/** Agency Community — see DmThreadModal's own doc comment. DMs are
+ *  agency-wide, not group-scoped, so the thread link goes to `/my/messages
+ *  /{threadId}` directly rather than through the group-scoped
+ *  CommunityLinkBase builders. */
+function threadHref(agencyScope: boolean | undefined, saId: string, pretty: boolean, threadId: string): string {
+  return agencyScope ? `/my/messages/${threadId}` : communityMessageThreadHref({ saId, pretty }, threadId);
+}
+
 function timeAgo(ms: number | null): string {
   if (!ms) return "";
   const s = Math.floor((Date.now() - ms) / 1000);
@@ -21,6 +29,7 @@ function timeAgo(ms: number | null): string {
 export function DmInbox({
   saId,
   pretty = false,
+  agencyScope,
   brand,
   accent,
   initialItems,
@@ -28,13 +37,15 @@ export function DmInbox({
   saId: string;
   /** True when serving `saId`'s own verified custom domain — see domain.ts. */
   pretty?: boolean;
+  /** Agency Community — see DmThreadModal's own doc comment. */
+  agencyScope?: boolean;
   brand: string;
   /** Theme parity (2026-08-29 closeout) — the unread dot is a small badge.
    *  Optional, falls back to `brand`. */
   accent?: string;
   initialItems: DmInboxItem[];
 }) {
-  const items = useInbox(saId, initialItems);
+  const items = useInbox(saId, initialItems, agencyScope);
 
   if (items.length === 0) {
     return (
@@ -49,7 +60,7 @@ export function DmInbox({
       {items.map((t) => (
         <Link
           key={t.threadId}
-          href={communityMessageThreadHref({ saId, pretty }, t.threadId)}
+          href={threadHref(agencyScope, saId, pretty, t.threadId)}
           className="flex items-center gap-3 px-4 py-3 hover:bg-[#F8F7F5]"
         >
           <DmAvatar

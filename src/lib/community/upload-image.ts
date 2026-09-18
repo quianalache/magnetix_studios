@@ -27,18 +27,24 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
  * again server-side; this just surfaces whatever error message the route
  * returns. `about`/`card` (2026-08-29 About-tab cleanup) added so the new
  * About editor works for a pure Community moderator with no CRM/staff
- * access, not just staff.
+ * access, not just staff. `agencyGroupId` (2026-09-17) targets the agency-
+ * scope sibling upload route instead — `saId`/`groupId` are ignored when
+ * set, same convention as `agencyGroupId` elsewhere in this codebase.
  */
 export async function uploadCommunitySettingsImage(
   file: File,
   saId: string,
   groupId: string,
   kind: "logo" | "cover" | "favicon" | "about" | "card",
+  agencyGroupId?: string,
 ): Promise<string> {
   const form = new FormData();
   form.append("file", file);
   form.append("kind", kind);
-  const res = await fetch(`/api/community/${saId}/${groupId}/settings/upload`, {
+  const uploadUrl = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/settings/upload`
+    : `/api/community/${saId}/${groupId}/settings/upload`;
+  const res = await fetch(uploadUrl, {
     method: "POST",
     body: form,
   });

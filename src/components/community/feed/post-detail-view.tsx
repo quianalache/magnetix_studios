@@ -496,6 +496,7 @@ export function PostDetailView({
                         ? "broadcast"
                         : "meeting"
                     }
+                    agencyGroupId={agencyGroupId}
                   />
                 )}
               {currentPost.postType === "live" &&
@@ -514,6 +515,7 @@ export function PostDetailView({
                       saId={saId}
                       groupId={groupId}
                       postId={currentPost.id}
+                      agencyGroupId={agencyGroupId}
                     />
                   </div>
                 )}

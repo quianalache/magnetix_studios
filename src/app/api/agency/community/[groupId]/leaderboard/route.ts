@@ -3,8 +3,9 @@ import { resolveAgencyCommunityCaller, agencyMemberDisplayName } from "@/lib/ser
 import {
   getAgencyLeaderboard,
   getAgencyMemberPointStats,
+  getAgencyPointsConfig,
 } from "@/lib/server/agency-community-points-service";
-import { DEFAULT_LEVELS, DEFAULT_POINT_RULES } from "@/lib/server/community-points-defaults";
+import { listActiveAgencyRewardsServerSide } from "@/lib/server/agency-community-rewards-service";
 import { getAgencyGroupById } from "@/lib/server/community-agency-service";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,10 @@ export const dynamic = "force-dynamic";
 /**
  * Agency Community Leaderboard — bundles rows for all 3 windows + the
  * viewer's own level/stats into one response, matching the owner page's
- * established client-fetch convention. Levels/rules are always the
- * shipped defaults (no custom Points & Rewards editing ported this pass —
- * see agency-community-points-service.ts's module comment).
+ * established client-fetch convention. Levels/rules/active rewards now
+ * reflect this group's real, possibly-customized Points & Rewards config
+ * (see agency-community-points-service.ts / agency-community-rewards-
+ * service.ts) instead of the shipped defaults.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await ctx.params;
@@ -24,14 +26,16 @@ export async function GET(request: Request, ctx: { params: Promise<{ groupId: st
   const group = await getAgencyGroupById(caller.agencyId, groupId);
   if (!group) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const [rows7d, rows30d, rowsAll] = await Promise.all([
+  const [rows7d, rows30d, rowsAll, config, activeRewards] = await Promise.all([
     getAgencyLeaderboard({ agencyId: caller.agencyId, groupId, window: "7d", limit: 50 }),
     getAgencyLeaderboard({ agencyId: caller.agencyId, groupId, window: "30d", limit: 50 }),
     getAgencyLeaderboard({ agencyId: caller.agencyId, groupId, window: "all", limit: 50 }),
+    getAgencyPointsConfig(caller.agencyId, groupId),
+    listActiveAgencyRewardsServerSide(caller.agencyId, groupId),
   ]);
 
-  const levels = DEFAULT_LEVELS;
-  const rules = DEFAULT_POINT_RULES;
+  const levels = config.levels;
+  const rules = config.rules;
 
   let viewer;
   let stats;
@@ -74,7 +78,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ groupId: st
     pointsEnabled: group.pointsEnabled === true,
     viewer,
     rowsByWindow: { "7d": rows7d, "30d": rows30d, all: rowsAll },
-    activeRewards: [],
+    activeRewards,
     levels,
     rules,
     stats,

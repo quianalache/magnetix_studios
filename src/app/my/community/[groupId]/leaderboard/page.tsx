@@ -7,8 +7,12 @@ import {
   activateAgencyMembershipServerSide,
 } from "@/lib/server/community-agency-service";
 import { agencyMemberDisplayName } from "@/lib/server/agency-community-access";
-import { getAgencyLeaderboard, getAgencyMemberPointStats } from "@/lib/server/agency-community-points-service";
-import { DEFAULT_LEVELS, DEFAULT_POINT_RULES } from "@/lib/server/community-points-defaults";
+import {
+  getAgencyLeaderboard,
+  getAgencyMemberPointStats,
+  getAgencyPointsConfig,
+} from "@/lib/server/agency-community-points-service";
+import { listActiveAgencyRewardsServerSide } from "@/lib/server/agency-community-rewards-service";
 import { CommunityShell, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { LeaderboardView, type ViewerLevelInfo } from "@/components/community/leaderboard/leaderboard-view";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
@@ -44,14 +48,16 @@ export default async function MyAgencyCommunityLeaderboardPage({
     await activateAgencyMembershipServerSide(agencyId, groupId, membership.id);
   }
 
-  const [rows7d, rows30d, rowsAll, stats] = await Promise.all([
+  const [rows7d, rows30d, rowsAll, stats, config, activeRewards] = await Promise.all([
     getAgencyLeaderboard({ agencyId, groupId, window: "7d", limit: 50 }),
     getAgencyLeaderboard({ agencyId, groupId, window: "30d", limit: 50 }),
     getAgencyLeaderboard({ agencyId, groupId, window: "all", limit: 50 }),
     getAgencyMemberPointStats(agencyId, groupId, membership.id),
+    getAgencyPointsConfig(agencyId, groupId),
+    listActiveAgencyRewardsServerSide(agencyId, groupId),
   ]);
 
-  const levels = DEFAULT_LEVELS;
+  const levels = config.levels;
   const points = membership.points ?? 0;
   const viewerLevelIndex = levels.findIndex((l) => l.level === (membership.level ?? 1));
   const viewerLevel = levels[viewerLevelIndex] ?? levels[0];
@@ -89,9 +95,9 @@ export default async function MyAgencyCommunityLeaderboardPage({
         accent={resolvedTheme.accent}
         viewer={viewerInfo}
         rowsByWindow={{ "7d": rows7d, "30d": rows30d, all: rowsAll }}
-        activeRewards={[]}
-        levels={[...levels]}
-        rules={DEFAULT_POINT_RULES}
+        activeRewards={activeRewards}
+        levels={levels}
+        rules={config.rules}
         stats={stats}
       />
     </CommunityShell>

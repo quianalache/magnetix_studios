@@ -164,7 +164,7 @@ export function parseRewardInputBody(body: {
   };
 }
 
-function validateRewardInput(input: RewardInput): void {
+export function validateRewardInput(input: RewardInput): void {
   if (!input.title || !input.title.trim()) {
     throw new Error("Reward title is required.");
   }

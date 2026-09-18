@@ -95,6 +95,7 @@ export function PointsRewardsWorkspace({
   saId,
   pretty = false,
   staffGroupId,
+  agencyGroupId,
   groupId,
   groupSlug,
   brand,
@@ -108,6 +109,10 @@ export function PointsRewardsWorkspace({
   pretty?: boolean;
   /** Staff Community-in-CRM integration — see CommunityLinkBase in routes.ts. */
   staffGroupId?: string;
+  /** Agency Community Settings → Points & Rewards — see CommunityLinkBase
+   *  in routes.ts. Branches the API base and the two href builders below;
+   *  everything else in this workspace is scope-agnostic. */
+  agencyGroupId?: string;
   groupId: string;
   groupSlug: string;
   brand: string;
@@ -122,7 +127,9 @@ export function PointsRewardsWorkspace({
   const [rewards, setRewards] = useState(initialRewards);
   const [winners, setWinners] = useState(initialWinners);
 
-  const apiBase = `/api/community/${saId}/${groupId}/points-rewards`;
+  const apiBase = agencyGroupId
+    ? `/api/agency/community/${agencyGroupId}/points-rewards`
+    : `/api/community/${saId}/${groupId}/points-rewards`;
 
   // ---- Points System ------------------------------------------------
   const [editingRule, setEditingRule] = useState<PointRule | null>(null);
@@ -256,7 +263,10 @@ export function PointsRewardsWorkspace({
       setMemberSearchResults([]);
       return;
     }
-    const res = await fetch(`/api/community/${saId}/${groupId}/mention-members?q=${encodeURIComponent(query)}`);
+    const mentionMembersBase = agencyGroupId
+      ? `/api/agency/community/${agencyGroupId}/mention-members`
+      : `/api/community/${saId}/${groupId}/mention-members`;
+    const res = await fetch(`${mentionMembersBase}?q=${encodeURIComponent(query)}`);
     const data = await res.json().catch(() => ({ members: [] }));
     setMemberSearchResults((data.members ?? []).map((m: { id: string; label: string; avatarUrl: string | null }) => ({ memberId: m.id, displayName: m.label, avatarUrl: m.avatarUrl })));
   }
@@ -322,7 +332,7 @@ export function PointsRewardsWorkspace({
         <div>
           <h1 className="text-xl font-semibold text-[#202124]">Community Settings</h1>
           <Link
-            href={communityHomeHref({ saId, pretty, staffGroupId }, groupSlug)}
+            href={communityHomeHref({ saId, pretty, staffGroupId, agencyGroupId }, groupSlug)}
             className="mt-1 flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to Community
@@ -331,7 +341,7 @@ export function PointsRewardsWorkspace({
       </div>
 
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <SettingsNav brand={brand} active="points-rewards" link={{ saId, pretty, staffGroupId }} groupSlug={groupSlug} />
+        <SettingsNav brand={brand} active="points-rewards" link={{ saId, pretty, staffGroupId, agencyGroupId }} groupSlug={groupSlug} />
 
         {/* min-w-0: a CSS Grid item defaults to min-width:auto, which lets
             unwrapped content (the long rule/level/reward description text
