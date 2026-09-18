@@ -1,22 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 
 /**
- * Public unsubscribe confirmation page. The page POSTs to /api/u/[token]
- * automatically on mount to flip emailOptedOut on the contact, then shows
- * a confirmation. We do this client-side so email-link previewers (which
- * issue HEAD/GET) don't accidentally opt people out.
- *
- * No layout chrome (sidebar/header) — this page renders standalone.
+ * Public unsubscribe confirmation page for Agency Communications — the
+ * agency-scope sibling of /u/[token]/page.tsx. Same client-side-POST-on-
+ * mount pattern (so email-link previewers issuing HEAD/GET never trigger
+ * an unsubscribe). No layout chrome — standalone page.
  */
 type Status = "loading" | "ok" | "error";
 
-export default function UnsubscribePage() {
-  const params = useParams<{ token: string }>();
-  const token = params.token;
+export default function AgencyUnsubscribePage({ token }: { token: string }) {
   const [status, setStatus] = useState<Status>("loading");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
@@ -24,18 +19,14 @@ export default function UnsubscribePage() {
     if (!token) return;
     (async () => {
       try {
-        const res = await fetch(`/api/u/${token}`, { method: "POST" });
+        const res = await fetch(`/api/u/agency/${token}`, { method: "POST" });
         if (!res.ok) {
-          const payload = (await res.json().catch(() => ({}))) as {
-            error?: string;
-          };
+          const payload = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(payload.error ?? "Could not process unsubscribe.");
         }
         setStatus("ok");
       } catch (err) {
-        setErrorMessage(
-          err instanceof Error ? err.message : "Could not process unsubscribe.",
-        );
+        setErrorMessage(err instanceof Error ? err.message : "Could not process unsubscribe.");
         setStatus("error");
       }
     })();
@@ -48,9 +39,7 @@ export default function UnsubscribePage() {
           <>
             <div className="mx-auto mb-4 h-10 w-10 animate-pulse rounded-full bg-muted" />
             <h1 className="text-lg font-semibold">Working on it…</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Hold on while we update your preferences.
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">Hold on while we update your preferences.</p>
           </>
         )}
         {status === "ok" && (
@@ -60,11 +49,10 @@ export default function UnsubscribePage() {
             </div>
             <h1 className="text-lg font-semibold">You&apos;re unsubscribed</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              We won&apos;t send you any more marketing emails from this
-              workspace. You&apos;ll still receive messages tied to things
-              you&apos;ve booked or purchased, like confirmations and
-              reminders. If this was a mistake, reply to a previous email and
-              we&apos;ll add you back manually.
+              We won&apos;t send you any more emails from Magnetix Studios. This
+              only affects Magnetix Studios&apos; own communications — any
+              business you use Magnetix through keeps its own separate
+              email preferences.
             </p>
           </>
         )}
@@ -74,12 +62,7 @@ export default function UnsubscribePage() {
               <AlertTriangle className="h-6 w-6" />
             </div>
             <h1 className="text-lg font-semibold">Something went wrong</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {errorMessage}
-            </p>
-            <p className="mt-4 text-xs text-muted-foreground">
-              Reply to a previous email and we&apos;ll opt you out manually.
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">{errorMessage}</p>
           </>
         )}
       </div>
