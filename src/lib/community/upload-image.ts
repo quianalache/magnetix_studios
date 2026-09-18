@@ -99,6 +99,30 @@ export async function uploadStandaloneCourseImage(
 }
 
 /**
+ * Agency Standalone Course sibling of `uploadStandaloneCourseImage` — the
+ * agency owner has no Firebase-Storage-writable client identity scoped to
+ * this path (same reasoning as `uploadCommunitySettingsImage`'s own
+ * agency branch), so this POSTs to the Admin-SDK-backed
+ * `/api/agency/standalone-courses/[courseId]/upload` route instead of
+ * writing to Storage directly.
+ */
+export async function uploadAgencyStandaloneCourseImage(
+  file: File,
+  courseId: string,
+  kind: "cover" | "lesson" | "instructor-headshot" | "logo" | "favicon",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`/api/agency/standalone-courses/${courseId}/upload`, { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) {
+    throw new Error(data.error ?? "Upload failed");
+  }
+  return data.url;
+}
+
+/**
  * Course-theme sibling — Hero background, block images (image/custom
  * blocks), Progress promo image, Instructor headshot. Same Storage path
  * prefix as `uploadStandaloneCourseImage` (already permitted by

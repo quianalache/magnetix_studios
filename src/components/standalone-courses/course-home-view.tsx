@@ -47,7 +47,7 @@ export function CourseHomeView({
   theme: CourseTheme;
   sections: StandaloneCourseSection[];
   lessons: StandaloneLesson[];
-  member: Member;
+  member: Pick<Member, "email" | "displayName">;
   completedLessonIds: string[];
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
   /** false in the theme editor's live preview — the curriculum and the

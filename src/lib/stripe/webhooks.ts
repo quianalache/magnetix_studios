@@ -26,6 +26,11 @@ import {
   handleStandaloneCourseSubscriptionDeleted,
 } from "@/lib/server/standalone-course-purchase-service";
 import {
+  AGENCY_COURSE_CHARGE_KIND,
+  handleAgencyStandaloneCourseCheckoutCompleted,
+  handleAgencyStandaloneCourseSubscriptionDeleted,
+} from "@/lib/server/agency-standalone-course-purchase-service";
+import {
   OFFER_CHARGE_KIND,
   handleCourseOfferCheckoutCompleted,
   handleCourseOfferSubscriptionDeleted,
@@ -76,6 +81,14 @@ export async function handleCheckoutCompleted(
   // Standalone Course instant purchase (embedded Checkout, mode:"payment").
   if (session.metadata?.kind === COURSE_CHARGE_KIND) {
     await handleStandaloneCourseCheckoutCompleted(session);
+    return;
+  }
+
+  // Agency Standalone Course instant purchase — same shape, agency-owned
+  // course, charged directly on the platform's own shared Stripe account
+  // (see agency-standalone-course-purchase-service.ts's module comment).
+  if (session.metadata?.kind === AGENCY_COURSE_CHARGE_KIND) {
+    await handleAgencyStandaloneCourseCheckoutCompleted(session);
     return;
   }
 
@@ -516,6 +529,11 @@ export async function handleSubscriptionDeleted(
 
   if (subscription.metadata?.kind === COURSE_CHARGE_KIND) {
     await handleStandaloneCourseSubscriptionDeleted(subscription);
+    return;
+  }
+
+  if (subscription.metadata?.kind === AGENCY_COURSE_CHARGE_KIND) {
+    await handleAgencyStandaloneCourseSubscriptionDeleted(subscription);
     return;
   }
 

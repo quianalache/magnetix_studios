@@ -8,7 +8,7 @@ import { CommunityShell, COMMUNITY_DEFAULT_BRAND } from "@/components/community/
 import { CourseThumb } from "@/components/community/classroom/course-thumb";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { CommunityGroup } from "@/types/community";
-import type { AgencyCourseCardView } from "@/lib/server/agency-community-classroom-service";
+import type { AgencyClassroomCourseCard } from "@/lib/server/agency-community-classroom-service";
 
 /** Agency Community Classroom catalog — owner view (the real "watch
  *  courses" experience, not the authoring tool — that's the separate
@@ -24,7 +24,7 @@ export default function AgencyClassroomCatalogPage({
   const isOwner = agencyRole === "owner";
 
   const [group, setGroup] = useState<CommunityGroup | null>(null);
-  const [courses, setCourses] = useState<AgencyCourseCardView[] | null>(null);
+  const [courses, setCourses] = useState<AgencyClassroomCourseCard[] | null>(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function AgencyClassroomCatalogPage({
       .catch(() => setNotFound(true));
     void fetch(`/api/agency/community/${groupId}/courses/catalog`)
       .then((r) => r.json())
-      .then((d: { courses?: AgencyCourseCardView[] }) => setCourses(d.courses ?? []))
+      .then((d: { courses?: AgencyClassroomCourseCard[] }) => setCourses(d.courses ?? []))
       .catch(() => setCourses([]));
   }, [isOwner, groupId]);
 
@@ -90,7 +90,14 @@ export default function AgencyClassroomCatalogPage({
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-[#202124]">{c.title}</h3>
-                    {c.locked && <Lock className="h-3 w-3 shrink-0 text-[#909090]" />}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {c.source === "standalone" && (
+                        <span className="rounded-full bg-[#F0F0F0] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#6B6875]">
+                          Linked Product
+                        </span>
+                      )}
+                      {c.locked && <Lock className="h-3 w-3 text-[#909090]" />}
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-[#909090]">{c.description || `${c.lessonCount} lessons`}</p>
                   {c.locked ? (

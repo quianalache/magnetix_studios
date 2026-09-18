@@ -8,7 +8,7 @@ import {
   getAgencyMembershipForPerson,
   activateAgencyMembershipServerSide,
 } from "@/lib/server/community-agency-service";
-import { listAgencyCoursesForMember } from "@/lib/server/agency-community-classroom-service";
+import { listAgencyClassroomCatalogForMember } from "@/lib/server/agency-community-classroom-service";
 import { agencyMemberDisplayName } from "@/lib/server/agency-community-access";
 import { CommunityShell, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
 import { CourseThumb } from "@/components/community/classroom/course-thumb";
@@ -46,11 +46,11 @@ export default async function MyAgencyClassroomCatalogPage({
   }
 
   const linkBase = { saId: "", pretty: false, agencyGroupId: groupId, agencyMemberView: true };
-  const courses = await listAgencyCoursesForMember({
+  const courses = await listAgencyClassroomCatalogForMember({
     linkBase,
     groupId,
     groupSlug: group.slug,
-    memberId: person.id,
+    personId: person.id,
     viewerLevel: membership.level ?? 1,
   });
 
@@ -82,7 +82,14 @@ export default async function MyAgencyClassroomCatalogPage({
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-semibold text-[#202124]">{c.title}</h3>
-                    {c.locked && <Lock className="h-3 w-3 shrink-0 text-[#909090]" />}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {c.source === "standalone" && (
+                        <span className="rounded-full bg-[#F0F0F0] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#6B6875]">
+                          Linked Product
+                        </span>
+                      )}
+                      {c.locked && <Lock className="h-3 w-3 text-[#909090]" />}
+                    </div>
                   </div>
                   <p className="mt-1 line-clamp-2 text-xs text-[#909090]">{c.description || `${c.lessonCount} lessons`}</p>
                   {c.locked ? (

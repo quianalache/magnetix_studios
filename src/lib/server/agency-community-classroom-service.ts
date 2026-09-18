@@ -418,3 +418,73 @@ export async function listAgencyCoursesForMember(opts: {
     }),
   );
 }
+
+export type AgencyClassroomCourseSource = "native" | "standalone";
+export interface AgencyClassroomCourseCard extends AgencyCourseCardView {
+  source: AgencyClassroomCourseSource;
+}
+
+/**
+ * Agency Community Classroom's combined catalog — native courses union
+ * linked Agency Standalone Courses, mirroring tenant
+ * classroom-catalog-service.ts's "one card shape, two sources" union. A
+ * linked Standalone Course is never copied here — content, entitlement,
+ * and progress all stay on the course itself; this only reads its
+ * catalog-card summary. Unlike tenant (which embeds a linked Product's
+ * lessons inside the Community route tree via a `/classroom/product/...`
+ * bridge), a linked agency card's `href` goes straight to the course's
+ * own site (`/course/agency/{courseId}` sales page, or its own classroom
+ * home once enrolled) — that embedded-viewer bridge isn't ported for
+ * agency this pass, a disclosed simplification, not a broken link.
+ */
+export async function listAgencyClassroomCatalogForMember(opts: {
+  linkBase: CommunityLinkBase;
+  groupId: string;
+  groupSlug: string;
+  personId: string;
+  viewerLevel: number;
+}): Promise<AgencyClassroomCourseCard[]> {
+  const native = await listAgencyCoursesForMember({
+    linkBase: opts.linkBase,
+    groupId: opts.groupId,
+    groupSlug: opts.groupSlug,
+    memberId: opts.personId,
+    viewerLevel: opts.viewerLevel,
+  });
+  const nativeCards: AgencyClassroomCourseCard[] = native.map((c) => ({ ...c, source: "native" }));
+
+  const agencyId = opts.linkBase.agencyGroupId!;
+  const [{ listAgencyStandaloneCoursesLinkedToGroup, getAgencyStandaloneEnrollment }, { hasPaidAgencyStandaloneCourse }] = await Promise.all([
+    import("@/lib/server/agency-standalone-course-service"),
+    import("@/lib/server/agency-standalone-course-purchase-service"),
+  ]);
+  const linked = await listAgencyStandaloneCoursesLinkedToGroup(agencyId, opts.groupId);
+  const linkedCards: AgencyClassroomCourseCard[] = await Promise.all(
+    linked.map(async (course) => {
+      const enrolled = await getAgencyStandaloneEnrollment(agencyId, course.id, opts.personId);
+      let locked: { reason: string; purchasable: boolean } | null = null;
+      if (!enrolled && course.access === "purchase") {
+        const paid = await hasPaidAgencyStandaloneCourse(agencyId, course.id, opts.personId);
+        if (!paid) {
+          const price = course.priceCents != null ? ` — ${formatPrice(course.priceCents, course.currency)}` : "";
+          locked = { reason: `Buy${price}`, purchasable: true };
+        }
+      }
+      const href = locked ? `/course/agency/${course.id}` : enrolled ? `/course/agency/${course.id}/classroom` : `/course/agency/${course.id}`;
+      return {
+        id: course.id,
+        source: "standalone",
+        title: course.title,
+        description: "",
+        thumbnailUrl: course.coverUrl,
+        lessonCount: 0,
+        progressPct: enrolled?.progressPct ?? 0,
+        locked,
+        firstLessonId: null,
+        href,
+      } satisfies AgencyClassroomCourseCard;
+    }),
+  );
+
+  return [...nativeCards, ...linkedCards];
+}

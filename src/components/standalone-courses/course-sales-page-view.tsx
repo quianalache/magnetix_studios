@@ -47,6 +47,7 @@ type CourseSalesCourse = Pick<
 export function CourseSalesPageView({
   saId,
   courseId,
+  agencyScope,
   course,
   theme,
   outline,
@@ -62,6 +63,9 @@ export function CourseSalesPageView({
 }: {
   saId: string;
   courseId: string;
+  /** Agency Standalone Course — see EnrollModal's own doc comment. Also
+   *  branches the header/enroll "Log in" destination to MyMagnetix. */
+  agencyScope?: boolean;
   course: CourseSalesCourse;
   theme: CourseTheme;
   outline: StandaloneCourseCurriculumSection[];
@@ -122,7 +126,7 @@ export function CourseSalesPageView({
               </div>
             ) : interactive ? (
               <a
-                href={`/course/${saId}/login?course=${courseId}`}
+                href={agencyScope ? `/my/login?next=${encodeURIComponent(`/course/agency/${courseId}`)}` : `/course/${saId}/login?course=${courseId}`}
                 className="rounded-md border px-4 py-1.5 text-sm font-medium hover:opacity-80"
                 style={{
                   borderColor: theme.header.searchBorder,
@@ -364,6 +368,7 @@ export function CourseSalesPageView({
                   <EnrollModal
                     saId={saId}
                     courseId={courseId}
+                    agencyScope={agencyScope}
                     access={course.access}
                     priceLabel={priceLabel}
                     brand={theme.hero.buttonColor}

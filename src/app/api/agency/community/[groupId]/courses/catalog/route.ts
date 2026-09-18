@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { resolveAgencyCommunityCaller } from "@/lib/server/agency-community-access";
-import { listAgencyCoursesForMember } from "@/lib/server/agency-community-classroom-service";
+import { listAgencyClassroomCatalogForMember } from "@/lib/server/agency-community-classroom-service";
 import { getAgencyGroupById } from "@/lib/server/community-agency-service";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ groupId: st
   const memberId = caller.kind === "owner" ? caller.uid : caller.personId;
   const viewerLevel = caller.kind === "owner" ? Number.POSITIVE_INFINITY : (caller.membership.level ?? 1);
 
-  const courses = await listAgencyCoursesForMember({
+  const courses = await listAgencyClassroomCatalogForMember({
     linkBase: { saId: "", pretty: false, agencyGroupId: groupId, agencyMemberView: caller.kind === "member" },
     groupId,
     groupSlug: group.slug,
-    memberId,
+    personId: memberId,
     viewerLevel,
   });
   return NextResponse.json({ courses });

@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUpload } from "@/components/community/image-upload";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { CoursePreviewCard } from "@/components/standalone-courses/course-preview-card";
-import { uploadStandaloneCourseImage } from "@/lib/community/upload-image";
+import { uploadStandaloneCourseImage, uploadAgencyStandaloneCourseImage } from "@/lib/community/upload-image";
 import { cn } from "@/lib/utils";
 import type {
   StandaloneCourse,
@@ -43,12 +43,17 @@ function plainTextSnippet(html: string): string {
  */
 export function CourseWizard({
   subAccountId,
+  agencyScope,
   mode,
   course,
   cancelHref,
   onDone,
 }: {
   subAccountId: string;
+  /** Agency Standalone Course — targets /api/agency/standalone-courses/...
+   *  and the Admin-SDK-backed upload route instead of a direct client
+   *  Storage write. `subAccountId` is ignored in this mode. */
+  agencyScope?: boolean;
   mode: "create" | "edit";
   /** Required (loaded) when `mode === "edit"`. */
   course?: StandaloneCourse | null;
@@ -127,8 +132,11 @@ export function CourseWizard({
         priceTextOverride: priceTextOverride.trim() || null,
         published,
       };
-      const url =
-        mode === "create"
+      const url = agencyScope
+        ? mode === "create"
+          ? `/api/agency/standalone-courses`
+          : `/api/agency/standalone-courses/${course!.id}`
+        : mode === "create"
           ? `/api/sub-accounts/${subAccountId}/standalone-courses`
           : `/api/sub-accounts/${subAccountId}/standalone-courses/${course!.id}`;
       const res = await fetch(url, {
@@ -246,12 +254,9 @@ export function CourseWizard({
                       value={about}
                       onChange={setAbout}
                       onUploadImage={(file) =>
-                        uploadStandaloneCourseImage(
-                          file,
-                          subAccountId,
-                          courseIdForUploads,
-                          "lesson",
-                        )
+                        agencyScope
+                          ? uploadAgencyStandaloneCourseImage(file, courseIdForUploads, "lesson")
+                          : uploadStandaloneCourseImage(file, subAccountId, courseIdForUploads, "lesson")
                       }
                     />
                     <p className="text-xs text-muted-foreground">
@@ -278,12 +283,9 @@ export function CourseWizard({
                     onChange={setCoverUrl}
                     onUploadingChange={setImgUploading}
                     onUpload={(file) =>
-                      uploadStandaloneCourseImage(
-                        file,
-                        subAccountId,
-                        courseIdForUploads,
-                        "cover",
-                      )
+                      agencyScope
+                        ? uploadAgencyStandaloneCourseImage(file, courseIdForUploads, "cover")
+                        : uploadStandaloneCourseImage(file, subAccountId, courseIdForUploads, "cover")
                     }
                     aspect="video"
                   />

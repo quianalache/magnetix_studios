@@ -32,6 +32,7 @@ type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 export function EnrollModal({
   saId,
   courseId,
+  agencyScope,
   access,
   priceLabel,
   brand,
@@ -40,6 +41,10 @@ export function EnrollModal({
 }: {
   saId: string;
   courseId: string;
+  /** Agency Standalone Course — targets /api/course/agency/[courseId]/...
+   *  (global Person identity, no phone field — see that signup route)
+   *  instead of /api/course/{saId}/[courseId]/... `saId` is ignored. */
+  agencyScope?: boolean;
   access: "open" | "purchase";
   priceLabel: string;
   brand: string;
@@ -68,13 +73,14 @@ export function EnrollModal({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/course/${saId}/${courseId}/signup`, {
+      const signupUrl = agencyScope ? `/api/course/agency/${courseId}/signup` : `/api/course/${saId}/${courseId}/signup`;
+      const res = await fetch(signupUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           email,
-          phone,
+          ...(agencyScope ? {} : { phone }),
           ...(needsBirthDetails ? { birthDate, birthTime, birthPlace } : {}),
         }),
       });
@@ -157,16 +163,18 @@ export function EnrollModal({
                   required
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="enroll-phone">Phone</Label>
-                <Input
-                  id="enroll-phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
+              {!agencyScope && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="enroll-phone">Phone</Label>
+                  <Input
+                    id="enroll-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               {needsBirthDetails && (
                 <>
                   <p className="pt-1 text-xs text-[#909090]">
@@ -220,7 +228,7 @@ export function EnrollModal({
               <p className="text-center text-xs text-[#909090]">
                 Already purchased?{" "}
                 <a
-                  href={`/course/${saId}/login?course=${courseId}`}
+                  href={agencyScope ? `/my/login?next=${encodeURIComponent(`/course/agency/${courseId}`)}` : `/course/${saId}/login?course=${courseId}`}
                   className="underline"
                 >
                   Log in
