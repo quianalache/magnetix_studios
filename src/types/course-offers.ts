@@ -1,6 +1,7 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { CourseTheme } from "./course-theme";
 import type { ContactAttribution } from "./contacts";
+import type { PaymentMode } from "./tenancy";
 
 /**
  * Course Offers — the commerce/pricing layer on top of Standalone Courses
@@ -107,6 +108,7 @@ export interface CourseOffer {
    *  "recurring"`. Null/0 = bill immediately. Maps to Stripe Checkout's
    *  `subscription_data.trial_period_days`. */
   trialDays: number | null;
+  paymentMode?: PaymentMode;
   /** Custom checkout price display, e.g. "Free Trial", "Limited Time Only". */
   priceTextOverride: string | null;
   visibility: OfferVisibility;
@@ -210,6 +212,7 @@ export interface CourseOfferPurchase {
   stripePaymentIntentId: string | null;
   /** The connected Stripe account this charge ran on (`{stripeAccount: id}`), or null when it used the shared platform account (stripeCourseCheckoutEnabledByAgency) or PayPal. Lets any later off-session charge (e.g. a one-click upsell) know which account to target. */
   stripeConnectAccountId: string | null;
+  paymentMode?: PaymentMode;
   status: CourseOfferPurchaseStatus;
   grantedByUid: string | null;
   requestedAt: Timestamp | FieldValue | null;

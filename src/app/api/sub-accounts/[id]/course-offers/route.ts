@@ -31,6 +31,7 @@ export async function POST(
     priceTextOverride?: string | null;
     booking?: CourseOfferBookingBundle | null;
     projectTemplateIds?: string[];
+    paymentMode?: "test" | "live";
   };
   try {
     body = await request.json();
@@ -85,6 +86,7 @@ export async function POST(
     priceTextOverride: body.priceTextOverride ?? null,
     booking: body.booking ?? null,
     projectTemplates,
+    paymentMode: body.paymentMode,
   });
   return NextResponse.json({ ok: true, offer });
 }

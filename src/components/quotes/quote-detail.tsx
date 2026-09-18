@@ -221,6 +221,7 @@ export function QuoteDetail({
       validUntil,
       paymentDueDays: values.paymentDueDays,
       autoCreateDealOnAccept: values.autoCreateDealOnAccept,
+      paymentMode: values.paymentMode,
     });
     setEditing(false);
     setFlash(`${isInvoice ? "Invoice" : "Quote"} saved.`);

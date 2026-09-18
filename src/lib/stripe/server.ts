@@ -1,7 +1,9 @@
 import "server-only";
 
 import Stripe from "stripe";
+import { getAdminDb } from "@/lib/firebase/admin";
 import type {
+  PaymentMode,
   StripeConnectAccount,
   StripeConnectConnection,
   StripeEnvironment,
@@ -65,6 +67,31 @@ export function getStripeConnectionForEnvironment(
   // accounts until an environment can be confirmed and backfilled; it never
   // treats a flat record as two independent environment connections.
   return stripeConnect.accountId?.trim() ? stripeConnect : null;
+}
+
+/** Strict tenant payment resolver. Explicit mode never falls back to another
+ * environment or to the legacy flat Connect account field. */
+export async function resolveStripeForSubAccount(
+  subAccountId: string,
+  paymentMode: PaymentMode,
+): Promise<{ environment: StripeEnvironment; accountId: string; stripe: Stripe }> {
+  const snap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  const connection = snap.data()?.stripeConnect?.[paymentMode] as
+    | StripeConnectConnection
+    | undefined;
+  const accountId = connection?.accountId?.trim();
+  if (!accountId) {
+    throw new Error(
+      paymentMode === "test"
+        ? "Connect a Stripe test account before using Test mode."
+        : "Connect your Live Stripe account before accepting real payments."
+    );
+  }
+  return { environment: paymentMode, accountId, stripe: getStripeServer(paymentMode) };
+}
+
+export function normalizePaymentMode(value: unknown, fallback: PaymentMode = "test"): PaymentMode {
+  return value === "live" || value === "test" ? value : fallback;
 }
 
 /** Whether the configured Stripe secret key is a test-mode key — drives the

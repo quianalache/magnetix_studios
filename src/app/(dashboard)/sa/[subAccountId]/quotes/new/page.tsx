@@ -100,6 +100,7 @@ export default function NewQuotePage() {
           validUntilDateString: values.validUntilDateString,
           paymentDueDays: values.paymentDueDays,
           autoCreateDealOnAccept: values.autoCreateDealOnAccept,
+          paymentMode: values.paymentMode,
         }),
       });
       if (!res.ok) {

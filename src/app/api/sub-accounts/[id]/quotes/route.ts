@@ -169,6 +169,7 @@ interface CreateQuotePayload {
   validUntilDateString?: string | null;
   paymentDueDays?: number | null;
   autoCreateDealOnAccept?: boolean;
+  paymentMode?: "test" | "live";
 }
 
 /** Whitelist + clamp an Offer snapshot object the client claims to be
@@ -317,6 +318,10 @@ function sanitizePayload(body: CreateQuotePayload): Partial<Quote> {
 
   if (typeof body.autoCreateDealOnAccept === "boolean") {
     out.autoCreateDealOnAccept = body.autoCreateDealOnAccept;
+  }
+
+  if (body.paymentMode === "test" || body.paymentMode === "live") {
+    out.paymentMode = body.paymentMode;
   }
 
   if (body.paymentDueDays === null) {

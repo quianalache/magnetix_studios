@@ -86,6 +86,7 @@ export async function createStandaloneCourseServerSide(opts: {
   billingType?: StandaloneCourseBillingType;
   recurringInterval?: StandaloneCourseRecurringInterval | null;
   trialDays?: number | null;
+  paymentMode?: "test" | "live";
   published?: boolean;
   showMemberCount?: boolean;
 }): Promise<StandaloneCourse> {
@@ -113,6 +114,7 @@ export async function createStandaloneCourseServerSide(opts: {
     recurringInterval:
       billingType === "recurring" ? (opts.recurringInterval ?? "month") : null,
     trialDays: billingType === "recurring" ? (opts.trialDays ?? null) : null,
+    paymentMode: opts.paymentMode ?? "test",
     enrollmentCount: 0,
     showMemberCount: opts.showMemberCount ?? false,
     language: null as string | null,
@@ -174,6 +176,7 @@ export interface StandaloneCoursePatch {
   billingType?: StandaloneCourseBillingType;
   recurringInterval?: StandaloneCourseRecurringInterval | null;
   trialDays?: number | null;
+  paymentMode?: "test" | "live";
   showMemberCount?: boolean;
   language?: string | null;
   difficulty?: StandaloneCourseDifficulty | null;
@@ -252,6 +255,9 @@ export async function updateStandaloneCourseServerSide(opts: {
       }
       if (p.trialDays !== undefined) updates.trialDays = p.trialDays;
     }
+  }
+  if (p.paymentMode === "test" || p.paymentMode === "live") {
+    updates.paymentMode = p.paymentMode;
   }
   if (p.language !== undefined) updates.language = p.language;
   if (p.difficulty !== undefined) updates.difficulty = p.difficulty;

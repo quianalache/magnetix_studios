@@ -6,9 +6,10 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import {
-  getStripeConnectionForEnvironment,
   getStripeEnvironment,
   getStripeServer,
+  normalizePaymentMode,
+  resolveStripeForSubAccount,
 } from "@/lib/stripe/server";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import {
@@ -269,6 +270,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
    *  doc comment) — a buyer charged off-session for an upsell never landed
    *  on that offer's own page. */
   attribution?: ContactAttribution | null;
+  paymentMode?: "test" | "live";
 }): Promise<{ clientSecret: string }> {
   const offer = await getCourseOffer(opts.subAccountId, opts.offerId);
   if (!offer || offer.type === "free" || !offer.priceCents) {
@@ -286,11 +288,15 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   // comment in types/tenancy.ts) — everyone else must connect Stripe or
   // use PayPal (requestCourseOfferPaypalServerSide, below — already
   // correctly per-sub-account, unaffected by any of this).
-  const connectAccountId =
-    getStripeConnectionForEnvironment(
-      subData?.stripeConnect,
-      getStripeEnvironment()
-    )?.accountId ?? null;
+  const paymentMode = normalizePaymentMode(
+    opts.paymentMode ?? offer.paymentMode,
+    getStripeEnvironment(),
+  );
+  const resolved = await resolveStripeForSubAccount(opts.subAccountId, paymentMode).catch((error) => {
+    if (subData?.stripeCourseCheckoutEnabledByAgency === true && !opts.paymentMode && !offer.paymentMode) return null;
+    throw error;
+  });
+  const connectAccountId = resolved?.accountId ?? null;
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
@@ -305,7 +311,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
   const amountCents = offer.priceCents;
   const currency = offer.currency ?? "USD";
 
-  const stripe = getStripeServer();
+  const stripe = resolved?.stripe ?? getStripeServer(paymentMode);
   const metadata = {
     kind: OFFER_CHARGE_KIND,
     subAccountId: opts.subAccountId,
@@ -414,6 +420,7 @@ export async function startCourseOfferStripeCheckoutServerSide(opts: {
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
     stripeConnectAccountId: connectAccountId,
+    paymentMode,
     // Known upfront now (see the pre-created/reused Customer above) rather
     // than only learned later from the checkout-completed webhook.
     stripeCustomerId: customerId,
@@ -1063,6 +1070,11 @@ export async function handleCourseOfferCheckoutCompleted(
     console.error(
       `[course-offer] no pending purchase for session ${session.id}`
     );
+    return;
+  }
+  const purchase = snap.docs[0].data() as { paymentMode?: "test" | "live" };
+  if (purchase.paymentMode && session.livemode !== (purchase.paymentMode === "live")) {
+    console.error(`[course-offer] rejected ${session.id}: Stripe livemode does not match purchase paymentMode`);
     return;
   }
   const subscriptionId =

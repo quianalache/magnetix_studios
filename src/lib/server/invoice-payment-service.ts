@@ -2,7 +2,12 @@ import "server-only";
 
 import type Stripe from "stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
+import {
+  getStripeEnvironment,
+  getStripeServer,
+  normalizePaymentMode,
+  resolveStripeForSubAccount,
+} from "@/lib/stripe/server";
 import { computeQuoteTotals } from "@/lib/quotes/calc";
 import { markQuotePaidServerSide } from "@/lib/quotes/lifecycle";
 import type { Quote } from "@/types/quotes";
@@ -104,8 +109,14 @@ export async function createInvoiceStripeCheckoutSession(opts: {
   }
 
   const sub = subSnap.exists ? (subSnap.data() as SubAccountDoc) : null;
-  const connectAccountId = sub?.stripeConnect?.accountId ?? null;
-  const chargesEnabled = sub?.stripeConnect?.chargesEnabled === true;
+  const paymentMode = normalizePaymentMode(quote.paymentMode, getStripeEnvironment());
+  const resolved = quote.paymentMode
+    ? await resolveStripeForSubAccount(opts.subAccountId, paymentMode)
+    : null;
+  const connectAccountId = resolved?.accountId ?? sub?.stripeConnect?.accountId ?? null;
+  const chargesEnabled = resolved
+    ? sub?.stripeConnect?.[paymentMode]?.chargesEnabled === true
+    : sub?.stripeConnect?.chargesEnabled === true;
   if (!connectAccountId || !chargesEnabled) {
     throw new InvoicePaymentError(
       "Stripe isn't fully connected for this workspace yet — connect it under Settings → Payments before sending invoices via Stripe.",
@@ -122,7 +133,7 @@ export async function createInvoiceStripeCheckoutSession(opts: {
     );
   }
 
-  const stripe = getStripeServer();
+  const stripe = resolved?.stripe ?? getStripeServer(paymentMode);
 
   // Best-effort: expire the PREVIOUS session, on the account it was
   // actually minted on (not necessarily this same connectAccountId, in
@@ -265,6 +276,11 @@ export async function handleInvoiceStripeCheckoutCompleted(
     console.error(
       `[invoice-payment] metadata/tenant mismatch for session ${session.id} — refusing to act (quote subAccountId=${quote.subAccountId} agencyId=${quote.agencyId} kind=${quote.kind}; metadata subAccountId=${subAccountId} agencyId=${agencyId})`
     );
+    return;
+  }
+
+  if (quote.paymentMode && session.livemode !== (quote.paymentMode === "live")) {
+    console.error(`[invoice-payment] rejected ${session.id}: Stripe livemode does not match invoice paymentMode`);
     return;
   }
 

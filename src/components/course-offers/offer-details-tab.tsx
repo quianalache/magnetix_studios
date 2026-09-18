@@ -29,10 +29,6 @@ import type { BookingPage } from "@/types/booking";
 const SELECT =
   "h-9 w-full rounded-md border border-input bg-background text-foreground px-3 text-[13px] shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring [&>option]:bg-background [&>option]:text-foreground";
 
-const isStripeTestMode = (
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""
-).startsWith("pk_test_");
-
 function toDateInputValue(value: unknown): string {
   if (!value) return "";
   const d =
@@ -68,6 +64,7 @@ export function OfferDetailsTab({
   const [trialDays, setTrialDays] = useState(
     offer.trialDays != null ? offer.trialDays.toString() : ""
   );
+  const [paymentMode, setPaymentMode] = useState<"test" | "live">(offer.paymentMode ?? "test");
   const [priceTextOverride, setPriceTextOverride] = useState(
     offer.priceTextOverride ?? ""
   );
@@ -129,6 +126,7 @@ export function OfferDetailsTab({
     );
     setRecurringInterval(offer.recurringInterval ?? "month");
     setTrialDays(offer.trialDays != null ? offer.trialDays.toString() : "");
+    setPaymentMode(offer.paymentMode ?? "test");
     setPriceTextOverride(offer.priceTextOverride ?? "");
     setThumbnailUrl(offer.thumbnailUrl);
     setDiscountCodesEnabled(offer.discountCodesEnabled);
@@ -186,6 +184,7 @@ export function OfferDetailsTab({
         recurringInterval: type === "recurring" ? recurringInterval : null,
         trialDays:
           type === "recurring" && trialDays.trim() ? Number(trialDays) : null,
+        paymentMode,
         priceTextOverride: priceTextOverride.trim() || null,
         thumbnailUrl,
         discountCodesEnabled,
@@ -504,12 +503,14 @@ export function OfferDetailsTab({
               placeholder="Free Offer"
             />
           </div>
-          <p className="text-muted-foreground mt-2 text-[12px]">
-            Payment Mode:{" "}
-            <span className="font-medium">
-              {isStripeTestMode ? "Test" : "Live"}
-            </span>
-          </p>
+          <div className="mt-3 rounded-md border p-3">
+            <Label>Payment Mode</Label>
+            <select className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm" value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as "test" | "live")}>
+              <option value="test">Test</option>
+              <option value="live">Live</option>
+            </select>
+            <p className="mt-1 text-[12px] text-muted-foreground">{paymentMode === "test" ? "TEST — No real money will be charged. Uses the connected Test Stripe account." : "LIVE — Real customers will be charged. Uses the connected Live Stripe account."}</p>
+          </div>
         </div>
 
         <div className="rounded-lg border p-3">
@@ -590,6 +591,11 @@ export function OfferDetailsTab({
         />
       </div>
 
+      {type !== "free" && paymentMode === "test" && (
+        <p className="col-span-full rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+          This checkout is still in Test mode. Customers will not be charged real money.
+        </p>
+      )}
       <div className="col-span-full flex items-center justify-between border-t pt-4">
         <span />
         <div className="flex gap-2">

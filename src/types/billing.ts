@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { PaymentMode } from "./tenancy";
 import type { ContactAttribution } from "./contacts";
 
 /**
@@ -397,6 +398,7 @@ export interface BillingChargeDoc {
   amountCents: number;
   /** Lowercase ISO 4217. */
   currency: string;
+  paymentMode?: PaymentMode;
   status: BillingChargeStatus;
   /**
    * SHA-256 of the currently-valid /pay/charge token (raw token only ever

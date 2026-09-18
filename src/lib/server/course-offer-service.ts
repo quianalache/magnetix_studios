@@ -114,6 +114,7 @@ export async function createCourseOfferServerSide(opts: {
   priceTextOverride?: string | null;
   booking?: CourseOfferBookingBundle | null;
   projectTemplates?: CourseOfferProjectTemplateBundle[];
+  paymentMode?: "test" | "live";
 }): Promise<CourseOffer> {
   const type: OfferType = opts.type ?? "free";
   const slug = await ensureUniqueSlug({
@@ -134,6 +135,7 @@ export async function createCourseOfferServerSide(opts: {
     recurringInterval:
       type === "recurring" ? (opts.recurringInterval ?? "month") : null,
     trialDays: type === "recurring" ? (opts.trialDays ?? null) : null,
+    paymentMode: opts.paymentMode ?? "test",
     priceTextOverride: opts.priceTextOverride?.trim() || null,
     visibility: "draft" as OfferVisibility,
     version: 1,
@@ -179,6 +181,7 @@ export interface CourseOfferPatch {
    *  bundle or nothing. */
   booking?: CourseOfferBookingBundle | null;
   projectTemplates?: CourseOfferProjectTemplateBundle[];
+  paymentMode?: "test" | "live";
 }
 
 export async function updateCourseOfferServerSide(opts: {
@@ -235,6 +238,9 @@ export async function updateCourseOfferServerSide(opts: {
       updates.recurringInterval = p.recurringInterval;
     }
     if (p.trialDays !== undefined) updates.trialDays = p.trialDays;
+  }
+  if (p.paymentMode === "test" || p.paymentMode === "live") {
+    updates.paymentMode = p.paymentMode;
   }
   if (p.priceTextOverride !== undefined) {
     updates.priceTextOverride = p.priceTextOverride?.trim() || null;

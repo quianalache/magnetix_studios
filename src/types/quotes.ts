@@ -1,4 +1,5 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
+import type { PaymentMode } from "./tenancy";
 
 /**
  * Quotes — the v1 "Estimate" feature (GHL-equivalent click-to-accept).
@@ -256,6 +257,7 @@ export interface Quote {
    *  time by `/api/sub-accounts/[id]/quotes/[quoteId]/send`, not
    *  editable directly by the client. */
   paymentProvider?: "stripe" | "paypal" | null;
+  paymentMode?: PaymentMode;
   /** The connected Stripe account (Stripe Connect, `acct_…`) the
    *  CURRENT `paymentLinkId` ran on — needed to expire/reference that
    *  exact session later (Connect API calls must target the same
@@ -331,6 +333,7 @@ export const DEFAULT_QUOTE: Omit<
   paymentLinkId: null,
   paymentLinkMintedAt: null,
   paymentProvider: null,
+  paymentMode: "test",
   stripePaymentConnectAccountId: null,
   paymentSessionAmountCents: null,
 };

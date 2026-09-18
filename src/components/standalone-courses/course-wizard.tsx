@@ -82,6 +82,9 @@ export function CourseWizard({
   const [trialDays, setTrialDays] = useState(
     course?.trialDays != null ? course.trialDays.toString() : "",
   );
+  const [paymentMode, setPaymentMode] = useState<"test" | "live">(
+    course?.paymentMode ?? "test",
+  );
   const [priceTextOverride, setPriceTextOverride] = useState("");
   const [published, setPublished] = useState(course?.published ?? false);
 
@@ -129,6 +132,7 @@ export function CourseWizard({
           access === "purchase" && billingType === "recurring" && trialDays.trim()
             ? Number(trialDays)
             : null,
+        paymentMode,
         priceTextOverride: priceTextOverride.trim() || null,
         published,
       };
@@ -397,6 +401,16 @@ export function CourseWizard({
                           </div>
                         )}
                       </div>
+                      <div className="space-y-1.5 rounded-md border p-3">
+                        <Label htmlFor="w-payment-mode">Payment Mode</Label>
+                        <select id="w-payment-mode" className={SELECT} value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as "test" | "live")}>
+                          <option value="test">Test</option>
+                          <option value="live">Live</option>
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          {paymentMode === "test" ? "TEST — No real money will be charged. Uses the connected Test Stripe account." : "LIVE — Real customers will be charged. Uses the connected Live Stripe account."}
+                        </p>
+                      </div>
 
                       <div className="space-y-1.5">
                         <Label htmlFor="w-price-text">
@@ -419,6 +433,11 @@ export function CourseWizard({
                     />
                     Published (visible on the public sales page)
                   </label>
+                  {access === "purchase" && paymentMode === "test" && (
+                    <p className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                      This checkout is still in Test mode. Customers will not be charged real money.
+                    </p>
+                  )}
                 </>
               )}
 

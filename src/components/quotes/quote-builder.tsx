@@ -73,6 +73,7 @@ export interface QuoteFormValues {
    *  available. Null for quotes (no payment collection) and for an
    *  invoice where neither provider is connected yet. */
   paymentProvider: "stripe" | "paypal" | null;
+  paymentMode: "test" | "live";
 }
 
 interface QuoteBuilderProps {
@@ -165,6 +166,9 @@ export function QuoteBuilder({
   const [paymentProvider, setPaymentProvider] = useState<"stripe" | "paypal" | null>(
     initial?.paymentProvider ??
       (stripeConnected ? "stripe" : paypalConnected ? "paypal" : null),
+  );
+  const [paymentMode, setPaymentMode] = useState<"test" | "live">(
+    initial?.paymentMode ?? "test",
   );
 
   // Territories — only needed to label contacts by territory in the picker
@@ -315,6 +319,7 @@ export function QuoteBuilder({
         paymentDueDays: isInvoice ? paymentDueDays : null,
         autoCreateDealOnAccept: autoCreateDeal,
         paymentProvider: isInvoice ? paymentProvider : null,
+        paymentMode: isInvoice ? paymentMode : "test",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -606,6 +611,16 @@ export function QuoteBuilder({
                       <option value="stripe">Stripe (card, auto-synced)</option>
                       <option value="paypal">PayPal (manual confirmation)</option>
                     </select>
+                  </div>
+                )}
+                {stripeConnected && (
+                  <div className="mt-4">
+                    <Label htmlFor="payment-mode" className="text-xs uppercase tracking-wider text-muted-foreground">Payment mode</Label>
+                    <select id="payment-mode" value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as "test" | "live")} className="mt-1 h-9 w-48 rounded-lg border border-input bg-background px-2.5 text-sm">
+                      <option value="test">Test</option>
+                      <option value="live">Live</option>
+                    </select>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{paymentMode === "test" ? "TEST — No real money will be charged." : "LIVE — Real customers will be charged."}</p>
                   </div>
                 )}
                 {!stripeConnected && !paypalConnected && (

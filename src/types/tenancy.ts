@@ -1,6 +1,7 @@
 export type AgencyRole = "owner" | "staff";
 export type SubAccountRole = "admin" | "collaborator";
 export type SubAccountStatus = "active" | "archived";
+export type PaymentMode = "test" | "live";
 
 /**
  * Dashboard accent theme (Agency → Settings → App theme). Drives CSS
@@ -819,7 +820,7 @@ export interface PayPalConfig {
   connectedAt: Date;
 }
 
-export type StripeEnvironment = "test" | "live";
+export type StripeEnvironment = PaymentMode;
 
 export interface StripeConnectConnection {
   /** The connected account's id, e.g. "acct_...". Returned as `stripe_user_id` from the OAuth token exchange. */

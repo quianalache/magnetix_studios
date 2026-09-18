@@ -6,9 +6,10 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { buildPaypalAmountUrl } from "@/lib/paypal/payment-link";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import {
-  getStripeConnectionForEnvironment,
   getStripeEnvironment,
   getStripeServer,
+  normalizePaymentMode,
+  resolveStripeForSubAccount,
 } from "@/lib/stripe/server";
 import {
   getStandaloneCourse,
@@ -122,6 +123,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   memberId: string;
   memberEmail: string;
   returnUrl: string;
+  paymentMode?: "test" | "live";
 }): Promise<{ clientSecret: string }> {
   const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
   if (!course || course.access !== "purchase" || !course.priceCents) {
@@ -133,11 +135,17 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   const subData = subSnap.data();
   // Real fix (Stripe Connect) when connected — see the matching comment in
   // course-offer-purchase-service.ts for the full reasoning.
-  const connectAccountId =
-    getStripeConnectionForEnvironment(
-      subData?.stripeConnect,
-      getStripeEnvironment()
-    )?.accountId ?? null;
+  const paymentMode = normalizePaymentMode(
+    opts.paymentMode ?? course.paymentMode,
+    getStripeEnvironment(),
+  );
+  const resolved = await resolveStripeForSubAccount(opts.subAccountId, paymentMode).catch((error) => {
+    // Legacy records without paymentMode preserve their prior shared-account
+    // behavior until explicitly edited; newly created records never enter it.
+    if (subData?.stripeCourseCheckoutEnabledByAgency === true && !opts.paymentMode && !course.paymentMode) return null;
+    throw error;
+  });
+  const connectAccountId = resolved?.accountId ?? null;
   const useSharedAccount =
     subData?.stripeCourseCheckoutEnabledByAgency === true;
   if (!connectAccountId && !useSharedAccount) {
@@ -153,7 +161,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
   const currency = course.currency ?? "USD";
   const isRecurring = course.billingType === "recurring";
 
-  const stripe = getStripeServer();
+  const stripe = resolved?.stripe ?? getStripeServer(paymentMode);
   const metadata = {
     kind: COURSE_CHARGE_KIND,
     subAccountId: opts.subAccountId,
@@ -221,6 +229,7 @@ export async function startStandaloneCourseStripeCheckoutServerSide(opts: {
     paypalUrl: null,
     stripeCheckoutSessionId: session.id,
     stripeConnectAccountId: connectAccountId,
+    paymentMode,
     stripePaymentIntentId: null,
     stripeCustomerId: null,
     stripeSubscriptionId: null,
@@ -360,6 +369,11 @@ export async function handleStandaloneCourseCheckoutCompleted(
     console.error(
       `[standalone-course] no pending purchase for session ${session.id}`
     );
+    return;
+  }
+  const purchase = snap.docs[0].data() as { paymentMode?: "test" | "live" };
+  if (purchase.paymentMode && session.livemode !== (purchase.paymentMode === "live")) {
+    console.error(`[standalone-course] rejected ${session.id}: Stripe livemode does not match purchase paymentMode`);
     return;
   }
   const subscriptionId =

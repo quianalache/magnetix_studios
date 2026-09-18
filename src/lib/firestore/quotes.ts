@@ -173,6 +173,7 @@ export async function updateDraftQuote(
       | "paymentDueDays"
       | "currency"
       | "autoCreateDealOnAccept"
+      | "paymentMode"
     >
   >,
 ): Promise<void> {

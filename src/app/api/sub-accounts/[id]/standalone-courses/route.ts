@@ -66,6 +66,7 @@ export async function POST(
     currency?: string | null;
     published?: boolean;
     showMemberCount?: boolean;
+    paymentMode?: "test" | "live";
   };
   try {
     body = await request.json();
@@ -91,6 +92,7 @@ export async function POST(
     currency: body.currency ?? null,
     published: body.published,
     showMemberCount: body.showMemberCount,
+    paymentMode: body.paymentMode,
   });
   return NextResponse.json({ ok: true, course });
 }

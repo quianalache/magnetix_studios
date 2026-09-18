@@ -3,7 +3,7 @@ import "server-only";
 import type Stripe from "stripe";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
-import { getStripeServer } from "@/lib/stripe/server";
+import { getStripeServer, getStripeEnvironment, normalizePaymentMode, resolveStripeForSubAccount } from "@/lib/stripe/server";
 import { applyFeatureGates } from "@/lib/server/feature-gates-service";
 import {
   buildChargeCheckoutUrl,
@@ -1883,6 +1883,7 @@ export async function createOneTimeCharge(input: {
   description: string;
   amountCents: number;
   currency: string;
+  paymentMode?: "test" | "live";
 }): Promise<{ charge: BillingChargeResponse; checkoutUrl: string }> {
   if (!billingStripeIsConfigured()) {
     throw new BillingError(
@@ -1901,6 +1902,7 @@ export async function createOneTimeCharge(input: {
     description: input.description,
     amountCents: input.amountCents,
     currency: input.currency,
+    paymentMode: input.paymentMode ?? "test",
     status: "pending",
     tokenHash: hash,
     stripeCheckoutSessionId: null,
@@ -2047,7 +2049,11 @@ export async function createChargeCheckoutSession(input: {
     ? readBilling(subSnap.data() as Record<string, unknown>)
     : null;
 
-  const stripe = getStripeServer();
+  const paymentMode = normalizePaymentMode(charge.paymentMode, getStripeEnvironment());
+  const resolved = charge.paymentMode
+    ? await resolveStripeForSubAccount(charge.subAccountId, paymentMode)
+    : null;
+  const stripe = resolved?.stripe ?? getStripeServer(paymentMode);
   const metadata = {
     kind: SUB_ACCOUNT_CHARGE_KIND,
     agencyId: charge.agencyId,
@@ -2071,7 +2077,7 @@ export async function createChargeCheckoutSession(input: {
     cancel_url: input.cancelUrl,
     metadata,
     payment_intent_data: { metadata },
-  });
+  }, resolved ? { stripeAccount: resolved.accountId } : undefined);
   if (!session.url) {
     throw new BillingError("Stripe did not return a checkout URL.", 502);
   }
