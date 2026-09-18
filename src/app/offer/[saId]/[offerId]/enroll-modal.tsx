@@ -50,10 +50,9 @@ export function EnrollOfferModal({
   offerId: string;
   /** Agency Course Offer — targets /api/offer/agency/[offerId]/signup
    *  (global Person identity) instead of /api/offer/{saId}/[offerId]/...
-   *  `saId` is ignored. Agency offers never expose the Extra Contact Info/
-   *  Service Agreement toggles (see agency-course-offer-service.ts), so
-   *  `checkoutSettings` stays at its all-off default and this form never
-   *  actually renders the phone/address/agreement fields for agency. */
+   *  `saId` is ignored. `checkoutSettings` (2026-09-18 parity pass) is a
+   *  real, owner-configurable setting for agency offers too — this form's
+   *  phone/address/agreement fields render exactly as they do for tenant. */
   agencyScope?: boolean;
   type: OfferType;
   priceLabel: string;
@@ -100,12 +99,13 @@ export function EnrollOfferModal({
         body: JSON.stringify({
           name,
           email,
-          ...(agencyScope ? {} : {
-            phone,
-            address,
-            serviceAgreementAccepted: agreementAccepted,
-            attribution: attributionRef.current,
-          }),
+          phone,
+          address,
+          serviceAgreementAccepted: agreementAccepted,
+          // Attribution/UTM tracking has no agency-scope equivalent yet
+          // (a genuinely separate, unrelated feature) — the agency route
+          // ignores this field if sent, but omitting it is cleaner.
+          ...(agencyScope ? {} : { attribution: attributionRef.current }),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {

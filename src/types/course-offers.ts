@@ -236,6 +236,17 @@ export interface CourseOfferPurchase {
   invoiceNumber?: string;
   invoiceLineItemId?: string;
   sourcePaymentProvider?: "stripe";
+  /** Agency Course Offer checkout only (2026-09-18) — a tenant purchase
+   *  never sets these; the buyer's name/phone/address there lives on the
+   *  tenant `Member` doc instead (see `ensureMember`). Agency has no
+   *  Member-equivalent for offer buyers, so a checkout that collects
+   *  these (name always; phone/address per `checkoutSettings.
+   *  collectPhoneNumber`/`collectAddress`) stores them here, on the
+   *  purchase record itself. `buyerDisplayName` also feeds the recent-
+   *  purchases popup's first-name line (see that route's own comment). */
+  buyerDisplayName?: string | null;
+  buyerPhone?: string | null;
+  buyerAddress?: string | null;
 }
 
 /**

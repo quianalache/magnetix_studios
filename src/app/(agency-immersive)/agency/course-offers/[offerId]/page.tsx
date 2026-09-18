@@ -10,16 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
+import { ExtraContactInfoPanel, ServiceAgreementPanel } from "@/components/course-offers/theme-editor/checkout-settings-panels";
 import { uploadAgencyCourseOfferImage } from "@/lib/community/upload-image";
-import type { CourseOffer, OfferType, RecurringInterval } from "@/types/course-offers";
+import { DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS, type CourseOffer, type CourseOfferCheckoutSettings, type CourseOfferUpsell, type OfferType, type RecurringInterval } from "@/types/course-offers";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
 /**
  * Agency Course Offer editor — title/description, bundled courses,
- * pricing, visibility, thumbnail. Simpler than the tenant offer editor
+ * pricing, visibility, thumbnail, checkout settings, and its (at most
+ * one) One-Click Upsell. Simpler than the tenant offer editor
  * (`offer-details-tab.tsx`) on purpose: that component is deeply coupled
- * to Booking Pages/Project Templates/One-Click Upsells, none of which
- * exist at agency scope (see agency-course-offer-service.ts).
+ * to Booking Pages/Project Templates and a generic multi-upsell CRUD UI
+ * (In-App upsells included), neither of which exist/are ported at agency
+ * scope (see agency-course-offer-service.ts / agency-course-offer-
+ * upsell-service.ts).
  */
 export default function AgencyCourseOfferEditorPage({ params }: { params: Promise<{ offerId: string }> }) {
   const { offerId } = use(params);
@@ -30,6 +34,7 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
 
   const [offer, setOffer] = useState<CourseOffer | null>(null);
   const [courses, setCourses] = useState<StandaloneCourse[]>([]);
+  const [otherOffers, setOtherOffers] = useState<CourseOffer[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -44,6 +49,8 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
   const [priceTextOverride, setPriceTextOverride] = useState("");
   const [published, setPublished] = useState(false);
   const [discountCodesEnabled, setDiscountCodesEnabled] = useState(false);
+  const [showRecentPurchasePopup, setShowRecentPurchasePopup] = useState(false);
+  const [checkoutSettings, setCheckoutSettings] = useState<CourseOfferCheckoutSettings>(DEFAULT_COURSE_OFFER_CHECKOUT_SETTINGS);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
@@ -66,6 +73,8 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           setPriceTextOverride(o.priceTextOverride ?? "");
           setPublished(o.visibility === "published");
           setDiscountCodesEnabled(o.discountCodesEnabled);
+          setShowRecentPurchasePopup(o.showRecentPurchasePopup);
+          setCheckoutSettings(o.checkoutSettings);
           setThumbnailUrl(o.thumbnailUrl);
         }
       })
@@ -75,7 +84,11 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
       .then((r) => r.json())
       .then((d: { courses?: StandaloneCourse[] }) => setCourses(d.courses ?? []))
       .catch(() => {});
-  }, [isOwner, apiBase]);
+    fetch("/api/agency/course-offers")
+      .then((r) => r.json())
+      .then((d: { offers?: CourseOffer[] }) => setOtherOffers((d.offers ?? []).filter((o) => o.id !== offerId)))
+      .catch(() => {});
+  }, [isOwner, apiBase, offerId]);
 
   if (authLoading) return null;
   if (!isOwner) {
@@ -147,6 +160,8 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           priceTextOverride: priceTextOverride.trim() || null,
           visibility: published ? "published" : "draft",
           discountCodesEnabled,
+          showRecentPurchasePopup,
+          checkoutSettings,
           thumbnailUrl,
         }),
       });
@@ -288,6 +303,24 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           </label>
         )}
 
+        {type !== "free" && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={showRecentPurchasePopup} onChange={(e) => setShowRecentPurchasePopup(e.target.checked)} className="h-4 w-4" />
+            Show &quot;recent purchases&quot; popup on the checkout page
+          </label>
+        )}
+
+        <div className="space-y-4 border-t pt-4">
+          <ExtraContactInfoPanel value={checkoutSettings} onChange={setCheckoutSettings} />
+          <ServiceAgreementPanel value={checkoutSettings} onChange={setCheckoutSettings} />
+        </div>
+
+        {type !== "free" && (
+          <div className="border-t pt-4">
+            <OneClickUpsellSection offerId={offerId} otherOffers={otherOffers} />
+          </div>
+        )}
+
         <div className="flex items-center justify-between border-t pt-3">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={published} onChange={(e) => setPublished(e.target.checked)} className="h-4 w-4" />
@@ -299,6 +332,119 @@ export default function AgencyCourseOfferEditorPage({ params }: { params: Promis
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * At most one One-Click Upsell per offer — its own save action (a separate
+ * endpoint from the offer's general PATCH, mirroring the tenant upsell
+ * CRUD's own independence from the offer-details save button).
+ */
+function OneClickUpsellSection({ offerId, otherOffers }: { offerId: string; otherOffers: CourseOffer[] }) {
+  const apiBase = `/api/agency/course-offers/${offerId}/upsell`;
+  const [upsell, setUpsell] = useState<CourseOfferUpsell | null>(null);
+  const [targetOfferId, setTargetOfferId] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch(apiBase)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { upsell?: CourseOfferUpsell | null } | null) => {
+        setUpsell(d?.upsell ?? null);
+        if (d?.upsell) setTargetOfferId(d.upsell.targetOfferId);
+      })
+      .finally(() => setLoaded(true));
+  }, [apiBase]);
+
+  const selectable = otherOffers.filter((o) => o.type !== "free" && o.visibility === "published");
+
+  async function saveUpsell() {
+    if (!targetOfferId) {
+      toast.error("Pick a target offer first");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = upsell
+        ? await fetch(apiBase, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetOfferId }) })
+        : await fetch(apiBase, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetOfferId }) });
+      const d = (await res.json().catch(() => ({}))) as { upsell?: CourseOfferUpsell; error?: string };
+      if (!res.ok) throw new Error(d.error ?? "Couldn't save upsell");
+      if (d.upsell) setUpsell(d.upsell);
+      toast.success("Upsell saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save upsell");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function togglePublished() {
+    if (!upsell) return;
+    const next = upsell.visibility === "published" ? "draft" : "published";
+    setBusy(true);
+    try {
+      const res = await fetch(apiBase, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ visibility: next }) });
+      if (!res.ok) throw new Error();
+      setUpsell({ ...upsell, visibility: next });
+    } catch {
+      toast.error("Couldn't update upsell");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeUpsell() {
+    if (!confirm("Remove this one-click upsell?")) return;
+    setBusy(true);
+    try {
+      await fetch(apiBase, { method: "DELETE" });
+      setUpsell(null);
+      setTargetOfferId("");
+      toast.success("Upsell removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="space-y-2">
+      <Label>One-Click Upsell</Label>
+      <p className="text-xs text-muted-foreground">
+        After a buyer pays for this offer, offer them one more paid offer with a single click — no second checkout form.
+      </p>
+      {selectable.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Publish another paid offer first to use it as an upsell target.</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={targetOfferId} onChange={(e) => setTargetOfferId(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2.5 text-sm">
+            <option value="">Select an offer…</option>
+            {selectable.map((o) => (
+              <option key={o.id} value={o.id}>{o.title}</option>
+            ))}
+          </select>
+          <Button size="sm" variant="outline" onClick={saveUpsell} disabled={busy}>
+            {upsell ? "Update" : "Add upsell"}
+          </Button>
+          {upsell && (
+            <>
+              <Button size="sm" variant="outline" onClick={togglePublished} disabled={busy}>
+                {upsell.visibility === "published" ? "Unpublish" : "Publish"}
+              </Button>
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={removeUpsell} disabled={busy}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {upsell.visibility === "published" ? "Live — buyers will see this after checkout." : "Draft — not shown to buyers yet."}
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
