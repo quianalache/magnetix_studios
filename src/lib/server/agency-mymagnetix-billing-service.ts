@@ -92,6 +92,14 @@ async function liveSubscriptionFields(stripeSubscriptionId: string): Promise<{
   }
 }
 
+/** Mirrors tenant `isManageableSubscription` in mymagnetix-billing-portal-
+ *  service.ts — a canceled subscription still renders (in payment history
+ *  and, briefly, as a "current" card until the next poll), but the Stripe
+ *  Billing Portal has nothing left to manage for it. */
+function isManageableAgencySubscription(status: PersonSubscriptionPurchase["status"]): boolean {
+  return status !== "canceled" && status !== "ended";
+}
+
 function paymentStatusFromPurchaseStatus(status: string): PersonPaymentHistoryItem["status"] {
   if (status === "paid") return "succeeded";
   if (status === "pending") return "pending";
@@ -128,7 +136,7 @@ export async function listAgencyPurchasesForPerson(personId: string): Promise<{
       const all = await listAgencyStandaloneCoursePurchases(agencyId, course.id);
       return all
         .filter((p) => p.memberId === personId)
-        .map((p) => ({ purchase: p, title: course.title }));
+        .map((p) => ({ purchase: p, title: course.title, courseId: course.id }));
     }),
   );
   const offerPurchaseLists = await Promise.all(
@@ -136,15 +144,15 @@ export async function listAgencyPurchasesForPerson(personId: string): Promise<{
       const all = await listAgencyCourseOfferPurchases(agencyId, offer.id);
       return all
         .filter((p) => p.memberId === personId)
-        .map((p) => ({ purchase: p, title: offer.title }));
+        .map((p) => ({ purchase: p, title: offer.title, offerId: offer.id }));
     }),
   );
 
-  for (const { purchase, title } of coursePurchaseLists.flat()) {
-    await accumulateCoursePurchase({ purchase, title, agencyId, businessName, subscriptions, paymentHistory });
+  for (const { purchase, title, courseId } of coursePurchaseLists.flat()) {
+    await accumulateCoursePurchase({ purchase, title, courseId, businessName, subscriptions, paymentHistory });
   }
-  for (const { purchase, title } of offerPurchaseLists.flat()) {
-    await accumulateOfferPurchase({ purchase, title, businessName, subscriptions, paymentHistory });
+  for (const { purchase, title, offerId } of offerPurchaseLists.flat()) {
+    await accumulateOfferPurchase({ purchase, title, offerId, businessName, subscriptions, paymentHistory });
   }
 
   return { subscriptions, paymentHistory };
@@ -153,18 +161,22 @@ export async function listAgencyPurchasesForPerson(personId: string): Promise<{
 async function accumulateCoursePurchase(opts: {
   purchase: StandaloneCoursePurchase;
   title: string;
-  agencyId: string;
+  courseId: string;
   businessName: string;
   subscriptions: PersonSubscriptionPurchase[];
   paymentHistory: PersonPaymentHistoryItem[];
 }): Promise<void> {
-  const { purchase: p, title, businessName, subscriptions, paymentHistory } = opts;
+  const { purchase: p, title, courseId, businessName, subscriptions, paymentHistory } = opts;
   if (p.status === "pending") return; // no charge has landed yet — nothing to show
 
   if (p.stripeSubscriptionId) {
     const live = await liveSubscriptionFields(p.stripeSubscriptionId);
     subscriptions.push({
-      id: `agency-course:${p.id}`,
+      // Embeds enough path info (kind:courseId:purchaseId) for
+      // /api/my/billing/portal/agency to re-resolve the real purchase doc
+      // server-side — see that route's own doc comment. Never parsed
+      // client-side; the Manage button just echoes this id back verbatim.
+      id: `agency-course:${courseId}:${p.id}`,
       subAccountId: "agency",
       businessName,
       provider: "stripe",
@@ -178,7 +190,7 @@ async function accumulateCoursePurchase(opts: {
       currentPeriodStart: live?.currentPeriodStart ?? null,
       currentPeriodEnd: live?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: live?.cancelAtPeriodEnd ?? false,
-      canManage: false,
+      canManage: isManageableAgencySubscription(live?.status ?? (p.status === "canceled" ? "canceled" : "unknown")),
     });
   }
 
@@ -208,17 +220,19 @@ async function accumulateCoursePurchase(opts: {
 async function accumulateOfferPurchase(opts: {
   purchase: CourseOfferPurchase;
   title: string;
+  offerId: string;
   businessName: string;
   subscriptions: PersonSubscriptionPurchase[];
   paymentHistory: PersonPaymentHistoryItem[];
 }): Promise<void> {
-  const { purchase: p, title, businessName, subscriptions, paymentHistory } = opts;
+  const { purchase: p, title, offerId, businessName, subscriptions, paymentHistory } = opts;
   if (p.status === "pending") return;
 
   if (p.stripeSubscriptionId) {
     const live = await liveSubscriptionFields(p.stripeSubscriptionId);
     subscriptions.push({
-      id: `agency-offer:${p.id}`,
+      // See accumulateCoursePurchase's own comment on this id shape.
+      id: `agency-offer:${offerId}:${p.id}`,
       subAccountId: "agency",
       businessName,
       provider: "stripe",
@@ -232,7 +246,7 @@ async function accumulateOfferPurchase(opts: {
       currentPeriodStart: live?.currentPeriodStart ?? null,
       currentPeriodEnd: live?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: live?.cancelAtPeriodEnd ?? false,
-      canManage: false,
+      canManage: isManageableAgencySubscription(live?.status ?? (p.status === "canceled" ? "canceled" : "unknown")),
     });
   }
 

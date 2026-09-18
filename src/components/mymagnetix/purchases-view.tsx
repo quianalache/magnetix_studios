@@ -10,6 +10,15 @@ import { SubscriptionDetailsSheet } from "@/components/mymagnetix/subscription-d
 import { SubscriptionCard } from "@/components/mymagnetix/subscription-card";
 import { PaymentHistoryTable } from "@/components/mymagnetix/payment-history-table";
 
+/** Agency-sourced subscriptions (see agency-mymagnetix-billing-service.ts)
+ *  aren't in the tenant `externalSubscriptions` ledger the default
+ *  /api/my/billing/portal endpoint reads from, so they need the sibling
+ *  agency portal-session route instead — same button/UI either way, see
+ *  ManageSubscriptionButton's own `endpoint` prop. */
+function manageEndpointFor(subscription: PersonSubscriptionPurchase): string | undefined {
+  return subscription.subAccountId === "agency" ? "/api/my/billing/portal/agency" : undefined;
+}
+
 /**
  * Pure presentational Purchases view (approved mockup, 2026-09-16) — takes
  * already-fetched data as props, no fetching of its own. Split out of
@@ -80,6 +89,7 @@ export function PurchasesView({
                 key={subscription.id}
                 subscription={subscription}
                 onViewDetails={() => setSelectedSubscription(subscription)}
+                manageEndpoint={manageEndpointFor(subscription)}
               />
             ))}
           </div>
@@ -113,6 +123,7 @@ export function PurchasesView({
       <SubscriptionDetailsSheet
         subscription={selectedSubscription}
         onClose={() => setSelectedSubscription(null)}
+        manageEndpoint={selectedSubscription ? manageEndpointFor(selectedSubscription) : undefined}
       />
     </div>
   );
