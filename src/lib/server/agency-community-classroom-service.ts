@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { formatPrice } from "@/lib/server/community-classroom-service";
-import { communityLearningLessonHref, type CommunityLinkBase } from "@/lib/community/routes";
+import { communityLearningLessonHref, communityLearningProductLessonHref, type CommunityLinkBase } from "@/lib/community/routes";
 import type {
   Course,
   CourseAccess,
@@ -430,12 +430,13 @@ export interface AgencyClassroomCourseCard extends AgencyCourseCardView {
  * classroom-catalog-service.ts's "one card shape, two sources" union. A
  * linked Standalone Course is never copied here — content, entitlement,
  * and progress all stay on the course itself; this only reads its
- * catalog-card summary. Unlike tenant (which embeds a linked Product's
- * lessons inside the Community route tree via a `/classroom/product/...`
- * bridge), a linked agency card's `href` goes straight to the course's
- * own site (`/course/agency/{courseId}` sales page, or its own classroom
- * home once enrolled) — that embedded-viewer bridge isn't ported for
- * agency this pass, a disclosed simplification, not a broken link.
+ * catalog-card summary. An entitled viewer's `href` goes to the
+ * Community-embedded lesson bridge (`/classroom/product/{courseId}/
+ * {lessonId}`, see communityLearningProductLessonHref + the
+ * `[courseId]/[lessonId]` route under `.../classroom/product/`) so the
+ * course is consumed inside this Community's own shell, same as tenant;
+ * a locked-but-purchasable card still goes straight to the course's own
+ * public sales page (that's the one purchase destination that exists).
  */
 export async function listAgencyClassroomCatalogForMember(opts: {
   linkBase: CommunityLinkBase;
@@ -454,34 +455,51 @@ export async function listAgencyClassroomCatalogForMember(opts: {
   const nativeCards: AgencyClassroomCourseCard[] = native.map((c) => ({ ...c, source: "native" }));
 
   const agencyId = opts.linkBase.agencyGroupId!;
-  const [{ listAgencyStandaloneCoursesLinkedToGroup, getAgencyStandaloneEnrollment }, { hasPaidAgencyStandaloneCourse }] = await Promise.all([
+  const [
+    { listAgencyStandaloneCoursesLinkedToGroup, getAgencyStandaloneEnrollment, getAgencyStandaloneCourseTree },
+    { hasPaidAgencyStandaloneCourse },
+  ] = await Promise.all([
     import("@/lib/server/agency-standalone-course-service"),
     import("@/lib/server/agency-standalone-course-purchase-service"),
   ]);
   const linked = await listAgencyStandaloneCoursesLinkedToGroup(agencyId, opts.groupId);
   const linkedCards: AgencyClassroomCourseCard[] = await Promise.all(
     linked.map(async (course) => {
-      const enrolled = await getAgencyStandaloneEnrollment(agencyId, course.id, opts.personId);
+      const [tree, enrolled] = await Promise.all([
+        getAgencyStandaloneCourseTree({ agencyId, courseId: course.id, includeUnpublished: false }),
+        getAgencyStandaloneEnrollment(agencyId, course.id, opts.personId),
+      ]);
+      const lessonCount = tree?.lessons.length ?? 0;
+
       let locked: { reason: string; purchasable: boolean } | null = null;
-      if (!enrolled && course.access === "purchase") {
+      if (course.access === "purchase") {
         const paid = await hasPaidAgencyStandaloneCourse(agencyId, course.id, opts.personId);
         if (!paid) {
           const price = course.priceCents != null ? ` — ${formatPrice(course.priceCents, course.currency)}` : "";
           locked = { reason: `Buy${price}`, purchasable: true };
         }
       }
-      const href = locked ? `/course/agency/${course.id}` : enrolled ? `/course/agency/${course.id}/classroom` : `/course/agency/${course.id}`;
+
+      const salesHref = `/course/agency/${course.id}`;
+      const firstLessonId = tree?.lessons[0]?.id ?? null;
+      // Entitled -> the Community-embedded lesson experience (stays inside
+      // this group's shell); locked+purchasable -> the course's own public
+      // sales page, its existing purchase destination.
+      const unlockedHref = firstLessonId
+        ? communityLearningProductLessonHref(opts.linkBase, opts.groupSlug, course.id, firstLessonId)
+        : null;
+
       return {
         id: course.id,
         source: "standalone",
         title: course.title,
         description: "",
         thumbnailUrl: course.coverUrl,
-        lessonCount: 0,
+        lessonCount,
         progressPct: enrolled?.progressPct ?? 0,
         locked,
-        firstLessonId: null,
-        href,
+        firstLessonId,
+        href: locked ? (locked.purchasable ? salesHref : null) : unlockedHref,
       } satisfies AgencyClassroomCourseCard;
     }),
   );

@@ -7,6 +7,7 @@ import { getStripeServer } from "@/lib/stripe/server";
 import {
   getAgencyStandaloneCourse,
   grantLinkedAgencyCommunityGroupsServerSide,
+  revokeLinkedAgencyCommunityAccessServerSide,
 } from "@/lib/server/agency-standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
 
@@ -124,6 +125,16 @@ export async function hasPaidAgencyStandaloneCourse(agencyId: string, courseId: 
   return !snap.empty;
 }
 
+/** For the owner-facing Purchases UI — see /agency/standalone-courses/
+ *  [courseId]/purchases. Stripe only, so unlike tenant's PayPal-era list
+ *  there's no "pending, needs manual mark-paid" bucket: every purchase
+ *  here is either "pending" (checkout started, webhook hasn't landed yet)
+ *  or a terminal Stripe-driven status. */
+export async function listAgencyStandaloneCoursePurchases(agencyId: string, courseId: string): Promise<StandaloneCoursePurchase[]> {
+  const snap = await purchasesCol(agencyId, courseId).orderBy("requestedAt", "desc").get();
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<StandaloneCoursePurchase, "id">) }));
+}
+
 /** Mark a purchase paid + grant classroom access — mirrors tenant
  *  `markStandaloneCoursePurchasePaidServerSide`, called only from the
  *  Stripe webhook (no manual "mark paid" — see this file's module
@@ -210,12 +221,12 @@ export async function handleAgencyStandaloneCourseCheckoutCompleted(session: Str
 
 /** Webhook: `customer.subscription.deleted` for an agency course sold as a
  *  recurring subscription. Mirrors tenant
- *  `handleStandaloneCourseSubscriptionDeleted`, minus the linked-group
- *  revoke (see this file's module comment on the not-yet-ported
- *  access-source bookkeeping) — the purchase/enrollment access-window
- *  stamp still happens, so the classroom guard denies re-entry once the
- *  paid period ends; only the separately-linked Community group
- *  membership doesn't auto-revoke yet. */
+ *  `handleStandaloneCourseSubscriptionDeleted` exactly, including the
+ *  source-aware linked-Community-group revoke (see
+ *  agency-community-access-source-service.ts) — only removes Community
+ *  access this specific course granted; a person with any other access
+ *  source (manual invite, another linked course, customer/affiliate/
+ *  plan_cohort roster entry) keeps their membership untouched. */
 export async function handleAgencyStandaloneCourseSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
   const { agencyId, courseId } = subscription.metadata ?? {};
   if (!agencyId || !courseId) return;
@@ -226,4 +237,5 @@ export async function handleAgencyStandaloneCourseSubscriptionDeleted(subscripti
   await getAdminDb()
     .doc(`agencies/${agencyId}/standaloneCourses/${courseId}/enrollments/${purchase.memberId}`)
     .set({ accessExpiresAt: FieldValue.serverTimestamp() }, { merge: true });
+  await revokeLinkedAgencyCommunityAccessServerSide({ agencyId, courseId, personId: purchase.memberId });
 }

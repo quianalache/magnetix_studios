@@ -37,6 +37,11 @@ import {
   syncCourseOfferSubscriptionStatusServerSide,
 } from "@/lib/server/course-offer-purchase-service";
 import {
+  AGENCY_OFFER_CHARGE_KIND,
+  handleAgencyCourseOfferCheckoutCompleted,
+  handleAgencyCourseOfferSubscriptionDeleted,
+} from "@/lib/server/agency-course-offer-purchase-service";
+import {
   INVOICE_PAYMENT_KIND,
   handleInvoiceStripeCheckoutCompleted,
 } from "@/lib/server/invoice-payment-service";
@@ -96,6 +101,12 @@ export async function handleCheckoutCompleted(
   // mode:"subscription" depending on the offer's type.
   if (session.metadata?.kind === OFFER_CHARGE_KIND) {
     await handleCourseOfferCheckoutCompleted(session);
+    return;
+  }
+
+  // Agency Course Offer purchase — same shape, agency-owned bundle.
+  if (session.metadata?.kind === AGENCY_OFFER_CHARGE_KIND) {
+    await handleAgencyCourseOfferCheckoutCompleted(session);
     return;
   }
 
@@ -534,6 +545,11 @@ export async function handleSubscriptionDeleted(
 
   if (subscription.metadata?.kind === AGENCY_COURSE_CHARGE_KIND) {
     await handleAgencyStandaloneCourseSubscriptionDeleted(subscription);
+    return;
+  }
+
+  if (subscription.metadata?.kind === AGENCY_OFFER_CHARGE_KIND) {
+    await handleAgencyCourseOfferSubscriptionDeleted(subscription);
     return;
   }
 

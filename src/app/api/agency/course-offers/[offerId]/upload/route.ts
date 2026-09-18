@@ -7,15 +7,14 @@ export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
-/** Cover/lesson image upload for Agency Standalone Courses — owner-only,
- *  Admin-SDK write (the agency owner has no Firebase-Storage-writable
- *  client identity scoped to this path, matching every other agency
- *  upload route in this codebase). Does NOT write the URL to Firestore
- *  itself — the wizard/lesson editor holds it in local state until Save. */
-export async function POST(request: Request, ctx: { params: Promise<{ courseId: string }> }) {
+/** Thumbnail/theme image upload for Agency Course Offers — owner-only,
+ *  Admin-SDK write, same reasoning as the sibling Standalone Course upload
+ *  route. Does NOT write the URL to Firestore itself — the caller holds it
+ *  in local state until Save. */
+export async function POST(request: Request, ctx: { params: Promise<{ offerId: string }> }) {
   const caller = await requireAgencyOwnerAny(request);
   if (caller instanceof NextResponse) return caller;
-  const { courseId } = await ctx.params;
+  const { offerId } = await ctx.params;
 
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) {
@@ -23,18 +22,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ courseId: 
   }
 
   let file: File | null = null;
-  let kind = "cover";
+  let kind = "thumbnail";
   try {
     const form = await request.formData();
     const f = form.get("file");
     if (f instanceof File) file = f;
     const k = form.get("kind");
-    const allowedKinds = [
-      "cover", "lesson", "instructor-headshot", "logo", "favicon",
-      // Theme editor kinds — see uploadCourseThemeImage's agency branch.
-      "hero", "block", "progress-promo", "background", "lesson-background",
-    ];
-    if (typeof k === "string" && allowedKinds.includes(k)) {
+    if (typeof k === "string" && ["thumbnail", "hero", "block", "background"].includes(k)) {
       kind = k;
     }
   } catch {
@@ -47,7 +41,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ courseId: 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const ext = file.name.includes(".") ? file.name.split(".").pop() : "img";
-    const path = `standalone-courses/agency/${caller.agencyId}/${courseId}/${kind}-${Date.now()}.${ext}`;
+    const path = `course-offers/agency/${caller.agencyId}/${offerId}/${kind}-${Date.now()}.${ext}`;
     const token = randomUUID();
     await getStorage()
       .bucket(bucketName)
@@ -56,7 +50,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ courseId: 
     const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
     return NextResponse.json({ ok: true, url });
   } catch (err) {
-    console.error("[agency-standalone-course-upload] upload failed", err);
+    console.error("[agency-course-offer-upload] upload failed", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
   }
 }

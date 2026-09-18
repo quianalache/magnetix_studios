@@ -162,6 +162,12 @@ export async function uploadCourseThemeImage(
     | "background"
     | "lesson-background",
 ): Promise<string> {
+  // Agency Standalone Course theme editor reuses this exact function (see
+  // its callers in body-panel.tsx/sidebar-panel.tsx/block-form.tsx/the
+  // theme page) — "agency" is never a real subAccountId, so this is the
+  // same sentinel used everywhere else to redirect an agency-scoped call
+  // through the Admin-SDK route instead of a direct client Storage write.
+  if (saId === "agency") return uploadAgencyCourseThemeImage(file, courseId, kind);
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
   }
@@ -175,6 +181,20 @@ export async function uploadCourseThemeImage(
   return getDownloadURL(storageRef);
 }
 
+async function uploadAgencyCourseThemeImage(
+  file: File,
+  courseId: string,
+  kind: "hero" | "block" | "progress-promo" | "instructor-headshot" | "background" | "lesson-background",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`/api/agency/standalone-courses/${courseId}/upload`, { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+  return data.url;
+}
+
 /**
  * Course Offer theme sibling of `uploadCourseThemeImage` — Hero background,
  * body/sidebar block images. Same Storage path prefix as
@@ -186,6 +206,7 @@ export async function uploadCourseOfferThemeImage(
   offerId: string,
   kind: "hero" | "block" | "background",
 ): Promise<string> {
+  if (saId === "agency") return uploadAgencyCourseOfferThemeImage(file, offerId, kind);
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
   }
@@ -197,6 +218,34 @@ export async function uploadCourseOfferThemeImage(
   const storageRef = ref(getFirebaseStorage(), path);
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
+}
+
+async function uploadAgencyCourseOfferThemeImage(
+  file: File,
+  offerId: string,
+  kind: "hero" | "block" | "background",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`/api/agency/course-offers/${offerId}/upload`, { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+  return data.url;
+}
+
+/**
+ * Agency Course Offer thumbnail sibling of `uploadCourseOfferImage` — same
+ * Admin-SDK-route reasoning as `uploadAgencyStandaloneCourseImage`.
+ */
+export async function uploadAgencyCourseOfferImage(file: File, offerId: string): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", "thumbnail");
+  const res = await fetch(`/api/agency/course-offers/${offerId}/upload`, { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+  return data.url;
 }
 
 /**

@@ -53,10 +53,9 @@ const UNGROUPED = "__ungrouped__";
  * exact tenant outline/lesson-editor UI (drag-and-drop, chart-unlock
  * editor) with client-fetch against the agency courses API instead of
  * realtime Firestore subscriptions (see the Classroom builder's own doc
- * comment for why). No Purchases/Theme/Offers/Settings tabs — Course
- * Offers and the theme editor aren't ported for agency this pass (see
- * agency-standalone-course-service.ts); "Settings" (language/difficulty/
- * topic/advanced toggles) similarly deferred.
+ * comment for why). Theme editor now lives at `./theme` (parity pass,
+ * 2026-09-18). "Settings" (language/difficulty/topic/advanced toggles)
+ * still deferred, same as tenant's own equivalent gaps.
  */
 export default function AgencyCourseEditorPage(props: { params: Promise<{ courseId: string }> }) {
   return (
@@ -201,6 +200,12 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
           </a>
           <Link href={`/agency/standalone-courses/${courseId}/community-groups`}>
             <Button variant="outline" size="sm">Community Groups</Button>
+          </Link>
+          <Link href={`/agency/standalone-courses/${courseId}/theme`}>
+            <Button variant="outline" size="sm">Theme</Button>
+          </Link>
+          <Link href={`/agency/standalone-courses/${courseId}/purchases`}>
+            <Button variant="outline" size="sm">Purchases</Button>
           </Link>
           <Link href={`/agency/standalone-courses/${courseId}/edit`}>
             <Button variant="outline" size="sm">

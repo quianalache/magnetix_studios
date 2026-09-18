@@ -311,7 +311,16 @@ export async function unlinkAgencyCommunityGroupServerSide(opts: {
  *  collection (see community-agency-service.ts's AgencyGroupMemberRoster).
  *  `personId` is the buyer's global Person id — the roster doc IS the
  *  membership (no separate join needed), matching every other agency
- *  Community grant path in this codebase. */
+ *  Community grant path in this codebase.
+ *
+ *  Records this grant in agency-community-access-source-service.ts (mirrors
+ *  tenant's own `upsertProductAccessSourceServerSide` call here exactly) so
+ *  a later canceled subscription can precisely revoke only THIS course's
+ *  share of the grant — see `revokeLinkedAgencyCommunityAccessServerSide`.
+ *  `source` is set to `"product"` ONLY when creating a brand-new roster
+ *  entry; an existing entry's `source` (manual invite, another course,
+ *  etc.) is never overwritten — same "never relabel an existing reason"
+ *  rule as tenant's `origin` field. */
 export async function grantLinkedAgencyCommunityGroupsServerSide(opts: {
   agencyId: string;
   courseId: string;
@@ -322,6 +331,7 @@ export async function grantLinkedAgencyCommunityGroupsServerSide(opts: {
   const course = await getAgencyStandaloneCourse(opts.agencyId, opts.courseId);
   if (!course || course.linkedCommunityGroupIds.length === 0) return;
 
+  const { upsertAgencyProductAccessSourceServerSide } = await import("@/lib/server/agency-community-access-source-service");
   const db = getAdminDb();
   for (const groupId of course.linkedCommunityGroupIds) {
     const groupRef = db.doc(`agencies/${opts.agencyId}/communityGroups/${groupId}`);
@@ -337,7 +347,7 @@ export async function grantLinkedAgencyCommunityGroupsServerSide(opts: {
         email: opts.email,
         displayName: existing?.data()?.displayName ?? opts.displayName,
         personId: opts.personId,
-        source: "customer" as const,
+        source: existing?.data()?.source ?? ("product" as const),
         status: "active" as const,
         invitedByUid: existing?.data()?.invitedByUid ?? "system",
         createdAt: existing?.data()?.createdAt ?? FieldValue.serverTimestamp(),
@@ -347,16 +357,51 @@ export async function grantLinkedAgencyCommunityGroupsServerSide(opts: {
       },
       { merge: true },
     );
-    // Note: tenant records this grant in community-access-source-service.ts
-    // (subAccounts/{saId}/...) so a later canceled subscription can
-    // precisely revoke a Product-derived membership. That service is
-    // tenant-path-shaped and not reusable here; not ported this pass — a
-    // real, disclosed gap. The grant itself (below) is unaffected; only
-    // "auto-revoke this specific group access if this course's paid
-    // access is later canceled" doesn't happen yet for agency.
+    await upsertAgencyProductAccessSourceServerSide({
+      agencyId: opts.agencyId,
+      groupId,
+      membershipId: memberRef.id,
+      courseId: opts.courseId,
+    });
     if (!wasActive) {
       await groupRef.update({ memberCount: FieldValue.increment(1) });
     }
+  }
+}
+
+/**
+ * The other end of `grantLinkedAgencyCommunityGroupsServerSide` — called
+ * when a course's paid access genuinely ends (a canceled Stripe
+ * subscription, direct or via an Agency Course Offer bundle). Revokes
+ * this course's access-source record in every group it's linked to, then
+ * reconciles each roster entry — which only ever deactivates one whose
+ * `source === "product"` AND that has no other active access source left
+ * (another linked course, a manual join, a staff grant, etc. all leave it
+ * untouched). Mirrors tenant `revokeLinkedCommunityAccessServerSide`.
+ */
+export async function revokeLinkedAgencyCommunityAccessServerSide(opts: {
+  agencyId: string;
+  courseId: string;
+  personId: string;
+}): Promise<void> {
+  const course = await getAgencyStandaloneCourse(opts.agencyId, opts.courseId);
+  if (!course || course.linkedCommunityGroupIds.length === 0) return;
+
+  const { revokeAgencyProductAccessSourceServerSide } = await import("@/lib/server/agency-community-access-source-service");
+  for (const groupId of course.linkedCommunityGroupIds) {
+    const membersSnap = await getAdminDb()
+      .collection(`agencies/${opts.agencyId}/communityGroups/${groupId}/members`)
+      .where("personId", "==", opts.personId)
+      .limit(1)
+      .get();
+    const membership = membersSnap.docs[0];
+    if (!membership) continue;
+    await revokeAgencyProductAccessSourceServerSide({
+      agencyId: opts.agencyId,
+      groupId,
+      membershipId: membership.id,
+      courseId: opts.courseId,
+    });
   }
 }
 

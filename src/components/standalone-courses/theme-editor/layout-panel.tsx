@@ -67,6 +67,7 @@ export function LayoutPanel({
   onBackgroundChange,
   onUploadImage,
   saId,
+  agencyScope,
   applyTarget,
   onApplied,
 }: {
@@ -80,6 +81,9 @@ export function LayoutPanel({
    *  same reasoning as `BlockForm`'s `onUploadImage`. */
   onUploadImage: (file: File) => Promise<string>;
   saId: string;
+  /** Agency Standalone Course/Offer — see CourseSalesPageView's own doc
+   *  comment. Branches the theme-templates API base only. */
+  agencyScope?: boolean;
   /** Templates are shared across Courses and Offers — this is just the
    *  request body the apply route needs to know which one to write onto. */
   applyTarget: { courseId: string } | { offerId: string };
@@ -91,14 +95,15 @@ export function LayoutPanel({
   const [templates, setTemplates] = useState<CourseThemeTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const templatesApiBase = agencyScope ? "/api/agency/course-theme-templates" : `/api/sub-accounts/${saId}/course-theme-templates`;
 
   useEffect(() => {
-    fetch(`/api/sub-accounts/${saId}/course-theme-templates`)
+    fetch(templatesApiBase)
       .then((r) => r.json())
       .then((d: { templates?: CourseThemeTemplate[] }) => setTemplates(d.templates ?? []))
       .catch(() => {})
       .finally(() => setTemplatesLoading(false));
-  }, [saId]);
+  }, [templatesApiBase]);
 
   function toggle(key: SectionKey) {
     setOpen((prev) => (prev === key ? null : key));
@@ -108,7 +113,7 @@ export function LayoutPanel({
     setApplyingId(templateId);
     try {
       const res = await fetch(
-        `/api/sub-accounts/${saId}/course-theme-templates/${templateId}/apply`,
+        `${templatesApiBase}/${templateId}/apply`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

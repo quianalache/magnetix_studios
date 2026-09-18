@@ -10,8 +10,8 @@ import { formatCurrency } from "@/lib/format";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
 /** Agency Standalone Courses — owner list + create. Mirrors
- *  /sa/[subAccountId]/courses/page.tsx's "Products" tab (no "Offers" tab —
- *  Course Offers isn't ported for agency this pass). */
+ *  /sa/[subAccountId]/courses/page.tsx's "Products" tab; Course Offers
+ *  (bundling) now lives at its own /agency/course-offers page. */
 export default function AgencyStandaloneCoursesPage() {
   const { agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
@@ -41,11 +41,16 @@ export default function AgencyStandaloneCoursesPage() {
           <h1 className="text-lg font-semibold">Standalone Courses</h1>
           <p className="mt-0.5 text-[13px] text-muted-foreground">Manage or create new courses for Magnetix Studios.</p>
         </div>
-        <Link href="/agency/standalone-courses/new">
-          <Button size="sm">
-            <Plus className="h-3.5 w-3.5" /> New course
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/agency/course-offers">
+            <Button size="sm" variant="outline">Course Offers</Button>
+          </Link>
+          <Link href="/agency/standalone-courses/new">
+            <Button size="sm">
+              <Plus className="h-3.5 w-3.5" /> New course
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {!courses ? (

@@ -39,6 +39,7 @@ type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 export function EnrollOfferModal({
   saId,
   offerId,
+  agencyScope,
   type,
   priceLabel,
   brand,
@@ -47,6 +48,13 @@ export function EnrollOfferModal({
 }: {
   saId: string;
   offerId: string;
+  /** Agency Course Offer — targets /api/offer/agency/[offerId]/signup
+   *  (global Person identity) instead of /api/offer/{saId}/[offerId]/...
+   *  `saId` is ignored. Agency offers never expose the Extra Contact Info/
+   *  Service Agreement toggles (see agency-course-offer-service.ts), so
+   *  `checkoutSettings` stays at its all-off default and this form never
+   *  actually renders the phone/address/agreement fields for agency. */
+  agencyScope?: boolean;
   type: OfferType;
   priceLabel: string;
   brand: string;
@@ -85,16 +93,19 @@ export function EnrollOfferModal({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/offer/${saId}/${offerId}/signup`, {
+      const signupUrl = agencyScope ? `/api/offer/agency/${offerId}/signup` : `/api/offer/${saId}/${offerId}/signup`;
+      const res = await fetch(signupUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
           email,
-          phone,
-          address,
-          serviceAgreementAccepted: agreementAccepted,
-          attribution: attributionRef.current,
+          ...(agencyScope ? {} : {
+            phone,
+            address,
+            serviceAgreementAccepted: agreementAccepted,
+            attribution: attributionRef.current,
+          }),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {

@@ -45,6 +45,7 @@ export interface OfferIncludedCourse {
 export function OfferSalesPageView({
   saId,
   offerId,
+  agencyScope,
   offer,
   theme,
   priceLabel,
@@ -58,6 +59,8 @@ export function OfferSalesPageView({
 }: {
   saId: string;
   offerId: string;
+  /** Agency Course Offer — see EnrollOfferModal's own doc comment. */
+  agencyScope?: boolean;
   offer: OfferSalesOffer;
   theme: CourseTheme;
   priceLabel: string;
@@ -382,6 +385,7 @@ export function OfferSalesPageView({
                   <EnrollOfferModal
                     saId={saId}
                     offerId={offerId}
+                    agencyScope={agencyScope}
                     type={offer.type}
                     priceLabel={priceLabel}
                     brand={theme.hero.buttonColor}

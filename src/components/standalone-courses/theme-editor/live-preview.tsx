@@ -78,6 +78,26 @@ export function ThemeLivePreview({
   const [lessons, setLessons] = useState<StandaloneLesson[]>([]);
 
   useEffect(() => {
+    // Agency scope has no client-readable Firestore path for these (see
+    // every other agency-owner surface's Admin-SDK-route convention), so
+    // it fetches the same {course, sections, lessons} payload the course
+    // editor itself loads instead of subscribing live — the preview still
+    // reflects in-progress theme edits (via the `theme`/`lessonTheme`
+    // props), just not concurrent section/lesson edits from elsewhere.
+    if (saId === "agency") {
+      let cancelled = false;
+      fetch(`/api/agency/standalone-courses/${courseId}`)
+        .then((r) => r.json())
+        .then((d: { sections?: StandaloneCourseSection[]; lessons?: StandaloneLesson[] }) => {
+          if (cancelled) return;
+          setSections(d.sections ?? []);
+          setLessons(d.lessons ?? []);
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
     const u1 = subscribeToStandaloneSections(saId, courseId, setSections);
     const u2 = subscribeToStandaloneLessons(saId, courseId, setLessons);
     return () => {

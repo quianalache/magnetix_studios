@@ -1225,7 +1225,16 @@ export interface AgencyGroupMemberRoster {
   email: string;
   displayName: string | null;
   personId: string | null;
-  source: "manual" | "customer" | "affiliate" | "plan_cohort";
+  /** "product" (2026-09-18) — the CURRENT independent reason this roster
+   *  entry exists, mirroring tenant `GroupMembership.origin`'s doc
+   *  comment: it's kept correct by every grant path overwriting it away
+   *  from "product" whenever it touches an EXISTING doc, not just a
+   *  frozen creation record. Only ever set at doc-creation time by
+   *  `grantLinkedAgencyCommunityGroupsServerSide` when no roster entry
+   *  existed yet; never applied to a pre-existing entry (manual invite,
+   *  another source, etc.) — see agency-community-access-source-service.ts
+   *  for why this exclusivity is what makes revocation safe. */
+  source: "manual" | "customer" | "affiliate" | "plan_cohort" | "product";
   status: "pending" | "active" | "removed";
   invitedByUid: string;
   createdAt: FirebaseFirestore.Timestamp | FirebaseFirestore.FieldValue | null;
