@@ -2,7 +2,7 @@ import "server-only";
 
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldPath, FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import {
@@ -290,15 +290,20 @@ export async function GET(request: Request) {
         subAccountId: id,
         returnedStripeAccountId: linked.accountId,
       });
-      await getAdminDb()
-        .doc(`subAccounts/${id}`)
-        .set(
-          {
-            [`stripeConnect.${environment}`]: connection,
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
+      const subAccountRef = getAdminDb().doc(`subAccounts/${id}`);
+      // `set(..., { merge: true })` treated the dotted key as a literal
+      // top-level field in the Admin SDK. Use explicit FieldPath segments so
+      // the connection lands under the canonical stripeConnect map. Delete
+      // the malformed literal left by the diagnostic attempt while repairing
+      // the same record.
+      await subAccountRef.update(
+        new FieldPath("stripeConnect", environment),
+        connection,
+        new FieldPath(`stripeConnect.${environment}`),
+        FieldValue.delete(),
+        "updatedAt",
+        FieldValue.serverTimestamp()
+      );
     } catch (err) {
       callbackLog("firestore_write_failed", {
         environment,
