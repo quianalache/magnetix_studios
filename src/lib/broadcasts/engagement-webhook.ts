@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { BroadcastSendDoc, SendEngagement } from "@/types";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { suppressAgencyRecipientServerSide } from "@/lib/server/agency-recipient-preferences-service";
 
 /**
  * Handles the Resend "engagement" event family — delivered/opened/clicked/
@@ -24,6 +25,14 @@ import { emitWorkflowEvent } from "@/lib/workflows/events";
  * matching the manual-unsubscribe-link behavior, since continuing to mail a
  * hard-bounced or complaining address damages sending reputation for every
  * other sub-account sharing this Resend account.
+ *
+ * Agency Communications parity (2026-09-18): this same `collectionGroup(
+ * "sends")` query already matches Agency Communications' own `sends`
+ * subcollection too (deliberately named identically — see
+ * agency-communications-service.ts's module comment). Its rows carry no
+ * `contactId` (by design — see AgencyCommunicationSendDoc's own doc
+ * comment), which is the structural signal used below to suppress via
+ * agency-recipient-preferences-service.ts instead of a tenant Contact.
  */
 
 interface EmailBounce {
@@ -76,12 +85,16 @@ export async function handleBroadcastEngagementEvent(event: {
   if (!broadcastRef) return;
 
   let contactIdToSuppress: string | null = null;
+  let agencyEmailToSuppress: string | null = null;
   let suppressReason: "hard bounce" | "spam complaint" | null = null;
 
   await db.runTransaction(async (tx) => {
     const sendSnap = await tx.get(sendRef);
     if (!sendSnap.exists) return;
-    const send = sendSnap.data() as BroadcastSendDoc;
+    // Loosely typed here on purpose — this row could be a tenant
+    // BroadcastSendDoc (has `contactId`, no `recipientEmail`) or an
+    // AgencyCommunicationSendDoc (has `recipientEmail`, no `contactId`).
+    const send = sendSnap.data() as BroadcastSendDoc & { recipientEmail?: string };
     const engagement = send.engagement;
 
     switch (event.type) {
@@ -141,7 +154,8 @@ export async function handleBroadcastEngagementEvent(event: {
         // Hard bounces only — a soft/undetermined bounce is often transient
         // (mailbox full, greylisting) and shouldn't cut someone off.
         if (bounceType === "hard") {
-          contactIdToSuppress = send.contactId;
+          if (send.contactId) contactIdToSuppress = send.contactId;
+          else if (send.recipientEmail) agencyEmailToSuppress = send.recipientEmail;
           suppressReason = "hard bounce";
         }
         return;
@@ -155,7 +169,8 @@ export async function handleBroadcastEngagementEvent(event: {
         tx.update(broadcastRef, {
           "totals.complained": FieldValue.increment(1),
         });
-        contactIdToSuppress = send.contactId;
+        if (send.contactId) contactIdToSuppress = send.contactId;
+        else if (send.recipientEmail) agencyEmailToSuppress = send.recipientEmail;
         suppressReason = "spam complaint";
         return;
       }
@@ -225,5 +240,12 @@ export async function handleBroadcastEngagementEvent(event: {
       .catch((err) =>
         console.warn("[broadcasts/engagement] activity write failed", err)
       );
+  }
+
+  if (agencyEmailToSuppress && suppressReason && agencyId) {
+    const reason = suppressReason === "hard bounce" ? "hard_bounce" : "complaint";
+    await suppressAgencyRecipientServerSide({ agencyId, email: agencyEmailToSuppress, reason }).catch((err) =>
+      console.warn("[broadcasts/engagement] agency opt-out write failed", err),
+    );
   }
 }

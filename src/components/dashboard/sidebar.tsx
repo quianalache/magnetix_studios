@@ -756,8 +756,8 @@ function SidebarContent({
             )}
             {/* Agency Community (2026-09-16) — Agency-owned communities,
                 distinct from any sub-account's own Community. Only added
-                because a real destination exists now; Communications/
-                Courses/Referrals stay omitted until they have one too. */}
+                because a real destination exists now; Courses/Referrals
+                stay omitted until they have one too. */}
             {agencyRole === "owner" && (
               <Link
                 href="/agency/community"
@@ -772,6 +772,26 @@ function SidebarContent({
               >
                 <MessagesSquare className="h-4 w-4 shrink-0" />
                 {!collapsed && "Community"}
+              </Link>
+            )}
+            {/* Agency Communications (2026-09-18) — Magnetix Studios' own
+                Broadcasts + Email Templates, reusing the tenant Broadcast
+                system's block editor/renderer/QStash fan-out. Belongs to
+                Magnetix Studios, never a sub-account. */}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/communications"
+                title={collapsed ? "Communications" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
+                  pathname.startsWith("/agency/communications")
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <Mail className="h-4 w-4 shrink-0" />
+                {!collapsed && "Communications"}
               </Link>
             )}
             {/* Hidden until the owner enables it under Agency → Settings —

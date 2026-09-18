@@ -12,12 +12,15 @@ import {
   type EmailTemplateSummary,
 } from "@/lib/email/template-library";
 
-interface EmailTemplateContextValue {
+export interface EmailTemplateContextValue {
   templates: EmailTemplateSummary[];
   loading: boolean;
 }
 
-const EmailTemplateContext = createContext<EmailTemplateContextValue | null>(
+/** Exported so agency-email-template-context.tsx can feed this same
+ *  context from a fetch-based provider instead of a client Firestore
+ *  listener — see that file's own doc comment. */
+export const EmailTemplateContext = createContext<EmailTemplateContextValue | null>(
   null,
 );
 

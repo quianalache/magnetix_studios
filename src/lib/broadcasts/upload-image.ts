@@ -25,6 +25,13 @@ export async function uploadBroadcastImage(
   draftId: string,
   kind: "image" | "video-thumbnail",
 ): Promise<string> {
+  // Agency Communications reuses this exact function (see its callers in
+  // block-editors.tsx/email-blocks-editor.tsx) — "agency" is never a real
+  // subAccountId, same sentinel used throughout this codebase to redirect
+  // an agency-scoped call through the Admin-SDK route instead of a direct
+  // client Storage write (the agency owner has no client-writable Storage
+  // path here).
+  if (saId === "agency") return uploadAgencyBroadcastImage(file, draftId, kind);
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file (JPG, PNG, WebP, or GIF).");
   }
@@ -36,4 +43,19 @@ export async function uploadBroadcastImage(
   const storageRef = ref(getFirebaseStorage(), path);
   await uploadBytes(storageRef, file, { contentType: file.type });
   return getDownloadURL(storageRef);
+}
+
+async function uploadAgencyBroadcastImage(
+  file: File,
+  draftId: string,
+  kind: "image" | "video-thumbnail",
+): Promise<string> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  form.append("draftId", draftId);
+  const res = await fetch("/api/agency/communications/upload", { method: "POST", body: form });
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; url?: string; error?: string };
+  if (!res.ok || !data.ok || !data.url) throw new Error(data.error ?? "Upload failed");
+  return data.url;
 }
