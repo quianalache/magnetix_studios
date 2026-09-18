@@ -77,7 +77,17 @@ export async function GET(request: Request) {
     hasConnectingUid: Boolean(connectingUid),
   });
 
-  const access = await requireSubAccountAdmin(request, id);
+  // Do not depend on the CRM browser session surviving Stripe's top-level
+  // cross-site redirect. The state is HMAC-signed with the initiating uid;
+  // turn that authenticated identity into the same server-side tenancy check
+  // used by the rest of the app. This still rejects inactive users,
+  // non-members, and non-admins without trusting any client-supplied field.
+  const callbackRequest = new Request(request.url, {
+    headers: {
+      "x-user-uid": connectingUid,
+    },
+  });
+  const access = await requireSubAccountAdmin(callbackRequest, id);
   if (access instanceof NextResponse) {
     callbackLog("auth_failed", { environment, subAccountId: id });
     return NextResponse.redirect(

@@ -73,6 +73,11 @@ const PUBLIC_PATHS = [
   // + best-effort failure handling inside the route — never breaks
   // the landing experience.
   "/api/landing/heartbeat",
+  // Stripe OAuth returns here from a top-level cross-site navigation. The
+  // callback authenticates the HMAC-signed state and re-checks the signed
+  // user's admin access server-side; requiring the browser session here is
+  // fragile because the OAuth return need not carry the CRM session cookie.
+  "/api/stripe-connect/callback",
   // Booking/offer page visit + conversion beacon — public POST from every
   // visitor landing on those public pages (most have no session at all).
   // Existence + published-status checked inside the route; best-effort,
