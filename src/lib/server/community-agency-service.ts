@@ -1,14 +1,12 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sanitizeCommunityPostHtml, sanitizeCommunityCommentHtml } from "@/lib/community/post-html";
 import { resolveBrandName, resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
-import { buildFeedPoll } from "@/lib/server/community-feed-service";
 import { extractMentionedMemberIds } from "@/lib/server/notification-producers";
 import {
   notifyCommunityReplyShared,
@@ -32,7 +30,16 @@ import {
   type CreateAgencySectionByScopeInput,
   type UpdateSectionPatch,
 } from "@/lib/server/community-channels-service";
-import { ownedAgencyAttachmentStoragePath } from "@/lib/community/attachment-provenance";
+import {
+  deleteAttachmentStorageByScope,
+  resolveCommentParentIdByScope,
+  listFeedPostsByScope,
+  getFeedPostByScope,
+  toggleLikeByScope,
+  viewerPollVotesByScope,
+  votePollByScope,
+} from "@/lib/server/community-feed-shared-service";
+import { agencyScope } from "@/lib/server/community-scope";
 import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
   CommunityGroup,
@@ -73,15 +80,19 @@ import type { MediaAttachment } from "@/types/media-attachment";
  *       comments/{commentId}
  *     members/{memberId}          (roster only — see note below)
  *
- * Scope: v1 supports group settings (name/about/status), channels,
- * sections, posts (text + GIF + video-link + channel-ref, no image/file/
- * voice upload — that needs a parallel Storage upload pipeline this pass
- * doesn't build), comments/replies, likes, and pinning. It deliberately
- * does NOT support: polls voting (poll create/display works; voting
- * doesn't), @ mentions, live rooms, DMs, events, leaderboard, points &
- * rewards, classroom/course links, or Skool import — none of those exist
- * for an agency-owned group yet. See the Agency Community task's
- * "remaining work" section for the full list.
+ * Scope (updated 2026-09-19, Community Shared Architecture Phase 3 —
+ * corrected from this comment's original 2026-09-16 "v1" scope list,
+ * which had gone stale across several later passes): group settings,
+ * channels, sections, posts (text + GIF + video-link + channel-ref, no
+ * image/file/voice upload — that needs a parallel Storage upload pipeline
+ * not built here), comments/replies, likes, pinning, poll create/vote,
+ * @ mentions, live rooms, DMs, events, leaderboard, and points & rewards
+ * all now have real Agency-scope parity (see the Community Shared
+ * Architecture Phase 1/2/3 reports). Classroom/course links also have
+ * parity (agency-community-classroom-service.ts). Genuinely still absent:
+ * Skool import (architecturally tied to tenant Contact/Member creation,
+ * no Agency analog) and image/file/voice attachment upload (no Storage
+ * pipeline built for Agency yet, GIF/video-link/text still work).
  *
  * Membership + real access (2026-09-17) — an agency community has no
  * Member/session identity system of its own (the tenant one is hard-bound
@@ -626,31 +637,14 @@ export async function updateAgencyPostServerSide(
   return { id: after.id, ...after.data() } as CommunityPost;
 }
 
-/** Best-effort Storage cleanup for a deleted post/comment's attachments —
- *  mirrors `deleteAttachmentStorage` (tenant). A Storage hiccup here must
- *  never block deleting the Firestore doc itself. */
+/** Thin wrapper over the shared core (community-feed-shared-service.ts) —
+ *  signature unchanged, every existing call site in this file is
+ *  untouched. */
 async function deleteAgencyAttachmentStorage(
   attachments: MediaAttachment[] | undefined,
   agencyId: string,
 ): Promise<void> {
-  if (!attachments?.length) return;
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) return;
-  const bucket = getStorage().bucket(bucketName);
-  await Promise.allSettled(
-    attachments.map(async (a) => {
-      const storagePath = ownedAgencyAttachmentStoragePath(a, agencyId);
-      if (!storagePath) return;
-      try {
-        await bucket.file(storagePath).delete();
-      } catch (err) {
-        console.warn(
-          "[community-agency-service] attachment cleanup: object missing or already removed",
-          err,
-        );
-      }
-    }),
-  );
+  return deleteAttachmentStorageByScope(agencyScope(agencyId), attachments);
 }
 
 export async function deleteAgencyPostServerSide(
@@ -674,33 +668,23 @@ export async function deleteAgencyPostServerSide(
 
 /** `isModerator` defaults to true (owner-safe) since every pre-existing
  *  caller was owner-only; the member routes pass `false` explicitly. */
+/** `isModerator` defaults to true (owner-safe) since every pre-existing
+ *  caller was owner-only; the member routes pass `false` explicitly.
+ *  Fetch + channel-access filtering + sort are now the shared core (see
+ *  community-feed-shared-service.ts) — `postLimit: null` preserves this
+ *  function's existing unlimited-scan behavior exactly (a genuine, kept
+ *  scale difference from tenant's own `.limit()` + pinned-backfill). */
 export async function listAgencyFeed(
   agencyId: string,
   groupId: string,
   isModerator = true,
 ): Promise<CommunityPost[]> {
-  const snap = await postsCol(agencyId, groupId).get();
-  let posts = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as CommunityPost);
-  // Channels (left rail) — a non-moderator viewer must never see a post
-  // from a private channel or one nested in a private section, at the
-  // actual read layer, not just by the left rail hiding the link. Mirrors
-  // listFeed's own enforcement (community-feed-service.ts).
-  if (!isModerator) {
-    const inaccessible = await getAgencyInaccessibleChannelNames({
-      agencyId,
-      groupId,
-      isModerator: false,
-    });
-    if (inaccessible.size > 0) {
-      posts = posts.filter((p) => !p.category || !inaccessible.has(p.category));
-    }
-  }
-  posts.sort((a, b) => {
-    const am = a.createdAt as { toMillis?: () => number } | null;
-    const bm = b.createdAt as { toMillis?: () => number } | null;
-    return (bm?.toMillis?.() ?? 0) - (am?.toMillis?.() ?? 0);
+  return listFeedPostsByScope({
+    scope: agencyScope(agencyId),
+    groupId,
+    viewerIsModerator: isModerator,
+    postLimit: null,
   });
-  return posts;
 }
 
 export async function getAgencyPost(
@@ -709,20 +693,12 @@ export async function getAgencyPost(
   postId: string,
   isModerator = true,
 ): Promise<CommunityPost | null> {
-  const snap = await postsCol(agencyId, groupId).doc(postId).get();
-  if (!snap.exists) return null;
-  const post = { id: snap.id, ...snap.data() } as CommunityPost;
-  // Same "must not be able to navigate directly to it by URL" enforcement
-  // as listAgencyFeed above, applied to a single-post direct fetch.
-  if (!isModerator && post.category) {
-    const inaccessible = await getAgencyInaccessibleChannelNames({
-      agencyId,
-      groupId,
-      isModerator: false,
-    });
-    if (inaccessible.has(post.category)) return null;
-  }
-  return post;
+  return getFeedPostByScope({
+    scope: agencyScope(agencyId),
+    groupId,
+    postId,
+    viewerIsModerator: isModerator,
+  });
 }
 
 export async function isAgencyPostLikedByViewer(
@@ -751,40 +727,26 @@ export async function isAgencyCommentLikedByViewer(
 }
 
 /** Toggle like — idempotent per-uid doc, same pattern as the tenant
- *  `likes/{memberId}` subcollection, keyed by Firebase uid instead. */
-/** Returns `authorId` (the post's `authorMemberId`) alongside `liked` so
- *  the caller can award/revoke "receive_like" points to the right person —
- *  mirrors tenant `toggleLikeServerSide`'s own shape. */
+ *  `likes/{memberId}` subcollection, keyed by Firebase uid instead. Like/
+ *  unlike mechanics are now the shared core (community-feed-shared-
+ *  service.ts) — points integration (award/revoke "receive_like") stays
+ *  at the API route layer here exactly as before (see that file's module
+ *  comment for why: the roster-doc-id translation this needs has no
+ *  business living in a scope-agnostic core). One correctness fix that
+ *  falls out of sharing tenant's already-correct implementation: a
+ *  like/unlike against a since-deleted post now throws a clean "Not
+ *  found" instead of an unhandled raw Firestore `.update()`-on-missing-doc
+ *  error — see the Phase 3 report. */
 export async function toggleAgencyPostLikeServerSide(
   agencyId: string,
   groupId: string,
   postId: string,
   uid: string,
 ): Promise<{ liked: boolean; authorId: string | null }> {
-  const db = getAdminDb();
-  const postRef = postsCol(agencyId, groupId).doc(postId);
-  const likeRef = postRef.collection("likes").doc(uid);
-  return db.runTransaction(async (tx) => {
-    const [likeSnap, postSnap] = await Promise.all([tx.get(likeRef), tx.get(postRef)]);
-    const liked = !likeSnap.exists;
-    if (liked) {
-      tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
-      tx.update(postRef, { likeCount: FieldValue.increment(1) });
-    } else {
-      tx.delete(likeRef);
-      tx.update(postRef, { likeCount: FieldValue.increment(-1) });
-    }
-    const authorId = (postSnap.data()?.authorMemberId as string | undefined) ?? null;
-    return { liked, authorId };
-  });
+  return toggleLikeByScope({ scope: agencyScope(agencyId), groupId, postId, viewerId: uid });
 }
 
 // -------------------------------------------------------------- Polls --
-
-function toMillisOrNull(v: unknown): number | null {
-  const m = v as { toMillis?: () => number } | null;
-  return typeof m?.toMillis === "function" ? m.toMillis() : null;
-}
 
 /** Batch-read this viewer's own vote (if any) for each post that has a
  *  poll — mirrors `viewerPollVotes` (tenant), keyed by the caller's opaque
@@ -796,20 +758,7 @@ export async function viewerAgencyPollVotes(
   postIdsWithPolls: string[],
   viewerId: string,
 ): Promise<Map<string, string[]>> {
-  const result = new Map<string, string[]>();
-  if (postIdsWithPolls.length === 0) return result;
-  const db = getAdminDb();
-  const refs = postIdsWithPolls.map((id) =>
-    postsCol(agencyId, groupId).doc(id).collection("pollVotes").doc(viewerId),
-  );
-  const snaps = await db.getAll(...refs);
-  snaps.forEach((s, i) => {
-    if (s.exists) {
-      const optionIds = (s.data()?.optionIds as string[] | undefined) ?? [];
-      result.set(postIdsWithPolls[i], optionIds);
-    }
-  });
-  return result;
+  return viewerPollVotesByScope(agencyScope(agencyId), groupId, postIdsWithPolls, viewerId);
 }
 
 /** Cast or change a vote on a poll — one doc per voter at
@@ -824,66 +773,14 @@ export async function voteAgencyPollServerSide(opts: {
   viewerIsModerator: boolean;
   optionIds: string[];
 }): Promise<{ ok: true; poll: FeedPoll } | { ok: false; error: string }> {
-  const db = getAdminDb();
-  const postRef = postsCol(opts.agencyId, opts.groupId).doc(opts.postId);
-  const voteRef = postRef.collection("pollVotes").doc(opts.viewerId);
-
-  return db.runTransaction(async (tx) => {
-    const [postSnap, voteSnap] = await Promise.all([tx.get(postRef), tx.get(voteRef)]);
-    if (!postSnap.exists) return { ok: false, error: "Post not found" };
-    const poll = (postSnap.data() as CommunityPost).poll;
-    if (!poll) return { ok: false, error: "This post has no poll" };
-
-    const endsAtMs = toMillisOrNull(poll.endsAt);
-    if (endsAtMs !== null && endsAtMs <= Date.now()) {
-      return { ok: false, error: "This poll is closed" };
-    }
-
-    const validIds = new Set(poll.options.map((o) => o.id));
-    const requested = Array.from(new Set(opts.optionIds)).filter((id) => validIds.has(id));
-    if (requested.length === 0) {
-      return { ok: false, error: "Choose at least one option" };
-    }
-    if (!poll.allowMultiple && requested.length > 1) {
-      return { ok: false, error: "This poll only allows one answer" };
-    }
-
-    const previous: string[] = voteSnap.exists
-      ? ((voteSnap.data()?.optionIds as string[] | undefined) ?? [])
-      : [];
-    const optionCounts = { ...poll.optionCounts };
-    for (const id of previous) {
-      if (!requested.includes(id)) {
-        optionCounts[id] = Math.max(0, (optionCounts[id] ?? 0) - 1);
-      }
-    }
-    for (const id of requested) {
-      if (!previous.includes(id)) {
-        optionCounts[id] = (optionCounts[id] ?? 0) + 1;
-      }
-    }
-    const voterCount = poll.voterCount + (voteSnap.exists ? 0 : 1);
-    const now = FieldValue.serverTimestamp();
-
-    tx.set(voteRef, {
-      viewerId: opts.viewerId,
-      viewerDisplayName: opts.viewerDisplayName,
-      agencyId: opts.agencyId,
-      groupId: opts.groupId,
-      postId: opts.postId,
-      optionIds: requested,
-      votedAt: voteSnap.exists ? voteSnap.data()!.votedAt : now,
-      updatedAt: now,
-    });
-    tx.update(postRef, {
-      "poll.optionCounts": optionCounts,
-      "poll.voterCount": voterCount,
-    });
-
-    return {
-      ok: true,
-      poll: buildFeedPoll({ ...poll, optionCounts, voterCount }, requested, opts.viewerIsModerator),
-    };
+  return votePollByScope({
+    scope: agencyScope(opts.agencyId),
+    groupId: opts.groupId,
+    postId: opts.postId,
+    voterId: opts.viewerId,
+    voterDisplayName: opts.viewerDisplayName,
+    viewerIsModerator: opts.viewerIsModerator,
+    optionIds: opts.optionIds,
   });
 }
 
@@ -905,16 +802,21 @@ export async function createAgencyCommentServerSide(
   const author = await resolveAgencyAuthor(input.author);
   const postRef = postsCol(input.agencyId, input.groupId).doc(input.postId);
 
-  // A reply always resolves to the SAME top-level parent — same rule the
-  // tenant service enforces.
-  let parentId: string | null = input.parentId ?? null;
-  if (parentId) {
-    const parentSnap = await commentsCol(input.agencyId, input.groupId, input.postId)
-      .doc(parentId)
-      .get();
-    const grandparent = parentSnap.data()?.parentId as string | null | undefined;
-    if (grandparent) parentId = grandparent;
-  }
+  // Thread-parent resolution is now the shared core (see
+  // community-feed-shared-service.ts) — one disclosed correctness fix
+  // falls out of sharing tenant's already-correct implementation: a
+  // request naming a parentId that doesn't actually exist now throws
+  // ("Comment not found") instead of silently storing that bogus id as
+  // the new comment's own parentId (Agency's previous inline check only
+  // ever looked at `parentSnap.data()?.parentId`, which reads as
+  // `undefined` on a nonexistent doc — indistinguishable from "not a
+  // reply" — so a bad id passed through uncaught). See the Phase 3 report.
+  const parentId = await resolveCommentParentIdByScope(
+    agencyScope(input.agencyId),
+    input.groupId,
+    input.postId,
+    input.parentId,
+  );
 
   const doc = {
     groupId: input.groupId,
@@ -1026,6 +928,10 @@ export async function deleteAgencyCommentServerSide(
   await postRef.update({ commentCount: FieldValue.increment(-1) });
 }
 
+/** Like/unlike mechanics are now the shared core — see
+ *  `toggleAgencyPostLikeServerSide`'s own updated doc comment for the
+ *  points-integration boundary and the not-found correctness fix, both
+ *  identical here. */
 export async function toggleAgencyCommentLikeServerSide(
   agencyId: string,
   groupId: string,
@@ -1033,22 +939,7 @@ export async function toggleAgencyCommentLikeServerSide(
   commentId: string,
   uid: string,
 ): Promise<{ liked: boolean; authorId: string | null }> {
-  const db = getAdminDb();
-  const commentRef = commentsCol(agencyId, groupId, postId).doc(commentId);
-  const likeRef = commentRef.collection("likes").doc(uid);
-  return db.runTransaction(async (tx) => {
-    const [likeSnap, commentSnap] = await Promise.all([tx.get(likeRef), tx.get(commentRef)]);
-    const liked = !likeSnap.exists;
-    if (liked) {
-      tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
-      tx.update(commentRef, { likeCount: FieldValue.increment(1) });
-    } else {
-      tx.delete(likeRef);
-      tx.update(commentRef, { likeCount: FieldValue.increment(-1) });
-    }
-    const authorId = (commentSnap.data()?.authorMemberId as string | undefined) ?? null;
-    return { liked, authorId };
-  });
+  return toggleLikeByScope({ scope: agencyScope(agencyId), groupId, postId, commentId, viewerId: uid });
 }
 
 // -------------------------------------------------------- Membership --

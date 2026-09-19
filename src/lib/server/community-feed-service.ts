@@ -1,7 +1,6 @@
 import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   awardPoints,
@@ -11,12 +10,22 @@ import {
   sanitizeCommunityPostHtml,
   sanitizeCommunityCommentHtml,
 } from "@/lib/community/post-html";
-import { getInaccessibleChannelNames } from "@/lib/server/community-channels-service";
 import {
   extractMentionedMemberIds,
   notifyCommunityMentions,
   notifyCommunityReply,
 } from "@/lib/server/notification-producers";
+import {
+  deleteAttachmentStorageByScope,
+  resolveCommentParentIdByScope,
+  listFeedPostsByScope,
+  getFeedPostByScope,
+  toggleLikeByScope,
+  viewerPollVotesByScope,
+  votePollByScope,
+  buildFeedPoll,
+} from "@/lib/server/community-feed-shared-service";
+import { tenantScope } from "@/lib/server/community-scope";
 import type {
   AuthorView,
   CommunityComment,
@@ -161,87 +170,30 @@ async function viewerLikes(
   return liked;
 }
 
-/** millis for a Firestore Timestamp/Date/FieldValue-shaped value, or null. */
-function toMillisOrNull(v: unknown): number | null {
-  if (!v) return null;
-  const m = v as {
-    toMillis?: () => number;
-    toDate?: () => Date;
-    seconds?: number;
-  };
-  if (typeof m.toMillis === "function") return m.toMillis();
-  if (typeof m.toDate === "function") return m.toDate().getTime();
-  if (typeof m.seconds === "number") return m.seconds * 1000;
-  return null;
-}
-
 /**
- * The ONE place a raw {@link CommunityPoll} doc is turned into the
- * viewer-safe {@link FeedPoll} every read path sends to the client — see
- * the type's own doc comment for why `optionCounts`/`voterCount` must
- * never leak here when `resultsVisible` is false. `viewerVote` is this
- * specific viewer's own vote doc (or null if they haven't voted) — always
- * read per-request, never cached/denormalized onto the post, so a vote
- * cast a second ago is reflected immediately.
+ * `buildFeedPoll`/`viewerPollVotes` are now thin re-exports of the shared
+ * Community Shared Architecture Phase 3 core (community-feed-shared-
+ * service.ts) — the raw-poll -> viewer-safe-FeedPoll transform and the
+ * per-viewer vote read were already 100% scope-agnostic modulo path, and
+ * `buildFeedPoll` in particular is imported directly by
+ * community-agency-service.ts from THIS module path — re-exporting here
+ * (rather than each call site importing the shared file directly) keeps
+ * that existing import path working unchanged.
  */
-/** Exported (2026-08-20, found live during QA) — the create/edit POST/PATCH
- *  routes must run every poll they hand back through this SAME function
- *  before it reaches the client. `createPostServerSide`/
- *  `updatePostServerSide` return the RAW stored `CommunityPoll` (server
- *  shape: no `viewerSelection`/`resultsVisible`/`closed`/`canManage`) —
- *  handing that straight to the client as if it were a `FeedPoll` crashed
- *  `CommunityPollCard` immediately (`poll.viewerSelection.length` on
- *  `undefined`) the moment a newly-created poll rendered optimistically.
- *  Confirmed live, fixed before this ever reached a real member. */
-export function buildFeedPoll(
-  poll: CommunityPoll,
-  viewerVote: string[] | null,
-  viewerIsModerator: boolean
-): FeedPoll {
-  const endsAtMs = toMillisOrNull(poll.endsAt);
-  const closed = endsAtMs !== null && endsAtMs <= Date.now();
-  const resultsVisible = poll.showResults || viewerIsModerator;
-  return {
-    options: poll.options,
-    allowMultiple: poll.allowMultiple,
-    showResults: poll.showResults,
-    endsAtMs,
-    closed,
-    resultsVisible,
-    optionCounts: resultsVisible ? poll.optionCounts : null,
-    voterCount: resultsVisible ? poll.voterCount : null,
-    viewerSelection: viewerVote ?? [],
-    canManage: viewerIsModerator,
-  };
-}
+export { buildFeedPoll };
 
-/** Batch-read this viewer's own vote (if any) for each post that has a
- *  poll — mirrors `viewerLikes`'s "one small doc per post per viewer"
- *  shape, same reasoning: cheap, bounded, no aggregation query needed.
- *  Exported (2026-08-20) for the create/edit routes' own `buildFeedPoll`
- *  call — see that export's comment. */
 export async function viewerPollVotes(
   saId: string,
   groupId: string,
   postIdsWithPolls: string[],
   viewerMemberId: string
 ): Promise<Map<string, string[]>> {
-  const result = new Map<string, string[]>();
-  if (postIdsWithPolls.length === 0) return result;
-  const db = getAdminDb();
-  const refs = postIdsWithPolls.map((id) =>
-    db.doc(
-      `subAccounts/${saId}/communityGroups/${groupId}/posts/${id}/pollVotes/${viewerMemberId}`
-    )
+  return viewerPollVotesByScope(
+    tenantScope(saId),
+    groupId,
+    postIdsWithPolls,
+    viewerMemberId
   );
-  const snaps = await db.getAll(...refs);
-  snaps.forEach((s, i) => {
-    if (s.exists) {
-      const optionIds = (s.data()?.optionIds as string[] | undefined) ?? [];
-      result.set(postIdsWithPolls[i], optionIds);
-    }
-  });
-  return result;
 }
 
 export interface CreatePostInput {
@@ -424,57 +376,17 @@ export async function listFeed(opts: {
   category?: string | null;
   limit?: number;
 }): Promise<FeedPost[]> {
-  const snap = await postsCol(opts.subAccountId, opts.groupId)
-    .orderBy("createdAt", "desc")
-    .limit(opts.limit ?? 100)
-    .get();
-
-  let posts = snap.docs.map((d) => ({
-    id: d.id,
-    ...(d.data() as Omit<CommunityPost, "id">),
-  }));
-
-  // A pinned post (either target) older than the `limit` newest posts
-  // would otherwise silently fall outside the window above and vanish
-  // from its own Featured Posts / "Pinned in [Channel]" section — found
-  // live: a real Community's oldest post (its original welcome message)
-  // is also its most-pinned one. Both queries are cheap regardless of
-  // community size (MAX_FEATURED_POSTS caps the first at 3; channel pins
-  // have no cap but are still a real moderator's deliberate, bounded
-  // selection, never approaching `limit`).
-  const alreadyIncluded = new Set(posts.map((p) => p.id));
-  const [pinnedSnap, channelPinnedSnap] = await Promise.all([
-    postsCol(opts.subAccountId, opts.groupId).where("pinned", "==", true).get(),
-    postsCol(opts.subAccountId, opts.groupId)
-      .where("pinnedToChannel", "==", true)
-      .get(),
-  ]);
-  for (const d of [...pinnedSnap.docs, ...channelPinnedSnap.docs]) {
-    if (!alreadyIncluded.has(d.id)) {
-      posts.push({ id: d.id, ...(d.data() as Omit<CommunityPost, "id">) });
-      alreadyIncluded.add(d.id);
-    }
-  }
-
-  if (opts.category && opts.category !== "All") {
-    posts = posts.filter((p) => p.category === opts.category);
-  }
-  // Channels (left rail) — a non-moderator viewer must never see a post
-  // from a private channel or one nested in a private section, at the
-  // actual read layer, not just by the left rail hiding the link. Applies
-  // regardless of the `?c=` filter above (also covers "All Posts").
-  if (opts.viewerIsModerator !== true) {
-    const inaccessible = await getInaccessibleChannelNames({
-      subAccountId: opts.subAccountId,
-      groupId: opts.groupId,
-      isModerator: false,
-    });
-    if (inaccessible.size > 0) {
-      posts = posts.filter((p) => !p.category || !inaccessible.has(p.category));
-    }
-  }
-  // Pinned float to the top, preserving recency within each band.
-  posts.sort((a, b) => Number(b.pinned) - Number(a.pinned));
+  // Fetch + pinned-backfill + category filter + channel-access filter +
+  // sort are now the shared core (community-feed-shared-service.ts) — see
+  // that file's module comment. `postLimit` (not `null`) preserves
+  // tenant's existing `.limit()` + pinned-backfill behavior exactly.
+  const posts = await listFeedPostsByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    viewerIsModerator: opts.viewerIsModerator === true,
+    category: opts.category,
+    postLimit: opts.limit ?? 100,
+  });
 
   const authors = await hydrateAuthors(
     opts.subAccountId,
@@ -522,23 +434,16 @@ export async function getFeedPost(opts: {
   /** See `listFeed`'s same option — same safe-default reasoning. */
   viewerIsModerator?: boolean;
 }): Promise<FeedPost | null> {
-  const snap = await postsCol(opts.subAccountId, opts.groupId)
-    .doc(opts.postId)
-    .get();
-  if (!snap.exists) return null;
-  const post = { id: snap.id, ...(snap.data() as Omit<CommunityPost, "id">) };
-  // Same "must not be able to navigate directly to it by URL" enforcement
-  // as listFeed above, applied to a single-post direct fetch — returning
-  // null here reads identically to "post not found" to every existing
-  // caller (both the page and the API route already 404 on null).
-  if (opts.viewerIsModerator !== true && post.category) {
-    const inaccessible = await getInaccessibleChannelNames({
-      subAccountId: opts.subAccountId,
-      groupId: opts.groupId,
-      isModerator: false,
-    });
-    if (inaccessible.has(post.category)) return null;
-  }
+  // Fetch + channel-access enforcement is now the shared core — see
+  // community-feed-shared-service.ts's module comment. Returning `null`
+  // here still reads identically to "post not found" to every caller.
+  const post = await getFeedPostByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    postId: opts.postId,
+    viewerIsModerator: opts.viewerIsModerator === true,
+  });
+  if (!post) return null;
   const authors = await hydrateAuthors(opts.subAccountId, opts.groupId, [
     post.authorMemberId,
   ]);
@@ -616,34 +521,6 @@ export async function listComments(opts: {
   }));
 }
 
-/**
- * Resolve the EFFECTIVE parentId for a new comment, enforcing the
- * two-visual-level thread model at the data boundary — not merely a
- * client-side convention the UI happens to follow. If `requestedParentId`
- * names a comment that is ITSELF a reply (has its own non-null parentId),
- * the new comment attaches to that reply's own top-level parent instead —
- * "replying to a reply" always lands in the same thread as a sibling
- * reply, never a third indentation level. Throws if the requested parent
- * doesn't exist (or isn't in this post) rather than silently guessing —
- * a genuinely different error case than "flatten a too-deep reply".
- */
-async function resolveCommentParentId(
-  postRef: FirebaseFirestore.DocumentReference,
-  requestedParentId: string | null | undefined
-): Promise<string | null> {
-  if (!requestedParentId) return null;
-  const targetSnap = await postRef
-    .collection("comments")
-    .doc(requestedParentId)
-    .get();
-  if (!targetSnap.exists) {
-    throw new Error("Comment not found");
-  }
-  const targetParentId = (targetSnap.data() as Omit<CommunityComment, "id">)
-    .parentId;
-  return targetParentId ?? requestedParentId;
-}
-
 export async function createCommentServerSide(opts: {
   subAccountId: string;
   groupId: string;
@@ -657,8 +534,12 @@ export async function createCommentServerSide(opts: {
 }): Promise<CommunityComment> {
   const db = getAdminDb();
   const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
-  const effectiveParentId = await resolveCommentParentId(
-    postRef,
+  // Thread-parent resolution (the two-visual-level model) is now the
+  // shared core — see community-feed-shared-service.ts's own doc comment.
+  const effectiveParentId = await resolveCommentParentIdByScope(
+    tenantScope(opts.subAccountId),
+    opts.groupId,
+    opts.postId,
     opts.parentId
   );
   const commentRef = postRef.collection("comments").doc();
@@ -777,30 +658,16 @@ export async function toggleLikeServerSide(opts: {
   commentId?: string;
   viewerMemberId: string;
 }): Promise<{ liked: boolean }> {
-  const db = getAdminDb();
-  const base = `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`;
-  const targetRef = opts.commentId
-    ? db.doc(`${base}/posts/${opts.postId}/comments/${opts.commentId}`)
-    : db.doc(`${base}/posts/${opts.postId}`);
-  const likeRef = targetRef.collection("likes").doc(opts.viewerMemberId);
-
-  const { liked, authorId } = await db.runTransaction(async (tx) => {
-    const [likeSnap, targetSnap] = await Promise.all([
-      tx.get(likeRef),
-      tx.get(targetRef),
-    ]);
-    if (!targetSnap.exists) throw new Error("Not found");
-    const authorId = targetSnap.data()!.authorMemberId as string;
-
-    if (likeSnap.exists) {
-      tx.delete(likeRef);
-      tx.update(targetRef, { likeCount: FieldValue.increment(-1) });
-      return { liked: false, authorId };
-    }
-
-    tx.set(likeRef, { createdAt: FieldValue.serverTimestamp() });
-    tx.update(targetRef, { likeCount: FieldValue.increment(1) });
-    return { liked: true, authorId };
+  // Like/unlike mechanics (transactional doc + counter) are now the shared
+  // core — see community-feed-shared-service.ts's module comment for why
+  // the points integration below stays here rather than moving into it
+  // (tenant's memberId needs no translation to award onto; Agency's does).
+  const { liked, authorId } = await toggleLikeByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    postId: opts.postId,
+    commentId: opts.commentId,
+    viewerId: opts.viewerMemberId,
   });
 
   if (opts.viewerMemberId !== authorId) {
@@ -926,30 +793,14 @@ export async function setPostPinServerSide(opts: {
  * block deleting the post itself — the alternative (a stuck, undeletable
  * post because of an unrelated Storage hiccup) is worse.
  */
-/** Attachment storage path, or null for kinds with nothing of ours to
- *  clean up (gif = provider CDN URL, video-link = metadata only). */
+/** Thin wrapper over the shared core (community-feed-shared-service.ts) —
+ *  signature unchanged, every existing call site in this file is
+ *  untouched. */
 async function deleteAttachmentStorage(
   attachments: MediaAttachment[] | undefined,
   subAccountId: string
 ) {
-  if (!attachments?.length) return;
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) return;
-  const bucket = getStorage().bucket(bucketName);
-  await Promise.allSettled(
-    attachments.map(async (a) => {
-      const storagePath = ownedAttachmentStoragePath(a, subAccountId);
-      if (!storagePath) return;
-      try {
-        await bucket.file(storagePath).delete();
-      } catch (err) {
-        console.warn(
-          "[community-feed] attachment cleanup: object missing or already removed",
-          err
-        );
-      }
-    })
-  );
+  return deleteAttachmentStorageByScope(tenantScope(subAccountId), attachments);
 }
 
 /**
@@ -1084,75 +935,18 @@ export async function votePollServerSide(opts: {
   viewerIsModerator: boolean;
   optionIds: string[];
 }): Promise<{ ok: true; poll: FeedPoll } | { ok: false; error: string }> {
-  const db = getAdminDb();
-  const postRef = postsCol(opts.subAccountId, opts.groupId).doc(opts.postId);
-  const voteRef = postRef.collection("pollVotes").doc(opts.memberId);
-
-  return db.runTransaction(async (tx) => {
-    const [postSnap, voteSnap] = await Promise.all([
-      tx.get(postRef),
-      tx.get(voteRef),
-    ]);
-    if (!postSnap.exists) return { ok: false, error: "Post not found" };
-    const poll = (postSnap.data() as CommunityPost).poll;
-    if (!poll) return { ok: false, error: "This post has no poll" };
-
-    const endsAtMs = toMillisOrNull(poll.endsAt);
-    if (endsAtMs !== null && endsAtMs <= Date.now()) {
-      return { ok: false, error: "This poll is closed" };
-    }
-
-    const validIds = new Set(poll.options.map((o) => o.id));
-    const requested = Array.from(new Set(opts.optionIds)).filter((id) =>
-      validIds.has(id)
-    );
-    if (requested.length === 0) {
-      return { ok: false, error: "Choose at least one option" };
-    }
-    if (!poll.allowMultiple && requested.length > 1) {
-      return { ok: false, error: "This poll only allows one answer" };
-    }
-
-    const previous: string[] = voteSnap.exists
-      ? ((voteSnap.data()?.optionIds as string[] | undefined) ?? [])
-      : [];
-    const optionCounts = { ...poll.optionCounts };
-    for (const id of previous) {
-      if (!requested.includes(id)) {
-        optionCounts[id] = Math.max(0, (optionCounts[id] ?? 0) - 1);
-      }
-    }
-    for (const id of requested) {
-      if (!previous.includes(id)) {
-        optionCounts[id] = (optionCounts[id] ?? 0) + 1;
-      }
-    }
-    const voterCount = poll.voterCount + (voteSnap.exists ? 0 : 1);
-    const now = FieldValue.serverTimestamp();
-
-    tx.set(voteRef, {
-      memberId: opts.memberId,
-      memberDisplayName: opts.memberDisplayName,
-      subAccountId: opts.subAccountId,
-      groupId: opts.groupId,
-      postId: opts.postId,
-      optionIds: requested,
-      votedAt: voteSnap.exists ? voteSnap.data()!.votedAt : now,
-      updatedAt: now,
-    });
-    tx.update(postRef, {
-      "poll.optionCounts": optionCounts,
-      "poll.voterCount": voterCount,
-    });
-
-    return {
-      ok: true,
-      poll: buildFeedPoll(
-        { ...poll, optionCounts, voterCount },
-        requested,
-        opts.viewerIsModerator
-      ),
-    };
+  // Poll-vote validation + tally + transaction are now the shared core —
+  // see community-feed-shared-service.ts's own doc comment for why the
+  // persisted vote-doc field NAMES stay scope-specific (memberId/
+  // memberDisplayName/subAccountId here) even though the logic is shared.
+  return votePollByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    postId: opts.postId,
+    voterId: opts.memberId,
+    voterDisplayName: opts.memberDisplayName,
+    viewerIsModerator: opts.viewerIsModerator,
+    optionIds: opts.optionIds,
   });
 }
 
