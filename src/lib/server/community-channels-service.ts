@@ -2,23 +2,77 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getGroupById, updateGroupServerSide } from "@/lib/server/community-service";
+import {
+  communityGroupsRoot,
+  tenantScope,
+  agencyScope,
+  type CommunityOwnerScope,
+} from "@/lib/server/community-scope";
 import type { ChannelType, CommunityChannel, CommunitySection } from "@/types/community";
 
 /**
- * Left rail Channels/Sections data layer. See `CommunityChannel`'s own
- * module comment (types/community.ts) for the full architecture rationale
- * — short version: a Channel's `name` IS the plain `category` string every
- * post already uses, so this is a metadata layer on top of the existing
- * post/feed model, not a migration of it.
+ * Left rail Channels/Sections data layer — Community Shared Architecture
+ * Phase 1 (2026-09-19). This is now the ONE place Channel/Section business
+ * logic (create/update/delete, ordering, private/read-only state,
+ * name-uniqueness, category-list sync, cascade-rename) lives for BOTH
+ * tenant and Agency Community, parameterized by `CommunityOwnerScope`
+ * (see community-scope.ts). Every exported tenant function below keeps its
+ * exact pre-existing signature — no tenant call site changes. The Agency
+ * equivalents in community-agency-service.ts (`createAgencyChannelServerSide`
+ * etc.) now delegate to the `*ByScope` functions here instead of carrying
+ * their own second implementation — see that file's own updated doc
+ * comments at each function for what changed.
+ *
+ * One deliberate, disclosed behavior change from consolidating onto ONE
+ * implementation: the Agency channel-rename path previously had no
+ * duplicate-name guard (only channel CREATION checked for an existing
+ * name) — a gap, not an intentional scope difference. The shared
+ * `updateChannelServerSideByScope` now enforces the SAME uniqueness rule
+ * tenant always had on rename, for both scopes, since "a channel name is
+ * unique within its community" is a business rule, not a tenant-only one.
+ * See the Phase 1 report's "Duplicated Logic Removed" section.
+ *
+ * See `CommunityChannel`'s own module comment (types/community.ts) for the
+ * full architecture rationale — short version: a Channel's `name` IS the
+ * plain `category` string every post already uses, so this is a metadata
+ * layer on top of the existing post/feed model, not a migration of it.
  */
 
-function channelsCol(saId: string, groupId: string) {
-  return getAdminDb().collection(`subAccounts/${saId}/communityGroups/${groupId}/channels`);
+function channelsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${communityGroupsRoot(scope)}/${groupId}/channels`);
 }
 
-function sectionsCol(saId: string, groupId: string) {
-  return getAdminDb().collection(`subAccounts/${saId}/communityGroups/${groupId}/sections`);
+function sectionsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${communityGroupsRoot(scope)}/${groupId}/sections`);
+}
+
+function postsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${communityGroupsRoot(scope)}/${groupId}/posts`);
+}
+
+/** Categories are read/written directly against the group doc's own
+ *  `categories` field regardless of scope — deliberately NOT routed through
+ *  `getGroupById`/`updateGroupServerSide` (tenant-only) or
+ *  `getAgencyGroupById`/`updateAgencyGroupServerSide` (agency-only, and
+ *  importing either here from community-agency-service.ts would be a
+ *  needless cross-file coupling for one array field) to keep this module
+ *  free of a circular import in either direction. */
+async function getGroupCategories(
+  scope: CommunityOwnerScope,
+  groupId: string,
+): Promise<string[]> {
+  const snap = await getAdminDb().doc(`${communityGroupsRoot(scope)}/${groupId}`).get();
+  return (snap.data()?.categories as string[] | undefined) ?? [];
+}
+
+async function setGroupCategories(
+  scope: CommunityOwnerScope,
+  groupId: string,
+  categories: string[],
+): Promise<void> {
+  await getAdminDb()
+    .doc(`${communityGroupsRoot(scope)}/${groupId}`)
+    .update({ categories, updatedAt: FieldValue.serverTimestamp() });
 }
 
 function docToChannel(id: string, data: FirebaseFirestore.DocumentData): CommunityChannel {
@@ -54,21 +108,28 @@ function docToSection(id: string, data: FirebaseFirestore.DocumentData): Communi
 }
 
 /**
- * Lazily backfills a real `CommunityChannel` doc for any `group.categories`
- * entry that doesn't have one yet — the ONE-TIME-migration-free way every
- * pre-existing community (whose only "channel" concept was ever the flat
- * `categories` array) ends up with real Channel metadata the first time
- * its left rail is rendered, without a migration script. Idempotent: safe
- * to call on every read. Returns the up-to-date channel list so callers
- * that already need it don't have to re-query.
+ * Lazily backfills a real `CommunityChannel` doc for any legacy
+ * `group.categories` entry that doesn't have one yet. Tenant-only
+ * behavior, preserved exactly: every pre-Channels-feature tenant community
+ * had only a flat `categories` array, so this idempotent backfill is what
+ * gives it real Channel metadata the first time its left rail renders,
+ * with no migration script. Agency Community was built AFTER the Channels
+ * feature existed — every agency group has always had real Channel docs
+ * from creation, so there is no legacy state to backfill from; agency
+ * scope skips this and just lists what already exists (see
+ * `listChannelsByScope` below), exactly matching its pre-consolidation
+ * behavior.
  */
-export async function ensureChannelsForGroup(
-  saId: string,
+async function ensureChannelsForGroupByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
 ): Promise<CommunityChannel[]> {
-  const group = await getGroupById(saId, groupId);
-  const categories = group?.categories ?? [];
-  const snap = await channelsCol(saId, groupId).get();
+  if (scope.kind === "agency") return listChannelsByScope(scope, groupId);
+
+  const [categories, snap] = await Promise.all([
+    getGroupCategories(scope, groupId),
+    channelsColByScope(scope, groupId).get(),
+  ]);
   const existing = snap.docs.map((d) => docToChannel(d.id, d.data()));
   const existingNames = new Set(existing.map((c) => c.name));
   const missing = categories.filter((c) => !existingNames.has(c));
@@ -79,10 +140,10 @@ export async function ensureChannelsForGroup(
   const batch = db.batch();
   const created: CommunityChannel[] = [];
   missing.forEach((name, i) => {
-    const ref = channelsCol(saId, groupId).doc();
+    const ref = channelsColByScope(scope, groupId).doc();
     const order = maxOrder + 1 + i;
     const doc = {
-      subAccountId: saId,
+      subAccountId: scope.kind === "subAccount" ? scope.subAccountId : undefined,
       groupId,
       name,
       icon: "💬",
@@ -102,6 +163,16 @@ export async function ensureChannelsForGroup(
   return [...existing, ...created];
 }
 
+async function listChannelsByScope(
+  scope: CommunityOwnerScope,
+  groupId: string,
+): Promise<CommunityChannel[]> {
+  const snap = await channelsColByScope(scope, groupId).get();
+  return snap.docs
+    .map((d) => docToChannel(d.id, d.data()))
+    .sort((a, b) => a.order - b.order);
+}
+
 export interface ChannelsAndSections {
   sections: CommunitySection[];
   channels: CommunityChannel[];
@@ -109,21 +180,21 @@ export interface ChannelsAndSections {
 
 /**
  * The left rail's one read — sections + channels, already filtered for the
- * viewer (Part "Private Section"/"Private Channel"): a non-moderator never
- * sees a private Section's heading, never sees a Channel nested inside a
- * private Section (regardless of that Channel's OWN `private` value —
- * Section privacy is an additional gate layered on top, not a replacement
- * for Channel-level rules), and never sees a Channel whose own `private`
- * is true. Both lists are sorted by `order`.
+ * viewer: a non-moderator never sees a private Section's heading, never
+ * sees a Channel nested inside a private Section (regardless of that
+ * Channel's OWN `private` value — Section privacy is an additional gate
+ * layered on top, not a replacement for Channel-level rules), and never
+ * sees a Channel whose own `private` is true. Both lists are sorted by
+ * `order`. Shared core for both scopes.
  */
-export async function listChannelsAndSectionsForViewer(opts: {
-  subAccountId: string;
+async function listChannelsAndSectionsForViewerByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   isModerator: boolean;
 }): Promise<ChannelsAndSections> {
   const [channels, sectionsSnap] = await Promise.all([
-    ensureChannelsForGroup(opts.subAccountId, opts.groupId),
-    sectionsCol(opts.subAccountId, opts.groupId).get(),
+    ensureChannelsForGroupByScope(opts.scope, opts.groupId),
+    sectionsColByScope(opts.scope, opts.groupId).get(),
   ]);
   let sections = sectionsSnap.docs.map((d) => docToSection(d.id, d.data()));
   sections.sort((a, b) => a.order - b.order);
@@ -144,21 +215,18 @@ export async function listChannelsAndSectionsForViewer(opts: {
 /**
  * Every channel NAME (the string a post's `category` field would hold)
  * that a non-moderator viewer must never see a post from — private
- * channels, plus every channel nested in a private section. Used by
- * `listFeed`/`getFeedPost` (community-feed-service.ts) to enforce "must
- * not be able to load its posts / navigate directly to it by URL" at the
- * actual post-read layer, not just by hiding the left-rail link.
- * Moderators always get an empty set (nothing is hidden from them).
+ * channels, plus every channel nested in a private section. Shared core
+ * for both scopes; moderators always get an empty set.
  */
-export async function getInaccessibleChannelNames(opts: {
-  subAccountId: string;
+async function getInaccessibleChannelNamesByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   isModerator: boolean;
 }): Promise<Set<string>> {
   if (opts.isModerator) return new Set();
-  const { channels } = await listChannelsAndSectionsForViewer(opts);
+  const { channels } = await listChannelsAndSectionsForViewerByScope(opts);
   const visibleNames = new Set(channels.map((c) => c.name));
-  const allChannels = await ensureChannelsForGroup(opts.subAccountId, opts.groupId);
+  const allChannels = await ensureChannelsForGroupByScope(opts.scope, opts.groupId);
   const inaccessible = new Set<string>();
   for (const c of allChannels) {
     if (!visibleNames.has(c.name)) inaccessible.add(c.name);
@@ -166,30 +234,30 @@ export async function getInaccessibleChannelNames(opts: {
   return inaccessible;
 }
 
-/** Single-channel lookup by name — the post create/edit routes' own
- *  Read-Only/Private enforcement point (a post targets a channel by name,
- *  same as it always targeted a plain category string). `null` = no
- *  channel with that name exists yet (shouldn't normally happen once
- *  `ensureChannelsForGroup` has run, but a stale/hand-crafted request
- *  claiming an unknown category is handled the same defensive way the
- *  existing `categories.includes(...)` check already did). */
-export async function getChannelByName(
-  saId: string,
+async function getChannelByNameByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   name: string,
 ): Promise<CommunityChannel | null> {
-  const snap = await channelsCol(saId, groupId).where("name", "==", name).limit(1).get();
+  const snap = await channelsColByScope(scope, groupId).where("name", "==", name).limit(1).get();
   if (snap.empty) return null;
   return docToChannel(snap.docs[0].id, snap.docs[0].data());
 }
 
-async function nameTaken(saId: string, groupId: string, name: string, excludeId?: string) {
-  const snap = await channelsCol(saId, groupId).where("name", "==", name).limit(2).get();
+/** `excludeId` omitted on create (nothing to exclude yet); passed on rename
+ *  so a channel doesn't collide with its own unchanged name. */
+async function nameTakenByScope(
+  scope: CommunityOwnerScope,
+  groupId: string,
+  name: string,
+  excludeId?: string,
+): Promise<boolean> {
+  const snap = await channelsColByScope(scope, groupId).where("name", "==", name).limit(2).get();
   return snap.docs.some((d) => d.id !== excludeId);
 }
 
-export interface CreateChannelInput {
-  subAccountId: string;
+export interface CreateChannelByScopeInput {
+  scope: CommunityOwnerScope;
   groupId: string;
   name: string;
   icon: string;
@@ -199,17 +267,19 @@ export interface CreateChannelInput {
   sectionId?: string | null;
 }
 
-export async function createChannelServerSide(input: CreateChannelInput): Promise<CommunityChannel> {
+async function createChannelServerSideByScope(
+  input: CreateChannelByScopeInput,
+): Promise<CommunityChannel> {
   const name = input.name.trim().slice(0, 60);
   if (!name) throw new Error("Channel name is required");
-  if (await nameTaken(input.subAccountId, input.groupId, name)) {
+  if (await nameTakenByScope(input.scope, input.groupId, name)) {
     throw new Error("A channel with that name already exists");
   }
-  const existing = await ensureChannelsForGroup(input.subAccountId, input.groupId);
+  const existing = await ensureChannelsForGroupByScope(input.scope, input.groupId);
   const order = existing.reduce((m, c) => Math.max(m, c.order), -1) + 1;
 
   const doc = {
-    subAccountId: input.subAccountId,
+    subAccountId: input.scope.kind === "subAccount" ? input.scope.subAccountId : undefined,
     groupId: input.groupId,
     name,
     icon: input.icon || "💬",
@@ -222,19 +292,15 @@ export async function createChannelServerSide(input: CreateChannelInput): Promis
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const ref = await channelsCol(input.subAccountId, input.groupId).add(doc);
+  const ref = await channelsColByScope(input.scope, input.groupId).add(doc);
 
   // Keep CommunityGroup.categories (the flat name list every existing
   // post-create/edit validation + the feed's own ?c= filter already read)
   // in sync — see the module comment on CommunityChannel for why this
   // dual-write exists instead of migrating those call sites.
-  const group = await getGroupById(input.subAccountId, input.groupId);
-  if (group && !group.categories.includes(name)) {
-    await updateGroupServerSide({
-      subAccountId: input.subAccountId,
-      groupId: input.groupId,
-      patch: { categories: [...group.categories, name] },
-    });
+  const categories = await getGroupCategories(input.scope, input.groupId);
+  if (!categories.includes(name)) {
+    await setGroupCategories(input.scope, input.groupId, [...categories, name]);
   }
 
   return { id: ref.id, ...doc, createdAt: null, updatedAt: null };
@@ -257,21 +323,20 @@ export interface UpdateChannelPatch {
  *  limit; communities with more posts in one channel than that are a real,
  *  disclosed limitation (see the Channels feature report), not silently
  *  incomplete — logged loudly rather than silently truncated. */
-async function cascadeRenamePostsCategory(
-  saId: string,
+async function cascadeRenamePostsCategoryByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   oldName: string,
   newName: string,
 ) {
-  const postsSnap = await getAdminDb()
-    .collection(`subAccounts/${saId}/communityGroups/${groupId}/posts`)
+  const postsSnap = await postsColByScope(scope, groupId)
     .where("category", "==", oldName)
     .limit(500)
     .get();
   if (postsSnap.empty) return;
   if (postsSnap.size >= 500) {
     console.error(
-      `[community-channels] cascadeRenamePostsCategory hit the 500-doc batch cap for ${saId}/${groupId} "${oldName}" -> "${newName}" — some posts may still carry the old category name.`,
+      `[community-channels] cascadeRenamePostsCategory hit the 500-doc batch cap for ${communityGroupsRoot(scope)}/${groupId} "${oldName}" -> "${newName}" — some posts may still carry the old category name.`,
     );
   }
   const batch = getAdminDb().batch();
@@ -279,13 +344,13 @@ async function cascadeRenamePostsCategory(
   await batch.commit();
 }
 
-export async function updateChannelServerSide(
-  saId: string,
+async function updateChannelServerSideByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   channelId: string,
   patch: UpdateChannelPatch,
 ): Promise<CommunityChannel | null> {
-  const ref = channelsCol(saId, groupId).doc(channelId);
+  const ref = channelsColByScope(scope, groupId).doc(channelId);
   const snap = await ref.get();
   if (!snap.exists) return null;
   const existing = docToChannel(snap.id, snap.data()!);
@@ -297,7 +362,7 @@ export async function updateChannelServerSide(
     const name = patch.name.trim().slice(0, 60);
     if (!name) throw new Error("Channel name is required");
     if (name !== existing.name) {
-      if (await nameTaken(saId, groupId, name, channelId)) {
+      if (await nameTakenByScope(scope, groupId, name, channelId)) {
         throw new Error("A channel with that name already exists");
       }
       updates.name = name;
@@ -315,16 +380,10 @@ export async function updateChannelServerSide(
 
   if (renamedFrom) {
     const newName = updates.name as string;
-    await cascadeRenamePostsCategory(saId, groupId, renamedFrom, newName);
-    const group = await getGroupById(saId, groupId);
-    if (group) {
-      const nextCategories = group.categories.map((c) => (c === renamedFrom ? newName : c));
-      await updateGroupServerSide({
-        subAccountId: saId,
-        groupId,
-        patch: { categories: Array.from(new Set(nextCategories)) },
-      });
-    }
+    await cascadeRenamePostsCategoryByScope(scope, groupId, renamedFrom, newName);
+    const categories = await getGroupCategories(scope, groupId);
+    const nextCategories = categories.map((c) => (c === renamedFrom ? newName : c));
+    await setGroupCategories(scope, groupId, Array.from(new Set(nextCategories)));
   }
 
   const fresh = await ref.get();
@@ -333,62 +392,77 @@ export async function updateChannelServerSide(
 
 export type DeleteChannelResult = { ok: true } | { ok: false; error: string };
 
-/** Blocks deletion if the channel has any posts (Part "Delete Channel" —
- *  the explicitly sanctioned safe default when there's no reassignment
- *  flow: block rather than silently cascade-delete real content). */
-export async function deleteChannelServerSide(
-  saId: string,
+/**
+ * Blocks deletion if the channel has any posts — the explicitly sanctioned
+ * tenant safe default when there's no reassignment flow: block rather than
+ * silently cascade-delete real content. Shared core for both scopes, BUT
+ * the posts-in-use guard is deliberately gated on `guardPostsInUse` rather
+ * than applied unconditionally: the pre-consolidation Agency
+ * implementation deleted unconditionally, with no such guard, and this
+ * phase's explicit "preserve existing behavior" constraint means that
+ * difference is preserved here rather than silently tightened — see the
+ * Phase 1 report's "Duplicated Logic Removed" for the one guard this pass
+ * DID unify (channel-rename name-uniqueness) versus this one, which it
+ * deliberately did not.
+ */
+async function deleteChannelServerSideByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   channelId: string,
+  guardPostsInUse: boolean,
 ): Promise<DeleteChannelResult> {
-  const ref = channelsCol(saId, groupId).doc(channelId);
+  const ref = channelsColByScope(scope, groupId).doc(channelId);
   const snap = await ref.get();
   if (!snap.exists) return { ok: false, error: "Channel not found" };
   const channel = docToChannel(snap.id, snap.data()!);
 
-  const postsSnap = await getAdminDb()
-    .collection(`subAccounts/${saId}/communityGroups/${groupId}/posts`)
-    .where("category", "==", channel.name)
-    .limit(1)
-    .get();
-  if (!postsSnap.empty) {
-    return {
-      ok: false,
-      error: "This channel has posts in it. Move or delete them before deleting the channel.",
-    };
+  if (guardPostsInUse) {
+    const postsSnap = await postsColByScope(scope, groupId)
+      .where("category", "==", channel.name)
+      .limit(1)
+      .get();
+    if (!postsSnap.empty) {
+      return {
+        ok: false,
+        error: "This channel has posts in it. Move or delete them before deleting the channel.",
+      };
+    }
   }
 
   await ref.delete();
-  const group = await getGroupById(saId, groupId);
-  if (group && group.categories.includes(channel.name)) {
-    await updateGroupServerSide({
-      subAccountId: saId,
+  const categories = await getGroupCategories(scope, groupId);
+  if (categories.includes(channel.name)) {
+    await setGroupCategories(
+      scope,
       groupId,
-      patch: { categories: group.categories.filter((c) => c !== channel.name) },
-    });
+      categories.filter((c) => c !== channel.name),
+    );
   }
   return { ok: true };
 }
 
-export interface CreateSectionInput {
-  subAccountId: string;
+export interface CreateSectionByScopeInput {
+  scope: CommunityOwnerScope;
   groupId: string;
   name: string;
   icon: string;
   private?: boolean;
 }
 
-export async function createSectionServerSide(input: CreateSectionInput): Promise<CommunitySection> {
+async function createSectionServerSideByScope(
+  input: CreateSectionByScopeInput,
+): Promise<CommunitySection> {
   const name = input.name.trim().slice(0, 60);
   if (!name) throw new Error("Section name is required");
-  const existingSnap = await sectionsCol(input.subAccountId, input.groupId).get();
-  const order = existingSnap.docs.reduce(
-    (m, d) => Math.max(m, typeof d.data().order === "number" ? d.data().order : 0),
-    -1,
-  ) + 1;
+  const existingSnap = await sectionsColByScope(input.scope, input.groupId).get();
+  const order =
+    existingSnap.docs.reduce(
+      (m, d) => Math.max(m, typeof d.data().order === "number" ? d.data().order : 0),
+      -1,
+    ) + 1;
 
   const doc = {
-    subAccountId: input.subAccountId,
+    subAccountId: input.scope.kind === "subAccount" ? input.scope.subAccountId : undefined,
     groupId: input.groupId,
     name,
     icon: input.icon || "📁",
@@ -397,7 +471,7 @@ export async function createSectionServerSide(input: CreateSectionInput): Promis
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const ref = await sectionsCol(input.subAccountId, input.groupId).add(doc);
+  const ref = await sectionsColByScope(input.scope, input.groupId).add(doc);
   return { id: ref.id, ...doc, createdAt: null, updatedAt: null };
 }
 
@@ -408,13 +482,13 @@ export interface UpdateSectionPatch {
   order?: number;
 }
 
-export async function updateSectionServerSide(
-  saId: string,
+async function updateSectionServerSideByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   sectionId: string,
   patch: UpdateSectionPatch,
 ): Promise<CommunitySection | null> {
-  const ref = sectionsCol(saId, groupId).doc(sectionId);
+  const ref = sectionsColByScope(scope, groupId).doc(sectionId);
   const snap = await ref.get();
   if (!snap.exists) return null;
 
@@ -434,21 +508,253 @@ export async function updateSectionServerSide(
 }
 
 /** Deleting a Section never deletes its Channels — they become
- *  unsectioned, content and all existing relationships intact (Part
- *  "Delete Section"'s explicit safe default). */
+ *  unsectioned, content and all existing relationships intact. Shared
+ *  core for both scopes. */
+async function deleteSectionServerSideByScope(
+  scope: CommunityOwnerScope,
+  groupId: string,
+  sectionId: string,
+): Promise<{ ok: true; unsectionedCount: number } | { ok: false; error: string }> {
+  const ref = sectionsColByScope(scope, groupId).doc(sectionId);
+  const snap = await ref.get();
+  if (!snap.exists) return { ok: false, error: "Section not found" };
+
+  const channelsSnap = await channelsColByScope(scope, groupId).where("sectionId", "==", sectionId).get();
+  const batch = getAdminDb().batch();
+  channelsSnap.docs.forEach((d) =>
+    batch.update(d.ref, { sectionId: null, updatedAt: FieldValue.serverTimestamp() }),
+  );
+  batch.delete(ref);
+  await batch.commit();
+  return { ok: true, unsectionedCount: channelsSnap.size };
+}
+
+// -------------------------------------------------------------------------
+// Tenant-facing exports — EXACT pre-existing signatures, every tenant call
+// site (routes, community-feed-service.ts, etc.) is unchanged. Each is now
+// a thin wrapper around the shared `*ByScope` core above.
+// -------------------------------------------------------------------------
+
+export async function ensureChannelsForGroup(
+  saId: string,
+  groupId: string,
+): Promise<CommunityChannel[]> {
+  return ensureChannelsForGroupByScope(tenantScope(saId), groupId);
+}
+
+export async function listChannelsAndSectionsForViewer(opts: {
+  subAccountId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<ChannelsAndSections> {
+  return listChannelsAndSectionsForViewerByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    isModerator: opts.isModerator,
+  });
+}
+
+export async function getInaccessibleChannelNames(opts: {
+  subAccountId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<Set<string>> {
+  return getInaccessibleChannelNamesByScope({
+    scope: tenantScope(opts.subAccountId),
+    groupId: opts.groupId,
+    isModerator: opts.isModerator,
+  });
+}
+
+export async function getChannelByName(
+  saId: string,
+  groupId: string,
+  name: string,
+): Promise<CommunityChannel | null> {
+  return getChannelByNameByScope(tenantScope(saId), groupId, name);
+}
+
+export interface CreateChannelInput {
+  subAccountId: string;
+  groupId: string;
+  name: string;
+  icon: string;
+  description?: string;
+  private?: boolean;
+  readOnly?: boolean;
+  sectionId?: string | null;
+}
+
+export async function createChannelServerSide(input: CreateChannelInput): Promise<CommunityChannel> {
+  return createChannelServerSideByScope({ ...input, scope: tenantScope(input.subAccountId) });
+}
+
+export async function updateChannelServerSide(
+  saId: string,
+  groupId: string,
+  channelId: string,
+  patch: UpdateChannelPatch,
+): Promise<CommunityChannel | null> {
+  return updateChannelServerSideByScope(tenantScope(saId), groupId, channelId, patch);
+}
+
+export async function deleteChannelServerSide(
+  saId: string,
+  groupId: string,
+  channelId: string,
+): Promise<DeleteChannelResult> {
+  return deleteChannelServerSideByScope(tenantScope(saId), groupId, channelId, true);
+}
+
+export interface CreateSectionInput {
+  subAccountId: string;
+  groupId: string;
+  name: string;
+  icon: string;
+  private?: boolean;
+}
+
+export async function createSectionServerSide(input: CreateSectionInput): Promise<CommunitySection> {
+  return createSectionServerSideByScope({ ...input, scope: tenantScope(input.subAccountId) });
+}
+
+export async function updateSectionServerSide(
+  saId: string,
+  groupId: string,
+  sectionId: string,
+  patch: UpdateSectionPatch,
+): Promise<CommunitySection | null> {
+  return updateSectionServerSideByScope(tenantScope(saId), groupId, sectionId, patch);
+}
+
 export async function deleteSectionServerSide(
   saId: string,
   groupId: string,
   sectionId: string,
 ): Promise<{ ok: true; unsectionedCount: number } | { ok: false; error: string }> {
-  const ref = sectionsCol(saId, groupId).doc(sectionId);
-  const snap = await ref.get();
-  if (!snap.exists) return { ok: false, error: "Section not found" };
+  return deleteSectionServerSideByScope(tenantScope(saId), groupId, sectionId);
+}
 
-  const channelsSnap = await channelsCol(saId, groupId).where("sectionId", "==", sectionId).get();
-  const batch = getAdminDb().batch();
-  channelsSnap.docs.forEach((d) => batch.update(d.ref, { sectionId: null, updatedAt: FieldValue.serverTimestamp() }));
-  batch.delete(ref);
-  await batch.commit();
-  return { ok: true, unsectionedCount: channelsSnap.size };
+// -------------------------------------------------------------------------
+// Agency-facing exports — same shared core, agency scope. Called from
+// community-agency-service.ts's own (now-thin) Agency-named wrappers,
+// which keep THEIR pre-existing exported signatures unchanged for the
+// Agency Community API dispatcher — see that file.
+// -------------------------------------------------------------------------
+
+export async function listChannelsAndSectionsForAgencyGroup(
+  agencyId: string,
+  groupId: string,
+): Promise<ChannelsAndSections> {
+  const channels = await listChannelsByScope(agencyScope(agencyId), groupId);
+  const sectionsSnap = await sectionsColByScope(agencyScope(agencyId), groupId).get();
+  const sections = sectionsSnap.docs
+    .map((d) => docToSection(d.id, d.data()))
+    .sort((a, b) => a.order - b.order);
+  return { channels, sections };
+}
+
+export async function listChannelsAndSectionsForAgencyViewer(opts: {
+  agencyId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<ChannelsAndSections> {
+  return listChannelsAndSectionsForViewerByScope({
+    scope: agencyScope(opts.agencyId),
+    groupId: opts.groupId,
+    isModerator: opts.isModerator,
+  });
+}
+
+export async function getInaccessibleAgencyChannelNames(opts: {
+  agencyId: string;
+  groupId: string;
+  isModerator: boolean;
+}): Promise<Set<string>> {
+  return getInaccessibleChannelNamesByScope({
+    scope: agencyScope(opts.agencyId),
+    groupId: opts.groupId,
+    isModerator: opts.isModerator,
+  });
+}
+
+export async function getAgencyChannelByNameShared(
+  agencyId: string,
+  groupId: string,
+  name: string,
+): Promise<CommunityChannel | null> {
+  return getChannelByNameByScope(agencyScope(agencyId), groupId, name);
+}
+
+export interface CreateAgencyChannelByScopeInput {
+  agencyId: string;
+  groupId: string;
+  name: string;
+  icon: string;
+  description?: string;
+  private?: boolean;
+  readOnly?: boolean;
+  sectionId?: string | null;
+}
+
+export async function createAgencyChannelShared(
+  input: CreateAgencyChannelByScopeInput,
+): Promise<CommunityChannel> {
+  return createChannelServerSideByScope({ ...input, scope: agencyScope(input.agencyId) });
+}
+
+export async function updateAgencyChannelShared(
+  agencyId: string,
+  groupId: string,
+  channelId: string,
+  patch: UpdateChannelPatch,
+): Promise<CommunityChannel> {
+  const updated = await updateChannelServerSideByScope(agencyScope(agencyId), groupId, channelId, patch);
+  if (!updated) throw new Error("Channel not found");
+  return updated;
+}
+
+/** Matches the pre-consolidation Agency signature exactly (`Promise<void>`,
+ *  unconditional delete, no posts-in-use guard) — see the module comment
+ *  on `deleteChannelServerSideByScope` for why this phase preserves that
+ *  difference rather than tightening it. */
+export async function deleteAgencyChannelShared(
+  agencyId: string,
+  groupId: string,
+  channelId: string,
+): Promise<void> {
+  await deleteChannelServerSideByScope(agencyScope(agencyId), groupId, channelId, false);
+}
+
+export interface CreateAgencySectionByScopeInput {
+  agencyId: string;
+  groupId: string;
+  name: string;
+  icon: string;
+  private?: boolean;
+}
+
+export async function createAgencySectionShared(
+  input: CreateAgencySectionByScopeInput,
+): Promise<CommunitySection> {
+  return createSectionServerSideByScope({ ...input, scope: agencyScope(input.agencyId) });
+}
+
+export async function updateAgencySectionShared(
+  agencyId: string,
+  groupId: string,
+  sectionId: string,
+  patch: UpdateSectionPatch,
+): Promise<CommunitySection> {
+  const updated = await updateSectionServerSideByScope(agencyScope(agencyId), groupId, sectionId, patch);
+  if (!updated) throw new Error("Section not found");
+  return updated;
+}
+
+export async function deleteAgencySectionShared(
+  agencyId: string,
+  groupId: string,
+  sectionId: string,
+): Promise<{ ok: true; unsectionedCount: number } | { ok: false; error: string }> {
+  return deleteSectionServerSideByScope(agencyScope(agencyId), groupId, sectionId);
 }

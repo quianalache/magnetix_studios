@@ -5,6 +5,12 @@ import { createNotification } from "@/lib/server/notification-service";
 import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { communityPostHref, communityHomeHref } from "@/lib/community/routes";
 import { formatStartLocal } from "@/lib/booking/email";
+import {
+  notifyCommunityReplyShared,
+  notifyCommunityMentionsShared,
+  notifyCommunityLiveStartedShared,
+  type CommunityNotifyAdapter,
+} from "@/lib/server/community-notification-producers";
 
 /**
  * MyMagnetix Notifications V1 — real producers, called directly from the
@@ -43,6 +49,12 @@ function enterHref(subAccountId: string, next: string): string {
  * intentionally mirrors the Live Room's access rules: active memberships
  * only; a private channel is moderator-only. The room id is the event's
  * stable recurrence unit, so reconnects/retries cannot fan out duplicates.
+ *
+ * Business rules (self-exclusion, private-channel-moderator-only, one
+ * notification per room, Person-only) now live once in
+ * `notifyCommunityLiveStartedShared` (community-notification-producers.ts)
+ * — this is a thin tenant adapter over that shared core; see the Agency
+ * sibling (`notifyAgencyCommunityLiveStarted`, community-agency-service.ts).
  */
 export async function notifyCommunityLiveStarted(opts: {
   subAccountId: string;
@@ -52,73 +64,76 @@ export async function notifyCommunityLiveStarted(opts: {
   channel: string | null;
   hostMemberId: string;
 }): Promise<void> {
-  const db = getAdminDb();
-  const [groupSnap, membershipsSnap, hostName, channelSnap] = await Promise.all(
-    [
-      db
-        .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
-        .get(),
-      db
-        .collection(
-          `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`
+  await notifyCommunityLiveStartedShared(
+    tenantNotifyAdapter(opts.subAccountId, opts.groupId),
+    {
+      roomId: opts.roomId,
+      title: opts.title,
+      channel: opts.channel,
+      hostId: opts.hostMemberId,
+      listActiveRecipients: async () => {
+        const snap = await getAdminDb()
+          .collection(
+            `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/memberships`
+          )
+          .where("status", "==", "active")
+          .get();
+        return snap.docs.map((d) => {
+          const data = d.data() as {
+            memberId: string;
+            role: "member" | "moderator";
+          };
+          return { id: data.memberId, isModerator: data.role === "moderator" };
+        });
+      },
+      isChannelPrivate: async (channelName) => {
+        const snap = await getAdminDb()
+          .collection(
+            `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/channels`
+          )
+          .where("name", "==", channelName)
+          .limit(1)
+          .get();
+        return !snap.empty && snap.docs[0].data().private === true;
+      },
+    }
+  );
+}
+
+/** Builds the tenant `CommunityNotifyAdapter` — the one place tenant's
+ *  Member->Person resolution, display-name fallback, and `/api/my/enter`
+ *  bridge-wrapped destinations are supplied to the shared Community
+ *  notification core. `groupId` is closed over here (not part of the
+ *  shared adapter's own shape) since every call site already has it. */
+function tenantNotifyAdapter(
+  subAccountId: string,
+  groupId: string
+): CommunityNotifyAdapter {
+  return {
+    subAccountId,
+    resolvePersonId: (memberId) =>
+      resolvePersonIdForMember(subAccountId, memberId),
+    resolveActorName: (memberId) =>
+      getMemberDisplayName(subAccountId, memberId),
+    getCommunityMeta: async () => {
+      const snap = await getAdminDb()
+        .doc(`subAccounts/${subAccountId}/communityGroups/${groupId}`)
+        .get();
+      const data = snap.data() as { name?: string; slug?: string } | undefined;
+      return { name: data?.name || "a Community", slug: data?.slug || groupId };
+    },
+    buildPostDestination: (groupSlug, postId) =>
+      enterHref(
+        subAccountId,
+        communityPostHref(
+          { saId: subAccountId, pretty: false },
+          groupSlug,
+          postId
         )
-        .where("status", "==", "active")
-        .get(),
-      getMemberDisplayName(opts.subAccountId, opts.hostMemberId),
-      opts.channel
-        ? db
-            .collection(
-              `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/channels`
-            )
-            .where("name", "==", opts.channel)
-            .limit(1)
-            .get()
-        : Promise.resolve(null),
-    ]
-  );
-  const group = groupSnap.data() as
-    | { name?: string; slug?: string }
-    | undefined;
-  const communityName = group?.name || "a Community";
-  const slug = group?.slug || opts.groupId;
-  const privateChannel = channelSnap
-    ? !channelSnap.empty && channelSnap.docs[0].data().private === true
-    : false;
-  const destination = enterHref(
-    opts.subAccountId,
-    `/c/${opts.subAccountId}/${slug}/live/${opts.roomId}`
-  );
-  await Promise.all(
-    membershipsSnap.docs.map(async (membership) => {
-      const data = membership.data() as {
-        memberId: string;
-        role: "member" | "moderator";
-      };
-      if (
-        data.memberId === opts.hostMemberId ||
-        (privateChannel && data.role !== "moderator")
-      )
-        return;
-      const personId = await resolvePersonIdForMember(
-        opts.subAccountId,
-        data.memberId
-      );
-      if (!personId) return;
-      await createNotification({
-        personId,
-        subAccountId: opts.subAccountId,
-        eventType: "community.live.started",
-        objectType: "live-room",
-        objectId: opts.roomId,
-        actorMemberId: opts.hostMemberId,
-        title: `${hostName} is live: ${opts.title}`,
-        message: `Join ${communityName} now.`,
-        destination,
-        meta: { communityName, actorName: hostName },
-        sourceObjectId: opts.roomId,
-      });
-    })
-  );
+      ),
+    buildLiveRoomDestination: (groupSlug, roomId) =>
+      enterHref(subAccountId, `/c/${subAccountId}/${groupSlug}/live/${roomId}`),
+  };
 }
 
 async function resolvePersonIdForMember(
@@ -266,46 +281,16 @@ export async function notifyCommunityReply(opts: {
   recipientMemberId: string;
   isReplyToComment: boolean;
 }): Promise<void> {
-  if (opts.recipientMemberId === opts.commenterMemberId) return; // no self-notify
-
-  const personId = await resolvePersonIdForMember(
-    opts.subAccountId,
-    opts.recipientMemberId
+  await notifyCommunityReplyShared(
+    tenantNotifyAdapter(opts.subAccountId, opts.groupId),
+    {
+      postId: opts.postId,
+      commentId: opts.commentId,
+      commenterId: opts.commenterMemberId,
+      recipientId: opts.recipientMemberId,
+      isReplyToComment: opts.isReplyToComment,
+    }
   );
-  if (!personId) return;
-
-  const [commenterName, groupSnap] = await Promise.all([
-    getMemberDisplayName(opts.subAccountId, opts.commenterMemberId),
-    getAdminDb()
-      .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
-      .get(),
-  ]);
-  const communityName = (groupSnap.data()?.name as string) || "a Community";
-  const groupSlug = (groupSnap.data()?.slug as string) || opts.groupId;
-
-  await createNotification({
-    personId,
-    subAccountId: opts.subAccountId,
-    eventType: "community.reply",
-    objectType: "comment",
-    objectId: opts.commentId,
-    actorMemberId: opts.commenterMemberId,
-    title: opts.isReplyToComment
-      ? `${commenterName} replied to you in ${communityName}`
-      : `${commenterName} replied to your post in ${communityName}`,
-    destination: enterHref(
-      opts.subAccountId,
-      communityPostHref(
-        { saId: opts.subAccountId, pretty: false },
-        groupSlug,
-        opts.postId
-      )
-    ),
-    meta: { communityName, actorName: commenterName },
-    // The reply itself (commentId) is the recurring unit — each distinct
-    // reply is its own real notification, never deduped against a prior one.
-    sourceObjectId: opts.commentId,
-  });
 }
 
 /**
@@ -322,52 +307,14 @@ export async function notifyCommunityMentions(opts: {
   authorMemberId: string;
   mentionedMemberIds: string[];
 }): Promise<void> {
-  const targets = opts.mentionedMemberIds.filter(
-    (id) => id !== opts.authorMemberId
-  );
-  if (targets.length === 0) return;
-
-  const [authorName, groupSnap] = await Promise.all([
-    getMemberDisplayName(opts.subAccountId, opts.authorMemberId),
-    getAdminDb()
-      .doc(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`)
-      .get(),
-  ]);
-  const communityName = (groupSnap.data()?.name as string) || "a Community";
-  const groupSlug = (groupSnap.data()?.slug as string) || opts.groupId;
-  const destination = enterHref(
-    opts.subAccountId,
-    communityPostHref(
-      { saId: opts.subAccountId, pretty: false },
-      groupSlug,
-      opts.postId
-    )
-  );
-
-  await Promise.all(
-    targets.map(async (memberId) => {
-      const personId = await resolvePersonIdForMember(
-        opts.subAccountId,
-        memberId
-      );
-      if (!personId) return;
-      await createNotification({
-        personId,
-        subAccountId: opts.subAccountId,
-        eventType: "community.mention",
-        objectType: "comment",
-        objectId: opts.contentObjectId,
-        actorMemberId: opts.authorMemberId,
-        title: `${authorName} mentioned you in ${communityName}`,
-        destination,
-        meta: { communityName, actorName: authorName },
-        // One mention notification per (content item, recipient) — the
-        // SAME content edited/re-mentioning the same person again is a
-        // real product decision for later, not handled here; this call
-        // only ever runs once, at creation time.
-        sourceObjectId: `${opts.contentObjectId}:${memberId}`,
-      });
-    })
+  await notifyCommunityMentionsShared(
+    tenantNotifyAdapter(opts.subAccountId, opts.groupId),
+    {
+      postId: opts.postId,
+      contentObjectId: opts.contentObjectId,
+      authorId: opts.authorMemberId,
+      mentionedIds: opts.mentionedMemberIds,
+    }
   );
 }
 

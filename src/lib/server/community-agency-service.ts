@@ -10,7 +10,28 @@ import { signPersonMagicLinkToken } from "@/lib/server/person-auth";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import { buildFeedPoll } from "@/lib/server/community-feed-service";
 import { extractMentionedMemberIds } from "@/lib/server/notification-producers";
-import { createNotification } from "@/lib/server/notification-service";
+import {
+  notifyCommunityReplyShared,
+  notifyCommunityMentionsShared,
+  notifyCommunityLiveStartedShared,
+  type CommunityNotifyAdapter,
+} from "@/lib/server/community-notification-producers";
+import {
+  listChannelsAndSectionsForAgencyGroup,
+  listChannelsAndSectionsForAgencyViewer,
+  getInaccessibleAgencyChannelNames,
+  getAgencyChannelByNameShared,
+  createAgencyChannelShared,
+  updateAgencyChannelShared,
+  deleteAgencyChannelShared,
+  createAgencySectionShared,
+  updateAgencySectionShared,
+  deleteAgencySectionShared,
+  type CreateAgencyChannelByScopeInput,
+  type UpdateChannelPatch,
+  type CreateAgencySectionByScopeInput,
+  type UpdateSectionPatch,
+} from "@/lib/server/community-channels-service";
 import { ownedAgencyAttachmentStoragePath } from "@/lib/community/attachment-provenance";
 import { normalizeNavigation } from "@/lib/community/community-navigation";
 import type {
@@ -100,9 +121,6 @@ function groupDoc(agencyId: string, groupId: string) {
 }
 function channelsCol(agencyId: string, groupId: string) {
   return groupDoc(agencyId, groupId).collection("channels");
-}
-function sectionsCol(agencyId: string, groupId: string) {
-  return groupDoc(agencyId, groupId).collection("sections");
 }
 function postsCol(agencyId: string, groupId: string) {
   return groupDoc(agencyId, groupId).collection("posts");
@@ -349,199 +367,86 @@ export async function updateAgencyGroupServerSide(opts: {
 }
 
 // -------------------------------------------------------- Channels/Sections
+//
+// Community Shared Architecture Phase 1 (2026-09-19): every function below
+// is now a thin delegation to the shared, scope-aware core in
+// community-channels-service.ts (the SAME business logic tenant's own
+// Channels/Sections use) instead of a second, parallel implementation.
+// Exported names/signatures are UNCHANGED from before this pass — every
+// existing Agency Community API handler call site needs no changes. See
+// that file's own module comment for the one disclosed behavior
+// consolidation (channel-rename name-uniqueness, now enforced for both
+// scopes) and the one deliberately-preserved difference (unconditional
+// channel delete, no posts-in-use guard — kept exactly as it was).
 
-export interface CreateAgencyChannelInput {
-  agencyId: string;
-  groupId: string;
-  name: string;
-  icon: string;
-  description?: string;
-  private?: boolean;
-  readOnly?: boolean;
-  sectionId?: string | null;
-}
+export type {
+  CreateAgencyChannelByScopeInput as CreateAgencyChannelInput,
+  UpdateChannelPatch as UpdateAgencyChannelPatch,
+  CreateAgencySectionByScopeInput as CreateAgencySectionInput,
+  UpdateSectionPatch as UpdateAgencySectionPatch,
+} from "@/lib/server/community-channels-service";
 
 export async function listAgencyChannelsAndSections(
   agencyId: string,
   groupId: string,
 ): Promise<{ channels: CommunityChannel[]; sections: CommunitySection[] }> {
-  const [channelsSnap, sectionsSnap] = await Promise.all([
-    channelsCol(agencyId, groupId).get(),
-    sectionsCol(agencyId, groupId).get(),
-  ]);
-  return {
-    channels: channelsSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as CommunityChannel)
-      .sort((a, b) => a.order - b.order),
-    sections: sectionsSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as CommunitySection)
-      .sort((a, b) => a.order - b.order),
-  };
+  return listChannelsAndSectionsForAgencyGroup(agencyId, groupId);
 }
 
 /**
  * The left rail's one read — sections + channels, already filtered for the
- * viewer. Mirrors `listChannelsAndSectionsForViewer` in
- * community-channels-service.ts (tenant): a non-moderator never sees a
- * private Section's heading, never sees a Channel nested inside a private
- * Section (regardless of that Channel's OWN `private` value), and never
- * sees a Channel whose own `private` is true.
+ * viewer. Shared core with tenant's `listChannelsAndSectionsForViewer` (see
+ * community-channels-service.ts): a non-moderator never sees a private
+ * Section's heading, never sees a Channel nested inside a private Section
+ * (regardless of that Channel's OWN `private` value), and never sees a
+ * Channel whose own `private` is true.
  */
 export async function listAgencyChannelsAndSectionsForViewer(opts: {
   agencyId: string;
   groupId: string;
   isModerator: boolean;
 }): Promise<{ channels: CommunityChannel[]; sections: CommunitySection[] }> {
-  const { channels, sections: allSections } = await listAgencyChannelsAndSections(
-    opts.agencyId,
-    opts.groupId,
-  );
-  if (opts.isModerator) return { channels, sections: allSections };
-
-  const privateSectionIds = new Set(allSections.filter((s) => s.private).map((s) => s.id));
-  const sections = allSections.filter((s) => !s.private);
-  const filteredChannels = channels.filter(
-    (c) => !c.private && !(c.sectionId && privateSectionIds.has(c.sectionId)),
-  );
-  return { channels: filteredChannels, sections };
+  return listChannelsAndSectionsForAgencyViewer(opts);
 }
 
 /**
  * Every channel NAME a non-moderator viewer must never see a post from —
- * private channels, plus every channel nested in a private section. Mirrors
- * `getInaccessibleChannelNames` (tenant) — used at the actual post-read
- * layer (listAgencyFeed/getAgencyPost), not just to hide the left-rail link.
+ * private channels, plus every channel nested in a private section. Shared
+ * core with tenant's `getInaccessibleChannelNames` — used at the actual
+ * post-read layer (listAgencyFeed/getAgencyPost), not just to hide the
+ * left-rail link.
  */
 export async function getAgencyInaccessibleChannelNames(opts: {
   agencyId: string;
   groupId: string;
   isModerator: boolean;
 }): Promise<Set<string>> {
-  if (opts.isModerator) return new Set();
-  const [{ channels: visible }, { channels: all }] = await Promise.all([
-    listAgencyChannelsAndSectionsForViewer(opts),
-    listAgencyChannelsAndSections(opts.agencyId, opts.groupId),
-  ]);
-  const visibleNames = new Set(visible.map((c) => c.name));
-  const inaccessible = new Set<string>();
-  for (const c of all) {
-    if (!visibleNames.has(c.name)) inaccessible.add(c.name);
-  }
-  return inaccessible;
+  return getInaccessibleAgencyChannelNames(opts);
 }
 
 /** Single-channel lookup by name — the post create route's Read-Only/
- *  Private enforcement point, mirrors `getChannelByName` (tenant). */
+ *  Private enforcement point, shared core with tenant's `getChannelByName`. */
 export async function getAgencyChannelByName(
   agencyId: string,
   groupId: string,
   name: string,
 ): Promise<CommunityChannel | null> {
-  const snap = await channelsCol(agencyId, groupId).where("name", "==", name).limit(1).get();
-  if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...snap.docs[0].data() } as CommunityChannel;
+  return getAgencyChannelByNameShared(agencyId, groupId, name);
 }
 
 export async function createAgencyChannelServerSide(
-  input: CreateAgencyChannelInput,
+  input: CreateAgencyChannelByScopeInput,
 ): Promise<CommunityChannel> {
-  const name = input.name.trim().slice(0, 60);
-  if (!name) throw new Error("Channel name is required");
-  const existingSnap = await channelsCol(input.agencyId, input.groupId)
-    .where("name", "==", name)
-    .limit(1)
-    .get();
-  if (!existingSnap.empty) throw new Error("A channel with that name already exists");
-
-  const allSnap = await channelsCol(input.agencyId, input.groupId).get();
-  const order = allSnap.docs.reduce(
-    (m, d) => Math.max(m, (d.data().order as number) ?? 0),
-    -1,
-  ) + 1;
-
-  const doc = {
-    groupId: input.groupId,
-    name,
-    icon: input.icon || "💬",
-    description: (input.description ?? "").trim().slice(0, 500),
-    private: input.private === true,
-    readOnly: input.readOnly === true,
-    sectionId: input.sectionId ?? null,
-    channelType: "feed" as ChannelType,
-    order,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  const ref = await channelsCol(input.agencyId, input.groupId).add(doc);
-
-  const group = await getAgencyGroupById(input.agencyId, input.groupId);
-  if (group && !group.categories.includes(name)) {
-    await groupDoc(input.agencyId, input.groupId).update({
-      categories: [...group.categories, name],
-    });
-  }
-  return { id: ref.id, ...doc } as CommunityChannel;
-}
-
-export interface UpdateAgencyChannelPatch {
-  name?: string;
-  icon?: string;
-  description?: string;
-  private?: boolean;
-  readOnly?: boolean;
-  sectionId?: string | null;
-  order?: number;
+  return createAgencyChannelShared(input);
 }
 
 export async function updateAgencyChannelServerSide(
   agencyId: string,
   groupId: string,
   channelId: string,
-  patch: UpdateAgencyChannelPatch,
+  patch: UpdateChannelPatch,
 ): Promise<CommunityChannel> {
-  const ref = channelsCol(agencyId, groupId).doc(channelId);
-  const before = await ref.get();
-  if (!before.exists) throw new Error("Channel not found");
-  const beforeName = before.data()?.name as string;
-
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (patch.icon !== undefined) update.icon = patch.icon;
-  if (patch.description !== undefined) update.description = patch.description.trim().slice(0, 500);
-  if (patch.private !== undefined) update.private = patch.private;
-  if (patch.readOnly !== undefined) update.readOnly = patch.readOnly;
-  if (patch.sectionId !== undefined) update.sectionId = patch.sectionId;
-  if (patch.order !== undefined) update.order = patch.order;
-
-  let newName = beforeName;
-  if (patch.name !== undefined) {
-    newName = patch.name.trim().slice(0, 60);
-    if (!newName) throw new Error("Channel name is required");
-    update.name = newName;
-  }
-  await ref.update(update);
-
-  if (newName !== beforeName) {
-    // Cascade-rename posts using the old category name — same invariant
-    // the tenant service maintains (a Channel's name IS the post category
-    // string). Capped at 500 like the tenant version.
-    const postsSnap = await postsCol(agencyId, groupId)
-      .where("category", "==", beforeName)
-      .limit(500)
-      .get();
-    if (!postsSnap.empty) {
-      const batch = getAdminDb().batch();
-      postsSnap.docs.forEach((d) => batch.update(d.ref, { category: newName }));
-      await batch.commit();
-    }
-    const group = await getAgencyGroupById(agencyId, groupId);
-    if (group) {
-      const categories = group.categories.map((c) => (c === beforeName ? newName : c));
-      await groupDoc(agencyId, groupId).update({ categories });
-    }
-  }
-
-  const after = await ref.get();
-  return { id: after.id, ...after.data() } as CommunityChannel;
+  return updateAgencyChannelShared(agencyId, groupId, channelId, patch);
 }
 
 export async function deleteAgencyChannelServerSide(
@@ -549,86 +454,32 @@ export async function deleteAgencyChannelServerSide(
   groupId: string,
   channelId: string,
 ): Promise<void> {
-  await channelsCol(agencyId, groupId).doc(channelId).delete();
-}
-
-export interface CreateAgencySectionInput {
-  agencyId: string;
-  groupId: string;
-  name: string;
-  icon: string;
-  private?: boolean;
+  return deleteAgencyChannelShared(agencyId, groupId, channelId);
 }
 
 export async function createAgencySectionServerSide(
-  input: CreateAgencySectionInput,
+  input: CreateAgencySectionByScopeInput,
 ): Promise<CommunitySection> {
-  const name = input.name.trim().slice(0, 60);
-  if (!name) throw new Error("Section name is required");
-  const allSnap = await sectionsCol(input.agencyId, input.groupId).get();
-  const order = allSnap.docs.reduce(
-    (m, d) => Math.max(m, (d.data().order as number) ?? 0),
-    -1,
-  ) + 1;
-  const doc = {
-    groupId: input.groupId,
-    name,
-    icon: input.icon || "📁",
-    private: input.private === true,
-    order,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  const ref = await sectionsCol(input.agencyId, input.groupId).add(doc);
-  return { id: ref.id, ...doc } as CommunitySection;
-}
-
-export interface UpdateAgencySectionPatch {
-  name?: string;
-  icon?: string;
-  private?: boolean;
-  order?: number;
+  return createAgencySectionShared(input);
 }
 
 export async function updateAgencySectionServerSide(
   agencyId: string,
   groupId: string,
   sectionId: string,
-  patch: UpdateAgencySectionPatch,
+  patch: UpdateSectionPatch,
 ): Promise<CommunitySection> {
-  const ref = sectionsCol(agencyId, groupId).doc(sectionId);
-  const before = await ref.get();
-  if (!before.exists) throw new Error("Section not found");
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (patch.name !== undefined) {
-    const name = patch.name.trim().slice(0, 60);
-    if (!name) throw new Error("Section name is required");
-    update.name = name;
-  }
-  if (patch.icon !== undefined) update.icon = patch.icon;
-  if (patch.private !== undefined) update.private = patch.private;
-  if (patch.order !== undefined) update.order = patch.order;
-  await ref.update(update);
-  const after = await ref.get();
-  return { id: after.id, ...after.data() } as CommunitySection;
+  return updateAgencySectionShared(agencyId, groupId, sectionId, patch);
 }
 
+/** Matches the pre-consolidation Agency signature exactly (`Promise<void>`,
+ *  no "section not found" surfaced to the caller — same as before). */
 export async function deleteAgencySectionServerSide(
   agencyId: string,
   groupId: string,
   sectionId: string,
 ): Promise<void> {
-  // Unsection every channel currently in this section — same behavior as
-  // the tenant deleteSectionServerSide (channels/posts are never deleted).
-  const channelsSnap = await channelsCol(agencyId, groupId)
-    .where("sectionId", "==", sectionId)
-    .get();
-  if (!channelsSnap.empty) {
-    const batch = getAdminDb().batch();
-    channelsSnap.docs.forEach((d) => batch.update(d.ref, { sectionId: null }));
-    await batch.commit();
-  }
-  await sectionsCol(agencyId, groupId).doc(sectionId).delete();
+  await deleteAgencySectionShared(agencyId, groupId, sectionId);
 }
 
 // ------------------------------------------------------------------ Posts --
@@ -1329,6 +1180,48 @@ async function resolveAgencyActorName(
   return resolveBrandName();
 }
 
+/**
+ * Builds the Agency `CommunityNotifyAdapter` — the one place Agency's
+ * roster-personId resolution, display-name fallback (real Person label, or
+ * `resolveBrandName()`/Magnetix Studios for the owner, who has no Person
+ * identity), and `/my/community/...` destinations (no `/api/my/enter`
+ * bridge needed — a Person is already a real MyMagnetix identity) are
+ * supplied to the shared Community notification core
+ * (community-notification-producers.ts). Used by all three
+ * `notifyAgencyCommunity*` functions below.
+ */
+function agencyNotifyAdapter(agencyId: string, groupId: string): CommunityNotifyAdapter {
+  return {
+    subAccountId: null,
+    resolvePersonId: (candidateId) => resolveAgencyNotifyRecipientPersonId(agencyId, groupId, candidateId),
+    resolveActorName: (actorId) => resolveAgencyActorName(agencyId, groupId, actorId),
+    getCommunityMeta: async () => {
+      const group = await getAgencyGroupById(agencyId, groupId);
+      return { name: group?.name || "a Community", slug: group?.slug || groupId };
+    },
+    buildPostDestination: (_groupSlug, postId) => `/my/community/${groupId}/post/${postId}`,
+    buildLiveRoomDestination: (_groupSlug, roomId) => `/my/community/${groupId}/live-rooms/${roomId}`,
+  };
+}
+
+/**
+ * MyMagnetix Notifications — real in-app bell events for Agency Community
+ * replies/mentions/live-starts, reusing the SAME shared, already
+ * Person-native notification model (`createNotification`,
+ * notification-service.ts) the tenant Community's `notifyCommunityReply`/
+ * `notifyCommunityMentions`/`notifyCommunityLiveStarted` already use — as
+ * of Community Shared Architecture Phase 1 (2026-09-19), both scopes now
+ * call into the SAME shared business-rule core
+ * (community-notification-producers.ts) instead of each maintaining a full
+ * second implementation; only the adapter above (identity/branding/
+ * destination) differs. Only a real MEMBER (an active roster entry) has a
+ * MyMagnetix notification bell to receive this on — the owner
+ * authenticates via Firebase, not a Person, and has no notification
+ * surface here in v1. Email delivery is deliberately NOT wired (the email
+ * channel needs a verified per-sub-account sending domain that has no
+ * agency analog — see notification-email-service.ts's `subAccountId`
+ * guard); this creates the in-app notification only, same as before.
+ */
 async function notifyAgencyCommunityReply(opts: {
   agencyId: string;
   groupId: string;
@@ -1340,29 +1233,12 @@ async function notifyAgencyCommunityReply(opts: {
   recipientId: string;
   isReplyToComment: boolean;
 }): Promise<void> {
-  if (opts.recipientId === opts.commenterId) return;
-  const personId = await resolveAgencyNotifyRecipientPersonId(opts.agencyId, opts.groupId, opts.recipientId);
-  if (!personId) return;
-
-  const [commenterName, group] = await Promise.all([
-    resolveAgencyActorName(opts.agencyId, opts.groupId, opts.commenterId),
-    getAgencyGroupById(opts.agencyId, opts.groupId),
-  ]);
-  const communityName = group?.name || "a Community";
-
-  await createNotification({
-    personId,
-    subAccountId: null,
-    eventType: "community.reply",
-    objectType: "comment",
-    objectId: opts.commentId,
-    actorMemberId: opts.commenterId,
-    title: opts.isReplyToComment
-      ? `${commenterName} replied to you in ${communityName}`
-      : `${commenterName} replied to your post in ${communityName}`,
-    destination: `/my/community/${opts.groupId}/post/${opts.postId}`,
-    meta: { communityName, actorName: commenterName },
-    sourceObjectId: opts.commentId,
+  await notifyCommunityReplyShared(agencyNotifyAdapter(opts.agencyId, opts.groupId), {
+    postId: opts.postId,
+    commentId: opts.commentId,
+    commenterId: opts.commenterId,
+    recipientId: opts.recipientId,
+    isReplyToComment: opts.isReplyToComment,
   });
 }
 
@@ -1376,52 +1252,24 @@ async function notifyAgencyCommunityMentions(opts: {
   authorId: string;
   mentionedIds: string[];
 }): Promise<void> {
-  const targets = opts.mentionedIds.filter((id) => id !== opts.authorId);
-  if (targets.length === 0) return;
-
-  const [authorName, group] = await Promise.all([
-    resolveAgencyActorName(opts.agencyId, opts.groupId, opts.authorId),
-    getAgencyGroupById(opts.agencyId, opts.groupId),
-  ]);
-  const communityName = group?.name || "a Community";
-  const destination = `/my/community/${opts.groupId}/post/${opts.postId}`;
-
-  await Promise.all(
-    targets.map(async (candidateId) => {
-      const personId = await resolveAgencyNotifyRecipientPersonId(opts.agencyId, opts.groupId, candidateId);
-      if (!personId) return;
-      await createNotification({
-        personId,
-        subAccountId: null,
-        eventType: "community.mention",
-        objectType: "comment",
-        objectId: opts.contentObjectId,
-        actorMemberId: opts.authorId,
-        title: `${authorName} mentioned you in ${communityName}`,
-        destination,
-        meta: { communityName, actorName: authorName },
-        sourceObjectId: `${opts.contentObjectId}:${candidateId}`,
-      });
-    }),
-  );
+  await notifyCommunityMentionsShared(agencyNotifyAdapter(opts.agencyId, opts.groupId), {
+    postId: opts.postId,
+    contentObjectId: opts.contentObjectId,
+    authorId: opts.authorId,
+    mentionedIds: opts.mentionedIds,
+  });
 }
 
 /**
  * "Notify members" for Agency Community Live Rooms — the agency-scope
- * sibling of `notifyCommunityLiveStarted` (tenant, notification-producers.ts).
- * Was hardcoded `notifyMembers: false` in agency-community-live-room-service.ts;
- * this closes that gap using the exact same pattern as
- * `notifyAgencyCommunityReply`/`notifyAgencyCommunityMentions` above: the
- * agency roster doc already carries `personId` directly (no separate
- * Member->Person lookup needed), `createNotification` is called with
- * `subAccountId: null` (real Person identity, no tenant Contacts involved),
- * and `hostPersonId: null` (the owner hosting) never inherits a Quiana
+ * sibling of `notifyCommunityLiveStarted` (tenant, notification-producers.ts),
+ * both now thin wrappers over the shared `notifyCommunityLiveStartedShared`
+ * core. `hostPersonId: null` (the owner hosting) never inherits a Quiana
  * LaChé — or any — sub-account's branding, since `resolveAgencyActorName`
- * falls back to `resolveBrandName()` (Magnetix Studios) for that case, same
- * as every other agency-authored notification. `createNotification`'s own
- * `.create()`-based dedupe (keyed on eventType:sourceObjectId:personId)
- * already prevents duplicate notifications if this is ever called twice
- * for the same room.
+ * falls back to `resolveBrandName()` (Magnetix Studios) for that case.
+ * `createNotification`'s own `.create()`-based dedupe (keyed on
+ * eventType:sourceObjectId:personId) already prevents duplicate
+ * notifications if this is ever called twice for the same room.
  */
 export async function notifyAgencyCommunityLiveStarted(opts: {
   agencyId: string;
@@ -1431,43 +1279,27 @@ export async function notifyAgencyCommunityLiveStarted(opts: {
   channel: string | null;
   hostPersonId: string | null;
 }): Promise<void> {
-  const [members, group, hostName, channelDoc] = await Promise.all([
-    listAgencyGroupMembers(opts.agencyId, opts.groupId),
-    getAgencyGroupById(opts.agencyId, opts.groupId),
-    opts.hostPersonId
-      ? resolveAgencyActorName(opts.agencyId, opts.groupId, opts.hostPersonId)
-      : resolveBrandName(),
-    opts.channel ? getAgencyChannelByName(opts.agencyId, opts.groupId, opts.channel) : Promise.resolve(null),
-  ]);
-  const communityName = group?.name || "a Community";
-  const destination = `/my/community/${opts.groupId}/live-rooms/${opts.roomId}`;
-  // Agency Community has no per-member moderator role yet (only the owner
-  // — who has no notification bell here, see the module comment above) —
-  // a private channel's live-room start is never announced to the general
-  // roster, mirroring tenant's own "moderator-only" exclusion in effect
-  // (nobody here qualifies as the moderator exception).
-  const privateChannel = channelDoc?.private === true;
-  if (privateChannel) return;
-
-  await Promise.all(
-    members
-      .filter((m) => m.status === "active" && m.personId && m.personId !== opts.hostPersonId)
-      .map((m) =>
-        createNotification({
-          personId: m.personId as string,
-          subAccountId: null,
-          eventType: "community.live.started",
-          objectType: "live-room",
-          objectId: opts.roomId,
-          actorMemberId: opts.hostPersonId,
-          title: `${hostName} is live: ${opts.title}`,
-          message: `Join ${communityName} now.`,
-          destination,
-          meta: { communityName, actorName: hostName },
-          sourceObjectId: opts.roomId,
-        }),
-      ),
-  );
+  await notifyCommunityLiveStartedShared(agencyNotifyAdapter(opts.agencyId, opts.groupId), {
+    roomId: opts.roomId,
+    title: opts.title,
+    channel: opts.channel,
+    hostId: opts.hostPersonId,
+    // Agency Community has no per-member moderator role yet — every
+    // candidate reports `isModerator: false`, so a private channel's
+    // live-room start is never announced to the general roster (nobody
+    // qualifies for the moderator exception), mirroring tenant's own
+    // behavior in effect.
+    listActiveRecipients: async () => {
+      const members = await listAgencyGroupMembers(opts.agencyId, opts.groupId);
+      return members
+        .filter((m) => m.status === "active" && !!m.personId)
+        .map((m) => ({ id: m.personId as string, isModerator: false }));
+    },
+    isChannelPrivate: async (channelName) => {
+      const channelDoc = await getAgencyChannelByName(opts.agencyId, opts.groupId, channelName);
+      return channelDoc?.private === true;
+    },
+  });
 }
 
 export async function getAgencyMembershipForPerson(
