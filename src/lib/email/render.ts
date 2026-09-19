@@ -15,18 +15,23 @@ export interface EmailRenderOptions {
   unsubscribeUrl?: string;
   resolveMergeTags?: (value: string) => string;
   includeComplianceFooter?: boolean;
+  /** Preview-only mode: omit blocks that are still incomplete while editing. */
+  allowIncomplete?: boolean;
 }
 
 export function renderEmailHtml(
   document: EmailDocument,
   options: EmailRenderOptions = {}
 ): string {
-  assertRenderable(document);
+  const renderDocument = options.allowIncomplete
+    ? documentWithRenderableBlocks(document)
+    : document;
+  assertRenderable(renderDocument);
   const resolve = options.resolveMergeTags ?? ((value: string) => value);
-  const preheader = document.preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;visibility:hidden;">${esc(resolve(document.preheader))}</div>`
+  const preheader = renderDocument.preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;visibility:hidden;">${esc(resolve(renderDocument.preheader))}</div>`
     : "";
-  const rows = document.blocks
+  const rows = renderDocument.blocks
     .map((block) => renderBlockRow(block, resolve))
     .join("");
   const footer = options.includeComplianceFooter
@@ -44,10 +49,13 @@ export function renderEmailText(
   document: EmailDocument,
   options: EmailRenderOptions = {}
 ): string {
-  assertRenderable(document);
+  const renderDocument = options.allowIncomplete
+    ? documentWithRenderableBlocks(document)
+    : document;
+  assertRenderable(renderDocument);
   const resolve = options.resolveMergeTags ?? ((value: string) => value);
-  const parts = [document.preheader ? resolve(document.preheader) : ""]
-    .concat(document.blocks.map((block) => blockToText(block, resolve)))
+  const parts = [renderDocument.preheader ? resolve(renderDocument.preheader) : ""]
+    .concat(renderDocument.blocks.map((block) => blockToText(block, resolve)))
     .filter(Boolean);
   if (options.includeComplianceFooter) {
     parts.push(
@@ -61,6 +69,18 @@ export function renderEmailText(
     );
   }
   return parts.join("\n\n");
+}
+
+function documentWithRenderableBlocks(document: EmailDocument): EmailDocument {
+  return {
+    ...document,
+    blocks: document.blocks.filter((block) =>
+      validateEmailDocument(
+        { ...document, subject: "Preview", preheader: null, blocks: [block] },
+        { requireSubject: false },
+      ).length === 0,
+    ),
+  };
 }
 
 function assertRenderable(document: EmailDocument): void {

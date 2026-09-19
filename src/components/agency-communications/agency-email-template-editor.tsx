@@ -77,7 +77,7 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
   const previewDocument = useMemo(() => emailDocumentFromBroadcastContent(content, subject, preheader), [content, subject, preheader]);
   const previewHtml = useMemo(() => {
     try {
-      return renderEmailHtml(previewDocument, {});
+      return renderEmailHtml(previewDocument, { allowIncomplete: true });
     } catch {
       return "";
     }

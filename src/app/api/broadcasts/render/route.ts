@@ -61,8 +61,12 @@ export async function POST(request: Request) {
   const businessName = subAccount?.name ?? "";
 
   const opts = { unsubscribeUrl, mailingAddress, businessName };
-  const html = renderBroadcastEmailHtml(content, opts, payload.subject, payload.preheader);
-  const text = renderBroadcastEmailText(content, opts, payload.subject, payload.preheader);
+  const html = renderBroadcastEmailHtml(content, opts, payload.subject, payload.preheader, {
+    allowIncomplete: true,
+  });
+  const text = renderBroadcastEmailText(content, opts, payload.subject, payload.preheader, {
+    allowIncomplete: true,
+  });
 
   return NextResponse.json({ html, text });
 }

@@ -110,7 +110,7 @@ export function EmailTemplateEditor({
   );
   const previewHtml = useMemo(() => {
     try {
-      return renderEmailHtml(previewDocument, {});
+      return renderEmailHtml(previewDocument, { allowIncomplete: true });
     } catch {
       return "";
     }

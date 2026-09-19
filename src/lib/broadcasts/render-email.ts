@@ -13,6 +13,7 @@ interface RenderOpts {
 
 interface RenderOptions {
   resolveMergeTags?: (value: string) => string;
+  allowIncomplete?: boolean;
 }
 
 function sharedRenderOptions(opts: RenderOpts, options: RenderOptions) {
@@ -22,6 +23,7 @@ function sharedRenderOptions(opts: RenderOpts, options: RenderOptions) {
     unsubscribeUrl: opts.unsubscribeUrl,
     includeComplianceFooter: true,
     resolveMergeTags: options.resolveMergeTags,
+    allowIncomplete: options.allowIncomplete,
   };
 }
 

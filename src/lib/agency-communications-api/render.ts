@@ -34,8 +34,12 @@ export async function POST(request: Request) {
   const brand = await resolveCustomBrand();
   const unsubscribeUrl = buildAgencyUnsubscribeUrl("preview@magnetix.invalid");
   const opts = { unsubscribeUrl, mailingAddress: "", businessName: brand.name };
-  const html = renderBroadcastEmailHtml(payload.content, opts, payload.subject, payload.preheader);
-  const text = renderBroadcastEmailText(payload.content, opts, payload.subject, payload.preheader);
+  const html = renderBroadcastEmailHtml(payload.content, opts, payload.subject, payload.preheader, {
+    allowIncomplete: true,
+  });
+  const text = renderBroadcastEmailText(payload.content, opts, payload.subject, payload.preheader, {
+    allowIncomplete: true,
+  });
 
   return NextResponse.json({ html, text });
 }
