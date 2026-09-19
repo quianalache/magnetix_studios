@@ -110,13 +110,13 @@ export function NavigationWorkspace({
 
   function toggleVisible(key: NavItemKey) {
     if (MANDATORY_NAV_KEYS.includes(key)) return; // defense in depth — the row itself is already disabled
-    // Classroom is genuinely blocked for Agency Community until Agency
-    // Courses exists — never let it become visible, even via this generic
-    // toggle (defense in depth; the row itself is already excluded below).
-    if (agencyGroupId && key === "classroom") return;
     setDraft((d) => d.map((item) => (item.key === key ? { ...item, visible: !item.visible } : item)));
   }
-  const visibleRows = agencyGroupId ? draft.filter((item) => item.key !== "classroom") : draft;
+  // Classroom has full Agency parity now (native Agency Courses + linked
+  // Agency Standalone Courses, see agency-community-classroom-service.ts's
+  // listAgencyClassroomCatalogForMember) — no longer excluded from Agency
+  // Navigation settings.
+  const visibleRows = draft;
 
   function rename(key: NavItemKey, label: string) {
     setDraft((d) => d.map((item) => (item.key === key ? { ...item, label } : item)));

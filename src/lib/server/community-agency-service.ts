@@ -1406,6 +1406,70 @@ async function notifyAgencyCommunityMentions(opts: {
   );
 }
 
+/**
+ * "Notify members" for Agency Community Live Rooms — the agency-scope
+ * sibling of `notifyCommunityLiveStarted` (tenant, notification-producers.ts).
+ * Was hardcoded `notifyMembers: false` in agency-community-live-room-service.ts;
+ * this closes that gap using the exact same pattern as
+ * `notifyAgencyCommunityReply`/`notifyAgencyCommunityMentions` above: the
+ * agency roster doc already carries `personId` directly (no separate
+ * Member->Person lookup needed), `createNotification` is called with
+ * `subAccountId: null` (real Person identity, no tenant Contacts involved),
+ * and `hostPersonId: null` (the owner hosting) never inherits a Quiana
+ * LaChé — or any — sub-account's branding, since `resolveAgencyActorName`
+ * falls back to `resolveBrandName()` (Magnetix Studios) for that case, same
+ * as every other agency-authored notification. `createNotification`'s own
+ * `.create()`-based dedupe (keyed on eventType:sourceObjectId:personId)
+ * already prevents duplicate notifications if this is ever called twice
+ * for the same room.
+ */
+export async function notifyAgencyCommunityLiveStarted(opts: {
+  agencyId: string;
+  groupId: string;
+  roomId: string;
+  title: string;
+  channel: string | null;
+  hostPersonId: string | null;
+}): Promise<void> {
+  const [members, group, hostName, channelDoc] = await Promise.all([
+    listAgencyGroupMembers(opts.agencyId, opts.groupId),
+    getAgencyGroupById(opts.agencyId, opts.groupId),
+    opts.hostPersonId
+      ? resolveAgencyActorName(opts.agencyId, opts.groupId, opts.hostPersonId)
+      : resolveBrandName(),
+    opts.channel ? getAgencyChannelByName(opts.agencyId, opts.groupId, opts.channel) : Promise.resolve(null),
+  ]);
+  const communityName = group?.name || "a Community";
+  const destination = `/my/community/${opts.groupId}/live-rooms/${opts.roomId}`;
+  // Agency Community has no per-member moderator role yet (only the owner
+  // — who has no notification bell here, see the module comment above) —
+  // a private channel's live-room start is never announced to the general
+  // roster, mirroring tenant's own "moderator-only" exclusion in effect
+  // (nobody here qualifies as the moderator exception).
+  const privateChannel = channelDoc?.private === true;
+  if (privateChannel) return;
+
+  await Promise.all(
+    members
+      .filter((m) => m.status === "active" && m.personId && m.personId !== opts.hostPersonId)
+      .map((m) =>
+        createNotification({
+          personId: m.personId as string,
+          subAccountId: null,
+          eventType: "community.live.started",
+          objectType: "live-room",
+          objectId: opts.roomId,
+          actorMemberId: opts.hostPersonId,
+          title: `${hostName} is live: ${opts.title}`,
+          message: `Join ${communityName} now.`,
+          destination,
+          meta: { communityName, actorName: hostName },
+          sourceObjectId: opts.roomId,
+        }),
+      ),
+  );
+}
+
 export async function getAgencyMembershipForPerson(
   agencyId: string,
   groupId: string,

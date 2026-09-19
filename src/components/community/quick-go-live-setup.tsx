@@ -18,11 +18,11 @@ export function QuickGoLiveSetup({
   saId: string;
   groupId: string;
   /** Agency Community — targets /api/agency/community/[groupId]/live-rooms
-   *  instead of /api/community/{saId}/{groupId}/live-rooms. "Keep as post"
-   *  has full parity (companion post + recording/replay, see
-   *  agency-community-live-recording-service.ts) — only "Notify members"
-   *  stays hidden for agency (no live-started notification producer exists
-   *  for agency scope yet; the route hardcodes notifyMembers: false). */
+   *  instead of /api/community/{saId}/{groupId}/live-rooms. Full parity with
+   *  tenant: "Keep as post" (companion post + recording/replay, see
+   *  agency-community-live-recording-service.ts) and "Notify members"
+   *  (notifyAgencyCommunityLiveStarted, community-agency-service.ts) both
+   *  work identically for agency scope. */
   agencyGroupId?: string;
   categories: string[];
   filter: string;
@@ -492,19 +492,18 @@ export function QuickGoLiveSetup({
               />{" "}
               Keep live as a post
             </label>
-            {/* Agency live rooms have no live-started notification producer
-                yet — omit rather than show a control that silently does
-                nothing (the route hardcodes notifyMembers: false). */}
-            {!agencyGroupId && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={notifyMembers}
-                  onChange={(e) => setNotifyMembers(e.target.checked)}
-                />{" "}
-                Notify members
-              </label>
-            )}
+            {/* Agency Community now has full "notify members" parity too
+                (notifyAgencyCommunityLiveStarted, community-agency-service.ts)
+                — real in-app bell notifications to every active roster
+                Person, same as tenant. */}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={notifyMembers}
+                onChange={(e) => setNotifyMembers(e.target.checked)}
+              />{" "}
+              Notify members
+            </label>
             {error && <p className="text-sm text-red-700">{error}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button

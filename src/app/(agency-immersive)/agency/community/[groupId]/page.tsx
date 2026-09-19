@@ -7,6 +7,7 @@ import {
   COMMUNITY_DEFAULT_BRAND,
 } from "@/components/community/community-shell";
 import { FeedView, type ClientPost } from "@/components/community/feed/feed-view";
+import { CommunityBanner } from "@/components/community/community-banner";
 import { CommunityLeftNav } from "@/components/community/community-left-nav";
 import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
 import type { CommunityGroup, CommunityChannel, CommunitySection } from "@/types/community";
@@ -110,32 +111,35 @@ export default function AgencyCommunityFeedPage({
       viewerIsModerator
       embedded={false}
     >
-      <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <div className="min-w-0">
-          <CommunityLeftNav
-            saId=""
-            agencyGroupId={groupId}
-            groupId={group.id}
-            groupSlug={group.slug}
-            brand={brand}
-            primaryAction={resolvedTheme.primaryAction}
-            viewer={{ memberId: viewer.memberId, role: "moderator" }}
-            initialChannels={channels}
-            initialSections={sections}
-          />
-        </div>
-        <div className="min-w-0">
-          <FeedView
-            saId=""
-            agencyGroupId={groupId}
-            groupId={group.id}
-            groupSlug={group.slug}
-            brand={brand}
-            communityName={group.name}
-            categories={group.categories}
-            viewer={{ ...viewer, role: "moderator" }}
-            initialPosts={posts}
-          />
+      <div className="space-y-4">
+        {(group.showBanner ?? true) && <CommunityBanner group={group} />}
+        <div className="grid gap-6 md:grid-cols-[200px_1fr]">
+          <div className="min-w-0">
+            <CommunityLeftNav
+              saId=""
+              agencyGroupId={groupId}
+              groupId={group.id}
+              groupSlug={group.slug}
+              brand={brand}
+              primaryAction={resolvedTheme.primaryAction}
+              viewer={{ memberId: viewer.memberId, role: "moderator" }}
+              initialChannels={channels}
+              initialSections={sections}
+            />
+          </div>
+          <div className="min-w-0">
+            <FeedView
+              saId=""
+              agencyGroupId={groupId}
+              groupId={group.id}
+              groupSlug={group.slug}
+              brand={brand}
+              communityName={group.name}
+              categories={group.categories}
+              viewer={{ ...viewer, role: "moderator" }}
+              initialPosts={posts}
+            />
+          </div>
         </div>
       </div>
     </CommunityShell>

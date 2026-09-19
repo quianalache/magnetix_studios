@@ -7,7 +7,11 @@ import {
   getLiveSessionServerSide,
   updateLiveSessionLifecycleServerSide,
 } from "@/lib/server/live-session-service";
-import { createAgencyPostServerSide, updateAgencyPostServerSide } from "@/lib/server/community-agency-service";
+import {
+  createAgencyPostServerSide,
+  updateAgencyPostServerSide,
+  notifyAgencyCommunityLiveStarted,
+} from "@/lib/server/community-agency-service";
 import { createAgencyLiveRecordingAsset } from "@/lib/server/agency-community-live-recording-service";
 import { stopCommunityLiveRecordingServerSide } from "@/lib/server/community-live-recording-service";
 import type { CommunityLiveRoom, CommunityLiveRoomStatus } from "@/types/community";
@@ -58,6 +62,7 @@ export async function createAgencyLiveRoomServerSide(input: {
   mode: "meeting" | "broadcast";
   channel?: string | null;
   keepAsPost?: boolean;
+  notifyMembers?: boolean;
   thumbnailUrl?: string | null;
 }): Promise<CommunityLiveRoom> {
   const roomRef = roomCollection(input.agencyId, input.groupId).doc();
@@ -120,7 +125,7 @@ export async function createAgencyLiveRoomServerSide(input: {
     createdByMemberId: input.author.kind === "owner" ? input.author.uid : input.author.personId,
     channel: input.channel ?? null,
     keepAsPost,
-    notifyMembers: false,
+    notifyMembers: input.notifyMembers === true,
     communityPostId,
     recordingAssetId,
     recordingStatus: recordingAssetId ? ("pending" as const) : ("unavailable" as const),
@@ -129,6 +134,18 @@ export async function createAgencyLiveRoomServerSide(input: {
     updatedAt: FieldValue.serverTimestamp(),
   };
   await roomRef.create(doc);
+  // The room is now durably LIVE; never notify while the setup dialog is
+  // merely open — mirrors tenant's exact same ordering/reasoning.
+  if (doc.notifyMembers) {
+    await notifyAgencyCommunityLiveStarted({
+      agencyId: input.agencyId,
+      groupId: input.groupId,
+      roomId: roomRef.id,
+      title: doc.title,
+      channel: doc.channel,
+      hostPersonId: input.author.kind === "member" ? input.author.personId : null,
+    });
+  }
   return { id: roomRef.id, ...doc } as CommunityLiveRoom;
 }
 
