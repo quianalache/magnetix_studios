@@ -8,6 +8,9 @@ import {
   listSpacesForPerson,
   listCoursesForPerson,
   listComingUpForPerson,
+  listCommunitiesForPerson,
+  listAgencyCommunitiesForPerson,
+  listUpcomingCommunityEventsForPerson,
   listAttentionForPerson,
   listPaymentsForPerson,
   listPinnedKeys,
@@ -41,8 +44,13 @@ function greeting(): string {
 
 // "Coming Up" in the approved mockup mixes real upcoming appointments AND
 // real upcoming subscription renewals into one chronological feed — both
-// arrays are already real data (listComingUpForPerson / listPaymentsForPerson);
-// this just merges and sorts them, it doesn't invent a third source.
+// arrays are already real data (listComingUpForPerson / listPaymentsForPerson).
+// Community Product Finish Pass (2026-09-19) adds a third real source, the
+// next upcoming Community Event per Community the Person belongs to
+// (listUpcomingCommunityEventsForPerson, tenant + Agency both included via
+// the shared PersonCommunityItem model) — still just merging and sorting
+// real data, never inventing a fourth source (no fake Course dates: courses
+// have no scheduled-date concept, so they stay in "Continue Learning" only).
 interface ComingUpFeedItem {
   key: string;
   date: Date;
@@ -50,7 +58,7 @@ interface ComingUpFeedItem {
   subtitle: string;
   businessName: string;
   enterHref?: string;
-  kind: "appointment" | "renewal";
+  kind: "appointment" | "renewal" | "community-event";
 }
 
 export default async function MyMagnetixHomePage() {
@@ -59,15 +67,18 @@ export default async function MyMagnetixHomePage() {
 
   const memberships = await listPersonMemberships(person.id);
 
-  const [firstName, spaces, courses, comingUp, attention, payments, pinned] = await Promise.all([
+  const [firstName, spaces, courses, comingUp, tenantCommunities, agencyCommunities, attention, payments, pinned] = await Promise.all([
     resolvePersonFirstName(person.id, person.primaryEmail, memberships),
     listSpacesForPerson(memberships),
     listCoursesForPerson(memberships),
     listComingUpForPerson(memberships),
+    listCommunitiesForPerson(memberships),
+    listAgencyCommunitiesForPerson(person.id),
     listAttentionForPerson(memberships),
     listPaymentsForPerson(memberships),
     listPinnedKeys(person.id),
   ]);
+  const upcomingEvents = await listUpcomingCommunityEventsForPerson(tenantCommunities, agencyCommunities);
 
   const mindset = todaysMindsetEntry();
   const continueLearning = courses
@@ -95,6 +106,17 @@ export default async function MyMagnetixHomePage() {
         subtitle: `Renews • ${formatCurrency(p.amountCents / 100, p.currency)}`,
         businessName: "Subscription",
         kind: "renewal",
+      }),
+    ),
+    ...upcomingEvents.map(
+      (e): ComingUpFeedItem => ({
+        key: e.key,
+        date: e.startAt,
+        title: e.title,
+        subtitle: `${e.communityName} • ${formatTime(e.startAt)}`,
+        businessName: e.businessName,
+        enterHref: e.enterHref,
+        kind: "community-event",
       }),
     ),
   ]

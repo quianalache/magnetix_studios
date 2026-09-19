@@ -13,6 +13,16 @@ import {
   type PortalBooking,
 } from "@/lib/server/portal-service";
 import { resolvePortalBranding } from "@/types/portal-branding";
+import {
+  resolveFirstAgencyId,
+  resolveBrandName,
+} from "@/lib/landing/resolve-brand";
+import {
+  listGroupsForAgency,
+  getAgencyMembershipForPerson,
+} from "@/lib/server/community-agency-service";
+import { listCommunityEventsServerSide } from "@/lib/server/community-event-service";
+import { listAgencyEventsServerSide } from "@/lib/server/agency-community-event-service";
 import { projectProgressPct } from "@/types/projects";
 import type { SubAccountDoc } from "@/types/tenancy";
 import type { Member } from "@/types/community";
@@ -230,13 +240,24 @@ export async function listCoursesForPerson(
 }
 
 export interface PersonCommunityItem extends PortalCommunity {
-  subAccountId: string;
+  /** Present only for a tenant Community — absent for an Agency-owned one.
+   *  Mirrors `CommunityGroup.subAccountId`'s own "absent = agency" contract
+   *  (types/community.ts) — never populate this with an agency id or any
+   *  other stand-in value for an Agency community; that's exactly the
+   *  "fake subAccountId" the Shared-First Architecture rules forbid. */
+  subAccountId?: string;
   businessName: string;
   enterHref: string;
   pinKey: string;
 }
 
-/** Every Community this Person belongs to, across every business. */
+/** Every tenant Community this Person belongs to, across every business
+ *  (via their tenant Member links). See `listAgencyCommunitiesForPerson`
+ *  for the Agency-scope sibling — kept separate rather than merged into
+ *  one function since the identity fan-out source is genuinely different
+ *  (tenant `PersonMembership[]` vs the single platform agency's roster),
+ *  though both return the SAME `PersonCommunityItem` shape so callers
+ *  (My Communities, the switcher) can combine the two lists directly. */
 export async function listCommunitiesForPerson(
   memberships: PersonMembership[]
 ): Promise<PersonCommunityItem[]> {
@@ -259,6 +280,61 @@ export async function listCommunitiesForPerson(
     })
   );
   return items.flat();
+}
+
+/**
+ * Every Agency Community this Person has an ACTIVE roster membership in —
+ * the Agency-scope sibling of `listCommunitiesForPerson`, added so "My
+ * Communities" shows both without a separate Agency-only portal product
+ * (Shared-First Architecture: one card model, scope-specific data source).
+ * Unlike the tenant fan-out (one query per sub-account relationship), a
+ * Person's Agency membership isn't indexed by a pre-known groupId, so this
+ * lists the platform's own (single) agency's published groups and checks
+ * membership per group — bounded and cheap in practice (a handful of
+ * Agency-owned communities, not hundreds). No bridge/session-minting is
+ * needed for `enterHref` — unlike a tenant Member, a Person IS already the
+ * real identity `/my/community/[groupId]` authenticates with (see
+ * agency-community-access.ts) — so it's the group's own `href` unchanged.
+ */
+export async function listAgencyCommunitiesForPerson(
+  personId: string
+): Promise<PersonCommunityItem[]> {
+  const agencyId = await resolveFirstAgencyId();
+  if (!agencyId) return [];
+
+  const [groups, businessName] = await Promise.all([
+    listGroupsForAgency(agencyId),
+    resolveBrandName(),
+  ]);
+  const published = groups.filter((g) => g.status === "published");
+
+  const items = await Promise.all(
+    published.map(async (group): Promise<PersonCommunityItem | null> => {
+      const membership = await getAgencyMembershipForPerson(
+        agencyId,
+        group.id,
+        personId
+      );
+      if (!membership || membership.status !== "active") return null;
+      const href = `/my/community/${group.id}`;
+      return {
+        groupId: group.id,
+        name: group.name,
+        slug: group.slug,
+        tagline: group.tagline,
+        logoUrl: group.logoUrl ?? null,
+        memberStatus: membership.status,
+        role: "member",
+        level: membership.level ?? 1,
+        points: membership.points ?? 0,
+        href,
+        businessName,
+        enterHref: href,
+        pinKey: `community:agency:${agencyId}:${group.id}`,
+      };
+    })
+  );
+  return items.filter((i): i is PersonCommunityItem => i !== null);
 }
 
 export interface PersonUpcomingItem extends PortalBooking {
@@ -293,6 +369,99 @@ export async function listComingUpForPerson(
   return items
     .flat()
     .sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0))
+    .slice(0, limit);
+}
+
+export interface PersonUpcomingCommunityEventItem {
+  key: string;
+  eventId: string;
+  groupId: string;
+  title: string;
+  startAt: Date;
+  businessName: string;
+  communityName: string;
+  enterHref: string;
+}
+
+function eventStartMillis(value: unknown): number {
+  const v = value as { toMillis?: () => number; seconds?: number } | null;
+  if (typeof v?.toMillis === "function") return v.toMillis();
+  return typeof v?.seconds === "number" ? v.seconds * 1000 : 0;
+}
+
+/**
+ * Community Product Finish Pass (2026-09-19) — the next upcoming event per
+ * Community this Person belongs to, across BOTH scopes, feeding the SAME
+ * "Coming Up" home feed real appointments/renewals already use (see
+ * `listComingUpForPerson`) rather than a separate widget. Takes the
+ * already-resolved community lists (tenant `listCommunitiesForPerson` +
+ * Agency `listAgencyCommunitiesForPerson`) so this never re-derives
+ * membership itself — one shared shape (`PersonUpcomingCommunityEventItem`)
+ * regardless of which scope a given Community happens to be. `enterHref`
+ * needs no `/api/my/enter` bridge for an Agency event (same reasoning as
+ * `listAgencyCommunitiesForPerson`'s own `enterHref`).
+ */
+export async function listUpcomingCommunityEventsForPerson(
+  tenantCommunities: PersonCommunityItem[],
+  agencyCommunities: PersonCommunityItem[],
+  limit = 3
+): Promise<PersonUpcomingCommunityEventItem[]> {
+  const now = Date.now();
+
+  const tenantItems = await Promise.all(
+    tenantCommunities.map(
+      async (c): Promise<PersonUpcomingCommunityEventItem | null> => {
+        if (!c.subAccountId) return null;
+        const events = await listCommunityEventsServerSide(
+          c.subAccountId,
+          c.groupId
+        );
+        const next = events.find(
+          (e) => e.status !== "canceled" && eventStartMillis(e.startAt) > now
+        );
+        if (!next) return null;
+        return {
+          key: `event:${c.subAccountId}:${c.groupId}:${next.id}`,
+          eventId: next.id,
+          groupId: c.groupId,
+          title: next.title,
+          startAt: new Date(eventStartMillis(next.startAt)),
+          businessName: c.businessName,
+          communityName: c.name,
+          enterHref: `/api/my/enter?subAccountId=${c.subAccountId}&next=${encodeURIComponent(`/c/${c.subAccountId}/${c.slug}/events/${next.id}`)}`,
+        };
+      }
+    )
+  );
+
+  const agencyId =
+    agencyCommunities.length > 0 ? await resolveFirstAgencyId() : null;
+  const agencyItems = await Promise.all(
+    agencyCommunities.map(
+      async (c): Promise<PersonUpcomingCommunityEventItem | null> => {
+        if (!agencyId) return null;
+        const events = await listAgencyEventsServerSide(agencyId, c.groupId);
+        const next = events.find(
+          (e) => e.status !== "canceled" && eventStartMillis(e.startAt) > now
+        );
+        if (!next) return null;
+        return {
+          key: `event:agency:${agencyId}:${c.groupId}:${next.id}`,
+          eventId: next.id,
+          groupId: c.groupId,
+          title: next.title,
+          startAt: new Date(eventStartMillis(next.startAt)),
+          businessName: c.businessName,
+          communityName: c.name,
+          enterHref: `/my/community/${c.groupId}/events/${next.id}`,
+        };
+      }
+    )
+  );
+
+  return [...tenantItems, ...agencyItems]
+    .filter((i): i is PersonUpcomingCommunityEventItem => i !== null)
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
     .slice(0, limit);
 }
 

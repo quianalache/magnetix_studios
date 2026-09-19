@@ -5,6 +5,7 @@ import { getCurrentPerson } from "@/lib/server/person-session";
 import {
   listPersonMemberships,
   listCommunitiesForPerson,
+  listAgencyCommunitiesForPerson,
   listPinnedKeys,
 } from "@/lib/server/mymagnetix-service";
 import { PinButton } from "@/components/mymagnetix/pin-button";
@@ -13,20 +14,28 @@ import { MyMagnetixBackLink } from "@/components/mymagnetix/back-link";
 export const dynamic = "force-dynamic";
 
 /**
- * My Communities — the person-centered global index (Part 12). Reuses
- * portal-service.ts's listPortalCommunities across every business
- * relationship; clicking opens the same Community group experience Client
- * Portal already links to. One Community object, one more discovery path.
+ * My Communities — the person-centered global index (Part 12), now
+ * covering BOTH scopes (Community Product Finish Pass, 2026-09-19):
+ * `listCommunitiesForPerson` (tenant, every business relationship) and
+ * `listAgencyCommunitiesForPerson` (the platform's Agency-owned
+ * communities) return the same `PersonCommunityItem` shape, so this page
+ * needs no scope-specific branching of its own — one shared card model,
+ * per the Shared-First Architecture rules. Clicking a tenant entry
+ * bridges into that Community via `/api/my/enter`; an Agency entry goes
+ * straight to `/my/community/[groupId]` (no bridge needed — a Person is
+ * already the real identity that route authenticates with).
  */
 export default async function MyMagnetixCommunitiesPage() {
   const person = await getCurrentPerson();
   if (!person) redirect("/my/login");
 
   const memberships = await listPersonMemberships(person.id);
-  const [communities, pinned] = await Promise.all([
+  const [tenantCommunities, agencyCommunities, pinned] = await Promise.all([
     listCommunitiesForPerson(memberships),
+    listAgencyCommunitiesForPerson(person.id),
     listPinnedKeys(person.id),
   ]);
+  const communities = [...tenantCommunities, ...agencyCommunities];
 
   const sorted = communities.slice().sort((a, b) => {
     const ap = pinned.has(a.pinKey) ? 0 : 1;
@@ -48,7 +57,7 @@ export default async function MyMagnetixCommunitiesPage() {
         <div className="mt-5 flex flex-col gap-2.5">
           {sorted.map((community) => (
             <div
-              key={`${community.subAccountId}:${community.groupId}`}
+              key={community.pinKey}
               className="flex items-center gap-3 rounded-xl border border-[#ECE9F5] bg-white p-3 transition-shadow hover:shadow-md"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#EDE9FE] text-[#6D28D9]">
