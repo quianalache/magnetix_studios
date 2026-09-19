@@ -45,3 +45,17 @@ export function communityGroupsRoot(scope: CommunityOwnerScope): string {
     ? `subAccounts/${scope.subAccountId}/communityGroups`
     : `agencies/${scope.agencyId}/communityGroups`;
 }
+
+/** The scope's own identity field, exactly as each side's pre-existing
+ *  documents already denormalized it (`{subAccountId}` for tenant docs,
+ *  `{agencyId}` for Agency docs) — used where a shared write function
+ *  needs to preserve that field on a newly-created doc rather than
+ *  silently dropping it (a real, if never-queried-on, persisted-data
+ *  shape neither scope's existing docs should start diverging from). */
+export function scopeIdentityFields(
+  scope: CommunityOwnerScope
+): { subAccountId: string } | { agencyId: string } {
+  return scope.kind === "subAccount"
+    ? { subAccountId: scope.subAccountId }
+    : { agencyId: scope.agencyId };
+}

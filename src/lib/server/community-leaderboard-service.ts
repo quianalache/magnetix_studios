@@ -2,13 +2,27 @@ import "server-only";
 
 import { Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { communityGroupsRoot, tenantScope, type CommunityOwnerScope } from "@/lib/server/community-scope";
+import { listActiveParticipantsByScope } from "@/lib/server/community-participants-service";
 import type { GroupMembership, Member } from "@/types/community";
 
 /**
  * Leaderboard + members directory reads (Admin SDK, server-rendered for
- * members). All-time ranking uses the denormalized `membership.points`; the
- * 7-day / 30-day windows aggregate the `pointEvents` time-series on read (a
- * QStash rollup is the escalation if a group ever gets big enough to need it).
+ * members). All-time ranking uses the denormalized participant `points`;
+ * the 7-day / 30-day windows aggregate the `pointEvents` time-series on
+ * read (a QStash rollup is the escalation if a group ever gets big enough
+ * to need it).
+ *
+ * Community Shared Architecture Phase 2 (2026-09-19): `getLeaderboardByScope`
+ * is now the ONE ranking/scoring implementation for both tenant and
+ * Agency — `getLeaderboard` (tenant, below) and `getAgencyLeaderboard`
+ * (Agency, agency-community-points-service.ts) are both thin wrappers over
+ * it. The only thing that differs per scope is participant lookup
+ * (`listActiveParticipantsByScope`, community-participants-service.ts) —
+ * scoring/ordering is identical. `listMemberDirectory` (tenant-only,
+ * richer member-management read: handle/bio/last-seen/banned rows) is
+ * untouched by this phase — Agency's member-management UI already has its
+ * own equivalent (`listAgencyGroupMembers`, community-agency-service.ts).
  */
 
 export type LeaderboardWindow = "7d" | "30d" | "all";
@@ -27,62 +41,29 @@ function displayNameFor(m: Pick<Member, "displayName" | "email">): string {
   return m.email.split("@")[0] || "Member";
 }
 
-async function activeMemberships(
-  saId: string,
-  groupId: string,
-): Promise<GroupMembership[]> {
-  const snap = await getAdminDb()
-    .collection(`subAccounts/${saId}/communityGroups/${groupId}/memberships`)
-    .get();
-  return snap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<GroupMembership, "id">) }))
-    .filter((m) => m.status === "active");
-}
-
-async function hydrateMembers(
-  saId: string,
-  memberIds: string[],
-): Promise<Map<string, { displayName: string; avatarUrl: string | null }>> {
-  const db = getAdminDb();
-  const unique = Array.from(new Set(memberIds));
-  const out = new Map<string, { displayName: string; avatarUrl: string | null }>();
-  if (unique.length === 0) return out;
-  const snaps = await db.getAll(
-    ...unique.map((id) => db.doc(`subAccounts/${saId}/members/${id}`)),
-  );
-  unique.forEach((id, i) => {
-    const m = snaps[i].data() as Member | undefined;
-    out.set(id, {
-      displayName: m ? displayNameFor(m) : "Former member",
-      avatarUrl: m?.avatarUrl ?? null,
-    });
-  });
-  return out;
-}
-
-export async function getLeaderboard(opts: {
-  subAccountId: string;
+export async function getLeaderboardByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   window: LeaderboardWindow;
   limit?: number;
 }): Promise<LeaderboardRow[]> {
   const limit = opts.limit ?? 50;
-  const memberships = await activeMemberships(opts.subAccountId, opts.groupId);
-  const levelByMember = new Map(memberships.map((m) => [m.memberId, m.level]));
+  // Active participants (id/displayName/avatarUrl/level/all-time points) —
+  // needed regardless of window, either as the score source (all-time) or
+  // just for display metadata (7d/30d, whose score comes from pointEvents).
+  const participants = await listActiveParticipantsByScope(opts.scope, opts.groupId);
+  const byId = new Map(participants.map((p) => [p.id, p]));
 
   let scored: { memberId: string; points: number }[];
-
   if (opts.window === "all") {
-    scored = memberships
-      .map((m) => ({ memberId: m.memberId, points: m.points ?? 0 }))
+    scored = participants
+      .map((p) => ({ memberId: p.id, points: p.points }))
       .filter((s) => s.points > 0);
   } else {
     const days = opts.window === "7d" ? 7 : 30;
     const cutoff = Timestamp.fromMillis(Date.now() - days * 24 * 60 * 60 * 1000);
     const snap = await getAdminDb()
-      .collection(
-        `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/pointEvents`,
-      )
+      .collection(`${communityGroupsRoot(opts.scope)}/${opts.groupId}/pointEvents`)
       .where("createdAt", ">=", cutoff)
       .get();
     const tally = new Map<string, number>();
@@ -96,20 +77,26 @@ export async function getLeaderboard(opts: {
   }
 
   scored.sort((a, b) => b.points - a.points);
-  const top = scored.slice(0, limit);
-  const names = await hydrateMembers(
-    opts.subAccountId,
-    top.map((s) => s.memberId),
-  );
+  return scored.slice(0, limit).map((s, i) => {
+    const p = byId.get(s.memberId);
+    return {
+      rank: i + 1,
+      memberId: s.memberId,
+      displayName: p?.displayName ?? "Member",
+      avatarUrl: p?.avatarUrl ?? null,
+      level: p?.level ?? 1,
+      points: s.points,
+    };
+  });
+}
 
-  return top.map((s, i) => ({
-    rank: i + 1,
-    memberId: s.memberId,
-    displayName: names.get(s.memberId)?.displayName ?? "Member",
-    avatarUrl: names.get(s.memberId)?.avatarUrl ?? null,
-    level: levelByMember.get(s.memberId) ?? 1,
-    points: s.points,
-  }));
+export async function getLeaderboard(opts: {
+  subAccountId: string;
+  groupId: string;
+  window: LeaderboardWindow;
+  limit?: number;
+}): Promise<LeaderboardRow[]> {
+  return getLeaderboardByScope({ ...opts, scope: tenantScope(opts.subAccountId) });
 }
 
 export interface MemberDirectoryRow {
@@ -157,6 +144,11 @@ function handleFor(displayName: string, memberId: string): string {
  * avatar, level, join date, and last-seen (for the online indicator). Banned
  * rows are returned too so a moderator can see + un-ban them; the page only
  * shows the Banned tab to moderators.
+ *
+ * Tenant-only (richer read than the shared `CommunityParticipant` model
+ * needs — handle/bio/last-seen/banned rows have no Agency member-
+ * management equivalent yet, see `listAgencyGroupMembers` instead) —
+ * unchanged by Phase 2, kept exactly as it was.
  */
 export async function listMemberDirectory(opts: {
   subAccountId: string;

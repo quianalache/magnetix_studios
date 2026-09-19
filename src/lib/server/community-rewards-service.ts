@@ -2,8 +2,9 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getLeaderboard } from "@/lib/server/community-leaderboard-service";
-import { listMemberDirectory } from "@/lib/server/community-leaderboard-service";
+import { getLeaderboardByScope } from "@/lib/server/community-leaderboard-service";
+import { listActiveParticipantsByScope } from "@/lib/server/community-participants-service";
+import { communityGroupsRoot, scopeIdentityFields, tenantScope, type CommunityOwnerScope } from "@/lib/server/community-scope";
 import type {
   CommunityReward,
   CommunityRewardWinner,
@@ -14,23 +15,29 @@ import type {
 
 /**
  * Points & Rewards — Rewards + Winners. Rewards live at
- * `subAccounts/{saId}/communityGroups/{groupId}/rewards/{id}`; Winners
- * (a persistent historical record, never deleted when a reward is
- * archived) at `.../rewardWinners/{id}`. See `types/points-rewards.ts` for
- * the full shape and why fulfillment is a discriminated union scoped
- * inside each reward rather than a global settings card.
+ * `.../communityGroups/{groupId}/rewards/{id}`; Winners (a persistent
+ * historical record, never deleted when a reward is archived) at
+ * `.../rewardWinners/{id}`. See `types/points-rewards.ts` for the full
+ * shape and why fulfillment is a discriminated union scoped inside each
+ * reward rather than a global settings card.
+ *
+ * Community Shared Architecture Phase 2 (2026-09-19): every function below
+ * is now a scope-aware `*ByScope` core (`CommunityOwnerScope`), with the
+ * tenant-facing exports at the bottom kept at their EXACT pre-existing
+ * signatures — no tenant call site changes. `agency-community-rewards-
+ * service.ts` is the Agency-scope sibling; its exports are now thin
+ * delegations to the SAME cores here. `effectiveRewardStatus`/
+ * `validateRewardInput`/`parseRewardInputBody`/`MAX_ACTIVE_REWARDS`/
+ * `MaxActiveRewardsError` were ALREADY scope-agnostic before this phase
+ * (no subAccountId/agencyId parameter at all) and are unchanged.
  */
 
-function rewardsCol(subAccountId: string, groupId: string) {
-  return getAdminDb().collection(
-    `subAccounts/${subAccountId}/communityGroups/${groupId}/rewards`,
-  );
+function rewardsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${communityGroupsRoot(scope)}/${groupId}/rewards`);
 }
 
-function winnersCol(subAccountId: string, groupId: string) {
-  return getAdminDb().collection(
-    `subAccounts/${subAccountId}/communityGroups/${groupId}/rewardWinners`,
-  );
+function winnersColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${communityGroupsRoot(scope)}/${groupId}/rewardWinners`);
 }
 
 /** Handles a real Firestore `Timestamp` (read path) AND a plain JS `Date`
@@ -51,23 +58,19 @@ function toMillis(v: unknown): number | null {
 /**
  * The LIVE status shown anywhere in the UI — always computed fresh from
  * the moderator's stored `status` plus `startAt`/`endAt`, never a stored,
- * cron-updated field (no background-job infrastructure exists in this
- * codebase to keep such a field current). `draft`/`completed`/`archived`
- * are moderator-controlled terminal/pre-live states and pass through
- * unchanged — dates never override them. `scheduled`/`active` are the two
- * "live cycle" states: with no dates, `active` simply stays active until
- * the moderator manually ends it (the "always-active" reward shape); with
- * dates, the effective status walks scheduled -> active -> expired purely
- * from the clock, with no write required at each transition.
+ * cron-updated field. `draft`/`completed`/`archived` are moderator-
+ * controlled terminal/pre-live states and pass through unchanged — dates
+ * never override them. `scheduled`/`active` are the two "live cycle"
+ * states: with no dates, `active` simply stays active until the moderator
+ * manually ends it; with dates, the effective status walks scheduled ->
+ * active -> expired purely from the clock, with no write required at each
+ * transition. Already scope-agnostic — unchanged by this phase.
  *
- * Known, disclosed limitation (Points & Rewards Implementation Report):
- * the max-3-active cap below is enforced only against THIS moment's other
- * rewards at save time, so two rewards independently scheduled for
- * overlapping future windows can both be saved even if, once their start
- * dates arrive, more than 3 would be effectively active at once. Catching
- * that would need a scheduled job re-checking the whole set on a timer —
- * real, deliberately out-of-scope follow-up work per the "don't build an
- * overcomplicated rules engine yet" instruction.
+ * Known, disclosed limitation (unchanged): the max-3-active cap below is
+ * enforced only against THIS moment's other rewards at save time, so two
+ * rewards independently scheduled for overlapping future windows can both
+ * be saved even if, once their start dates arrive, more than 3 would be
+ * effectively active at once.
  */
 export function effectiveRewardStatus(
   reward: { status: RewardStatus; startAt: unknown; endAt: unknown },
@@ -98,11 +101,11 @@ export interface RewardWithEffectiveStatus extends CommunityReward {
   effectiveStatus: RewardStatus;
 }
 
-export async function listRewardsServerSide(
-  subAccountId: string,
+export async function listRewardsByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
 ): Promise<RewardWithEffectiveStatus[]> {
-  const snap = await rewardsCol(subAccountId, groupId).orderBy("createdAt", "desc").get();
+  const snap = await rewardsColByScope(scope, groupId).orderBy("createdAt", "desc").get();
   const now = Date.now();
   return snap.docs.map((d) => {
     const reward = { id: d.id, ...(d.data() as Omit<CommunityReward, "id">) };
@@ -113,33 +116,28 @@ export async function listRewardsServerSide(
 /** Just the rewards a member should see right now — Overview's "Active
  *  Rewards" panel and the member-facing Leaderboard both want exactly
  *  this: up to 3, effectively active THIS moment, newest first. */
-export async function listActiveRewardsServerSide(
-  subAccountId: string,
+export async function listActiveRewardsByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
 ): Promise<RewardWithEffectiveStatus[]> {
-  const all = await listRewardsServerSide(subAccountId, groupId);
+  const all = await listRewardsByScope(scope, groupId);
   return all.filter((r) => r.effectiveStatus === "active").slice(0, MAX_ACTIVE_REWARDS);
 }
 
 /**
  * The create/update payload. `startAt`/`endAt` are plain JS `Date | null`
  * here — NOT `Timestamp` like the persisted `CommunityReward` — because
- * this is what a JSON request body round-trips as (the modal sends a
- * `Date`, `JSON.stringify` serializes it to an ISO string, and the API
- * route parses that string back into a `Date` before calling this) and
- * what the Admin SDK writes natively (a `Date` value is auto-converted to
- * a `Timestamp` on write, same as any other Admin SDK write in this
- * codebase).
+ * this is what a JSON request body round-trips as and what the Admin SDK
+ * writes natively. Already scope-agnostic — unchanged by this phase.
  */
 export type RewardInput = Pick<CommunityReward, "title" | "description" | "status" | "criterion" | "fulfillment"> & {
   startAt: Date | null;
   endAt: Date | null;
 };
 
-/** Parses a raw JSON request body into a `RewardInput` — specifically,
- *  turns `startAt`/`endAt`'s ISO-string-or-null wire shape into real
- *  `Date | null` values. Used by both the create and update API routes so
- *  neither has to duplicate this. */
+/** Parses a raw JSON request body into a `RewardInput`. Used by both
+ *  scopes' create/update API routes so neither has to duplicate this.
+ *  Already scope-agnostic — unchanged by this phase. */
 export function parseRewardInputBody(body: {
   title?: string;
   description?: string;
@@ -164,6 +162,7 @@ export function parseRewardInputBody(body: {
   };
 }
 
+/** Already scope-agnostic — unchanged by this phase. */
 export function validateRewardInput(input: RewardInput): void {
   if (!input.title || !input.title.trim()) {
     throw new Error("Reward title is required.");
@@ -179,32 +178,32 @@ export function validateRewardInput(input: RewardInput): void {
   }
 }
 
-/** Moderator-only. Enforces the max-3-active cap INSIDE a transaction —
- *  same race-safe pattern as Featured Posts' `MAX_FEATURED_POSTS` (read
- *  the current count fresh inside `runTransaction`, reject before
+/** Moderator/owner-only. Enforces the max-3-active cap INSIDE a
+ *  transaction — same race-safe pattern as Featured Posts' own cap check
+ *  (read the current count fresh inside `runTransaction`, reject before
  *  writing) — so two near-simultaneous "activate" requests can never both
  *  pass the check. */
-export async function createRewardServerSide(opts: {
-  subAccountId: string;
+export async function createRewardByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   createdBy: string;
   input: RewardInput;
 }): Promise<CommunityReward> {
   validateRewardInput(opts.input);
   const db = getAdminDb();
-  const ref = rewardsCol(opts.subAccountId, opts.groupId).doc();
+  const ref = rewardsColByScope(opts.scope, opts.groupId).doc();
 
   const willBeActive = effectiveRewardStatus(opts.input) === "active";
   if (willBeActive) {
     return db.runTransaction(async (tx) => {
-      const snap = await tx.get(rewardsCol(opts.subAccountId, opts.groupId));
+      const snap = await tx.get(rewardsColByScope(opts.scope, opts.groupId));
       const now = Date.now();
       const activeCount = snap.docs.filter(
         (d) => effectiveRewardStatus(d.data() as Omit<CommunityReward, "id">, now) === "active",
       ).length;
       if (activeCount >= MAX_ACTIVE_REWARDS) throw new MaxActiveRewardsError();
       const doc = {
-        subAccountId: opts.subAccountId,
+        ...scopeIdentityFields(opts.scope),
         groupId: opts.groupId,
         ...opts.input,
         title: opts.input.title.trim(),
@@ -218,7 +217,7 @@ export async function createRewardServerSide(opts: {
   }
 
   const doc = {
-    subAccountId: opts.subAccountId,
+    ...scopeIdentityFields(opts.scope),
     groupId: opts.groupId,
     ...opts.input,
     title: opts.input.title.trim(),
@@ -230,19 +229,17 @@ export async function createRewardServerSide(opts: {
   return { id: ref.id, ...doc } as unknown as CommunityReward;
 }
 
-/** Moderator-only. Same transactional cap-check as create, but only when
- *  this update would newly RESULT in an effectively-active reward (an
- *  edit that keeps a reward inactive, or that ends an already-active one,
- *  never needs the check). */
-export async function updateRewardServerSide(opts: {
-  subAccountId: string;
+/** Moderator/owner-only. Same transactional cap-check as create, but only
+ *  when this update would newly RESULT in an effectively-active reward. */
+export async function updateRewardByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   rewardId: string;
   input: RewardInput;
 }): Promise<CommunityReward | null> {
   validateRewardInput(opts.input);
   const db = getAdminDb();
-  const ref = rewardsCol(opts.subAccountId, opts.groupId).doc(opts.rewardId);
+  const ref = rewardsColByScope(opts.scope, opts.groupId).doc(opts.rewardId);
 
   const willBeActive = effectiveRewardStatus(opts.input) === "active";
   return db.runTransaction(async (tx) => {
@@ -251,7 +248,7 @@ export async function updateRewardServerSide(opts: {
     const wasActive =
       effectiveRewardStatus(current.data() as Omit<CommunityReward, "id">) === "active";
     if (willBeActive && !wasActive) {
-      const snap = await tx.get(rewardsCol(opts.subAccountId, opts.groupId));
+      const snap = await tx.get(rewardsColByScope(opts.scope, opts.groupId));
       const now = Date.now();
       const activeCount = snap.docs.filter((d) => {
         if (d.id === opts.rewardId) return false;
@@ -265,16 +262,14 @@ export async function updateRewardServerSide(opts: {
   });
 }
 
-/** Moderator-only. Archiving never needs the active-cap check (it only
- *  ever REMOVES a reward from the active count). Archived rewards are
- *  never deleted — they remain visible in the Rewards tab's past/
- *  completed view and any Winners history referencing them stays intact. */
-export async function archiveRewardServerSide(opts: {
-  subAccountId: string;
+/** Moderator/owner-only. Archiving never needs the active-cap check.
+ *  Archived rewards are never deleted. */
+export async function archiveRewardByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   rewardId: string;
 }): Promise<void> {
-  await rewardsCol(opts.subAccountId, opts.groupId).doc(opts.rewardId).update({
+  await rewardsColByScope(opts.scope, opts.groupId).doc(opts.rewardId).update({
     status: "archived",
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -290,21 +285,26 @@ export interface EligibleWinner {
 
 /**
  * For a calculable criterion (everything but "manual"), the members who
- * currently qualify — surfaced to the moderator for CONFIRMATION, never
- * auto-granted (Part 17's explicit "do not silently grant real-world
- * prizes without owner awareness"). "manual" always returns [] — the
- * moderator picks from the member directory directly in that case.
+ * currently qualify — surfaced to the moderator/owner for CONFIRMATION,
+ * never auto-granted. "manual" always returns [] — the caller picks from
+ * the member directory directly in that case. Uses the SAME shared
+ * `listActiveParticipantsByScope` (community-participants-service.ts) for
+ * `point_threshold`/`reach_level`, and the SAME shared
+ * `getLeaderboardByScope` for `top_points_period`, for both scopes — the
+ * only thing that ever differed between tenant/Agency here was WHICH
+ * directory read backed the calculable criteria, not the eligibility
+ * rules themselves.
  */
-export async function evaluateEligibleWinners(
-  subAccountId: string,
+export async function evaluateEligibleWinnersByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   criterion: RewardCriterion,
 ): Promise<EligibleWinner[]> {
   if (criterion.type === "manual") return [];
 
   if (criterion.type === "top_points_period") {
-    const rows = await getLeaderboard({
-      subAccountId,
+    const rows = await getLeaderboardByScope({
+      scope,
       groupId,
       window: criterion.window,
       limit: criterion.winnerCount,
@@ -318,42 +318,42 @@ export async function evaluateEligibleWinners(
     }));
   }
 
-  const directory = await listMemberDirectory({ subAccountId, groupId });
+  const participants = await listActiveParticipantsByScope(scope, groupId);
   if (criterion.type === "point_threshold") {
-    return directory
-      .filter((m) => m.status === "active" && m.points >= criterion.threshold)
-      .map((m) => ({ memberId: m.memberId, displayName: m.displayName, avatarUrl: m.avatarUrl, points: m.points, level: m.level }));
+    return participants
+      .filter((p) => p.points >= criterion.threshold)
+      .map((p) => ({ memberId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl, points: p.points, level: p.level }));
   }
   // reach_level
-  return directory
-    .filter((m) => m.status === "active" && m.level >= criterion.level)
-    .map((m) => ({ memberId: m.memberId, displayName: m.displayName, avatarUrl: m.avatarUrl, points: m.points, level: m.level }));
+  return participants
+    .filter((p) => p.level >= criterion.level)
+    .map((p) => ({ memberId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl, points: p.points, level: p.level }));
 }
 
-export async function listWinnersServerSide(
-  subAccountId: string,
+export async function listWinnersByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
 ): Promise<CommunityRewardWinner[]> {
-  const snap = await winnersCol(subAccountId, groupId).orderBy("awardedAt", "desc").get();
+  const snap = await winnersColByScope(scope, groupId).orderBy("awardedAt", "desc").get();
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CommunityRewardWinner, "id">) }));
 }
 
-/** Moderator-only — records a win, always `pending` fulfillment until the
- *  moderator marks it fulfilled. Used both for a manual-criterion pick and
- *  for confirming one of `evaluateEligibleWinners`'s calculable
- *  candidates — either way a moderator explicitly triggers this call, so
- *  "system" auto-grants never happen in V1. */
-export async function createWinnerServerSide(opts: {
-  subAccountId: string;
+/** Moderator/owner-only — records a win, always `pending` fulfillment
+ *  until explicitly marked fulfilled. Used both for a manual-criterion
+ *  pick and for confirming one of `evaluateEligibleWinnersByScope`'s
+ *  calculable candidates — either way an explicit action triggers this
+ *  call, so "system" auto-grants never happen. */
+export async function createWinnerByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   rewardId: string;
   memberId: string;
   awardedBy: string;
   notes?: string;
 }): Promise<CommunityRewardWinner> {
-  const ref = winnersCol(opts.subAccountId, opts.groupId).doc();
+  const ref = winnersColByScope(opts.scope, opts.groupId).doc();
   const doc = {
-    subAccountId: opts.subAccountId,
+    ...scopeIdentityFields(opts.scope),
     groupId: opts.groupId,
     rewardId: opts.rewardId,
     memberId: opts.memberId,
@@ -366,6 +366,98 @@ export async function createWinnerServerSide(opts: {
   return { id: ref.id, ...doc } as CommunityRewardWinner;
 }
 
+export async function updateWinnerFulfillmentByScope(opts: {
+  scope: CommunityOwnerScope;
+  groupId: string;
+  winnerId: string;
+  fulfillmentStatus: WinnerFulfillmentStatus;
+  notes?: string;
+}): Promise<void> {
+  await winnersColByScope(opts.scope, opts.groupId)
+    .doc(opts.winnerId)
+    .update({
+      fulfillmentStatus: opts.fulfillmentStatus,
+      ...(opts.notes !== undefined ? { notes: opts.notes } : {}),
+    });
+}
+
+// -------------------------------------------------------------------------
+// Tenant-facing exports — EXACT pre-existing signatures, every tenant call
+// site is unchanged. Each is now a thin wrapper around the shared
+// `*ByScope` core above, which itself still writes the same
+// `{subAccountId, groupId, ...}` (tenant) / `{agencyId, groupId, ...}`
+// (Agency) identity fields onto new reward/winner docs each scope always
+// wrote (via `scopeIdentityFields`) — preserved even though nothing reads
+// them back today, rather than silently dropped as an "unused field
+// cleanup" side effect of this consolidation.
+// -------------------------------------------------------------------------
+
+export async function listRewardsServerSide(
+  subAccountId: string,
+  groupId: string,
+): Promise<RewardWithEffectiveStatus[]> {
+  return listRewardsByScope(tenantScope(subAccountId), groupId);
+}
+
+export async function listActiveRewardsServerSide(
+  subAccountId: string,
+  groupId: string,
+): Promise<RewardWithEffectiveStatus[]> {
+  return listActiveRewardsByScope(tenantScope(subAccountId), groupId);
+}
+
+export async function createRewardServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  createdBy: string;
+  input: RewardInput;
+}): Promise<CommunityReward> {
+  return createRewardByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, createdBy: opts.createdBy, input: opts.input });
+}
+
+export async function updateRewardServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  rewardId: string;
+  input: RewardInput;
+}): Promise<CommunityReward | null> {
+  return updateRewardByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, rewardId: opts.rewardId, input: opts.input });
+}
+
+export async function archiveRewardServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  rewardId: string;
+}): Promise<void> {
+  return archiveRewardByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, rewardId: opts.rewardId });
+}
+
+export async function evaluateEligibleWinners(
+  subAccountId: string,
+  groupId: string,
+  criterion: RewardCriterion,
+): Promise<EligibleWinner[]> {
+  return evaluateEligibleWinnersByScope(tenantScope(subAccountId), groupId, criterion);
+}
+
+export async function listWinnersServerSide(
+  subAccountId: string,
+  groupId: string,
+): Promise<CommunityRewardWinner[]> {
+  return listWinnersByScope(tenantScope(subAccountId), groupId);
+}
+
+export async function createWinnerServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  rewardId: string;
+  memberId: string;
+  awardedBy: string;
+  notes?: string;
+}): Promise<CommunityRewardWinner> {
+  return createWinnerByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, rewardId: opts.rewardId, memberId: opts.memberId, awardedBy: opts.awardedBy, notes: opts.notes });
+}
+
 export async function updateWinnerFulfillmentServerSide(opts: {
   subAccountId: string;
   groupId: string;
@@ -373,10 +465,5 @@ export async function updateWinnerFulfillmentServerSide(opts: {
   fulfillmentStatus: WinnerFulfillmentStatus;
   notes?: string;
 }): Promise<void> {
-  await winnersCol(opts.subAccountId, opts.groupId)
-    .doc(opts.winnerId)
-    .update({
-      fulfillmentStatus: opts.fulfillmentStatus,
-      ...(opts.notes !== undefined ? { notes: opts.notes } : {}),
-    });
+  return updateWinnerFulfillmentByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, winnerId: opts.winnerId, fulfillmentStatus: opts.fulfillmentStatus, notes: opts.notes });
 }

@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { DEFAULT_LEVELS, DEFAULT_POINT_RULES } from "@/lib/server/community-points-defaults";
+import { communityGroupsRoot, tenantScope, type CommunityOwnerScope } from "@/lib/server/community-scope";
 import type {
   CommunityLevel,
   PointActionKey,
@@ -26,18 +27,57 @@ import type {
  * `sourceEntityId`/`configVersion`, additively; every pre-existing event
  * written by the old like logic still reads back fine (those extra fields
  * are simply absent on old rows).
+ *
+ * Community Shared Architecture Phase 2 (2026-09-19): every function below
+ * is now a scope-aware `*ByScope` core (`CommunityOwnerScope`, see
+ * community-scope.ts), with the tenant-facing exports at the bottom kept
+ * at their EXACT pre-existing signatures (thin wrappers) — no tenant call
+ * site changes. `agency-community-points-service.ts` is the Agency-scope
+ * sibling; its exported functions are now thin delegations to the SAME
+ * cores here instead of a second implementation. The one real per-scope
+ * difference is WHERE points/level live: tenant writes onto a separate
+ * `.../memberships/{memberId}` doc; Agency has no such second doc —
+ * `points`/`level` live directly on the roster doc at
+ * `agencies/{agencyId}/communityGroups/{groupId}/members/{membershipId}`
+ * (see `AgencyGroupMemberRoster`'s own doc comment) — `membershipDocByScope`
+ * below is the one path branch that difference requires.
+ *
+ * Disclosed, PRESERVED (not unified) behavior difference: tenant's
+ * `pointsEnabled` master switch defaults to ENABLED when never configured
+ * (only an explicit `=== false` blocks an award); Agency's defaults to
+ * DISABLED until the owner explicitly opts in (`=== false` OR `undefined`
+ * blocks) — this was already a deliberate, pre-existing product decision
+ * (Agency Community Settings' "Points & Leaderboard" checkbox defaults
+ * unchecked), not a bug, so `awardPointsByScope` takes an explicit
+ * `pointsEnabledDefault` parameter rather than silently picking one
+ * behavior for both scopes.
  */
 
-function configRef(subAccountId: string, groupId: string) {
-  return getAdminDb().doc(
-    `subAccounts/${subAccountId}/communityGroups/${groupId}/config/pointsRewards`,
-  );
+function groupDocPathByScope(scope: CommunityOwnerScope, groupId: string): string {
+  return `${communityGroupsRoot(scope)}/${groupId}`;
 }
 
-function pointEventsCol(subAccountId: string, groupId: string) {
-  return getAdminDb().collection(
-    `subAccounts/${subAccountId}/communityGroups/${groupId}/pointEvents`,
-  );
+function configRefByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().doc(`${groupDocPathByScope(scope, groupId)}/config/pointsRewards`);
+}
+
+function pointEventsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  return getAdminDb().collection(`${groupDocPathByScope(scope, groupId)}/pointEvents`);
+}
+
+/** The ONE path branch the tenant/Agency points-storage difference
+ *  requires — see the module comment above. `membershipId` is the tenant
+ *  memberId (== the membership doc's own id) or the Agency roster doc id. */
+function membershipDocByScope(scope: CommunityOwnerScope, groupId: string, membershipId: string) {
+  const base = groupDocPathByScope(scope, groupId);
+  const subcollection = scope.kind === "agency" ? "members" : "memberships";
+  return getAdminDb().doc(`${base}/${subcollection}/${membershipId}`);
+}
+
+function membershipsColByScope(scope: CommunityOwnerScope, groupId: string) {
+  const base = groupDocPathByScope(scope, groupId);
+  const subcollection = scope.kind === "agency" ? "members" : "memberships";
+  return getAdminDb().collection(`${base}/${subcollection}`);
 }
 
 /**
@@ -49,11 +89,11 @@ function pointEventsCol(subAccountId: string, groupId: string) {
  * key's shipped default merged in too, so a product update never leaves an
  * action silently unconfigured.
  */
-export async function getPointsConfig(
-  subAccountId: string,
+export async function getPointsConfigByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
 ): Promise<PointsRewardsConfig> {
-  const snap = await configRef(subAccountId, groupId).get();
+  const snap = await configRefByScope(scope, groupId).get();
   if (!snap.exists) {
     return {
       rules: DEFAULT_POINT_RULES,
@@ -82,7 +122,8 @@ export async function getPointsConfig(
 /** Resolve a points total to a level using THIS group's configured levels
  *  (replaces the global `levelForPoints` from `config/community.ts` for
  *  every new award — that function stays in place only as the default
- *  seed's threshold source, per `community-points-defaults.ts`). */
+ *  seed's threshold source, per `community-points-defaults.ts`). Already
+ *  scope-agnostic (`points` is just a number) — unchanged by this phase. */
 export function levelForConfig(config: PointsRewardsConfig, points: number): number {
   let level = 1;
   for (const l of config.levels) {
@@ -104,7 +145,8 @@ export class LevelValidationError extends Error {
  * subsequent threshold strictly greater than the previous (no overlap, no
  * reversal), every name a non-empty trimmed string. Throws
  * `LevelValidationError` with a specific, user-facing message on the first
- * problem found — never silently clamps or reorders.
+ * problem found — never silently clamps or reorders. Already
+ * scope-agnostic — unchanged by this phase.
  */
 export function validateLevels(levels: CommunityLevel[]): void {
   if (levels.length !== 9) {
@@ -139,6 +181,7 @@ export function validateLevels(levels: CommunityLevel[]): void {
   }
 }
 
+/** Already scope-agnostic — unchanged by this phase. */
 export function validateRules(rules: PointRuleMap): void {
   for (const action of Object.keys(DEFAULT_POINT_RULES) as PointActionKey[]) {
     const rule = rules[action];
@@ -154,19 +197,17 @@ export function validateRules(rules: PointRuleMap): void {
   }
 }
 
-/** Moderator-only (enforced by the API route, same convention as every
- *  other `*ServerSide` write in this codebase). Full replace of `rules` —
- *  the caller always sends the complete map (the Settings UI always holds
- *  a complete draft), so there's no partial-merge ambiguity to get wrong. */
-export async function updatePointRulesServerSide(opts: {
-  subAccountId: string;
+/** Moderator/owner-only (enforced by each scope's own API route). Full
+ *  replace of `rules` — the caller always sends the complete map. */
+export async function updatePointRulesByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   rules: PointRuleMap;
   updatedBy: string;
 }): Promise<PointsRewardsConfig> {
   validateRules(opts.rules);
-  const current = await getPointsConfig(opts.subAccountId, opts.groupId);
-  await configRef(opts.subAccountId, opts.groupId).set(
+  const current = await getPointsConfigByScope(opts.scope, opts.groupId);
+  await configRefByScope(opts.scope, opts.groupId).set(
     {
       rules: opts.rules,
       levels: current.levels,
@@ -176,21 +217,22 @@ export async function updatePointRulesServerSide(opts: {
     },
     { merge: false },
   );
-  return getPointsConfig(opts.subAccountId, opts.groupId);
+  return getPointsConfigByScope(opts.scope, opts.groupId);
 }
 
-/** Moderator-only. Full replace of `levels`, validated first (throws
- *  `LevelValidationError` — the API route surfaces `.message` directly, a
- *  clear 400, never a generic 500). */
-export async function updateLevelsServerSide(opts: {
-  subAccountId: string;
+/** Moderator/owner-only. Full replace of `levels`, validated first, then
+ *  recomputes every participant's stored `level` against the new
+ *  thresholds — see `recomputeMembershipLevelsByScope`'s own doc comment
+ *  for exactly what that does and doesn't touch. */
+export async function updateLevelsByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   levels: CommunityLevel[];
   updatedBy: string;
 }): Promise<PointsRewardsConfig> {
   validateLevels(opts.levels);
-  const current = await getPointsConfig(opts.subAccountId, opts.groupId);
-  await configRef(opts.subAccountId, opts.groupId).set(
+  const current = await getPointsConfigByScope(opts.scope, opts.groupId);
+  await configRefByScope(opts.scope, opts.groupId).set(
     {
       rules: current.rules,
       levels: opts.levels,
@@ -200,51 +242,40 @@ export async function updateLevelsServerSide(opts: {
     },
     { merge: false },
   );
-  const next = await getPointsConfig(opts.subAccountId, opts.groupId);
-  // Level is CURRENT STATUS, not history — unlike points/pointEvents, a
-  // stored `level` must never go stale relative to the Community's
-  // CURRENT thresholds. `GroupMembership.level` is read directly (not
-  // recomputed on the fly) by a real number of other systems — course
-  // level-gating (community-classroom-service.ts), every post/comment
-  // author's level badge, the leaderboard, reach_level reward criteria —
-  // so the safest fix without a sweeping rewrite of every one of those
-  // call sites is to recompute and persist it here, once, the moment
-  // thresholds change (see recomputeMembershipLevels's own doc comment
-  // for exactly what it does and doesn't touch).
-  await recomputeMembershipLevels(opts.subAccountId, opts.groupId, next);
+  const next = await getPointsConfigByScope(opts.scope, opts.groupId);
+  await recomputeMembershipLevelsByScope(opts.scope, opts.groupId, next);
   return next;
 }
 
 /**
- * Recompute and persist `GroupMembership.level` for every membership in
- * this group against a (just-saved) levels config — called only from
- * `updateLevelsServerSide`, right after a threshold change. Reads each
- * membership's EXISTING `points` (never modified here) and writes only
- * `level` when it actually differs from what's already stored — a no-op
- * write is skipped entirely, so an unrelated points/rules save never
- * touches `level` at all (this function is never called from there).
+ * Recompute and persist `level` for every participant doc in this group
+ * against a (just-saved) levels config — called only from
+ * `updateLevelsByScope`, right after a threshold change. Reads each
+ * participant's EXISTING `points` (never modified here) and writes only
+ * `level` when it actually differs — a no-op write is skipped entirely.
+ * Deliberately unconditional over EVERY doc in the collection (not
+ * filtered to `status === "active"`, unlike `listActiveParticipantsByScope`)
+ * — a banned/pending member's stored level must stay correct too, matching
+ * both scopes' pre-Phase-2 behavior exactly (neither tenant's
+ * `recomputeMembershipLevels` nor Agency's `recomputeAgencyMembershipLevels`
+ * filtered by status either).
  *
  * Explicitly does NOT: read or write `points`, touch `pointEvents`,
- * create/update a `CommunityRewardWinner`, or emit any webhook/email —
- * it's a single field, `.update()`-only batch write, nothing else in
- * this codebase hooks Firestore membership writes (confirmed: no Cloud
- * Functions triggers exist in this repo), so a threshold change can
- * never accidentally award a reward or fire a notification.
+ * create/update a `CommunityRewardWinner`, or emit any webhook/email/
+ * notification.
  */
-export async function recomputeMembershipLevels(
-  subAccountId: string,
+export async function recomputeMembershipLevelsByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   config: PointsRewardsConfig,
 ): Promise<{ updated: number }> {
   const db = getAdminDb();
-  const membershipsSnap = await db
-    .collection(`subAccounts/${subAccountId}/communityGroups/${groupId}/memberships`)
-    .get();
+  const snap = await membershipsColByScope(scope, groupId).get();
 
   let updated = 0;
   let batch = db.batch();
   let opsInBatch = 0;
-  for (const doc of membershipsSnap.docs) {
+  for (const doc of snap.docs) {
     const data = doc.data() as { points?: number; level?: number };
     const correctLevel = levelForConfig(config, data.points ?? 0);
     if (data.level !== correctLevel) {
@@ -266,22 +297,11 @@ export async function recomputeMembershipLevels(
 
 /**
  * Deterministic `pointEvents` doc id: the entire idempotency + "once per
- * related entity" mechanism (Part 3 / Part 12's explicit requirements)
- * falls out of this single choice — a retried request, or a second
- * attempt to award the same action for the same entity+actor, always
- * targets the SAME doc, so `tx.get(eventRef).exists` alone tells
- * `awardPoints` whether this exact award already happened. Doesn't
- * collide with Firestore's reserved `__...__` doc-id pattern (neither
- * prefixed nor suffixed with a double underscore).
- *
- * Keyed on the ACTOR, not the recipient — this is what makes
- * `receive_like` correct: the content (and its creator) is fixed per
- * `sourceEntityId`, but each of potentially many DIFFERENT likers must be
- * able to independently earn the creator a fresh award for the same
- * post/comment. Keying on the recipient instead would collapse every
- * liker's award into a single id and only the first liker would ever
- * count. For every other action the actor and recipient are the same
- * member anyway, so this is a no-op change for them.
+ * related entity" mechanism falls out of this single choice — a retried
+ * request, or a second attempt to award the same action for the same
+ * entity+actor, always targets the SAME doc. Keyed on the ACTOR, not the
+ * recipient — see `receive_like`'s own reasoning in `awardPointsByScope`'s
+ * doc comment. Already scope-agnostic (ids are opaque strings) — unchanged.
  */
 function deterministicEventId(action: PointActionKey, sourceEntityId: string, actorMemberId: string): string {
   return `${action}::${sourceEntityId}::${actorMemberId}`;
@@ -303,58 +323,64 @@ export type AwardPointsResult =
 /**
  * The single, central, idempotent point-award function — every trigger
  * site (post/comment/reply/video-post/receive-like/invite-join) calls this
- * instead of writing to `pointEvents`/`membership.points` directly. Self-
- * transacting (runs its own `runTransaction`) rather than accepting a
- * caller's in-flight transaction — deliberately, so every call site gets
- * the exact same all-reads-before-writes-safe shape without having to
- * reason about interleaving with its own unrelated reads/writes. A rare
- * award-transaction failure after the primary content write already
- * succeeded never blocks or rolls back that content (a post/comment/like
- * always succeeds even if, hypothetically, its point award doesn't) —
- * idempotency means a safe, correct retry is always possible later if this
- * ever needs one.
+ * instead of writing to `pointEvents`/participant `points` directly.
+ * Self-transacting (runs its own `runTransaction`) rather than accepting a
+ * caller's in-flight transaction, so every call site gets the exact same
+ * all-reads-before-writes-safe shape. A rare award-transaction failure
+ * after the primary content write already succeeded never blocks or rolls
+ * back that content — idempotency means a safe, correct retry is always
+ * possible later.
  *
- * `memberId` is who the points go to (the recipient); `actorMemberId`
- * (defaults to `memberId` when omitted) is who performed the action. They
- * differ only for `receive_like`, where the LIKER is the actor and the
- * content's creator is the recipient — see `deterministicEventId`'s doc
- * comment for why the idempotency key is actor-scoped, and
- * `PointEvent.actorMemberId`'s doc comment for the analytics reasoning.
+ * `memberId` is who the points go to (the recipient, and the tenant
+ * memberId / Agency roster-doc id the participant doc lives at);
+ * `actorMemberId` (defaults to `memberId`) is who performed the action.
+ * They differ only for `receive_like`, where the LIKER is the actor and
+ * the content's creator is the recipient.
+ *
+ * `pointsEnabledDefault` is the ONE disclosed, preserved tenant/Agency
+ * behavior difference (see this file's module comment): tenant passes
+ * `"enabledByDefault"` (blocks only on an explicit `pointsEnabled ===
+ * false`); Agency passes `"disabledByDefault"` (blocks on `=== false` OR
+ * `undefined` — the owner must explicitly opt in).
  *
  * Enforces, in order: the group's `pointsEnabled` master switch, the
  * rule's own enabled flag, the rule's `per_day` cap (counted from REAL
- * `pointEvents` rows created today for this RECIPIENT+action — not a
- * separate mutable counter, so it can't drift and self-corrects if an
- * event is later revoked), then the entity-scoped idempotency check.
+ * `pointEvents` rows created today for this RECIPIENT+action), then the
+ * entity-scoped idempotency check.
  */
-export async function awardPoints(opts: {
-  subAccountId: string;
+export async function awardPointsByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   memberId: string;
   actorMemberId?: string;
   action: PointActionKey;
   /** The post/comment/new-member id this award is about. */
   sourceEntityId: string;
+  pointsEnabledDefault: "enabledByDefault" | "disabledByDefault";
 }): Promise<AwardPointsResult> {
   const db = getAdminDb();
-  const base = `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`;
   const actorMemberId = opts.actorMemberId ?? opts.memberId;
 
-  const groupSnap = await db.doc(base).get();
-  if (groupSnap.data()?.pointsEnabled === false) {
+  const groupSnap = await db.doc(groupDocPathByScope(opts.scope, opts.groupId)).get();
+  const pointsEnabled = groupSnap.data()?.pointsEnabled as boolean | undefined;
+  const blocked =
+    opts.pointsEnabledDefault === "enabledByDefault"
+      ? pointsEnabled === false
+      : pointsEnabled !== true;
+  if (blocked) {
     return { awarded: false, delta: 0, reason: "points_disabled" };
   }
 
-  const config = await getPointsConfig(opts.subAccountId, opts.groupId);
+  const config = await getPointsConfigByScope(opts.scope, opts.groupId);
   const rule = config.rules[opts.action];
   if (!rule || !rule.enabled || rule.points <= 0) {
     return { awarded: false, delta: 0, reason: "rule_disabled" };
   }
 
-  const eventRef = db.doc(
-    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId)}`,
+  const eventRef = pointEventsColByScope(opts.scope, opts.groupId).doc(
+    deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId),
   );
-  const membershipRef = db.doc(`${base}/memberships/${opts.memberId}`);
+  const membershipRef = membershipDocByScope(opts.scope, opts.groupId, opts.memberId);
 
   return db.runTransaction(async (tx): Promise<AwardPointsResult> => {
     const [eventSnap, membershipSnap] = await Promise.all([
@@ -370,7 +396,7 @@ export async function awardPoints(opts: {
 
     if (rule.limit.type === "per_day" && rule.limit.maxPerDay) {
       const todaySnap = await tx.get(
-        pointEventsCol(opts.subAccountId, opts.groupId)
+        pointEventsColByScope(opts.scope, opts.groupId)
           .where("memberId", "==", opts.memberId)
           .where("action", "==", opts.action)
           .where("createdAt", ">=", Timestamp.fromMillis(startOfTodayUtcMs())),
@@ -407,34 +433,29 @@ export interface MemberPointStats {
 
 /**
  * The Leaderboard page's "Your Stats (All Time)" panel — a per-action
- * breakdown for ONE member. Two separate real `pointEvents` queries
- * (`memberId ==` and `actorMemberId ==`, each a single-equality query, no
- * composite index needed), because since the `receive_like` product
- * correction those are no longer the same thing for this member:
- *  - `memberId == this member` = events THEY were the RECIPIENT of —
- *    everything that actually contributed to their points (posts,
- *    comments, replies, invites, and likes THEY received).
- *  - `actorMemberId == this member` = events THEY performed as the
- *    ACTOR — for `receive_like` specifically, this is "how many times
- *    did I like someone else's content", which earns the liker nothing
- *    but is still a genuine personal engagement stat worth showing
- *    ("Likes Given"). For every other action actor === recipient, so
- *    those rows are simply skipped here to avoid double-counting
- *    something the first query already counted.
- * Counts EVENTS, not raw actions — an action whose rule was disabled,
- * over a daily cap, or a duplicate never created an event, so this only
- * ever reflects what actually earned points, consistent with "points
- * start accumulating from live use forward" (imported Skool history has
- * no pointEvents at all, so it contributes nothing here either).
+ * breakdown for ONE participant. Two separate real `pointEvents` queries
+ * (`memberId ==` and `actorMemberId ==`), because since the `receive_like`
+ * product correction those are no longer the same thing for this
+ * participant — see the tenant-era doc comment preserved here:
+ *  - `memberId == this participant` = events THEY were the RECIPIENT of.
+ *  - `actorMemberId == this participant` = events THEY performed as the
+ *    ACTOR — for `receive_like` specifically, "how many times did I like
+ *    someone else's content" (Likes Given), earning the liker nothing but
+ *    still a genuine engagement stat. Every other action's actor row was
+ *    already counted in the first query, so it's skipped here to avoid
+ *    double-counting.
+ * `membersInvited` naturally stays 0 at Agency scope (no `invite_member`
+ * action can ever fire there — owner-invite-only membership, no
+ * member-to-member invite flow) without any special-casing here.
  */
-export async function getMemberPointStats(
-  subAccountId: string,
+export async function getMemberPointStatsByScope(
+  scope: CommunityOwnerScope,
   groupId: string,
   memberId: string,
 ): Promise<MemberPointStats> {
   const [asRecipientSnap, asActorSnap] = await Promise.all([
-    pointEventsCol(subAccountId, groupId).where("memberId", "==", memberId).get(),
-    pointEventsCol(subAccountId, groupId).where("actorMemberId", "==", memberId).get(),
+    pointEventsColByScope(scope, groupId).where("memberId", "==", memberId).get(),
+    pointEventsColByScope(scope, groupId).where("actorMemberId", "==", memberId).get(),
   ]);
   const stats: MemberPointStats = { totalPoints: 0, posts: 0, comments: 0, likesGiven: 0, membersInvited: 0 };
   asRecipientSnap.docs.forEach((d) => {
@@ -453,17 +474,11 @@ export async function getMemberPointStats(
         stats.membersInvited++;
         break;
       default:
-        // "receive_like" contributes to totalPoints above but has no own
-        // bucket in this stats shape (the mockup's 5 rows have no "Likes
-        // Received" row) — see the module comment.
         break;
     }
   });
   asActorSnap.docs.forEach((d) => {
     const { action, memberId: recipientId } = d.data() as { action?: PointActionKey; memberId: string };
-    // Only "receive_like" can have actor !== recipient; every other
-    // action's actor-side row was already counted above (memberId ===
-    // actorMemberId for those), so counting it again here would double it.
     if (action === "receive_like" && recipientId !== memberId) {
       stats.likesGiven++;
     }
@@ -473,11 +488,9 @@ export async function getMemberPointStats(
 
 export interface PointsOverview {
   /** Sum of positive point deltas awarded in the last 30 days — "given",
-   *  not net (a revoke's negative delta doesn't reduce this; it's a
-   *  historical record of what was actually awarded, not a running
-   *  balance). */
+   *  not net. */
   totalPointsGiven30d: number;
-  /** Unique members who earned at least one point in the last 30 days. */
+  /** Unique participants who earned at least one point in the last 30 days. */
   membersEarningPoints30d: number;
   /** Rewards whose EFFECTIVE status is "active" right now. */
   activeRewardsCount: number;
@@ -490,23 +503,20 @@ export interface PointsOverview {
 
 /**
  * Community Settings → Points & Rewards → Overview's 5 numbers, and only
- * those 5 — deliberately NOT a broader analytics surface (Part 2's
- * explicit "do not turn this into the broader Community Analytics
- * system"). `activeMemberCount` is passed in (the caller already has it
- * via `listMemberDirectory` for other reasons) rather than this function
- * re-querying memberships itself.
+ * those 5. `activeMemberCount`/`activeRewardsCount` are passed in by the
+ * caller (already has them for other reasons) rather than re-queried here.
  */
-export async function getPointsOverview(opts: {
-  subAccountId: string;
+export async function getPointsOverviewByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   activeMemberCount: number;
   activeRewardsCount: number;
 }): Promise<PointsOverview> {
   const cutoff = Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const [eventsSnap, winnersSnap] = await Promise.all([
-    pointEventsCol(opts.subAccountId, opts.groupId).where("createdAt", ">=", cutoff).get(),
+    pointEventsColByScope(opts.scope, opts.groupId).where("createdAt", ">=", cutoff).get(),
     getAdminDb()
-      .collection(`subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}/rewardWinners`)
+      .collection(`${groupDocPathByScope(opts.scope, opts.groupId)}/rewardWinners`)
       .where("awardedAt", ">=", cutoff)
       .get(),
   ]);
@@ -535,16 +545,11 @@ export async function getPointsOverview(opts: {
 
 /**
  * Reverse a previously-awarded event (unlike -> reverse the receive_like
- * award). Looks up the SAME deterministic doc id `awardPoints` would have
- * used (actor-scoped — see that function's doc comment), so it only ever
- * reverses a real, existing award — a member who never actually earned
- * the point (rule was disabled at the time, daily cap was hit, etc.) has
- * nothing to revoke, safely a no-op. `memberId` here is only used to
- * locate the RECIPIENT's membership doc to decrement — the event itself
- * is found purely from `action`/`sourceEntityId`/`actorMemberId`.
+ * award). Looks up the SAME deterministic doc id `awardPointsByScope` would
+ * have used, so it only ever reverses a real, existing award.
  */
-export async function revokePoints(opts: {
-  subAccountId: string;
+export async function revokePointsByScope(opts: {
+  scope: CommunityOwnerScope;
   groupId: string;
   memberId: string;
   actorMemberId?: string;
@@ -552,13 +557,12 @@ export async function revokePoints(opts: {
   sourceEntityId: string;
 }): Promise<{ revoked: boolean }> {
   const db = getAdminDb();
-  const base = `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`;
-  const config = await getPointsConfig(opts.subAccountId, opts.groupId);
+  const config = await getPointsConfigByScope(opts.scope, opts.groupId);
   const actorMemberId = opts.actorMemberId ?? opts.memberId;
-  const eventRef = db.doc(
-    `${base}/pointEvents/${deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId)}`,
+  const eventRef = pointEventsColByScope(opts.scope, opts.groupId).doc(
+    deterministicEventId(opts.action, opts.sourceEntityId, actorMemberId),
   );
-  const membershipRef = db.doc(`${base}/memberships/${opts.memberId}`);
+  const membershipRef = membershipDocByScope(opts.scope, opts.groupId, opts.memberId);
 
   return db.runTransaction(async (tx) => {
     const [eventSnap, membershipSnap] = await Promise.all([
@@ -573,4 +577,80 @@ export async function revokePoints(opts: {
     tx.update(membershipRef, { points: nextPoints, level: levelForConfig(config, nextPoints) });
     return { revoked: true };
   });
+}
+
+// -------------------------------------------------------------------------
+// Tenant-facing exports — EXACT pre-existing signatures, every tenant call
+// site is unchanged. Each is now a thin wrapper around the shared
+// `*ByScope` core above, passing `pointsEnabledDefault: "enabledByDefault"`
+// (tenant's pre-existing default — see the module comment).
+// -------------------------------------------------------------------------
+
+export async function getPointsConfig(subAccountId: string, groupId: string): Promise<PointsRewardsConfig> {
+  return getPointsConfigByScope(tenantScope(subAccountId), groupId);
+}
+
+export async function updatePointRulesServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  rules: PointRuleMap;
+  updatedBy: string;
+}): Promise<PointsRewardsConfig> {
+  return updatePointRulesByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, rules: opts.rules, updatedBy: opts.updatedBy });
+}
+
+export async function updateLevelsServerSide(opts: {
+  subAccountId: string;
+  groupId: string;
+  levels: CommunityLevel[];
+  updatedBy: string;
+}): Promise<PointsRewardsConfig> {
+  return updateLevelsByScope({ scope: tenantScope(opts.subAccountId), groupId: opts.groupId, levels: opts.levels, updatedBy: opts.updatedBy });
+}
+
+export async function recomputeMembershipLevels(
+  subAccountId: string,
+  groupId: string,
+  config: PointsRewardsConfig,
+): Promise<{ updated: number }> {
+  return recomputeMembershipLevelsByScope(tenantScope(subAccountId), groupId, config);
+}
+
+export async function awardPoints(opts: {
+  subAccountId: string;
+  groupId: string;
+  memberId: string;
+  actorMemberId?: string;
+  action: PointActionKey;
+  sourceEntityId: string;
+}): Promise<AwardPointsResult> {
+  return awardPointsByScope({ ...opts, scope: tenantScope(opts.subAccountId), pointsEnabledDefault: "enabledByDefault" });
+}
+
+export async function getMemberPointStats(
+  subAccountId: string,
+  groupId: string,
+  memberId: string,
+): Promise<MemberPointStats> {
+  return getMemberPointStatsByScope(tenantScope(subAccountId), groupId, memberId);
+}
+
+export async function getPointsOverview(opts: {
+  subAccountId: string;
+  groupId: string;
+  activeMemberCount: number;
+  activeRewardsCount: number;
+}): Promise<PointsOverview> {
+  return getPointsOverviewByScope({ ...opts, scope: tenantScope(opts.subAccountId) });
+}
+
+export async function revokePoints(opts: {
+  subAccountId: string;
+  groupId: string;
+  memberId: string;
+  actorMemberId?: string;
+  action: PointActionKey;
+  sourceEntityId: string;
+}): Promise<{ revoked: boolean }> {
+  return revokePointsByScope({ ...opts, scope: tenantScope(opts.subAccountId) });
 }
