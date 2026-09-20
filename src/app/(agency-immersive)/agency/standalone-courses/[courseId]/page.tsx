@@ -5,22 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   GraduationCap,
-  GripVertical,
   Loader2,
   Plus,
   Settings2,
@@ -33,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
-import { cn } from "@/lib/utils";
+import { CourseOutlineSidebar } from "@/components/standalone-courses/course-outline-sidebar";
 import {
   COURSE_GATE_CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -46,8 +33,6 @@ import type {
   StandaloneLesson,
 } from "@/types/standalone-courses";
 
-const UNGROUPED = "__ungrouped__";
-
 /**
  * Agency Standalone Course editor — sections/lessons builder. Reuses the
  * exact tenant outline/lesson-editor UI (drag-and-drop, chart-unlock
@@ -55,7 +40,11 @@ const UNGROUPED = "__ungrouped__";
  * realtime Firestore subscriptions (see the Classroom builder's own doc
  * comment for why). Theme editor now lives at `./theme` (parity pass,
  * 2026-09-18). "Settings" (language/difficulty/topic/advanced toggles)
- * still deferred, same as tenant's own equivalent gaps.
+ * still deferred, same as tenant's own equivalent gaps. The outline
+ * sidebar itself is the shared `CourseOutlineSidebar` (Course Section UX,
+ * 2026-09-20) — same component the tenant page uses, wired to this page's
+ * fetch-based `refresh()` via the `onChanged` prop instead of a live
+ * subscription.
  */
 export default function AgencyCourseEditorPage(props: { params: Promise<{ courseId: string }> }) {
   return (
@@ -116,8 +105,6 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessons, loaded]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
-
   if (authLoading) return null;
   if (!isOwner) {
     return (
@@ -163,28 +150,8 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
     }
   }
 
-  const sectionIds = new Set(sections.map((s) => s.id));
-  const containerOf = (l: StandaloneLesson) => (l.sectionId && sectionIds.has(l.sectionId) ? l.sectionId : UNGROUPED);
-  const lessonsIn = (container: string) => lessons.filter((l) => containerOf(l) === container).sort((a, b) => a.order - b.order);
-  const ungrouped = lessonsIn(UNGROUPED);
   const selectedLesson = lessons.find((l) => l.id === selectedId) ?? null;
   const hasLessons = lessons.length > 0;
-
-  async function handleDragEnd(e: DragEndEvent) {
-    const lessonId = String(e.active.id);
-    const overId = e.over ? String(e.over.id) : null;
-    if (!overId) return;
-    const lesson = lessons.find((l) => l.id === lessonId);
-    if (!lesson) return;
-    const target = overId === UNGROUPED ? null : overId;
-    const current = containerOf(lesson) === UNGROUPED ? null : containerOf(lesson);
-    if (current === target) return;
-    const maxOrder = lessons.reduce((m, l) => Math.max(m, l.order), 0);
-    setLessons((prev) => prev.map((l) => (l.id === lessonId ? { ...l, sectionId: target, order: maxOrder + 1 } : l)));
-    selectLesson(lessonId);
-    const res = await fetch(`${apiBase}/lessons/${lessonId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sectionId: target, order: maxOrder + 1 }) });
-    if (!res.ok) toast.error("Couldn't move the lesson");
-  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6">
@@ -221,32 +188,19 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
       <h1 className="text-2xl font-semibold tracking-tight">{course.title}</h1>
 
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-        <aside className="space-y-2">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            {sections.map((section) => (
-              <SectionBlock key={section.id} apiBase={apiBase} section={section} lessons={lessonsIn(section.id)} selectedId={selectedId} onSelect={selectLesson} onAddLesson={() => addLesson(section.id)} onChanged={refresh} />
-            ))}
-
-            {(ungrouped.length > 0 || sections.length > 0) && (
-              <DropZone id={UNGROUPED}>
-                {sections.length > 0 && <p className="px-1 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Other lessons</p>}
-                {ungrouped.map((l, i) => (
-                  <LessonNavRow key={l.id} apiBase={apiBase} lesson={l} siblings={ungrouped} index={i} selected={selectedId === l.id} onSelect={() => selectLesson(l.id)} onChanged={refresh} />
-                ))}
-                {ungrouped.length === 0 && <p className="px-1 py-2 text-xs text-muted-foreground">Drop a lesson here to remove it from its section.</p>}
-              </DropZone>
-            )}
-          </DndContext>
-
-          <div className="flex flex-col gap-1 pt-1">
-            <Button size="sm" variant="outline" onClick={addSection}>
-              <Plus className="h-4 w-4" /> Section
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => addLesson(null)}>
-              <Plus className="h-4 w-4" /> Lesson (no section)
-            </Button>
-          </div>
-        </aside>
+        <CourseOutlineSidebar
+          apiBase={apiBase}
+          courseId={courseId}
+          sections={sections}
+          lessons={lessons}
+          onSectionsChange={setSections}
+          onLessonsChange={setLessons}
+          selectedId={selectedId}
+          onSelectLesson={selectLesson}
+          onAddSection={addSection}
+          onAddLesson={addLesson}
+          onChanged={refresh}
+        />
 
         <div>
           {selectedLesson ? (
@@ -264,87 +218,6 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function DropZone({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return <div ref={setNodeRef} className={cn("rounded-lg border bg-card p-2 transition-colors", isOver && "border-primary ring-1 ring-primary")}>{children}</div>;
-}
-
-function SectionBlock({
-  apiBase, section, lessons, selectedId, onSelect, onAddLesson, onChanged,
-}: {
-  apiBase: string; section: StandaloneCourseSection; lessons: StandaloneLesson[]; selectedId: string | null; onSelect: (id: string) => void; onAddLesson: () => void; onChanged: () => void;
-}) {
-  const [title, setTitle] = useState(section.title);
-  const { setNodeRef, isOver } = useDroppable({ id: section.id });
-
-  async function rename() {
-    if (title.trim() === section.title) return;
-    await fetch(`${apiBase}/sections/${section.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
-    onChanged();
-  }
-  async function remove() {
-    if (!confirm("Delete this section? Its lessons move to 'Other'.")) return;
-    await fetch(`${apiBase}/sections/${section.id}`, { method: "DELETE" });
-    onChanged();
-  }
-
-  return (
-    <div ref={setNodeRef} className={cn("rounded-lg border bg-card p-2 transition-colors", isOver && "border-primary ring-1 ring-primary")}>
-      <div className="mb-1 flex items-center gap-1">
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} onBlur={rename} className="h-7 border-0 bg-transparent px-1 text-xs font-semibold uppercase tracking-wide focus-visible:ring-1" />
-        <button onClick={remove} className="text-muted-foreground hover:text-destructive" title="Delete section">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {lessons.map((l, i) => (
-        <LessonNavRow key={l.id} apiBase={apiBase} lesson={l} siblings={lessons} index={i} selected={selectedId === l.id} onSelect={() => onSelect(l.id)} onChanged={onChanged} />
-      ))}
-      <button onClick={onAddLesson} className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted">
-        <Plus className="h-3.5 w-3.5" /> Lesson
-      </button>
-    </div>
-  );
-}
-
-function LessonNavRow({
-  apiBase, lesson, siblings, index, selected, onSelect, onChanged,
-}: {
-  apiBase: string; lesson: StandaloneLesson; siblings: StandaloneLesson[]; index: number; selected: boolean; onSelect: () => void; onChanged: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lesson.id });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
-
-  async function move(dir: -1 | 1) {
-    const other = siblings[index + dir];
-    if (!other) return;
-    await Promise.all([
-      fetch(`${apiBase}/lessons/${lesson.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: other.order }) }),
-      fetch(`${apiBase}/lessons/${other.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ order: lesson.order }) }),
-    ]);
-    onChanged();
-  }
-
-  return (
-    <div ref={setNodeRef} style={style} className={cn("group flex items-center gap-1 rounded-md px-1", selected && "bg-primary/10", isDragging && "opacity-50")}>
-      <button {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground/60 hover:text-foreground active:cursor-grabbing" title="Drag to a section">
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-      <div className="flex flex-col opacity-0 group-hover:opacity-100">
-        <button onClick={() => move(-1)} disabled={index === 0} className="text-muted-foreground disabled:opacity-30">
-          <ChevronUp className="h-3 w-3" />
-        </button>
-        <button onClick={() => move(1)} disabled={index === siblings.length - 1} className="text-muted-foreground disabled:opacity-30">
-          <ChevronDown className="h-3 w-3" />
-        </button>
-      </div>
-      <button onClick={onSelect} className={cn("flex-1 truncate py-1.5 text-left text-sm", selected ? "font-medium text-primary" : "text-foreground")}>
-        {lesson.title}
-        {!lesson.published && <span className="ml-1.5 text-xs text-muted-foreground">(draft)</span>}
-      </button>
     </div>
   );
 }

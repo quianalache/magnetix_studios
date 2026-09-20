@@ -5,22 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
   ArrowLeft,
-  ChevronDown,
-  ChevronUp,
   ExternalLink,
   GraduationCap,
-  GripVertical,
   Loader2,
   Plus,
   Settings2,
@@ -38,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
-import { cn } from "@/lib/utils";
+import { CourseOutlineSidebar } from "@/components/standalone-courses/course-outline-sidebar";
 import {
   COURSE_GATE_CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -51,13 +38,14 @@ import type {
   StandaloneLesson,
 } from "@/types/standalone-courses";
 
-const UNGROUPED = "__ungrouped__";
-
 /**
  * Standalone-course editor — sections/lessons builder. Forked from the
  * Community classroom editor page (`community/[groupId]/classroom/[courseId]/
  * page.tsx`): same drag-and-drop outline + lesson editor, minus `groupId`
- * threading throughout.
+ * threading throughout. The outline sidebar itself (section reorder/
+ * collapse, lesson drag/reorder) is the shared `CourseOutlineSidebar` —
+ * see that component's own doc comment for why (Course Section UX,
+ * 2026-09-20).
  *
  * `useSearchParams` requires a Suspense boundary around anything that reads
  * it during the initial render, so the actual page body lives in `Inner`
@@ -118,10 +106,6 @@ function StandaloneCourseEditorPageInner({
       { scroll: false }
     );
   }
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
 
   useEffect(() => {
     const u1 = subscribeToStandaloneCourse(subAccountId, courseId, (c) => {
@@ -216,43 +200,8 @@ function StandaloneCourseEditorPageInner({
     }
   }
 
-  const sectionIds = new Set(sections.map((s) => s.id));
-  const containerOf = (l: StandaloneLesson) =>
-    l.sectionId && sectionIds.has(l.sectionId) ? l.sectionId : UNGROUPED;
-  const lessonsIn = (container: string) =>
-    lessons
-      .filter((l) => containerOf(l) === container)
-      .sort((a, b) => a.order - b.order);
-  const ungrouped = lessonsIn(UNGROUPED);
   const selectedLesson = lessons.find((l) => l.id === selectedId) ?? null;
   const hasLessons = lessons.length > 0;
-
-  // Drag a lesson onto a section (or the "no section" zone) to move it there.
-  // Reordering WITHIN a section stays on the up/down arrows.
-  async function handleDragEnd(e: DragEndEvent) {
-    const lessonId = String(e.active.id);
-    const overId = e.over ? String(e.over.id) : null;
-    if (!overId) return;
-    const lesson = lessons.find((l) => l.id === lessonId);
-    if (!lesson) return;
-    const target = overId === UNGROUPED ? null : overId;
-    const current =
-      containerOf(lesson) === UNGROUPED ? null : containerOf(lesson);
-    if (current === target) return;
-    const maxOrder = lessons.reduce((m, l) => Math.max(m, l.order), 0);
-    setLessons((prev) =>
-      prev.map((l) =>
-        l.id === lessonId ? { ...l, sectionId: target, order: maxOrder + 1 } : l
-      )
-    );
-    selectLesson(lessonId);
-    const res = await fetch(`${apiBase}/lessons/${lessonId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sectionId: target, order: maxOrder + 1 }),
-    });
-    if (!res.ok) toast.error("Couldn't move the lesson");
-  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-6">
@@ -321,61 +270,19 @@ function StandaloneCourseEditorPageInner({
       <h1 className="text-2xl font-semibold tracking-tight">{course.title}</h1>
 
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-        {/* Left — outline (drag a lesson onto a section to move it) */}
-        <aside className="space-y-2">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            {sections.map((section) => (
-              <SectionBlock
-                key={section.id}
-                apiBase={apiBase}
-                section={section}
-                lessons={lessonsIn(section.id)}
-                selectedId={selectedId}
-                onSelect={selectLesson}
-                onAddLesson={() => addLesson(section.id)}
-              />
-            ))}
-
-            {(ungrouped.length > 0 || sections.length > 0) && (
-              <DropZone id={UNGROUPED}>
-                {sections.length > 0 && (
-                  <p className="text-muted-foreground px-1 py-1 text-xs font-medium tracking-wide uppercase">
-                    Other lessons
-                  </p>
-                )}
-                {ungrouped.map((l, i) => (
-                  <LessonNavRow
-                    key={l.id}
-                    apiBase={apiBase}
-                    lesson={l}
-                    siblings={ungrouped}
-                    index={i}
-                    selected={selectedId === l.id}
-                    onSelect={() => selectLesson(l.id)}
-                  />
-                ))}
-                {ungrouped.length === 0 && (
-                  <p className="text-muted-foreground px-1 py-2 text-xs">
-                    Drop a lesson here to remove it from its section.
-                  </p>
-                )}
-              </DropZone>
-            )}
-          </DndContext>
-
-          <div className="flex flex-col gap-1 pt-1">
-            <Button size="sm" variant="outline" onClick={addSection}>
-              <Plus className="h-4 w-4" /> Section
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => addLesson(null)}>
-              <Plus className="h-4 w-4" /> Lesson (no section)
-            </Button>
-          </div>
-        </aside>
+        {/* Left — outline (section reorder/collapse, lesson drag/reorder) */}
+        <CourseOutlineSidebar
+          apiBase={apiBase}
+          courseId={courseId}
+          sections={sections}
+          lessons={lessons}
+          onSectionsChange={setSections}
+          onLessonsChange={setLessons}
+          selectedId={selectedId}
+          onSelectLesson={selectLesson}
+          onAddSection={addSection}
+          onAddLesson={addLesson}
+        />
 
         {/* Right — editor / empty state */}
         <div>
@@ -405,188 +312,6 @@ function StandaloneCourseEditorPageInner({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-/** A droppable container that highlights while a lesson hovers over it. */
-function DropZone({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "bg-card rounded-lg border p-2 transition-colors",
-        isOver && "border-primary ring-primary ring-1"
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SectionBlock({
-  apiBase,
-  section,
-  lessons,
-  selectedId,
-  onSelect,
-  onAddLesson,
-}: {
-  apiBase: string;
-  section: StandaloneCourseSection;
-  lessons: StandaloneLesson[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onAddLesson: () => void;
-}) {
-  const [title, setTitle] = useState(section.title);
-  const { setNodeRef, isOver } = useDroppable({ id: section.id });
-
-  async function rename() {
-    if (title.trim() === section.title) return;
-    await fetch(`${apiBase}/sections/${section.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
-  }
-  async function remove() {
-    if (!confirm("Delete this section? Its lessons move to 'Other'.")) return;
-    await fetch(`${apiBase}/sections/${section.id}`, { method: "DELETE" });
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        "bg-card rounded-lg border p-2 transition-colors",
-        isOver && "border-primary ring-primary ring-1"
-      )}
-    >
-      <div className="mb-1 flex items-center gap-1">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={rename}
-          className="h-7 border-0 bg-transparent px-1 text-xs font-semibold tracking-wide uppercase focus-visible:ring-1"
-        />
-        <button
-          onClick={remove}
-          className="text-muted-foreground hover:text-destructive"
-          title="Delete section"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {lessons.map((l, i) => (
-        <LessonNavRow
-          key={l.id}
-          apiBase={apiBase}
-          lesson={l}
-          siblings={lessons}
-          index={i}
-          selected={selectedId === l.id}
-          onSelect={() => onSelect(l.id)}
-        />
-      ))}
-      <button
-        onClick={onAddLesson}
-        className="text-muted-foreground hover:bg-muted mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs"
-      >
-        <Plus className="h-3.5 w-3.5" /> Lesson
-      </button>
-    </div>
-  );
-}
-
-function LessonNavRow({
-  apiBase,
-  lesson,
-  siblings,
-  index,
-  selected,
-  onSelect,
-}: {
-  apiBase: string;
-  lesson: StandaloneLesson;
-  siblings: StandaloneLesson[];
-  index: number;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: lesson.id });
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        zIndex: 50,
-      }
-    : undefined;
-
-  async function move(dir: -1 | 1) {
-    const other = siblings[index + dir];
-    if (!other) return;
-    await Promise.all([
-      fetch(`${apiBase}/lessons/${lesson.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: other.order }),
-      }),
-      fetch(`${apiBase}/lessons/${other.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order: lesson.order }),
-      }),
-    ]);
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "group flex items-center gap-1 rounded-md px-1",
-        selected && "bg-primary/10",
-        isDragging && "opacity-50"
-      )}
-    >
-      <button
-        {...attributes}
-        {...listeners}
-        className="text-muted-foreground/60 hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
-        title="Drag to a section"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
-      <div className="flex flex-col opacity-0 group-hover:opacity-100">
-        <button
-          onClick={() => move(-1)}
-          disabled={index === 0}
-          className="text-muted-foreground disabled:opacity-30"
-        >
-          <ChevronUp className="h-3 w-3" />
-        </button>
-        <button
-          onClick={() => move(1)}
-          disabled={index === siblings.length - 1}
-          className="text-muted-foreground disabled:opacity-30"
-        >
-          <ChevronDown className="h-3 w-3" />
-        </button>
-      </div>
-      <button
-        onClick={onSelect}
-        className={cn(
-          "flex-1 truncate py-1.5 text-left text-sm",
-          selected ? "text-primary font-medium" : "text-foreground"
-        )}
-      >
-        {lesson.title}
-        {!lesson.published && (
-          <span className="text-muted-foreground ml-1.5 text-xs">(draft)</span>
-        )}
-      </button>
     </div>
   );
 }
