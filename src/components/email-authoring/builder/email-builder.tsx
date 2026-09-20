@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
+import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Laptop, Smartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ElementsPanel } from "./elements-panel";
@@ -78,8 +79,13 @@ export function EmailBuilder({
     jumpToBlockId ?? null
   );
   const [viewport, setViewport] = useState<"desktop" | "mobile">("desktop");
+  // KeyboardSensor gives block reordering a keyboard fallback (task
+  // instruction 20) — tab to a block's drag handle, then arrow
+  // keys/space reorder it, matching dnd-kit's built-in sortable keyboard
+  // support.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   // Strict Send validation (task instruction 10/11) — when a consumer's
