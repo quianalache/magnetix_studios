@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Eye, Loader2, Save, Trash2 } from "lucide-react";
+import { Copy, Loader2, Save, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -16,15 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmailBlocksEditor } from "@/components/email-authoring/email-blocks-editor";
+import { EmailBuilder } from "@/components/email-authoring/builder/email-builder";
 import { emailDocumentFromBroadcastContent } from "@/lib/email/adapters";
 import { renderEmailHtml } from "@/lib/email/render";
 import type { BroadcastContent } from "@/types/broadcast-content";
 
 /**
  * Agency Email Template create/edit surface — the agency-scope sibling of
- * EmailTemplateEditor, reusing the exact same visual EmailDocument
- * designer (EmailBlocksEditor). Fetch-based CRUD against
+ * EmailTemplateEditor, reusing the exact same shared visual Email Builder
+ * (task's standing shared-first rule). Fetch-based CRUD against
  * /api/agency/email-templates instead of the tenant client-Firestore
  * template-library.ts functions. No personalization-tag menu — merge
  * tags target a tenant Contact, which has no Agency equivalent.
@@ -40,6 +39,7 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
   const [content, setContent] = useState<BroadcastContent>({ version: 1, blocks: [] });
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -74,14 +74,10 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
 
-  const previewDocument = useMemo(() => emailDocumentFromBroadcastContent(content, subject, preheader), [content, subject, preheader]);
-  const previewHtml = useMemo(() => {
-    try {
-      return renderEmailHtml(previewDocument, { allowIncomplete: true });
-    } catch {
-      return "";
-    }
-  }, [previewDocument]);
+  const getPreviewHtml = useCallback(async () => {
+    const document = emailDocumentFromBroadcastContent(content, subject, preheader);
+    return renderEmailHtml(document, { allowIncomplete: true });
+  }, [content, subject, preheader]);
 
   async function handleSave() {
     if (!name.trim()) {
@@ -181,6 +177,9 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
               </Button>
             </>
           )}
+          <Button type="button" variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            Preview
+          </Button>
           <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
             {templateId ? "Save" : "Create template"}
@@ -188,31 +187,21 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-5">
-          <div className="space-y-1.5">
-            <Label htmlFor="aet-subject">Subject</Label>
-            <Input id="aet-subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="A quick update from Magnetix Studios" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="aet-preheader">Preheader</Label>
-            <Input id="aet-preheader" value={preheader} onChange={(e) => setPreheader(e.target.value)} placeholder="Shown next to the subject in most inboxes (optional)" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Content</Label>
-            <EmailBlocksEditor blocks={content.blocks} onChange={(blocks) => setContent({ version: 1, blocks })} saId="agency" draftId={uploadScopeId} />
-          </div>
-        </div>
-
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-            <Eye className="h-3.5 w-3.5" /> Preview
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-muted/20">
-            <iframe title="Email template preview" sandbox="" srcDoc={previewHtml} className="h-[600px] w-full bg-white" />
-          </div>
-        </div>
-      </div>
+      {/* The SAME shared visual Email Builder every other authoring surface
+          uses (task's standing shared-first rule). */}
+      <EmailBuilder
+        content={content}
+        onChange={setContent}
+        subject={subject}
+        preheader={preheader}
+        onSubjectChange={setSubject}
+        onPreheaderChange={setPreheader}
+        saId="agency"
+        draftId={uploadScopeId}
+        getPreviewHtml={getPreviewHtml}
+        previewOpen={previewOpen}
+        onPreviewOpenChange={setPreviewOpen}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">

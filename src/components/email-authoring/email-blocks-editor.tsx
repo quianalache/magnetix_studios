@@ -2,6 +2,7 @@
 
 import {
   AlignLeft,
+  ArrowUpDown,
   Columns2,
   Image as ImageIcon,
   Minus,
@@ -46,6 +47,7 @@ const BLOCK_LABELS: Record<
   video: { label: "Video", icon: Video },
   button: { label: "Button", icon: MousePointerClick },
   divider: { label: "Divider", icon: Minus },
+  spacer: { label: "Spacer", icon: ArrowUpDown },
   columns: { label: "Columns", icon: Columns2 },
 };
 
@@ -55,6 +57,7 @@ const BLOCK_ORDER: EmailBlock["type"][] = [
   "video",
   "button",
   "divider",
+  "spacer",
   "columns",
 ];
 
@@ -79,6 +82,8 @@ function newBlock(type: EmailBlock["type"]): EmailBlock {
       return { id: newBlockId(), type: "button", label: "Click here", href: "" };
     case "divider":
       return { id: newBlockId(), type: "divider" };
+    case "spacer":
+      return { id: newBlockId(), type: "spacer", heightPx: 24 };
     case "columns":
       return {
         id: newBlockId(),
@@ -169,6 +174,11 @@ export function EmailBlocksEditor({
             {block.type === "divider" && (
               <div className="text-muted-foreground border-t py-2 text-center text-xs">
                 A horizontal divider — no settings.
+              </div>
+            )}
+            {block.type === "spacer" && (
+              <div className="text-muted-foreground py-2 text-center text-xs">
+                Blank vertical space — {block.heightPx ?? 24}px.
               </div>
             )}
             {block.type === "columns" && (

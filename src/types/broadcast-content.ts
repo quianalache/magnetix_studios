@@ -63,6 +63,16 @@ export interface DividerBlock {
   type: "divider";
 }
 
+/** Blank vertical space — added for the shared visual Email Builder
+ *  (2026-09-20); mirrors the canonical `EmailSpacerBlock`
+ *  (types/email-document.ts) the renderer already fully supported before
+ *  this block type had anywhere to come FROM in the composer. */
+export interface SpacerBlock {
+  id: string;
+  type: "spacer";
+  heightPx?: number;
+}
+
 /** Non-column blocks only — no nested columns, kept simple for table-safe
  *  rendering (a <table> inside a <td> inside a <table> is exactly the kind
  *  of nesting real-world email clients handle inconsistently). */
@@ -71,7 +81,8 @@ export type EmailBlockNonColumn =
   | ImageBlock
   | VideoBlock
   | ButtonBlock
-  | DividerBlock;
+  | DividerBlock
+  | SpacerBlock;
 
 export interface ColumnsBlock {
   id: string;

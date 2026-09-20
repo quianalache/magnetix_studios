@@ -5,38 +5,16 @@ import { useRouter } from "next/navigation";
 import { doc, getDoc } from "firebase/firestore";
 import { toast } from "sonner";
 import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  AlignLeft,
   ArrowLeft,
   Check,
   CloudUpload,
+  Eye,
   FileText,
   FlaskConical,
-  GripVertical,
-  ImageIcon,
   Loader2,
-  MousePointerClick,
-  Minus,
-  Columns2,
-  Plus,
   Save,
   Send,
   TriangleAlert,
-  Video,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -55,14 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { TextBlockEditor } from "@/components/broadcasts/text-block-editor";
-import {
-  ImageBlockEditor,
-  VideoBlockEditor,
-  ButtonBlockEditor,
-  ColumnsBlockEditor,
-  newBlockId,
-} from "@/components/broadcasts/block-editors";
+import { EmailBuilder } from "@/components/email-authoring/builder/email-builder";
+import { documentHasIncompleteBlock, firstIncompleteBlockId } from "@/components/email-authoring/builder/block-factory";
 import {
   AudienceConditionBuilder,
   audienceFilterFromApiShape,
@@ -79,13 +51,11 @@ import {
 import { SaveAsTemplateDialog } from "@/components/email-authoring/save-as-template-dialog";
 import { createEmailTemplate } from "@/lib/email/template-library";
 import { audienceLabel } from "@/lib/broadcasts/audience-label";
-import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
 import type {
   BroadcastAudienceFilter,
   BroadcastContent,
   BroadcastDoc,
-  EmailBlock,
 } from "@/types";
 
 /** Audience size at/above which the send-confirmation dialog requires
@@ -100,44 +70,6 @@ const LARGE_AUDIENCE_THRESHOLD = 100;
  *  that a refresh a couple seconds after the last edit rarely loses
  *  anything (2026-08-27 Persistent Broadcast Drafts V1). */
 const AUTOSAVE_DEBOUNCE_MS = 1500;
-
-const BLOCK_LABELS: Record<EmailBlock["type"], { label: string; icon: typeof FileText }> = {
-  text: { label: "Text", icon: AlignLeft },
-  image: { label: "Image", icon: ImageIcon },
-  video: { label: "Video", icon: Video },
-  button: { label: "Button", icon: MousePointerClick },
-  divider: { label: "Divider", icon: Minus },
-  columns: { label: "Columns", icon: Columns2 },
-};
-
-function newBlock(type: EmailBlock["type"]): EmailBlock {
-  switch (type) {
-    case "text":
-      // Genuinely empty — "Write something…" is shown by TextBlockEditor's
-      // TipTap Placeholder extension, not stored as real content. Seeding
-      // the literal phrase here used to mean typing right after adding a
-      // block appended to it instead of replacing it, and the phrase could
-      // end up in the sent email.
-      return { id: newBlockId(), type: "text", html: "<p></p>" };
-    case "image":
-      return { id: newBlockId(), type: "image", src: "", alt: "" };
-    case "video":
-      return { id: newBlockId(), type: "video", videoUrl: "", thumbnailSrc: "", alt: "" };
-    case "button":
-      return { id: newBlockId(), type: "button", label: "Click here", href: "" };
-    case "divider":
-      return { id: newBlockId(), type: "divider" };
-    case "columns":
-      return {
-        id: newBlockId(),
-        type: "columns",
-        columns: [
-          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
-          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
-        ],
-      };
-  }
-}
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -175,13 +107,13 @@ export function BroadcastComposer({
 
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
-  const [blocks, setBlocks] = useState<EmailBlock[]>([]);
+  const [content, setContent] = useState<BroadcastContent>({ version: 1, blocks: [] });
   const [audience, setAudience] = useState<AudienceFilterState>(defaultAudienceFilterState());
   const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [previewHtml, setPreviewHtml] = useState("");
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [jumpToBlockId, setJumpToBlockId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
@@ -208,10 +140,6 @@ export function BroadcastComposer({
   // state and the next. Send Now still requires a fully valid filter
   // (unchanged, via `canSend` below).
   const lastValidAudienceFilterRef = useRef<BroadcastAudienceFilter>({ kind: "all" });
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-  );
 
   // Hydrate from a persisted draft on mount. Read-once (not onSnapshot) —
   // this composer becomes the source of truth for the session the moment
@@ -240,7 +168,7 @@ export function BroadcastComposer({
         }
         setSubject(data.subject ?? "");
         setPreheader(data.preheader ?? "");
-        setBlocks(data.content?.blocks ?? []);
+        setContent(data.content ?? { version: 1, blocks: [] });
         setAudience(audienceFilterFromApiShape(data.audienceFilter));
         if (data.audienceFilter) lastValidAudienceFilterRef.current = data.audienceFilter;
         setSourceTemplateId(data.sourceTemplateId ?? null);
@@ -272,7 +200,6 @@ export function BroadcastComposer({
     if (user?.email) setTestSendEmail((prev) => prev || user.email!);
   }, [user?.email]);
 
-  const content: BroadcastContent = useMemo(() => ({ version: 1, blocks }), [blocks]);
   const audiencePreview = useAudiencePreview(contacts, audience);
 
   // Test Mode audience — intersected server-side too (resolveAudience), but
@@ -303,57 +230,27 @@ export function BroadcastComposer({
       .slice(0, 8);
   }, [contacts, testModeQuery, testRecipientIds]);
 
-  // Debounced live preview — the composer's iframe renders the EXACT same
-  // renderer output the real send uses, never a second approximate render.
-  useEffect(() => {
-    const handle = setTimeout(async () => {
-      setPreviewLoading(true);
-      try {
-        const res = await fetch("/api/broadcasts/render", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ subAccountId, subject, preheader, content }),
-        });
-        const data = (await res.json()) as { html?: string };
-        if (data.html) setPreviewHtml(data.html);
-      } catch {
-        // Preview is best-effort — a network hiccup shouldn't block composing.
-      } finally {
-        setPreviewLoading(false);
-      }
-    }, 400);
-    return () => clearTimeout(handle);
-  }, [subAccountId, subject, preheader, content]);
-
-  const addBlock = useCallback((type: EmailBlock["type"]) => {
-    setBlocks((prev) => [...prev, newBlock(type)]);
-  }, []);
-
-  const updateBlock = useCallback((id: string, next: EmailBlock) => {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? next : b)));
-  }, []);
-
-  const removeBlock = useCallback((id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
-  }, []);
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    setBlocks((prev) => {
-      const oldIndex = prev.findIndex((b) => b.id === active.id);
-      const newIndex = prev.findIndex((b) => b.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return prev;
-      return arrayMove(prev, oldIndex, newIndex);
+  // On-demand preview — Preview is now the top-controls final-verification
+  // action (task instruction 8), not an always-rendering detached column;
+  // the Preview modal calls this the moment it opens, and it returns the
+  // EXACT same renderer output the real send uses, never an approximation.
+  const getPreviewHtml = useCallback(async () => {
+    const res = await fetch("/api/broadcasts/render", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ subAccountId, subject, preheader, content }),
     });
-  }
+    const data = (await res.json()) as { html?: string; error?: string };
+    if (!res.ok || !data.html) throw new Error(data.error ?? "Preview failed to load");
+    return data.html;
+  }, [subAccountId, subject, preheader, content]);
 
   const missingAddress = !subAccount?.mailingAddress;
   const audienceFilter = audienceFilterToApiShape(audience);
   if (audienceFilter) lastValidAudienceFilterRef.current = audienceFilter;
   const canSend =
     !!subject.trim() &&
-    blocks.length > 0 &&
+    content.blocks.length > 0 &&
     !!audienceFilter &&
     effectiveRecipientCount > 0 &&
     !missingAddress &&
@@ -367,7 +264,8 @@ export function BroadcastComposer({
   // draft exists (hydrated OR created by an earlier tick), every
   // subsequent debounced change saves regardless, including clearing
   // content back to empty.
-  const hasMeaningfulContent = !!subject.trim() || blocks.length > 0 || audience.conditions.length > 0;
+  const hasMeaningfulContent =
+    !!subject.trim() || content.blocks.length > 0 || audience.conditions.length > 0;
 
   const saveDraftNow = useCallback(async () => {
     if (!hasPersistedDraft && !hasMeaningfulContent) return;
@@ -453,8 +351,23 @@ export function BroadcastComposer({
   // Opening the Send button never sends directly — it always opens the
   // confirmation dialog first (production safety controls, 2026-08-26,
   // requirement 3). The dialog itself calls handleSend on confirm.
+  // Strict Send validation (task instruction 10) — draft authoring in the
+  // canvas is deliberately tolerant of incomplete blocks (instruction 9),
+  // but neither a real Send nor a real Test Send may go out with one.
+  // Blocks the action, names the problem, and selects the offending block
+  // in the builder so the owner can jump straight to it instead of
+  // discovering it only after clicking Send.
+  function blockIfIncomplete(): boolean {
+    if (!documentHasIncompleteBlock(content.blocks)) return true;
+    const id = firstIncompleteBlockId(content.blocks);
+    setJumpToBlockId(id);
+    toast.error("This email has an incomplete block — finish it before sending.");
+    return false;
+  }
+
   function openConfirm() {
     if (!canSend) return;
+    if (!blockIfIncomplete()) return;
     setConfirmTypedText("");
     setConfirmOpen(true);
   }
@@ -529,6 +442,7 @@ export function BroadcastComposer({
       toast.error("Enter a valid email address.");
       return;
     }
+    if (!blockIfIncomplete()) return;
     setTestSending(true);
     try {
       const res = await fetch("/api/broadcasts/email/test-send", {
@@ -581,7 +495,7 @@ export function BroadcastComposer({
   function handlePickTemplate(t: PickedEmailTemplate) {
     setSubject(t.subject);
     setPreheader(t.preheader ?? "");
-    setBlocks(t.content.blocks);
+    setContent(t.content);
     // Provenance only — `sourceTemplateId` is write-through metadata never
     // re-read server-side to reconstruct content, so recording it here
     // doesn't create a live link back to the template.
@@ -625,16 +539,19 @@ export function BroadcastComposer({
             type="button"
             variant="outline"
             onClick={() => setSaveTemplateOpen(true)}
-            disabled={blocks.length === 0}
+            disabled={content.blocks.length === 0}
           >
             <Save className="mr-1 h-4 w-4" />
             Save as template
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setPreviewOpen(true)}>
+            <Eye className="mr-1 h-4 w-4" /> Preview
           </Button>
           <Button
             type="button"
             variant="outline"
             onClick={() => setTestSendOpen(true)}
-            disabled={blocks.length === 0 || !subject.trim()}
+            disabled={content.blocks.length === 0 || !subject.trim()}
           >
             <FlaskConical className="mr-1 h-4 w-4" /> Test Send
           </Button>
@@ -660,174 +577,126 @@ export function BroadcastComposer({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left: composer */}
-        <div className="space-y-4">
-          <div className="space-y-2 rounded-xl border bg-card p-4">
-            <Input
-              placeholder="Subject line"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="text-base font-medium"
-            />
-            <Input
-              placeholder="Preview text (optional — shown next to the subject in most inboxes)"
-              value={preheader}
-              onChange={(e) => setPreheader(e.target.value)}
-              className="text-sm"
-            />
-          </div>
+      <div className="space-y-6">
+        {/* Recipients — the composer's existing single-page audience/Test
+            Mode workflow, unchanged. The mockup's "Content → Audience →
+            Review & Send" step indicator doesn't exist as a literal wizard
+            in this product today, so rather than inventing one, the shared
+            builder below replaces only the content-authoring half of this
+            page (task instruction 12's "reuse existing data/workflow"
+            escape hatch) — Recipients/Test Mode/Send stay exactly where an
+            operator already knows to find them. */}
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
+          <AudienceConditionBuilder
+            contacts={contacts}
+            value={audience}
+            onChange={setAudience}
+            subAccountId={subAccountId}
+          />
 
-          <div className="rounded-xl border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
-            <AudienceConditionBuilder
-              contacts={contacts}
-              value={audience}
-              onChange={setAudience}
-              subAccountId={subAccountId}
-            />
-
-            <div className="mt-4 rounded-lg border bg-muted/20 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="test-mode-toggle" className="flex items-center gap-1.5 text-sm font-medium">
-                  <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
-                  Test Mode
-                </Label>
-                <Switch id="test-mode-toggle" checked={testMode} onCheckedChange={setTestMode} />
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                When on, this send only ever reaches the test recipients you
-                pick below — enforced server-side, no matter how broad the
-                segment above resolves. The real segment currently matches{" "}
-                <span className="font-mono">{audiencePreview.recipients}</span> contact
-                {audiencePreview.recipients === 1 ? "" : "s"}.
-              </p>
-
-              {testMode && (
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {testRecipientIds.map((id) => {
-                      const c = contacts.find((x) => x.id === id);
-                      return (
-                        <span
-                          key={id}
-                          className="flex items-center gap-1 rounded-full border bg-background px-2 py-1 text-xs"
-                        >
-                          {c ? c.name || c.email : id}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setTestRecipientIds((prev) => prev.filter((x) => x !== id))
-                            }
-                            className="text-muted-foreground hover:text-destructive"
-                            aria-label="Remove test recipient"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                    {testRecipientIds.length === 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        No test recipients selected yet — Send is disabled until you add at least one.
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      placeholder="Search contacts by name or email…"
-                      value={testModeQuery}
-                      onChange={(e) => setTestModeQuery(e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    {testModeCandidates.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md">
-                        {testModeCandidates.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              setTestRecipientIds((prev) => [...prev, c.id]);
-                              setTestModeQuery("");
-                            }}
-                            className="flex w-full flex-col items-start px-3 py-1.5 text-left text-xs hover:bg-muted"
-                          >
-                            <span className="font-medium">{c.name || "(no name)"}</span>
-                            <span className="text-muted-foreground">{c.email}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Will actually email:{" "}
-                    <span className="font-mono font-semibold text-foreground">
-                      {testModeContacts.length}
-                    </span>{" "}
-                    of {testRecipientIds.length} selected (the rest don&apos;t match the segment above, or are opted out).
-                  </p>
-                </div>
-              )}
+          <div className="mt-4 rounded-lg border bg-muted/20 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="test-mode-toggle" className="flex items-center gap-1.5 text-sm font-medium">
+                <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
+                Test Mode
+              </Label>
+              <Switch id="test-mode-toggle" checked={testMode} onCheckedChange={setTestMode} />
             </div>
-          </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When on, this send only ever reaches the test recipients you
+              pick below — enforced server-side, no matter how broad the
+              segment above resolves. The real segment currently matches{" "}
+              <span className="font-mono">{audiencePreview.recipients}</span> contact
+              {audiencePreview.recipients === 1 ? "" : "s"}.
+            </p>
 
-          <div className="space-y-3">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                {blocks.map((block) => (
-                  <BlockCard
-                    key={block.id}
-                    block={block}
-                    saId={subAccountId}
-                    draftId={draftId}
-                    onChange={(next) => updateBlock(block.id, next)}
-                    onRemove={() => removeBlock(block.id)}
+            {testMode && (
+              <div className="mt-3 space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {testRecipientIds.map((id) => {
+                    const c = contacts.find((x) => x.id === id);
+                    return (
+                      <span
+                        key={id}
+                        className="flex items-center gap-1 rounded-full border bg-background px-2 py-1 text-xs"
+                      >
+                        {c ? c.name || c.email : id}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTestRecipientIds((prev) => prev.filter((x) => x !== id))
+                          }
+                          className="text-muted-foreground hover:text-destructive"
+                          aria-label="Remove test recipient"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {testRecipientIds.length === 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      No test recipients selected yet — Send is disabled until you add at least one.
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Input
+                    placeholder="Search contacts by name or email…"
+                    value={testModeQuery}
+                    onChange={(e) => setTestModeQuery(e.target.value)}
+                    className="h-8 text-sm"
                   />
-                ))}
-              </SortableContext>
-            </DndContext>
-
-            {blocks.length === 0 && (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Add your first block below.
+                  {testModeCandidates.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md">
+                      {testModeCandidates.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            setTestRecipientIds((prev) => [...prev, c.id]);
+                            setTestModeQuery("");
+                          }}
+                          className="flex w-full flex-col items-start px-3 py-1.5 text-left text-xs hover:bg-muted"
+                        >
+                          <span className="font-medium">{c.name || "(no name)"}</span>
+                          <span className="text-muted-foreground">{c.email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Will actually email:{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {testModeContacts.length}
+                  </span>{" "}
+                  of {testRecipientIds.length} selected (the rest don&apos;t match the segment above, or are opted out).
+                </p>
               </div>
             )}
-
-            <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/30 p-3">
-              {(Object.keys(BLOCK_LABELS) as EmailBlock["type"][]).map((type) => {
-                const { label, icon: Icon } = BLOCK_LABELS[type];
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addBlock(type)}
-                    className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
 
-        {/* Right: live preview — the exact rendered email, not an approximation */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Preview</h2>
-            {previewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-muted/20">
-            <iframe
-              title="Broadcast preview"
-              srcDoc={previewHtml}
-              sandbox=""
-              className="h-[720px] w-full bg-white"
-            />
-          </div>
-        </div>
+        {/* Content — the shared visual Email Builder. Same 3-pane surface
+            (Elements / Canvas / Inspector) TENANT Email Templates, AGENCY
+            Broadcasts, and AGENCY Email Templates all use — see
+            src/components/email-authoring/builder/email-builder.tsx. */}
+        <EmailBuilder
+          content={content}
+          onChange={setContent}
+          subject={subject}
+          preheader={preheader}
+          onSubjectChange={setSubject}
+          onPreheaderChange={setPreheader}
+          saId={subAccountId}
+          draftId={draftId}
+          getPreviewHtml={getPreviewHtml}
+          previewOpen={previewOpen}
+          onPreviewOpenChange={setPreviewOpen}
+          jumpToBlockId={jumpToBlockId}
+        />
       </div>
 
       <EmailTemplatePickerDialog
@@ -993,79 +862,5 @@ function SaveStateIndicator({ state }: { state: SaveState }) {
     <span className="flex items-center gap-1 text-xs text-muted-foreground">
       <Check className="h-3 w-3" /> Saved
     </span>
-  );
-}
-
-function BlockCard({
-  block,
-  saId,
-  draftId,
-  onChange,
-  onRemove,
-}: {
-  block: EmailBlock;
-  saId: string;
-  draftId: string;
-  onChange: (next: EmailBlock) => void;
-  onRemove: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  const { label, icon: Icon } = BLOCK_LABELS[block.type];
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        "rounded-xl border bg-card p-3",
-        isDragging && "opacity-60 ring-2 ring-primary/40",
-      )}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing"
-            aria-label="Drag to reorder"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-xs text-muted-foreground hover:text-destructive"
-        >
-          Remove
-        </button>
-      </div>
-
-      {block.type === "text" && (
-        <TextBlockEditor value={block.html} onChange={(html) => onChange({ ...block, html })} />
-      )}
-      {block.type === "image" && (
-        <ImageBlockEditor block={block} saId={saId} draftId={draftId} onChange={onChange} />
-      )}
-      {block.type === "video" && (
-        <VideoBlockEditor block={block} saId={saId} draftId={draftId} onChange={onChange} />
-      )}
-      {block.type === "button" && <ButtonBlockEditor block={block} onChange={onChange} />}
-      {block.type === "divider" && (
-        <div className="border-t py-2 text-center text-xs text-muted-foreground">
-          A horizontal divider — no settings.
-        </div>
-      )}
-      {block.type === "columns" && <ColumnsBlockEditor block={block} onChange={onChange} />}
-    </div>
   );
 }

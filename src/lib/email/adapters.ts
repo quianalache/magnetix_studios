@@ -105,6 +105,8 @@ function broadcastLeafToEmailLeaf(
       return { ...block };
     case "divider":
       return { ...block };
+    case "spacer":
+      return { ...block };
   }
 }
 
@@ -165,13 +167,15 @@ function emailLeafToBroadcastLeaf(
       };
     case "divider":
       return { id: block.id, type: "divider" };
+    case "spacer":
+      return {
+        id: block.id,
+        type: "spacer",
+        ...(block.heightPx ? { heightPx: block.heightPx } : {}),
+      };
     case "heading":
       throw new Error(
         `Broadcast adapter cannot represent heading block ${block.id}.`
-      );
-    case "spacer":
-      throw new Error(
-        `Broadcast adapter cannot represent spacer block ${block.id}.`
       );
   }
 }

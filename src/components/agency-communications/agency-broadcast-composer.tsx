@@ -1,42 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  AlignLeft,
   ArrowLeft,
   Check,
   CloudUpload,
+  Eye,
   FileText,
   FlaskConical,
-  GripVertical,
-  ImageIcon,
   Loader2,
-  MousePointerClick,
-  Minus,
-  Columns2,
-  Plus,
   Save,
   Send,
   TriangleAlert,
-  Video,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -49,62 +27,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { TextBlockEditor } from "@/components/broadcasts/text-block-editor";
-import {
-  ImageBlockEditor,
-  VideoBlockEditor,
-  ButtonBlockEditor,
-  ColumnsBlockEditor,
-  newBlockId,
-} from "@/components/broadcasts/block-editors";
+import { EmailBuilder } from "@/components/email-authoring/builder/email-builder";
+import { documentHasIncompleteBlock, firstIncompleteBlockId } from "@/components/email-authoring/builder/block-factory";
 import {
   EmailTemplatePickerDialog,
   type PickedEmailTemplate,
 } from "@/components/email-authoring/email-template-picker-dialog";
 import { SaveAsTemplateDialog } from "@/components/email-authoring/save-as-template-dialog";
 import { AgencyAudiencePicker } from "@/components/agency-communications/agency-audience-picker";
-import { cn } from "@/lib/utils";
 import type {
   AgencyAudienceSource,
   AgencyCommunicationDoc,
 } from "@/types/agency-communications";
-import type { BroadcastContent, EmailBlock } from "@/types/broadcast-content";
+import type { BroadcastContent } from "@/types/broadcast-content";
 
 const LARGE_AUDIENCE_THRESHOLD = 100;
 const AUTOSAVE_DEBOUNCE_MS = 1500;
-
-const BLOCK_LABELS: Record<EmailBlock["type"], { label: string; icon: typeof FileText }> = {
-  text: { label: "Text", icon: AlignLeft },
-  image: { label: "Image", icon: ImageIcon },
-  video: { label: "Video", icon: Video },
-  button: { label: "Button", icon: MousePointerClick },
-  divider: { label: "Divider", icon: Minus },
-  columns: { label: "Columns", icon: Columns2 },
-};
-
-function newBlock(type: EmailBlock["type"]): EmailBlock {
-  switch (type) {
-    case "text":
-      return { id: newBlockId(), type: "text", html: "<p></p>" };
-    case "image":
-      return { id: newBlockId(), type: "image", src: "", alt: "" };
-    case "video":
-      return { id: newBlockId(), type: "video", videoUrl: "", thumbnailSrc: "", alt: "" };
-    case "button":
-      return { id: newBlockId(), type: "button", label: "Click here", href: "" };
-    case "divider":
-      return { id: newBlockId(), type: "divider" };
-    case "columns":
-      return {
-        id: newBlockId(),
-        type: "columns",
-        columns: [
-          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
-          { blocks: [{ id: newBlockId(), type: "text", html: "<p></p>" }] },
-        ],
-      };
-  }
-}
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -132,12 +70,12 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
 
   const [subject, setSubject] = useState("");
   const [preheader, setPreheader] = useState("");
-  const [blocks, setBlocks] = useState<EmailBlock[]>([]);
+  const [content, setContent] = useState<BroadcastContent>({ version: 1, blocks: [] });
   const [audienceSources, setAudienceSources] = useState<AgencyAudienceSource[]>([]);
   const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null);
 
-  const [previewHtml, setPreviewHtml] = useState("");
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [jumpToBlockId, setJumpToBlockId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
@@ -154,8 +92,6 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const sessionIdRef = useRef(crypto.randomUUID());
   const clientSeqRef = useRef(0);
-
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   useEffect(() => {
     if (!existingCommunicationId) return;
@@ -183,7 +119,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
         }
         setSubject(c.subject ?? "");
         setPreheader(c.preheader ?? "");
-        setBlocks(c.content?.blocks ?? []);
+        setContent(c.content ?? { version: 1, blocks: [] });
         setAudienceSources(c.audienceSources ?? []);
         setSourceTemplateId(c.sourceTemplateId ?? null);
         setHasPersistedDraft(true);
@@ -203,8 +139,6 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
   useEffect(() => {
     if (user?.email) setTestSendEmail((prev) => prev || user.email!);
   }, [user?.email]);
-
-  const content: BroadcastContent = useMemo(() => ({ version: 1, blocks }), [blocks]);
 
   useEffect(() => {
     if (audienceSources.length === 0) {
@@ -232,50 +166,37 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
 
   const requiresTypedConfirm = audiencePreview.recipients >= LARGE_AUDIENCE_THRESHOLD;
 
-  useEffect(() => {
-    const handle = setTimeout(async () => {
-      setPreviewLoading(true);
-      try {
-        const res = await fetch("/api/agency/communications/render", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ subject, preheader, content }),
-        });
-        const data = (await res.json()) as { html?: string };
-        if (data.html) setPreviewHtml(data.html);
-      } catch {
-        // Best-effort.
-      } finally {
-        setPreviewLoading(false);
-      }
-    }, 400);
-    return () => clearTimeout(handle);
+  // On-demand preview (task instruction 8) — the Preview modal calls this
+  // the moment it opens, returning the exact same renderer output the real
+  // send uses.
+  const getPreviewHtml = useCallback(async () => {
+    const res = await fetch("/api/agency/communications/render", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ subject, preheader, content }),
+    });
+    const data = (await res.json()) as { html?: string; error?: string };
+    if (!res.ok || !data.html) throw new Error(data.error ?? "Preview failed to load");
+    return data.html;
   }, [subject, preheader, content]);
 
-  const addBlock = useCallback((type: EmailBlock["type"]) => {
-    setBlocks((prev) => [...prev, newBlock(type)]);
-  }, []);
-  const updateBlock = useCallback((id: string, next: EmailBlock) => {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? next : b)));
-  }, []);
-  const removeBlock = useCallback((id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
-  }, []);
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    setBlocks((prev) => {
-      const oldIndex = prev.findIndex((b) => b.id === active.id);
-      const newIndex = prev.findIndex((b) => b.id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return prev;
-      return arrayMove(prev, oldIndex, newIndex);
-    });
+  // Strict Send validation (task instruction 10/11) — see the matching
+  // comment in broadcast-composer.tsx.
+  function blockIfIncomplete(): boolean {
+    if (!documentHasIncompleteBlock(content.blocks)) return true;
+    const id = firstIncompleteBlockId(content.blocks);
+    setJumpToBlockId(id);
+    toast.error("This email has an incomplete block — finish it before sending.");
+    return false;
   }
 
   const canSend =
-    !!subject.trim() && blocks.length > 0 && audienceSources.length > 0 && audiencePreview.recipients > 0 && !sending;
-  const hasMeaningfulContent = !!subject.trim() || blocks.length > 0 || audienceSources.length > 0;
+    !!subject.trim() &&
+    content.blocks.length > 0 &&
+    audienceSources.length > 0 &&
+    audiencePreview.recipients > 0 &&
+    !sending;
+  const hasMeaningfulContent = !!subject.trim() || content.blocks.length > 0 || audienceSources.length > 0;
 
   const saveDraftNow = useCallback(async () => {
     if (!hasPersistedDraft && !hasMeaningfulContent) return;
@@ -325,6 +246,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
 
   function openConfirm() {
     if (!canSend) return;
+    if (!blockIfIncomplete()) return;
     setConfirmTypedText("");
     setConfirmOpen(true);
   }
@@ -380,6 +302,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
       toast.error("Enter a valid email address.");
       return;
     }
+    if (!blockIfIncomplete()) return;
     setTestSending(true);
     try {
       const res = await fetch("/api/agency/communications/test-send", {
@@ -422,7 +345,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
   function handlePickTemplate(t: PickedEmailTemplate) {
     setSubject(t.subject);
     setPreheader(t.preheader ?? "");
-    setBlocks(t.content.blocks);
+    setContent(t.content);
     setSourceTemplateId(t.id);
   }
 
@@ -467,10 +390,13 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
           <Button type="button" variant="outline" onClick={() => setTemplatePickerOpen(true)}>
             <FileText className="mr-1 h-4 w-4" /> Load template
           </Button>
-          <Button type="button" variant="outline" onClick={() => setSaveTemplateOpen(true)} disabled={blocks.length === 0}>
+          <Button type="button" variant="outline" onClick={() => setSaveTemplateOpen(true)} disabled={content.blocks.length === 0}>
             <Save className="mr-1 h-4 w-4" /> Save as template
           </Button>
-          <Button type="button" variant="outline" onClick={() => setTestSendOpen(true)} disabled={blocks.length === 0 || !subject.trim()}>
+          <Button type="button" variant="outline" onClick={() => setPreviewOpen(true)}>
+            <Eye className="mr-1 h-4 w-4" /> Preview
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setTestSendOpen(true)} disabled={content.blocks.length === 0 || !subject.trim()}>
             <FlaskConical className="mr-1 h-4 w-4" /> Test Send
           </Button>
           <Button type="button" onClick={openConfirm} disabled={!canSend}>
@@ -480,73 +406,40 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-4">
-          <div className="space-y-2 rounded-xl border bg-card p-4">
-            <Input placeholder="Subject line" value={subject} onChange={(e) => setSubject(e.target.value)} className="text-base font-medium" />
-            <Input
-              placeholder="Preview text (optional — shown next to the subject in most inboxes)"
-              value={preheader}
-              onChange={(e) => setPreheader(e.target.value)}
-              className="text-sm"
-            />
-          </div>
-
-          <div className="rounded-xl border bg-card p-4">
-            <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
-            <AgencyAudiencePicker value={audienceSources} onChange={setAudienceSources} />
-            <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
-              {audienceLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              <span>
-                Will email <span className="font-mono font-semibold text-foreground">{audiencePreview.recipients}</span> recipient
-                {audiencePreview.recipients === 1 ? "" : "s"}
-                {audiencePreview.skipped > 0 ? ` (${audiencePreview.skipped} opted out, skipped)` : ""}.
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                {blocks.map((block) => (
-                  <BlockCard key={block.id} block={block} draftId={draftId} onChange={(next) => updateBlock(block.id, next)} onRemove={() => removeBlock(block.id)} />
-                ))}
-              </SortableContext>
-            </DndContext>
-
-            {blocks.length === 0 && (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Add your first block below.</div>
-            )}
-
-            <div className="flex flex-wrap gap-2 rounded-xl border bg-muted/30 p-3">
-              {(Object.keys(BLOCK_LABELS) as EmailBlock["type"][]).map((type) => {
-                const { label, icon: Icon } = BLOCK_LABELS[type];
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addBlock(type)}
-                    className="flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <Plus className="h-3 w-3" />
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+      <div className="space-y-6">
+        {/* Recipients — Agency's existing single-page audience workflow,
+            unchanged (task instruction 12's "reuse existing data/workflow"
+            escape hatch — see the matching comment in broadcast-composer.tsx). */}
+        <div className="rounded-xl border bg-card p-4">
+          <h2 className="mb-3 text-sm font-semibold">Recipients</h2>
+          <AgencyAudiencePicker value={audienceSources} onChange={setAudienceSources} />
+          <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
+            {audienceLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <span>
+              Will email <span className="font-mono font-semibold text-foreground">{audiencePreview.recipients}</span> recipient
+              {audiencePreview.recipients === 1 ? "" : "s"}
+              {audiencePreview.skipped > 0 ? ` (${audiencePreview.skipped} opted out, skipped)` : ""}.
+            </span>
           </div>
         </div>
 
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Preview</h2>
-            {previewLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-muted/20">
-            <iframe title="Communication preview" srcDoc={previewHtml} sandbox="" className="h-[720px] w-full bg-white" />
-          </div>
-        </div>
+        {/* Content — the SAME shared visual Email Builder Tenant Broadcasts
+            uses (task's standing shared-first rule). saId="agency" matches
+            this composer's existing upload-scope convention. */}
+        <EmailBuilder
+          content={content}
+          onChange={setContent}
+          subject={subject}
+          preheader={preheader}
+          onSubjectChange={setSubject}
+          onPreheaderChange={setPreheader}
+          saId="agency"
+          draftId={draftId}
+          getPreviewHtml={getPreviewHtml}
+          previewOpen={previewOpen}
+          onPreviewOpenChange={setPreviewOpen}
+          jumpToBlockId={jumpToBlockId}
+        />
       </div>
 
       <EmailTemplatePickerDialog open={templatePickerOpen} onOpenChange={setTemplatePickerOpen} subAccountId="agency" onPick={handlePickTemplate} />
@@ -632,45 +525,5 @@ function SaveStateIndicator({ state }: { state: SaveState }) {
     <span className="flex items-center gap-1 text-xs text-muted-foreground">
       <Check className="h-3 w-3" /> Saved
     </span>
-  );
-}
-
-function BlockCard({
-  block,
-  draftId,
-  onChange,
-  onRemove,
-}: {
-  block: EmailBlock;
-  draftId: string;
-  onChange: (next: EmailBlock) => void;
-  onRemove: () => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-  const { label, icon: Icon } = BLOCK_LABELS[block.type];
-
-  return (
-    <div ref={setNodeRef} style={style} className={cn("rounded-xl border bg-card p-3", isDragging && "opacity-60 ring-2 ring-primary/40")}>
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button type="button" {...attributes} {...listeners} className="cursor-grab text-muted-foreground hover:text-foreground active:cursor-grabbing" aria-label="Drag to reorder">
-            <GripVertical className="h-4 w-4" />
-          </button>
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        </div>
-        <button type="button" onClick={onRemove} className="text-xs text-muted-foreground hover:text-destructive">
-          Remove
-        </button>
-      </div>
-
-      {block.type === "text" && <TextBlockEditor value={block.html} onChange={(html) => onChange({ ...block, html })} />}
-      {block.type === "image" && <ImageBlockEditor block={block} saId="agency" draftId={draftId} onChange={onChange} />}
-      {block.type === "video" && <VideoBlockEditor block={block} saId="agency" draftId={draftId} onChange={onChange} />}
-      {block.type === "button" && <ButtonBlockEditor block={block} onChange={onChange} />}
-      {block.type === "divider" && <div className="border-t py-2 text-center text-xs text-muted-foreground">A horizontal divider — no settings.</div>}
-      {block.type === "columns" && <ColumnsBlockEditor block={block} onChange={onChange} />}
-    </div>
   );
 }

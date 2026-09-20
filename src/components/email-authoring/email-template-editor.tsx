@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Eye, Loader2, Save, Sparkles, Trash2 } from "lucide-react";
+import { Copy, Loader2, Save, Sparkles, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmailBlocksEditor } from "@/components/email-authoring/email-blocks-editor";
+import { EmailBuilder } from "@/components/email-authoring/builder/email-builder";
 import {
   createEmailTemplate,
   deleteEmailTemplate,
@@ -64,6 +63,7 @@ export function EmailTemplateEditor({
     "subject"
   );
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -104,17 +104,14 @@ export function EmailTemplateEditor({
     setTagMenuOpen(false);
   }
 
-  const previewDocument = useMemo(
-    () => emailDocumentFromBroadcastContent(content, subject, preheader),
-    [content, subject, preheader]
-  );
-  const previewHtml = useMemo(() => {
-    try {
-      return renderEmailHtml(previewDocument, { allowIncomplete: true });
-    } catch {
-      return "";
-    }
-  }, [previewDocument]);
+  // On-demand preview (task instruction 8) — computed client-side, exactly
+  // as this editor already did (no render route for Templates), just
+  // deferred to the moment the Preview modal opens rather than on every
+  // keystroke.
+  const getPreviewHtml = useCallback(async () => {
+    const document = emailDocumentFromBroadcastContent(content, subject, preheader);
+    return renderEmailHtml(document, { allowIncomplete: true });
+  }, [content, subject, preheader]);
 
   async function handleSave() {
     if (!name.trim()) {
@@ -241,6 +238,9 @@ export function EmailTemplateEditor({
               </Button>
             </>
           )}
+          <Button type="button" variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
+            Preview
+          </Button>
           <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
             {saving ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -252,78 +252,49 @@ export function EmailTemplateEditor({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-5">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="et-subject">Subject</Label>
-              <TagButton
-                open={tagMenuOpen && tagTarget === "subject"}
-                onToggle={() => {
-                  setTagTarget("subject");
-                  setTagMenuOpen((o) => !o || tagTarget !== "subject");
-                }}
-                onInsert={insertTag}
-              />
-            </div>
-            <Input
-              id="et-subject"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Welcome, {{contact.firstName}}"
-            />
-          </div>
+      <p className="text-[11px] text-muted-foreground">
+        Type personalization tags like <code>{"{{contact.firstName}}"}</code>{" "}
+        directly into text, button labels, or alt text — or use &quot;Insert
+        personalization&quot; next to Subject/Preheader.
+      </p>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="et-preheader">Preheader</Label>
-              <TagButton
-                open={tagMenuOpen && tagTarget === "preheader"}
-                onToggle={() => {
-                  setTagTarget("preheader");
-                  setTagMenuOpen((o) => !o || tagTarget !== "preheader");
-                }}
-                onInsert={insertTag}
-              />
-            </div>
-            <Input
-              id="et-preheader"
-              value={preheader}
-              onChange={(e) => setPreheader(e.target.value)}
-              placeholder="Shown next to the subject in most inboxes (optional)"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Content</Label>
-            <p className="text-[11px] text-muted-foreground">
-              Type personalization tags like <code>{"{{contact.firstName}}"}</code>{" "}
-              directly into text, button labels, or alt text.
-            </p>
-            <EmailBlocksEditor
-              blocks={content.blocks}
-              onChange={(blocks) => setContent({ version: 1, blocks })}
-              saId={subAccountId}
-              draftId={uploadScopeId}
-            />
-          </div>
-        </div>
-
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
-            <Eye className="h-3.5 w-3.5" />
-            Preview
-          </div>
-          <div className="overflow-hidden rounded-xl border bg-muted/20">
-            <iframe
-              title="Email template preview"
-              sandbox=""
-              srcDoc={previewHtml}
-              className="h-[600px] w-full bg-white"
-            />
-          </div>
-        </div>
-      </div>
+      {/* The SAME shared visual Email Builder Broadcasts uses (task's
+          standing shared-first rule) — Templates simply have no
+          Audience/Send controls around it, since none exist for this
+          surface today. */}
+      <EmailBuilder
+        content={content}
+        onChange={setContent}
+        subject={subject}
+        preheader={preheader}
+        onSubjectChange={setSubject}
+        onPreheaderChange={setPreheader}
+        saId={subAccountId}
+        draftId={uploadScopeId}
+        getPreviewHtml={getPreviewHtml}
+        previewOpen={previewOpen}
+        onPreviewOpenChange={setPreviewOpen}
+        subjectAccessory={
+          <TagButton
+            open={tagMenuOpen && tagTarget === "subject"}
+            onToggle={() => {
+              setTagTarget("subject");
+              setTagMenuOpen((o) => !o || tagTarget !== "subject");
+            }}
+            onInsert={insertTag}
+          />
+        }
+        preheaderAccessory={
+          <TagButton
+            open={tagMenuOpen && tagTarget === "preheader"}
+            onToggle={() => {
+              setTagTarget("preheader");
+              setTagMenuOpen((o) => !o || tagTarget !== "preheader");
+            }}
+            onInsert={insertTag}
+          />
+        }
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">
