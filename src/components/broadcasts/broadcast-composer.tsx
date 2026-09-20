@@ -690,7 +690,7 @@ export function BroadcastComposer({
           preheader={preheader}
           onSubjectChange={setSubject}
           onPreheaderChange={setPreheader}
-          saId={subAccountId}
+          scope={{ kind: "tenant", subAccountId }}
           draftId={draftId}
           getPreviewHtml={getPreviewHtml}
           previewOpen={previewOpen}

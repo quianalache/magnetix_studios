@@ -60,7 +60,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
  * "verify the render before a real send."
  */
 export function AgencyBroadcastComposer({ existingCommunicationId }: { existingCommunicationId?: string }) {
-  const { user, agencyRole, loading: authLoading } = useAuth();
+  const { user, agencyId, agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const router = useRouter();
 
@@ -424,8 +424,10 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
         </div>
 
         {/* Content — the SAME shared visual Email Builder Tenant Broadcasts
-            uses (task's standing shared-first rule). saId="agency" matches
-            this composer's existing upload-scope convention. */}
+            uses (task's standing shared-first rule). `agencyId` here is a
+            client-side dispatch marker only — the upload route re-derives
+            the real agencyId from verified auth claims regardless (see
+            upload-image.ts's EmailBuilderScope doc comment). */}
         <EmailBuilder
           content={content}
           onChange={setContent}
@@ -433,7 +435,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
           preheader={preheader}
           onSubjectChange={setSubject}
           onPreheaderChange={setPreheader}
-          saId="agency"
+          scope={{ kind: "agency", agencyId: agencyId ?? "" }}
           draftId={draftId}
           getPreviewHtml={getPreviewHtml}
           previewOpen={previewOpen}

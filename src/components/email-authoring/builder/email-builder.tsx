@@ -20,6 +20,7 @@ import { CanvasBlock } from "./canvas-block";
 import { PreviewModal } from "./preview-modal";
 import { newBlock, type BuilderBlockType } from "./block-factory";
 import type { BroadcastContent, EmailBlock } from "@/types/broadcast-content";
+import type { EmailBuilderScope } from "@/lib/broadcasts/upload-image";
 
 /**
  * Shared visual Email Builder shell (2026-09-20) — the ONE authoring
@@ -35,6 +36,34 @@ import type { BroadcastContent, EmailBlock } from "@/types/broadcast-content";
  * migration (task instructions 13, 16).
  */
 
+/**
+ * Discriminated builder scope (2026-09-20 scope-model hardening) — replaces
+ * the overloaded `saId: string` prop this builder previously took, which
+ * meant a real `subAccountId` for Tenant but the literal sentinel string
+ * `"agency"` for Agency (a read-only audit traced every use of that string
+ * and found it harmless today — the Agency branch never actually builds a
+ * `subAccounts/{saId}`-shaped path, it just dispatches to a separate,
+ * Admin-SDK-authenticated upload route that re-derives the real agencyId
+ * from verified auth claims — but it was still a stringly-typed dispatch
+ * flag masquerading as a tenant id, exactly the shape of bug that survives
+ * a refactor and breaks silently).
+ *
+ * Canonically defined in `upload-image.ts` (the lowest-level consumer, with
+ * no dependency on any component in this tree) and re-exported here so the
+ * public import path stays `@/components/email-authoring/builder/email-
+ * builder` — defining it directly in this file would create a type-level
+ * import cycle with `inspector-panel.tsx`.
+ *
+ * No existing repo-wide type matched this cleanly: `CommunityOwnerScope`
+ * (src/lib/server/community-scope.ts) is `import "server-only"` and can't
+ * be imported into this client component tree, and `CommunityGroupOwnerScope`
+ * (src/types/community.ts) is a bare `"subAccount" | "agency"` string union
+ * with no id carried alongside it. This type is intentionally the same
+ * two-way vocabulary/shape as both, just carrying the real id and safe to
+ * import from `"use client"` code.
+ */
+export type { EmailBuilderScope };
+
 export interface EmailBuilderProps {
   content: BroadcastContent;
   onChange: (content: BroadcastContent) => void;
@@ -42,8 +71,8 @@ export interface EmailBuilderProps {
   preheader: string;
   onSubjectChange: (value: string) => void;
   onPreheaderChange: (value: string) => void;
-  /** Scopes uploaded image/video-thumbnail storage paths (tenant subAccountId, or the Agency's own storage scope id). */
-  saId: string;
+  /** Scopes uploaded image/video-thumbnail storage paths. */
+  scope: EmailBuilderScope;
   /** Stable id (broadcast/template/draft id) — scopes uploaded storage paths. */
   draftId: string;
   /** Resolves the exact same-renderer preview HTML the parent's "Preview" top-bar button triggers. */
@@ -66,7 +95,7 @@ export function EmailBuilder({
   preheader,
   onSubjectChange,
   onPreheaderChange,
-  saId,
+  scope,
   draftId,
   getPreviewHtml,
   previewOpen,
@@ -224,7 +253,7 @@ export function EmailBuilder({
               onBlockChange={(next) =>
                 setBlocks(blocks.map((b) => (b.id === next.id ? next : b)))
               }
-              saId={saId}
+              scope={scope}
               draftId={draftId}
               subjectAccessory={subjectAccessory}
               preheaderAccessory={preheaderAccessory}

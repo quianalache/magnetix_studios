@@ -30,7 +30,7 @@ import type { BroadcastContent } from "@/types/broadcast-content";
  */
 export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string }) {
   const router = useRouter();
-  const { agencyRole, loading: authLoading } = useAuth();
+  const { agencyId, agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const [uploadScopeId] = useState(() => templateId ?? crypto.randomUUID());
   const [loading, setLoading] = useState(!!templateId);
@@ -196,7 +196,7 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
         preheader={preheader}
         onSubjectChange={setSubject}
         onPreheaderChange={setPreheader}
-        saId="agency"
+        scope={{ kind: "agency", agencyId: agencyId ?? "" }}
         draftId={uploadScopeId}
         getPreviewHtml={getPreviewHtml}
         previewOpen={previewOpen}

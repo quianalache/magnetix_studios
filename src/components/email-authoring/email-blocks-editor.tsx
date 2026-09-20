@@ -19,6 +19,7 @@ import {
   newBlockId,
 } from "@/components/broadcasts/block-editors";
 import type { EmailBlock } from "@/types/broadcast-content";
+import type { EmailBuilderScope } from "@/lib/broadcasts/upload-image";
 
 /**
  * Shared block-authoring shell — extracted so Workflow Design Email (Shared
@@ -104,11 +105,17 @@ export function EmailBlocksEditor({
 }: {
   blocks: EmailBlock[];
   onChange: (blocks: EmailBlock[]) => void;
-  /** Sub-account id — scopes uploaded image/video-thumbnail storage paths. */
+  /** Sub-account id — scopes uploaded image/video-thumbnail storage paths.
+   *  This shell is a tenant-only consumer (Workflow Design Email has no
+   *  Agency equivalent), so it's wrapped into a tenant `EmailBuilderScope`
+   *  once, right here, rather than changing this file's own external
+   *  contract for callers like workflow-email-designer.tsx. */
   saId: string;
   /** Stable id (the emailDocumentId) — scopes uploaded storage paths. */
   draftId: string;
 }) {
+  const scope: EmailBuilderScope = { kind: "tenant", subAccountId: saId };
+
   function addBlock(type: EmailBlock["type"]) {
     onChange([...blocks, newBlock(type)]);
   }
@@ -152,7 +159,7 @@ export function EmailBlocksEditor({
             {block.type === "image" && (
               <ImageBlockEditor
                 block={block}
-                saId={saId}
+                scope={scope}
                 draftId={draftId}
                 onChange={(next) => updateBlock(block.id, next)}
               />
@@ -160,7 +167,7 @@ export function EmailBlocksEditor({
             {block.type === "video" && (
               <VideoBlockEditor
                 block={block}
-                saId={saId}
+                scope={scope}
                 draftId={draftId}
                 onChange={(next) => updateBlock(block.id, next)}
               />
