@@ -38,6 +38,22 @@ import type { VideoProvider } from "@/types/community";
  * embed domain instead of `adilo.bigcommand.com`, that account's videos
  * won't match this pattern yet — a real, separate gap to close later if it
  * comes up, not guessed at here.
+ *
+ * Adilo id character set widened + real URL parsing (2026-09-20): a second
+ * real video (`adilo.bigcommand.com/watch/_OttfMW1`) was rejected because
+ * the id started with `_` and the original pattern's capturing group was
+ * `[A-Za-z0-9]+` — Adilo ids are not guaranteed alphanumeric-only, so this
+ * uses `[A-Za-z0-9_-]` instead (the same character set this file already
+ * trusts for YouTube's 11-char id, not a new invention). Also switched from
+ * matching the substring `adilo.bigcommand.com/watch/` anywhere in the
+ * pasted text to real `new URL()` parsing with an exact hostname check —
+ * the old substring match would have also wrongly accepted a URL like
+ * `https://evil.com/adilo.bigcommand.com/watch/x` (the real host is
+ * evil.com) or `https://notadilo.bigcommand.com/watch/x` (a different,
+ * merely-suffix-matching host), since neither the domain boundary nor the
+ * scheme was ever actually checked. Adilo is the only provider given a
+ * custom `match` function (below) — every other provider's `patterns`
+ * array and matching behavior is untouched.
  */
 export interface ParsedVideo {
   provider: VideoProvider;
@@ -47,9 +63,36 @@ export interface ParsedVideo {
 
 interface VideoProviderDefinition {
   provider: VideoProvider;
-  /** Tried in order; the first capturing group is the extracted id. */
-  patterns: RegExp[];
+  /** Tried in order; the first capturing group is the extracted id. Mutually
+   *  exclusive with `match` — a provider uses one style or the other. */
+  patterns?: RegExp[];
+  /** Custom matcher for a provider whose safe recognition needs more than a
+   *  substring regex (e.g. an exact-hostname check via `new URL()`).
+   *  Returns the extracted id, or null if `raw` isn't this provider's URL. */
+  match?: (raw: string) => string | null;
   embedUrl: (id: string) => string;
+}
+
+/**
+ * Adilo watch-URL matcher — real URL parsing rather than a substring regex,
+ * so the hostname is checked exactly (`adilo.bigcommand.com`, never a
+ * lookalike or a different host that merely contains that text somewhere
+ * in its own URL) and the id is read from the parsed pathname. Tolerates a
+ * bare `adilo.bigcommand.com/watch/{id}` paste with no scheme (prepends
+ * `https://` for parsing) to preserve the same no-protocol-required
+ * behavior every other provider's regex already has.
+ */
+function parseAdiloUrl(raw: string): string | null {
+  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw);
+  let url: URL;
+  try {
+    url = new URL(hasScheme ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (url.hostname !== "adilo.bigcommand.com") return null;
+  const match = url.pathname.match(/^\/watch\/([A-Za-z0-9_-]+)/);
+  return match ? match[1] : null;
 }
 
 const VIDEO_PROVIDERS: VideoProviderDefinition[] = [
@@ -97,12 +140,13 @@ const VIDEO_PROVIDERS: VideoProviderDefinition[] = [
     // adilo.bigcommand.com/watch/{id} — confirmed live to be both the
     // shareable link AND the correct iframe embed src (Adilo's own oEmbed
     // response for a real video returns this exact URL as `html`'s iframe
-    // src). Anchored to the literal "adilo." subdomain so a real
-    // `bigcommand.com` URL for something else (e.g. `help.bigcommand.com`,
-    // `encoding.bigcommand.com` — both real, unrelated hosts on the same
-    // parent domain) is never mistaken for a video id.
+    // src). Exact-hostname-checked via `parseAdiloUrl` (see above) so a
+    // real `bigcommand.com` URL for something else (e.g. `help.bigcommand.com`,
+    // `encoding.bigcommand.com`, or a lookalike host that merely contains
+    // "adilo.bigcommand.com" somewhere in its own URL) is never mistaken
+    // for a video id.
     provider: "adilo",
-    patterns: [/adilo\.bigcommand\.com\/watch\/([A-Za-z0-9]+)/],
+    match: parseAdiloUrl,
     embedUrl: (id) => `https://adilo.bigcommand.com/watch/${id}`,
   },
 ];
@@ -111,7 +155,14 @@ export function parseVideoUrl(raw: string): ParsedVideo | null {
   const url = raw.trim();
   if (!url) return null;
   for (const def of VIDEO_PROVIDERS) {
-    for (const pattern of def.patterns) {
+    if (def.match) {
+      const id = def.match(url);
+      if (id) {
+        return { provider: def.provider, id, embedUrl: def.embedUrl(id) };
+      }
+      continue;
+    }
+    for (const pattern of def.patterns ?? []) {
       const match = url.match(pattern);
       if (match) {
         return {
