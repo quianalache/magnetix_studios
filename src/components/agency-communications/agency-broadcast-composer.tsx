@@ -357,6 +357,20 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
       </div>
     );
   }
+  // `agencyId` resolves from the same auth claims `agencyRole` already did,
+  // so this should never actually be true once `isOwner` is — but the
+  // shared Email Builder's `EmailBuilderScope` must never receive an empty
+  // placeholder id (see upload-image.ts's doc comment), so this composer
+  // treats a still-unresolved agencyId as an extension of the loading
+  // state rather than constructing an invalid scope object.
+  if (!agencyId) {
+    return (
+      <div className="mx-auto w-full max-w-7xl space-y-3">
+        <div className="h-6 w-40 animate-pulse rounded bg-muted/40" />
+        <div className="h-96 animate-pulse rounded-xl border bg-muted/30" />
+      </div>
+    );
+  }
   if (hydrating) {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-3">
@@ -435,7 +449,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
           preheader={preheader}
           onSubjectChange={setSubject}
           onPreheaderChange={setPreheader}
-          scope={{ kind: "agency", agencyId: agencyId ?? "" }}
+          scope={{ kind: "agency", agencyId }}
           draftId={draftId}
           getPreviewHtml={getPreviewHtml}
           previewOpen={previewOpen}
