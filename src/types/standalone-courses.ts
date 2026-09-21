@@ -5,6 +5,7 @@ import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import type { PaymentMode } from "./tenancy";
+import type { LessonVideoSource } from "./media-asset";
 
 /**
  * Standalone Courses — a course/product sold on its own public sales page,
@@ -165,6 +166,8 @@ export interface StandaloneLesson {
   videoUrl: string | null;
   videoProvider: VideoProvider | null;
   videoId: string | null;
+  hostedVideoId?: string | null;
+  videoSource?: LessonVideoSource | null;
   bodyHtml: string;
   resourceLinks: ResourceLink[];
   /**

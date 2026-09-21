@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { CourseOutlineSidebar } from "@/components/standalone-courses/course-outline-sidebar";
+import { HostedVideoField } from "@/components/standalone-courses/hosted-video-field";
 import {
   COURSE_GATE_CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -291,6 +292,7 @@ function StandaloneCourseEditorPageInner({
               key={selectedLesson.id}
               apiBase={apiBase}
               saId={subAccountId}
+              agencyId={course.agencyId}
               courseId={courseId}
               lesson={selectedLesson}
               onDeleted={() => selectLesson(null)}
@@ -319,18 +321,21 @@ function StandaloneCourseEditorPageInner({
 function LessonEditor({
   apiBase,
   saId,
+  agencyId,
   courseId,
   lesson,
   onDeleted,
 }: {
   apiBase: string;
   saId: string;
+  agencyId: string;
   courseId: string;
   lesson: StandaloneLesson;
   onDeleted: () => void;
 }) {
   const [title, setTitle] = useState(lesson.title);
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl ?? "");
+  const [hostedVideoId, setHostedVideoId] = useState<string | null>(lesson.hostedVideoId ?? null);
   const [body, setBody] = useState(lesson.bodyHtml);
   const [published, setPublished] = useState(lesson.published);
   const [links, setLinks] = useState<ResourceLink[]>(
@@ -341,7 +346,7 @@ function LessonEditor({
   const [saving, setSaving] = useState(false);
 
   const parsed = videoUrl.trim() ? parseVideoUrl(videoUrl) : null;
-  const videoValid = !videoUrl.trim() || parsed !== null;
+  const videoValid = Boolean(hostedVideoId) || !videoUrl.trim() || parsed !== null;
 
   async function save() {
     if (!videoValid) {
@@ -357,7 +362,8 @@ function LessonEditor({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
-          videoUrl: videoUrl.trim() || null,
+          hostedVideoId,
+          videoUrl: hostedVideoId ? null : videoUrl.trim() || null,
           bodyHtml: body,
           published,
           resourceLinks: links.filter((l) => l.url.trim()),
@@ -402,22 +408,11 @@ function LessonEditor({
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
 
-      <div className="space-y-1.5">
-        <Label>
-          Video URL (YouTube, Vimeo, Loom, Descript, Wistia, or Adilo)
-        </Label>
-        <Input
-          value={videoUrl}
-          onChange={(e) => setVideoUrl(e.target.value)}
-          placeholder="https://youtube.com/watch?v=…"
-        />
-        {!videoValid && (
-          <p className="text-destructive text-xs">
-            Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo
-            link.
-          </p>
-        )}
-        {parsed && (
+      <HostedVideoField ownerScope={{ kind: "tenant", agencyId, subAccountId: saId }} title={title} courseId={courseId} lessonId={lesson.id} hostedVideoId={hostedVideoId} onHostedVideoChange={setHostedVideoId} externalUrl={videoUrl} onExternalUrlChange={setVideoUrl} />
+      {!hostedVideoId && !videoValid && (
+        <p className="text-destructive text-xs">Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo link.</p>
+      )}
+      {!hostedVideoId && parsed && (
           <div className="aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-black">
             <iframe
               src={parsed.embedUrl}
@@ -426,8 +421,7 @@ function LessonEditor({
               className="h-full w-full"
             />
           </div>
-        )}
-      </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Lesson text</Label>

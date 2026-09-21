@@ -2,6 +2,8 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { updateBunnyLessonReference } from "@/lib/server/bunny-stream-service";
+import type { LessonVideoSource } from "@/types/media-asset";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { ensureUniqueSlug, isSlugAvailable, isValidSlugFormat } from "@/lib/slug";
 import {
@@ -477,6 +479,8 @@ export interface AgencyStandaloneLessonPatch {
   order?: number;
   published?: boolean;
   videoUrl?: string | null;
+  hostedVideoId?: string | null;
+  videoSource?: LessonVideoSource | null;
   bodyHtml?: string;
   resourceLinks?: ResourceLink[];
   chartUnlockCondition?: ChartRuleCondition | null;
@@ -490,6 +494,8 @@ export async function updateAgencyStandaloneLessonServerSide(opts: {
 }): Promise<{ videoError?: boolean }> {
   const updates: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
   const p = opts.patch;
+  const existingSnap = await lessonsCol(opts.agencyId, opts.courseId).doc(opts.lessonId).get();
+  const existing = existingSnap.data() as { hostedVideoId?: string | null } | undefined;
   if (typeof p.title === "string") updates.title = p.title.trim();
   if (p.sectionId !== undefined) updates.sectionId = p.sectionId;
   if (typeof p.order === "number") updates.order = p.order;
@@ -503,23 +509,36 @@ export async function updateAgencyStandaloneLessonServerSide(opts: {
   }
   if (p.chartUnlockCondition !== undefined) updates.chartUnlockCondition = p.chartUnlockCondition;
   let videoError = false;
-  if (p.videoUrl !== undefined) {
+  if (p.hostedVideoId !== undefined) {
+    updates.hostedVideoId = p.hostedVideoId;
+    updates.videoSource = p.hostedVideoId ? { sourceType: "hosted", hostedVideoId: p.hostedVideoId } : null;
+    updates.videoUrl = null;
+    updates.videoProvider = null;
+    updates.videoId = null;
+  } else if (p.videoUrl !== undefined) {
     if (!p.videoUrl) {
       updates.videoUrl = null;
       updates.videoProvider = null;
       updates.videoId = null;
+      updates.hostedVideoId = null;
+      updates.videoSource = null;
     } else {
       const parsed = parseVideoUrl(p.videoUrl);
       if (parsed) {
         updates.videoUrl = p.videoUrl.trim();
         updates.videoProvider = parsed.provider;
         updates.videoId = parsed.id;
+        updates.hostedVideoId = null;
+        updates.videoSource = { sourceType: "external", provider: parsed.provider, url: p.videoUrl.trim(), videoId: parsed.id };
       } else {
         videoError = true;
       }
     }
   }
   await lessonsCol(opts.agencyId, opts.courseId).doc(opts.lessonId).update(updates);
+  const nextHosted = p.hostedVideoId !== undefined ? p.hostedVideoId : (p.videoUrl !== undefined && !videoError ? null : existing?.hostedVideoId ?? null);
+  if (existing?.hostedVideoId && existing.hostedVideoId !== nextHosted) await updateBunnyLessonReference({ kind: "agency", agencyId: opts.agencyId }, existing.hostedVideoId, { type: "course_lesson", courseId: opts.courseId, lessonId: opts.lessonId }, false);
+  if (nextHosted && nextHosted !== existing?.hostedVideoId) await updateBunnyLessonReference({ kind: "agency", agencyId: opts.agencyId }, nextHosted, { type: "course_lesson", courseId: opts.courseId, lessonId: opts.lessonId }, true);
   return { videoError };
 }
 
@@ -528,7 +547,9 @@ export async function deleteAgencyStandaloneLessonServerSide(opts: {
   courseId: string;
   lessonId: string;
 }): Promise<void> {
+  const existing = (await lessonsCol(opts.agencyId, opts.courseId).doc(opts.lessonId).get()).data() as { hostedVideoId?: string | null } | undefined;
   await getAdminDb().recursiveDelete(lessonsCol(opts.agencyId, opts.courseId).doc(opts.lessonId));
+  if (existing?.hostedVideoId) await updateBunnyLessonReference({ kind: "agency", agencyId: opts.agencyId }, existing.hostedVideoId, { type: "course_lesson", courseId: opts.courseId, lessonId: opts.lessonId }, false);
 }
 
 export function filterAgencyLessonsForEnrollment(

@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { CourseOutlineSidebar } from "@/components/standalone-courses/course-outline-sidebar";
+import { HostedVideoField } from "@/components/standalone-courses/hosted-video-field";
 import {
   COURSE_GATE_CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -204,7 +205,7 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
 
         <div>
           {selectedLesson ? (
-            <LessonEditor apiBase={apiBase} courseId={courseId} lesson={selectedLesson} onDeleted={async () => { selectLesson(null); await refresh(); }} onSaved={refresh} />
+            <LessonEditor apiBase={apiBase} agencyId={course.agencyId} courseId={courseId} lesson={selectedLesson} onDeleted={async () => { selectLesson(null); await refresh(); }} onSaved={refresh} />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center">
               <GraduationCap className="h-8 w-8 text-muted-foreground" />
@@ -223,12 +224,13 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
 }
 
 function LessonEditor({
-  apiBase, courseId, lesson, onDeleted, onSaved,
+  apiBase, agencyId, courseId, lesson, onDeleted, onSaved,
 }: {
-  apiBase: string; courseId: string; lesson: StandaloneLesson; onDeleted: () => void; onSaved: () => void;
+  apiBase: string; agencyId: string; courseId: string; lesson: StandaloneLesson; onDeleted: () => void; onSaved: () => void;
 }) {
   const [title, setTitle] = useState(lesson.title);
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl ?? "");
+  const [hostedVideoId, setHostedVideoId] = useState<string | null>(lesson.hostedVideoId ?? null);
   const [body, setBody] = useState(lesson.bodyHtml);
   const [published, setPublished] = useState(lesson.published);
   const [links, setLinks] = useState<ResourceLink[]>(lesson.resourceLinks ?? []);
@@ -236,7 +238,7 @@ function LessonEditor({
   const [saving, setSaving] = useState(false);
 
   const parsed = videoUrl.trim() ? parseVideoUrl(videoUrl) : null;
-  const videoValid = !videoUrl.trim() || parsed !== null;
+  const videoValid = Boolean(hostedVideoId) || !videoUrl.trim() || parsed !== null;
 
   async function save() {
     if (!videoValid) {
@@ -248,7 +250,7 @@ function LessonEditor({
       const res = await fetch(`${apiBase}/lessons/${lesson.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, videoUrl: videoUrl.trim() || null, bodyHtml: body, published, resourceLinks: links.filter((l) => l.url.trim()), chartUnlockCondition: unlockCondition }),
+        body: JSON.stringify({ title, hostedVideoId, videoUrl: hostedVideoId ? null : videoUrl.trim() || null, bodyHtml: body, published, resourceLinks: links.filter((l) => l.url.trim()), chartUnlockCondition: unlockCondition }),
       });
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string };
@@ -284,16 +286,13 @@ function LessonEditor({
         <Input value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
 
-      <div className="space-y-1.5">
-        <Label>Video URL (YouTube, Vimeo, Loom, Descript, Wistia, or Adilo)</Label>
-        <Input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" />
-        {!videoValid && <p className="text-xs text-destructive">Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo link.</p>}
-        {parsed && (
+      <HostedVideoField ownerScope={{ kind: "agency", agencyId }} title={title} courseId={courseId} lessonId={lesson.id} hostedVideoId={hostedVideoId} onHostedVideoChange={setHostedVideoId} externalUrl={videoUrl} onExternalUrlChange={setVideoUrl} />
+      {!hostedVideoId && !videoValid && <p className="text-xs text-destructive">Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo link.</p>}
+      {!hostedVideoId && parsed && (
           <div className="aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-black">
             <iframe src={parsed.embedUrl} title="preview" allowFullScreen className="h-full w-full" />
           </div>
-        )}
-      </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Lesson text</Label>

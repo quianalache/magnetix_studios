@@ -8,7 +8,8 @@ import type { FieldValue, Timestamp } from "firebase/firestore";
 export interface MediaAsset {
   id: string;
   agencyId: string;
-  subAccountId: string;
+  subAccountId: string | null;
+  ownerScope?: VideoOwnerScope;
   uploadedByPersonId: string | null;
   mediaType: MediaAssetType;
   source: MediaAssetSource | null;
@@ -20,6 +21,43 @@ export interface MediaAsset {
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
   deletedAt: Timestamp | FieldValue | null;
+  bunny?: BunnyMediaAssetMetadata;
+  references?: MediaAssetReference[];
+}
+
+export type VideoOwnerScope =
+  | { kind: "tenant"; agencyId: string; subAccountId: string }
+  | { kind: "agency"; agencyId: string };
+
+export type LessonVideoSource =
+  | {
+      sourceType: "external";
+      provider: string;
+      url: string;
+      videoId: string;
+    }
+  | { sourceType: "hosted"; hostedVideoId: string };
+
+export interface BunnyMediaAssetMetadata {
+  libraryId: string;
+  videoGuid: string;
+  title: string;
+  lifecycleStatus: MediaAssetStatus;
+  durationSeconds: number | null;
+  storageBytes: number | null;
+  width: number | null;
+  height: number | null;
+  thumbnailFileName: string | null;
+  providerStatus: number | string | null;
+  providerUpdatedAt: Timestamp | FieldValue | null;
+  deletedAt: Timestamp | FieldValue | null;
+}
+
+export interface MediaAssetReference {
+  type: "course_lesson";
+  courseId: string;
+  lessonId: string;
+  createdAt: Timestamp | FieldValue | null;
 }
 
 export type MediaAssetType =
@@ -36,7 +74,11 @@ export type MediaAssetStatus =
   | "ready"
   | "failed"
   | "deleted";
-export type MediaStorageProvider = "firebase" | "s3_compatible" | "external";
+export type MediaStorageProvider =
+  | "firebase"
+  | "s3_compatible"
+  | "external"
+  | "bunny";
 
 /** A durable relation to the feature that owns or exposes an asset. */
 export interface MediaAssetSource {

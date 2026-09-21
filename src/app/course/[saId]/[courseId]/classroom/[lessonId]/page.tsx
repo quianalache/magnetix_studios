@@ -15,6 +15,7 @@ import {
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 import { getInAppUpsellsForMember } from "@/lib/server/course-offer-upsell-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
+import { getBunnyPlaybackUrl } from "@/lib/server/bunny-stream-service";
 
 export const dynamic = "force-dynamic";
 
@@ -89,14 +90,16 @@ export default async function StandaloneLessonPlayerPage({
     id: s.id,
     title: s.title,
   }));
-  const lessons: PlayerLesson[] = visibleLessons.map((l) => ({
+  const lessons: PlayerLesson[] = await Promise.all(visibleLessons.map(async (l) => ({
     id: l.id,
     title: l.title,
     sectionId: l.sectionId,
-    embedUrl: embedUrlFor(l.videoProvider, l.videoId),
+    embedUrl: l.hostedVideoId
+      ? await getBunnyPlaybackUrl({ kind: "tenant", agencyId: course.agencyId, subAccountId: saId }, l.hostedVideoId)
+      : embedUrlFor(l.videoProvider, l.videoId),
     body: renderLessonBodyHtml(l.bodyHtml),
     resourceLinks: l.resourceLinks ?? [],
-  }));
+  })));
 
   return (
     <>

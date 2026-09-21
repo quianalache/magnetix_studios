@@ -20,5 +20,9 @@ export function mediaStorageAdapter(
       throw new MediaStorageConfigurationError(
         "External MediaAssets are references and have no Magnetix storage adapter."
       );
+    case "bunny":
+      throw new MediaStorageConfigurationError(
+        "Bunny-hosted videos use the Bunny embed playback service, not a generic storage adapter."
+      );
   }
 }
