@@ -42,15 +42,28 @@ function toAsset(snap: FirebaseFirestore.DocumentSnapshot): MediaAsset {
   return { id: snap.id, ...(snap.data() as Omit<MediaAsset, "id">) };
 }
 
-async function bunnyRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export type BunnyWebhookCheckpoint = (checkpoint: string, details?: Record<string, unknown>) => void;
+
+class BunnyRequestError extends Error {
+  constructor(public readonly status: number, path: string) {
+    super(`Bunny request failed (${status}) for ${path}`);
+    this.name = "BunnyRequestError";
+  }
+}
+
+async function bunnyRequest<T>(path: string, init: RequestInit = {}, onCheckpoint?: BunnyWebhookCheckpoint): Promise<T> {
   const config = requireConfig();
+  onCheckpoint?.("bunny_metadata_get_starting", { path });
   const response = await fetch(`https://video.bunnycdn.com${path}`, {
     ...init,
     headers: { AccessKey: config.apiKey, Accept: "application/json", ...(init.headers || {}) },
   });
-  if (!response.ok) throw new Error(`Bunny request failed (${response.status})`);
+  onCheckpoint?.("bunny_get_status_received", { path, httpStatus: response.status, ok: response.ok });
+  if (!response.ok) throw new BunnyRequestError(response.status, path);
   const text = await response.text();
-  return (text ? JSON.parse(text) : undefined) as T;
+  const parsed = (text ? JSON.parse(text) : undefined) as T;
+  onCheckpoint?.("bunny_response_parsed", { path, responsePresent: Boolean(parsed) });
+  return parsed;
 }
 
 interface BunnyVideo {
@@ -135,11 +148,13 @@ export async function getBunnyAsset(scope: VideoOwnerScope, assetId: string) {
   return scopeMatches(asset, scope) && asset.storage.provider === "bunny" ? asset : null;
 }
 
-export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: string) {
+export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: string, onCheckpoint?: BunnyWebhookCheckpoint) {
   const asset = await getBunnyAsset(scope, assetId);
   if (!asset?.bunny) throw new Error("Hosted video not found");
-  const video = await bunnyRequest<BunnyVideo>(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`);
+  const video = await bunnyRequest<BunnyVideo>(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`, {}, onCheckpoint);
   const status = lifecycle(video);
+  onCheckpoint?.("metadata_normalized", { providerStatus: video.status ?? null, lifecycleStatus: status });
+  onCheckpoint?.("media_asset_update_starting");
   await assetCollection(scope).doc(assetId).set({
     status,
     updatedAt: FieldValue.serverTimestamp(),
@@ -162,6 +177,7 @@ export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: stri
       providerUpdatedAt: FieldValue.serverTimestamp(),
     },
   }, { merge: true });
+  onCheckpoint?.("usage_recompute_starting");
   await refreshBunnyUsage(scope);
   return { ...(await getBunnyAsset(scope, assetId) as MediaAsset), provider: video };
 }
