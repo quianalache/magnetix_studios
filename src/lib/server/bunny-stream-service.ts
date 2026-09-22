@@ -42,8 +42,6 @@ function toAsset(snap: FirebaseFirestore.DocumentSnapshot): MediaAsset {
   return { id: snap.id, ...(snap.data() as Omit<MediaAsset, "id">) };
 }
 
-export type BunnyWebhookCheckpoint = (checkpoint: string, details?: Record<string, unknown>) => void;
-
 class BunnyRequestError extends Error {
   constructor(public readonly status: number, path: string) {
     super(`Bunny request failed (${status}) for ${path}`);
@@ -51,33 +49,15 @@ class BunnyRequestError extends Error {
   }
 }
 
-async function bunnyRequest<T>(path: string, init: RequestInit = {}, onCheckpoint?: BunnyWebhookCheckpoint): Promise<T> {
+async function bunnyRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const config = requireConfig();
-  const rawApiKey = process.env.BUNNY_STREAM_API_KEY || "";
-  const trimmedApiKey = rawApiKey.trim();
-  console.info("[bunny-auth-identity]", {
-    apiKeyPresent: Boolean(rawApiKey),
-    exactLength: rawApiKey.length,
-    trimmedLength: trimmedApiKey.length,
-    exactDiffersFromTrimmed: rawApiKey !== trimmedApiKey,
-    exactFingerprintPrefix: createHash("sha256").update(rawApiKey).digest("hex").slice(0, 8),
-    trimmedFingerprintPrefix: createHash("sha256").update(trimmedApiKey).digest("hex").slice(0, 8),
-    libraryId: config.libraryId,
-    path,
-    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || undefined,
-    headerName: "AccessKey",
-    headerValueSource: "BUNNY_STREAM_API_KEY",
-  });
-  onCheckpoint?.("bunny_metadata_get_starting", { path });
   const response = await fetch(`https://video.bunnycdn.com${path}`, {
     ...init,
     headers: { AccessKey: config.apiKey, Accept: "application/json", ...(init.headers || {}) },
   });
-  onCheckpoint?.("bunny_get_status_received", { path, httpStatus: response.status, ok: response.ok });
   if (!response.ok) throw new BunnyRequestError(response.status, path);
   const text = await response.text();
   const parsed = (text ? JSON.parse(text) : undefined) as T;
-  onCheckpoint?.("bunny_response_parsed", { path, responsePresent: Boolean(parsed) });
   return parsed;
 }
 
@@ -163,13 +143,11 @@ export async function getBunnyAsset(scope: VideoOwnerScope, assetId: string) {
   return scopeMatches(asset, scope) && asset.storage.provider === "bunny" ? asset : null;
 }
 
-export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: string, onCheckpoint?: BunnyWebhookCheckpoint) {
+export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: string) {
   const asset = await getBunnyAsset(scope, assetId);
   if (!asset?.bunny) throw new Error("Hosted video not found");
-  const video = await bunnyRequest<BunnyVideo>(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`, {}, onCheckpoint);
+  const video = await bunnyRequest<BunnyVideo>(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`);
   const status = lifecycle(video);
-  onCheckpoint?.("metadata_normalized", { providerStatus: video.status ?? null, lifecycleStatus: status });
-  onCheckpoint?.("media_asset_update_starting");
   await assetCollection(scope).doc(assetId).set({
     status,
     updatedAt: FieldValue.serverTimestamp(),
@@ -192,7 +170,6 @@ export async function syncBunnyHostedVideo(scope: VideoOwnerScope, assetId: stri
       providerUpdatedAt: FieldValue.serverTimestamp(),
     },
   }, { merge: true });
-  onCheckpoint?.("usage_recompute_starting");
   await refreshBunnyUsage(scope);
   return { ...(await getBunnyAsset(scope, assetId) as MediaAsset), provider: video };
 }

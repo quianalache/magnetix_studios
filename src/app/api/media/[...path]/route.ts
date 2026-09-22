@@ -9,7 +9,6 @@ import {
   initBunnyHostedVideo,
   syncBunnyHostedVideo,
   webhookEventId,
-  type BunnyWebhookCheckpoint,
 } from "@/lib/server/bunny-stream-service";
 import type { VideoOwnerScope } from "@/types/media-asset";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -62,31 +61,21 @@ export async function POST(request: Request, ctx: { params: Promise<{ path?: str
   if (!input) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
   if (path.join("/") === "webhooks/bunny-stream") {
-    let checkpoint = "webhook_received";
-    const logCheckpoint: BunnyWebhookCheckpoint = (nextCheckpoint, details) => {
-      checkpoint = nextCheckpoint;
-      console.info("[bunny-webhook] checkpoint", { checkpoint: nextCheckpoint, ...details });
-    };
     try {
-      logCheckpoint("webhook_received", { method: request.method, path: path.join("/") });
       const guid = String(input.videoGuid || input.videoId || input.VideoGuid || input.VideoId || "");
       if (!guid) return NextResponse.json({ ok: false, error: "Missing Bunny video GUID" }, { status: 400 });
-      logCheckpoint("guid_parsed", { guid });
       const found = await findBunnyAssetByGuid(guid);
       if (!found) return NextResponse.json({ ok: true, ignored: true });
-      logCheckpoint("media_asset_lookup_succeeded", { assetId: found.asset.id });
       const eventId = webhookEventId(input as Record<string, unknown>);
       const eventRef = getAdminDb().collection("bunnyWebhookEvents").doc(eventId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 150));
       const existing = await eventRef.get();
       if (existing.exists) return NextResponse.json({ ok: true, duplicate: true });
       const scope = found.asset.ownerScope || (found.asset.subAccountId ? { kind: "tenant", agencyId: found.asset.agencyId, subAccountId: found.asset.subAccountId } : { kind: "agency", agencyId: found.asset.agencyId });
-      await syncBunnyHostedVideo(scope, found.asset.id, logCheckpoint);
-      logCheckpoint("webhook_event_persistence_starting", { eventId });
+      await syncBunnyHostedVideo(scope, found.asset.id);
       await eventRef.set({ eventId, videoGuid: guid, processedAt: new Date().toISOString() });
-      logCheckpoint("handler_completed", { eventId });
       return NextResponse.json({ ok: true });
     } catch (error) {
-      console.error("[bunny-webhook] exception", { checkpoint, ...webhookErrorDetails(error), envPresence: webhookEnvPresence() });
+      console.error("[bunny-webhook] exception", { ...webhookErrorDetails(error), envPresence: webhookEnvPresence() });
       throw error;
     }
   }
