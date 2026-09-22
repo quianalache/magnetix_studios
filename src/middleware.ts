@@ -275,6 +275,10 @@ const PUBLIC_PATHS = [
   // verified inside the route via `verifyQStashSignature`. Mirrors the
   // existing /api/broadcasts/email/step + /api/workflows/step paths.
   "/api/webhooks-out",
+  // Bunny Stream webhook callback; owner-scoped media actions authenticate
+  // inside the consolidated route, while provider callbacks have no staff
+  // session cookie.
+  "/api/media",
 ];
 
 /**
