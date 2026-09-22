@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type {
   MediaAsset,
@@ -96,7 +96,7 @@ export async function initBunnyHostedVideo(input: {
   if (!bunny.guid) throw new Error("Bunny did not return a video GUID");
   const ref = assetCollection(input.scope).doc();
   const reference: MediaAssetReference | undefined = input.courseId && input.lessonId
-    ? { type: "course_lesson", courseId: input.courseId, lessonId: input.lessonId, createdAt: FieldValue.serverTimestamp() }
+    ? { type: "course_lesson", courseId: input.courseId, lessonId: input.lessonId, createdAt: Timestamp.now() }
     : undefined;
   await ref.set({
     agencyId: input.scope.agencyId,
@@ -123,7 +123,7 @@ export async function initBunnyHostedVideo(input: {
     videoGuid: bunny.guid,
     libraryId: config.libraryId,
     uploadUrl: "https://video.bunnycdn.com/tusupload",
-    authorizationSignature: hash(`${config.apiKey}${bunny.guid}${expires}`),
+    authorizationSignature: hash(`${config.libraryId}${config.apiKey}${expires}${bunny.guid}`),
     authorizationExpire: expires,
   };
 }
@@ -184,7 +184,7 @@ export async function updateBunnyLessonReference(scope: VideoOwnerScope, assetId
   const asset = await getBunnyAsset(scope, assetId);
   if (!asset) return;
   const refs = (asset.references || []).filter((item) => !(item.type === reference.type && item.courseId === reference.courseId && item.lessonId === reference.lessonId));
-  if (attached) refs.push({ ...reference, createdAt: FieldValue.serverTimestamp() });
+  if (attached) refs.push({ ...reference, createdAt: Timestamp.now() });
   await assetCollection(scope).doc(assetId).set({ references: refs, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 
