@@ -13,7 +13,7 @@
   "logoUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/aac0e62d2b4d4e7d8835c4c6f7e8b3858a98e13b5e30427fb8151c3735c2a818.jpg",
   "coverUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/5d0625ea10e24a059e464e07bfd59a889a97f828af314677b2a727d38b7c2082-md.jpg",
   "faviconUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/f10bed4c7d3444159281c758fed5e95bccbdade9110f4430872c2fc84927e197.png",
-  "aboutMediaCount": 5,
+  "aboutMediaCount": 6,
   "aboutImages": [
     {
       "sourceAttachmentId": "ab2e416112584dda88d18532af8a3c41",
@@ -29,6 +29,11 @@
       "sourceAttachmentId": "86fe9b9aefa440e781500952802ca2f6",
       "fileId": "b43a2b80cb5e48699618ac73a1637ab9",
       "url": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/72f9840c02ee4026a3fa16aaf05da6c82625bc4001ab427e81752524c1f44411.png"
+    },
+    {
+      "sourceAttachmentId": "ea22e4c5012240549f5c081f5227abd6",
+      "fileId": "a4233b05af0845b79da9514f98029c6f",
+      "url": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/13c08c2d436f429697987c97bcca7002cf09f73026c24961a7765c76864f9464.png"
     }
   ],
   "aboutVideos": [
@@ -40,7 +45,8 @@
     { "sourceAttachmentId": "ab2e416112584dda88d18532af8a3c41", "type": "image" },
     { "sourceAttachmentId": "14ec0fb772a9431fb634a2b4816fa2f9", "type": "video" },
     { "sourceAttachmentId": "6d4a386400394cc6a03926b3c139ae14", "type": "image" },
-    { "sourceAttachmentId": "86fe9b9aefa440e781500952802ca2f6", "type": "image" }
+    { "sourceAttachmentId": "86fe9b9aefa440e781500952802ca2f6", "type": "image" },
+    { "sourceAttachmentId": "ea22e4c5012240549f5c081f5227abd6", "type": "image" }
   ],
-  "assetMigrationStatus": "source URLs observed; permanent Magnetix/Firebase rehost pending"
+  "assetMigrationStatus": "six About media items verified; images rehosted to Magnetix Firebase Storage and YouTube videos preserved by URL/ID"
 }
