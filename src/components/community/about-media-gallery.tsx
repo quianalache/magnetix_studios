@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Play } from "lucide-react";
+import { embedUrlFor } from "@/lib/community/video-embed";
 import type { CommunityAboutMediaItem } from "@/types/community";
 
 /**
@@ -17,26 +18,28 @@ import type { CommunityAboutMediaItem } from "@/types/community";
  * just not a concern here since this shape has none of that).
  */
 export function AboutMediaGallery({ items }: { items: CommunityAboutMediaItem[] }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  if (items.length === 0) return null;
-
-  const active = items[Math.min(activeIndex, items.length - 1)];
-  const others = items
+  const orderedItems = items
     .map((item, index) => ({ item, index }))
-    .filter(({ index }) => index !== activeIndex);
+    .sort((a, b) => a.item.order - b.item.order || a.index - b.index)
+    .map(({ item }) => item);
+  const [activeId, setActiveId] = useState(orderedItems[0]?.id ?? "");
+  if (orderedItems.length === 0) return null;
+
+  const active = orderedItems.find((item) => item.id === activeId) ?? orderedItems[0];
 
   return (
     <section className="community-about-media-block" aria-label="Community media">
       <FeaturedMedia item={active} />
-      {others.length > 0 && (
+      {orderedItems.length > 0 && (
         <div className="community-about-media-strip">
-          {others.map(({ item, index }) => (
+          {orderedItems.map((item) => (
             <button
               key={item.id}
               type="button"
-              className="community-about-media-thumb"
-              onClick={() => setActiveIndex(index)}
-              aria-label={item.title?.trim() ? `Show ${item.title}` : "Show media item"}
+              className={`community-about-media-thumb${item.id === active.id ? " community-about-media-thumb-active" : ""}`}
+              onClick={() => setActiveId(item.id)}
+              aria-label={mediaAriaLabel(item)}
+              aria-pressed={item.id === active.id}
             >
               <ThumbMedia item={item} />
             </button>
@@ -47,6 +50,12 @@ export function AboutMediaGallery({ items }: { items: CommunityAboutMediaItem[] 
   );
 }
 
+function mediaAriaLabel(item: CommunityAboutMediaItem): string {
+  const title = item.title?.trim();
+  if (title) return `Show ${title}`;
+  return item.type === "video" ? "Show YouTube video" : "Show image";
+}
+
 function FeaturedMedia({ item }: { item: CommunityAboutMediaItem }) {
   const title = item.title?.trim() || "";
   const label = item.label?.trim() || "";
@@ -54,15 +63,25 @@ function FeaturedMedia({ item }: { item: CommunityAboutMediaItem }) {
   const mediaImage = item.type === "image" ? item.url : item.thumbnailUrl || null;
   const isEmpty = !mediaImage;
   const isVideo = item.type === "video";
+  const embedUrl = isVideo ? embedUrlFor(item.provider, item.videoId) : null;
 
   const card = (
     <article
       className={`community-about-media-featured-wrap ${isEmpty ? "community-about-media-empty" : ""}`}
     >
-      {mediaImage && (
+      {embedUrl && (
+        <iframe
+          className="community-about-media-video"
+          src={embedUrl}
+          title={title || "YouTube video"}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
+      )}
+      {!embedUrl && mediaImage && (
         <div className="community-about-media-image" style={{ backgroundImage: `url(${mediaImage})` }} />
       )}
-      {isVideo && (
+      {isVideo && !embedUrl && (
         <div className="community-about-play community-about-play-lg">
           <Play size={22} fill="currentColor" />
         </div>

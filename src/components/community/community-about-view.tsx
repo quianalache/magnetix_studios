@@ -204,6 +204,9 @@ export function CommunityAboutStyles() {
 .community-about-media-thumb { flex: 0 0 108px; padding: 0; border: none; background: none; cursor: pointer; scroll-snap-align: start; border-radius: 7px; }
 .community-about-media-thumb-inner { border-radius: 7px; transition: opacity .15s ease, transform .15s ease; }
 .community-about-media-thumb:hover .community-about-media-thumb-inner { opacity: .85; }
+.community-about-media-thumb:focus-visible { outline: 3px solid var(--ca-primary); outline-offset: 3px; }
+.community-about-media-thumb-active .community-about-media-thumb-inner { border-color: var(--ca-primary); box-shadow: 0 0 0 2px var(--ca-primary); }
+.community-about-media-video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 
 /* About content */
 .community-about-copy-section { max-width: 780px; }

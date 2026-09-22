@@ -1,0 +1,46 @@
+{
+  "source": "Skool __NEXT_DATA__.props.pageProps.currentGroup",
+  "capturedAt": "2026-09-22",
+  "skoolGroupId": "7895e266f9e64cdfab94bd56e1f8478e",
+  "slug": "quiana",
+  "name": "quiana",
+  "displayName": "Magnetic Visibility Skool",
+  "description": "A high-level circle for entrepreneurs ready to turn YouTube into their #1 client magnet and grow visibility with ease, clarity, and confidence.",
+  "aboutText": "Bookie, be honest.\n\nHow long have you been saying you’re going to start your YouTube channel?\n\nOr “get consistent again.”\nOr finally use your videos to sell the thing you know people need.\n\nBut then you sit down and suddenly it’s a whole production.\n\nWhat do I even talk about?What if nobody watches?What if I sound awkward?What if my niche is too small?What if I only get 12 views and embarrass myself on the internet?\n\nHoney. Come here.\n\n🙅🏾‍♀️ You do not need 1,000 subscribers to monetize your YouTube.\n\n🙅🏾‍♀️ You do not need a huge audience, a perfect setup, or a fake polished personality to start turning your videos into trust, leads, sales, and momentum.\n\n✨You need a simple way to know what to say, how to say it, and how to turn one video into an asset that can keep working after you close the laptop.\n\nThat’s what we do inside Magnetic Visibility Circle.\n\nWe make YouTube feel lighter, easier, and way less dramatic.\n\nBecause one YouTube video can become one of the most powerful business assets you create.",
+  "privacy": 1,
+  "totalMembers": 69,
+  "displayPrice": { "currency": "usd", "amount": 800, "recurringInterval": "month" },
+  "logoUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/aac0e62d2b4d4e7d8835c4c6f7e8b3858a98e13b5e30427fb8151c3735c2a818.jpg",
+  "coverUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/5d0625ea10e24a059e464e07bfd59a889a97f828af314677b2a727d38b7c2082-md.jpg",
+  "faviconUrl": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/f10bed4c7d3444159281c758fed5e95bccbdade9110f4430872c2fc84927e197.png",
+  "aboutMediaCount": 5,
+  "aboutImages": [
+    {
+      "sourceAttachmentId": "ab2e416112584dda88d18532af8a3c41",
+      "fileId": "95667f634c2e471b8f90cec803a25e97",
+      "url": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/33358692d7d64bf49fe902a907a4b3fa22a6b5423d8f4a20b6fc7512c7be2697.png"
+    },
+    {
+      "sourceAttachmentId": "6d4a386400394cc6a03926b3c139ae14",
+      "fileId": "452a28f41a0b4e99bcded70c86bd2dd1",
+      "url": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/1df5eb100aaf4d21bc99f8ec51fdae0b1a8a2d2b0ec44a659ae853817ea43273.png"
+    },
+    {
+      "sourceAttachmentId": "86fe9b9aefa440e781500952802ca2f6",
+      "fileId": "b43a2b80cb5e48699618ac73a1637ab9",
+      "url": "https://assets.skool.com/f/7895e266f9e64cdfab94bd56e1f8478e/72f9840c02ee4026a3fa16aaf05da6c82625bc4001ab427e81752524c1f44411.png"
+    }
+  ],
+  "aboutVideos": [
+    { "sourceAttachmentId": "d352eadd95284cf9b162244cee036af2", "videoUrl": "https://youtu.be/GdvN3CMo8qs", "classification": "not migrated by image-only task" },
+    { "sourceAttachmentId": "14ec0fb772a9431fb634a2b4816fa2f9", "videoUrl": "https://youtu.be/Dy7NqU4ukHE", "classification": "not migrated by image-only task" }
+  ],
+  "aboutMediaOrder": [
+    { "sourceAttachmentId": "d352eadd95284cf9b162244cee036af2", "type": "video" },
+    { "sourceAttachmentId": "ab2e416112584dda88d18532af8a3c41", "type": "image" },
+    { "sourceAttachmentId": "14ec0fb772a9431fb634a2b4816fa2f9", "type": "video" },
+    { "sourceAttachmentId": "6d4a386400394cc6a03926b3c139ae14", "type": "image" },
+    { "sourceAttachmentId": "86fe9b9aefa440e781500952802ca2f6", "type": "image" }
+  ],
+  "assetMigrationStatus": "source URLs observed; permanent Magnetix/Firebase rehost pending"
+}
