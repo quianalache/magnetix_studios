@@ -53,6 +53,21 @@ class BunnyRequestError extends Error {
 
 async function bunnyRequest<T>(path: string, init: RequestInit = {}, onCheckpoint?: BunnyWebhookCheckpoint): Promise<T> {
   const config = requireConfig();
+  const rawApiKey = process.env.BUNNY_STREAM_API_KEY || "";
+  const trimmedApiKey = rawApiKey.trim();
+  console.info("[bunny-auth-identity]", {
+    apiKeyPresent: Boolean(rawApiKey),
+    exactLength: rawApiKey.length,
+    trimmedLength: trimmedApiKey.length,
+    exactDiffersFromTrimmed: rawApiKey !== trimmedApiKey,
+    exactFingerprintPrefix: createHash("sha256").update(rawApiKey).digest("hex").slice(0, 8),
+    trimmedFingerprintPrefix: createHash("sha256").update(trimmedApiKey).digest("hex").slice(0, 8),
+    libraryId: config.libraryId,
+    path,
+    deploymentId: process.env.VERCEL_DEPLOYMENT_ID || undefined,
+    headerName: "AccessKey",
+    headerValueSource: "BUNNY_STREAM_API_KEY",
+  });
   onCheckpoint?.("bunny_metadata_get_starting", { path });
   const response = await fetch(`https://video.bunnycdn.com${path}`, {
     ...init,
