@@ -63,14 +63,13 @@ export async function POST(request: Request, ctx: { params: Promise<{ path?: str
 
   if (path.join("/") === "webhooks/bunny-stream") {
     let checkpoint = "webhook_received";
-    let guid = "";
     const logCheckpoint: BunnyWebhookCheckpoint = (nextCheckpoint, details) => {
       checkpoint = nextCheckpoint;
       console.info("[bunny-webhook] checkpoint", { checkpoint: nextCheckpoint, ...details });
     };
     try {
       logCheckpoint("webhook_received", { method: request.method, path: path.join("/") });
-      guid = String(input.videoGuid || input.videoId || input.VideoGuid || input.VideoId || "");
+      const guid = String(input.videoGuid || input.videoId || input.VideoGuid || input.VideoId || "");
       if (!guid) return NextResponse.json({ ok: false, error: "Missing Bunny video GUID" }, { status: 400 });
       logCheckpoint("guid_parsed", { guid });
       const found = await findBunnyAssetByGuid(guid);
@@ -87,16 +86,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ path?: str
       logCheckpoint("handler_completed", { eventId });
       return NextResponse.json({ ok: true });
     } catch (error) {
-      const details = { checkpoint, guid, ...webhookErrorDetails(error), envPresence: webhookEnvPresence() };
-      console.error("[bunny-webhook] exception", details);
-      try {
-        await getAdminDb().collection("bunnyWebhookDiagnostics").add({ ...details, recordedAt: new Date().toISOString() });
-      } catch (diagnosticWriteError) {
-        console.error("[bunny-webhook] diagnostic persistence failed", {
-          errorName: diagnosticWriteError instanceof Error ? diagnosticWriteError.name : "UnknownError",
-          errorMessage: diagnosticWriteError instanceof Error ? diagnosticWriteError.message : String(diagnosticWriteError),
-        });
-      }
+      console.error("[bunny-webhook] exception", { checkpoint, ...webhookErrorDetails(error), envPresence: webhookEnvPresence() });
       throw error;
     }
   }
