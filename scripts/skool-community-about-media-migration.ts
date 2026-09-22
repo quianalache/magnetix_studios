@@ -88,9 +88,10 @@ function expectedMedia(current: Media[], entry: { sourceAttachmentId: string; ty
     throw new Error(`Refusing to replace existing video record ${id}; identity differs from the verified source.`);
   }
   return {
-    ...(existing ?? { id, type: "video", url: video.videoUrl, label: "", title: "", linkUrl: video.videoUrl, featured: false }),
+    ...(existing ?? { id, type: "video", url: video.videoUrl, label: "", title: "", linkUrl: null, featured: false }),
     type: "video",
     url: video.videoUrl,
+    linkUrl: null,
     thumbnailUrl: `https://i.ytimg.com/vi/${idValue}/hqdefault.jpg`,
     provider: "youtube",
     videoId: idValue,
