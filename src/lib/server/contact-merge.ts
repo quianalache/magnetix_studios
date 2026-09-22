@@ -26,16 +26,21 @@ function tsMillis(v: unknown): number {
   return typeof d === "number" ? d : 0;
 }
 
-/** Re-point a `contactId` field from the loser to the survivor, batched. */
+/** Re-point a contact-reference field from the loser to the survivor, batched.
+ *  `field` defaults to "contactId" — pass an override for a doc family that
+ *  names the field differently (e.g. `projects.assignedContactId`). Touches
+ *  only that one field on each doc, same as every other repoint in this
+ *  file — never overwrites unrelated fields. */
 async function repoint(
   db: FirebaseFirestore.Firestore,
   snap: FirebaseFirestore.QuerySnapshot,
   survivorId: string,
+  field: string = "contactId",
 ): Promise<void> {
   let batch = db.batch();
   let n = 0;
   for (const d of snap.docs) {
-    batch.update(d.ref, { contactId: survivorId });
+    batch.update(d.ref, { [field]: survivorId });
     if (++n % 400 === 0) {
       await batch.commit();
       batch = db.batch();
@@ -120,11 +125,18 @@ async function mergeConversation(
 /**
  * Fold `loserId` into `survivorId`: every record that referenced the
  * loser (deals, tasks, events, quotes, form submissions, web chat
- * sessions, voice calls) gets re-pointed, message/notes/activity
- * subcollections move onto the survivor, the inbox conversation
- * threads merge, `survivorPatch` is applied to the survivor doc, and
- * the loser is recursively deleted. Not reversible — callers confirm
- * with the operator first.
+ * sessions, voice calls, community Member identity, external billing
+ * subscriptions/payments, assigned Projects) gets re-pointed,
+ * message/notes/activity subcollections move onto the survivor, the
+ * inbox conversation threads merge, `survivorPatch` is applied to the
+ * survivor doc, and the loser is recursively deleted. Not reversible —
+ * callers confirm with the operator first.
+ *
+ * Ordering guarantee: every repoint in step 2 happens (awaited,
+ * sequentially) before the loser is deleted in step 5. If any query or
+ * write in step 2 throws, the function throws before reaching the
+ * delete — the loser Contact is never removed until every reference
+ * family above has been successfully repointed.
  *
  * Known gap: per-broadcast `sends` and voice-campaign `recipients`
  * subcollections are doc-ID-keyed by contactId and are NOT re-pointed
@@ -160,19 +172,41 @@ export async function performContactMerge(params: {
 
   // 2. Re-point every record that referenced the loser (mirrors the
   //    contact-delete blocker set) so nothing orphans.
-  const [deals, tasks, events, quotes, submissions, webChats, voiceCalls] =
-    await Promise.all([
-      db.collection("deals").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
-      db.collection("tasks").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
-      db.collection("events").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
-      db.collection("quotes").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
-      db.collectionGroup("submissions").where("contactId", "==", loserId).get(),
-      db.collection("subAccounts").doc(sub).collection("webChatSessions").where("contactId", "==", loserId).get(),
-      db.collection("subAccounts").doc(sub).collection("voiceCalls").where("contactId", "==", loserId).get(),
-    ]);
-  for (const snap of [deals, tasks, events, quotes, submissions, webChats, voiceCalls]) {
+  const [
+    deals,
+    tasks,
+    events,
+    quotes,
+    submissions,
+    webChats,
+    voiceCalls,
+    members,
+    externalSubscriptions,
+    externalPayments,
+    projects,
+  ] = await Promise.all([
+    db.collection("deals").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    db.collection("tasks").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    db.collection("events").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    db.collection("quotes").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    db.collectionGroup("submissions").where("contactId", "==", loserId).get(),
+    db.collection("subAccounts").doc(sub).collection("webChatSessions").where("contactId", "==", loserId).get(),
+    db.collection("subAccounts").doc(sub).collection("voiceCalls").where("contactId", "==", loserId).get(),
+    // Community member identity — Member.contactId is the link BACK to the
+    // CRM record; left unrepointed, a merge would delete the loser Contact
+    // out from under an active community Member.
+    db.collection(`subAccounts/${sub}/members`).where("contactId", "==", loserId).get(),
+    // Billing/purchase history that must survive the contact it was
+    // recorded against.
+    db.collection("externalSubscriptions").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    db.collection("externalPayments").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
+    // Project assignment — different field name than the rest (assignedContactId).
+    db.collection("projects").where("subAccountId", "==", sub).where("assignedContactId", "==", loserId).get(),
+  ]);
+  for (const snap of [deals, tasks, events, quotes, submissions, webChats, voiceCalls, members, externalSubscriptions, externalPayments]) {
     await repoint(db, snap, survivorId);
   }
+  await repoint(db, projects, survivorId, "assignedContactId");
 
   // 3. Merge the inbox conversation index.
   await mergeConversation(db, loserId, survivorId, conversationContact);
