@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 const SIGNATURE_HEADER = "x-bunnystream-signature";
 const VERSION_HEADER = "x-bunnystream-signature-version";
@@ -20,4 +20,8 @@ export function verifyBunnyStreamWebhookSignature(
   const expectedBytes = Buffer.from(expected, "ascii");
   const receivedBytes = Buffer.from(signature, "ascii");
   return expectedBytes.length === receivedBytes.length && timingSafeEqual(expectedBytes, receivedBytes);
+}
+
+export function bunnyWebhookFingerprint(rawBody: Uint8Array): string {
+  return createHash("sha256").update(rawBody).digest("hex");
 }

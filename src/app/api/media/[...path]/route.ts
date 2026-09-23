@@ -8,11 +8,10 @@ import {
   getBunnyPlaybackUrl,
   initBunnyHostedVideo,
   syncBunnyHostedVideo,
-  webhookEventId,
 } from "@/lib/server/bunny-stream-service";
 import type { VideoOwnerScope } from "@/types/media-asset";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { verifyBunnyStreamWebhookSignature } from "@/lib/server/bunny-webhook-signature";
+import { bunnyWebhookFingerprint, verifyBunnyStreamWebhookSignature } from "@/lib/server/bunny-webhook-signature";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +56,20 @@ function webhookErrorDetails(error: unknown) {
   return { errorName: "UnknownError", errorMessage: String(error), stack: undefined, bunnyHttpStatus: undefined };
 }
 
+async function claimBunnyWebhookEvent(eventRef: FirebaseFirestore.DocumentReference, event: Record<string, unknown>) {
+  return getAdminDb().runTransaction(async (transaction) => {
+    const existing = await transaction.get(eventRef);
+    if (existing.exists) {
+      const data = existing.data() || {};
+      if (data.processedAt || !data.processingStartedAt) return false;
+      const startedAt = Date.parse(String(data.processingStartedAt));
+      if (!Number.isFinite(startedAt) || Date.now() - startedAt < 5 * 60 * 1000) return false;
+    }
+    transaction.set(eventRef, { ...event, state: "processing", processingStartedAt: new Date().toISOString() }, { merge: true });
+    return true;
+  });
+}
+
 export async function POST(request: Request, ctx: { params: Promise<{ path?: string[] }> }) {
   const path = (await ctx.params).path || [];
 
@@ -78,14 +91,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ path?: str
       if (!guid) return NextResponse.json({ ok: false, error: "Missing Bunny video GUID" }, { status: 400 });
       const found = await findBunnyAssetByGuid(guid);
       if (!found) return NextResponse.json({ ok: true, ignored: true });
-      const eventId = webhookEventId(input as Record<string, unknown>);
+      const eventId = `sha256-${bunnyWebhookFingerprint(rawBody)}`;
       const eventRef = getAdminDb().collection("bunnyWebhookEvents").doc(eventId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 150));
-      const existing = await eventRef.get();
-      if (existing.exists) return NextResponse.json({ ok: true, duplicate: true });
+      const claimed = await claimBunnyWebhookEvent(eventRef, { eventId, videoGuid: guid, bodyFingerprint: bunnyWebhookFingerprint(rawBody) });
+      if (!claimed) return NextResponse.json({ ok: true, duplicate: true });
       const scope = found.asset.ownerScope || (found.asset.subAccountId ? { kind: "tenant", agencyId: found.asset.agencyId, subAccountId: found.asset.subAccountId } : { kind: "agency", agencyId: found.asset.agencyId });
-      await syncBunnyHostedVideo(scope, found.asset.id);
-      await eventRef.set({ eventId, videoGuid: guid, processedAt: new Date().toISOString() });
-      return NextResponse.json({ ok: true });
+      try {
+        await syncBunnyHostedVideo(scope, found.asset.id);
+        await eventRef.set({ state: "processed", processedAt: new Date().toISOString() }, { merge: true });
+        return NextResponse.json({ ok: true });
+      } catch (error) {
+        await eventRef.delete().catch(() => undefined);
+        throw error;
+      }
     } catch (error) {
       console.error("[bunny-webhook] exception", { ...webhookErrorDetails(error), envPresence: webhookEnvPresence() });
       throw error;

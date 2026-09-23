@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
-import { verifyBunnyStreamWebhookSignature } from "./bunny-webhook-signature";
+import { bunnyWebhookFingerprint, verifyBunnyStreamWebhookSignature } from "./bunny-webhook-signature";
 
 const key = "read-only-test-key";
 const body = Buffer.from('{"VideoGuid":"abc","Status":4}');
@@ -30,4 +30,9 @@ test("rejects unsupported signature metadata and missing secret", () => {
   assert.equal(verifyBunnyStreamWebhookSignature(body, headers(signature, { "X-BunnyStream-Signature-Version": "v0" }), key), false);
   assert.equal(verifyBunnyStreamWebhookSignature(body, headers(signature, { "X-BunnyStream-Signature-Algorithm": "sha256" }), key), false);
   assert.equal(verifyBunnyStreamWebhookSignature(body, headers(), undefined), false);
+});
+
+test("fingerprints exact raw bytes and separates lifecycle payloads", () => {
+  assert.equal(bunnyWebhookFingerprint(body), bunnyWebhookFingerprint(Buffer.from(body)));
+  assert.notEqual(bunnyWebhookFingerprint(body), bunnyWebhookFingerprint(Buffer.from('{"VideoGuid":"abc","Status":3}')));
 });
