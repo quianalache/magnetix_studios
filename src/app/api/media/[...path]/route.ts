@@ -12,6 +12,7 @@ import {
 } from "@/lib/server/bunny-stream-service";
 import type { VideoOwnerScope } from "@/types/media-asset";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { verifyBunnyStreamWebhookSignature } from "@/lib/server/bunny-webhook-signature";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ function webhookEnvPresence() {
     BUNNY_STREAM_API_KEY: Boolean(process.env.BUNNY_STREAM_API_KEY),
     BUNNY_STREAM_CDN_HOSTNAME: Boolean(process.env.BUNNY_STREAM_CDN_HOSTNAME),
     BUNNY_STREAM_TOKEN_KEY: Boolean(process.env.BUNNY_STREAM_TOKEN_KEY),
+    BUNNY_STREAM_READ_ONLY_API_KEY: Boolean(process.env.BUNNY_STREAM_READ_ONLY_API_KEY),
   };
 }
 
@@ -57,11 +59,21 @@ function webhookErrorDetails(error: unknown) {
 
 export async function POST(request: Request, ctx: { params: Promise<{ path?: string[] }> }) {
   const path = (await ctx.params).path || [];
-  const input = await body(request);
-  if (!input) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
   if (path.join("/") === "webhooks/bunny-stream") {
     try {
+      const rawBody = new Uint8Array(await request.arrayBuffer());
+      if (!verifyBunnyStreamWebhookSignature(rawBody, request.headers, process.env.BUNNY_STREAM_READ_ONLY_API_KEY)) {
+        return NextResponse.json({ error: "Invalid webhook signature" }, { status: 401 });
+      }
+      let input: Record<string, unknown>;
+      try {
+        const parsed = JSON.parse(new TextDecoder().decode(rawBody));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Webhook body must be an object");
+        input = parsed as Record<string, unknown>;
+      } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+      }
       const guid = String(input.videoGuid || input.videoId || input.VideoGuid || input.VideoId || "");
       if (!guid) return NextResponse.json({ ok: false, error: "Missing Bunny video GUID" }, { status: 400 });
       const found = await findBunnyAssetByGuid(guid);
@@ -79,6 +91,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ path?: str
       throw error;
     }
   }
+
+  const input = await body(request);
+  if (!input) return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 
   if (path.join("/") === "hosted-videos/upload-init") {
     const scope = parseScope(input.ownerScope);
