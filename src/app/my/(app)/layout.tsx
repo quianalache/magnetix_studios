@@ -59,7 +59,7 @@ export default async function MyMagnetixLayout({ children }: { children: ReactNo
   return (
     <div className="min-h-screen bg-[#F5F4FB]">
       <div className="mx-auto flex w-full max-w-[1440px]">
-        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#ECE9F5] bg-white px-4 py-6 lg:flex">
+        <aside id="mymagnetix-sidebar" className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-[#ECE9F5] bg-white px-4 py-6 lg:flex">
           <div className="mb-7 flex items-center gap-2.5 px-2">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-xl text-[15px] font-bold text-white"

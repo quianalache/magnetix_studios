@@ -38,7 +38,7 @@ export const MYMAGNETIX_NAV_ITEMS: MyMagnetixNavItem[] = [
   { href: "/my/readings", label: "Readings", icon: "readings" },
   { href: "/my#messages", label: "Messages", icon: "messages", disabled: true },
   { href: "/my#projects", label: "Projects", icon: "projects", disabled: true },
-  { href: "/my#spaces", label: "My Spaces", icon: "spaces" },
+  { href: "/my#spaces", label: "Your Spaces", icon: "spaces" },
   // Purchases (2026-09-16): a real page (src/app/my/(app)/purchases/page.tsx)
   // backed by the Stripe reconciliation ledger's Person-safe read layer
   // already existed, fully built, before this nav item was ever wired to

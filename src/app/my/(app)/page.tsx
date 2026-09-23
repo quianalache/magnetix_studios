@@ -20,6 +20,7 @@ import { gradientForId, initialsFor } from "@/lib/mymagnetix/visuals";
 import { formatCurrency } from "@/lib/format";
 import { MindsetCard } from "@/components/mymagnetix/mindset-card";
 import { PinButton } from "@/components/mymagnetix/pin-button";
+import { MyMagnetixOnboardingTour } from "@/components/mymagnetix/onboarding-tour";
 
 export const dynamic = "force-dynamic";
 
@@ -139,7 +140,7 @@ export default async function MyMagnetixHomePage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
           {/* Needs Your Attention */}
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-attention" className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <div className="flex items-center justify-between">
               <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Needs your attention</h2>
               {attention.length > 0 && (
@@ -185,7 +186,7 @@ export default async function MyMagnetixHomePage() {
           </section>
 
           {/* Continue Where You Left Off */}
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-continue" className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <div className="flex items-center justify-between">
               <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Continue where you left off</h2>
               {continueLearning.length > 0 && <span className="text-[12px] font-semibold text-[#5E2574]">View all</span>}
@@ -234,9 +235,9 @@ export default async function MyMagnetixHomePage() {
           </section>
 
           {/* Your Spaces */}
-          <section id="spaces" className="scroll-mt-20 rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-spaces" className="scroll-mt-20 rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <div className="flex items-center justify-between">
-              <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Your spaces</h2>
+              <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Your Spaces</h2>
               {spaces.length > 0 && <span className="text-[12px] font-semibold text-[#5E2574]">View all</span>}
             </div>
             {spaces.length === 0 ? (
@@ -285,7 +286,7 @@ export default async function MyMagnetixHomePage() {
 
         <div className="flex flex-col gap-6">
           {/* Coming Up */}
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-coming-up" className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <div className="flex items-center justify-between">
               <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Coming up</h2>
               {comingUpFeed.length > 0 && <span className="text-[12px] font-semibold text-[#5E2574]">View calendar</span>}
@@ -331,7 +332,7 @@ export default async function MyMagnetixHomePage() {
           </section>
 
           {/* Payments This Week */}
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-payments" className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <div className="flex items-center justify-between">
               <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Payments this week</h2>
               {payments.length > 0 && <span className="text-[12px] font-semibold text-[#5E2574]">View all</span>}
@@ -358,7 +359,7 @@ export default async function MyMagnetixHomePage() {
           </section>
 
           {/* Quick Actions */}
-          <section className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
+          <section id="mymagnetix-quick-actions" className="rounded-2xl border border-[#ECE9F5] bg-white p-5 shadow-[0_1px_2px_rgba(30,20,60,0.04)]">
             <h2 className="text-[14.5px] font-bold text-[#1D1B27]">Quick actions</h2>
             <div className="mt-3.5 grid grid-cols-2 gap-2.5">
               <Link
@@ -380,7 +381,7 @@ export default async function MyMagnetixHomePage() {
                 <span className="text-[11.5px] font-medium text-[#1D1B27]">My Communities</span>
               </Link>
               <Link
-                href="#spaces"
+                href="#mymagnetix-spaces"
                 className="flex flex-col items-center gap-2 rounded-xl border border-[#ECE9F5] py-3.5 text-center transition-colors hover:border-[#5E2574]"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D1FAE5] text-[#0F766E]">
@@ -401,6 +402,7 @@ export default async function MyMagnetixHomePage() {
           </section>
         </div>
       </div>
+      <MyMagnetixOnboardingTour primaryEmail={person.primaryEmail} />
     </div>
   );
 }

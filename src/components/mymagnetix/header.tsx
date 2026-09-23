@@ -58,6 +58,7 @@ export function MyMagnetixHeader({
     <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#ECE9F5] bg-white/95 px-4 py-3.5 backdrop-blur sm:px-6 lg:px-8">
       <button
         type="button"
+        id="mymagnetix-mobile-menu-button"
         className="lg:hidden"
         onClick={() => setMobileOpen((v) => !v)}
         aria-label="Toggle menu"

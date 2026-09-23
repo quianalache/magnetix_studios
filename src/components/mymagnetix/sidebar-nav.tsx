@@ -32,7 +32,7 @@ export function MyMagnetixSidebarNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-1 flex-col gap-0.5">
+    <nav id="mymagnetix-sidebar-nav" className="flex flex-1 flex-col gap-0.5">
       {MYMAGNETIX_NAV_ITEMS.map((item) => {
         const Icon = ICONS[item.icon];
         if (item.disabled) {
