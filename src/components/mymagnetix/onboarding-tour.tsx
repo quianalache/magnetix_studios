@@ -46,11 +46,51 @@ export function MyMagnetixOnboardingTour({ primaryEmail }: { primaryEmail: strin
   }, [step]);
 
   useEffect(() => {
-    try {
-      if (!window.localStorage.getItem(storageKey)) setStepIndex(0);
-    } catch {
-      setStepIndex(0);
+    let cancelled = false;
+    const legacyStatus = () => {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { status?: unknown };
+        return parsed.status === "completed" || parsed.status === "dismissed" ? parsed.status : null;
+      } catch {
+        return null;
+      }
+    };
+
+    async function loadAccountState() {
+      try {
+        const response = await fetch("/api/my/onboarding", { credentials: "same-origin", cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { status?: "completed" | "dismissed" | null };
+        if (cancelled) return;
+        if (data.status) {
+          setStepIndex(null);
+          return;
+        }
+
+        const legacy = legacyStatus();
+        if (legacy) {
+          const migrated = await fetch("/api/my/onboarding", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: legacy }),
+          });
+          if (migrated.ok) {
+            try { window.localStorage.removeItem(storageKey); } catch { /* Account state is now authoritative. */ }
+          }
+          if (!cancelled) setStepIndex(null);
+          return;
+        }
+        setStepIndex(0);
+      } catch {
+        // Do not show a tour when account state cannot be read; this avoids
+        // replaying an already-completed tour during a transient outage.
+      }
     }
+    void loadAccountState();
+    return () => { cancelled = true; };
   }, [storageKey]);
 
   useEffect(() => {
@@ -69,8 +109,20 @@ export function MyMagnetixOnboardingTour({ primaryEmail }: { primaryEmail: strin
     };
   }, [measure, step]);
 
-  const finish = useCallback((status: "completed" | "dismissed") => {
-    try { window.localStorage.setItem(storageKey, JSON.stringify({ status, at: new Date().toISOString() })); } catch { /* Session-only fallback. */ }
+  const finish = useCallback(async (status: "completed" | "dismissed") => {
+    const response = await fetch("/api/my/onboarding", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }).catch(() => null);
+    if (!response?.ok) {
+      // Temporary browser fallback prevents an immediate replay if the write
+      // is interrupted; it is never consulted when account state is present.
+      try { window.localStorage.setItem(storageKey, JSON.stringify({ status, at: new Date().toISOString() })); } catch { /* Best effort only. */ }
+    } else {
+      try { window.localStorage.removeItem(storageKey); } catch { /* Account state is authoritative. */ }
+    }
     setStepIndex(null);
   }, [storageKey]);
 

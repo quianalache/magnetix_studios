@@ -66,6 +66,9 @@ export interface PersonIdentity {
   primaryEmail: string;
   createdAt: string | null;
   updatedAt: string | null;
+  /** Account-level MyMagnetix first-run tour state. */
+  myMagnetixOnboardingStatus?: "completed" | "dismissed";
+  myMagnetixOnboardingUpdatedAt?: string | null;
 }
 
 function col() {
