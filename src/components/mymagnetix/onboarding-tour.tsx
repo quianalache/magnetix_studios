@@ -33,16 +33,19 @@ function getRects(selectors: string[]): Rect[] {
 function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(value, max)); }
 
 function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): TooltipLayout {
-  const width = Math.min(540, viewport.width - 24);
-  const height = index === 0 ? 470 : 360;
+  const width = Math.min(400, viewport.width - 24);
+  const height = index === 0 ? 470 : index === 6 ? 330 : 300;
   if (index === 0 || rects.length === 0) return { centered: true, pointerSide: "top", style: { width } };
   if (viewport.width < 768) {
-    if (index === 6) return { centered: false, pointerSide: "top", style: { width, left: 12, top: 150 }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
-    return { centered: false, pointerSide: "top", style: { width, left: 12, bottom: 12 }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
+    const mobileHeight = index === 6 ? 280 : 240;
+    const targetBottom = Math.max(...rects.map((rect) => rect.top + rect.height));
+    const top = targetBottom + 16;
+    const style = top + mobileHeight <= viewport.height - 12 ? { width, left: 12, top } : { width, left: 12, bottom: 12 };
+    return { centered: false, pointerSide: "top", style, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
   }
 
   const target = rects[0];
-  if (index === 1) return { centered: false, pointerSide: "left", style: { width: 430, left: clamp(target.left + target.width + 28, 24, viewport.width - 454), top: 150 } };
+  if (index === 1) return { centered: false, pointerSide: "left", style: { width: 360, left: clamp(target.left + target.width + 28, 24, viewport.width - 384), top: 150 } };
   if (index === 2 || index === 3) {
     const left = clamp(target.left + target.width / 2 - width / 2, 24, viewport.width - width - 24);
     const top = target.top - height - 26;
@@ -51,7 +54,9 @@ function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): Too
   }
   if (index === 6) {
     const top = Math.max(24, Math.min(...rects.map((rect) => rect.top)) - height - 26);
-    return { centered: false, pointerSide: "bottom", style: { width: 520, left: clamp(target.left + target.width / 2 - 260, 24, viewport.width - 544), top }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - clamp(target.left + target.width / 2 - 260, 24, viewport.width - 544), 28, 492)) };
+    const finalWidth = 400;
+    const finalLeft = clamp(target.left + target.width / 2 - finalWidth / 2, 24, viewport.width - finalWidth - 24);
+    return { centered: false, pointerSide: "bottom", style: { width: finalWidth, left: finalLeft, top }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - finalLeft, 28, finalWidth - 28)) };
   }
   const left = target.left - width - 28;
   if (left >= 24) return { centered: false, pointerSide: "right", style: { width, left, top: clamp(target.top + target.height / 2 - height / 2, 24, viewport.height - height - 24) } };
@@ -119,16 +124,25 @@ export function MyMagnetixOnboardingTour({ primaryEmail }: { primaryEmail: strin
   const next = () => step.final ? finish("completed") : setStepIndex((current) => (current === null ? 0 : current + 1));
   const layout = getTooltipLayout(stepIndex, rects, viewport);
   const contextual = stepIndex > 0;
+  const cardClass = contextual ? "p-4 sm:p-5" : "p-6 sm:p-8";
+  const iconClass = contextual ? "h-9 w-9 rounded-xl" : "h-12 w-12 rounded-2xl";
+  const iconSizeClass = contextual ? "h-[18px] w-[18px]" : "h-6 w-6";
+  const titleClass = contextual ? "mt-3 text-[20px] sm:text-[23px]" : "mt-4 text-[29px] sm:text-[34px]";
+  const bodyClass = contextual ? "mt-3 text-[14px] leading-6" : "mt-5 text-[15px] leading-7";
+  const headerClass = contextual ? "gap-3 pr-7" : "gap-4 pr-7";
+  const stepLabelClass = contextual ? "pt-1 text-[11px]" : "pt-2 text-[12px]";
+  const titleWidthClass = contextual ? "max-w-[360px]" : "max-w-[430px]";
+  const bodyWidthClass = contextual ? "max-w-[360px]" : "max-w-[460px]";
   const tooltip = (
-    <div className="relative rounded-[22px] border border-white/80 bg-white p-6 shadow-[0_24px_80px_rgba(49,24,81,0.25)] sm:p-8" style={{ ...layout.style, ...(layout.centered ? {} : { position: "absolute" }) }}>
+    <div className={`relative rounded-[22px] border border-white/80 bg-white shadow-[0_24px_80px_rgba(49,24,81,0.25)] ${cardClass}`} style={{ ...layout.style, ...(layout.centered ? {} : { position: "absolute" }) }}>
       {!layout.centered && (layout.pointerLefts?.length ? layout.pointerLefts.map((left, index) => <Pointer key={index} side={layout.pointerSide} left={left} />) : <Pointer side={layout.pointerSide} />)}
       <button type="button" onClick={() => finish("dismissed")} aria-label="Close tour" className="absolute right-4 top-4 rounded-full p-1.5 text-[#8A87A0] transition-colors hover:bg-[#F5F1FA] hover:text-[#5E2574]"><X className="h-5 w-5" /></button>
-      <div className="flex items-start justify-between gap-4 pr-7"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F3E8FF] text-[#7E22CE]"><Sparkles className="h-6 w-6" /></div><span className="pt-2 text-[12px] font-medium text-[#77718F]">Step {stepIndex + 1} of 7</span></div>
+      <div className={`flex items-start justify-between ${headerClass}`}><div className={`flex shrink-0 items-center justify-center bg-[#F3E8FF] text-[#7E22CE] ${iconClass}`}><Sparkles className={iconSizeClass} /></div><span className={`${stepLabelClass} font-medium text-[#77718F]`}>Step {stepIndex + 1} of 7</span></div>
       {step.eyebrow && <span className="mt-5 inline-flex rounded-full bg-[#F3E8FF] px-3 py-1 text-[12px] font-bold text-[#7E22CE]">{step.eyebrow}</span>}
-      <h2 id="mymagnetix-tour-title" className="mt-4 max-w-[490px] text-[29px] font-bold leading-[1.08] tracking-[-0.03em] text-[#1D1B27] sm:text-[34px]">{step.title}</h2>
-      <p className="mt-5 max-w-[490px] text-[15px] leading-7 text-[#67627D]">{step.body}</p>
-      <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">{stepIndex > 0 ? <button type="button" onClick={() => setStepIndex((current) => (current === null ? 0 : current - 1))} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#DCCFEA] px-5 text-[14px] font-semibold text-[#5E2574] transition-colors hover:bg-[#FAF7FD]"><ArrowLeft className="h-4 w-4" /> Back</button> : <button type="button" onClick={() => finish("dismissed")} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#DCCFEA] px-5 text-[14px] font-semibold text-[#5E2574] transition-colors hover:bg-[#FAF7FD]">Skip for now</button>}<button type="button" onClick={next} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7E22CE] px-6 text-[14px] font-bold text-white shadow-[0_8px_20px_rgba(126,34,206,0.22)] transition-colors hover:bg-[#6B21A8] sm:flex-none">{step.final ? "Start exploring" : stepIndex === 0 ? "Show me around" : "Next"}<ArrowRight className="h-4 w-4" /></button></div>
-      <div className="mt-6 flex justify-center gap-1.5" aria-label={`Tour progress: step ${stepIndex + 1} of 7`}>{STEPS.map((_, index) => <span key={index} className={`h-1.5 rounded-full transition-all ${index === stepIndex ? "w-6 bg-[#7E22CE]" : "w-1.5 bg-[#E5D8F0]"}`} />)}</div>
+      <h2 id="mymagnetix-tour-title" className={`${titleWidthClass} font-bold leading-[1.1] tracking-[-0.03em] text-[#1D1B27] ${titleClass}`}>{step.title}</h2>
+      <p className={`${bodyWidthClass} text-[#67627D] ${bodyClass}`}>{step.body}</p>
+      <div className={`flex gap-2 ${contextual ? "mt-4 flex-row" : "mt-7 flex-col-reverse sm:flex-row sm:justify-end"}`}>{stepIndex > 0 ? <button type="button" onClick={() => setStepIndex((current) => (current === null ? 0 : current - 1))} className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-xl border border-[#DCCFEA] text-[13px] font-semibold text-[#5E2574] transition-colors hover:bg-[#FAF7FD] ${contextual ? "flex-1 px-2" : "px-5 text-[14px]"}`}><ArrowLeft className="h-4 w-4" /> Back</button> : <button type="button" onClick={() => finish("dismissed")} className="inline-flex min-h-12 items-center justify-center rounded-xl border border-[#DCCFEA] px-5 text-[14px] font-semibold text-[#5E2574] transition-colors hover:bg-[#FAF7FD]">Skip for now</button>}<button type="button" onClick={next} className={`inline-flex min-h-10 items-center justify-center gap-1 rounded-xl bg-[#7E22CE] text-[13px] font-bold text-white shadow-[0_8px_20px_rgba(126,34,206,0.22)] transition-colors hover:bg-[#6B21A8] ${contextual ? "flex-1 px-2" : "flex-1 px-6 text-[14px] sm:flex-none"}`}>{step.final ? "Start exploring" : stepIndex === 0 ? "Show me around" : "Next"}<ArrowRight className="h-4 w-4" /></button></div>
+      <div className={`${contextual ? "mt-4" : "mt-6"} flex justify-center gap-1.5`} aria-label={`Tour progress: step ${stepIndex + 1} of 7`}>{STEPS.map((_, index) => <span key={index} className={`h-1.5 rounded-full transition-all ${index === stepIndex ? "w-6 bg-[#7E22CE]" : "w-1.5 bg-[#E5D8F0]"}`} />)}</div>
     </div>
   );
 
