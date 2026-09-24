@@ -34,7 +34,7 @@ function clamp(value: number, min: number, max: number) { return Math.max(min, M
 
 function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): TooltipLayout {
   const width = Math.min(400, viewport.width - 24);
-  const height = index === 0 ? 470 : index === 6 ? 330 : 300;
+  const height = index === 0 ? 470 : index === 4 ? 350 : index === 6 ? 330 : index === 2 || index === 3 ? 280 : 300;
   if (index === 0 || rects.length === 0) return { centered: true, pointerSide: "top", style: { width } };
   if (viewport.width < 768) {
     const mobileHeight = index === 6 ? 280 : 240;
@@ -50,7 +50,7 @@ function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): Too
     const left = clamp(target.left + target.width / 2 - width / 2, 24, viewport.width - width - 24);
     const top = target.top - height - 26;
     if (top >= 24) return { centered: false, pointerSide: "bottom", style: { width, left, top } };
-    return { centered: false, pointerSide: "top", style: { width, left, top: target.top + target.height + 26 } };
+    return { centered: false, pointerSide: "top", style: { width, left, top: clamp(target.top + target.height + 26, 24, viewport.height - height - 24) } };
   }
   if (index === 6) {
     const top = Math.max(24, Math.min(...rects.map((rect) => rect.top)) - height - 26);
