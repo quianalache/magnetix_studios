@@ -239,11 +239,7 @@ export function CourseSettingsModal({
           </Button>
           <Button onClick={save} disabled={saving || imgUploading}>
             {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-            {imgUploading
-              ? "Uploading image…"
-              : mode === "create"
-                ? "Create course"
-                : "Save"}
+            {imgUploading ? "Uploading image…" : "Save"}
           </Button>
         </DialogFooter>}
       </DialogContent>
