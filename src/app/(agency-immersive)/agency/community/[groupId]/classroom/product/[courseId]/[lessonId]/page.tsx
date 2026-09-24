@@ -4,13 +4,21 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { CommunityShell, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
-import { LessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/community/classroom/lesson-player";
-import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
+import { CommunityShell } from "@/components/community/community-shell";
+import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
+import type { CourseTheme, LessonTheme } from "@/types/course-theme";
+import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
 import type { CommunityGroup } from "@/types/community";
 
 interface PlayerResponse {
-  course: { id: string; title: string };
+  course: {
+    id: string;
+    title: string;
+    coverUrl: string | null;
+    instructor: StandaloneCourseInstructor;
+    theme: CourseTheme;
+    lessonTheme: LessonTheme;
+  };
   sections: PlayerSection[];
   lessons: PlayerLesson[];
   completedIds: string[];
@@ -68,9 +76,8 @@ export default function AgencyEmbeddedProductLessonPage({
   }
   if (!group || !player) return <div className="mx-auto max-w-7xl p-8" />;
 
-  const resolvedTheme = resolveCommunityTheme(group);
-  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const catalog = `/agency/community/${groupId}/classroom`;
+  const productHref = `${catalog}/product/${courseId}`;
 
   return (
     <CommunityShell
@@ -85,12 +92,16 @@ export default function AgencyEmbeddedProductLessonPage({
       <Link href={catalog} className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]">
         <ArrowLeft className="h-4 w-4" /> {player.course.title}
       </Link>
-      <LessonPlayer
+      <StandaloneLessonPlayer
         completeEndpoint={`/api/agency/community/${groupId}/courses/product/${courseId}/lessons/${lessonId}/complete`}
-        lessonHrefBase={`${catalog}/product/${courseId}`}
-        brand={brand}
-        primaryAction={resolvedTheme.primaryAction}
-        accent={resolvedTheme.accent}
+        lessonHrefBase={productHref}
+        homeHref={productHref}
+        saId="agency"
+        lessonTheme={player.course.lessonTheme}
+        courseTitle={player.course.title}
+        courseCoverUrl={player.course.coverUrl}
+        instructor={player.course.instructor}
+        crossSellTargets={new Map()}
         sections={player.sections}
         lessons={player.lessons}
         currentLessonId={lessonId}

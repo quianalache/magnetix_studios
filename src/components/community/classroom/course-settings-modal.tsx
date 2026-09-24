@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUpload } from "@/components/community/image-upload";
 import { uploadCommunityImage, uploadCommunitySettingsImage } from "@/lib/community/upload-image";
@@ -127,7 +128,22 @@ export function CourseSettingsModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {mode === "create" ? (
+          <div className="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Community Classroom uses canonical Courses. Create the course in
+              the CRM Courses area, then link it to this community from the
+              course&apos;s Community Groups page.
+            </p>
+            <Link
+              href={agencyGroupId ? "/agency/standalone-courses" : `/sa/${saId}/courses`}
+              className="inline-flex rounded-md bg-foreground px-3 py-2 text-background"
+              onClick={() => onOpenChange(false)}
+            >
+              Open Courses
+            </Link>
+          </div>
+        ) : <div className="space-y-4">
           <ImageUpload
             label="Course image"
             hint="Shown on the course card in the classroom. 16:9 works best."
@@ -215,9 +231,9 @@ export function CourseSettingsModal({
             />
             Published (visible to members)
           </label>
-        </div>
+        </div>}
 
-        <DialogFooter>
+        {mode === "edit" && <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
@@ -229,7 +245,7 @@ export function CourseSettingsModal({
                 ? "Create course"
                 : "Save"}
           </Button>
-        </DialogFooter>
+        </DialogFooter>}
       </DialogContent>
     </Dialog>
   );

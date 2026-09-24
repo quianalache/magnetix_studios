@@ -5,8 +5,7 @@ import {
   getStandaloneEnrollment,
   filterLessonsForEnrollment,
 } from "@/lib/server/standalone-course-service";
-import { embedUrlFor } from "@/lib/community/video-embed";
-import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
+import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 import {
   StandaloneLessonPlayer,
   type PlayerLesson,
@@ -15,7 +14,6 @@ import {
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 import { getInAppUpsellsForMember } from "@/lib/server/course-offer-upsell-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
-import { getBunnyPlaybackUrl } from "@/lib/server/bunny-stream-service";
 
 export const dynamic = "force-dynamic";
 
@@ -90,16 +88,15 @@ export default async function StandaloneLessonPlayerPage({
     id: s.id,
     title: s.title,
   }));
-  const lessons: PlayerLesson[] = await Promise.all(visibleLessons.map(async (l) => ({
-    id: l.id,
-    title: l.title,
-    sectionId: l.sectionId,
-    embedUrl: l.hostedVideoId
-      ? await getBunnyPlaybackUrl({ kind: "tenant", agencyId: course.agencyId, subAccountId: saId }, l.hostedVideoId)
-      : embedUrlFor(l.videoProvider, l.videoId),
-    body: renderLessonBodyHtml(l.bodyHtml),
-    resourceLinks: l.resourceLinks ?? [],
-  })));
+  const lessons: PlayerLesson[] = await Promise.all(
+    visibleLessons.map((l) =>
+      presentStandaloneLesson(l, {
+        kind: "tenant",
+        agencyId: course.agencyId,
+        subAccountId: saId,
+      }),
+    ),
+  );
 
   return (
     <>

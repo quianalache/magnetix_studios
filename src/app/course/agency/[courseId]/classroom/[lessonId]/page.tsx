@@ -5,9 +5,7 @@ import {
   getAgencyStandaloneEnrollment,
   filterAgencyLessonsForEnrollment,
 } from "@/lib/server/agency-standalone-course-service";
-import { embedUrlFor } from "@/lib/community/video-embed";
-import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
-import { getBunnyPlaybackUrl } from "@/lib/server/bunny-stream-service";
+import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 import {
   StandaloneLessonPlayer,
   type PlayerLesson,
@@ -47,16 +45,9 @@ export default async function AgencyStandaloneLessonPlayerPage({
   }
 
   const sections: PlayerSection[] = tree.sections.map((s) => ({ id: s.id, title: s.title }));
-  const lessons: PlayerLesson[] = await Promise.all(visibleLessons.map(async (l) => ({
-    id: l.id,
-    title: l.title,
-    sectionId: l.sectionId,
-    embedUrl: l.hostedVideoId
-      ? await getBunnyPlaybackUrl({ kind: "agency", agencyId }, l.hostedVideoId)
-      : embedUrlFor(l.videoProvider, l.videoId),
-    body: renderLessonBodyHtml(l.bodyHtml),
-    resourceLinks: l.resourceLinks ?? [],
-  })));
+  const lessons: PlayerLesson[] = await Promise.all(
+    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId })),
+  );
 
   return (
     <StandaloneLessonPlayer

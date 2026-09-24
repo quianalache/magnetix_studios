@@ -39,17 +39,20 @@ export function CourseHomeView({
   member,
   completedLessonIds,
   crossSellTargets,
+  homeHref: customHomeHref,
   interactive = true,
 }: {
   saId: string;
   courseId: string;
   course: StandaloneCourse;
   theme: CourseTheme;
-  sections: StandaloneCourseSection[];
-  lessons: StandaloneLesson[];
+  sections: Array<Pick<StandaloneCourseSection, "id" | "title"> & { order?: number }>;
+  lessons: Array<Pick<StandaloneLesson, "id" | "sectionId" | "title"> & { order?: number }>;
   member: Pick<Member, "email" | "displayName">;
   completedLessonIds: string[];
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
+  /** Optional distribution-channel home path; defaults to the direct course route. */
+  homeHref?: string;
   /** false in the theme editor's live preview — the curriculum and the
    *  Hero's "into first lesson" CTA become non-navigating so clicking them
    *  doesn't take over the whole editor. */
@@ -67,7 +70,7 @@ export function CourseHomeView({
   const firstIncomplete = lessons.find((l) => !completed.has(l.id)) ?? lessons[0];
   const totalLessons = lessons.length;
   const completedCount = completedLessonIds.length;
-  const homeHref = `/course/${saId}/${courseId}/classroom`;
+  const homeHref = customHomeHref ?? `/course/${saId}/${courseId}/classroom`;
 
   return (
     <div className="min-h-screen bg-[#F8F7F5]" style={pageStyle}>

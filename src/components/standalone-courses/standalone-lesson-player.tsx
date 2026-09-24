@@ -44,6 +44,7 @@ import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
 export interface PlayerLesson {
   id: string;
   title: string;
+  order?: number;
   sectionId: string | null;
   embedUrl: string | null;
   /** Sanitized lesson body HTML (already run through renderLessonBodyHtml). */

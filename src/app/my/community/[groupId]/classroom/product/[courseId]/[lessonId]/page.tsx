@@ -16,11 +16,9 @@ import {
   filterAgencyLessonsForEnrollment,
 } from "@/lib/server/agency-standalone-course-service";
 import { checkAgencyCourseEntitlementForPerson } from "@/lib/standalone-courses/agency-course-access";
-import { embedUrlFor } from "@/lib/community/video-embed";
-import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
-import { CommunityShell, COMMUNITY_DEFAULT_BRAND } from "@/components/community/community-shell";
-import { LessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/community/classroom/lesson-player";
-import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
+import { CommunityShell } from "@/components/community/community-shell";
+import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
+import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -82,19 +80,12 @@ export default async function MyAgencyEmbeddedProductLessonPage({
     redirect(`${productHref}/${first.id}`);
   }
 
-  const resolvedTheme = resolveCommunityTheme(group);
-  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
   const viewer = { memberId: membership.id, displayName: agencyMemberDisplayName(membership), avatarUrl: null, level: membership.level ?? 1 };
 
   const sections: PlayerSection[] = tree.sections.map((s) => ({ id: s.id, title: s.title }));
-  const lessons: PlayerLesson[] = visibleLessons.map((l) => ({
-    id: l.id,
-    title: l.title,
-    sectionId: l.sectionId,
-    embedUrl: embedUrlFor(l.videoProvider, l.videoId),
-    body: renderLessonBodyHtml(l.bodyHtml),
-    resourceLinks: l.resourceLinks ?? [],
-  }));
+  const lessons: PlayerLesson[] = await Promise.all(
+    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId })),
+  );
 
   return (
     <CommunityShell
@@ -110,12 +101,16 @@ export default async function MyAgencyEmbeddedProductLessonPage({
       <Link href={catalog} className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]">
         <ArrowLeft className="h-4 w-4" /> {course.title}
       </Link>
-      <LessonPlayer
+      <StandaloneLessonPlayer
         completeEndpoint={`/api/agency/community/${groupId}/courses/product/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={productHref}
-        brand={brand}
-        primaryAction={resolvedTheme.primaryAction}
-        accent={resolvedTheme.accent}
+        homeHref={productHref}
+        saId="agency"
+        lessonTheme={course.lessonTheme}
+        courseTitle={course.title}
+        courseCoverUrl={course.coverUrl}
+        instructor={course.instructor}
+        crossSellTargets={new Map()}
         sections={sections}
         lessons={lessons}
         currentLessonId={lessonId}

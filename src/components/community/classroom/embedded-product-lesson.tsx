@@ -13,18 +13,14 @@ import {
   getStandaloneEnrollment,
   filterLessonsForEnrollment,
 } from "@/lib/server/standalone-course-service";
-import { embedUrlFor } from "@/lib/community/video-embed";
-import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
+import { CommunityShell } from "@/components/community/community-shell";
 import {
-  CommunityShell,
-  COMMUNITY_DEFAULT_BRAND,
-} from "@/components/community/community-shell";
-import {
-  LessonPlayer,
+  StandaloneLessonPlayer,
   type PlayerLesson,
   type PlayerSection,
-} from "@/components/community/classroom/lesson-player";
-import { resolveCommunityTheme } from "@/lib/community/community-theme-presets";
+} from "@/components/standalone-courses/standalone-lesson-player";
+import { getCourseOffer } from "@/lib/server/course-offer-service";
+import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 import type {
   AuthorView,
   CommunityGroup,
@@ -116,11 +112,27 @@ export async function EmbeddedProductLesson(opts: {
     redirect(`${productHref}/${first.id}`);
   }
 
-  // Theme parity — same shared resolver every other Community page uses,
-  // so a linked Product looks like part of THIS Community, not like the
-  // Standalone product's own independent branding.
-  const resolvedTheme = resolveCommunityTheme(group);
-  const brand = resolvedTheme.primary || COMMUNITY_DEFAULT_BRAND;
+  const targetIds = new Set(
+    course.lessonTheme.sidebar.flatMap((block) =>
+      block.type === "crossSell" && block.targetOfferId ? [block.targetOfferId] : [],
+    ),
+  );
+  const crossSellTargets = new Map();
+  await Promise.all(
+    [...targetIds].map(async (id) => {
+      const target = await getCourseOffer(saId, id);
+      if (target) {
+        crossSellTargets.set(id, {
+          id: target.id,
+          title: target.title,
+          priceCents: target.priceCents,
+          currency: target.currency,
+          type: target.type,
+          visibility: target.visibility,
+        });
+      }
+    }),
+  );
   const viewer: AuthorView = {
     memberId: member.id,
     displayName:
@@ -133,14 +145,15 @@ export async function EmbeddedProductLesson(opts: {
     id: s.id,
     title: s.title,
   }));
-  const lessons: PlayerLesson[] = visibleLessons.map((l) => ({
-    id: l.id,
-    title: l.title,
-    sectionId: l.sectionId,
-    embedUrl: embedUrlFor(l.videoProvider, l.videoId),
-    body: renderLessonBodyHtml(l.bodyHtml),
-    resourceLinks: l.resourceLinks ?? [],
-  }));
+  const lessons: PlayerLesson[] = await Promise.all(
+    visibleLessons.map((l) =>
+      presentStandaloneLesson(l, {
+        kind: "tenant",
+        agencyId: course.agencyId,
+        subAccountId: saId,
+      }),
+    ),
+  );
 
   return (
     <CommunityShell
@@ -158,12 +171,16 @@ export async function EmbeddedProductLesson(opts: {
       >
         <ArrowLeft className="h-4 w-4" /> {course.title}
       </Link>
-      <LessonPlayer
+      <StandaloneLessonPlayer
         completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={productHref}
-        brand={brand}
-        primaryAction={resolvedTheme.primaryAction}
-        accent={resolvedTheme.accent}
+        homeHref={productHref}
+        saId={saId}
+        lessonTheme={course.lessonTheme}
+        courseTitle={course.title}
+        courseCoverUrl={course.coverUrl}
+        instructor={course.instructor}
+        crossSellTargets={crossSellTargets}
         sections={sections}
         lessons={lessons}
         currentLessonId={lessonId}

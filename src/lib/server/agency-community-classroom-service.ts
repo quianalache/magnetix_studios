@@ -4,7 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { formatPrice } from "@/lib/server/community-classroom-service";
-import { communityLearningLessonHref, communityLearningProductLessonHref, type CommunityLinkBase } from "@/lib/community/routes";
+import { communityLearningLessonHref, communityLearningProductHref, type CommunityLinkBase } from "@/lib/community/routes";
 import type {
   Course,
   CourseAccess,
@@ -486,7 +486,7 @@ export async function listAgencyClassroomCatalogForMember(opts: {
       // this group's shell); locked+purchasable -> the course's own public
       // sales page, its existing purchase destination.
       const unlockedHref = firstLessonId
-        ? communityLearningProductLessonHref(opts.linkBase, opts.groupSlug, course.id, firstLessonId)
+        ? communityLearningProductHref(opts.linkBase, opts.groupSlug, course.id)
         : null;
 
       return {

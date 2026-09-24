@@ -14,7 +14,7 @@ import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import { checkStandaloneCourseEntitlementForMember } from "@/lib/standalone-courses/course-access";
 import {
   communityLearningLessonHref,
-  communityLearningProductLessonHref,
+  communityLearningProductHref,
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import type { GroupMembership } from "@/types/community";
@@ -157,11 +157,10 @@ export async function listClassroomCatalogForMember(opts: {
       // this group's shell); locked+purchasable -> the Product's own
       // public sales page, its existing purchase destination.
       const unlockedHref = firstLessonId
-        ? communityLearningProductLessonHref(
+      ? communityLearningProductHref(
             opts.linkBase,
             opts.groupSlug,
             course.id,
-            firstLessonId
           )
         : null;
 

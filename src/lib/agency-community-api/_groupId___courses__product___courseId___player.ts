@@ -9,8 +9,7 @@ import {
   filterAgencyLessonsForEnrollment,
 } from "@/lib/server/agency-standalone-course-service";
 import { checkAgencyCourseEntitlementForPerson } from "@/lib/standalone-courses/agency-course-access";
-import { embedUrlFor } from "@/lib/community/video-embed";
-import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
+import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -47,17 +46,21 @@ export async function GET(
   const enrollment = await getAgencyStandaloneEnrollment(caller.agencyId, courseId, memberId);
   const visibleLessons = filterAgencyLessonsForEnrollment(tree.lessons, enrollment);
   const sections = tree.sections.map((s) => ({ id: s.id, title: s.title }));
-  const lessons = visibleLessons.map((l) => ({
-    id: l.id,
-    title: l.title,
-    sectionId: l.sectionId,
-    published: l.published,
-    embedUrl: embedUrlFor(l.videoProvider, l.videoId),
-    body: renderLessonBodyHtml(l.bodyHtml),
-    resourceLinks: l.resourceLinks ?? [],
-  }));
+  const lessons = await Promise.all(
+    visibleLessons.map((l) =>
+      presentStandaloneLesson(l, { kind: "agency", agencyId: caller.agencyId }),
+    ),
+  );
   return NextResponse.json({
-    course: { id: course.id, title: course.title },
+    course: {
+      ...course,
+      id: course.id,
+      title: course.title,
+      coverUrl: course.coverUrl,
+      instructor: course.instructor,
+      theme: course.theme,
+      lessonTheme: course.lessonTheme,
+    },
     sections,
     lessons,
     completedIds: enrollment?.completedLessonIds ?? [],

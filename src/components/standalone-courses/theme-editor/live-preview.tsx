@@ -76,6 +76,7 @@ export function ThemeLivePreview({
 }) {
   const [sections, setSections] = useState<StandaloneCourseSection[]>([]);
   const [lessons, setLessons] = useState<StandaloneLesson[]>([]);
+  const [hostedUrls, setHostedUrls] = useState<Record<string, string | null>>({});
 
   useEffect(() => {
     // Agency scope has no client-readable Firestore path for these (see
@@ -106,6 +107,34 @@ export function ThemeLivePreview({
     };
   }, [saId, courseId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const hosted = lessons.filter((lesson) => lesson.hostedVideoId);
+    if (hosted.length === 0) {
+      setHostedUrls({});
+      return () => {
+        cancelled = true;
+      };
+    }
+    const endpoint = saId === "agency"
+      ? `/api/agency/standalone-courses/${courseId}/preview-video`
+      : `/api/sub-accounts/${saId}/standalone-courses/${courseId}/preview-video`;
+    void Promise.all(hosted.map(async (lesson) => {
+      try {
+        const response = await fetch(`${endpoint}?lessonId=${encodeURIComponent(lesson.id)}`);
+        const data = response.ok ? (await response.json() as { embedUrl?: string | null }) : {};
+        return [lesson.id, data.embedUrl ?? null] as const;
+      } catch {
+        return [lesson.id, null] as const;
+      }
+    })).then((entries) => {
+      if (!cancelled) setHostedUrls(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [saId, courseId, lessons]);
+
   const crossSellTargets = useMemo(() => {
     const map = new Map<string, CrossSellTargetInfo>();
     for (const o of otherOffers) {
@@ -135,7 +164,9 @@ export function ThemeLivePreview({
         // Lessons whose sectionId doesn't resolve to a real section are
         // grouped as "other", same rule `StandaloneLessonPlayer` itself uses.
         sectionId: l.sectionId && sectionIds.has(l.sectionId) ? l.sectionId : null,
-        embedUrl: embedUrlFor(l.videoProvider, l.videoId),
+        embedUrl: l.hostedVideoId
+          ? hostedUrls[l.id] ?? null
+          : embedUrlFor(l.videoProvider, l.videoId),
         body: lessonBodyToEditorHtml(l.bodyHtml),
         resourceLinks: l.resourceLinks ?? [],
       }));

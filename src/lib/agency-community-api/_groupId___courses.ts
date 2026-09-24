@@ -2,8 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireAgencyOwnerAny } from "@/lib/auth/require-tenancy";
-import { createAgencyCourseServerSide, listAgencyCourses } from "@/lib/server/agency-community-classroom-service";
-import type { CourseAccess } from "@/types/community";
+import { listAgencyCourses } from "@/lib/server/agency-community-classroom-service";
 
 export const dynamic = "force-dynamic";
 
@@ -20,39 +19,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ groupId: st
   return NextResponse.json({ courses });
 }
 
-export async function POST(request: Request, ctx: { params: Promise<{ groupId: string }> }) {
+export async function POST(request: Request) {
   const caller = await requireAgencyOwnerAny(request);
   if (caller instanceof NextResponse) return caller;
-  const { groupId } = await ctx.params;
-
-  let body: {
-    title?: string;
-    description?: string;
-    thumbnailUrl?: string | null;
-    access?: CourseAccess;
-    requiredLevel?: number | null;
-    priceCents?: number | null;
-    published?: boolean;
-  };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  if (!body.title?.trim()) {
-    return NextResponse.json({ error: "A course title is required" }, { status: 400 });
-  }
-
-  const course = await createAgencyCourseServerSide({
-    agencyId: caller.agencyId!,
-    groupId,
-    title: body.title,
-    description: body.description,
-    thumbnailUrl: body.thumbnailUrl ?? null,
-    access: body.access,
-    requiredLevel: body.requiredLevel ?? null,
-    priceCents: body.priceCents ?? null,
-    published: body.published,
-  });
-  return NextResponse.json({ ok: true, course });
+  return NextResponse.json(
+    { error: "Create a canonical Course first, then link it to this Community." },
+    { status: 410 },
+  );
 }

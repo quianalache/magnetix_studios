@@ -46,11 +46,12 @@ import {
 } from "@/lib/server/members-service";
 import { createGroupServerSide } from "@/lib/server/community-service";
 import {
-  createCourseServerSide,
-  createLessonServerSide,
-  createSectionServerSide,
-  updateLessonServerSide,
-} from "@/lib/server/community-classroom-service";
+  createStandaloneCourseServerSide,
+  createStandaloneLessonServerSide,
+  createStandaloneSectionServerSide,
+  linkCommunityGroupServerSide,
+  updateStandaloneLessonServerSide,
+} from "@/lib/server/standalone-course-service";
 import { createContactServerSide } from "@/lib/server/contacts-service";
 import {
   createDealServerSide,
@@ -2228,8 +2229,9 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         );
       }
 
-      // Group → course → section → lesson, all published so the URLs work
-      // the moment the user clicks them.
+      // Group → canonical Standalone Course → section → lesson. The group is
+      // only the distribution channel; content stays in the one Course
+      // system and the course is linked to this group below.
       const group = await createGroupServerSide({
         subAccountId: ctx.subAccountId!,
         agencyId: ctx.agencyId,
@@ -2241,29 +2243,30 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         joinPolicy: args.joinPolicy as "open" | "approval",
         status: "published",
       });
-      const course = await createCourseServerSide({
+      const course = await createStandaloneCourseServerSide({
         subAccountId: ctx.subAccountId!,
         agencyId: ctx.agencyId,
-        groupId: group.id,
         title: args.courseTitle as string,
         published: true,
       });
-      const section = await createSectionServerSide({
+      await linkCommunityGroupServerSide({
         subAccountId: ctx.subAccountId!,
+        courseId: course.id,
         groupId: group.id,
+      });
+      const section = await createStandaloneSectionServerSide({
+        subAccountId: ctx.subAccountId!,
         courseId: course.id,
         title: "Getting started",
       });
-      const lesson = await createLessonServerSide({
+      const lesson = await createStandaloneLessonServerSide({
         subAccountId: ctx.subAccountId!,
-        groupId: group.id,
         courseId: course.id,
         sectionId: section.id,
         title: args.lessonTitle as string,
       });
-      const { videoError } = await updateLessonServerSide({
+      const { videoError } = await updateStandaloneLessonServerSide({
         subAccountId: ctx.subAccountId!,
-        groupId: group.id,
         courseId: course.id,
         lessonId: lesson.id,
         patch: {
@@ -2275,7 +2278,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
 
       const base = process.env.NEXT_PUBLIC_APP_URL ?? "";
       const communityUrl = `${base}/c/${ctx.subAccountId}/${group.slug}/community`;
-      const lessonUrl = `${base}/c/${ctx.subAccountId}/${group.slug}/classroom/${course.id}/${lesson.id}`;
+      const lessonUrl = `${base}/c/${ctx.subAccountId}/${group.slug}/classroom/product/${course.id}/${lesson.id}`;
       const videoNote = videoError
         ? " (⚠️ the video URL wasn't recognized — YouTube/Vimeo/Loom/Descript links only; add it in the classroom editor)"
         : args.lessonVideoUrl
