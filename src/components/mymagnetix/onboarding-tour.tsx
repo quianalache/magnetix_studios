@@ -113,21 +113,27 @@ export function MyMagnetixOnboardingTour({ primaryEmail }: { primaryEmail: strin
   useEffect(() => {
     if (!step) return;
     const target = step.targets?.map((selector) => document.querySelector<HTMLElement>(selector)).find((element) => element && element.getBoundingClientRect().width > 0);
+    const adjustStep5MobilePosition = () => {
+      if (!target || stepIndex !== 4 || window.innerWidth >= 768) return;
+      const targetRect = target.getBoundingClientRect();
+      const minimumVisibleTarget = 120;
+      const desiredTop = Math.min(380 + 26, window.innerHeight - 12 - minimumVisibleTarget);
+      const scrollDelta = targetRect.top - desiredTop;
+      if (Math.abs(scrollDelta) > 8) window.scrollBy({ top: scrollDelta, behavior: "auto" });
+    };
     if (target && stepIndex !== 1) {
       if (stepIndex === 4 && window.innerWidth < 768) {
-        const targetRect = target.getBoundingClientRect();
-        const minimumVisibleTarget = 120;
-        const desiredTop = Math.min(380 + 26, window.innerHeight - 12 - minimumVisibleTarget);
-        const scrollDelta = targetRect.top - desiredTop;
-        if (Math.abs(scrollDelta) > 8) window.scrollBy({ top: scrollDelta, behavior: "auto" });
+        adjustStep5MobilePosition();
       } else {
         target.scrollIntoView({ block: window.innerWidth < 768 ? "start" : "center", behavior: "smooth" });
       }
     }
     const id = window.setTimeout(measure, 220);
-    window.addEventListener("resize", measure);
+    const handleViewportChange = () => { adjustStep5MobilePosition(); measure(); };
+    window.addEventListener("resize", handleViewportChange);
+    window.visualViewport?.addEventListener("resize", handleViewportChange);
     window.addEventListener("scroll", measure, { passive: true });
-    return () => { window.clearTimeout(id); window.removeEventListener("resize", measure); window.removeEventListener("scroll", measure); };
+    return () => { window.clearTimeout(id); window.removeEventListener("resize", handleViewportChange); window.visualViewport?.removeEventListener("resize", handleViewportChange); window.removeEventListener("scroll", measure); };
   }, [measure, step, stepIndex]);
 
   const finish = useCallback(async (status: "completed" | "dismissed") => {
