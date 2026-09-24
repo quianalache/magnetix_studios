@@ -36,7 +36,10 @@ function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): Too
   const width = Math.min(540, viewport.width - 24);
   const height = index === 0 ? 470 : 360;
   if (index === 0 || rects.length === 0) return { centered: true, pointerSide: "top", style: { width } };
-  if (viewport.width < 768) return { centered: false, pointerSide: "top", style: { width, left: 12, bottom: 12 }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
+  if (viewport.width < 768) {
+    if (index === 6) return { centered: false, pointerSide: "top", style: { width, left: 12, top: 150 }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
+    return { centered: false, pointerSide: "top", style: { width, left: 12, bottom: 12 }, pointerLefts: rects.map((rect) => clamp(rect.left + rect.width / 2 - 12, 28, width - 28)) };
+  }
 
   const target = rects[0];
   if (index === 1) return { centered: false, pointerSide: "left", style: { width: 430, left: clamp(target.left + target.width + 28, 24, viewport.width - 454), top: 150 } };
