@@ -38,6 +38,12 @@ function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): Too
   if (index === 0 || rects.length === 0) return { centered: true, pointerSide: "top", style: { width } };
   if (viewport.width < 768) {
     const mobileHeight = index === 4 ? 380 : 280;
+    if (index === 4) {
+      const target = rects[0];
+      const left = clamp(target.left + target.width / 2 - width / 2, 12, viewport.width - width - 12);
+      const top = clamp(target.top - mobileHeight - 26, 12, viewport.height - mobileHeight - 12);
+      return { centered: false, pointerSide: "bottom", style: { width, left, top }, pointerLefts: [clamp(target.left + target.width / 2 - left, 28, width - 28)] };
+    }
     const targetBottom = Math.max(...rects.map((rect) => rect.top + rect.height));
     const top = targetBottom + 16;
     const style = top + mobileHeight <= viewport.height - 12 ? { width, left: 12, top } : { width, left: 12, bottom: 12 };
@@ -107,7 +113,17 @@ export function MyMagnetixOnboardingTour({ primaryEmail }: { primaryEmail: strin
   useEffect(() => {
     if (!step) return;
     const target = step.targets?.map((selector) => document.querySelector<HTMLElement>(selector)).find((element) => element && element.getBoundingClientRect().width > 0);
-    if (target && stepIndex !== 1) target.scrollIntoView({ block: window.innerWidth < 768 ? "start" : "center", behavior: "smooth" });
+    if (target && stepIndex !== 1) {
+      if (stepIndex === 4 && window.innerWidth < 768) {
+        const targetRect = target.getBoundingClientRect();
+        const minimumVisibleTarget = 120;
+        const desiredTop = Math.min(380 + 26, window.innerHeight - 12 - minimumVisibleTarget);
+        const scrollDelta = targetRect.top - desiredTop;
+        if (Math.abs(scrollDelta) > 8) window.scrollBy({ top: scrollDelta, behavior: "auto" });
+      } else {
+        target.scrollIntoView({ block: window.innerWidth < 768 ? "start" : "center", behavior: "smooth" });
+      }
+    }
     const id = window.setTimeout(measure, 220);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, { passive: true });
