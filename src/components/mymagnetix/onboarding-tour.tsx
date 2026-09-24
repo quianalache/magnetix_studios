@@ -37,7 +37,7 @@ function getTooltipLayout(index: number, rects: Rect[], viewport: Viewport): Too
   const height = index === 0 ? 470 : index === 4 ? 350 : index === 6 ? 330 : index === 2 || index === 3 ? 280 : 300;
   if (index === 0 || rects.length === 0) return { centered: true, pointerSide: "top", style: { width } };
   if (viewport.width < 768) {
-    const mobileHeight = index === 6 ? 280 : 240;
+    const mobileHeight = index === 4 ? 380 : 280;
     const targetBottom = Math.max(...rects.map((rect) => rect.top + rect.height));
     const top = targetBottom + 16;
     const style = top + mobileHeight <= viewport.height - 12 ? { width, left: 12, top } : { width, left: 12, bottom: 12 };
