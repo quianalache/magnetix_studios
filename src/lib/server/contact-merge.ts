@@ -3,6 +3,9 @@ import "server-only";
 import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { emitContactDeleted } from "@/lib/server/contacts-service";
 import type { Contact } from "@/types/contacts";
+import { contactMergeFields } from "@/lib/server/contact-merge-fields";
+import { createHash } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 /**
  * Shared engine behind every contact-merge entry point: the Meta-stub
@@ -17,6 +20,8 @@ const SUBCOLLECTIONS = [
   "metaMessages",
   "messages",
   "whatsappMessages",
+  "emailMessages",
+  "mergeHistory",
   "notes",
   "activities",
 ] as const;
@@ -49,7 +54,8 @@ async function repoint(
   if (n % 400 !== 0) await batch.commit();
 }
 
-/** Copy a loser subcollection onto the survivor (preserving doc ids). */
+/** Preserve both rows on id collision. A stable alternate id makes retries
+ * safe without overwriting either contact's original metadata. */
 async function copySubcollection(
   db: FirebaseFirestore.Firestore,
   loserRef: FirebaseFirestore.DocumentReference,
@@ -58,18 +64,23 @@ async function copySubcollection(
   survivorId: string,
 ): Promise<void> {
   const docs = await loserRef.collection(name).get();
-  let batch = db.batch();
-  let n = 0;
   for (const d of docs.docs) {
+    if ((await d.ref.listCollections()).length) {
+      throw new Error("Merge requires review: nested contact metadata would be lost.");
+    }
     const data = d.data();
     if ("contactId" in data) data.contactId = survivorId;
-    batch.set(survivorRef.collection(name).doc(d.id), data, { merge: true });
-    if (++n % 400 === 0) {
-      await batch.commit();
-      batch = db.batch();
-    }
+    const target = survivorRef.collection(name).doc(d.id);
+    const alternate = survivorRef.collection(name).doc(`merged_${createHash("sha256").update(d.ref.path).digest("hex")}`);
+    await db.runTransaction(async (tx) => {
+      const existing = await tx.get(target);
+      if (!existing.exists) { tx.create(target, data); return; }
+      if (isDeepStrictEqual(existing.data(), data)) return;
+      const collision = await tx.get(alternate);
+      if (!collision.exists) tx.create(alternate, data);
+      else if (!isDeepStrictEqual(collision.data(), data)) throw new Error("Merge history conflict requires review.");
+    });
   }
-  if (n % 400 !== 0) await batch.commit();
 }
 
 /** Merge the loser's inbox conversation index doc into the survivor's. */
@@ -119,7 +130,7 @@ async function mergeConversation(
     }
     await survivorConvRef.set(patch, { merge: true });
   }
-  await loserConvRef.delete().catch(() => {});
+  await loserConvRef.delete();
 }
 
 /**
@@ -164,6 +175,37 @@ export async function performContactMerge(params: {
   } = params;
   const loserRef = db.doc(`contacts/${loserId}`);
   const survivorRef = db.doc(`contacts/${survivorId}`);
+
+  if (loserId === survivorId) throw new Error("Cannot merge a contact into itself.");
+  const [loserSnap, survivorSnap, collections, loserConversation, survivorConversation] = await Promise.all([
+    loserRef.get(), survivorRef.get(), loserRef.listCollections(),
+    db.doc(`conversations/${loserId}`).get(), db.doc(`conversations/${survivorId}`).get(),
+  ]);
+  const currentLoser = loserSnap.data() as Omit<Contact, "id"> | undefined;
+  const currentSurvivor = survivorSnap.data() as Omit<Contact, "id"> | undefined;
+  if (!currentLoser || !currentSurvivor || currentLoser.subAccountId !== sub || currentSurvivor.subAccountId !== sub || currentLoser.agencyId !== currentSurvivor.agencyId)
+    throw new Error("Contacts must belong to the same sub-account and agency.");
+  if (currentLoser.metaUserId && currentSurvivor.metaUserId && currentLoser.metaUserId !== currentSurvivor.metaUserId)
+    throw new Error("Conflicting Meta identities require review.");
+  if (collections.some((collection) => !(SUBCOLLECTIONS as readonly string[]).includes(collection.id)))
+    throw new Error("Merge requires review: unsupported contact metadata would be lost.");
+  for (const conversation of [loserConversation, survivorConversation]) {
+    if (conversation.exists && (conversation.data()?.subAccountId !== sub || conversation.data()?.agencyId !== currentSurvivor.agencyId))
+      throw new Error("Conversation tenancy mismatch.");
+  }
+
+  // Retain complete original metadata (including conflicting custom fields,
+  // identities, consent evidence and conversation controls) before deletion.
+  const historyRef = survivorRef.collection("mergeHistory").doc(loserId);
+  await db.runTransaction(async (tx) => {
+    if (!(await tx.get(historyRef)).exists) tx.create(historyRef, {
+      loserId, survivorId, subAccountId: sub, agencyId: currentSurvivor.agencyId,
+      loser: currentLoser, survivor: currentSurvivor,
+      loserConversation: loserConversation.data() ?? null,
+      survivorConversation: survivorConversation.data() ?? null,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
 
   // 1. Move the loser's own subcollections onto the survivor.
   for (const name of SUBCOLLECTIONS) {
@@ -214,6 +256,9 @@ export async function performContactMerge(params: {
   // 4. Apply the computed field patch to the survivor.
   await survivorRef.update({
     ...survivorPatch,
+    ...contactMergeFields(currentSurvivor, currentLoser),
+    // Explicit primary choices from the general merge still win.
+    ...Object.fromEntries(["name", "email", "phone"].filter((key) => survivorPatch[key] !== undefined).map((key) => [key, survivorPatch[key]])),
     updatedAt: FieldValue.serverTimestamp(),
   });
 

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useRef, useState, useEffect, type FormEvent } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { GoogleGIcon } from "@/components/brand/google-g-icon";
+import { AddNoteInput } from "@/components/contacts/add-note-input";
 import { cn } from "@/lib/utils";
 import { DEFAULT_REVIEW_SMS_TEMPLATE } from "@/lib/reviews/constants";
 import type { Contact } from "@/types/contacts";
@@ -27,20 +29,43 @@ const LABEL: Record<ConversationChannel, string> = {
  * Defaults to the channel the contact last used; the operator can switch
  * when more than one is available.
  */
-export function ConversationComposer({
-  contact,
-  availableChannels,
-  defaultChannel,
-}: {
+export interface ConversationComposerProps {
   contact: Contact;
-  availableChannels: ConversationChannel[];
+  availability: {
+    channel: ConversationChannel;
+    available: boolean;
+    reason?: string;
+    notice?: string;
+  }[];
   defaultChannel: ConversationChannel;
-}) {
-  const { subAccount } = useSubAccount();
-  const initial = availableChannels.includes(defaultChannel)
-    ? defaultChannel
-    : (availableChannels[0] ?? "sms");
-  const [channel, setChannel] = useState<ConversationChannel>(initial);
+  onSent?: () => void;
+  loading?: boolean;
+}
+
+export function ConversationComposer(props: ConversationComposerProps) {
+  const { subAccountId } = useSubAccount();
+  return <Composer key={`${subAccountId}:${props.contact.id}`} {...props} />;
+}
+
+function Composer({
+  contact,
+  availability,
+  defaultChannel,
+  onSent,
+  loading = false,
+}: ConversationComposerProps) {
+  const { subAccount, saPath } = useSubAccount();
+  const id = useId();
+  const active = useRef(true);
+  const inFlight = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const [tab, setTab] = useState<"reply" | "note">("reply");
+  const [channel, setChannel] = useState<ConversationChannel>(defaultChannel);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -63,15 +88,6 @@ export function ConversationComposer({
     setBody((prev) => (prev.trim() ? `${prev.trim()} ${msg}` : msg));
   }
 
-  if (availableChannels.length === 0) {
-    return (
-      <div className="border-t px-4 py-3 text-xs text-muted-foreground">
-        No messaging channel is configured for this sub-account. Set up a
-        dedicated Twilio number (Settings → SMS) to reply here.
-      </div>
-    );
-  }
-
   // Meta (Messenger / Instagram) replies post to a different route, identify
   // the recipient by `metaUserId` (not phone), and have no STOP-style opt-out.
   const isMeta = channel === "messenger" || channel === "instagram";
@@ -81,9 +97,7 @@ export function ConversationComposer({
       ? !!contact.smsOptedOut
       : channel === "whatsapp"
         ? !!contact.whatsappOptedOut
-        : channel === "email"
-          ? !!contact.emailOptedOut
-          : false;
+        : false;
   const endpoint = isMeta
     ? "/api/comms/meta/send"
     : channel === "sms"
@@ -96,10 +110,33 @@ export function ConversationComposer({
     : channel === "email"
       ? !!contact.email
       : !!contact.phone;
-  const disabled = optedOut || sending || !hasIdentity;
+  function channelReason(ch: ConversationChannel) {
+    const capability = availability.find((item) => item.channel === ch);
+    if (loading) return "Checking channel availability…";
+    if (
+      (ch === "sms" && contact.smsOptedOut) ||
+      (ch === "whatsapp" && contact.whatsappOptedOut)
+    )
+      return `Contact opted out of ${LABEL[ch]}.`;
+    if (
+      ch === "email"
+        ? !contact.email
+        : ch === "sms" || ch === "whatsapp"
+          ? !contact.phone
+          : !contact.metaUserId
+    )
+      return `No ${ch === "email" ? "email address" : ch === "sms" || ch === "whatsapp" ? "phone number" : `${LABEL[ch]} identity`} for this contact.`;
+    return capability?.available
+      ? undefined
+      : capability?.reason || `${LABEL[ch]} is unavailable.`;
+  }
+  const reason = channelReason(channel);
+  const notice = availability.find((item) => item.channel === channel)?.notice;
+  const disabled = !!reason || optedOut || sending || !hasIdentity;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (disabled || tab !== "reply" || inFlight.current) return;
     const trimmed = body.trim();
     if (!trimmed) return;
     if (!hasIdentity) {
@@ -108,7 +145,7 @@ export function ConversationComposer({
           ? "This contact hasn't messaged via Facebook/Instagram."
           : channel === "email"
             ? "This contact has no email address."
-            : "This contact has no phone number.",
+            : "This contact has no phone number."
       );
       return;
     }
@@ -116,6 +153,7 @@ export function ConversationComposer({
       toast.error(`This contact opted out of ${LABEL[channel]}.`);
       return;
     }
+    inFlight.current = true;
     setSending(true);
     try {
       const res = await fetch(endpoint, {
@@ -134,83 +172,142 @@ export function ConversationComposer({
       if (!res.ok || !data.ok) {
         throw new Error(data.error ?? "Couldn't send.");
       }
+      if (!active.current) return;
       setBody("");
+      onSent?.();
       // Snapshot listener appends the row.
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't send.");
+      if (active.current)
+        toast.error(err instanceof Error ? err.message : "Couldn't send.");
     } finally {
-      setSending(false);
+      inFlight.current = false;
+      if (active.current) setSending(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t px-4 py-3">
-      {availableChannels.length > 1 && (
-        <div className="mb-2 flex gap-1">
-          {availableChannels.map((ch) => (
-            <button
-              key={ch}
-              type="button"
-              onClick={() => setChannel(ch)}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
-                channel === ch
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {LABEL[ch]}
-            </button>
-          ))}
-        </div>
-      )}
-      <Textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        placeholder={
-          optedOut
-            ? `Contact opted out of ${LABEL[channel]}`
-            : `Reply via ${LABEL[channel]} to ${
-                (isMeta
-                  ? contact.name
-                  : channel === "email"
-                    ? contact.email
-                    : contact.phone) || "this contact"
-              }…`
-        }
-        rows={2}
-        disabled={disabled}
-        className="min-h-[60px] resize-none px-3 py-2 text-sm"
-      />
-      <div className="mt-2 flex items-center justify-between gap-2">
-        {reviewConfigured ? (
-          <Button
+    <div className="bg-card border-t px-4 py-3">
+      <div className="mb-3 flex gap-1" aria-label="Message type">
+        {(["reply", "note"] as const).map((value) => (
+          <button
+            key={value}
             type="button"
-            variant="ghost"
-            size="sm"
-            onClick={insertReviewMessage}
-            disabled={sending}
-            title="Insert a Google review request into the reply"
+            aria-pressed={tab === value}
+            onClick={() => setTab(value)}
+            className={cn(
+              "focus-visible:outline-primary min-h-11 rounded-md px-3 text-sm font-medium",
+              tab === value
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted"
+            )}
           >
-            <GoogleGIcon className="mr-1 h-3.5 w-3.5" />
-            Ask for review
-          </Button>
-        ) : (
-          <span />
-        )}
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!body.trim() || disabled}
-        >
-          {sending ? (
-            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Send className="mr-1 h-3.5 w-3.5" />
-          )}
-          Send via {LABEL[channel]}
-        </Button>
+            {value === "reply" ? "Reply" : "Internal Note"}
+          </button>
+        ))}
       </div>
-    </form>
+      <div hidden={tab !== "note"} className="[&_button]:min-h-11">
+        <p className="text-muted-foreground mb-2 text-xs">
+          Internal notes are saved to this contact and are never sent.
+        </p>
+        <AddNoteInput contactId={contact.id} />
+      </div>
+      <form hidden={tab !== "reply"} onSubmit={handleSubmit}>
+        <Textarea
+          value={body}
+          aria-label={`Reply via ${LABEL[channel]}`}
+          aria-describedby={reason || notice ? `${id}-status` : undefined}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder={
+            optedOut
+              ? `Contact opted out of ${LABEL[channel]}`
+              : `Reply via ${LABEL[channel]} to ${
+                  (isMeta
+                    ? contact.name
+                    : channel === "email"
+                      ? contact.email
+                      : contact.phone) || "this contact"
+                }…`
+          }
+          rows={2}
+          disabled={disabled}
+          className="min-h-24 resize-none px-3 py-2 text-sm"
+        />
+        {(reason || notice) && (
+          <p
+            id={`${id}-status`}
+            role="status"
+            className="text-muted-foreground mt-2 text-xs"
+          >
+            {reason || notice}
+          </p>
+        )}
+        {channel === "whatsapp" && reason && (
+          <Link
+            href={saPath(`/contacts/${contact.id}`)}
+            className="text-primary inline-flex min-h-11 items-center text-xs underline"
+          >
+            View contact for WhatsApp templates
+          </Link>
+        )}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          {reviewConfigured ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="min-h-11"
+              onClick={insertReviewMessage}
+              disabled={sending}
+              title="Insert a Google review request into the reply"
+            >
+              <GoogleGIcon className="mr-1 h-3.5 w-3.5" />
+              Ask for review
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <label
+              htmlFor={`${id}-channel`}
+              className="text-muted-foreground text-xs"
+            >
+              Send via
+            </label>
+            <select
+              id={`${id}-channel`}
+              value={channel}
+              disabled={sending || loading}
+              onChange={(e) =>
+                setChannel(e.target.value as ConversationChannel)
+              }
+              className="bg-background focus-visible:outline-primary min-h-11 max-w-full rounded-md border px-2 text-sm sm:max-w-64"
+            >
+              {(Object.keys(LABEL) as ConversationChannel[]).map((ch) => {
+                const unavailable = channelReason(ch);
+                return (
+                  <option key={ch} value={ch} disabled={!!unavailable}>
+                    {LABEL[ch]}
+                    {unavailable ? ` — ${unavailable}` : ""}
+                  </option>
+                );
+              })}
+            </select>
+            <Button
+              type="submit"
+              size="sm"
+              className="min-h-11"
+              disabled={!body.trim() || disabled}
+            >
+              {sending ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Send className="mr-1 h-3.5 w-3.5" />
+              )}
+              Send
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -5,7 +5,7 @@ import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireContactAccessible, requireUid } from "@/lib/comms/route-auth";
 import { sendMetaMessage } from "@/lib/comms/meta";
-import { metaCanInstagramDm } from "@/lib/comms/meta-capabilities";
+import { metaCanInstagramDm, metaCanInbox } from "@/lib/comms/meta-capabilities";
 import { upsertConversationForMessage } from "@/lib/server/conversations-service";
 import type { ActivityType } from "@/types/contacts";
 import type { SubAccountDoc } from "@/types";
@@ -100,6 +100,9 @@ export async function POST(request: Request) {
       },
       { status: 503 },
     );
+  }
+  if (channel === "messenger" && !metaCanInbox(cfg)) {
+    return NextResponse.json({ error: "This connection does not have Messenger messaging permission." }, { status: 403 });
   }
   if (channel === "instagram" && !metaCanInstagramDm(cfg)) {
     return NextResponse.json(

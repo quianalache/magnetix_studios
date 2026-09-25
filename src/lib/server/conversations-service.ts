@@ -100,7 +100,7 @@ export async function upsertConversationForMessage(
         patch.status = "open";
         patch.assigneeUid = null;
         patch.botMode = "auto"; // reserved for Phase 2
-        patch.botPausedUntil = null;
+        if (!input.pauseBot) patch.botPausedUntil = null;
         // First-ever message is outbound → no unread yet.
         if (input.direction !== "inbound") patch.unreadCount = 0;
       }
@@ -174,27 +174,24 @@ export async function updateConversationWorkflowState(input: {
 }): Promise<boolean> {
   const db = getAdminDb();
   const ref = db.doc(`conversations/${input.contactId}`);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data()?.subAccountId !== input.subAccountId)
-    return false;
-  const previous = snap.data() ?? {};
-  const patch: Record<string, unknown> = {
-    updatedAt: FieldValue.serverTimestamp(),
-  };
-  if (input.status !== undefined) patch.status = input.status;
-  if (input.assigneeUid !== undefined) patch.assigneeUid = input.assigneeUid;
-  await ref.set(patch, { merge: true });
+  const previous = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data()?.subAccountId !== input.subAccountId) return null;
+    const data = snap.data() ?? {};
+    const patch: Record<string, unknown> = {};
+    if (input.status !== undefined && input.status !== data.status) patch.status = input.status;
+    if (input.assigneeUid !== undefined && input.assigneeUid !== (data.assigneeUid ?? null)) patch.assigneeUid = input.assigneeUid;
+    if (Object.keys(patch).length) tx.update(ref, { ...patch, updatedAt: FieldValue.serverTimestamp() });
+    return data;
+  });
+  if (!previous) return false;
   const agencyId = previous.agencyId as string | undefined;
-  const eventType =
-    input.status === "closed"
-      ? "conversation.closed"
-      : input.status === "open" && previous.status === "closed"
-        ? "conversation.reopened"
-        : input.assigneeUid !== undefined &&
-            input.assigneeUid !== (previous.assigneeUid ?? null)
-          ? "conversation.assigned"
-          : null;
-  if (agencyId && eventType) {
+  const events: ("conversation.closed" | "conversation.reopened" | "conversation.assigned")[] = [];
+  if (input.status === "closed" && previous.status !== "closed") events.push("conversation.closed");
+  if (input.status === "open" && previous.status === "closed") events.push("conversation.reopened");
+  if (input.assigneeUid !== undefined && input.assigneeUid !== (previous.assigneeUid ?? null)) events.push("conversation.assigned");
+  for (const eventType of events) {
+    if (!agencyId) continue;
     emitWorkflowEvent({
       eventType,
       eventId: `conversation:${input.contactId}:${eventType}:${Date.now()}`,
@@ -203,7 +200,7 @@ export async function updateConversationWorkflowState(input: {
       contactId: input.contactId,
       source: "conversations",
       payload: {
-        assignedToUid: input.assigneeUid ?? previous.assigneeUid ?? null,
+        assignedToUid: input.assigneeUid !== undefined ? input.assigneeUid : previous.assigneeUid ?? null,
         status: input.status ?? previous.status ?? "open",
       },
     });

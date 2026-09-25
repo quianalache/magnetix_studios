@@ -90,6 +90,7 @@ export async function setConversationBotMode(
     });
   } catch (err) {
     console.warn("[conversations] set bot mode failed", err);
+    throw err;
   }
 }
 
@@ -102,6 +103,7 @@ export async function resumeBot(contactId: string): Promise<void> {
     });
   } catch (err) {
     console.warn("[conversations] resume bot failed", err);
+    throw err;
   }
 }
 
@@ -116,6 +118,7 @@ export async function discardConversationDraft(
     });
   } catch (err) {
     console.warn("[conversations] discard draft failed", err);
+    throw err;
   }
 }
 

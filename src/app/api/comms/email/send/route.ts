@@ -52,6 +52,10 @@ export async function POST(request: Request) {
   const contact = await requireContactAccessible(auth.uid, contactId);
   if (contact instanceof NextResponse) return contact;
 
+  if (contact.deliverabilitySuppressed) {
+    return NextResponse.json({ error: "Email delivery is suppressed for this contact." }, { status: 400 });
+  }
+
   if (!contact.email) {
     return NextResponse.json(
       { error: "This contact has no email address." },

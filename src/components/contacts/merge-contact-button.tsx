@@ -26,7 +26,7 @@ import type { Contact } from "@/types/contacts";
  * tags/custom fields/conversation history fold onto the survivor and
  * it's removed. Not reversible.
  */
-export function MergeContactButton({ contact }: { contact: Contact }) {
+export function MergeContactButton({ contact, conversationContext = false }: { contact: Contact; conversationContext?: boolean }) {
   const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -95,7 +95,7 @@ export function MergeContactButton({ contact }: { contact: Contact }) {
       }
       toast.success("Contacts merged.");
       setOpen(false);
-      router.push(saPath(`/contacts/${survivor.id}`));
+      router.push(saPath(`/${conversationContext ? "conversations" : "contacts"}/${survivor.id}`));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't merge contacts.");
     } finally {

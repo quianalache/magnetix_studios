@@ -27,7 +27,7 @@ import type { Contact } from "@/types/contacts";
  * /api/contacts/[id]/link), then the stub is removed. Self-gates to `null` when
  * not applicable, so it can be dropped into the header unconditionally.
  */
-export function LinkContactButton({ contact }: { contact: Contact }) {
+export function LinkContactButton({ contact, conversationContext = false }: { contact: Contact; conversationContext?: boolean }) {
   const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -70,7 +70,7 @@ export function LinkContactButton({ contact }: { contact: Contact }) {
       toast.success("Merged into the existing contact.");
       setOpen(false);
       // The stub is gone — send the operator to the survivor.
-      router.push(saPath(`/contacts/${targetId}`));
+      router.push(saPath(`/${conversationContext ? "conversations" : "contacts"}/${targetId}`));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't link contact.");
     } finally {
@@ -90,7 +90,7 @@ export function LinkContactButton({ contact }: { contact: Contact }) {
         title="Link this Facebook/Instagram contact into an existing one"
       >
         <Link2 className="mr-1 h-3.5 w-3.5" />
-        Link
+        {conversationContext ? "Connect to Contact" : "Link"}
       </Button>
 
       <Dialog
@@ -103,8 +103,7 @@ export function LinkContactButton({ contact }: { contact: Contact }) {
           <DialogHeader>
             <DialogTitle>Link to an existing contact</DialogTitle>
             <DialogDescription>
-              This contact came from Facebook/Instagram and has no email or
-              phone. Pick the existing contact who is the same person — their
+              Pick the existing contact who is the same person — their
               Messenger/Instagram conversation, messages, and any linked records
               move onto that contact, and this duplicate is removed. This
               can&apos;t be undone.

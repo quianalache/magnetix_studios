@@ -741,14 +741,16 @@ service cloud.firestore {
     // operator-facing fields (mark-read, status, assignment, bot controls) —
     // never tenancy or denormalized content.
     match /conversations/{conversationId} {
-      allow read: if canAccessSub(
+      allow read: if canSeeScopedDoc(
         resource.data.subAccountId,
-        resource.data.agencyId
+        resource.data.agencyId,
+        get(/databases/$(database)/documents/contacts/$(conversationId)).data.get("territoryId", null)
       );
       allow create: if false;
-      allow update: if canAccessSub(
+      allow update: if canSeeScopedDoc(
         resource.data.subAccountId,
-        resource.data.agencyId
+        resource.data.agencyId,
+        get(/databases/$(database)/documents/contacts/$(conversationId)).data.get("territoryId", null)
       ) && tenantFieldsLockedOnUpdate()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
           ['unreadCount', 'status', 'assigneeUid', 'botMode', 'botPausedUntil', 'pendingDraft', 'updatedAt']
@@ -819,9 +821,10 @@ service cloud.firestore {
       );
 
       match /notes/{noteId} {
-        allow read, write: if canAccessSub(
+        allow read, write: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         );
       }
       match /activities/{activityId} {
@@ -837,13 +840,15 @@ service cloud.firestore {
       // path is the one client-side mutation we allow: an update is only
       // permitted when the sole diff is the `readAt` field.
       match /messages/{messageId} {
-        allow read: if canAccessSub(
+        allow read: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         );
-        allow update: if canAccessSub(
+        allow update: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
         allow create, delete: if false;
       }
@@ -852,13 +857,15 @@ service cloud.firestore {
       // whatsapp/send route. Reads are member-scoped; creates + deletes are
       // server-only; the only client mutation is stamping `readAt`.
       match /whatsappMessages/{messageId} {
-        allow read: if canAccessSub(
+        allow read: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         );
-        allow update: if canAccessSub(
+        allow update: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
         allow create, delete: if false;
       }
@@ -867,13 +874,15 @@ service cloud.firestore {
       // webhook + the /api/comms/meta/send route. Reads are member-scoped;
       // creates + deletes are server-only; the only client mutation is `readAt`.
       match /metaMessages/{messageId} {
-        allow read: if canAccessSub(
+        allow read: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         );
-        allow update: if canAccessSub(
+        allow update: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
         allow create, delete: if false;
       }
@@ -886,13 +895,15 @@ service cloud.firestore {
       // the detail thread's client-side onSnapshot got a silent
       // permission-denied and rendered as an empty "No messages yet" thread.
       match /emailMessages/{messageId} {
-        allow read: if canAccessSub(
+        allow read: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         );
-        allow update: if canAccessSub(
+        allow update: if canSeeScopedDoc(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
-          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.get("territoryId", null)
         ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
         allow create, delete: if false;
       }

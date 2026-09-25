@@ -22,6 +22,7 @@ export default function DashboardLayout({
   // The bottom tab bar only renders inside a sub-account — reserve space
   // for it (it's position:fixed, so it doesn't push content itself).
   const hasTabBar = /^\/sa\//.test(pathname);
+  const isConversations = /^\/sa\/[^/]+\/conversations(?:\/|$)/.test(pathname);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -70,6 +71,7 @@ export default function DashboardLayout({
           className={cn(
             "flex-1 overflow-y-auto p-4 md:p-6",
             hasTabBar && "pb-24 md:pb-6",
+            isConversations && "min-h-0 overflow-hidden p-2 pb-20 md:p-3",
           )}
         >
           {children}
