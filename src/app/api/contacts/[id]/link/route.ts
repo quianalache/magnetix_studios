@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { performContactMerge } from "@/lib/server/contact-merge";
 import type { Contact } from "@/types/contacts";
+import { contactMergeFields } from "@/lib/server/contact-merge-fields";
 
 /**
  * Link (merge) a Facebook/Instagram "stub" contact into an existing contact.
@@ -36,8 +37,8 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const targetId = body.targetContactId?.trim();
-  if (!targetId) {
+  const targetId = typeof body?.targetContactId === "string" ? body.targetContactId.trim() : "";
+  if (!targetId || targetId.includes("/") || stubId.includes("/")) {
     return NextResponse.json(
       { error: "targetContactId is required" },
       { status: 400 },
@@ -84,7 +85,7 @@ export async function POST(
     );
   }
   const target = targetSnap.data() as Omit<Contact, "id">;
-  if (target.subAccountId !== stub.subAccountId) {
+  if (target.subAccountId !== stub.subAccountId || target.agencyId !== stub.agencyId) {
     return NextResponse.json(
       { error: "Both contacts must be in the same sub-account." },
       { status: 400 },
@@ -105,8 +106,8 @@ export async function POST(
     subAccountId: stub.subAccountId,
     loserId: stubId,
     survivorId: targetId,
-    survivorPatch: { metaUserId: stub.metaUserId },
-    conversationContact: { name: target.name, phone: target.phone },
+    survivorPatch: { ...contactMergeFields(target, stub), metaUserId: stub.metaUserId },
+    conversationContact: { name: target.name || stub.name, phone: target.phone || stub.phone },
     loserData: stub,
   });
 

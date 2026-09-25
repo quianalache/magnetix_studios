@@ -4,131 +4,21 @@ import Link from "next/link";
 import { MessagesSquare } from "lucide-react";
 import { toDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ConversationDoc, ConversationChannel } from "@/types/conversations";
+import type { ConversationDoc } from "@/types/conversations";
+import { ChannelBadge, ContactInitials } from "./channel-badge";
 
-const CHANNEL_LABEL: Record<ConversationChannel, string> = {
-  sms: "SMS",
-  whatsapp: "WhatsApp",
-  messenger: "Messenger",
-  instagram: "Instagram",
-  email: "Email",
-};
-
-const CHANNEL_BADGE: Record<ConversationChannel, string> = {
-  sms: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
-  whatsapp: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  messenger: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-  instagram: "bg-pink-500/10 text-pink-700 dark:text-pink-400",
-  email: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400",
-};
-
-export function ConversationList({
-  conversations,
-  basePath,
-}: {
-  /** Pre-filtered + pre-sorted by the page. */
-  conversations: ConversationDoc[];
-  /** e.g. `/sa/{id}/conversations` — rows link to `{basePath}/{contactId}`. */
-  basePath: string;
+export function ConversationList({ conversations, basePath, selectedId, filtered = false }: {
+  conversations: ConversationDoc[]; basePath: string; selectedId?: string; filtered?: boolean;
 }) {
-  if (conversations.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed bg-card/50 p-12 text-center">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-          <MessagesSquare className="h-6 w-6 text-primary" />
-        </div>
-        <h3 className="text-base font-semibold">No conversations yet</h3>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-          Inbound and outbound SMS / WhatsApp messages land here, one thread per
-          contact. Send a message or wait for a customer to reply.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="divide-y overflow-hidden rounded-xl border bg-card">
-      {conversations.map((c) => {
-        const unread = (c.unreadCount ?? 0) > 0;
-        const ts = toDate(c.lastMessageAt);
-        const title = c.contactName || c.contactPhone || "Unknown contact";
-        return (
-          <Link
-            key={c.id}
-            href={`${basePath}/${c.contactId}`}
-            className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-              {initials(title)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span
-                  className={cn(
-                    "truncate text-sm",
-                    unread ? "font-semibold" : "font-medium",
-                  )}
-                >
-                  {title}
-                </span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {ts ? formatShort(ts) : ""}
-                </span>
-              </div>
-              <div className="mt-0.5 flex items-center justify-between gap-2">
-                <span
-                  className={cn(
-                    "truncate text-xs",
-                    unread ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  {c.lastDirection === "outbound" ? "You: " : ""}
-                  {c.lastMessagePreview}
-                </span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  {c.pendingDraft && (
-                    <span className="rounded-full bg-amber-500/15 px-1.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                      Draft
-                    </span>
-                  )}
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 text-[10px] font-medium",
-                      CHANNEL_BADGE[c.lastChannel] ?? CHANNEL_BADGE.sms,
-                    )}
-                  >
-                    {CHANNEL_LABEL[c.lastChannel] ?? c.lastChannel}
-                  </span>
-                  {unread && (
-                    <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-                      {c.unreadCount}
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function formatShort(d: Date): string {
-  const now = Date.now();
-  const diff = now - d.getTime();
-  if (diff < 24 * 3600 * 1000) {
-    return d.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (!conversations.length) return <div className="px-5 py-12 text-center text-sm text-muted-foreground"><MessagesSquare className="mx-auto mb-3 size-7" /><p>{filtered ? "No conversations match these filters." : "No conversations yet."}</p><p className="mt-2 text-xs">{filtered ? "Try another search or channel." : "Messages from your connected channels appear here."}</p></div>;
+  return <div className="space-y-1 p-2">{conversations.map(c => {
+    const name = c.contactName || c.contactPhone || "Unnamed contact";
+    const date = toDate(c.lastMessageAt);
+    return <Link key={c.id} href={basePath + "/" + c.contactId} scroll={false} aria-current={selectedId === c.contactId ? "page" : undefined} className={cn("flex min-h-20 gap-3 rounded-xl px-3 py-3 outline-none transition-colors hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-primary", selectedId === c.contactId && "bg-primary/10")}>
+      <ContactInitials name={name} />
+      <div className="min-w-0 flex-1"><div className="flex items-baseline justify-between gap-2"><span className={cn("truncate text-sm", c.unreadCount ? "font-bold" : "font-semibold")}>{name}</span><time dateTime={date?.toISOString()} className="shrink-0 text-[10px] text-muted-foreground">{date ? date.toDateString() === new Date().toDateString() ? date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : date.toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</time></div>
+      <p className="my-0.5 truncate text-xs text-muted-foreground">{c.lastDirection === "outbound" ? "You: " : ""}{c.lastMessagePreview}</p>
+      <div className="flex items-center justify-between gap-1"><ChannelBadge channel={c.lastChannel} /><span className="flex items-center gap-1">{c.status !== "open" && <span className="text-[10px] capitalize text-muted-foreground">{c.status}</span>}{c.pendingDraft && <span className="text-[10px] text-amber-700">Draft</span>}{c.unreadCount > 0 && <span aria-label={c.unreadCount + " unread messages"} className="min-w-5 rounded-full bg-pink-600 px-1 text-center text-xs font-semibold text-white">{c.unreadCount}</span>}</span></div></div>
+    </Link>;
+  })}</div>;
 }

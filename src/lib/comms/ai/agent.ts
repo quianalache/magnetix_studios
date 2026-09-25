@@ -192,6 +192,26 @@ export async function getChannelConfig(
   return snap.data() as AiChannelConfig;
 }
 
+/** Capability reads must not trigger the legacy migration's writes. */
+export async function readAgentConfiguration(subAccountId: string) {
+  const db = getAdminDb();
+  const [profile, sms, whatsapp, meta, legacy] = await Promise.all([
+    db.doc(profilePath(subAccountId)).get(),
+    db.doc(channelPath(subAccountId, "sms")).get(),
+    db.doc(channelPath(subAccountId, "whatsapp")).get(),
+    db.doc(channelPath(subAccountId, "meta")).get(),
+    db.doc(legacyPath(subAccountId)).get(),
+  ]);
+  // Project the legacy configuration in memory only, matching migration rules.
+  const legacyData = !profile.exists ? legacy.data() : undefined;
+  return {
+    profile: (profile.data() ?? legacyData) as Partial<AiAgentProfile> | undefined,
+    sms: (legacyData ?? sms.data()) as Partial<AiChannelConfig> | undefined,
+    whatsapp: whatsapp.data() as Partial<AiChannelConfig> | undefined,
+    meta: meta.data() as Partial<AiChannelConfig> | undefined,
+  };
+}
+
 export async function upsertChannelConfig(
   subAccountId: string,
   channelId: ConfiguredChannelId,

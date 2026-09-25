@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import type { Contact } from "@/types/contacts";
+import { territoryGate } from "@/lib/auth/territory-filter";
 
 export function requireUid(request: Request):
   | { uid: string; email: string }
@@ -29,7 +30,7 @@ export async function requireContactAccessible(
   uid: string,
   contactId: string,
 ): Promise<Contact | NextResponse> {
-  if (!contactId) {
+  if (!contactId || contactId.includes("/")) {
     return NextResponse.json(
       { error: "Missing contactId" },
       { status: 400 },
@@ -66,9 +67,16 @@ export async function requireContactAccessible(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const member = memberSnap.data() ?? {};
-  if (member.status !== "active") {
+  if (member.status !== "active" || !["admin", "collaborator"].includes(member.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return { id: snap.id, ...data };
+  const gate = await territoryGate({
+    uid,
+    subAccountId: data.subAccountId,
+    subAccountRole: member.role,
+  }, data.territoryId);
+  if (gate) return gate;
+
+  return { ...data, id: snap.id };
 }

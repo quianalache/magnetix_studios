@@ -1,152 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import {
-  Building2,
-  CircleDot,
-  ExternalLink,
-  Mail,
-  Phone,
-  Tag,
-  X,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ExternalLink, Mail, Phone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useSubAccount } from "@/context/sub-account-context";
-import { SourceBadge } from "@/components/contacts/source-badge";
-import { ContactDeals } from "@/components/contacts/contact-deals";
-import { ContactTasks } from "@/components/contacts/contact-tasks";
 import { ActivityTimeline } from "@/components/contacts/activity-timeline";
-import { AddNoteInput } from "@/components/contacts/add-note-input";
+import { LinkContactButton } from "@/components/contacts/link-contact-button";
+import { ContactInitials, ChannelBadge } from "./channel-badge";
+import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
+import type { ChannelAvailability } from "./conversation-workspace";
 
-/**
- * Right-hand contact panel for the conversation view — gives the operator
- * full context (who this is + every interaction) without leaving the thread.
- *
- * A purpose-built compact summary (no "back to contacts" link / heavy
- * Email/SMS/Delete buttons — those belong on the full profile) plus the
- * same self-contained contact components the profile page uses. Each child
- * fetches its own data from a `contactId` / `contact` and derives scope from
- * `useSubAccount()`, so this panel passes nothing but the contact. Editing
- * lives on the full profile (the "Full profile" link) to avoid duplicating
- * the territory-aware save path.
- */
-export function ConversationContactPanel({
-  contact,
-  onClose,
-}: {
-  contact: Contact;
-  onClose: () => void;
+export function ConversationContactPanel({ contact, availability, onClose }: {
+  contact: Contact; availability: ChannelAvailability[]; onClose: () => void;
 }) {
   const { saPath } = useSubAccount();
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
-        <h2 className="text-sm font-semibold">Details</h2>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            render={<Link href={saPath(`/contacts/${contact.id}`)} />}
-          >
-            <ExternalLink className="mr-1 h-3.5 w-3.5" />
-            Full profile
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Hide details"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        {/* Compact summary */}
-        <div className="space-y-3">
-          <h3 className="truncate text-base font-semibold">
-            {contact.name || "Unnamed contact"}
-          </h3>
-          <dl className="space-y-2.5 rounded-xl border bg-background p-3 text-sm">
-            {contact.email && (
-              <Row icon={<Mail className="h-3.5 w-3.5" />} label="Email">
-                <a
-                  href={`mailto:${contact.email}`}
-                  className="break-all text-foreground hover:text-primary hover:underline"
-                >
-                  {contact.email}
-                </a>
-              </Row>
-            )}
-            {contact.phone && (
-              <Row icon={<Phone className="h-3.5 w-3.5" />} label="Phone">
-                <a
-                  href={`tel:${contact.phone}`}
-                  className="text-foreground hover:text-primary hover:underline"
-                >
-                  {contact.phone}
-                </a>
-              </Row>
-            )}
-            {contact.company && (
-              <Row icon={<Building2 className="h-3.5 w-3.5" />} label="Company">
-                <span className="text-foreground">{contact.company}</span>
-              </Row>
-            )}
-            <Row icon={<CircleDot className="h-3.5 w-3.5" />} label="Source">
-              <SourceBadge source={contact.source} />
-            </Row>
-            <Row icon={<Tag className="h-3.5 w-3.5" />} label="Tags">
-              {contact.tags && contact.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {contact.tags.map((tag) => (
-                    <Badge key={tag} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">No tags</span>
-              )}
-            </Row>
-          </dl>
-        </div>
-
-        <ContactDeals contact={contact} />
-        <ContactTasks contact={contact} />
-
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold">Activity</h3>
-          <AddNoteInput contactId={contact.id} />
-          <ActivityTimeline contactId={contact.id} />
-        </div>
-      </div>
+  const [tab, setTab] = useState<"contact" | "channels" | "activity">("contact");
+  return <div className="flex h-full min-h-0 flex-col">
+    <div className="flex shrink-0 items-center border-b px-3 pt-2">
+      {(["contact", "channels", "activity"] as const).map(item => <button key={item} type="button" aria-pressed={tab === item} onClick={() => setTab(item)} className={cn("min-h-11 flex-1 border-b-2 px-1 text-xs font-medium capitalize", tab === item ? "border-primary text-primary" : "border-transparent text-muted-foreground")}>{item}</button>)}
+      <Button aria-label="Hide contact details" variant="ghost" size="icon" className="size-10" onClick={onClose}><X className="size-4" /></Button>
     </div>
-  );
-}
-
-function Row({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-2">
-      <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </dt>
-        <dd className="min-w-0">{children}</dd>
-      </div>
+    <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
+      {tab === "contact" && <section aria-label="Contact summary" className="space-y-4"><div className="flex items-center gap-3"><ContactInitials name={contact.name || "?"} large /><div className="min-w-0"><h3 className="break-words font-semibold">{contact.name || "Unnamed contact"}</h3>{contact.phone && <p className="mt-2 flex items-start gap-1.5 break-all text-xs text-muted-foreground"><Phone className="size-3 shrink-0" />{contact.phone}</p>}{contact.email && <p className="mt-1 flex items-start gap-1.5 break-all text-xs text-muted-foreground"><Mail className="size-3 shrink-0" />{contact.email}</p>}</div></div>
+      <div className="flex flex-wrap gap-1.5">{contact.tags?.map(tag => <Badge key={tag} variant="secondary" className="rounded-full bg-primary/10 text-primary">{tag}</Badge>)}</div>
+      <Button className="min-h-11 w-full" render={<Link href={saPath("/contacts/" + contact.id)} target="_blank" rel="noopener noreferrer" />}><ExternalLink className="mr-2 size-4" />View Contact<span className="sr-only"> (opens in a new tab)</span></Button>
+      {contact.metaUserId && <LinkContactButton contact={contact} conversationContext />}
+      </section>}
+      {(tab === "contact" || tab === "channels") && <section aria-label="Contact channels" className="space-y-3 border-t pt-4"><h3 className="text-sm font-semibold">Channels</h3>{availability.length ? availability.map(item => <div key={item.channel} className="space-y-1.5 rounded-xl border border-border/60 p-3"><ChannelBadge channel={item.channel} /><p className="break-all text-xs">{item.channel === "email" ? contact.email || "No email address" : item.channel === "sms" || item.channel === "whatsapp" ? contact.phone || "No phone number" : contact.metaUserId ? "Linked messaging identity" : "No linked identity"}</p><p className={cn("text-xs", item.available ? "text-muted-foreground" : "text-muted-foreground")}>{item.available ? item.notice || "Available to reply" : item.reason || "Unavailable"}</p></div>) : <p className="text-xs text-muted-foreground">Checking connected channels…</p>}</section>}
+      {(tab === "contact" || tab === "activity") && <section aria-label="Recent activity" className="space-y-4 border-t pt-4"><h3 className="text-sm font-semibold">Recent Activity</h3><ActivityTimeline contactId={contact.id} limit={tab === "contact" ? 5 : 20} /></section>}
     </div>
-  );
+  </div>;
 }

@@ -16,9 +16,9 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  *
  * Only created when a real message row is written — i.e. dedicated-Twilio SMS,
  * a configured WhatsApp sender, (beta) a connected Meta inbox, or an inbound
- * email to a sub-account's verified receiving domain. Shared-sender SMS (no
- * message rows) produces no conversation, consistent with the per-contact
- * threads. Message subcollections by channel:
+ * email to a sub-account's verified receiving domain. Shared-sender outbound
+ * SMS also writes history; inbound replies require a dedicated sender.
+ * Message subcollections by channel:
  *   sms → contacts/{id}/messages, whatsapp → contacts/{id}/whatsappMessages,
  *   messenger + instagram → contacts/{id}/metaMessages (channel-discriminated),
  *   email → contacts/{id}/emailMessages.
@@ -40,6 +40,21 @@ export type ConversationChannel =
   | "email";
 
 export type ConversationStatus = "open" | "closed" | "snoozed";
+
+/** Safe capability projection; never contains provider configuration. */
+export interface ConversationAvailability {
+  channel: ConversationChannel;
+  available: boolean;
+  reason?: string;
+  notice?: string;
+}
+
+export interface ConversationDetails {
+  channels: ConversationAvailability[];
+  aiAvailable: boolean;
+  aiReason?: string;
+  members: { uid: string; name: string }[];
+}
 
 /**
  * Per-conversation AI mode:

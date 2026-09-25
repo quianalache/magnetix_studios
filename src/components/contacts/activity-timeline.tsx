@@ -49,7 +49,7 @@ type TimelineItem =
       meta: ActivityDoc["meta"];
     };
 
-export function ActivityTimeline({ contactId }: { contactId: string }) {
+export function ActivityTimeline({ contactId, limit }: { contactId: string; limit?: number }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activities, setActivities] = useState<ActivityDoc[]>([]);
   const [loadedNotes, setLoadedNotes] = useState(false);
@@ -128,7 +128,7 @@ export function ActivityTimeline({ contactId }: { contactId: string }) {
 
   return (
     <ol className="relative space-y-4 pl-6 before:absolute before:top-2 before:bottom-2 before:left-3 before:w-px before:bg-border">
-      {items.map((item) =>
+      {items.slice(0, limit ?? items.length).map((item) =>
         item.kind === "note" ? (
           <TimelineRow
             key={`n-${item.id}`}

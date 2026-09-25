@@ -28,6 +28,7 @@ import {
 import { enrollInStandaloneCourseServerSide } from "@/lib/server/standalone-course-service";
 import { grantCourseOfferAccessServerSide } from "@/lib/server/course-offer-purchase-service";
 import { updateConversationWorkflowState } from "@/lib/server/conversations-service";
+import { recordOutboundSms } from "@/lib/server/sms-history";
 import { joinGroupServerSide } from "@/lib/server/community-service";
 import { createNotification } from "@/lib/server/notification-service";
 import {
@@ -379,12 +380,13 @@ const execSendSms: NodeExecutor = async (ctx) => {
   }
   const body = resolveMergeTags(cfg.body ?? "", mergeSubject(ctx, ""));
   try {
-    await sendSmsForSubAccount({
+    const sent = await sendSmsForSubAccount({
       subAccountId: ctx.subAccountId,
       subAccount: ctx.subAccount,
       to,
       body,
     });
+    await recordOutboundSms({ contact, body, sent, sentByUid: null });
     return { result: { kind: "next" }, log: "ok" };
   } catch {
     return {
