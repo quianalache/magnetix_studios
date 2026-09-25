@@ -218,6 +218,26 @@ export interface StandaloneEnrollment {
     humanDesign: HumanDesignProfile | null;
     astrology: AstrologyChart | null;
   } | null;
+  /**
+   * Complimentary access (Contacts redesign, 2026-09-25) — an authorized
+   * staff user granted this course from a Contact profile with no payment.
+   * An ACTIVE grant satisfies the classroom guard for a paid
+   * (`access: "purchase"`) course in place of a paid purchase, and is
+   * independent of any purchase: a canceled/refunded purchase never ends
+   * it, and revoking it never touches a purchase. No purchase record is
+   * ever written for it.
+   */
+  complimentaryAccess?: StandaloneComplimentaryAccess | null;
+}
+
+export interface StandaloneComplimentaryAccess {
+  status: "active" | "revoked";
+  grantedByUid: string;
+  grantedAt: Timestamp | FieldValue | null;
+  revokedByUid: string | null;
+  revokedAt: Timestamp | FieldValue | null;
+  /** The Contact profile it was granted from (audit only). */
+  contactId: string | null;
 }
 
 /**

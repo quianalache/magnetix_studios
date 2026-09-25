@@ -71,7 +71,10 @@ export function activityVisuals(
         : { icon: i(MessageSquareOff, "text-rose-500"), label: "Opted out of WhatsApp" };
     }
   }
-  if (type === "community_access_revoked" && meta?.accessRetained === true) {
+  if (
+    (type === "community_access_revoked" || type === "course_access_revoked") &&
+    meta?.accessRetained === true
+  ) {
     return { icon: i(UserMinus, "text-amber-500"), label: "Complimentary access removed" };
   }
 
@@ -154,6 +157,10 @@ export function activityVisuals(
       return { icon: i(UserCheck, "text-emerald-500"), label: "Community access granted" };
     case "community_access_revoked":
       return { icon: i(UserMinus, "text-rose-500"), label: "Community access removed" };
+    case "course_access_granted":
+      return { icon: i(GraduationCap, "text-emerald-500"), label: "Course access granted" };
+    case "course_access_revoked":
+      return { icon: i(UserMinus, "text-rose-500"), label: "Course access removed" };
     default:
       return { icon: i(Activity, "text-muted-foreground"), label: "Activity" };
   }

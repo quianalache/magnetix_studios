@@ -371,7 +371,18 @@ function GrantAccessDialog({
   const [selected, setSelected] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const activeKeys = useMemo(
-    () => new Set(current.filter((a) => a.status !== "removed").map((a) => a.key)),
+    () =>
+      new Set(
+        current
+          .filter(
+            (a) =>
+              !["removed", "locked", "expired"].includes(a.status) &&
+              // A paid course held only through a purchase can still get a
+              // complimentary grant on top (it outlasts a canceled subscription).
+              !(a.kind === "course" && !a.sources.includes("complimentary") && !a.sources.includes("free")),
+          )
+          .map((a) => a.key),
+      ),
     [current],
   );
 
@@ -480,7 +491,9 @@ function GrantAccessDialog({
                                       ? "Paid community — grants access without payment."
                                       : "Adds them as an active member."
                                     : item.kind === "course"
-                                      ? "Enrolls them in this open course."
+                                      ? item.paid
+                                        ? "Paid course — grants access without payment."
+                                        : "Enrolls them in this open course."
                                       : "Grants this free offer's courses and extras."
                                   : item.grantBlockedReason}
                             </span>

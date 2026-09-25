@@ -57,6 +57,7 @@ import type {
   StandaloneLesson,
 } from "@/types/standalone-courses";
 import { recordContactActivity } from "@/lib/server/contact-activity";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 
 /**
  * Server-side Standalone Course service (Admin SDK). Forked from
@@ -569,6 +570,17 @@ export async function revokeLinkedCommunityAccessServerSide(opts: {
 }): Promise<void> {
   const course = await getStandaloneCourse(opts.subAccountId, opts.courseId);
   if (!course || course.linkedCommunityGroupIds.length === 0) return;
+  // Contacts redesign: an active complimentary grant on this course is an
+  // independent reason to keep what the course includes — a canceled paid
+  // subscription must not strip linked-community access the staff grant
+  // still justifies. (Revoking the grant marks it revoked BEFORE calling
+  // this, so that path still proceeds.)
+  const enrollment = await getStandaloneEnrollment(
+    opts.subAccountId,
+    opts.courseId,
+    opts.memberId
+  );
+  if (hasActiveComplimentaryAccess(enrollment)) return;
   for (const groupId of course.linkedCommunityGroupIds) {
     await revokeProductAccessSourceServerSide({
       subAccountId: opts.subAccountId,
@@ -927,6 +939,9 @@ export async function enrollInStandaloneCourseServerSide(opts: {
   /** Contacts redesign (2026-09-25) — staff uid when this enrollment is a
    *  complimentary grant from the Contact profile (activity row only). */
   grantedByUid?: string | null;
+  /** False when the caller writes its own, more specific activity row
+   *  (the Contacts complimentary grant records "Course access granted"). */
+  recordActivity?: boolean;
 }): Promise<void> {
   const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
   const snap = await ref.get();
@@ -987,11 +1002,13 @@ export async function enrollInStandaloneCourseServerSide(opts: {
     );
     // Contacts redesign (2026-09-25) — contact timeline row; deterministic
     // id so a racing duplicate enroll can't write two.
-    const enrolledCourse = await getStandaloneCourse(
-      opts.subAccountId,
-      opts.courseId
-    ).catch(() => null);
-    await recordContactActivity({
+    const enrolledCourse =
+      opts.recordActivity === false
+        ? null
+        : await getStandaloneCourse(opts.subAccountId, opts.courseId).catch(
+            () => null
+          );
+    if (opts.recordActivity !== false) await recordContactActivity({
       subAccountId: opts.subAccountId,
       memberId: opts.memberId,
       type: "course_enrolled",

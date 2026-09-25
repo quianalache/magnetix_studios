@@ -69,6 +69,8 @@ const CATEGORY: Partial<Record<ActivityType, ActivityCategory>> = {
   course_enrolled: "access",
   community_access_granted: "access",
   community_access_revoked: "access",
+  course_access_granted: "access",
+  course_access_revoked: "access",
   note_added: "notes",
 };
 

@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/standalone-course-service";
 import { hasPaidStandaloneCourse } from "@/lib/server/standalone-course-purchase-service";
 import type { Member } from "@/types/community";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
 /** Timestamp-ish value read off a Firestore doc — Admin SDK Timestamp or a
@@ -79,6 +80,16 @@ export async function checkStandaloneCourseEntitlementForMember(
   course: StandaloneCourse,
   memberId: string
 ): Promise<boolean> {
+  const enrollment = await getStandaloneEnrollment(
+    course.subAccountId,
+    course.id,
+    memberId
+  );
+  // Complimentary access (Contacts redesign) — a staff grant with no
+  // payment. It stands on its own: it satisfies the paid-course check and
+  // isn't subject to a purchase-derived access window (e.g. the expiry a
+  // canceled subscription stamps), so it only ends when staff revoke it.
+  if (hasActiveComplimentaryAccess(enrollment)) return true;
   if (course.access === "purchase") {
     const paid = await hasPaidStandaloneCourse(
       course.subAccountId,
@@ -91,11 +102,6 @@ export async function checkStandaloneCourseEntitlementForMember(
   // Offer with a "begin at date" or "restrict to N days" rule stamps the
   // enrollment with an access window. Most enrollments have neither field
   // set and are unaffected.
-  const enrollment = await getStandaloneEnrollment(
-    course.subAccountId,
-    course.id,
-    memberId
-  );
   const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
   const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
   const now = new Date();

@@ -348,7 +348,11 @@ export type ActivityType =
   | "purchase_completed"
   | "course_enrolled"
   | "community_access_granted"
-  | "community_access_revoked";
+  | "community_access_revoked"
+  // Complimentary (no-payment) course access granted / revoked by staff
+  // from the Contact profile — covers paid courses too.
+  | "course_access_granted"
+  | "course_access_revoked";
 
 export interface Note {
   id: string;

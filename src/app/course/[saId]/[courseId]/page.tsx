@@ -1,5 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { requireCoursePageAccess } from "@/lib/standalone-courses/course-access";
+import {
+  checkStandaloneCourseEntitlementForMember,
+  requireCoursePageAccess,
+} from "@/lib/standalone-courses/course-access";
 import {
   getCurriculumOutline,
   getStandaloneEnrollment,
@@ -52,7 +55,18 @@ export default async function CourseSalesPage({
   // they land straight on the Product page (`CourseHomeView`, the
   // curriculum/course-home hub), matching GHL: pricing only exists to get
   // someone access in the first place, never shown again afterward.
-  if (enrollment) redirect(`/course/${saId}/${courseId}/classroom`);
+  //
+  // Only when that enrollment actually grants access, though: the classroom
+  // guard sends a not-entitled member (unpaid paid course, expired access
+  // window, revoked complimentary grant) back HERE, so redirecting every
+  // enrollment unconditionally looped the two pages forever.
+  if (
+    enrollment &&
+    member &&
+    (await checkStandaloneCourseEntitlementForMember(course, member.id))
+  ) {
+    redirect(`/course/${saId}/${courseId}/classroom`);
+  }
 
   const outline = await getCurriculumOutline(saId, courseId);
 

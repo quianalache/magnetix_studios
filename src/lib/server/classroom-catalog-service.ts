@@ -10,6 +10,7 @@ import {
   listStandaloneCoursesLinkedToGroup,
 } from "@/lib/server/standalone-course-service";
 import { hasPaidStandaloneCourse } from "@/lib/server/standalone-course-purchase-service";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import { getStandaloneCoursesGate } from "@/lib/standalone-courses/gate";
 import { checkStandaloneCourseEntitlementForMember } from "@/lib/standalone-courses/course-access";
 import {
@@ -120,7 +121,8 @@ export async function listClassroomCatalogForMember(opts: {
       const lessonCount = tree?.lessons.length ?? 0;
 
       let locked: { reason: string; purchasable: boolean } | null = null;
-      if (course.access === "purchase") {
+      // A complimentary staff grant stands in for a purchase (Contacts redesign).
+      if (course.access === "purchase" && !hasActiveComplimentaryAccess(enrollment)) {
         const paid = await hasPaidStandaloneCourse(
           saId,
           course.id,

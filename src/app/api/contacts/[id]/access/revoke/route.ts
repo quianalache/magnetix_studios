@@ -10,9 +10,10 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Revoke COMPLIMENTARY community access granted from Contacts
- * `{ key: "community:{id}" }`. Admin / agency owner only. Never removes
- * access that a paid purchase or a linked product independently provides.
+ * Revoke COMPLIMENTARY course or community access granted from Contacts
+ * `{ key: "community:{id}" | "course:{id}" }`. Admin / agency owner only.
+ * Never removes access that a paid purchase or a linked product
+ * independently provides.
  */
 export async function POST(
   request: Request,

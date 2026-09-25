@@ -18,7 +18,10 @@ import {
   enrollInStandaloneCourseServerSide,
   getStandaloneCourse,
   listStandaloneCourses,
+  revokeLinkedCommunityAccessServerSide,
 } from "@/lib/server/standalone-course-service";
+import { hasPaidStandaloneCourse } from "@/lib/server/standalone-course-purchase-service";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import { getCourseOffer, listCourseOffers } from "@/lib/server/course-offer-service";
 import { enrollAllCoursesForFreeOfferServerSide } from "@/lib/server/course-offer-purchase-service";
 import { recordContactActivity } from "@/lib/server/contact-activity";
@@ -54,15 +57,18 @@ import type {
  *     membership that has no independent reason to exist: a paid group
  *     purchase or an active linked-Product source keeps access (origin is
  *     handed back to that reason) — see `revokeComplimentaryAccessForContact`.
+ *   - Paid standalone course (owner-approved 2026-09-25): the enrollment
+ *     gets an explicit `complimentaryAccess` grant (see
+ *     StandaloneEnrollment) which the classroom guard accepts in place of a
+ *     paid purchase — no purchase record, no payment, no price change.
+ *     Revoking flips only that grant; a paid purchase for the same course
+ *     keeps access (and its linked communities) exactly as before.
  *   - Open standalone course / free Course Offer: enrolls via the existing
  *     enrollment paths (anyone can already enroll in these, so there is
  *     nothing to revoke).
- *   - Paid course / paid offer: NOT grantable. The classroom guard
- *     (`checkStandaloneCourseEntitlementForMember`) and `hasPaidCourseOffer`
- *     only accept a PAID purchase record, so complimentary access would
- *     require either a fake purchase (explicitly disallowed) or new
- *     entitlement logic in those guards — a genuine blocker, surfaced to
- *     the UI via `grantBlockedReason`.
+ *   - Paid Course Offer: not grantable as a bundle — an offer also carries
+ *     booking bundles, project templates and upsells that are tied to a
+ *     purchase. Its courses can each be granted individually instead.
  *
  * Identity: a contact reaches access through its Member (`members/{id}
  * .contactId`). A contact with no member gets one created ONLY at grant
@@ -231,12 +237,10 @@ export async function getAccessCatalog(subAccountId: string): Promise<AccessCata
     }));
 
   const courseItems: AccessCatalogItem[] = courses.map((c) => {
+    // Price never restricts eligibility — a paid course is granted as
+    // complimentary access (no purchase, no payment).
     const paid = c.access === "purchase";
-    const reason = paid
-      ? "Paid course — access requires a purchase record, so complimentary access isn't supported yet."
-      : !c.published
-        ? "Publish this course before enrolling people."
-        : null;
+    const reason = !c.published ? "Publish this course before enrolling people." : null;
     return {
       key: `course:${c.id}`,
       kind: "course" as const,
@@ -252,7 +256,7 @@ export async function getAccessCatalog(subAccountId: string): Promise<AccessCata
   const offerItems: AccessCatalogItem[] = offers.map((o) => {
     const paid = o.type !== "free";
     const reason = paid
-      ? "Paid offer — access requires a purchase record, so complimentary access isn't supported yet."
+      ? "Paid offers bundle purchase-only extras (bookings, projects, upsells). Grant the courses it includes individually instead."
       : o.visibility !== "published"
         ? "Publish this offer before granting it."
         : null;
@@ -449,33 +453,56 @@ export async function getContactAccessSummary(
   const enrollmentSnaps = enrollmentRefs.length
     ? await db.getAll(...enrollmentRefs.map((r) => r.ref))
     : [];
+  const courseGrantors = await resolveAuthorNames(
+    subAccountId,
+    enrollmentSnaps
+      .filter((s) => s.exists && hasActiveComplimentaryAccess(s.data()))
+      .map((s) => s.get("complimentaryAccess.grantedByUid") as string),
+  );
   enrollmentRefs.forEach((r, i) => {
     const snap = enrollmentSnaps[i];
     if (!snap.exists) return;
     const e = snap.data() ?? {};
+    const comp = hasActiveComplimentaryAccess(e) ? e.complimentaryAccess : null;
     const expiresAt = toEpochMs(e.accessExpiresAt);
-    const expired = expiresAt !== null && expiresAt <= Date.now();
+    // A complimentary grant isn't subject to a purchase-derived access
+    // window (the classroom guard accepts it first).
+    const expired = !comp && expiresAt !== null && expiresAt <= Date.now();
     const paid = r.c.access === "purchase";
-    const sources: AccessSourceLabel[] = paid
-      ? paidCourseIds.has(r.c.id)
-        ? ["purchase"]
-        : []
-      : ["free"];
+    const purchased = paidCourseIds.has(r.c.id);
+    const sources: AccessSourceLabel[] = [];
+    if (paid && purchased) sources.push("purchase");
+    if (!paid) sources.push("free");
+    if (comp) sources.push("complimentary");
+    const revokedComp = !comp && e.complimentaryAccess?.status === "revoked";
     access.push({
       key: `course:${r.c.id}`,
       kind: "course",
       targetId: r.c.id,
       name: r.c.title || "Course",
-      status: expired ? "expired" : ((e.status as string) ?? "enrolled"),
+      status: expired
+        ? "expired"
+        : paid && !purchased && !comp
+          ? "locked"
+          : ((e.status as string) ?? "enrolled"),
       sources,
       since: iso(e.enrolledAt),
-      complimentary: null,
-      revocable: false,
-      managedNote: paid
-        ? paidCourseIds.has(r.c.id)
-          ? "Access comes from a purchase."
-          : "Enrolled, but this paid course needs a purchase before the lessons unlock."
-        : "Open course — any member can access it.",
+      complimentary: comp
+        ? {
+            grantedAt: iso(comp.grantedAt),
+            grantedByName: courseGrantors.get(comp.grantedByUid as string)?.name ?? null,
+          }
+        : null,
+      revocable: !!comp,
+      managedNote: comp
+        ? null
+        : paid
+          ? purchased
+            ? "Access comes from a purchase."
+            : revokedComp
+              ? "Complimentary access was revoked — the lessons are locked (progress is kept)."
+              : "Enrolled, but this paid course needs a purchase or a complimentary grant before the lessons unlock."
+          : "Open course — any member can access it.",
     });
   });
 
@@ -541,6 +568,18 @@ export async function grantAccessForContact(opts: {
   if (parsed.kind === "course") {
     const course = await getStandaloneCourse(opts.contact.subAccountId, parsed.id);
     if (!course) throw new ContactAccessError("That course no longer exists.", 404);
+    // Owner-approved (2026-09-25): paid courses are granted as explicit
+    // complimentary access on the enrollment — no purchase, no payment.
+    if (course.access === "purchase") {
+      return grantComplimentaryCourseAccess({
+        contact: opts.contact,
+        agencyId,
+        courseId: course.id,
+        courseTitle: course.title,
+        memberId: member.id,
+        staffUid: opts.staffUid,
+      });
+    }
     const existing = await getAdminDb()
       .doc(`subAccounts/${opts.contact.subAccountId}/standaloneCourses/${parsed.id}/enrollments/${member.id}`)
       .get();
@@ -710,6 +749,153 @@ async function grantComplimentaryCommunityAccess(opts: {
   return { status: "granted", message: `Granted access to "${group.name}".` };
 }
 
+function enrollmentRef(subAccountId: string, courseId: string, memberId: string) {
+  return getAdminDb().doc(
+    `subAccounts/${subAccountId}/standaloneCourses/${courseId}/enrollments/${memberId}`,
+  );
+}
+
+/**
+ * Complimentary access to a PAID standalone course. Enrolls through the
+ * existing path when needed (which also grants the course's linked
+ * communities, exactly as a purchase would), then stamps an explicit
+ * `complimentaryAccess` grant on the enrollment — the thing the classroom
+ * guard accepts in place of a paid purchase. Writes no purchase, charges
+ * nothing, touches no price, and leaves any existing purchase untouched.
+ */
+async function grantComplimentaryCourseAccess(opts: {
+  contact: Contact;
+  agencyId: string;
+  courseId: string;
+  courseTitle: string;
+  memberId: string;
+  staffUid: string;
+}): Promise<GrantOutcome> {
+  const { contact, courseId, memberId } = opts;
+  const subAccountId = contact.subAccountId;
+  const ref = enrollmentRef(subAccountId, courseId, memberId);
+  const before = await ref.get();
+  if (before.exists && hasActiveComplimentaryAccess(before.data())) {
+    return { status: "already", message: `Already has complimentary access to "${opts.courseTitle}".` };
+  }
+
+  // Creates the enrollment if missing (course.enrolled events +
+  // notification) and (re)grants linked communities either way — both
+  // idempotent. Its own "enrolled" activity row is suppressed in favour of
+  // the more specific row below.
+  await enrollInStandaloneCourseServerSide({
+    subAccountId,
+    agencyId: opts.agencyId,
+    courseId,
+    memberId,
+    grantedByUid: opts.staffUid,
+    recordActivity: false,
+  });
+
+  const granted = await getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new ContactAccessError("Enrollment couldn't be created — try again.", 500);
+    if (hasActiveComplimentaryAccess(snap.data())) return false;
+    tx.update(ref, {
+      complimentaryAccess: {
+        status: "active",
+        grantedByUid: opts.staffUid,
+        grantedAt: FieldValue.serverTimestamp(),
+        revokedByUid: null,
+        revokedAt: null,
+        contactId: contact.id,
+      },
+    });
+    return true;
+  });
+  if (!granted) {
+    return { status: "already", message: `Already has complimentary access to "${opts.courseTitle}".` };
+  }
+
+  const alsoPaid = await hasPaidStandaloneCourse(subAccountId, courseId, memberId);
+  await recordContactActivity({
+    subAccountId,
+    contactId: contact.id,
+    type: "course_access_granted",
+    content: `Granted complimentary access to the "${opts.courseTitle}" course`,
+    meta: { courseId, memberId, via: "complimentary", alsoPaid },
+    createdBy: opts.staffUid,
+  });
+  return {
+    status: "granted",
+    message: alsoPaid
+      ? `Granted complimentary access to "${opts.courseTitle}". They also have paid access, which is unchanged.`
+      : `Granted complimentary access to "${opts.courseTitle}".`,
+  };
+}
+
+/**
+ * Revoke ONLY the complimentary grant on a paid course. A paid purchase for
+ * the same course keeps the member's access — and the linked communities it
+ * justifies — exactly as it was. Without one, the enrollment stays (progress
+ * kept) but the lessons lock, and the course's linked-community source is
+ * revoked through the existing reconcile path (which never removes a
+ * membership that has any other reason to exist).
+ */
+async function revokeComplimentaryCourseAccess(opts: {
+  contact: Contact;
+  courseId: string;
+  staffUid: string;
+}): Promise<{ message: string; accessRetained: boolean }> {
+  const { contact, courseId } = opts;
+  const subAccountId = contact.subAccountId;
+  const members = await membersForContact(subAccountId, contact.id);
+  const snaps = members.length
+    ? await getAdminDb().getAll(...members.map((m) => enrollmentRef(subAccountId, courseId, m.id)))
+    : [];
+  const hit = snaps.find((s) => s.exists && hasActiveComplimentaryAccess(s.data()));
+  if (!hit) {
+    throw new ContactAccessError(
+      "There's no complimentary grant to revoke here — this access comes from somewhere else.",
+      409,
+    );
+  }
+  const memberId = hit.id;
+  const revoked = await getAdminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(hit.ref);
+    if (!snap.exists || !hasActiveComplimentaryAccess(snap.data())) return false;
+    tx.update(hit.ref, {
+      "complimentaryAccess.status": "revoked",
+      "complimentaryAccess.revokedAt": FieldValue.serverTimestamp(),
+      "complimentaryAccess.revokedByUid": opts.staffUid,
+    });
+    return true;
+  });
+  const course = await getStandaloneCourse(subAccountId, courseId);
+  const title = course?.title ?? "course";
+  if (!revoked) {
+    return { message: `Complimentary access to "${title}" was already revoked.`, accessRetained: false };
+  }
+
+  const paid = await hasPaidStandaloneCourse(subAccountId, courseId, memberId);
+  if (!paid) {
+    // The grant is now revoked, so this proceeds (it skips while a grant
+    // is active) — and still only ever removes Product-only memberships.
+    await revokeLinkedCommunityAccessServerSide({ subAccountId, courseId, memberId });
+  }
+  await recordContactActivity({
+    subAccountId,
+    contactId: contact.id,
+    type: "course_access_revoked",
+    content: paid
+      ? `Complimentary access to the "${title}" course removed — their paid purchase still gives them access`
+      : `Complimentary access to the "${title}" course revoked`,
+    meta: { courseId, memberId, via: "complimentary_revoked", accessRetained: paid },
+    createdBy: opts.staffUid,
+  });
+  return {
+    message: paid
+      ? `Complimentary grant removed. They keep access through their paid purchase.`
+      : `Access to "${title}" revoked. Their progress is kept if access is granted again.`,
+    accessRetained: paid,
+  };
+}
+
 /* --------------------------------- Revoke ------------------------------- */
 
 export async function revokeComplimentaryAccessForContact(opts: {
@@ -718,9 +904,16 @@ export async function revokeComplimentaryAccessForContact(opts: {
   staffUid: string;
 }): Promise<{ message: string; accessRetained: boolean }> {
   const parsed = parseAccessKey(opts.key);
+  if (parsed?.kind === "course") {
+    return revokeComplimentaryCourseAccess({
+      contact: opts.contact,
+      courseId: parsed.id,
+      staffUid: opts.staffUid,
+    });
+  }
   if (!parsed || parsed.kind !== "community") {
     throw new ContactAccessError(
-      "Only complimentary community access can be revoked from Contacts.",
+      "Only complimentary course or community access can be revoked from Contacts.",
       400,
     );
   }
