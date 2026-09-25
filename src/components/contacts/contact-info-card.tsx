@@ -33,6 +33,7 @@ import { subscribeToTerritories } from "@/lib/firestore/territories";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useSubAccount } from "@/context/sub-account-context";
 import type { Contact } from "@/types/contacts";
+import { composeName } from "@/lib/contacts/names";
 import type { TerritoryDoc } from "@/types";
 
 /**
@@ -157,7 +158,11 @@ export function ContactInfoCard({
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .filter(Boolean)
     .join(", ");
-  const hasParts = !!(contact.firstName?.trim() || contact.lastName?.trim());
+  // Only worth showing when the parts say something the heading doesn't
+  // (e.g. a display name like "Dr. Jo Smith" with first "Jo").
+  const hasParts =
+    !!(contact.firstName?.trim() || contact.lastName?.trim()) &&
+    composeName(contact.firstName, contact.lastName) !== (contact.name ?? "").trim();
 
   return (
     <section className="rounded-xl border bg-card p-4" aria-label="Contact information">

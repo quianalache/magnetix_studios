@@ -93,7 +93,6 @@ export function ContactsFilterBar({
   onOpenMore,
   sourceChoices,
   tagSuggestions,
-  trailing,
 }: {
   search: string;
   onSearch: (v: string) => void;
@@ -103,8 +102,6 @@ export function ContactsFilterBar({
   /** Source values to offer (known sources + any seen on this page). */
   sourceChoices?: { value: string; label: string }[];
   tagSuggestions: string[];
-  /** Right-aligned controls (Customize columns). */
-  trailing?: ReactNode;
 }) {
   const [tagDraft, setTagDraft] = useState("");
   const [companyDraft, setCompanyDraft] = useState("");
@@ -362,7 +359,6 @@ export function ContactsFilterBar({
           More filters{otherCount > 0 ? ` · ${otherCount}` : ""}
         </Button>
 
-        {trailing && <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">{trailing}</div>}
       </div>
     </div>
   );

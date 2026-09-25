@@ -71,7 +71,7 @@ export function buildContactColumns(opts: {
     { id: "email", label: "Email", sort: "email", render: (r) => text(r.email) },
     { id: "phone", label: "Phone", sort: "phone", render: (r) => text(r.phone) },
     { id: "company", label: "Company", sort: "company", render: (r) => text(r.company) },
-    { id: "tags", label: "Tags", className: "min-w-[10rem]", render: (r) => tagsCell(r.tags) },
+    { id: "tags", label: "Tags", className: "min-w-[8rem]", render: (r) => tagsCell(r.tags) },
     {
       id: "source",
       label: "Source",

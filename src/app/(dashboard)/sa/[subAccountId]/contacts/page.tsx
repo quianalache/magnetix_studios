@@ -429,7 +429,7 @@ export default function ContactsPage() {
   const noContactsAtAll = !!data && visibleTotal === 0;
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-5 rounded-2xl">
+    <div className="momentum-scope mx-auto w-full max-w-7xl space-y-5 rounded-2xl">
       <Suspense fallback={null}>
         <ImportQueryWatcher onOpen={openImport} />
       </Suspense>
@@ -499,6 +499,13 @@ export default function ContactsPage() {
             </span>
           )}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <ContactsColumnsMenu
+          all={allColumns}
+          selected={columnIds}
+          onChange={setColumns}
+          onReset={resetColumns}
+        />
         <ContactListsMenu
           subAccountId={subAccountId}
           lists={lists}
@@ -515,6 +522,7 @@ export default function ContactsPage() {
             }
           }}
         />
+        </div>
       </div>
 
       <ContactsFilterBar
@@ -525,14 +533,6 @@ export default function ContactsPage() {
         onOpenMore={() => setMoreOpen(true)}
         sourceChoices={sourceChoices}
         tagSuggestions={tagSuggestions}
-        trailing={
-          <ContactsColumnsMenu
-            all={allColumns}
-            selected={columnIds}
-            onChange={setColumns}
-            onReset={resetColumns}
-          />
-        }
       />
       <ActiveFilterChips rows={rows} onRowsChange={setRows} fieldOptions={fieldOptions} />
 

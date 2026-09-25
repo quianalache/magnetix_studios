@@ -15,7 +15,7 @@ import type { Contact } from "@/types/contacts";
 /**
  * Contact profile route (Contacts redesign, 2026-09-25) — loads the contact
  * (live) and renders `ContactProfileView`. Loading / not-found states use
- * the same 1440px container as the view so the width doesn't jump.
+ * the same max-w-7xl container as the view so the width doesn't jump.
  */
 export default function ContactProfilePage() {
   const params = useParams<{ id: string }>();
@@ -44,7 +44,7 @@ export default function ContactProfilePage() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-[1440px]">
+      <div className="mx-auto w-full max-w-7xl">
         <ProfileSkeleton />
       </div>
     );
@@ -52,7 +52,7 @@ export default function ContactProfilePage() {
 
   if (!contact) {
     return (
-      <div className="mx-auto w-full max-w-[1440px]">
+      <div className="mx-auto w-full max-w-7xl">
         <NotFound />
       </div>
     );

@@ -51,8 +51,7 @@ const MOBILE_SECTIONS: { id: MobileSection; label: string }[] = [
  * three desktop columns are never squeezed onto a phone.
  *
  * Width: the approved three-column layout doesn't fit the 5xl data-page
- * container, so the profile joins Pipeline as a wide page (capped at
- * 1440px) — see the page-width convention in CLAUDE.md.
+ * container, so the Contacts screens use max-w-7xl (the mockup's ~1280px) — see the page-width convention in CLAUDE.md.
  */
 export function ContactProfileView({ contact }: { contact: Contact }) {
   const { subAccountId, agencyId } = useSubAccount();
@@ -92,7 +91,7 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
     cn(mobileSection === section ? "block" : "hidden", "lg:block");
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-5">
+    <div className="mx-auto w-full max-w-7xl space-y-5">
       <ContactProfileHeader
         contact={contact}
         editOpen={editOpen}

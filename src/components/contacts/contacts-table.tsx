@@ -108,11 +108,11 @@ export function ContactsTable({
           <table className="w-full text-left">
             <thead className="border-b bg-muted/40">
               <tr className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <th scope="col" className="sticky left-0 z-[1] bg-muted/40 px-4 py-3">
+                <th scope="col" className="sticky left-0 z-[1] bg-muted/40 px-3 py-3">
                   {header("Name", "name")}
                 </th>
                 {columns.map((c) => (
-                  <th key={c.id} scope="col" className={cn("whitespace-nowrap px-4 py-3", c.className)}>
+                  <th key={c.id} scope="col" className={cn("whitespace-nowrap px-3 py-3", c.className)}>
                     {header(c.label, c.sort)}
                   </th>
                 ))}
@@ -128,10 +128,10 @@ export function ContactsTable({
                   className="group cursor-pointer hover:bg-muted/30"
                   onClick={() => router.push(saPath(`/contacts/${row.id}`))}
                 >
-                  <td className="sticky left-0 z-[1] bg-card px-4 py-3 group-hover:bg-muted/30">
+                  <td className="sticky left-0 z-[1] bg-card px-3 py-3 group-hover:bg-muted/30">
                     <Link
                       href={saPath(`/contacts/${row.id}`)}
-                      className="flex min-w-[12rem] items-center gap-2.5"
+                      className="flex min-w-[11rem] items-center gap-2.5"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <span
@@ -146,7 +146,7 @@ export function ContactsTable({
                     </Link>
                   </td>
                   {columns.map((c) => (
-                    <td key={c.id} className="max-w-[16rem] truncate px-4 py-3 align-middle">
+                    <td key={c.id} className="max-w-[15rem] truncate px-3 py-3 align-middle">
                       {c.render(row, ctx)}
                     </td>
                   ))}

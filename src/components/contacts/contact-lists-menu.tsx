@@ -18,6 +18,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -159,6 +160,9 @@ export function ContactListsMenu({
           <ChevronDown className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-72">
+          {/* Base UI requires a label inside a Menu.Group (a bare label
+              crashes the menu on open — same fix as community-account-menu). */}
+          <DropdownMenuGroup>
           <DropdownMenuLabel className="text-xs">Saved lists · update automatically</DropdownMenuLabel>
           {lists.length === 0 && (
             <p className="px-2 pb-2 text-xs text-muted-foreground">
@@ -178,6 +182,7 @@ export function ContactListsMenu({
               </span>
             </DropdownMenuItem>
           ))}
+          </DropdownMenuGroup>
           {activeList && (
             <>
               <DropdownMenuSeparator />
