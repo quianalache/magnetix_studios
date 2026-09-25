@@ -1,181 +1,106 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
-import { PIPELINE_STAGES } from "@/types/deals";
+import Link from "next/link";
+import { ListFilter, Loader2 } from "lucide-react";
+import { useSubAccount } from "@/context/sub-account-context";
 import { evalConditionGroup } from "@/lib/segmentation/eval-condition-group";
 import { conditionGroupHasNegation } from "@/lib/segmentation/audience-warnings";
+import {
+  customFieldOption,
+  describeCondition,
+  standardFieldOptions,
+  type FieldOption,
+} from "@/lib/segmentation/field-options";
+import {
+  ConditionRowsEditor,
+  SELECT_CLASS,
+  groupToRows,
+  newRowId,
+  rowToCondition,
+  rowsToGroup,
+  type ConditionRow,
+} from "@/components/segmentation/condition-rows-editor";
 import type { Contact } from "@/types/contacts";
 import type { CustomFieldDef } from "@/types/custom-fields";
-import type { Condition, ConditionGroup, ConditionOp } from "@/types/workflows";
+import type { ContactListView } from "@/types/contact-lists";
+import type { Condition, ConditionGroup } from "@/types/workflows";
 import type { BroadcastAudienceFilter } from "@/types";
 
 /**
- * Broadcast Segmentation V1 (2026-08-27) — replaces AudienceFilterPicker's
- * single all/tag/stage dropdown with a real multi-condition AND/OR builder,
- * reusing the SAME ConditionGroup/Condition model + evaluator the Workflow
- * Builder already uses (lib/segmentation/eval-condition-group.ts) — not a
- * second segmentation language. Exports the same shape of helpers the old
- * module did (default state, api-shape converter, live-preview hook) so
- * `new/page.tsx` only needed its import swapped, not restructured.
+ * Broadcast Segmentation V1 (2026-08-27) — the multi-condition AND/OR
+ * audience builder, on the SAME ConditionGroup model + evaluator the
+ * Workflow Builder uses (lib/segmentation/eval-condition-group.ts).
+ *
+ * Contacts redesign (2026-09-25):
+ *   - Field list + row editor now come from the shared
+ *     lib/segmentation/field-options.ts + components/segmentation, so the
+ *     Contacts filters and Broadcasts can't drift. Adds First/Last name,
+ *     State/Region, Postal code, and the Created / Last updated date fields
+ *     (the evaluator gained real date operators).
+ *   - An audience can instead be a saved Contact List (`kind: "list"`).
+ *     Its preview is computed SERVER-side by the exact send-time resolver
+ *     (/api/broadcasts/audience-preview) because lists may hold access
+ *     conditions only the server can evaluate. Opt-out / missing-email
+ *     pre-flight and every send safeguard apply unchanged.
+ *
+ * Exports keep their original names/shapes so broadcast-composer.tsx needed
+ * no changes.
  */
 
-const SELECT_CLASS =
-  "flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground";
-const INPUT_CLASS =
-  "flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
-
-/** Mirrors source-badge.tsx's LABELS (not exported there) — every
- *  ContactSource value, not just the manual-create subset contact-form.tsx
- *  uses, since a marketer segmenting genuinely wants to filter by
- *  auto-set sources too (e.g. "Source is Community"). */
-const KNOWN_SOURCES: { value: string; label: string }[] = [
-  { value: "website-form", label: "Website Form" },
-  { value: "web-chat", label: "Web Chat" },
-  { value: "booking-page", label: "Booking" },
-  { value: "community", label: "Community" },
-  { value: "get-leads", label: "Get Leads" },
-  { value: "website", label: "Website" },
-  { value: "referral", label: "Referral" },
-  { value: "ads", label: "Ads" },
-  { value: "other", label: "Other" },
-  { value: "facebook", label: "Facebook" },
-  { value: "instagram", label: "Instagram" },
-  { value: "email", label: "Inbound Email" },
-];
-
-type FieldKind = "tags" | "select" | "text";
-
-interface FieldOption {
-  field: string;
-  label: string;
-  kind: FieldKind;
-  /** For kind "select" — the fixed choice list. */
-  choices?: { value: string; label: string }[];
-  ops: { op: ConditionOp; label: string }[];
-}
-
-const TAG_OPS: FieldOption["ops"] = [
-  { op: "has_tag", label: "has tag" },
-  { op: "not_has_tag", label: "doesn't have tag" },
-];
-const SELECT_EQ_OPS: FieldOption["ops"] = [
-  { op: "equals", label: "is" },
-  { op: "not_equals", label: "is not" },
-];
-const TEXT_OPS: FieldOption["ops"] = [
-  { op: "equals", label: "is" },
-  { op: "not_equals", label: "is not" },
-  { op: "contains", label: "contains" },
-  { op: "not_contains", label: "does not contain" },
-  { op: "is_set", label: "exists" },
-  { op: "not_set", label: "does not exist" },
-];
-
-/**
- * Segmentation V1 closeout (2026-08-27) — standard Contact fields beyond
- * Tag/Stage/Source/Company. Every field here is a real field on the
- * `Contact` type (src/types/contacts.ts) — deliberately NOT adding
- * "First Name"/"Last Name" (the schema only has one combined `name`
- * field, no split), "State/Region" or "Postal Code" (no such fields
- * exist on Contact — `address` is a single free-form string, not
- * structured), or "Created Date" (the shared evaluator has no date
- * comparison operators — see eval-condition-group.ts — so exposing a
- * date field here would mean silently falling back to string equality,
- * which is exactly the "fake date filtering" this closeout was told not
- * to do). `city` and `country` ARE real fields (best-effort,
- * geolocation-derived at contact creation — see Contact's own doc
- * comment) so they're included as plain text fields like Company.
- */
-function staticFieldOptions(): FieldOption[] {
-  return [
-    { field: "tags", label: "Tag", kind: "tags", ops: TAG_OPS },
-    {
-      field: "pipelineStage",
-      label: "Pipeline Stage",
-      kind: "select",
-      choices: PIPELINE_STAGES.map((s) => ({ value: s.id, label: s.label })),
-      ops: SELECT_EQ_OPS,
-    },
-    {
-      field: "source",
-      label: "Source",
-      kind: "select",
-      choices: KNOWN_SOURCES,
-      ops: SELECT_EQ_OPS,
-    },
-    { field: "name", label: "Name", kind: "text", ops: TEXT_OPS },
-    { field: "email", label: "Email", kind: "text", ops: TEXT_OPS },
-    { field: "phone", label: "Phone", kind: "text", ops: TEXT_OPS },
-    { field: "company", label: "Company", kind: "text", ops: TEXT_OPS },
-    { field: "city", label: "City", kind: "text", ops: TEXT_OPS },
-    { field: "country", label: "Country", kind: "text", ops: TEXT_OPS },
-  ];
-}
-
-function customFieldOption(def: CustomFieldDef): FieldOption {
-  if (def.type === "dropdown" && def.options.length > 0) {
-    return {
-      field: `customFields.${def.key}`,
-      label: def.label,
-      kind: "select",
-      choices: def.options.map((o) => ({ value: o, label: o })),
-      ops: SELECT_EQ_OPS,
-    };
-  }
-  return { field: `customFields.${def.key}`, label: def.label, kind: "text", ops: TEXT_OPS };
-}
-
-export interface AudienceConditionRow {
-  id: string;
-  field: string;
-  op: ConditionOp;
-  value: string;
-}
+export type AudienceConditionRow = ConditionRow;
 
 export interface AudienceFilterState {
   match: "all" | "any";
   conditions: AudienceConditionRow[];
+  /** Set when the audience is a saved Contact List (conditions unused). */
+  listId?: string | null;
+  listName?: string | null;
+  /** Snapshot of the list's definition — drives the negation warning only;
+   *  the server always resolves the live list. */
+  listGroup?: ConditionGroup | null;
 }
 
 export function defaultAudienceFilterState(): AudienceFilterState {
   return { match: "all", conditions: [] };
 }
 
-function rowToCondition(row: AudienceConditionRow): Condition | null {
-  if (!row.field || !row.op) return null;
-  const needsValue = row.op !== "is_set" && row.op !== "not_set";
-  if (needsValue && !row.value.trim()) return null;
-  return { field: row.field, op: row.op, value: row.value.trim() };
+function isListMode(state: AudienceFilterState): boolean {
+  return state.listId !== undefined && state.listId !== null;
 }
 
 function stateToGroup(state: AudienceFilterState): ConditionGroup | undefined {
+  if (isListMode(state)) return state.listGroup ?? undefined;
   if (state.conditions.length === 0) return undefined;
-  const all = state.conditions.map(rowToCondition).filter((c): c is Condition => !!c);
-  return { match: state.match, all };
+  return rowsToGroup(state);
 }
 
 /**
  * Negation/broad-filter warning (2026-08-26 production safety controls) —
- * true when any completed condition uses a negation operator (doesn't have
- * tag / is not / does not contain / does not exist). Advisory only, shown
- * in the composer and the send-confirmation dialog; never blocks sending.
- * See lib/segmentation/audience-warnings.ts for why "any negation, anywhere"
- * is the deliberately broad trigger for this warning.
+ * true when any completed condition uses a negation operator. Advisory
+ * only; never blocks sending. For a Contact List, checks the list's
+ * definition.
  */
 export function audienceStateHasNegation(state: AudienceFilterState): boolean {
   return conditionGroupHasNegation(stateToGroup(state));
 }
 
 /**
- * `null` when any added row is still incomplete (field/op picked but no
- * value yet, for an operator that needs one) — same "invalid blocks
- * sending" contract the old tag/stage picker had, so `new/page.tsx`'s
- * `canSend` gate (`!!audienceFilter`) needed no changes.
+ * `null` when any added row is still incomplete (or no list is picked yet)
+ * — the "invalid blocks sending" contract `canSend` relies on.
  */
 export function audienceFilterToApiShape(
   state: AudienceFilterState,
 ): BroadcastAudienceFilter | null {
+  if (isListMode(state)) {
+    if (!state.listId) return null;
+    return {
+      kind: "list",
+      listId: state.listId,
+      listName: state.listName ?? null,
+      group: state.listGroup ?? null,
+    };
+  }
   if (state.conditions.length === 0) return { kind: "all" };
   const all: Condition[] = [];
   for (const row of state.conditions) {
@@ -188,12 +113,8 @@ export function audienceFilterToApiShape(
 
 /**
  * Persistent Broadcast Drafts V1 (2026-08-27) — the reverse of
- * `audienceFilterToApiShape`, used to hydrate the condition-builder rows
- * when reopening a saved draft. Handles all four `BroadcastAudienceFilter`
- * shapes, including the two legacy ones (`tag` / `pipeline_stage`) even
- * though the composer itself never WRITES those — only defensive, in case
- * a draft doc ever ends up holding one (e.g. duplicated from other
- * tooling in the future).
+ * `audienceFilterToApiShape`, used to hydrate the builder when reopening a
+ * saved draft. Handles every `BroadcastAudienceFilter` shape.
  */
 export function audienceFilterFromApiShape(
   filter: BroadcastAudienceFilter | null | undefined,
@@ -211,26 +132,56 @@ export function audienceFilterFromApiShape(
       conditions: [{ id: newRowId(), field: "pipelineStage", op: "equals", value: filter.stage }],
     };
   }
-  return {
-    match: filter.group.match === "any" ? "any" : "all",
-    conditions: filter.group.all.map((c) => ({
-      id: newRowId(),
-      field: c.field,
-      op: c.op,
-      value: c.value ?? "",
-    })),
-  };
+  if (filter.kind === "list") {
+    return {
+      match: "all",
+      conditions: [],
+      listId: filter.listId,
+      listName: filter.listName ?? null,
+      listGroup: filter.group ?? null,
+    };
+  }
+  return groupToRows(filter.group);
+}
+
+interface ServerPreview {
+  recipients: number;
+  skipped: number;
+  matching: number;
+  recipientIds: string[];
+}
+
+// One in-flight/recent request per (sub-account, list, contact count) —
+// the composer and the builder both call useAudiencePreview.
+const previewCache = new Map<string, { at: number; promise: Promise<ServerPreview> }>();
+
+function fetchListPreview(subAccountId: string, listId: string, key: string): Promise<ServerPreview> {
+  const hit = previewCache.get(key);
+  if (hit && Date.now() - hit.at < 10_000) return hit.promise;
+  const promise = fetch("/api/broadcasts/audience-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subAccountId, audienceFilter: { kind: "list", listId } }),
+  }).then(async (res) => {
+    const data = (await res.json().catch(() => ({}))) as Partial<ServerPreview> & { error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Couldn't count this list.");
+    return {
+      recipients: data.recipients ?? 0,
+      skipped: data.skipped ?? 0,
+      matching: data.matching ?? 0,
+      recipientIds: data.recipientIds ?? [],
+    };
+  });
+  previewCache.set(key, { at: Date.now(), promise });
+  promise.catch(() => previewCache.delete(key));
+  return promise;
 }
 
 /**
- * Live preview — evaluated entirely client-side against the already-loaded
- * contact list (the composer's existing architecture; unchanged by this
- * pass — see new/page.tsx's `subscribeToContacts`). Send-time is
- * independently re-resolved server-side by the exact same evaluator
- * (lib/broadcasts/audience.ts) — this hook is display-only, never trusted
- * for the actual send. A row still being filled in (no value yet) simply
- * doesn't narrow the count further, so the preview stays responsive while
- * composing rather than flashing to 0.
+ * Live preview. Plain conditions: evaluated client-side against the
+ * already-loaded contacts (unchanged). Contact List: counted server-side by
+ * the send-time resolver (see the module comment). Either way the send route
+ * independently re-resolves and compares against the confirmed count.
  */
 export function useAudiencePreview(
   contacts: Contact[],
@@ -239,12 +190,37 @@ export function useAudiencePreview(
   recipients: number;
   skipped: number;
   matching: number;
-  /** The actual would-receive-email contacts — not just the count. Used by
-   *  the composer to intersect with a Test Mode allowlist and to drive the
-   *  send confirmation dialog (2026-08-26 production safety controls). */
   recipientContacts: Contact[];
+  loading?: boolean;
+  error?: string | null;
 } {
-  return useMemo(() => {
+  const { subAccountId } = useSubAccount();
+  const listId = isListMode(state) ? state.listId || null : null;
+  const listMode = isListMode(state);
+  const [server, setServer] = useState<{
+    key: string;
+    data: ServerPreview | null;
+    error: string | null;
+  } | null>(null);
+  const key = listId ? `${subAccountId}:${listId}:${contacts.length}` : "";
+
+  useEffect(() => {
+    if (!listId || !subAccountId) return;
+    let cancelled = false;
+    fetchListPreview(subAccountId, listId, key)
+      .then((data) => {
+        if (!cancelled) setServer({ key, data, error: null });
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setServer({ key, data: null, error: err.message });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listId, subAccountId, key]);
+
+  const clientPreview = useMemo(() => {
+    if (listMode) return null;
     const group = stateToGroup(state);
     const matching = contacts.filter((c) => evalConditionGroup(group, c));
     let skipped = 0;
@@ -266,13 +242,34 @@ export function useAudiencePreview(
       matching: matching.length,
       recipientContacts,
     };
-  }, [contacts, state]);
-}
+  }, [contacts, state, listMode]);
 
-let rowIdCounter = 0;
-function newRowId(): string {
-  rowIdCounter += 1;
-  return `cond_${Date.now()}_${rowIdCounter}`;
+  return useMemo(() => {
+    if (clientPreview) return clientPreview;
+    if (!listId) {
+      return { recipients: 0, skipped: 0, matching: 0, recipientContacts: [], loading: false, error: null };
+    }
+    const current = server && server.key === key ? server : null;
+    if (!current || !current.data) {
+      return {
+        recipients: 0,
+        skipped: 0,
+        matching: 0,
+        recipientContacts: [],
+        loading: !current,
+        error: current?.error ?? null,
+      };
+    }
+    const ids = new Set(current.data.recipientIds);
+    return {
+      recipients: current.data.recipients,
+      skipped: current.data.skipped,
+      matching: current.data.matching,
+      recipientContacts: contacts.filter((c) => ids.has(c.id)),
+      loading: false,
+      error: null,
+    };
+  }, [clientPreview, server, key, contacts, listId]);
 }
 
 export function AudienceConditionBuilder({
@@ -286,7 +283,9 @@ export function AudienceConditionBuilder({
   onChange: (next: AudienceFilterState) => void;
   subAccountId: string;
 }) {
+  const { saPath } = useSubAccount();
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
+  const [lists, setLists] = useState<ContactListView[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,164 +300,174 @@ export function AudienceConditionBuilder({
         // Custom fields are additive to the picker — a fetch hiccup just
         // means fewer field options, never blocks the rest of the builder.
       });
+    fetch(`/api/sub-accounts/${subAccountId}/contact-lists`)
+      .then((r) => r.json())
+      .then((data: { lists?: ContactListView[] }) => {
+        if (!cancelled) setLists(Array.isArray(data.lists) ? data.lists : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLists([]);
+      });
     return () => {
       cancelled = true;
     };
   }, [subAccountId]);
 
   const fieldOptions = useMemo<FieldOption[]>(
-    () => [...staticFieldOptions(), ...customFieldDefs.map(customFieldOption)],
+    () => [...standardFieldOptions(), ...customFieldDefs.map(customFieldOption)],
     [customFieldDefs],
   );
 
   const preview = useAudiencePreview(contacts, value);
+  const mode: "conditions" | "list" = isListMode(value) ? "list" : "conditions";
+  const selectedList = lists?.find((l) => l.id === value.listId) ?? null;
 
-  function addCondition() {
-    const first = fieldOptions[0];
-    onChange({
-      ...value,
-      conditions: [
-        ...value.conditions,
-        { id: newRowId(), field: first?.field ?? "", op: first?.ops[0]?.op ?? "equals", value: "" },
-      ],
-    });
+  function chooseMode(next: "conditions" | "list") {
+    if (next === mode) return;
+    if (next === "conditions") {
+      onChange(defaultAudienceFilterState());
+    } else {
+      const first = lists?.[0];
+      onChange({
+        match: "all",
+        conditions: [],
+        listId: first?.id ?? "",
+        listName: first?.name ?? null,
+        listGroup: first?.group ?? null,
+      });
+    }
   }
 
-  function updateCondition(id: string, patch: Partial<AudienceConditionRow>) {
+  function chooseList(listId: string) {
+    const list = lists?.find((l) => l.id === listId);
     onChange({
-      ...value,
-      conditions: value.conditions.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      match: "all",
+      conditions: [],
+      listId,
+      listName: list?.name ?? null,
+      listGroup: list?.group ?? null,
     });
-  }
-
-  function removeCondition(id: string) {
-    onChange({ ...value, conditions: value.conditions.filter((c) => c.id !== id) });
   }
 
   return (
     <div className="space-y-3">
-      {value.conditions.length > 1 && (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-medium text-muted-foreground">Match</span>
-          <select
-            value={value.match}
-            onChange={(e) => onChange({ ...value, match: e.target.value as "all" | "any" })}
-            className={`${SELECT_CLASS} w-auto`}
+      <div
+        className="inline-flex rounded-lg border bg-muted/30 p-0.5 text-xs"
+        role="tablist"
+        aria-label="Audience type"
+      >
+        {(["conditions", "list"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => chooseMode(m)}
+            className={`rounded-md px-3 py-1 font-medium transition-colors ${
+              mode === m
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <option value="all">All conditions</option>
-            <option value="any">Any condition</option>
+            {m === "conditions" ? "Build conditions" : "Use a Contact List"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "conditions" ? (
+        <ConditionRowsEditor
+          value={value}
+          onChange={(next) => onChange({ ...next, listId: null, listName: null, listGroup: null })}
+          fieldOptions={fieldOptions}
+          emptyText="No conditions — this broadcast will send to every contact in this sub-account (minus anyone unsubscribed from marketing email)."
+        />
+      ) : lists === null ? (
+        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading Contact Lists…
+        </p>
+      ) : lists.length === 0 ? (
+        <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+          No Contact Lists yet.{" "}
+          <Link href={saPath("/contacts")} className="font-medium text-primary hover:underline">
+            Create one in Contacts
+          </Link>{" "}
+          by filtering and choosing &ldquo;Save as list&rdquo;.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <select
+            value={value.listId ?? ""}
+            onChange={(e) => chooseList(e.target.value)}
+            className={SELECT_CLASS}
+            aria-label="Contact List"
+          >
+            <option value="" disabled>
+              Choose a Contact List…
+            </option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
           </select>
+          {value.listId && !selectedList && (
+            <p className="text-xs text-destructive">
+              This draft&apos;s Contact List no longer exists. Choose another audience.
+            </p>
+          )}
+          {selectedList && (
+            <div className="rounded-lg border bg-muted/20 p-2.5 text-xs">
+              <p className="flex items-center gap-1.5 font-medium">
+                <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+                Contacts who match {selectedList.group.match === "any" ? "any" : "all"} of:
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {selectedList.group.all.map((c, i) => (
+                  <li key={i}>{describeCondition(c, fieldOptions)}</li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-muted-foreground">
+                The list updates automatically — it&apos;s evaluated against current contact
+                data when you send.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
-      {value.conditions.length === 0 && (
-        <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
-          No conditions — this broadcast will send to every contact in this
-          sub-account (minus anyone unsubscribed from marketing email).
-        </p>
-      )}
-
-      {value.conditions.map((row) => {
-        const opt = fieldOptions.find((f) => f.field === row.field) ?? fieldOptions[0];
-        const needsValue = row.op !== "is_set" && row.op !== "not_set";
-        return (
-          <div key={row.id} className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/20 p-2">
-            <select
-              value={row.field}
-              onChange={(e) => {
-                const next = fieldOptions.find((f) => f.field === e.target.value);
-                updateCondition(row.id, {
-                  field: e.target.value,
-                  op: next?.ops[0]?.op ?? "equals",
-                  value: "",
-                });
-              }}
-              className={`${SELECT_CLASS} w-auto min-w-[9rem]`}
-            >
-              {fieldOptions.map((f) => (
-                <option key={f.field} value={f.field}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={row.op}
-              onChange={(e) => updateCondition(row.id, { op: e.target.value as ConditionOp })}
-              className={`${SELECT_CLASS} w-auto min-w-[7rem]`}
-            >
-              {(opt?.ops ?? TEXT_OPS).map((o) => (
-                <option key={o.op} value={o.op}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-
-            {needsValue && opt?.kind === "select" ? (
-              <select
-                value={row.value}
-                onChange={(e) => updateCondition(row.id, { value: e.target.value })}
-                className={`${SELECT_CLASS} min-w-[9rem] flex-1`}
-              >
-                <option value="">Pick a value…</option>
-                {opt.choices?.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            ) : needsValue ? (
-              <input
-                value={row.value}
-                onChange={(e) => updateCondition(row.id, { value: e.target.value })}
-                placeholder="Value"
-                className={`${INPUT_CLASS} min-w-[9rem] flex-1`}
-              />
-            ) : (
-              <span className="flex-1 text-xs text-muted-foreground">(no value needed)</span>
-            )}
-
-            <button
-              type="button"
-              onClick={() => removeCondition(row.id)}
-              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              aria-label="Remove condition"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        );
-      })}
-
-      <button
-        type="button"
-        onClick={addCondition}
-        className="flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-      >
-        <Plus className="h-3 w-3" /> Add condition
-      </button>
-
       {audienceStateHasNegation(value) && (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
-          This condition uses a &quot;not&quot;/&quot;doesn&apos;t have&quot; rule, which
+          This audience uses a &quot;not&quot;/&quot;doesn&apos;t have&quot; rule, which
           can match most contacts in your CRM (everyone except the
           exception). Review the count below before sending.
         </p>
       )}
 
       <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Will receive email</span>
-          <span className="font-mono font-semibold">{preview.recipients}</span>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Skipped (unsubscribed / no email)</span>
-          <span className="font-mono">{preview.skipped}</span>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-          <span>Total matching</span>
-          <span className="font-mono">{preview.matching}</span>
-        </div>
+        {preview.error ? (
+          <p className="text-xs text-destructive">{preview.error}</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Will receive email</span>
+              <span className="font-mono font-semibold">
+                {preview.loading ? (
+                  <Loader2 className="inline h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  preview.recipients
+                )}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Skipped (unsubscribed / no email)</span>
+              <span className="font-mono">{preview.skipped}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Total matching</span>
+              <span className="font-mono">{preview.matching}</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

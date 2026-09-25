@@ -1,9 +1,25 @@
 import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
-import { evalConditionGroup } from "@/lib/segmentation/eval-condition-group";
+import {
+  evalConditionGroup,
+  groupUsesAccessConditions,
+} from "@/lib/segmentation/eval-condition-group";
+import { buildAccessIndexForGroup } from "@/lib/segmentation/access-index";
+import { getContactList } from "@/lib/server/contact-lists-service";
 import type { BroadcastAudienceFilter } from "@/types";
 import type { Contact } from "@/types/contacts";
+import type { ConditionGroup } from "@/types/workflows";
+
+/** Thrown when a `list` audience references a list that no longer exists
+ *  (or belongs to another sub-account). Routes map it to a 400. */
+export class AudienceListMissingError extends Error {
+  constructor() {
+    super(
+      "The Contact List for this audience no longer exists. Pick another audience and review the count again.",
+    );
+  }
+}
 
 /**
  * Resolve a broadcast's audience filter to the contact set we'll fan out to.
@@ -27,6 +43,13 @@ import type { Contact } from "@/types/contacts";
  *     in server memory per contact — no new Firestore query shape, no
  *     client-computed id list ever trusted, same bounded-candidate-set
  *     pattern this function already used before this change.
+ *   - { kind: "list", listId }               — Contacts redesign
+ *     (2026-09-25): a saved Contact List. Its LIVE definition is loaded here
+ *     (tenant-checked) and evaluated exactly like "conditions" — the
+ *     client-supplied `group` snapshot on the filter is never trusted. A
+ *     list may use access conditions ("has purchased X"), which get a
+ *     server-built access index here; the opt-out / missing-email
+ *     pre-flight below applies to lists identically.
  *
  * This IS the send-time-authoritative resolver — /api/broadcasts/email/send
  * calls this directly (never trusts a client-supplied recipient list), and
@@ -86,6 +109,22 @@ export async function resolveAudience(
     query = query.where("pipelineStage", "==", filter.stage);
   }
 
+  // Contacts redesign (2026-09-25) — the effective condition group for
+  // "conditions" and "list" audiences, plus an access index when it
+  // references purchases / enrollments / community access.
+  let group: ConditionGroup | null = null;
+  if (filter.kind === "conditions") group = filter.group;
+  if (filter.kind === "list") {
+    const list = await getContactList(subAccountId, filter.listId);
+    if (!list) throw new AudienceListMissingError();
+    group = list.group;
+  }
+  const accessIndex =
+    group && groupUsesAccessConditions(group)
+      ? await buildAccessIndexForGroup(subAccountId, group)
+      : null;
+  const evalCtx = { accessIndex, now: Date.now() };
+
   const snap = await query.get();
 
   const testAllowlist = testRecipientIds ? new Set(testRecipientIds) : null;
@@ -109,7 +148,7 @@ export async function resolveAudience(
     // simply not in this audience at all, same as a Firestore query
     // excluding them; not surfaced in `skipped` (that list is specifically
     // "would have matched, but can't be sent to" — opt-out / no email).
-    if (filter.kind === "conditions" && !evalConditionGroup(filter.group, contact)) {
+    if (group && !evalConditionGroup(group, contact, evalCtx)) {
       continue;
     }
     if (contact.emailOptedOut) {

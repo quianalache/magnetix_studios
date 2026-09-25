@@ -14,6 +14,9 @@ export function audienceLabel(filter: BroadcastAudienceFilter): string {
     const stage = PIPELINE_STAGES.find((s) => s.id === filter.stage);
     return `Stage: ${stage?.label ?? filter.stage}`;
   }
+  if (filter.kind === "list") {
+    return `Contact List: ${filter.listName?.trim() || "saved list"}`;
+  }
   const count = filter.group?.all?.length ?? 0;
   if (count === 0) return "All contacts (empty filter)";
   const match = filter.group.match === "any" ? "any" : "all";

@@ -7,7 +7,8 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
 import { emailIsConfigured } from "@/lib/comms/resend";
 import { publishCallback, qstashIsConfigured } from "@/lib/automations/qstash";
-import { resolveAudience } from "@/lib/broadcasts/audience";
+import { AudienceListMissingError, resolveAudience } from "@/lib/broadcasts/audience";
+import { getContactList } from "@/lib/server/contact-lists-service";
 import { emailDocumentFromBroadcast } from "@/lib/email/adapters";
 import {
   requireMailingAddress,
@@ -133,10 +134,20 @@ export async function POST(request: Request) {
     audienceFilter.kind !== "all" &&
     audienceFilter.kind !== "tag" &&
     audienceFilter.kind !== "pipeline_stage" &&
-    audienceFilter.kind !== "conditions"
+    audienceFilter.kind !== "conditions" &&
+    audienceFilter.kind !== "list"
   ) {
     return NextResponse.json(
-      { error: "audienceFilter.kind must be 'all', 'tag', 'pipeline_stage', or 'conditions'" },
+      { error: "audienceFilter.kind must be 'all', 'tag', 'pipeline_stage', 'conditions', or 'list'" },
+      { status: 400 },
+    );
+  }
+  if (
+    audienceFilter.kind === "list" &&
+    (typeof audienceFilter.listId !== "string" || !audienceFilter.listId)
+  ) {
+    return NextResponse.json(
+      { error: "audienceFilter.listId is required for a Contact List audience" },
       { status: 400 },
     );
   }
@@ -219,12 +230,33 @@ export async function POST(request: Request) {
   // outside the allowlist can ever be queued, regardless of how broad
   // audienceFilter resolves.
   const scope = await loadEffectiveTerritoryScope(access);
-  const audience = await resolveAudience(
-    subAccountId,
-    audienceFilter,
-    scope.enforce ? (scope.ids ?? []) : null,
-    verifiedTestRecipientIds,
-  );
+  let audience: Awaited<ReturnType<typeof resolveAudience>>;
+  try {
+    audience = await resolveAudience(
+      subAccountId,
+      audienceFilter,
+      scope.enforce ? (scope.ids ?? []) : null,
+      verifiedTestRecipientIds,
+    );
+  } catch (err) {
+    if (err instanceof AudienceListMissingError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+    throw err;
+  }
+  // Contacts redesign (2026-09-25) — for a Contact List audience, stamp the
+  // list's name + definition AS RESOLVED onto the broadcast doc (audit /
+  // display only; resolution always used the live list above).
+  let storedAudienceFilter: BroadcastAudienceFilter = audienceFilter;
+  if (audienceFilter.kind === "list") {
+    const list = await getContactList(subAccountId, audienceFilter.listId);
+    storedAudienceFilter = {
+      kind: "list",
+      listId: audienceFilter.listId,
+      listName: list?.name ?? audienceFilter.listName ?? null,
+      group: list?.group ?? null,
+    };
+  }
   if (audience.recipients.length === 0) {
     return NextResponse.json(
       {
@@ -313,7 +345,7 @@ export async function POST(request: Request) {
     subject,
     preheader,
     sourceTemplateId,
-    audienceFilter,
+    audienceFilter: storedAudienceFilter,
     status: "queued",
     totals: {
       audienceSize: audience.recipients.length + audience.skipped.length,

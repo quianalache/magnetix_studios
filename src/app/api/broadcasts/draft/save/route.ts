@@ -78,7 +78,14 @@ export async function POST(request: Request) {
     audienceFilter.kind !== "all" &&
     audienceFilter.kind !== "tag" &&
     audienceFilter.kind !== "pipeline_stage" &&
-    audienceFilter.kind !== "conditions"
+    audienceFilter.kind !== "conditions" &&
+    audienceFilter.kind !== "list"
+  ) {
+    return NextResponse.json({ error: "Invalid audienceFilter" }, { status: 400 });
+  }
+  if (
+    audienceFilter.kind === "list" &&
+    (typeof audienceFilter.listId !== "string" || !audienceFilter.listId)
   ) {
     return NextResponse.json({ error: "Invalid audienceFilter" }, { status: 400 });
   }

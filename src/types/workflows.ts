@@ -94,7 +94,25 @@ export type ConditionOp =
   | "has_tag"
   | "not_has_tag"
   | "in_stage"
-  | "source_is";
+  | "source_is"
+  // Contacts redesign (2026-09-25) — date comparisons + access conditions,
+  // purely additive (every existing condition doc is unaffected; the
+  // Workflow editor's op list — CONDITION_OPS — doesn't offer these).
+  // Date ops read the field as a timestamp (Firestore Timestamp, Date, ISO
+  // string or epoch ms). `before`/`after` take a YYYY-MM-DD value compared
+  // by UTC calendar day ("after 2026-09-03" means from 09-04 onward);
+  // `within_last_days`/`more_than_days_ago` take a whole number of days.
+  | "before"
+  | "after"
+  | "within_last_days"
+  | "more_than_days_ago"
+  // `field` is the pseudo-field "access"; `value` is "offer:{id}",
+  // "course:{id}" or "community:{groupId}". Needs a server-built access
+  // index (lib/segmentation/access-index.ts) — without one (e.g. the
+  // client-side broadcast preview, workflow filters) both ops evaluate to
+  // false rather than guessing.
+  | "has_access"
+  | "not_has_access";
 
 export interface Condition {
   /** Contact field path (e.g. "email", "company", "customFields.x"). */

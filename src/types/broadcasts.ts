@@ -76,7 +76,20 @@ export type BroadcastAudienceFilter =
   | { kind: "all" }
   | { kind: "tag"; tag: string }
   | { kind: "pipeline_stage"; stage: string }
-  | { kind: "conditions"; group: ConditionGroup };
+  | { kind: "conditions"; group: ConditionGroup }
+  /**
+   * Contacts redesign (2026-09-25) — a saved Contact List
+   * (`contactLists/{listId}`). The resolver ALWAYS loads the list's live
+   * definition server-side; `listName`/`group` are a snapshot the send
+   * route stamps onto the broadcast doc for audit/display only and are
+   * never trusted for resolution.
+   */
+  | {
+      kind: "list";
+      listId: string;
+      listName?: string | null;
+      group?: ConditionGroup | null;
+    };
 
 export interface BroadcastTotals {
   /** Total contacts the audience query returned (before opt-out / missing-email skip). */

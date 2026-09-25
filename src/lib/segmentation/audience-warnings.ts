@@ -23,6 +23,9 @@ const NEGATION_OPS: ReadonlySet<ConditionOp> = new Set([
   "not_contains",
   "not_has_tag",
   "not_set",
+  // Contacts redesign (2026-09-25) — "hasn't purchased X" is exactly as
+  // broad as "doesn't have tag X".
+  "not_has_access",
 ]);
 
 export function conditionGroupHasNegation(group: ConditionGroup | undefined | null): boolean {

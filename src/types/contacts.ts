@@ -69,7 +69,23 @@ export interface ContactAttribution {
 
 export interface Contact {
   id: string;
+  /**
+   * Full display name — the canonical, backward-compatible name every
+   * existing consumer reads (Conversations, merge tags' fallback, the public
+   * API's `name`, search). Still always written. When `firstName`/`lastName`
+   * are set and `name` was blank, writers compose it from them (see
+   * `src/lib/contacts/names.ts`); an existing `name` is never re-split or
+   * overwritten from them automatically.
+   */
   name: string;
+  /**
+   * Contacts redesign (2026-09-25) — optional structured name parts.
+   * Absent on every contact created before this change and never
+   * backfilled by splitting `name` (ambiguous names like "Mary Ann van der
+   * Berg" can't be split safely); staff can fill them explicitly.
+   */
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string;
   company: string;
@@ -79,6 +95,14 @@ export interface Contact {
    *  later changes). Multi-line; operator types whatever format suits
    *  their region. Empty string when not provided. */
   address: string;
+  /**
+   * Contacts redesign (2026-09-25) — optional structured address parts,
+   * additive to the free-form `address` above (which stays the value quotes
+   * and invoices snapshot) and to the auto-captured `city`/`country`
+   * location fields below. Absent on legacy contacts.
+   */
+  state?: string;
+  postalCode?: string;
   source: ContactSource;
   tags: string[];
   pipelineStage: string | null;
@@ -249,6 +273,10 @@ export type ContactFormData = Pick<
   Contact,
   "name" | "email" | "phone" | "company" | "address" | "source" | "tags"
 > & {
+  firstName?: string;
+  lastName?: string;
+  state?: string;
+  postalCode?: string;
   territoryId?: string | null;
   customFields?: Record<string, import("./custom-fields").CustomFieldValue> | null;
 };
@@ -308,13 +336,30 @@ export type ActivityType =
   | "booking_completed"
   // Operator/host reassigned a team booking to a different host. Written by
   // /api/events/by-id/[id]/assign.
-  | "booking_reassigned";
+  | "booking_reassigned"
+  // Inbox Follow-up Watchdog (Labs) flagged an unanswered conversation.
+  // Written by agents-watchdog-service.ts (was written before it was part
+  // of this union, so it rendered with the wrong label).
+  | "ai_agent_flagged"
+  // Contacts redesign (2026-09-25) — access lifecycle. Written by
+  // src/lib/server/contact-activity.ts from the existing purchase /
+  // enrollment / membership services (and the Contacts access actions),
+  // with deterministic ids where a retry could otherwise duplicate a row.
+  | "purchase_completed"
+  | "course_enrolled"
+  | "community_access_granted"
+  | "community_access_revoked";
 
 export interface Note {
   id: string;
   content: string;
+  /** Author uid — stamped server-side from the caller's session (never
+   *  client-supplied) and preserved across edits. */
   createdBy: string;
   createdAt: Timestamp | FieldValue | null;
+  /** Set on the first edit; absent on never-edited (and all legacy) notes. */
+  updatedAt?: Timestamp | FieldValue | null;
+  updatedBy?: string | null;
 }
 
 export interface ActivityItem {
