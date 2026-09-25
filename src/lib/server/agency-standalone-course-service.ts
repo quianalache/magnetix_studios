@@ -18,6 +18,7 @@ import { evaluateChartRule } from "@/lib/energetics/chart-rules";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { calculateAstrologyChart, type AstrologyChart } from "@/lib/energetics/astrology";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import {
   DEFAULT_STANDALONE_COURSE_ADVANCED,
   DEFAULT_STANDALONE_COURSE_INSTRUCTOR,
@@ -388,6 +389,11 @@ export async function revokeLinkedAgencyCommunityAccessServerSide(opts: {
 }): Promise<void> {
   const course = await getAgencyStandaloneCourse(opts.agencyId, opts.courseId);
   if (!course || course.linkedCommunityGroupIds.length === 0) return;
+  // An active complimentary grant on this course independently justifies
+  // what it includes (same rule as the tenant side): a canceled paid
+  // subscription must not strip it. Revoking the grant marks it revoked
+  // BEFORE calling this, so that path still proceeds.
+  if (hasActiveComplimentaryAccess(await getAgencyStandaloneEnrollment(opts.agencyId, opts.courseId, opts.personId))) return;
 
   const { revokeAgencyProductAccessSourceServerSide } = await import("@/lib/server/agency-community-access-source-service");
   for (const groupId of course.linkedCommunityGroupIds) {

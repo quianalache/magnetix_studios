@@ -7,6 +7,7 @@ import {
   getAgencyStandaloneEnrollment,
 } from "@/lib/server/agency-standalone-course-service";
 import { hasPaidAgencyStandaloneCourse } from "@/lib/server/agency-standalone-course-purchase-service";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 
 /**
@@ -47,11 +48,15 @@ export async function requireAgencyCoursePageAccess(courseId: string): Promise<A
 }
 
 export async function checkAgencyCourseEntitlementForPerson(agencyId: string, course: StandaloneCourse, personId: string): Promise<boolean> {
+  const enrollment = await getAgencyStandaloneEnrollment(agencyId, course.id, personId);
+  // Complimentary access — same shared rule as the tenant guard: an active
+  // staff grant stands in for a purchase and isn't subject to a
+  // purchase-derived access window; it ends only when revoked.
+  if (hasActiveComplimentaryAccess(enrollment)) return true;
   if (course.access === "purchase") {
     const paid = await hasPaidAgencyStandaloneCourse(agencyId, course.id, personId);
     if (!paid) return false;
   }
-  const enrollment = await getAgencyStandaloneEnrollment(agencyId, course.id, personId);
   const beginsAt = toDateOrNull(enrollment?.accessBeginsAt);
   const expiresAt = toDateOrNull(enrollment?.accessExpiresAt);
   const now = new Date();

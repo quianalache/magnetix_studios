@@ -755,9 +755,7 @@ function SidebarContent({
               </Link>
             )}
             {/* Agency Community (2026-09-16) — Agency-owned communities,
-                distinct from any sub-account's own Community. Only added
-                because a real destination exists now; Courses/Referrals
-                stay omitted until they have one too. */}
+                distinct from any sub-account's own Community. */}
             {agencyRole === "owner" && (
               <Link
                 href="/agency/community"
@@ -772,6 +770,28 @@ function SidebarContent({
               >
                 <MessagesSquare className="h-4 w-4 shrink-0" />
                 {!collapsed && "Community"}
+              </Link>
+            )}
+            {/* Agency Courses — Agency-owned Standalone Courses + Course
+                Offers (shipped 2026-09-16/19, owner-only like the pages and
+                /api/agency/standalone-courses). The entry was left out when
+                Community was added and never restored once these pages
+                existed, so they were only reachable via in-page links. */}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/standalone-courses"
+                title={collapsed ? "Courses" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                  collapsed && "justify-center",
+                  pathname.startsWith("/agency/standalone-courses") ||
+                    pathname.startsWith("/agency/course-offers")
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                )}
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
+                {!collapsed && "Courses"}
               </Link>
             )}
             {/* Agency Communications (2026-09-18) — Magnetix Studios' own

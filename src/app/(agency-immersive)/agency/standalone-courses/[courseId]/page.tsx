@@ -173,7 +173,7 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
             <Button variant="outline" size="sm">Theme</Button>
           </Link>
           <Link href={`/agency/standalone-courses/${courseId}/purchases`}>
-            <Button variant="outline" size="sm">Purchases</Button>
+            <Button variant="outline" size="sm">Purchases &amp; access</Button>
           </Link>
           <Link href={`/agency/standalone-courses/${courseId}/edit`}>
             <Button variant="outline" size="sm">

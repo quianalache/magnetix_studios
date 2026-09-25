@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { parseVideoUrl } from "@/lib/community/video-embed";
 import { formatPrice } from "@/lib/server/community-classroom-service";
+import { hasActiveComplimentaryAccess } from "@/lib/standalone-courses/complimentary";
 import { communityLearningLessonHref, communityLearningProductHref, type CommunityLinkBase } from "@/lib/community/routes";
 import type {
   Course,
@@ -472,7 +473,8 @@ export async function listAgencyClassroomCatalogForMember(opts: {
       const lessonCount = tree?.lessons.length ?? 0;
 
       let locked: { reason: string; purchasable: boolean } | null = null;
-      if (course.access === "purchase") {
+      // A complimentary staff grant stands in for a purchase (shared rule).
+      if (course.access === "purchase" && !hasActiveComplimentaryAccess(enrolled)) {
         const paid = await hasPaidAgencyStandaloneCourse(agencyId, course.id, opts.personId);
         if (!paid) {
           const price = course.priceCents != null ? ` — ${formatPrice(course.priceCents, course.currency)}` : "";

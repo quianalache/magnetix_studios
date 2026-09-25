@@ -5,7 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
+import { AgencyCourseComplimentarySection } from "@/components/agency/agency-course-complimentary-section";
+import type { StandaloneCourse, StandaloneCoursePurchase } from "@/types/standalone-courses";
 
 interface Row extends StandaloneCoursePurchase {
   buyer: { email: string; displayName: string | null };
@@ -46,6 +47,7 @@ export default function AgencyStandaloneCoursePurchasesPage({
   const { agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [course, setCourse] = useState<StandaloneCourse | null>(null);
 
   useEffect(() => {
     if (!isOwner) return;
@@ -53,6 +55,10 @@ export default function AgencyStandaloneCoursePurchasesPage({
       .then((r) => r.json())
       .then((d: { purchases?: Row[] }) => setRows(d.purchases ?? []))
       .catch(() => setRows([]));
+    fetch(`/api/agency/standalone-courses/${courseId}`)
+      .then((r) => r.json())
+      .then((d: { course?: StandaloneCourse }) => setCourse(d.course ?? null))
+      .catch(() => setCourse(null));
   }, [isOwner, courseId]);
 
   if (authLoading) return null;
@@ -70,7 +76,7 @@ export default function AgencyStandaloneCoursePurchasesPage({
         <Link href={`/agency/standalone-courses/${courseId}`} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Course editor
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Purchases</h1>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Purchases &amp; access</h1>
       </div>
 
       {!rows ? (
@@ -104,6 +110,10 @@ export default function AgencyStandaloneCoursePurchasesPage({
             );
           })}
         </div>
+      )}
+
+      {course && (
+        <AgencyCourseComplimentarySection courseId={courseId} paid={course.access === "purchase"} />
       )}
     </div>
   );

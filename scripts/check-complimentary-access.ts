@@ -302,6 +302,110 @@ async function main() {
     assert.equal(await entitled("paidCourse", "mSolo"), false);
   });
 
+  /* ------------------------------ Agency scope ------------------------------ */
+  const A = `agencies/${AG}`;
+  const aw = (p: string, d: Record<string, unknown>) => db.doc(p).set(d);
+  const aCourse = (id: string, extra: Record<string, unknown>) =>
+    aw(`${A}/standaloneCourses/${id}`, {
+      agencyId: AG, title: id, published: true, enrollmentCount: 0, linkedCommunityGroupIds: [], createdAt: TS, ...extra,
+    });
+  await aCourse("aPaid", { access: "purchase", priceCents: 9900, currency: "USD", linkedCommunityGroupIds: ["aGroup"] });
+  await aCourse("aFree", { access: "open", priceCents: null });
+  await aw(`${A}/communityGroups/aGroup`, { agencyId: AG, name: "Agency Circle", memberCount: 0 });
+  // A person who legitimately bought the agency course on a subscription.
+  await aw(`people/pBuyer`, { primaryEmail: "buyer@example.test" });
+  await aw(`${A}/standaloneCourses/aPaid/purchases/aReal`, {
+    agencyId: AG, courseId: "aPaid", memberId: "pBuyer", status: "paid", amountCents: 9900, currency: "USD",
+    method: "stripe", stripeSubscriptionId: "sub_agency", requestedAt: TS, paidAt: TS,
+  });
+  await aw(`${A}/standaloneCourses/aPaid/enrollments/pBuyer`, {
+    memberId: "pBuyer", courseId: "aPaid", status: "enrolled", completedLessonIds: ["x"], progressPct: 30, enrolledAt: TS, completedAt: null,
+  });
+
+  const agencyRoute = await import("../src/app/api/agency/standalone-courses/[courseId]/complimentary/route");
+  const { checkAgencyCourseEntitlementForPerson } = await import("../src/lib/standalone-courses/agency-course-access");
+  const { getAgencyStandaloneCourse } = await import("../src/lib/server/agency-standalone-course-service");
+  const { handleAgencyStandaloneCourseSubscriptionDeleted } = await import("../src/lib/server/agency-standalone-course-purchase-service");
+  const agencyCall = async (method: "GET" | "POST" | "DELETE", uid: string, courseId: string, payload?: Record<string, unknown>) => {
+    const req = new Request("http://test.local/x", {
+      method,
+      headers: { "x-user-uid": uid, "content-type": "application/json" },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    });
+    const handler = agencyRoute[method];
+    const res = await handler(req, { params: Promise.resolve({ courseId }) });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  };
+  const aEntitled = async (courseId: string, personId: string) =>
+    checkAgencyCourseEntitlementForPerson(AG, (await getAgencyStandaloneCourse(AG, courseId))!, personId);
+  const personByEmail = async (email: string) =>
+    (await db.collection("people").where("primaryEmail", "==", email).limit(1).get()).docs[0]?.id;
+  const roster = async (personId: string) =>
+    (await db.collection(`${A}/communityGroups/aGroup/members`).where("personId", "==", personId).limit(1).get()).docs[0]?.data();
+
+  console.log("Agency — permissions + tenant boundaries");
+  await check("sub-account admin (not agency owner) is refused (403)", async () => {
+    assert.equal((await agencyCall("POST", "admin1", "aPaid", { email: "x@example.test" })).status, 403);
+  });
+  await check("another agency's owner can't reach this agency's course", async () => {
+    const r = await agencyCall("POST", "otherOwner", "aPaid", { email: "x@example.test" });
+    assert.equal(r.status, 404); // resolved against THEIR agency, where it doesn't exist
+    assert.equal((await db.doc(`${A}/standaloneCourses/aPaid`).get()).data()?.enrollmentCount, 0);
+  });
+
+  console.log("Agency — complimentary access, paid course");
+  await check("owner grants a paid agency course by email; guard admits them; no purchase", async () => {
+    const r = await agencyCall("POST", "owner1", "aPaid", { email: "guest@example.test" });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.status, "granted");
+    const pid = (await personByEmail("guest@example.test"))!;
+    assert.ok(pid, "a MyMagnetix person was resolved/created for that email");
+    assert.equal(await aEntitled("aPaid", pid), true);
+    assert.equal((await db.collection(`${A}/standaloneCourses/aPaid/purchases`).where("memberId", "==", pid).get()).size, 0);
+    assert.equal((await getAgencyStandaloneCourse(AG, "aPaid"))?.priceCents, 9900);
+    assert.equal((await roster(pid))?.status, "active");
+    const list = await agencyCall("GET", "owner1", "aPaid");
+    assert.ok((list.body.grants as { personId: string }[]).some((g) => g.personId === pid));
+  });
+  await check("free agency course: grant enrolls, nothing to revoke", async () => {
+    const r = await agencyCall("POST", "owner1", "aFree", { email: "guest@example.test" });
+    assert.equal(r.body.status, "enrolled");
+    const pid = (await personByEmail("guest@example.test"))!;
+    assert.equal(await aEntitled("aFree", pid), true);
+  });
+  await check("revoke locks the paid course, keeps progress, drops the linked community", async () => {
+    const pid = (await personByEmail("guest@example.test"))!;
+    const r = await agencyCall("DELETE", "owner1", "aPaid", { personId: pid });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.accessRetained, false);
+    assert.equal(await aEntitled("aPaid", pid), false);
+    assert.ok((await db.doc(`${A}/standaloneCourses/aPaid/enrollments/${pid}`).get()).exists);
+    assert.notEqual((await roster(pid))?.status, "active");
+    assert.equal((await agencyCall("DELETE", "owner1", "aPaid", { personId: pid })).status, 409);
+  });
+
+  console.log("Agency — complimentary + paid, and subscription cancellation");
+  await check("grant on top of a real purchase, revoke keeps the paid access", async () => {
+    assert.equal((await agencyCall("POST", "owner1", "aPaid", { email: "buyer@example.test" })).body.status, "granted");
+    const r = await agencyCall("DELETE", "owner1", "aPaid", { personId: "pBuyer" });
+    assert.equal(r.body.accessRetained, true);
+    assert.equal(await aEntitled("aPaid", "pBuyer"), true);
+    assert.equal((await db.doc(`${A}/standaloneCourses/aPaid/purchases/aReal`).get()).data()?.status, "paid");
+  });
+  await check("cancellation keeps access + linked community while a grant is active", async () => {
+    assert.equal((await agencyCall("POST", "owner1", "aPaid", { email: "buyer@example.test" })).body.status, "granted");
+    await handleAgencyStandaloneCourseSubscriptionDeleted({ id: "sub_agency", metadata: { agencyId: AG, courseId: "aPaid" } } as never);
+    assert.equal((await db.doc(`${A}/standaloneCourses/aPaid/purchases/aReal`).get()).data()?.status, "canceled");
+    assert.equal(await aEntitled("aPaid", "pBuyer"), true);
+    assert.equal((await roster("pBuyer"))?.status, "active");
+  });
+  await check("revoking after cancellation ends access fully", async () => {
+    const r = await agencyCall("DELETE", "owner1", "aPaid", { personId: "pBuyer" });
+    assert.equal(r.body.accessRetained, false);
+    assert.equal(await aEntitled("aPaid", "pBuyer"), false);
+    assert.notEqual((await roster("pBuyer"))?.status, "active");
+  });
+
   console.log(`\n${passed} checks passed.`);
   process.exit(0);
 }

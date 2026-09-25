@@ -1,5 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { requireAgencyCoursePageAccess } from "@/lib/standalone-courses/agency-course-access";
+import {
+  checkAgencyCourseEntitlementForPerson,
+  requireAgencyCoursePageAccess,
+} from "@/lib/standalone-courses/agency-course-access";
 import {
   getAgencyCurriculumOutline,
   getAgencyStandaloneEnrollment,
@@ -41,7 +44,13 @@ export default async function AgencyCourseSalesPage({
   const theme = course.theme;
 
   const enrollment = person ? await getAgencyStandaloneEnrollment(agencyId, courseId, person.id) : null;
-  if (enrollment) redirect(`/course/agency/${courseId}/classroom`);
+  // Only redirect an enrollment that actually grants access: the classroom
+  // guard sends a not-entitled person (unpaid paid course, expired access
+  // window, revoked complimentary grant) back HERE, so an unconditional
+  // redirect looped the two pages forever. Same fix as the tenant page.
+  if (enrollment && person && (await checkAgencyCourseEntitlementForPerson(agencyId, course, person.id))) {
+    redirect(`/course/agency/${courseId}/classroom`);
+  }
 
   const outline = await getAgencyCurriculumOutline(agencyId, courseId);
   const priceLabel =
