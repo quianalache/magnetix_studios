@@ -21,6 +21,7 @@ import {
   resolveNameForWrite,
   suggestNameSplit,
 } from "../src/lib/contacts/names";
+import { contactMergeFields } from "../src/lib/server/contact-merge-fields";
 import type { Contact } from "../src/types/contacts";
 import type { ConditionGroup } from "../src/types/workflows";
 
@@ -212,6 +213,36 @@ check("display / first / last fall back to the legacy full name", () => {
 check("suggested split is only a suggestion (first space)", () => {
   assert.deepEqual(suggestNameSplit("Mary Ann Smith"), { firstName: "Mary", lastName: "Ann Smith" });
   assert.deepEqual(suggestNameSplit("Kiki"), { firstName: "Kiki", lastName: "" });
+});
+
+console.log("Contact merge — new fields");
+const merge = (s: Partial<Contact>, l: Partial<Contact>) => contactMergeFields(contact(s), contact(l));
+check("state / postal code fill only when the survivor's are blank", () => {
+  assert.equal(merge({ state: "" }, { state: "TX" }).state, "TX");
+  assert.equal(merge({}, { postalCode: "78701" }).postalCode, "78701");
+  const kept = merge({ state: "CA", postalCode: "90210" }, { state: "TX", postalCode: "78701" });
+  assert.equal(kept.state, undefined);
+  assert.equal(kept.postalCode, undefined);
+});
+check("first/last name follow the surviving full name, never mixed", () => {
+  // Different people's names — the survivor's name stays, so the other
+  // record's parts must not be borrowed.
+  const mixed = merge({ name: "Jane Doe" }, { name: "Bob Smith", firstName: "Bob", lastName: "Smith" });
+  assert.equal(mixed.firstName, undefined);
+  assert.equal(mixed.lastName, undefined);
+  // Same full name — borrow the structured parts.
+  const same = merge({ name: "Jane Doe" }, { name: "jane doe", firstName: "Jane", lastName: "Doe" });
+  assert.deepEqual([same.firstName, same.lastName], ["Jane", "Doe"]);
+  // Survivor has no name — its name comes from the other record, and so do the parts.
+  const blank = merge({ name: "" }, { name: "Bob Smith", firstName: "Bob", lastName: "Smith" });
+  assert.deepEqual([blank.name, blank.firstName, blank.lastName], ["Bob Smith", "Bob", "Smith"]);
+  // Survivor already has parts — never overwritten.
+  const own = merge({ name: "Jane Doe", firstName: "J" }, { name: "Jane Doe", firstName: "Jane", lastName: "Doe" });
+  assert.equal(own.firstName, undefined);
+  assert.equal(own.lastName, undefined);
+});
+check("opt-outs still stick from either record", () => {
+  assert.equal(merge({ smsOptedOut: false }, { smsOptedOut: true }).smsOptedOut, true);
 });
 
 console.log(`\n${passed} checks passed.`);
