@@ -2,7 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Menu, X, Search, LogOut, ArrowLeftRight } from "lucide-react";
+import {
+  MessageCircle,
+  Menu,
+  X,
+  Search,
+  LogOut,
+  ArrowLeftRight,
+  Settings,
+} from "lucide-react";
 import { MyMagnetixSidebarNav } from "./sidebar-nav";
 import { NotificationBell, type BellAttentionItem } from "./notification-bell";
 
@@ -77,7 +85,10 @@ export function MyMagnetixHeader({
         >
           <Search className="h-[18px] w-[18px]" />
         </button>
-        <NotificationBell attentionItems={attentionItems} initialUnreadCount={attentionItems.length + unreadNotificationCount} />
+        <NotificationBell
+          attentionItems={attentionItems}
+          initialUnreadCount={attentionItems.length + unreadNotificationCount}
+        />
         <button
           type="button"
           disabled
@@ -91,11 +102,13 @@ export function MyMagnetixHeader({
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-[#F3F2EF]"
+            className="flex items-center gap-2 rounded-full py-1 pr-2 pl-1 hover:bg-[#F3F2EF]"
           >
             <span
               className="flex h-8 w-8 items-center justify-center rounded-full text-[12.5px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #A855F7, #5E2574)" }}
+              style={{
+                background: "linear-gradient(135deg, #A855F7, #5E2574)",
+              }}
             >
               {primaryEmail[0]?.toUpperCase() ?? "?"}
             </span>
@@ -104,8 +117,21 @@ export function MyMagnetixHeader({
             </span>
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-11 w-56 rounded-xl border border-[#ECE9F5] bg-white p-1.5 shadow-lg">
-              <p className="truncate px-2.5 py-2 text-[12px] text-[#909090]">{primaryEmail}</p>
+            <div className="absolute top-11 right-0 w-56 rounded-xl border border-[#ECE9F5] bg-white p-1.5 shadow-lg">
+              <p className="truncate px-2.5 py-2 text-[12px] text-[#909090]">
+                {primaryEmail}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  router.push("/my/settings");
+                }}
+                className="flex w-full items-center gap-2 rounded-lg bg-[#F3E4F0] px-2.5 py-2 text-left text-[13px] font-semibold text-[#202124] hover:bg-[#EBD6E8]"
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </button>
               {hasStaffAccess && (
                 <button
                   type="button"
@@ -131,7 +157,7 @@ export function MyMagnetixHeader({
       </div>
 
       {mobileOpen && (
-        <div className="absolute left-0 right-0 top-full border-b border-[#ECE9F5] bg-white p-3 lg:hidden">
+        <div className="absolute top-full right-0 left-0 border-b border-[#ECE9F5] bg-white p-3 lg:hidden">
           <MyMagnetixSidebarNav />
         </div>
       )}
