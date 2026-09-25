@@ -15,7 +15,7 @@ import { ContactForm } from "@/components/contacts/contact-form";
 import { useSubAccount } from "@/context/sub-account-context";
 import type { ContactFormData } from "@/types/contacts";
 
-export function AddContactModal() {
+export function AddContactModal({ onCreated }: { onCreated?: () => void } = {}) {
   const { subAccountId } = useSubAccount();
   const [open, setOpen] = useState(false);
 
@@ -34,6 +34,7 @@ export function AddContactModal() {
     }
     toast.success("Contact added");
     setOpen(false);
+    onCreated?.();
   }
 
   return (
