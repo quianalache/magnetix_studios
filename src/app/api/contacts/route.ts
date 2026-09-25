@@ -7,6 +7,10 @@ import {
   createContactServerSide,
   findExistingContactId,
 } from "@/lib/server/contacts-service";
+import { invalidateContactsCache } from "@/lib/server/contacts-query-service";
+import { resolveNameForWrite } from "@/lib/contacts/names";
+import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
+import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 
 /**
  * Dashboard-facing contact creation. The "Add contact" modal used to write
@@ -47,7 +51,15 @@ export async function POST(request: Request) {
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  const name = str(body.name, 200);
+  const firstName = str(body.firstName, 100);
+  const lastName = str(body.lastName, 100);
+  // An explicit name wins; otherwise compose it from first/last (never the
+  // other way round — see lib/contacts/names.ts).
+  const name = resolveNameForWrite({
+    name: str(body.name, 200),
+    firstName,
+    lastName,
+  }).slice(0, 200);
   const email = str(body.email);
   if (!name && !email) {
     return NextResponse.json(
@@ -76,6 +88,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Custom fields — validated like the v1 API (pre-existing gap: the Add
+  // Contact form sent them but this route dropped them).
+  let customFields: Record<string, import("@/types/custom-fields").CustomFieldValue> | undefined;
+  if (body.customFields !== undefined) {
+    const defs = await loadCustomFieldDefs(subAccountId, "contact");
+    const cf = validateCustomFieldValues(body.customFields, defs);
+    if (!cf.ok) {
+      return NextResponse.json({ error: cf.error }, { status: 400 });
+    }
+    customFields = cf.value;
+  }
+
   const { id, contact } = await createContactServerSide({
     subAccountId,
     agencyId,
@@ -90,8 +114,14 @@ export async function POST(request: Request) {
     address: str(body.address),
     source: str(body.source),
     tags: strArray(body.tags),
+    firstName,
+    lastName,
+    state: str(body.state, 100),
+    postalCode: str(body.postalCode, 20),
+    customFields,
     territoryId: typeof body.territoryId === "string" ? body.territoryId : null,
   });
+  invalidateContactsCache(subAccountId);
 
   return NextResponse.json({ id, contact }, { status: 201 });
 }

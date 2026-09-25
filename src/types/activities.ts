@@ -31,6 +31,25 @@ export type ActivityMeta = {
   bookingPageSlug?: string;
   paymentAmount?: number;
   paymentCurrency?: string;
+  /** Opt-out rows (`automation_step_skipped`) written by the unsubscribe
+   *  link / Resend engagement webhook carry `kind: "email_opt_out"`. */
+  kind?: string;
+  reason?: string;
+  /** Contacts redesign (2026-09-25) — access lifecycle rows. */
+  memberId?: string;
+  groupId?: string;
+  courseId?: string;
+  offerId?: string;
+  purchaseId?: string;
+  /** "offer" | "course" | "community" for purchase rows. */
+  purchaseScope?: string;
+  amountCents?: number;
+  currency?: string;
+  /** How access was granted/revoked: "staff" (Contacts action),
+   *  "purchase", "product", "join", "approval", etc. */
+  via?: string;
+  noteId?: string;
+  [key: string]: unknown;
 } | null;
 
 export interface ActivityDoc {

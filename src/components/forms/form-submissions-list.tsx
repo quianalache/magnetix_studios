@@ -95,12 +95,7 @@ export function FormSubmissionsList({
 
             {isOpen && (
               <div className="space-y-2 border-t bg-muted/20 px-3 py-3">
-                {(s.answers ?? legacyAnswersFrom(s)).map((a) => (
-                  <div key={a.fieldId} className="text-xs">
-                    <p className="font-medium text-muted-foreground">{a.label}</p>
-                    <p className="mt-0.5 whitespace-pre-wrap">{a.value || "—"}</p>
-                  </div>
-                ))}
+                <SubmissionAnswersList answers={s.answers ?? legacyAnswersFrom(s)} />
                 {s.contactId && (
                   <Link
                     href={saPath(`/contacts/${s.contactId}`)}
@@ -116,6 +111,30 @@ export function FormSubmissionsList({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * One submission's answers (label + value, in form order). Shared by this
+ * list's expanded rows and the contact profile's "View submission" dialog.
+ */
+export function SubmissionAnswersList({
+  answers,
+}: {
+  answers: { fieldId: string; label: string; value: string }[];
+}) {
+  if (answers.length === 0) {
+    return <p className="text-xs text-muted-foreground">No answers recorded.</p>;
+  }
+  return (
+    <>
+      {answers.map((a) => (
+        <div key={a.fieldId} className="text-xs">
+          <p className="font-medium text-muted-foreground">{a.label}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words">{a.value || "—"}</p>
+        </div>
+      ))}
+    </>
   );
 }
 

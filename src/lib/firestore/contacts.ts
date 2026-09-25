@@ -161,20 +161,30 @@ export async function updateContact(
   });
 }
 
+/**
+ * Create a note on a contact. Contacts redesign (2026-09-25): now goes
+ * through `POST /api/contacts/[id]/notes` so the author is stamped from the
+ * caller's session server-side (the old direct client write let any member
+ * write any `createdBy`). Signature kept for every existing caller
+ * (AddNoteInput, incl. its use inside Conversations); `userId` is ignored —
+ * the server decides authorship.
+ */
 export async function addNote(
   contactId: string,
   content: string,
-  userId: string,
+  userId?: string,
 ): Promise<string> {
-  const ref = await addDoc(
-    collection(getFirebaseDb(), CONTACTS, contactId, "notes"),
-    {
-      content,
-      createdBy: userId,
-      createdAt: serverTimestamp(),
-    },
-  );
-  return ref.id;
+  void userId;
+  const res = await fetch(`/api/contacts/${contactId}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+  if (!res.ok || !data.id) {
+    throw new Error(data.error ?? "Failed to save note.");
+  }
+  return data.id;
 }
 
 export function subscribeToNotes(

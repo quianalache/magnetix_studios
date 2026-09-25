@@ -14,16 +14,33 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useSubAccount } from "@/context/sub-account-context";
 import { parseCsv, guessContactField, isValidEmail } from "@/lib/csv";
+import { composeName } from "@/lib/contacts/names";
 import type { ContactFormData, ContactSource } from "@/types/contacts";
 
-type MappableField = "name" | "email" | "phone" | "company" | "source" | "tags";
+type MappableField =
+  | "name"
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "phone"
+  | "company"
+  | "address"
+  | "state"
+  | "postalCode"
+  | "source"
+  | "tags";
 
 const CONTACT_FIELDS: { value: MappableField | ""; label: string }[] = [
   { value: "", label: "— Skip column —" },
-  { value: "name", label: "Name" },
+  { value: "name", label: "Full name" },
+  { value: "firstName", label: "First name" },
+  { value: "lastName", label: "Last name" },
   { value: "email", label: "Email" },
   { value: "phone", label: "Phone" },
   { value: "company", label: "Company" },
+  { value: "address", label: "Address" },
+  { value: "state", label: "State / Region" },
+  { value: "postalCode", label: "Postal code" },
   { value: "source", label: "Source" },
   { value: "tags", label: "Tags" },
 ];
@@ -133,6 +150,11 @@ export function ImportContactsDialog({
           data[field] = value;
         }
       }
+      // Compose a full name from first/last when no full-name column was
+      // mapped (an explicit full name is never overwritten).
+      if (!data.name.trim()) {
+        data.name = composeName(data.firstName, data.lastName);
+      }
       if (!data.email || !isValidEmail(data.email)) {
         skipped++;
         if (errors.length < 5) {
@@ -224,7 +246,7 @@ export function ImportContactsDialog({
               <p className="text-sm font-medium">Choose a CSV file</p>
               <p className="text-xs text-muted-foreground">
                 First row should be headers. Email column is required.
-                Recognised columns: <code>name, email, phone, company, source, tags</code>.
+                Recognised columns: <code>name, first name, last name, email, phone, company, address, state, postal code, source, tags</code>.
               </p>
               <input
                 ref={inputRef}

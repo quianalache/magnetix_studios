@@ -1,21 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
-  Mail,
-  MailX,
-  MailCheck,
-  Phone,
-  Building2,
-  Pencil,
-  Tag,
   ArrowLeft,
-  CircleDot,
-  MapPinned,
+  Mail,
   MessageSquare,
+  Pencil,
   PhoneOutgoing,
-  ShieldAlert,
   Star,
   Trash2,
 } from "lucide-react";
@@ -29,7 +21,6 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -45,11 +36,10 @@ import { ContactForm } from "@/components/contacts/contact-form";
 import { SendEmailDialog } from "@/components/contacts/send-email-dialog";
 import { SendSmsDialog } from "@/components/contacts/send-sms-dialog";
 import { SendCallDialog } from "@/components/contacts/send-call-dialog";
-import { subscribeToTerritories } from "@/lib/firestore/territories";
 import { formatContactDate } from "@/lib/format";
+import { contactDisplayName, contactInitials } from "@/lib/contacts/names";
 import { useSubAccount } from "@/context/sub-account-context";
 import type { Contact, ContactFormData } from "@/types/contacts";
-import type { TerritoryDoc } from "@/types";
 
 interface ContactBlocker {
   type: string;
@@ -58,11 +48,29 @@ interface ContactBlocker {
   count: number;
 }
 
-export function ContactProfileHeader({ contact }: { contact: Contact }) {
+/**
+ * Contact profile top bar (Contacts redesign, 2026-09-25): identity + every
+ * existing contact action and its dialog — Email, SMS, AI Call, Google
+ * review request, Link (Meta contacts), Merge, Edit, Delete (with the
+ * linked-record dry-run check). The details list moved to
+ * `ContactInfoCard`; the edit sheet is controlled by the page so the info
+ * card's Edit button opens the same form.
+ *
+ * The Email / SMS dialogs stay until the embedded Conversations tab (Codex's
+ * Conversations redesign) provides equivalent sending — see the page.
+ */
+export function ContactProfileHeader({
+  contact,
+  editOpen,
+  onEditOpenChange,
+}: {
+  contact: Contact;
+  editOpen: boolean;
+  onEditOpenChange: (open: boolean) => void;
+}) {
   const { saPath, subAccount, subAccountId, isAdmin } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
@@ -74,11 +82,6 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
   // review link configured (Settings → Google reviews).
   const reviewConfigured = !!subAccount?.googleReviewConfig?.reviewUrl;
   const [reviewSending, setReviewSending] = useState(false);
-  // Staff marketing-email control (2026-08-28).
-  const [marketingAction, setMarketingAction] = useState<
-    "unsubscribe" | "resubscribe" | null
-  >(null);
-  const [marketingActionSaving, setMarketingActionSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteState, setDeleteState] = useState<
@@ -86,75 +89,11 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
     | { phase: "blocked"; blockers: ContactBlocker[] }
     | { phase: "confirm" }
   >({ phase: "checking" });
-  const [territories, setTerritories] = useState<TerritoryDoc[]>([]);
-
-  useEffect(() => {
-    if (!scopingOn || !subAccountId) {
-      setTerritories([]);
-      return;
-    }
-    const unsub = subscribeToTerritories(subAccountId, (list) =>
-      setTerritories(list),
-    );
-    return () => unsub();
-  }, [scopingOn, subAccountId]);
-
-  const territoryName = (() => {
-    if (!contact.territoryId) return null;
-    const match = territories.find((t) => t.id === contact.territoryId);
-    if (!match) return null;
-    return match.status === "archived"
-      ? `${match.name} (archived)`
-      : match.name;
-  })();
-
-  // Staff marketing-email control (2026-08-28) — never infer "consented"
-  // merely from emailOptedOut being false/absent; a legacy contact with no
-  // structured emailConsent stays "unknown" regardless. emailOptedOut:true
-  // DOES unambiguously mean unsubscribed even without a structured record
-  // (that's the pre-existing, unchanged live send-gate), so it's the one
-  // fallback allowed here.
-  const marketingStatus: "consented" | "unsubscribed" | "unknown" =
-    contact.emailConsent?.status === "consented"
-      ? "consented"
-      : contact.emailConsent?.status === "unsubscribed"
-        ? "unsubscribed"
-        : contact.emailOptedOut
-          ? "unsubscribed"
-          : "unknown";
-  const deliverabilitySuppressed = !!contact.deliverabilitySuppressed;
-
-  async function handleMarketingAction(action: "unsubscribe" | "resubscribe") {
-    setMarketingActionSaving(true);
-    try {
-      const res = await fetch(`/api/contacts/${contact.id}/marketing-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        toast.error(data.error ?? "Couldn't update marketing email status.");
-        return;
-      }
-      toast.success(
-        action === "resubscribe"
-          ? "Marked as consented to marketing email."
-          : "Marked as unsubscribed from marketing email.",
-      );
-      setMarketingAction(null);
-    } catch {
-      toast.error("Network error. Try again.");
-    } finally {
-      setMarketingActionSaving(false);
-    }
-  }
 
   async function handleSave(data: ContactFormData) {
     // Territory is owned by the contact and fanned out to its
     // deals/quotes/tasks/events via a dedicated admin endpoint, so it's
-    // handled separately from the plain field update. Strip it out of
-    // the client-SDK write; route a change through the fan-out endpoint.
+    // handled separately from the plain field update.
     const { territoryId, ...rest } = data;
     // Server route (not a direct Firestore write) so contact.updated fires.
     const res = await fetch(`/api/contacts/${contact.id}`, {
@@ -191,7 +130,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
     }
 
     toast.success("Contact updated");
-    setEditing(false);
+    onEditOpenChange(false);
   }
 
   async function handleRequestReview() {
@@ -225,6 +164,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
     }
   }
 
+  const displayName = contactDisplayName(contact);
   const contactName = contact.name || contact.email || "this contact";
 
   // Open the delete modal and run the dry-run link check. If the contact is
@@ -288,7 +228,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-3">
         <Link
           href={saPath("/contacts")}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -297,15 +237,27 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
           Back to contacts
         </Link>
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-2xl font-bold tracking-tight sm:text-3xl">
-              {contact.name || "Unnamed contact"}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Added {formatContactDate(contact.createdAt)}
-            </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              aria-hidden="true"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-semibold text-primary sm:h-14 sm:w-14 sm:text-lg"
+            >
+              {contactInitials(contact)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
+                  {displayName}
+                </h1>
+                {contact.source && <SourceBadge source={contact.source} />}
+              </div>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Added {formatContactDate(contact.createdAt)}
+              </p>
+            </div>
           </div>
+
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
               variant="outline"
@@ -333,11 +285,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
                 size="sm"
                 onClick={() => setCallOpen(true)}
                 disabled={!contact.phone}
-                title={
-                  !contact.phone
-                    ? "No phone on this contact"
-                    : "Call with AI"
-                }
+                title={!contact.phone ? "No phone on this contact" : "Call with AI"}
               >
                 <PhoneOutgoing className="mr-1 h-3.5 w-3.5" />
                 Call
@@ -349,11 +297,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
                 size="sm"
                 onClick={handleRequestReview}
                 disabled={!contact.phone || reviewSending}
-                title={
-                  !contact.phone
-                    ? "No phone on this contact"
-                    : "Request a Google review"
-                }
+                title={!contact.phone ? "No phone on this contact" : "Request a Google review"}
               >
                 <Star className="mr-1 h-3.5 w-3.5" />
                 Review
@@ -364,7 +308,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
             <LinkContactButton contact={contact} />
             {/* Self-gates: admin only. */}
             <MergeContactButton contact={contact} />
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Button variant="outline" size="sm" onClick={() => onEditOpenChange(true)}>
               <Pencil className="mr-1 h-3.5 w-3.5" />
               Edit
             </Button>
@@ -376,144 +320,17 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
                 disabled={deleteOpen}
                 className="text-destructive hover:bg-destructive/5 hover:text-destructive"
                 title="Delete this contact"
+                aria-label="Delete this contact"
               >
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                Delete
+                <Trash2 className="h-3.5 w-3.5 sm:mr-1" />
+                <span className="hidden sm:inline">Delete</span>
               </Button>
             )}
           </div>
         </div>
-
-        <dl className="space-y-3 rounded-xl border bg-card p-4 text-sm">
-          {contact.email && (
-            <Row icon={<Mail className="h-4 w-4 text-muted-foreground" />} label="Email">
-              <a
-                href={`mailto:${contact.email}`}
-                className="text-foreground hover:text-primary hover:underline"
-              >
-                {contact.email}
-              </a>
-            </Row>
-          )}
-          {contact.email && (
-            <Row
-              icon={<MailCheck className="h-4 w-4 text-muted-foreground" />}
-              label="Email Marketing"
-            >
-              <div className="flex flex-wrap items-center gap-1.5">
-                <Badge
-                  variant="outline"
-                  className={
-                    marketingStatus === "consented"
-                      ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400"
-                      : marketingStatus === "unsubscribed"
-                        ? "border-muted-foreground/30 text-muted-foreground"
-                        : "border-muted-foreground/20 text-muted-foreground"
-                  }
-                >
-                  {marketingStatus === "consented"
-                    ? "Consented"
-                    : marketingStatus === "unsubscribed"
-                      ? "Unsubscribed"
-                      : "Unknown"}
-                </Badge>
-                {deliverabilitySuppressed && (
-                  <Badge
-                    variant="outline"
-                    className="gap-1 border-destructive/40 text-destructive"
-                    title={
-                      contact.deliverabilitySuppressedReason === "complaint"
-                        ? "Marked as spam by this address"
-                        : contact.deliverabilitySuppressedReason === "hard_bounce"
-                          ? "This address hard-bounced"
-                          : "Deliverability-suppressed"
-                    }
-                  >
-                    <ShieldAlert className="h-3 w-3" />
-                    Deliverability suppressed
-                  </Badge>
-                )}
-                {marketingStatus !== "unsubscribed" && (
-                  <button
-                    type="button"
-                    onClick={() => setMarketingAction("unsubscribe")}
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <MailX className="h-3 w-3" /> Mark unsubscribed
-                  </button>
-                )}
-                {marketingStatus !== "consented" && (
-                  <button
-                    type="button"
-                    onClick={() => setMarketingAction("resubscribe")}
-                    disabled={deliverabilitySuppressed}
-                    title={
-                      deliverabilitySuppressed
-                        ? "Can't resubscribe — this address is deliverability-suppressed"
-                        : undefined
-                    }
-                    className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                  >
-                    <MailCheck className="h-3 w-3" /> Resubscribe
-                  </button>
-                )}
-              </div>
-            </Row>
-          )}
-          {contact.phone && (
-            <Row icon={<Phone className="h-4 w-4 text-muted-foreground" />} label="Phone">
-              <a
-                href={`tel:${contact.phone}`}
-                className="text-foreground hover:text-primary hover:underline"
-              >
-                {contact.phone}
-              </a>
-            </Row>
-          )}
-          {contact.company && (
-            <Row
-              icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
-              label="Company"
-            >
-              <span className="text-foreground">{contact.company}</span>
-            </Row>
-          )}
-          <Row
-            icon={<CircleDot className="h-4 w-4 text-muted-foreground" />}
-            label="Source"
-          >
-            <SourceBadge source={contact.source} />
-          </Row>
-          <Row
-            icon={<Tag className="h-4 w-4 text-muted-foreground" />}
-            label="Tags"
-          >
-            {contact.tags && contact.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {contact.tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-muted-foreground">No tags</span>
-            )}
-          </Row>
-          {scopingOn && (
-            <Row
-              icon={<MapPinned className="h-4 w-4 text-muted-foreground" />}
-              label="Territory"
-            >
-              {/* No explicit territory resolves to Global — the shared floor. */}
-              <Badge variant="outline">{territoryName || "Global"}</Badge>
-            </Row>
-          )}
-        </dl>
-
       </div>
 
-      <Sheet open={editing} onOpenChange={setEditing}>
+      <Sheet open={editOpen} onOpenChange={onEditOpenChange}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Edit Contact</SheetTitle>
@@ -526,71 +343,17 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
               initial={contact}
               submitLabel="Save Changes"
               onSubmit={handleSave}
-              onCancel={() => setEditing(false)}
+              onCancel={() => onEditOpenChange(false)}
             />
           </div>
         </SheetContent>
       </Sheet>
 
-      <SendEmailDialog
-        contact={contact}
-        open={emailOpen}
-        onOpenChange={setEmailOpen}
-      />
-      <SendSmsDialog
-        contact={contact}
-        open={smsOpen}
-        onOpenChange={setSmsOpen}
-      />
+      <SendEmailDialog contact={contact} open={emailOpen} onOpenChange={setEmailOpen} />
+      <SendSmsDialog contact={contact} open={smsOpen} onOpenChange={setSmsOpen} />
       {outboundAvailable && (
-        <SendCallDialog
-          contact={contact}
-          open={callOpen}
-          onOpenChange={setCallOpen}
-        />
+        <SendCallDialog contact={contact} open={callOpen} onOpenChange={setCallOpen} />
       )}
-
-      {/* Staff marketing-email control (2026-08-28). */}
-      <Dialog
-        open={marketingAction !== null}
-        onOpenChange={(o) => {
-          if (!o && !marketingActionSaving) setMarketingAction(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {marketingAction === "resubscribe"
-                ? "Resubscribe to marketing email?"
-                : "Mark unsubscribed from marketing email?"}
-            </DialogTitle>
-            <DialogDescription>
-              {marketingAction === "resubscribe"
-                ? `Confirm this contact has permission to receive marketing email. This will be recorded as a manual staff action, not as the contact's own opt-in.`
-                : `${contactName} will no longer receive Broadcast or Workflow marketing email. Their booking confirmations and other transactional email are unaffected.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setMarketingAction(null)}
-              disabled={marketingActionSaving}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => marketingAction && handleMarketingAction(marketingAction)}
-              disabled={marketingActionSaving}
-            >
-              {marketingActionSaving
-                ? "Saving…"
-                : marketingAction === "resubscribe"
-                  ? "Confirm & resubscribe"
-                  : "Confirm"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={deleteOpen}
@@ -619,10 +382,7 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
               </DialogHeader>
               <ul className="space-y-1.5 py-2">
                 {deleteState.blockers.map((b) => (
-                  <li
-                    key={b.type}
-                    className="flex items-center gap-2.5 text-sm"
-                  >
+                  <li key={b.type} className="flex items-center gap-2.5 text-sm">
                     <span className="inline-flex min-w-6 justify-center rounded-md bg-destructive/10 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-destructive">
                       {b.count}
                     </span>
@@ -648,18 +408,10 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
-                <Button
-                  variant="ghost"
-                  onClick={() => setDeleteOpen(false)}
-                  disabled={deleting}
-                >
+                <Button variant="ghost" onClick={() => setDeleteOpen(false)} disabled={deleting}>
                   Cancel
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={confirmDelete}
-                  disabled={deleting}
-                >
+                <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
                   {deleting ? "Deleting…" : "Delete contact"}
                 </Button>
               </DialogFooter>
@@ -692,26 +444,4 @@ function reviewSkipMessage(reason?: string): string {
     default:
       return "Couldn't send the review request.";
   }
-}
-
-function Row({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5">{icon}</div>
-      <div className="min-w-0 flex-1">
-        <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </dt>
-        <dd className="mt-0.5 min-w-0 break-words">{children}</dd>
-      </div>
-    </div>
-  );
 }

@@ -42,6 +42,7 @@ import type {
   NavItem,
   ResourceLink,
 } from "@/types/community";
+import { recordContactActivity } from "@/lib/server/contact-activity";
 
 /** Normalize an admin-entered link list: trim, drop empties, cap at 10. */
 function cleanLinks(links: ResourceLink[]): ResourceLink[] {
@@ -690,6 +691,15 @@ export async function joinGroupServerSide(opts: {
     }).catch((err) =>
       console.error("[joinGroupServerSide] notification failed", err)
     );
+    // Contacts redesign (2026-09-25) — contact timeline row.
+    await recordContactActivity({
+      subAccountId: opts.subAccountId,
+      contactId: contactId ?? null,
+      type: "community_access_granted",
+      content: `Joined the "${group.name}" community`,
+      meta: { groupId: opts.groupId, memberId: opts.memberId, via: staff ? "staff" : "join" },
+      createdBy: "system",
+    });
   }
 
   return becomesActive ? { status: "active" } : { status: "pending" };
@@ -907,6 +917,10 @@ export async function approveMembershipServerSide(opts: {
   groupId: string;
   memberId: string;
   agencyId: string;
+  /** Contacts redesign (2026-09-25) — set when a staff user grants
+   *  complimentary access from the Contact profile to someone whose join
+   *  request was pending; only changes the activity row's wording/actor. */
+  complimentaryGrantByUid?: string | null;
 }): Promise<void> {
   const groupRef = getAdminDb().doc(
     `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
@@ -975,6 +989,24 @@ export async function approveMembershipServerSide(opts: {
   }).catch((err) =>
     console.error("[approveMembershipServerSide] notification failed", err)
   );
+  // Contacts redesign (2026-09-25) — contact timeline row.
+  const approvedGroup = await groupRef.get().catch(() => null);
+  const approvedName =
+    (approvedGroup?.data()?.name as string | undefined) ?? "community";
+  await recordContactActivity({
+    subAccountId: opts.subAccountId,
+    contactId: contactId ?? null,
+    type: "community_access_granted",
+    content: opts.complimentaryGrantByUid
+      ? `Granted complimentary access to the "${approvedName}" community`
+      : `Approved to join the "${approvedName}" community`,
+    meta: {
+      groupId: opts.groupId,
+      memberId: opts.memberId,
+      via: opts.complimentaryGrantByUid ? "complimentary" : "approval",
+    },
+    createdBy: opts.complimentaryGrantByUid ?? "system",
+  });
 }
 
 /** Staff: promote a member to moderator (inline pin/delete rights) or demote. */
@@ -1008,6 +1040,15 @@ export async function setMembershipStatusServerSide(opts: {
   groupId: string;
   memberId: string;
   status: "removed" | "banned" | "active";
+  /** Contacts redesign (2026-09-25) — who/what caused this change, for the
+   *  contact activity row only (no effect on the status write itself).
+   *  Defaults to a generic staff action. */
+  actor?:
+    | "staff"
+    | "product_expired"
+    | "complimentary_granted"
+    | "complimentary_revoked";
+  actorUid?: string | null;
 }): Promise<void> {
   const groupRef = getAdminDb().doc(
     `subAccounts/${opts.subAccountId}/communityGroups/${opts.groupId}`
@@ -1021,6 +1062,35 @@ export async function setMembershipStatusServerSide(opts: {
     status: opts.status,
     ...(willActive ? { origin: "staff" } : {}),
   });
+  // Contacts redesign (2026-09-25) — contact timeline rows for the
+  // transition (never for a no-op re-set of the same status).
+  const statusGroupName = async () =>
+    ((await groupRef.get().catch(() => null))?.data()?.name as
+      | string
+      | undefined) ?? "community";
+  if (wasActive !== willActive) {
+    const name = await statusGroupName();
+    await recordContactActivity({
+      subAccountId: opts.subAccountId,
+      memberId: opts.memberId,
+      type: willActive ? "community_access_granted" : "community_access_revoked",
+      content: willActive
+        ? opts.actor === "complimentary_granted"
+          ? `Granted complimentary access to the "${name}" community`
+          : `Access to the "${name}" community restored`
+        : opts.actor === "complimentary_revoked"
+          ? `Complimentary access to the "${name}" community revoked`
+          : opts.status === "banned"
+          ? `Banned from the "${name}" community`
+          : `Removed from the "${name}" community`,
+      meta: {
+        groupId: opts.groupId,
+        memberId: opts.memberId,
+        via: opts.actor ?? "staff",
+      },
+      createdBy: opts.actorUid ?? "system",
+    });
+  }
   if (wasActive && !willActive) {
     await groupRef.update({ memberCount: FieldValue.increment(-1) });
     const [memberSnap, subSnap] = await Promise.all([

@@ -7,6 +7,8 @@ import {
   createContactServerSide,
   findExistingContactId,
 } from "@/lib/server/contacts-service";
+import { invalidateContactsCache } from "@/lib/server/contacts-query-service";
+import { resolveNameForWrite } from "@/lib/contacts/names";
 
 /**
  * Dashboard-facing CSV import. The client parses + maps + validates the CSV
@@ -69,7 +71,13 @@ export async function POST(request: Request) {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const name = str(row.name, 200);
+    const firstName = str(row.firstName, 100);
+    const lastName = str(row.lastName, 100);
+    const name = resolveNameForWrite({
+      name: str(row.name, 200),
+      firstName,
+      lastName,
+    }).slice(0, 200);
     const email = str(row.email);
     if (!name && !email) {
       errors.push({ index: i, message: "Missing name and email" });
@@ -100,6 +108,10 @@ export async function POST(request: Request) {
         address: str(row.address),
         source: str(row.source),
         tags: strArray(row.tags),
+        firstName,
+        lastName,
+        state: str(row.state, 100),
+        postalCode: str(row.postalCode, 20),
         territoryId: typeof row.territoryId === "string" ? row.territoryId : null,
       });
       created++;
@@ -111,5 +123,6 @@ export async function POST(request: Request) {
     }
   }
 
+  if (created > 0) invalidateContactsCache(subAccountId);
   return NextResponse.json({ created, errors });
 }

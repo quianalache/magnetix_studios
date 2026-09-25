@@ -22,6 +22,11 @@ export interface MergeTagSubject {
     name: string;
     email: string;
     phone: string;
+    /** Contacts redesign (2026-09-25) — structured parts, preferred over
+     *  splitting `name` when set. Optional so existing callers compile
+     *  unchanged and keep the old first-word/last-word behavior. */
+    firstName?: string | null;
+    lastName?: string | null;
   };
   owner: {
     displayName: string;
@@ -63,9 +68,9 @@ export function resolveMergeTags(
   return body.replace(TAG_RE, (_match, tag: string) => {
     switch (tag) {
       case "contact.firstName":
-        return firstWord(subject.contact.name);
+        return subject.contact.firstName?.trim() || firstWord(subject.contact.name);
       case "contact.lastName":
-        return lastWord(subject.contact.name);
+        return subject.contact.lastName?.trim() || lastWord(subject.contact.name);
       case "contact.email":
         return subject.contact.email ?? "";
       case "contact.phone":

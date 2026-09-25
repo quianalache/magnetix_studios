@@ -12,8 +12,18 @@ import { usePipelineStages } from "@/hooks/use-pipeline-stages";
 import type { Contact } from "@/types/contacts";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { Button } from "@/components/ui/button";
+import { RelatedCard } from "@/components/contacts/related-card";
 
-export function ContactDeals({ contact }: { contact: Contact }) {
+const MAX_SHOWN = 5;
+
+export function ContactDeals({
+  contact,
+  collapsible = null,
+}: {
+  contact: Contact;
+  /** Right-panel mode (Contacts redesign): fold toggle keyed by this id. */
+  collapsible?: string | null;
+}) {
   const { user } = useAuth();
   const { subAccountId, agencyId, saPath } = useSubAccount();
   const stages = usePipelineStages();
@@ -35,16 +45,11 @@ export function ContactDeals({ contact }: { contact: Contact }) {
   }, [contact.id, user, agencyId, subAccountId]);
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Deals
-          </p>
-          <p className="mt-0.5 text-sm font-semibold">
-            {loading ? "…" : `${deals.length} on this contact`}
-          </p>
-        </div>
+    <RelatedCard
+      title="Deals"
+      summary={loading ? "…" : `${deals.length} on this contact`}
+      collapsible={collapsible}
+      action={
         <NewDealDialog
           contacts={[contact]}
           defaultContactId={contact.id}
@@ -54,8 +59,8 @@ export function ContactDeals({ contact }: { contact: Contact }) {
             </Button>
           }
         />
-      </div>
-
+      }
+    >
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -71,7 +76,7 @@ export function ContactDeals({ contact }: { contact: Contact }) {
         </p>
       ) : (
         <ul className="space-y-2">
-          {deals.map((deal) => {
+          {deals.slice(0, MAX_SHOWN).map((deal) => {
             const stage = getStage(deal.stageId, stages);
             const days = daysSince(deal.stageChangedAt);
             return (
@@ -98,8 +103,18 @@ export function ContactDeals({ contact }: { contact: Contact }) {
               </li>
             );
           })}
+          {deals.length > MAX_SHOWN && (
+            <li>
+              <Link
+                href={saPath("/pipeline")}
+                className="block pt-1 text-center text-xs font-medium text-primary hover:underline"
+              >
+                View all {deals.length} in the pipeline
+              </Link>
+            </li>
+          )}
         </ul>
       )}
-    </div>
+    </RelatedCard>
   );
 }

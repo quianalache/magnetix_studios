@@ -9,6 +9,10 @@ import { emitWorkflowEvent } from "@/lib/workflows/events";
 import { getGroupById } from "@/lib/server/community-service";
 import { getCourse } from "@/lib/server/community-classroom-service";
 import type { Purchase, PurchaseScope } from "@/types/community";
+import {
+  formatActivityAmount,
+  recordContactActivity,
+} from "@/lib/server/contact-activity";
 import type { PayPalConfig } from "@/types";
 
 /**
@@ -152,6 +156,40 @@ export async function markPurchasePaidServerSide(opts: {
     grantedByUid: opts.grantedByUid,
   });
 
+  // Contacts redesign (2026-09-25) — contact timeline rows (deterministic
+  // ids, so a repeated "Mark as paid" can't duplicate them).
+  const purchasedGroup = await getGroupById(opts.subAccountId, opts.groupId);
+  const groupName = purchasedGroup?.name ?? "community";
+  let purchasedLabel = groupName;
+  if (purchase.scope === "course") {
+    const course = await getCourse(
+      opts.subAccountId,
+      opts.groupId,
+      purchase.targetId,
+    ).catch(() => null);
+    purchasedLabel = `${course?.title ?? "course"} (${groupName})`;
+  }
+  await recordContactActivity({
+    subAccountId: opts.subAccountId,
+    memberId: purchase.memberId,
+    type: "purchase_completed",
+    content: `Purchased "${purchasedLabel}" (${formatActivityAmount(
+      purchase.amountCents,
+      purchase.currency,
+    )})`,
+    meta: {
+      purchaseScope: "community",
+      groupId: opts.groupId,
+      purchaseId: purchase.id,
+      memberId: purchase.memberId,
+      amountCents: purchase.amountCents,
+      currency: purchase.currency,
+      via: "staff_marked_paid",
+    },
+    createdBy: opts.grantedByUid,
+    dedupeKey: `purchase_community_${purchase.id}`,
+  });
+
   // Grant access.
   if (purchase.scope === "group") {
     const groupRef = db.doc(
@@ -227,6 +265,15 @@ export async function markPurchasePaidServerSide(opts: {
       }).catch((err) =>
         console.error("[markPurchasePaidServerSide] notification failed", err)
       );
+      await recordContactActivity({
+        subAccountId: opts.subAccountId,
+        memberId: purchase.memberId,
+        type: "community_access_granted",
+        content: `Joined the "${groupName}" community (purchase)`,
+        meta: { groupId: opts.groupId, memberId: purchase.memberId, via: "purchase" },
+        createdBy: opts.grantedByUid,
+        dedupeKey: `community_granted_${opts.groupId}_${purchase.memberId}_purchase_${purchase.id}`,
+      });
     }
   }
   // scope "course": access is read live from this paid purchase — no extra

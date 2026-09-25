@@ -17,6 +17,10 @@ import {
   revokeLinkedCommunityAccessServerSide,
 } from "@/lib/server/standalone-course-service";
 import type { StandaloneCoursePurchase } from "@/types/standalone-courses";
+import {
+  formatActivityAmount,
+  recordContactActivity,
+} from "@/lib/server/contact-activity";
 import type { PayPalConfig } from "@/types";
 
 /**
@@ -317,6 +321,42 @@ export async function markStandaloneCoursePurchasePaidServerSide(opts: {
   );
   if (!existingEnroll.exists) {
     await courseRef.update({ enrollmentCount: FieldValue.increment(1) });
+  }
+
+  // Contacts redesign (2026-09-25) — contact timeline rows (deterministic
+  // ids: a webhook redelivery or double "Mark as paid" can't duplicate).
+  const courseTitle =
+    ((await courseRef.get()).data()?.title as string | undefined) ?? "course";
+  await recordContactActivity({
+    subAccountId: opts.subAccountId,
+    memberId: purchase.memberId,
+    type: "purchase_completed",
+    content: `Purchased "${courseTitle}" (${formatActivityAmount(
+      purchase.amountCents,
+      purchase.currency,
+    )})`,
+    meta: {
+      purchaseScope: "course",
+      courseId: opts.courseId,
+      purchaseId: purchase.id,
+      memberId: purchase.memberId,
+      amountCents: purchase.amountCents,
+      currency: purchase.currency,
+      via: opts.grantedByUid ? "staff_marked_paid" : "checkout",
+    },
+    createdBy: opts.grantedByUid ?? "checkout",
+    dedupeKey: `purchase_course_${purchase.id}`,
+  });
+  if (!existingEnroll.exists) {
+    await recordContactActivity({
+      subAccountId: opts.subAccountId,
+      memberId: purchase.memberId,
+      type: "course_enrolled",
+      content: `Enrolled in "${courseTitle}"`,
+      meta: { courseId: opts.courseId, memberId: purchase.memberId, via: "purchase" },
+      createdBy: opts.grantedByUid ?? "checkout",
+      dedupeKey: `enroll_course_${opts.courseId}_${purchase.memberId}`,
+    });
   }
 
   await grantLinkedCommunityGroupsServerSide({

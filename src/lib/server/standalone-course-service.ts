@@ -56,6 +56,7 @@ import type {
   StandaloneEnrollment,
   StandaloneLesson,
 } from "@/types/standalone-courses";
+import { recordContactActivity } from "@/lib/server/contact-activity";
 
 /**
  * Server-side Standalone Course service (Admin SDK). Forked from
@@ -528,6 +529,22 @@ export async function grantLinkedCommunityGroupsServerSide(opts: {
           err
         )
       );
+      const linkedGroup = await groupRef.get().catch(() => null);
+      await recordContactActivity({
+        subAccountId: opts.subAccountId,
+        memberId: opts.memberId,
+        type: "community_access_granted",
+        content: `Joined the "${
+          (linkedGroup?.data()?.name as string | undefined) ?? "community"
+        }" community (included with "${course.title}")`,
+        meta: {
+          groupId,
+          courseId: opts.courseId,
+          memberId: opts.memberId,
+          via: "product",
+        },
+        createdBy: "system",
+      });
     }
   }
 }
@@ -907,6 +924,9 @@ export async function enrollInStandaloneCourseServerSide(opts: {
   courseId: string;
   memberId: string;
   birthDetails?: EnrollBirthDetails;
+  /** Contacts redesign (2026-09-25) — staff uid when this enrollment is a
+   *  complimentary grant from the Contact profile (activity row only). */
+  grantedByUid?: string | null;
 }): Promise<void> {
   const ref = enrollmentDoc(opts.subAccountId, opts.courseId, opts.memberId);
   const snap = await ref.get();
@@ -965,6 +985,27 @@ export async function enrollInStandaloneCourseServerSide(opts: {
         err
       )
     );
+    // Contacts redesign (2026-09-25) — contact timeline row; deterministic
+    // id so a racing duplicate enroll can't write two.
+    const enrolledCourse = await getStandaloneCourse(
+      opts.subAccountId,
+      opts.courseId
+    ).catch(() => null);
+    await recordContactActivity({
+      subAccountId: opts.subAccountId,
+      memberId: opts.memberId,
+      type: "course_enrolled",
+      content: opts.grantedByUid
+        ? `Enrolled in "${enrolledCourse?.title ?? "course"}" by staff`
+        : `Enrolled in "${enrolledCourse?.title ?? "course"}"`,
+      meta: {
+        courseId: opts.courseId,
+        memberId: opts.memberId,
+        ...(opts.grantedByUid ? { via: "complimentary" } : {}),
+      },
+      createdBy: opts.grantedByUid ?? "system",
+      dedupeKey: `enroll_course_${opts.courseId}_${opts.memberId}`,
+    });
   }
   // Runs even on a repeat call — idempotent, and covers a group being
   // linked to the course after this member had already enrolled.

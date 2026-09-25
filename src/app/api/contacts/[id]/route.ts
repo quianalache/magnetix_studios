@@ -3,12 +3,17 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { territoryGate } from "@/lib/auth/territory-filter";
 import {
   emitContactDeleted,
   updateContactServerSide,
   type UpdateContactPatch,
 } from "@/lib/server/contacts-service";
 import type { Contact } from "@/types/contacts";
+import { invalidateContactsCache } from "@/lib/server/contacts-query-service";
+import { resolveNameForWrite } from "@/lib/contacts/names";
+import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
+import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 import type { MemberStatus, Role } from "@/types";
 
 /**
@@ -83,6 +88,12 @@ export async function PATCH(
 
   const access = await requireSubAccountMember(request, data.subAccountId);
   if (access instanceof NextResponse) return access;
+  // Contacts redesign (2026-09-25) security fix: a territory-scoped
+  // collaborator may only edit contacts in their territories — the same
+  // restriction the Firestore rule on contacts/{id} already enforces for
+  // direct client writes. Admins / owners / scoping-off always pass.
+  const gate = await territoryGate(access, data.territoryId ?? null);
+  if (gate) return gate;
 
   let body: Record<string, unknown>;
   try {
@@ -93,6 +104,43 @@ export async function PATCH(
 
   const patch: UpdateContactPatch = {};
   if (typeof body.name === "string") patch.name = body.name.trim().slice(0, 200);
+  // Contacts redesign (2026-09-25) — structured name/address parts. A
+  // blank value for a field the contact never had is skipped, so editing a
+  // legacy contact doesn't write empty fields or fire spurious
+  // contact.field.changed workflow events.
+  const optionalPart = (
+    key: "firstName" | "lastName" | "state" | "postalCode",
+    max: number,
+  ) => {
+    if (typeof body[key] !== "string") return;
+    const next = str(body[key], max);
+    const current = typeof data[key] === "string" ? (data[key] as string) : "";
+    if (next === current) return;
+    patch[key] = next;
+  };
+  optionalPart("firstName", 100);
+  optionalPart("lastName", 100);
+  optionalPart("state", 100);
+  optionalPart("postalCode", 20);
+  // A blanked name with parts present is re-composed from the parts; a
+  // non-blank name is always kept exactly as sent (never auto-split).
+  if (patch.name === "") {
+    const composed = resolveNameForWrite({
+      firstName: patch.firstName ?? data.firstName,
+      lastName: patch.lastName ?? data.lastName,
+    }).slice(0, 200);
+    if (composed) patch.name = composed;
+  }
+  if (
+    patch.name === "" &&
+    !(data.email ?? "").trim() &&
+    patch.email === undefined
+  ) {
+    return NextResponse.json(
+      { error: "A contact needs at least a name or an email." },
+      { status: 400 },
+    );
+  }
   if (typeof body.email === "string") patch.email = str(body.email);
   if (typeof body.phone === "string") patch.phone = str(body.phone);
   if (typeof body.company === "string") patch.company = str(body.company);
@@ -104,6 +152,25 @@ export async function PATCH(
       .map((t) => t.trim())
       .filter(Boolean)
       .slice(0, 50);
+  }
+  // Custom fields (pre-existing gap fixed 2026-09-25: the edit form sent
+  // them but this route never saved them). Same validation + full-map
+  // replacement semantics as PATCH /api/v1/contacts/[id].
+  if (body.customFields !== undefined) {
+    const defs = await loadCustomFieldDefs(data.subAccountId, "contact");
+    const cf = validateCustomFieldValues(body.customFields, defs);
+    if (!cf.ok) {
+      return NextResponse.json({ error: cf.error }, { status: 400 });
+    }
+    // Only write when something actually changed (the form always sends
+    // the map) — avoids spurious contact.field.changed events.
+    const stable = (m: Record<string, unknown> | null | undefined) =>
+      JSON.stringify(
+        Object.keys(m ?? {})
+          .sort()
+          .map((k) => [k, (m ?? {})[k]]),
+      );
+    if (stable(cf.value) !== stable(data.customFields)) patch.customFields = cf.value;
   }
   if (body.pipelineStage === null || typeof body.pipelineStage === "string") {
     patch.pipelineStage =
@@ -118,6 +185,7 @@ export async function PATCH(
   if (!result) {
     return NextResponse.json({ error: "Contact not found" }, { status: 404 });
   }
+  invalidateContactsCache(data.subAccountId);
   return NextResponse.json({ contact: result.contact });
 }
 
@@ -220,6 +288,7 @@ export async function DELETE(
   // Fire contact.deleted from the pre-delete snapshot — by the time
   // subscribers react the doc is gone, so we serialize what we just read.
   emitContactDeleted({ subAccountId, agencyId, contactId: id, data: contact });
+  invalidateContactsCache(subAccountId);
 
   return NextResponse.json({ ok: true, contactId: id });
 }

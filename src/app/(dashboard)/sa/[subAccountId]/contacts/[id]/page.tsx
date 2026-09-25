@@ -7,42 +7,44 @@ import { UserX } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContact } from "@/lib/firestore/contacts";
+import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { Button } from "@/components/ui/button";
-import { ContactProfileHeader } from "@/components/contacts/contact-profile-header";
-import { ContactDeals } from "@/components/contacts/contact-deals";
-import { ContactQuotes } from "@/components/contacts/contact-quotes";
-import { ContactTasks } from "@/components/contacts/contact-tasks";
-import { ContactProjects } from "@/components/contacts/contact-projects";
-import { ContactSubmittedForms } from "@/components/contacts/contact-submitted-forms";
-import { ContactEnergeticDecoding } from "@/components/contacts/contact-energetic-decoding";
-import { ContactPortalAccess } from "@/components/contacts/contact-portal-access";
-import { ContactMessagesThread } from "@/components/contacts/contact-messages-thread";
-import { ContactWhatsappThread } from "@/components/contacts/contact-whatsapp-thread";
-import { ActivityTimeline } from "@/components/contacts/activity-timeline";
-import { AddNoteInput } from "@/components/contacts/add-note-input";
+import { ContactProfileView } from "@/components/contacts/contact-profile-view";
 import type { Contact } from "@/types/contacts";
 
+/**
+ * Contact profile route (Contacts redesign, 2026-09-25) — loads the contact
+ * (live) and renders `ContactProfileView`. Loading / not-found states use
+ * the same 1440px container as the view so the width doesn't jump.
+ */
 export default function ContactProfilePage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const { user, loading: authLoading } = useAuth();
-  const { subAccount, subAccountId, agencyId } = useSubAccount();
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading || !user || !id) return;
     setLoading(true);
-    const unsub = subscribeToContact(id, (c) => {
-      setContact(c);
-      setLoading(false);
-    });
-    return () => unsub();
+    const unsub = safeSubscribe(
+      () =>
+        subscribeToContact(
+          id,
+          (c) => {
+            setContact(c);
+            setLoading(false);
+          },
+          () => setLoading(false),
+        ),
+      () => setLoading(false),
+    );
+    return () => unsub?.();
   }, [id, user, authLoading]);
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
+      <div className="mx-auto w-full max-w-[1440px]">
         <ProfileSkeleton />
       </div>
     );
@@ -50,65 +52,29 @@ export default function ContactProfilePage() {
 
   if (!contact) {
     return (
-      <div className="mx-auto w-full max-w-5xl">
+      <div className="mx-auto w-full max-w-[1440px]">
         <NotFound />
       </div>
     );
   }
 
-  // Messages thread is opt-in per sub-account. Only render when the
-  // dedicated Twilio config is enabled — shared-mode deployments see no
-  // change to the contact profile.
-  const showMessages = !!subAccount?.twilioConfig?.enabled;
-  // WhatsApp thread renders when the sub-account has a WhatsApp sender AND the
-  // agency gate is on — mirrors the channel's own gating.
-  const showWhatsapp =
-    !!subAccount?.twilioConfig?.whatsappFromNumber &&
-    subAccount?.whatsappEnabledByAgency === true;
-
-  return (
-    <div className="mx-auto grid w-full max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-      <div className="space-y-6">
-        <ContactProfileHeader contact={contact} />
-        <ContactDeals contact={contact} />
-        <ContactQuotes
-          contactId={contact.id}
-          scope={{ agencyId: agencyId ?? "", subAccountId }}
-        />
-        <ContactTasks contact={contact} />
-        <ContactProjects contact={contact} />
-        <ContactSubmittedForms contact={contact} />
-        <ContactEnergeticDecoding contact={contact} />
-        <ContactPortalAccess contact={contact} />
-        {showMessages && <ContactMessagesThread contact={contact} />}
-        {showWhatsapp && <ContactWhatsappThread contact={contact} />}
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Activity</h2>
-          <p className="text-muted-foreground text-sm">
-            Notes and pipeline events for this contact.
-          </p>
-        </div>
-        <AddNoteInput contactId={contact.id} />
-        <ActivityTimeline contactId={contact.id} />
-      </div>
-    </div>
-  );
+  return <ContactProfileView contact={contact} />;
 }
 
 function ProfileSkeleton() {
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-      <div className="space-y-4">
-        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
-        <div className="bg-muted h-8 w-64 animate-pulse rounded" />
-        <div className="bg-muted h-40 w-full animate-pulse rounded-xl" />
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="h-14 w-14 animate-pulse rounded-full bg-muted" />
+        <div className="space-y-2">
+          <div className="h-6 w-56 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+        </div>
       </div>
-      <div className="space-y-4">
-        <div className="bg-muted h-32 w-full animate-pulse rounded-xl" />
-        <div className="bg-muted h-24 w-full animate-pulse rounded-xl" />
+      <div className="grid gap-5 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_330px]">
+        <div className="h-72 animate-pulse rounded-xl bg-muted" />
+        <div className="h-96 animate-pulse rounded-xl bg-muted" />
+        <div className="hidden h-72 animate-pulse rounded-xl bg-muted xl:block" />
       </div>
     </div>
   );

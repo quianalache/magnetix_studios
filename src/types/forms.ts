@@ -94,8 +94,21 @@ export interface FormField {
   required: boolean;
   options: string[];
   // Maps this field's value back to the Contact shape.
-  // "name" | "email" | "phone" | "company" | "notes" | null
-  mapsTo: "name" | "email" | "phone" | "company" | "notes" | null;
+  // "name" | "email" | "phone" | "company" | "notes" | null, plus (Contacts
+  // redesign 2026-09-25) the structured "firstName" | "lastName" |
+  // "state" | "postalCode". When a form maps first/last but not "name", the
+  // submit route composes `name` from them.
+  mapsTo:
+    | "name"
+    | "firstName"
+    | "lastName"
+    | "email"
+    | "phone"
+    | "company"
+    | "state"
+    | "postalCode"
+    | "notes"
+    | null;
   /**
    * Only used by the `text_block` field type — the paragraph copy rendered
    * in place of an input. `label` doubles as an optional heading above it.

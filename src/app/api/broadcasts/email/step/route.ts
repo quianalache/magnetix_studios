@@ -212,6 +212,8 @@ export async function POST(request: Request) {
       name: contact.name ?? "",
       email: contact.email ?? "",
       phone: contact.phone ?? "",
+      firstName: contact.firstName ?? null,
+      lastName: contact.lastName ?? null,
     },
     owner: {
       displayName: (owner?.displayName as string) ?? "",

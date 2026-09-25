@@ -9,7 +9,14 @@ import { DictateButton } from "@/components/ui/dictate-button";
 import { addNote } from "@/lib/firestore/contacts";
 import { useAuth } from "@/hooks/use-auth";
 
-export function AddNoteInput({ contactId }: { contactId: string }) {
+export function AddNoteInput({
+  contactId,
+  onSaved,
+}: {
+  contactId: string;
+  /** Called after a note is saved (the Notes tab refreshes its list). */
+  onSaved?: () => void;
+}) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
@@ -23,9 +30,10 @@ export function AddNoteInput({ contactId }: { contactId: string }) {
     try {
       await addNote(contactId, trimmed, user.uid);
       setContent("");
+      onSaved?.();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to save note.");
+      toast.error(err instanceof Error && err.message ? err.message : "Failed to save note.");
     } finally {
       setSaving(false);
     }

@@ -47,6 +47,16 @@ export interface CreateContactInput {
   address: string;
   source: string;
   tags: string[];
+  /** Contacts redesign (2026-09-25) — optional structured fields. Only
+   *  written when non-empty, so every legacy caller produces exactly the
+   *  same doc as before. Callers compose `name` from first/last themselves
+   *  (see lib/contacts/names.ts) — this service never splits or rewrites. */
+  firstName?: string;
+  lastName?: string;
+  state?: string;
+  postalCode?: string;
+  /** Validated custom-field values (omitted/empty → not written). */
+  customFields?: Contact["customFields"];
   pipelineStage?: string | null;
   territoryId?: string | null;
   attribution?: ContactAttribution | null;
@@ -85,6 +95,13 @@ export async function createContactServerSide(
     address: input.address,
     source: input.source,
     tags: input.tags,
+    ...(input.firstName?.trim() ? { firstName: input.firstName.trim() } : {}),
+    ...(input.lastName?.trim() ? { lastName: input.lastName.trim() } : {}),
+    ...(input.state?.trim() ? { state: input.state.trim() } : {}),
+    ...(input.postalCode?.trim() ? { postalCode: input.postalCode.trim() } : {}),
+    ...(input.customFields && Object.keys(input.customFields).length > 0
+      ? { customFields: input.customFields }
+      : {}),
     pipelineStage: input.pipelineStage ?? null,
     attribution: input.attribution ?? null,
     emailOptedOut: false,
@@ -136,6 +153,11 @@ export async function createContactServerSide(
 /** Fields that can be patched. All optional; only provided keys are written. */
 export interface UpdateContactPatch {
   name?: string;
+  /** Contacts redesign (2026-09-25) — optional structured fields. */
+  firstName?: string;
+  lastName?: string;
+  state?: string;
+  postalCode?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -151,6 +173,9 @@ export interface UpdateContactPatch {
    *  should ever set these two together. */
   emailOptedOut?: boolean;
   emailConsent?: Contact["emailConsent"];
+  /** Full replacement of the custom-field value map (already validated by
+   *  the caller against the live definitions). */
+  customFields?: Contact["customFields"];
 }
 
 /**
@@ -176,10 +201,17 @@ export async function updateContactServerSide(opts: {
   const existing = snap.data()!;
   const mode = opts.mode ?? (existing.mode as Mode) ?? "live";
 
+  // Contacts redesign (2026-09-25): `customFields` is a full replacement
+  // (a merge would resurrect values the user just cleared), so it's
+  // written with update(); every other field keeps the existing merge.
+  const { customFields, ...mergePatch } = opts.patch;
   await ref.set(
-    { ...opts.patch, updatedAt: FieldValue.serverTimestamp() },
+    { ...mergePatch, updatedAt: FieldValue.serverTimestamp() },
     { merge: true }
   );
+  if (customFields !== undefined) {
+    await ref.update({ customFields: customFields ?? {} });
+  }
 
   const fresh = await ref.get();
   const contact = serializeContactForApi(fresh.id, fresh.data()!, mode);

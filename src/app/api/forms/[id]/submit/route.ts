@@ -18,6 +18,7 @@ import { defaultEmailConsentText, defaultSmsConsentText, evaluateCondition } fro
 import type { FormField, LeadForm } from "@/types/forms";
 import type { Contact, ContactAttribution } from "@/types/contacts";
 import { normalizeAttribution } from "@/lib/attribution";
+import { resolveNameForWrite } from "@/lib/contacts/names";
 
 type SubmitBody = {
   values: Record<string, string>;
@@ -33,18 +34,36 @@ function contactFieldsFromSubmission(
   values: Record<string, string>,
 ): {
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   phone: string;
   company: string;
+  state: string;
+  postalCode: string;
   notes: string;
 } {
-  const out = { name: "", email: "", phone: "", company: "", notes: "" };
+  const out = {
+    name: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    company: "",
+    state: "",
+    postalCode: "",
+    notes: "",
+  };
   for (const f of fields) {
     if (!f.mapsTo) continue;
     const v = (values[f.id] ?? "").toString().trim();
     if (!v) continue;
     out[f.mapsTo] = v;
   }
+  // Contacts redesign (2026-09-25): a form with First/Last name fields but
+  // no full-name field still produces a contact name. An explicit full-name
+  // field always wins.
+  out.name = resolveNameForWrite(out);
   return out;
 }
 
@@ -287,6 +306,11 @@ async function handleSubmit(
     const data = existingContact.data() as Partial<Contact>;
     const patch: Record<string, unknown> = {};
     if (mapped.name && !data.name) patch.name = mapped.name;
+    // Structured parts: fill blanks only, never overwrite existing values.
+    if (mapped.firstName && !data.firstName) patch.firstName = mapped.firstName;
+    if (mapped.lastName && !data.lastName) patch.lastName = mapped.lastName;
+    if (mapped.state && !data.state) patch.state = mapped.state;
+    if (mapped.postalCode && !data.postalCode) patch.postalCode = mapped.postalCode;
     if (mapped.phone && !data.phone) patch.phone = mapped.phone;
     if (matchEmail && !data.email) patch.email = matchEmail;
     if (mapped.company && !data.company) patch.company = mapped.company;
@@ -314,6 +338,10 @@ async function handleSubmit(
     // arrived via a tagged ad — otherwise the legacy "website" default.
     contactRef = await db.collection("contacts").add({
       name: mapped.name,
+      ...(mapped.firstName ? { firstName: mapped.firstName } : {}),
+      ...(mapped.lastName ? { lastName: mapped.lastName } : {}),
+      ...(mapped.state ? { state: mapped.state } : {}),
+      ...(mapped.postalCode ? { postalCode: mapped.postalCode } : {}),
       email: matchEmail,
       phone: mapped.phone,
       company: mapped.company,

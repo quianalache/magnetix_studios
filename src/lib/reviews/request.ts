@@ -367,6 +367,8 @@ async function buildSubject(
       name: contact.name ?? "",
       email: contact.email ?? "",
       phone: contact.phone ?? "",
+      firstName: contact.firstName ?? null,
+      lastName: contact.lastName ?? null,
     },
     owner,
     workspace: { name: subAccount.name ?? "" },

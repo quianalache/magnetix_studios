@@ -119,15 +119,31 @@ export function isValidEmail(s: string): boolean {
  */
 export function guessContactField(header: string):
   | "name"
+  | "firstName"
+  | "lastName"
   | "email"
   | "phone"
   | "company"
+  | "address"
+  | "state"
+  | "postalCode"
   | "source"
   | "tags"
   | null {
   const h = header.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Contacts redesign (2026-09-25): first/last map to their own fields
+  // (previously both mapped to "name", so the last column overwrote the
+  // first). The importer composes `name` from them when no full-name
+  // column is mapped.
+  if (h.includes("firstname") || h === "givenname" || h === "fname") return "firstName";
+  if (h.includes("lastname") || h === "surname" || h === "familyname" || h === "lname")
+    return "lastName";
   if (/(^|_)name($|_)/.test(h) || h === "fullname" || h === "name") return "name";
-  if (h.includes("firstname") || h.includes("lastname")) return "name";
+  if (h === "state" || h === "region" || h === "province" || h === "stateregion" || h === "county")
+    return "state";
+  if (h.includes("zip") || h.includes("postal") || h.includes("postcode")) return "postalCode";
+  if (h === "address" || h === "streetaddress" || h === "street" || h === "address1")
+    return "address";
   if (h === "email" || h === "emailaddress" || h.includes("mail"))
     return "email";
   if (h.includes("phone") || h === "tel" || h === "mobile") return "phone";

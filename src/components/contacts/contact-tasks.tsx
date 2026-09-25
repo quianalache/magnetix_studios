@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CheckSquare, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -8,12 +9,20 @@ import { subscribeToTasksForContact } from "@/lib/firestore/tasks";
 import { Button } from "@/components/ui/button";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { TaskItem } from "@/components/tasks/task-item";
+import { RelatedCard } from "@/components/contacts/related-card";
 import type { Contact } from "@/types/contacts";
 import type { Task } from "@/types/tasks";
 
-export function ContactTasks({ contact }: { contact: Contact }) {
+export function ContactTasks({
+  contact,
+  collapsible = null,
+}: {
+  contact: Contact;
+  /** Right-panel mode (Contacts redesign): fold toggle keyed by this id. */
+  collapsible?: string | null;
+}) {
   const { user } = useAuth();
-  const { subAccountId, agencyId } = useSubAccount();
+  const { subAccountId, agencyId, saPath } = useSubAccount();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -45,26 +54,19 @@ export function ContactTasks({ contact }: { contact: Contact }) {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Tasks
-          </p>
-          <p className="mt-0.5 text-sm font-semibold">
-            {loading
-              ? "…"
-              : openCount === 0
-                ? "No open tasks"
-                : `${openCount} open`}
-          </p>
-        </div>
+    <RelatedCard
+      title="Tasks"
+      summary={
+        loading ? "…" : openCount === 0 ? "No open tasks" : `${openCount} open`
+      }
+      collapsible={collapsible}
+      action={
         <Button size="sm" variant="outline" onClick={openNew}>
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add task
         </Button>
-      </div>
-
+      }
+    >
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -84,6 +86,14 @@ export function ContactTasks({ contact }: { contact: Contact }) {
           {tasks.slice(0, 5).map((t) => (
             <TaskItem key={t.id} task={t} contact={contact} onClick={openEdit} />
           ))}
+          {tasks.length > 5 && (
+            <Link
+              href={saPath("/tasks")}
+              className="block pt-1 text-center text-xs font-medium text-primary hover:underline"
+            >
+              View all {tasks.length} in Tasks
+            </Link>
+          )}
         </div>
       )}
 
@@ -94,6 +104,6 @@ export function ContactTasks({ contact }: { contact: Contact }) {
         task={editTask}
         defaultContactId={contact.id}
       />
-    </div>
+    </RelatedCard>
   );
 }

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { FolderKanban, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RelatedCard } from "@/components/contacts/related-card";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
@@ -27,7 +28,14 @@ function formatDate(value: Parameters<typeof toDate>[0]): string | null {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function ContactProjects({ contact }: { contact: Contact }) {
+export function ContactProjects({
+  contact,
+  collapsible = null,
+}: {
+  contact: Contact;
+  /** Right-panel mode (Contacts redesign): fold toggle keyed by this id. */
+  collapsible?: string | null;
+}) {
   const { user } = useAuth();
   const { subAccountId, agencyId } = useSubAccount();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -97,20 +105,17 @@ export function ContactProjects({ contact }: { contact: Contact }) {
   }
 
   return (
-    <div className="bg-card rounded-xl border p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Projects
-          </p>
-          <p className="mt-0.5 text-sm font-semibold">
-            {loading
-              ? "..."
-              : activeCount === 0
-                ? "No active projects"
-                : `${activeCount} active`}
-          </p>
-        </div>
+    <RelatedCard
+      title="Projects"
+      summary={
+        loading
+          ? "..."
+          : activeCount === 0
+            ? "No active projects"
+            : `${activeCount} active`
+      }
+      collapsible={collapsible}
+      action={
         <Button
           size="sm"
           variant="outline"
@@ -119,7 +124,8 @@ export function ContactProjects({ contact }: { contact: Contact }) {
           <Plus className="mr-1 h-3.5 w-3.5" />
           Add project
         </Button>
-      </div>
+      }
+    >
 
       {addOpen && (
         <div className="mb-3 space-y-2 rounded-lg border p-3">
@@ -207,10 +213,10 @@ export function ContactProjects({ contact }: { contact: Contact }) {
             variant="ghost"
             className="w-full"
           >
-            Open Projects
+            {projects.length > 5 ? `View all ${projects.length} projects` : "Open Projects"}
           </Button>
         </div>
       )}
-    </div>
+    </RelatedCard>
   );
 }

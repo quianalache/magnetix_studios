@@ -29,6 +29,10 @@ import type { PayPalConfig } from "@/types";
 import type { ContactAttribution } from "@/types/contacts";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import {
+  formatActivityAmount,
+  recordContactActivity,
+} from "@/lib/server/contact-activity";
 import { ensureMember } from "@/lib/community/member-account";
 import { resolveLineItemSourceType } from "@/lib/quotes/line-items";
 import type { Quote, InvoiceOfferFulfillmentItem } from "@/types/quotes";
@@ -722,6 +726,29 @@ export async function grantCourseOfferAccessServerSide(opts: {
       opts.stripePaymentIntentId ?? purchase.stripePaymentIntentId,
     stripeConnectAccountId: purchase.stripeConnectAccountId,
   }).catch((err) => console.warn("[course-offer] ledger sync failed", err));
+
+  // Contacts redesign (2026-09-25) — contact timeline row, written once per
+  // purchase (deterministic id) so a webhook redelivery can't duplicate it.
+  await recordContactActivity({
+    subAccountId: opts.subAccountId,
+    memberId: purchase.memberId,
+    type: "purchase_completed",
+    content: `Purchased "${offer?.title ?? "offer"}" (${formatActivityAmount(
+      purchase.amountCents,
+      purchase.currency,
+    )})`,
+    meta: {
+      purchaseScope: "offer",
+      offerId: opts.offerId,
+      purchaseId: purchase.id,
+      memberId: purchase.memberId,
+      amountCents: purchase.amountCents,
+      currency: purchase.currency,
+      via: opts.grantedByUid ? "staff_marked_paid" : "checkout",
+    },
+    createdBy: opts.grantedByUid ?? "checkout",
+    dedupeKey: `purchase_offer_${purchase.id}`,
+  });
 
   // Only real checkout-page landings carry attribution (see
   // startCourseOfferStripeCheckoutServerSide) — one-click upsell purchases

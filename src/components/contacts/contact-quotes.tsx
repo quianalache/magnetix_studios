@@ -6,7 +6,7 @@ import { FileText, Plus } from "lucide-react";
 
 import { QuoteStatusBadge } from "@/components/quotes/quote-status-badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { RelatedCard } from "@/components/contacts/related-card";
 import { subscribeToQuotesForContact } from "@/lib/firestore/quotes";
 import { computeQuoteTotals, effectiveQuoteStatus } from "@/lib/quotes/calc";
 import { formatCurrency, formatRelativeTime } from "@/lib/format";
@@ -25,9 +25,13 @@ import type { TenantScope } from "@/types";
 interface ContactQuotesProps {
   contactId: string;
   scope: TenantScope;
+  /** Right-panel mode (Contacts redesign): fold toggle keyed by this id. */
+  collapsible?: string | null;
 }
 
-export function ContactQuotes({ contactId, scope }: ContactQuotesProps) {
+const MAX_SHOWN = 5;
+
+export function ContactQuotes({ contactId, scope, collapsible = null }: ContactQuotesProps) {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,24 +51,26 @@ export function ContactQuotes({ contactId, scope }: ContactQuotesProps) {
   const newHref = `/sa/${scope.subAccountId}/quotes/new?contactId=${contactId}`;
 
   return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Quotes</h2>
+    <RelatedCard
+      title="Quotes & invoices"
+      summary={loading ? "…" : quotes.length === 0 ? "None yet" : `${quotes.length} total`}
+      collapsible={collapsible}
+      action={
         <Button
           render={<Link href={newHref} />}
-          variant="ghost"
+          variant="outline"
           size="sm"
           className="gap-1.5"
         >
           <Plus className="h-3.5 w-3.5" />
           Quote
         </Button>
-      </div>
-
+      }
+    >
       {loading ? (
-        <p className="mt-3 text-xs text-muted-foreground">Loading…</p>
+        <p className="text-xs text-muted-foreground">Loading…</p>
       ) : quotes.length === 0 ? (
-        <div className="mt-3 flex flex-col items-center gap-2 rounded-md border border-dashed py-6 text-center">
+        <div className="flex flex-col items-center gap-2 rounded-md border border-dashed py-6 text-center">
           <FileText className="h-5 w-5 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
             No quotes for this contact yet.
@@ -78,8 +84,8 @@ export function ContactQuotes({ contactId, scope }: ContactQuotesProps) {
           </Button>
         </div>
       ) : (
-        <ul className="mt-3 divide-y">
-          {quotes.map((q) => {
+        <ul className="divide-y">
+          {quotes.slice(0, MAX_SHOWN).map((q) => {
             const eff = effectiveQuoteStatus(q);
             const totals = computeQuoteTotals(q);
             return (
@@ -104,8 +110,18 @@ export function ContactQuotes({ contactId, scope }: ContactQuotesProps) {
               </li>
             );
           })}
+          {quotes.length > MAX_SHOWN && (
+            <li>
+              <Link
+                href={`/sa/${scope.subAccountId}/quotes`}
+                className="block pt-2 text-center text-xs font-medium text-primary hover:underline"
+              >
+                View all quotes
+              </Link>
+            </li>
+          )}
         </ul>
       )}
-    </Card>
+    </RelatedCard>
   );
 }

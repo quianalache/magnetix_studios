@@ -14,6 +14,7 @@ import { subscribeToCustomFields } from "@/lib/firestore/custom-fields";
 import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 import type { CustomFieldDef, CustomFieldValue } from "@/types/custom-fields";
 import type { Contact, ContactFormData, ContactSource } from "@/types/contacts";
+import { composeName, suggestNameSplit } from "@/lib/contacts/names";
 
 const SOURCES: { value: ContactSource; label: string }[] = [
   { value: "", label: "—" },
@@ -48,6 +49,19 @@ export function ContactForm({
   const canEditTerritory = scopingOn && (!isEdit || isAdmin);
 
   const [name, setName] = useState(initial?.name ?? "");
+  // Contacts redesign (2026-09-25) — optional structured name parts. The
+  // full name keeps following First + Last until the user edits it by
+  // hand; a legacy name is never split automatically (see names.ts).
+  const [firstName, setFirstName] = useState(initial?.firstName ?? "");
+  const [lastName, setLastName] = useState(initial?.lastName ?? "");
+  const [nameFollowsParts, setNameFollowsParts] = useState(
+    () =>
+      !(initial?.name ?? "").trim() ||
+      (initial?.name ?? "").trim() ===
+        composeName(initial?.firstName, initial?.lastName),
+  );
+  const [stateRegion, setStateRegion] = useState(initial?.state ?? "");
+  const [postalCode, setPostalCode] = useState(initial?.postalCode ?? "");
   const [email, setEmail] = useState(initial?.email ?? "");
   const [phone, setPhone] = useState(initial?.phone ?? "");
   const [company, setCompany] = useState(initial?.company ?? "");
@@ -78,10 +92,27 @@ export function ContactForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
+  function updatePart(which: "first" | "last", value: string) {
+    const nextFirst = which === "first" ? value : firstName;
+    const nextLast = which === "last" ? value : lastName;
+    if (which === "first") setFirstName(value);
+    else setLastName(value);
+    if (nameFollowsParts) setName(composeName(nextFirst, nextLast));
+  }
+
+  function fillPartsFromName() {
+    const split = suggestNameSplit(name);
+    setFirstName(split.firstName);
+    setLastName(split.lastName);
+    setNameFollowsParts(name.trim() === composeName(split.firstName, split.lastName));
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const next: Record<string, string> = {};
-    if (!name.trim()) next.name = "Name is required";
+    if (!name.trim() && !composeName(firstName, lastName)) {
+      next.name = "Name is required";
+    }
     if (!email.trim()) next.email = "Email is required";
     else if (!EMAIL_RE.test(email.trim())) next.email = "Enter a valid email";
     setErrors(next);
@@ -102,7 +133,11 @@ export function ContactForm({
     setSaving(true);
     try {
       const payload: ContactFormData = {
-        name: name.trim(),
+        name: name.trim() || composeName(firstName, lastName),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        state: stateRegion.trim(),
+        postalCode: postalCode.trim(),
         email: email.trim(),
         phone: phone.trim(),
         company: company.trim(),
@@ -127,17 +162,59 @@ export function ContactForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="c-first-name">First name</Label>
+          <Input
+            id="c-first-name"
+            value={firstName}
+            onChange={(e) => updatePart("first", e.target.value)}
+            placeholder="Jane"
+            autoComplete="given-name"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="c-last-name">Last name</Label>
+          <Input
+            id="c-last-name"
+            value={lastName}
+            onChange={(e) => updatePart("last", e.target.value)}
+            placeholder="Doe"
+            autoComplete="family-name"
+          />
+        </div>
+      </div>
+
       <div className="space-y-1.5">
-        <Label htmlFor="c-name">
-          Full name <span className="text-destructive">*</span>
-        </Label>
+        <div className="flex items-center justify-between gap-2">
+          <Label htmlFor="c-name">
+            Full name <span className="text-destructive">*</span>
+          </Label>
+          {name.trim() && !firstName.trim() && !lastName.trim() && (
+            <button
+              type="button"
+              onClick={fillPartsFromName}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Fill first &amp; last from full name
+            </button>
+          )}
+        </div>
         <Input
           id="c-name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setNameFollowsParts(false);
+          }}
           placeholder="Jane Doe"
           aria-invalid={!!errors.name}
+          aria-describedby="c-name-hint"
         />
+        <p id="c-name-hint" className="text-xs text-muted-foreground">
+          Shown everywhere this contact appears. Fills in from first and last
+          name until you edit it.
+        </p>
         {errors.name && (
           <p className="text-xs text-destructive">{errors.name}</p>
         )}
@@ -194,6 +271,29 @@ export function ContactForm({
         <p className="text-xs text-muted-foreground">
           Auto-populates on quotes and invoices billed to this contact.
         </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="c-state">State / Region</Label>
+          <Input
+            id="c-state"
+            value={stateRegion}
+            onChange={(e) => setStateRegion(e.target.value)}
+            placeholder="California"
+            autoComplete="address-level1"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="c-postal">Postal code</Label>
+          <Input
+            id="c-postal"
+            value={postalCode}
+            onChange={(e) => setPostalCode(e.target.value)}
+            placeholder="90210"
+            autoComplete="postal-code"
+          />
+        </div>
       </div>
 
       <div className="space-y-1.5">

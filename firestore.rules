@@ -818,17 +818,32 @@ service cloud.firestore {
         resource.data.agencyId
       );
 
+      // Contacts redesign (2026-09-25): notes are READ by members (the
+      // Notes tab, Conversations' internal notes, the AI context) but every
+      // create / edit / delete now goes through /api/contacts/[id]/notes
+      // (Admin SDK), which stamps the author from the session and enforces
+      // author-only edit / author-or-admin delete. The old rule let any
+      // member write any note with any `createdBy` (author spoofing) and
+      // edit or delete anyone's note.
       match /notes/{noteId} {
-        allow read, write: if canAccessSub(
+        allow read: if canAccessSub(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
           get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
         );
+        allow write: if false;
       }
+      // Contacts redesign (2026-09-25): the activity history is an audit
+      // trail — read-only for members. Every live writer is server-side
+      // (Admin SDK: comms routes, lifecycle services, webhooks); the old
+      // `write` let any member edit or delete history from the browser,
+      // which no UI ever needed. The legacy client helper
+      // (lib/firestore/activities.ts addActivity) has no remaining callers.
       match /activities/{activityId} {
-        allow read, write: if canAccessSub(
+        allow read: if canAccessSub(
           get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
           get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
         );
+        allow write: if false;
       }
       // SMS chat thread — populated server-side by the inbound webhook + the
       // sms/send route when the sub-account has dedicated Twilio enabled.
@@ -1145,6 +1160,15 @@ service cloud.firestore {
         resource.data.agencyId,
         resource.data.get("territoryId", null)
       );
+    }
+
+    // ---------- contact lists ----------
+    // Contacts redesign (2026-09-25) — saved dynamic segments. Server-only:
+    // every read/write goes through /api/sub-accounts/[id]/contact-lists
+    // (Admin SDK, tenancy-checked). Stated explicitly for clarity; this is
+    // the same as the default deny.
+    match /contactLists/{listId} {
+      allow read, write: if false;
     }
 
     match /forms/{formId} {

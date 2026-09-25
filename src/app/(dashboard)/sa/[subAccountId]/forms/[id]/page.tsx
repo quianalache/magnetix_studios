@@ -549,9 +549,13 @@ const FIELD_TYPE_GROUPS: { label: string; types: FormFieldType[] }[] = [
 const MAP_OPTIONS: { value: FormField["mapsTo"]; label: string }[] = [
   { value: null, label: "Don't map (store only)" },
   { value: "name", label: "Contact name" },
+  { value: "firstName", label: "First name" },
+  { value: "lastName", label: "Last name" },
   { value: "email", label: "Contact email" },
   { value: "phone", label: "Contact phone" },
   { value: "company", label: "Company" },
+  { value: "state", label: "State / Region" },
+  { value: "postalCode", label: "Postal code" },
   { value: "notes", label: "Initial note" },
 ];
 

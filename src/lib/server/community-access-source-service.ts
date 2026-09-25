@@ -37,7 +37,14 @@ import { setMembershipStatusServerSide } from "@/lib/server/community-service";
  * this reconciliation, by construction, with zero migration needed.
  */
 
-export type CommunityAccessSourceKind = "product";
+/**
+ * "product" — a linked Standalone Product (revocable by expiry).
+ * "staff"   — Contacts redesign (2026-09-25): a complimentary grant made
+ *   from the Contact profile (`sourceId = staff:contact-grant`, see
+ *   contact-access-service.ts). An ACTIVE staff source is an independent
+ *   reason for access, so reconcile never deactivates around it.
+ */
+export type CommunityAccessSourceKind = "product" | "staff";
 
 export interface CommunityAccessSource {
   id: string;
@@ -167,5 +174,6 @@ export async function reconcileCommunityMembershipAccess(opts: {
     groupId: opts.groupId,
     memberId: opts.memberId,
     status: "removed",
+    actor: "product_expired",
   });
 }
