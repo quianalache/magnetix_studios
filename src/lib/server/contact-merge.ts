@@ -4,6 +4,7 @@ import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { emitContactDeleted } from "@/lib/server/contacts-service";
 import type { Contact } from "@/types/contacts";
 import { contactMergeFields } from "@/lib/server/contact-merge-fields";
+import { invalidateContactsCache } from "@/lib/server/contacts-query-service";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
@@ -265,6 +266,8 @@ export async function performContactMerge(params: {
   // 5. Remove the loser + its (now-copied) subcollections, and fire
   //    contact.deleted from the pre-delete snapshot.
   await db.recursiveDelete(loserRef);
+  // Contacts list search cache (Contacts redesign) — drop the merged-away row now.
+  invalidateContactsCache(sub);
   emitContactDeleted({
     subAccountId: sub,
     agencyId: loserData.agencyId,

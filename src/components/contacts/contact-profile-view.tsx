@@ -177,7 +177,7 @@ export function ContactProfileView({ contact }: { contact: Contact }) {
               role="tabpanel"
               id={`contact-panel-${tab}`}
               aria-labelledby={`contact-tab-${tab}`}
-              className="p-3 sm:p-4"
+              className={tab === "conversations" ? "p-2" : "p-3 sm:p-4"}
             >
               {tab === "conversations" && <ContactConversationsPanel contact={contact} />}
               {tab === "activity" && (

@@ -4,8 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  Mail,
-  MessageSquare,
   Pencil,
   PhoneOutgoing,
   Star,
@@ -33,8 +31,6 @@ import { SourceBadge } from "@/components/contacts/source-badge";
 import { LinkContactButton } from "@/components/contacts/link-contact-button";
 import { MergeContactButton } from "@/components/contacts/merge-contact-button";
 import { ContactForm } from "@/components/contacts/contact-form";
-import { SendEmailDialog } from "@/components/contacts/send-email-dialog";
-import { SendSmsDialog } from "@/components/contacts/send-sms-dialog";
 import { SendCallDialog } from "@/components/contacts/send-call-dialog";
 import { formatContactDate } from "@/lib/format";
 import { contactDisplayName, contactInitials } from "@/lib/contacts/names";
@@ -50,14 +46,14 @@ interface ContactBlocker {
 
 /**
  * Contact profile top bar (Contacts redesign, 2026-09-25): identity + every
- * existing contact action and its dialog — Email, SMS, AI Call, Google
- * review request, Link (Meta contacts), Merge, Edit, Delete (with the
- * linked-record dry-run check). The details list moved to
- * `ContactInfoCard`; the edit sheet is controlled by the page so the info
- * card's Edit button opens the same form.
+ * existing contact action and its dialog — AI Call, Google review request,
+ * Link (Meta contacts), Merge, Edit, Delete (with the linked-record dry-run
+ * check). The details list moved to `ContactInfoCard`; the edit sheet is
+ * controlled by the page so the info card's Edit button opens the same form.
  *
- * The Email / SMS dialogs stay until the embedded Conversations tab (Codex's
- * Conversations redesign) provides equivalent sending — see the page.
+ * Email / SMS / WhatsApp sending lives in the Conversations tab (the
+ * embedded Conversations workspace composer), which replaced the old
+ * header Email / SMS dialogs.
  */
 export function ContactProfileHeader({
   contact,
@@ -71,8 +67,6 @@ export function ContactProfileHeader({
   const { saPath, subAccount, subAccountId, isAdmin } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
   const router = useRouter();
-  const [emailOpen, setEmailOpen] = useState(false);
-  const [smsOpen, setSmsOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   // Show the AI-call button only where the agency has enabled outbound
   // voice. Remaining gates (channel toggle, provisioning, compliance)
@@ -259,26 +253,6 @@ export function ContactProfileHeader({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEmailOpen(true)}
-              disabled={!contact.email}
-              title={!contact.email ? "No email on this contact" : "Send email"}
-            >
-              <Mail className="mr-1 h-3.5 w-3.5" />
-              Email
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSmsOpen(true)}
-              disabled={!contact.phone}
-              title={!contact.phone ? "No phone on this contact" : "Send SMS"}
-            >
-              <MessageSquare className="mr-1 h-3.5 w-3.5" />
-              SMS
-            </Button>
             {outboundAvailable && (
               <Button
                 variant="outline"
@@ -349,8 +323,6 @@ export function ContactProfileHeader({
         </SheetContent>
       </Sheet>
 
-      <SendEmailDialog contact={contact} open={emailOpen} onOpenChange={setEmailOpen} />
-      <SendSmsDialog contact={contact} open={smsOpen} onOpenChange={setSmsOpen} />
       {outboundAvailable && (
         <SendCallDialog contact={contact} open={callOpen} onOpenChange={setCallOpen} />
       )}

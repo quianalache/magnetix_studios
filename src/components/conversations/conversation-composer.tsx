@@ -1,14 +1,16 @@
 "use client";
 
-import { useId, useRef, useState, useEffect, type FormEvent } from "react";
-import Link from "next/link";
+import { useId, useMemo, useRef, useState, useEffect, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Loader2, Send } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { GoogleGIcon } from "@/components/brand/google-g-icon";
 import { AddNoteInput } from "@/components/contacts/add-note-input";
+import { WhatsappTemplateSender } from "@/components/contacts/whatsapp-template-sender";
+import { segmentInfo } from "@/lib/comms/sms-segments";
 import { cn } from "@/lib/utils";
 import { DEFAULT_REVIEW_SMS_TEMPLATE } from "@/lib/reviews/constants";
 import type { Contact } from "@/types/contacts";
@@ -54,7 +56,7 @@ function Composer({
   onSent,
   loading = false,
 }: ConversationComposerProps) {
-  const { subAccount, saPath } = useSubAccount();
+  const { subAccount } = useSubAccount();
   const id = useId();
   const active = useRef(true);
   const inFlight = useRef(false);
@@ -67,7 +69,13 @@ function Composer({
   const [tab, setTab] = useState<"reply" | "note">("reply");
   const [channel, setChannel] = useState<ConversationChannel>(defaultChannel);
   const [body, setBody] = useState("");
+  // Optional explicit subject for email — blank keeps the route's own
+  // "Re: {last subject}" derivation (the Contacts profile's former Send
+  // email dialog always asked for one, so the embedded composer keeps it).
+  const [subject, setSubject] = useState("");
+  const [templateMode, setTemplateMode] = useState(false);
   const [sending, setSending] = useState(false);
+  const smsInfo = useMemo(() => segmentInfo(body), [body]);
 
   // "Ask for review" — only when a review link is configured. Inserts the
   // rendered review message into the composer (free-form) so the operator can
@@ -131,6 +139,15 @@ function Composer({
       : capability?.reason || `${LABEL[ch]} is unavailable.`;
   }
   const reason = channelReason(channel);
+  // Approved templates are the compliant way to (re)open WhatsApp outside the
+  // 24h window. The template route enforces the gate, sender and opt-out
+  // again server-side; this only decides whether to offer the panel.
+  const templatesAllowed =
+    channel === "whatsapp" &&
+    !!contact.phone &&
+    !contact.whatsappOptedOut &&
+    subAccount?.whatsappEnabledByAgency === true &&
+    !!subAccount?.twilioConfig?.whatsappFromNumber;
   const notice = availability.find((item) => item.channel === channel)?.notice;
   const disabled = !!reason || optedOut || sending || !hasIdentity;
 
@@ -163,6 +180,7 @@ function Composer({
           contactId: contact.id,
           body: trimmed,
           ...(isMeta ? { channel } : {}),
+          ...(channel === "email" && subject.trim() ? { subject: subject.trim() } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -174,6 +192,7 @@ function Composer({
       }
       if (!active.current) return;
       setBody("");
+      setSubject("");
       onSent?.();
       // Snapshot listener appends the row.
     } catch (err) {
@@ -211,7 +230,18 @@ function Composer({
         </p>
         <AddNoteInput contactId={contact.id} />
       </div>
-      <form hidden={tab !== "reply"} onSubmit={handleSubmit}>
+      <form hidden={tab !== "reply" || (templateMode && templatesAllowed)} onSubmit={handleSubmit}>
+        {channel === "email" && (
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            aria-label="Email subject (optional)"
+            placeholder="Subject (optional — defaults to a reply to the last email)"
+            maxLength={200}
+            disabled={disabled}
+            className="mb-2 h-10 text-sm"
+          />
+        )}
         <Textarea
           value={body}
           aria-label={`Reply via ${LABEL[channel]}`}
@@ -241,13 +271,21 @@ function Composer({
             {reason || notice}
           </p>
         )}
-        {channel === "whatsapp" && reason && (
-          <Link
-            href={saPath(`/contacts/${contact.id}`)}
+        {channel === "sms" && body.length > 0 && (
+          <p className="text-muted-foreground mt-1 text-[11px]">
+            {smsInfo.length} chars · {smsInfo.segments} segment
+            {smsInfo.segments === 1 ? "" : "s"}
+            {smsInfo.encoding === "UCS-2" && " · Unicode"}
+          </p>
+        )}
+        {templatesAllowed && (
+          <button
+            type="button"
+            onClick={() => setTemplateMode(true)}
             className="text-primary inline-flex min-h-11 items-center text-xs underline"
           >
-            View contact for WhatsApp templates
-          </Link>
+            Send an approved WhatsApp template
+          </button>
         )}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           {reviewConfigured ? (
@@ -308,6 +346,23 @@ function Composer({
           </div>
         </div>
       </form>
+      {tab === "reply" && templateMode && templatesAllowed && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">Send an approved WhatsApp template</p>
+            <Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={() => setTemplateMode(false)}>
+              Back to reply
+            </Button>
+          </div>
+          <WhatsappTemplateSender
+            contact={contact}
+            onSent={() => {
+              setTemplateMode(false);
+              onSent?.();
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

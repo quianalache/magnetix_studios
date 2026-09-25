@@ -140,6 +140,10 @@ function mergeSubject(
   return {
     contact: {
       name: ctx.contact.name,
+      // Contacts redesign: real first/last name fields win over splitting
+      // `name` when the contact has them (see resolveMergeTags).
+      firstName: ctx.contact.firstName ?? null,
+      lastName: ctx.contact.lastName ?? null,
       email: ctx.contact.email,
       phone: ctx.contact.phone,
     },
