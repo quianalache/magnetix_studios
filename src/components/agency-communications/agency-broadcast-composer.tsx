@@ -60,7 +60,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
  * "verify the render before a real send."
  */
 export function AgencyBroadcastComposer({ existingCommunicationId }: { existingCommunicationId?: string }) {
-  const { user, agencyRole, loading: authLoading } = useAuth();
+  const { user, agencyId, agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const router = useRouter();
 
@@ -357,6 +357,20 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
       </div>
     );
   }
+  // `agencyId` resolves from the same auth claims `agencyRole` already did,
+  // so this should never actually be true once `isOwner` is — but the
+  // shared Email Builder's `EmailBuilderScope` must never receive an empty
+  // placeholder id (see upload-image.ts's doc comment), so this composer
+  // treats a still-unresolved agencyId as an extension of the loading
+  // state rather than constructing an invalid scope object.
+  if (!agencyId) {
+    return (
+      <div className="mx-auto w-full max-w-7xl space-y-3">
+        <div className="h-6 w-40 animate-pulse rounded bg-muted/40" />
+        <div className="h-96 animate-pulse rounded-xl border bg-muted/30" />
+      </div>
+    );
+  }
   if (hydrating) {
     return (
       <div className="mx-auto w-full max-w-7xl space-y-3">
@@ -424,8 +438,10 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
         </div>
 
         {/* Content — the SAME shared visual Email Builder Tenant Broadcasts
-            uses (task's standing shared-first rule). saId="agency" matches
-            this composer's existing upload-scope convention. */}
+            uses (task's standing shared-first rule). `agencyId` here is a
+            client-side dispatch marker only — the upload route re-derives
+            the real agencyId from verified auth claims regardless (see
+            upload-image.ts's EmailBuilderScope doc comment). */}
         <EmailBuilder
           content={content}
           onChange={setContent}
@@ -433,7 +449,7 @@ export function AgencyBroadcastComposer({ existingCommunicationId }: { existingC
           preheader={preheader}
           onSubjectChange={setSubject}
           onPreheaderChange={setPreheader}
-          saId="agency"
+          scope={{ kind: "agency", agencyId }}
           draftId={draftId}
           getPreviewHtml={getPreviewHtml}
           previewOpen={previewOpen}

@@ -15,6 +15,7 @@ import type {
   EmailBlockAlign,
   EmailBlockNonColumn,
 } from "@/types/broadcast-content";
+import type { EmailBuilderScope } from "@/lib/broadcasts/upload-image";
 
 /**
  * Right "Settings" inspector. Two sections per task instruction 6:
@@ -74,7 +75,7 @@ export function InspectorPanel({
   onPreheaderChange,
   selectedBlock,
   onBlockChange,
-  saId,
+  scope,
   draftId,
   subjectAccessory,
   preheaderAccessory,
@@ -85,7 +86,7 @@ export function InspectorPanel({
   onPreheaderChange: (value: string) => void;
   selectedBlock: EmailBlock | null;
   onBlockChange: (next: EmailBlock) => void;
-  saId: string;
+  scope: EmailBuilderScope;
   draftId: string;
   /** Optional accessory rendered next to each label — e.g. Email Templates'
    *  "Insert personalization" tag menu. Neither Broadcast surface has an
@@ -149,7 +150,7 @@ export function InspectorPanel({
         {selectedBlock?.type === "image" && (
           <ImageBlockEditor
             block={selectedBlock}
-            saId={saId}
+            scope={scope}
             draftId={draftId}
             onChange={onBlockChange}
           />
@@ -157,7 +158,7 @@ export function InspectorPanel({
         {selectedBlock?.type === "video" && (
           <VideoBlockEditor
             block={selectedBlock}
-            saId={saId}
+            scope={scope}
             draftId={draftId}
             onChange={onBlockChange}
           />

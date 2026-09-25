@@ -5,7 +5,10 @@ import { ImagePlus, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { uploadBroadcastImage } from "@/lib/broadcasts/upload-image";
+import {
+  uploadBroadcastImage,
+  type EmailBuilderScope,
+} from "@/lib/broadcasts/upload-image";
 import type {
   ImageBlock,
   VideoBlock,
@@ -46,12 +49,12 @@ function AlignPicker({
 
 export function ImageBlockEditor({
   block,
-  saId,
+  scope,
   draftId,
   onChange,
 }: {
   block: ImageBlock;
-  saId: string;
+  scope: EmailBuilderScope;
   draftId: string;
   onChange: (next: ImageBlock) => void;
 }) {
@@ -61,7 +64,7 @@ export function ImageBlockEditor({
   async function handleFile(file: File) {
     setUploading(true);
     try {
-      const url = await uploadBroadcastImage(file, saId, draftId, "image");
+      const url = await uploadBroadcastImage(file, scope, draftId, "image");
       onChange({ ...block, src: url });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -121,12 +124,12 @@ export function ImageBlockEditor({
 
 export function VideoBlockEditor({
   block,
-  saId,
+  scope,
   draftId,
   onChange,
 }: {
   block: VideoBlock;
-  saId: string;
+  scope: EmailBuilderScope;
   draftId: string;
   onChange: (next: VideoBlock) => void;
 }) {
@@ -136,7 +139,7 @@ export function VideoBlockEditor({
   async function handleFile(file: File) {
     setUploading(true);
     try {
-      const url = await uploadBroadcastImage(file, saId, draftId, "video-thumbnail");
+      const url = await uploadBroadcastImage(file, scope, draftId, "video-thumbnail");
       onChange({ ...block, thumbnailSrc: url });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

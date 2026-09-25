@@ -269,7 +269,7 @@ export function EmailTemplateEditor({
         preheader={preheader}
         onSubjectChange={setSubject}
         onPreheaderChange={setPreheader}
-        saId={subAccountId}
+        scope={{ kind: "tenant", subAccountId }}
         draftId={uploadScopeId}
         getPreviewHtml={getPreviewHtml}
         previewOpen={previewOpen}

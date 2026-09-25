@@ -30,7 +30,7 @@ import type { BroadcastContent } from "@/types/broadcast-content";
  */
 export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string }) {
   const router = useRouter();
-  const { agencyRole, loading: authLoading } = useAuth();
+  const { agencyId, agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const [uploadScopeId] = useState(() => templateId ?? crypto.randomUUID());
   const [loading, setLoading] = useState(!!templateId);
@@ -149,6 +149,15 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
   if (!isOwner) {
     return <div className="mx-auto max-w-2xl p-8 text-center text-sm text-muted-foreground">Communications is managed by the agency owner.</div>;
   }
+  // `agencyId` resolves from the same auth claims `agencyRole` already did,
+  // so this should never actually be true once `isOwner` is — but the
+  // shared Email Builder's `EmailBuilderScope` must never receive an empty
+  // placeholder id (see upload-image.ts's doc comment), so this editor
+  // treats a still-unresolved agencyId as an extension of the loading
+  // state rather than constructing an invalid scope object.
+  if (!agencyId) {
+    return <div className="mx-auto w-full max-w-3xl py-16 text-center text-sm text-muted-foreground">Loading template…</div>;
+  }
   if (loading) {
     return <div className="mx-auto w-full max-w-3xl py-16 text-center text-sm text-muted-foreground">Loading template…</div>;
   }
@@ -196,7 +205,7 @@ export function AgencyEmailTemplateEditor({ templateId }: { templateId?: string 
         preheader={preheader}
         onSubjectChange={setSubject}
         onPreheaderChange={setPreheader}
-        saId="agency"
+        scope={{ kind: "agency", agencyId }}
         draftId={uploadScopeId}
         getPreviewHtml={getPreviewHtml}
         previewOpen={previewOpen}
