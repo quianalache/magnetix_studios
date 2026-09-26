@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, Lock, Plus } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  Lock,
+  Plus,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -47,6 +54,14 @@ interface DraftStage {
   archived: boolean;
 }
 
+interface PendingReassignment {
+  stageKey: string;
+  stageId: string;
+  count: number;
+  toPipelineId: string;
+  toStageId: string;
+}
+
 let keySeq = 0;
 const nextKey = () => `new-${++keySeq}`;
 
@@ -70,6 +85,9 @@ export function ManageStagesDialog({
   const [saving, setSaving] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [reassigning, setReassigning] = useState<DraftStage | null>(null);
+  const [pendingReassignments, setPendingReassignments] = useState<
+    PendingReassignment[]
+  >([]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,9 +98,10 @@ export function ManageStagesDialog({
         name: s.name,
         type: s.type,
         archived: s.archived,
-      })),
+      }))
     );
     setCounts(stageCounts);
+    setPendingReassignments([]);
   }, [open, pipeline, stageCounts]);
 
   const active = draft.filter((s) => !s.archived);
@@ -127,6 +146,32 @@ export function ManageStagesDialog({
     }
     setSaving(true);
     try {
+      // Keep reassignment inside the Save transaction from the user's point
+      // of view. Opening the helper or choosing a destination only edits the
+      // local draft; Cancel never calls the live move endpoint.
+      for (const pending of pendingReassignments) {
+        let remaining = pending.count;
+        for (let guard = 0; guard < 100 && remaining > 0; guard++) {
+          const res = await reassignStageApi(
+            subAccountId,
+            pipeline.id,
+            pending.stageId,
+            {
+              toPipelineId: pending.toPipelineId,
+              toStageId: pending.toStageId,
+            }
+          );
+          remaining = res.remaining;
+          if (res.moved === 0) break;
+        }
+        if (remaining > 0) {
+          throw new PipelineApiError(
+            "Could not move all deals out of the stage.",
+            409,
+            "stage_reassignment_incomplete"
+          );
+        }
+      }
       const res = await replaceStagesApi(
         subAccountId,
         pipeline.id,
@@ -134,13 +179,15 @@ export function ManageStagesDialog({
           ...(s.id ? { id: s.id } : {}),
           name: s.name.trim(),
           archived: s.archived,
-        })),
+        }))
       );
       toast.success("Stages saved");
       onSaved(res.pipeline);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof PipelineApiError ? err.message : "Couldn't save stages.");
+      toast.error(
+        err instanceof PipelineApiError ? err.message : "Couldn't save stages."
+      );
     } finally {
       setSaving(false);
     }
@@ -153,25 +200,37 @@ export function ManageStagesDialog({
           <DialogHeader>
             <DialogTitle>Manage stages</DialogTitle>
             <DialogDescription>
-              {pipeline.name} · Rename, reorder, add or archive stages. Archived stages keep their
-              history; deals must be moved out before a stage can be archived.
+              {pipeline.name} · Rename, reorder, add or archive stages. Archived
+              stages keep their history; deals must be moved out before a stage
+              can be archived.
             </DialogDescription>
           </DialogHeader>
 
           <ol className="space-y-2">
             {active.map((s, i) => (
               <li key={s.key} className="flex items-center gap-1.5">
-                <span className="w-5 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{i + 1}</span>
+                <span className="text-muted-foreground w-5 shrink-0 text-right text-xs tabular-nums">
+                  {i + 1}
+                </span>
                 <Input
                   value={s.name}
                   maxLength={STAGE_NAME_MAX}
                   aria-label={`Stage ${i + 1} name`}
                   onChange={(e) => update(s.key, { name: e.target.value })}
                 />
-                <span className="w-10 shrink-0 text-center text-xs tabular-nums text-muted-foreground" title="Deals in this stage">
+                <span
+                  className="text-muted-foreground w-10 shrink-0 text-center text-xs tabular-nums"
+                  title="Deals in this stage"
+                >
                   {s.id ? (counts[s.id] ?? 0) : "new"}
                 </span>
-                <Button variant="ghost" size="icon" aria-label="Move up" disabled={i === 0} onClick={() => move(s.key, -1)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Move up"
+                  disabled={i === 0}
+                  onClick={() => move(s.key, -1)}
+                >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
                 <Button
@@ -184,12 +243,17 @@ export function ManageStagesDialog({
                   <ArrowDown className="h-4 w-4" />
                 </Button>
                 {s.type === "open" ? (
-                  <Button variant="ghost" size="icon" aria-label={`Archive ${s.name}`} onClick={() => archive(s)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Archive ${s.name}`}
+                    onClick={() => archive(s)}
+                  >
                     <Archive className="h-4 w-4" />
                   </Button>
                 ) : (
                   <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground"
+                    className="text-muted-foreground flex h-8 w-8 shrink-0 items-center justify-center"
                     title="Won and Lost are standard outcomes and can't be archived"
                   >
                     <Lock className="h-4 w-4" />
@@ -209,8 +273,18 @@ export function ManageStagesDialog({
                 const act = d.filter((s) => !s.archived);
                 const firstOutcome = act.findIndex((s) => s.type !== "open");
                 const at = firstOutcome === -1 ? act.length : firstOutcome;
-                const added: DraftStage = { key: nextKey(), name: "", type: "open", archived: false };
-                return [...act.slice(0, at), added, ...act.slice(at), ...d.filter((s) => s.archived)];
+                const added: DraftStage = {
+                  key: nextKey(),
+                  name: "",
+                  type: "open",
+                  archived: false,
+                };
+                return [
+                  ...act.slice(0, at),
+                  added,
+                  ...act.slice(at),
+                  ...d.filter((s) => s.archived),
+                ];
               });
             }}
           >
@@ -219,11 +293,22 @@ export function ManageStagesDialog({
 
           {archived.length > 0 && (
             <div className="space-y-2 border-t pt-3">
-              <p className="text-xs font-medium text-muted-foreground">Archived</p>
+              <p className="text-muted-foreground text-xs font-medium">
+                Archived
+              </p>
               {archived.map((s) => (
-                <div key={s.key} className="flex items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2 text-sm">
-                  <span className="truncate text-muted-foreground">{s.name}</span>
-                  <Button variant="ghost" size="sm" onClick={() => update(s.key, { archived: false })}>
+                <div
+                  key={s.key}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2 text-sm"
+                >
+                  <span className="text-muted-foreground truncate">
+                    {s.name}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => update(s.key, { archived: false })}
+                  >
                     <ArchiveRestore className="mr-1 h-4 w-4" /> Restore
                   </Button>
                 </div>
@@ -232,7 +317,11 @@ export function ManageStagesDialog({
           )}
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            <Button
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button onClick={save} disabled={saving}>
@@ -248,7 +337,18 @@ export function ManageStagesDialog({
         stage={reassigning}
         count={reassigning?.id ? (counts[reassigning.id] ?? 0) : 0}
         onClose={() => setReassigning(null)}
-        onDone={(stage) => {
+        onDone={(stage, destination) => {
+          // The reassign dialog is a draft editor. Do not move deals until
+          // the parent Save button is pressed.
+          setPendingReassignments((current) => [
+            ...current.filter((p) => p.stageKey !== stage.key),
+            {
+              stageKey: stage.key,
+              stageId: stage.id!,
+              count: counts[stage.id!] ?? 0,
+              ...destination,
+            },
+          ]);
           setCounts((c) => ({ ...c, [stage.id!]: 0 }));
           update(stage.key, { archived: true });
           setReassigning(null);
@@ -271,7 +371,10 @@ function ReassignDialog({
   stage: DraftStage | null;
   count: number;
   onClose: () => void;
-  onDone: (stage: DraftStage) => void;
+  onDone: (
+    stage: DraftStage,
+    destination: { toPipelineId: string; toStageId: string }
+  ) => void;
 }) {
   const [pipelines, setPipelines] = useState<Pipeline[] | null>(null);
   const [target, setTarget] = useState("");
@@ -289,7 +392,9 @@ function ReassignDialog({
     const list = pipelines ?? [pipeline];
     return list.map((p) => ({
       pipeline: p,
-      stages: activeStages(p).filter((s) => !(p.id === pipeline.id && s.id === stage?.id)),
+      stages: activeStages(p).filter(
+        (s) => !(p.id === pipeline.id && s.id === stage?.id)
+      ),
     }));
   }, [pipelines, pipeline, stage]);
 
@@ -298,20 +403,16 @@ function ReassignDialog({
     const [toPipelineId, toStageId] = target.split("::");
     setMoving(true);
     try {
-      let remaining = count;
-      // The server moves up to 500 per call; loop until the stage is empty.
-      for (let guard = 0; guard < 100 && remaining > 0; guard++) {
-        const res = await reassignStageApi(subAccountId, pipeline.id, stage.id, {
-          toPipelineId,
-          toStageId,
-        });
-        remaining = res.remaining;
-        if (res.moved === 0) break;
-      }
-      toast.success(`Moved ${count} ${count === 1 ? "deal" : "deals"}. Save to archive the stage.`);
-      onDone(stage);
+      toast.success(
+        `Reassignment staged for ${count} ${count === 1 ? "deal" : "deals"}. Save to apply it.`
+      );
+      onDone(stage, { toPipelineId, toStageId });
     } catch (err) {
-      toast.error(err instanceof PipelineApiError ? err.message : "Couldn't move the deals.");
+      toast.error(
+        err instanceof PipelineApiError
+          ? err.message
+          : "Couldn't move the deals."
+      );
     } finally {
       setMoving(false);
     }
@@ -323,15 +424,17 @@ function ReassignDialog({
         <DialogHeader>
           <DialogTitle>Move deals before archiving</DialogTitle>
           <DialogDescription>
-            &ldquo;{stage?.name}&rdquo; has {count} {count === 1 ? "deal" : "deals"}. Choose where they should go.
-            Each move is recorded on the deal and fires your automations like any other stage change.
+            &ldquo;{stage?.name}&rdquo; has {count}{" "}
+            {count === 1 ? "deal" : "deals"}. Choose where they should go. Each
+            move is recorded on the deal and fires your automations like any
+            other stage change.
           </DialogDescription>
         </DialogHeader>
         <select
           aria-label="Destination stage"
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          className="h-10 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm [&_option]:bg-background [&_option]:text-foreground"
+          className="border-input [&_option]:bg-background [&_option]:text-foreground h-10 w-full rounded-lg border bg-transparent px-2.5 text-sm"
         >
           <option value="">Choose a destination stage…</option>
           {options.map(({ pipeline: p, stages }) => (
@@ -348,8 +451,14 @@ function ReassignDialog({
           <Button variant="ghost" onClick={onClose} disabled={moving}>
             Cancel
           </Button>
-          <Button onClick={run} disabled={!target || moving} className={cn(moving && "cursor-wait")}>
-            {moving ? "Moving…" : `Move ${count} ${count === 1 ? "deal" : "deals"}`}
+          <Button
+            onClick={run}
+            disabled={!target || moving}
+            className={cn(moving && "cursor-wait")}
+          >
+            {moving
+              ? "Moving…"
+              : `Move ${count} ${count === 1 ? "deal" : "deals"}`}
           </Button>
         </DialogFooter>
       </DialogContent>
