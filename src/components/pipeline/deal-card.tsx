@@ -2,17 +2,37 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRightLeft, Check, Clock } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  Check,
+  CheckSquare,
+  Clock,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatCurrency, daysSince } from "@/lib/format";
 import { getPriority, type Deal } from "@/types/deals";
-import type { Contact } from "@/types/contacts";
+import { DEFAULT_CARD_FIELDS, type CardFieldKey } from "@/types/pipeline-cards";
+import type { DealNextActivity } from "@/types/pipeline-board";
 import { useSubAccount } from "@/context/sub-account-context";
 
+/** The contact bits a card needs — a full Contact or the board's summary. */
+export interface DealCardContact {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  company?: string | null;
+}
+
 interface DealCardProps {
-  deal: Deal;
-  contact: Contact | undefined;
+  deal: Deal & { nextTask?: DealNextActivity | null; nextAppointment?: DealNextActivity | null };
+  contact: DealCardContact | undefined;
+  /** Customize Cards selection; defaults to the pre-customization layout. */
+  fields?: CardFieldKey[];
   /** Resolved territory name for this deal. Only rendered when scoping is on. */
   territoryName?: string;
   dragging?: boolean;
@@ -21,18 +41,35 @@ interface DealCardProps {
   attributes?: React.HTMLAttributes<HTMLElement>;
   setNodeRef?: (node: HTMLElement | null) => void;
   style?: React.CSSProperties;
-  onEdit?: () => void;
+  /** Single click opens the deal (Deal Details). */
+  onOpen?: () => void;
   /**
    * Opens the mobile "move to stage" bottom sheet. Cross-column touch-drag
    * is fiddly on phones, so small screens get a tap affordance instead —
    * the button only renders below md (drag remains the desktop pattern).
    */
   onMoveRequest?: () => void;
+  onCompletedChange?: () => void;
+}
+
+function formatDay(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? ymd
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function DealCard({
   deal,
   contact,
+  fields = DEFAULT_CARD_FIELDS,
   territoryName,
   dragging,
   overlay,
@@ -40,15 +77,17 @@ export function DealCard({
   attributes,
   setNodeRef,
   style,
-  onEdit,
+  onOpen,
   onMoveRequest,
+  onCompletedChange,
 }: DealCardProps) {
   const { saPath, subAccount } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
+  const show = (k: CardFieldKey) => fields.includes(k);
 
   // "Completed" tick, only shown on Won deals. Optimistic local state, synced
-  // to the live deal snapshot; persists via the shared deals PATCH route (which
-  // also fires the optional Google review request).
+  // to the deal; persists via the shared deals PATCH route (which also fires
+  // the optional Google review request).
   const [completed, setCompleted] = useState(!!deal.completed);
   const [savingCompleted, setSavingCompleted] = useState(false);
   useEffect(() => {
@@ -68,6 +107,7 @@ export function DealCard({
       });
       if (!res.ok) throw new Error("save failed");
       toast.success(next ? "Marked completed" : "Marked not completed");
+      onCompletedChange?.();
     } catch {
       setCompleted(!next);
       toast.error("Couldn't update. Try again.");
@@ -77,98 +117,127 @@ export function DealCard({
   }
 
   const days = daysSince(deal.stageChangedAt);
-  const daysLabel =
-    days === 0 ? "today" : days === 1 ? "1d in stage" : `${days}d in stage`;
+  const daysLabel = days === 0 ? "today" : `${days}d in stage`;
   const priority = getPriority(deal.priority);
-
-  const initials = (contact?.name || contact?.email || "?")
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
     <div
       ref={setNodeRef}
       style={style}
+      role={onOpen && !overlay ? "button" : undefined}
+      tabIndex={onOpen && !overlay ? 0 : undefined}
+      aria-label={onOpen && !overlay ? `Open deal ${deal.title}` : undefined}
       className={cn(
-        "group relative rounded-lg border bg-card p-3 text-sm shadow-sm transition-all",
-        "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r-full before:bg-gradient-to-b before:from-indigo-500 before:via-violet-500 before:to-pink-500 before:opacity-0 before:transition-opacity",
-        !overlay && "cursor-grab hover:border-primary/40 hover:shadow-md hover:before:opacity-100 active:cursor-grabbing",
+        "group relative rounded-xl border bg-card p-3 text-sm shadow-sm transition-all",
+        !overlay && "cursor-pointer hover:border-primary/40 hover:shadow-md",
         dragging && "opacity-40",
         overlay && "rotate-1 scale-[1.02] cursor-grabbing shadow-lg ring-2 ring-primary/40",
       )}
       {...attributes}
       {...listeners}
-      onDoubleClick={
-        onEdit && !overlay
+      onClick={onOpen && !overlay ? onOpen : undefined}
+      onKeyDown={
+        onOpen && !overlay
           ? (e) => {
-              e.stopPropagation();
-              onEdit();
+              if (e.key === "Enter") onOpen();
             }
           : undefined
       }
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="pr-1 font-medium leading-snug">{deal.title}</p>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-            priority.badge,
-          )}
-        >
-          {priority.label}
-        </span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold tabular-nums">
-          {formatCurrency(deal.value, deal.currency)}
-        </span>
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3" />
-          {daysLabel}
-        </span>
-      </div>
-
-      <div className="mt-3 flex items-center gap-2 border-t pt-2">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-400/80 via-violet-400/80 to-pink-400/80 text-[9px] font-semibold text-white">
-          {initials}
-        </span>
-        {contact ? (
-          <Link
-            href={saPath(`/contacts/${contact.id}`)}
-            className="min-w-0 flex-1 truncate text-xs text-muted-foreground hover:text-primary hover:underline"
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {contact.name || contact.email || "Contact"}
-          </Link>
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-xs italic text-muted-foreground/60">
-            Unknown contact
-          </span>
-        )}
-        {scopingOn && territoryName && (
+        <p className="pr-1 font-semibold leading-snug">{deal.title}</p>
+        {show("priority") && (
           <span
-            className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground"
-            title={`Territory: ${territoryName}`}
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              priority.badge,
+            )}
           >
-            {territoryName}
+            {priority.label}
           </span>
         )}
       </div>
+
+      {show("value") && (
+        <p className="mt-1 font-semibold tabular-nums">{formatCurrency(deal.value, deal.currency)}</p>
+      )}
+
+      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+        {show("contact") && (
+          <div className="flex items-center gap-1.5">
+            <User className="h-3.5 w-3.5 shrink-0" />
+            {contact ? (
+              <Link
+                href={saPath(`/contacts/${contact.id}`)}
+                className="min-w-0 truncate hover:text-primary hover:underline"
+                onClick={stop}
+                onPointerDown={stop}
+                onKeyDown={stop}
+              >
+                {contact.name || contact.email || "Contact"}
+              </Link>
+            ) : (
+              <span className="italic text-muted-foreground/60">Unknown contact</span>
+            )}
+          </div>
+        )}
+        {show("company") && contact?.company && (
+          <div className="flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{contact.company}</span>
+          </div>
+        )}
+        {show("expectedCloseDate") && deal.expectedCloseDate && (
+          <div className="flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+            <span>Closes {formatDay(deal.expectedCloseDate)}</span>
+          </div>
+        )}
+        {show("nextTask") && deal.nextTask && (
+          <div className="flex items-center gap-1.5">
+            <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {deal.nextTask.title}
+              {deal.nextTask.at && ` · ${formatDay(deal.nextTask.at.slice(0, 10))}`}
+            </span>
+          </div>
+        )}
+        {show("nextAppointment") && deal.nextAppointment && (
+          <div className="flex items-center gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">
+              {deal.nextAppointment.title}
+              {deal.nextAppointment.at && ` · ${formatWhen(deal.nextAppointment.at)}`}
+            </span>
+          </div>
+        )}
+        {show("timeInStage") && (
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span>{daysLabel}</span>
+          </div>
+        )}
+      </div>
+
+      {scopingOn && territoryName && (
+        <span
+          className="mt-2 inline-block rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground"
+          title={`Territory: ${territoryName}`}
+        >
+          {territoryName}
+        </span>
+      )}
 
       {onMoveRequest && !overlay && (
         <button
           type="button"
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={stop}
           onClick={(e) => {
             e.stopPropagation();
             onMoveRequest();
           }}
-          className="mt-2 flex w-full min-h-10 items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-muted md:hidden"
+          className="mt-2 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-muted md:hidden"
         >
           <ArrowRightLeft className="h-3.5 w-3.5" />
           Move stage
@@ -178,7 +247,7 @@ export function DealCard({
       {deal.stageId === "won" && (
         <button
           type="button"
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={stop}
           onClick={overlay ? undefined : toggleCompleted}
           disabled={overlay || savingCompleted}
           title={
@@ -196,9 +265,7 @@ export function DealCard({
           <span
             className={cn(
               "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-              completed
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-muted-foreground/40",
+              completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-muted-foreground/40",
             )}
           >
             {completed && <Check className="h-3 w-3" />}

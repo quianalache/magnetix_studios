@@ -27,32 +27,61 @@ import {
   type DealPriority,
   type PipelineStageId,
 } from "@/types/deals";
-import { usePipelineStages } from "@/hooks/use-pipeline-stages";
+import {
+  activeStages,
+  DEFAULT_PIPELINE_ID,
+  type Pipeline,
+} from "@/types/pipelines";
+import { useDealFormOptions } from "@/hooks/use-deal-form-options";
 import type { Contact } from "@/types/contacts";
 
 interface NewDealDialogProps {
-  contacts: Contact[];
+  /** Contact picker options; loaded on demand while open when omitted. */
+  contacts?: Contact[];
   defaultContactId?: string;
+  /** Pipeline pre-selected in the form (default: the default pipeline). */
+  defaultPipelineId?: string;
+  /** Stage pre-selected (default: the pipeline's first active stage). */
   defaultStageId?: PipelineStageId;
   trigger?: React.ReactNode;
+  /** Controlled open state (e.g. a board column's "Add deal"). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onCreated?: (dealId: string) => void;
+}
+
+function firstStageId(p: Pipeline | undefined): string {
+  return (p && activeStages(p).find((s) => s.type === "open")?.id) ?? "";
 }
 
 export function NewDealDialog({
-  contacts,
+  contacts: contactsProp,
   defaultContactId,
-  defaultStageId = "new",
+  defaultPipelineId,
+  defaultStageId,
   trigger,
+  open: openProp,
+  onOpenChange,
+  onCreated,
 }: NewDealDialogProps) {
   const { subAccountId, subAccount } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
-  const stages = usePipelineStages();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (o: boolean) => {
+    setOpenState(o);
+    onOpenChange?.(o);
+  };
+  const { pipelines, contacts } = useDealFormOptions({ open, contacts: contactsProp });
+  const [pipelineId, setPipelineId] = useState(defaultPipelineId ?? DEFAULT_PIPELINE_ID);
+  const pipeline = pipelines?.find((p) => p.id === pipelineId);
+  const stages = pipeline ? activeStages(pipeline) : [];
   const [territories, setTerritories] = useState<TerritoryDoc[]>([]);
 
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [stageId, setStageId] = useState<PipelineStageId>(defaultStageId);
+  const [stageId, setStageId] = useState<PipelineStageId>(defaultStageId ?? "");
   const [priority, setPriority] = useState<DealPriority>("medium");
   const [contactId, setContactId] = useState(defaultContactId ?? "");
   const [cfDefs, setCfDefs] = useState<CustomFieldDef[]>([]);
@@ -65,13 +94,23 @@ export function NewDealDialog({
       setTitle("");
       setValue("");
       setCurrency("USD");
-      setStageId(defaultStageId);
+      setPipelineId(defaultPipelineId ?? DEFAULT_PIPELINE_ID);
+      setStageId(defaultStageId ?? "");
       setPriority("medium");
       setContactId(defaultContactId ?? "");
       setCfValues({});
       setErrors({});
     }
-  }, [open, defaultContactId, defaultStageId]);
+  }, [open, defaultContactId, defaultStageId, defaultPipelineId]);
+
+  // Once pipelines load (or the pipeline changes), make sure the selected
+  // stage belongs to the selected pipeline.
+  useEffect(() => {
+    if (!pipeline) return;
+    if (!activeStages(pipeline).some((s) => s.id === stageId)) {
+      setStageId(firstStageId(pipeline));
+    }
+  }, [pipeline, stageId]);
 
   // Live custom-field definitions for deals (only while the sheet is open).
   useEffect(() => {
@@ -122,6 +161,7 @@ export function NewDealDialog({
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Title is required";
     if (!contactId) next.contactId = "Pick a contact";
+    if (!stageId) next.stageId = "Pick a stage";
     const num = Number(value);
     if (value && (Number.isNaN(num) || num < 0)) next.value = "Enter a valid amount";
     setErrors(next);
@@ -138,6 +178,7 @@ export function NewDealDialog({
       value: Number(value) || 0,
       currency,
       contactId,
+      pipelineId,
       stageId,
       priority,
       // Territory is owned by the contact (the account) — the deal
@@ -159,8 +200,10 @@ export function NewDealDialog({
         toast.error(body.error ?? "Couldn't create deal. Try again.");
         return;
       }
+      const created = (await res.json().catch(() => ({}))) as { id?: string };
       toast.success("Deal created");
       setOpen(false);
+      if (created.id) onCreated?.(created.id);
     } catch (err) {
       console.error(err);
       toast.error("Couldn't create deal. Try again.");
@@ -171,7 +214,7 @@ export function NewDealDialog({
 
   return (
     <>
-      {trigger ? (
+      {openProp !== undefined ? null : trigger ? (
         // span wrapper instead of <button> — callers pass interactive
         // elements like <Button>, and a button-inside-a-button is invalid
         // HTML (React's hydration check flags it). role/keys provide a11y.
@@ -258,20 +301,46 @@ export function NewDealDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="deal-stage">Stage</Label>
-              <select
-                id="deal-stage"
-                value={stageId}
-                onChange={(e) => setStageId(e.target.value as PipelineStageId)}
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-              >
-                {stages.map((s) => (
-                  <option key={s.id} value={s.id} className="bg-background text-foreground">
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="deal-pipeline">Pipeline</Label>
+                <select
+                  id="deal-pipeline"
+                  value={pipelineId}
+                  disabled={!pipelines}
+                  onChange={(e) => {
+                    setPipelineId(e.target.value);
+                    setStageId("");
+                  }}
+                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                >
+                  {(pipelines ?? []).map((p) => (
+                    <option key={p.id} value={p.id} className="bg-background text-foreground">
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="deal-stage">Stage</Label>
+                <select
+                  id="deal-stage"
+                  value={stageId}
+                  disabled={!pipeline}
+                  onChange={(e) => setStageId(e.target.value as PipelineStageId)}
+                  aria-invalid={!!errors.stageId}
+                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+                >
+                  {stages.map((s) => (
+                    <option key={s.id} value={s.id} className="bg-background text-foreground">
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.stageId && (
+                  <p className="text-xs text-destructive">{errors.stageId}</p>
+                )}
+              </div>
             </div>
 
             <div className="space-y-1.5">

@@ -140,6 +140,8 @@ async function main() {
   const noteRoute = await import("../src/app/api/deals/[id]/notes/[noteId]/route");
   const activityRoute = await import("../src/app/api/deals/[id]/activity/route");
   const contactNotesRoute = await import("../src/app/api/contacts/[id]/notes/route");
+  const boardRoute = await import("../src/app/api/sub-accounts/[id]/pipelines/[pipelineId]/board/route");
+  const listRoute = await import("../src/app/api/sub-accounts/[id]/pipelines/[pipelineId]/deals/route");
 
   console.log("Compatibility (before migration)");
   await check("unmigrated sub-account reads one virtual default pipeline with its legacy stages", async () => {
@@ -361,6 +363,93 @@ async function main() {
     assert.equal(res.status, 200);
     assert.equal((await db.collection("deals/d1/notes").get()).size, 0);
     assert.equal((await db.collection("deals/d1/activities").get()).size, 0);
+  });
+
+  console.log("Board / List / Overview queries");
+  const noFilters = { search: "", stageIds: [], priorities: [], minValue: null, maxValue: null, countries: [], territories: [] };
+  // Fixture: 30 open deals in the default pipeline's "new" stage (paging),
+  // one EUR deal (currency separation), all in territory t1.
+  const batch = db.batch();
+  for (let i = 0; i < 30; i++) {
+    batch.set(db.doc(`deals/bulk${i}`), {
+      agencyId: AG, subAccountId: "sa1", contactId: "c1", title: `Bulk ${i}`, value: 10,
+      currency: "USD", pipelineId: "default", stageId: "new", priority: "low",
+      territoryId: "t1", createdAt: TS, updatedAt: TS,
+      stageChangedAt: new Date(TS.getTime() + i * 1000),
+    });
+  }
+  batch.set(db.doc("deals/eur1"), {
+    agencyId: AG, subAccountId: "sa1", contactId: "c2", title: "Euro deal", value: 500,
+    currency: "EUR", pipelineId: "default", stageId: "proposal", priority: "high",
+    territoryId: "t2", createdAt: TS, updatedAt: TS, stageChangedAt: TS,
+  });
+  await batch.commit();
+  await db.doc("contacts/c2").update({ name: "Zed Unique", company: "Findable Co" });
+
+  await check("overview stats per pipeline, currencies never summed", async () => {
+    const res = await pipelinesRoute.GET(
+      new Request("http://test.local/x?stats=1&fresh=1&includeArchived=1", { headers: { "x-user-uid": "admin1" } }),
+      p({ id: "sa1" }),
+    );
+    const { summaries } = await res.json();
+    const def = summaries.find((x: { pipeline: { id: string } }) => x.pipeline.id === "default");
+    assert.equal(def.stats.openValue.USD, 300);
+    assert.equal(def.stats.openValue.EUR, 500);
+    assert.equal(def.stats.stageCounts.new, 30);
+    assert.ok(summaries.some((x: { pipeline: { id: string } }) => x.pipeline.id === pid));
+  });
+
+  await check("board: exact counts, one page per stage, load more", async () => {
+    const res = await boardRoute.POST(req("admin1", { filters: noFilters, fresh: true }), p({ id: "sa1", pipelineId: "default" }));
+    const body = await res.json();
+    const col = body.columns.find((c: { stageId: string }) => c.stageId === "new");
+    assert.equal(col.count, 30);
+    assert.equal(col.deals.length, 25);
+    assert.equal(col.deals[0].title, "Bulk 29"); // most recently moved first
+    assert.ok(col.deals[0].contact && col.deals[0].contact.id === "c1");
+    const more = await boardRoute.POST(
+      req("admin1", { filters: noFilters, offsets: { new: 25 }, onlyStageId: "new" }),
+      p({ id: "sa1", pipelineId: "default" }),
+    );
+    const mb = await more.json();
+    assert.equal(mb.columns.length, 1);
+    assert.equal(mb.columns[0].deals.length, 5);
+    // Other pipelines' deals never mix in.
+    assert.ok(!body.columns.some((c: { deals: { pipelineId: string }[] }) => c.deals.some((d) => d.pipelineId !== "default")));
+  });
+
+  await check("board: territory-scoped collaborator only sees their deals", async () => {
+    const res = await boardRoute.POST(req("collab1", { filters: noFilters, fresh: true }), p({ id: "sa1", pipelineId: "default" }));
+    const body = await res.json();
+    const ids = body.columns.flatMap((c: { deals: { id: string }[] }) => c.deals.map((d) => d.id));
+    assert.ok(!ids.includes("eur1"), "t2 deal leaked to t1 collaborator");
+    assert.equal(body.stats.openValue.EUR, undefined);
+  });
+
+  await check("search matches contact name/company; list sorts + pages the same set", async () => {
+    const res = await boardRoute.POST(
+      // fresh: the contact was renamed after the cached candidate set loaded.
+      req("admin1", { filters: { ...noFilters, search: "findable" }, fresh: true }),
+      p({ id: "sa1", pipelineId: "default" }),
+    );
+    const body = await res.json();
+    const ids = body.columns.flatMap((c: { deals: { id: string }[] }) => c.deals.map((d) => d.id));
+    // Both of c2's deals (open EUR + the Won one) match via the contact.
+    assert.deepEqual([...ids].sort(), ["d3", "eur1"]);
+    const list = await listRoute.POST(
+      req("admin1", { filters: noFilters, sort: { field: "value", dir: "desc" }, page: 1 }),
+      p({ id: "sa1", pipelineId: "default" }),
+    );
+    const lb = await list.json();
+    assert.equal(lb.rows[0].id, "eur1");
+    assert.equal(lb.rows.length, 25);
+    assert.equal(lb.pageCount, 2);
+    const boardTotal = body.columns.reduce((n: number, c: { count: number }) => n + c.count, 0);
+    const listFiltered = await (await listRoute.POST(
+      req("admin1", { filters: { ...noFilters, search: "findable" }, sort: { field: "updatedAt", dir: "desc" }, page: 1 }),
+      p({ id: "sa1", pipelineId: "default" }),
+    )).json();
+    assert.equal(listFiltered.total, boardTotal);
   });
 
   console.log(`\n${passed} checks passed.`);

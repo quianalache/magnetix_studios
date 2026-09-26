@@ -21,6 +21,7 @@ import type { WebhookEventType } from "@/types/webhooks";
 import type { CustomFieldValue } from "@/types/custom-fields";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { invalidateDealsCache } from "@/lib/server/pipeline-deals-service";
 
 /**
  * Server-side Deal write service — the single chokepoint where a deal is
@@ -299,6 +300,7 @@ export async function createDealServerSide(
     stageChangedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(doc);
+  invalidateDealsCache(input.subAccountId);
 
   await writePipelineActivity(input.contactId, {
     content: `Deal "${input.title}" created in ${pipeline.name} · ${stageLabel(pipeline, input.stageId)}`,
@@ -468,6 +470,7 @@ export async function updateDealServerSide(opts: {
   }
 
   await ref.set(write, { merge: true });
+  invalidateDealsCache(subAccountId);
 
   const fresh = await ref.get();
   const data = fresh.data()!;
@@ -622,6 +625,7 @@ export async function deleteDealServerSide(opts: {
 
   // Deal notes + the deal's activity feed live under the deal doc.
   await db.recursiveDelete(ref);
+  invalidateDealsCache(data.subAccountId as string);
 
   emitDealEvents({
     subAccountId: data.subAccountId,

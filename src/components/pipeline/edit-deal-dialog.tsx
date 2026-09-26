@@ -23,7 +23,9 @@ import {
   type DealPriority,
   type PipelineStageId,
 } from "@/types/deals";
-import { usePipelineStages } from "@/hooks/use-pipeline-stages";
+import { useDealFormOptions } from "@/hooks/use-deal-form-options";
+import { dealPipelineId, findStage } from "@/types/pipelines";
+import { Textarea } from "@/components/ui/textarea";
 import type { Contact } from "@/types/contacts";
 import type { CustomFieldDef, CustomFieldValue } from "@/types/custom-fields";
 import { GLOBAL_TERRITORY_ID, type TerritoryDoc } from "@/types";
@@ -32,20 +34,34 @@ interface EditDealDialogProps {
   deal: Deal | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  contacts: Contact[];
+  /** Contact picker options; loaded on demand while open when omitted. */
+  contacts?: Contact[];
   territories: TerritoryDoc[];
+  onSaved?: () => void;
 }
 
 export function EditDealDialog({
   deal,
   open,
   onOpenChange,
-  contacts,
+  contacts: contactsProp,
   territories,
+  onSaved,
 }: EditDealDialogProps) {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
   const scopingOn = subAccount?.territoryScopingEnabled === true;
-  const stages = usePipelineStages();
+  const { pipelines, contacts } = useDealFormOptions({ open, contacts: contactsProp });
+  const [pipelineId, setPipelineId] = useState("");
+  const [description, setDescription] = useState("");
+  const [expectedCloseDate, setExpectedCloseDate] = useState("");
+  const pipeline = pipelines?.find((p) => p.id === pipelineId);
+  // Active stages of the selected pipeline, plus the deal's current stage
+  // when it's archived (so the form can show where the deal sits today).
+  const stages = pipeline
+    ? pipeline.stages.filter(
+        (st) => !st.archived || (deal && pipelineId === dealPipelineId(deal) && st.id === deal.stageId),
+      )
+    : [];
   // Changing the contact re-homes the deal's territory, which is an
   // admin-only action when scoping is on. Collaborators see it read-only.
   const canEditContact = !scopingOn || isAdmin;
@@ -67,6 +83,9 @@ export function EditDealDialog({
       setValue(deal.value ? String(deal.value) : "");
       setCurrency(deal.currency || "USD");
       setStageId(deal.stageId);
+      setPipelineId(dealPipelineId(deal));
+      setDescription(deal.description ?? "");
+      setExpectedCloseDate(deal.expectedCloseDate ?? "");
       setPriority(deal.priority ?? "medium");
       setContactId(deal.contactId);
       setCfValues(
@@ -110,6 +129,12 @@ export function EditDealDialog({
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Title is required";
     if (!contactId) next.contactId = "Pick a contact";
+    const pipelineChanged = pipelineId !== dealPipelineId(deal);
+    if (!stageId || (pipeline && !findStage(pipeline, stageId))) {
+      next.stageId = pipelineChanged
+        ? "Choose a stage in the destination pipeline"
+        : "Pick a stage";
+    }
     const num = Number(value);
     if (value && (Number.isNaN(num) || num < 0)) next.value = "Enter a valid amount";
     setErrors(next);
@@ -132,8 +157,11 @@ export function EditDealDialog({
         currency,
         priority,
         stageId,
+        description: description.trim() || null,
+        expectedCloseDate: expectedCloseDate || null,
         customFields: cf.value,
       };
+      if (pipelineChanged) base.pipelineId = pipelineId;
       // Only admins (or scoping-off) may re-home the contact. When they do,
       // the deal's territory follows the new contact. Collaborators send no
       // contact/territory change so the territoryId stays put (rules require
@@ -153,8 +181,9 @@ export function EditDealDialog({
         toast.error(body.error ?? "Couldn't update deal. Try again.");
         return;
       }
-      toast.success("Deal updated");
+      toast.success(pipelineChanged ? `Moved to ${pipeline?.name ?? "pipeline"}` : "Deal updated");
       onOpenChange(false);
+      onSaved?.();
     } catch (err) {
       console.error(err);
       toast.error("Couldn't update deal. Try again.");
@@ -226,20 +255,72 @@ export function EditDealDialog({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-deal-pipeline">Pipeline</Label>
+              <select
+                id="edit-deal-pipeline"
+                value={pipelineId}
+                disabled={!pipelines}
+                onChange={(e) => {
+                  setPipelineId(e.target.value);
+                  // Moving pipelines needs an explicit destination stage.
+                  setStageId(deal && e.target.value === dealPipelineId(deal) ? deal.stageId : "");
+                }}
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+              >
+                {pipelines && !pipeline && pipelineId && (
+                  <option value={pipelineId}>Current pipeline (archived)</option>
+                )}
+                {(pipelines ?? []).map((p) => (
+                  <option key={p.id} value={p.id} className="bg-background text-foreground">
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-deal-stage">Stage</Label>
+              <select
+                id="edit-deal-stage"
+                value={stageId}
+                onChange={(e) => setStageId(e.target.value as PipelineStageId)}
+                aria-invalid={!!errors.stageId}
+                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
+              >
+                {!stageId && <option value="">Choose a stage…</option>}
+                {stages.map((s) => (
+                  <option key={s.id} value={s.id} className="bg-background text-foreground">
+                    {s.name}
+                    {s.archived ? " (archived)" : ""}
+                  </option>
+                ))}
+              </select>
+              {errors.stageId && (
+                <p className="text-xs text-destructive">{errors.stageId}</p>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-1.5">
-            <Label htmlFor="edit-deal-stage">Stage</Label>
-            <select
-              id="edit-deal-stage"
-              value={stageId}
-              onChange={(e) => setStageId(e.target.value as PipelineStageId)}
-              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 text-foreground dark:bg-input/30 [&_option]:bg-background [&_option]:text-foreground"
-            >
-              {stages.map((s) => (
-                <option key={s.id} value={s.id} className="bg-background text-foreground">
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            <Label htmlFor="edit-deal-close">Expected closing date</Label>
+            <Input
+              id="edit-deal-close"
+              type="date"
+              value={expectedCloseDate}
+              onChange={(e) => setExpectedCloseDate(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-deal-description">Description</Label>
+            <Textarea
+              id="edit-deal-description"
+              rows={3}
+              maxLength={5000}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
 
           <div className="space-y-1.5">

@@ -121,7 +121,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
               enabled: true,
             },
           ]),
-      { href: "/pipeline", label: "Pipeline", icon: GitBranch, enabled: true },
+      { href: "/pipeline", label: "Pipelines", icon: GitBranch, enabled: true },
       {
         href: "/tasks",
         label: "Tasks",
