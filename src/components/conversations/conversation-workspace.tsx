@@ -15,7 +15,6 @@ import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
@@ -71,7 +70,7 @@ export function ConversationWorkspace() {
   const loaded = listReady && contactsReady;
   const unreadCount = rows.filter(c => c.unreadCount > 0).length;
 
-  return <section aria-label="Conversations workspace" className="flex h-full min-h-0 w-full min-w-0 gap-2 lg:gap-3">
+  return <section aria-label="Conversations workspace" className="relative flex h-full min-h-0 w-full min-w-0 gap-2 lg:gap-3">
     <aside aria-label="Conversation list" className={cn("flex w-full shrink-0 flex-col overflow-hidden rounded-2xl border bg-card md:w-[280px] xl:w-[320px] 2xl:w-[360px]", contactId && "hidden md:flex")}>
       <div className="space-y-3 p-4"><div><h1 className="text-xl font-bold tracking-tight text-primary">Conversations</h1><p className="mt-0.5 text-xs text-muted-foreground">All your messages in one place.</p></div>
         <div className="flex gap-2">{[false, true].map(value => <button key={String(value)} type="button" aria-pressed={unread === value} onClick={() => setUnread(value)} className={cn("min-h-10 rounded-full border px-4 text-xs font-medium", unread === value ? "border-primary bg-primary text-primary-foreground" : "text-primary hover:bg-primary/5")}>{value ? "Unread" : "All"}{loaded ? " (" + (value ? unreadCount : rows.length) + ")" : ""}</button>)}</div>
@@ -102,7 +101,6 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(true);
-  const [mobileDetails, setMobileDetails] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const refreshCapabilities = useCallback(() => setRefresh(n => n + 1), []);
@@ -175,8 +173,7 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
         {embedded ? <div className="flex min-w-0 items-center gap-2">{conversation ? <ChannelBadge channel={conversation.lastChannel} /> : <span className="text-xs text-muted-foreground">No messages yet</span>}</div> : <div className="flex min-w-0 items-center gap-2"><Link href={saPath("/conversations")} aria-label="Back to conversations" className="flex size-10 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"><ArrowLeft className="size-4" /></Link><ContactInitials name={contact.name || contact.phone || "?"} /><div className="min-w-0"><h2 className="truncate text-sm font-semibold">{contact.name || "Unnamed contact"}</h2><p className="truncate text-xs text-muted-foreground">{contact.phone || contact.email}</p></div></div>}
         <div className="flex shrink-0 items-center gap-1">{!embedded && conversation && <span className="hidden lg:inline-flex"><ChannelBadge channel={conversation.lastChannel} /></span>}
           {embedded ? <Button render={<Link href={saPath("/conversations/" + contactId)} />} variant="ghost" size="sm" className="min-h-10 gap-1 px-2 text-xs">Open in Conversations<ExternalLink className="size-3" /></Button> : <>
-          <Button variant="ghost" size="icon" className="hidden size-10 2xl:inline-flex" aria-label={detailsOpen ? "Hide contact details" : "Show contact details"} onClick={toggleDetails}><PanelRight className="size-4" /></Button>
-          <Button variant="ghost" size="icon" className="size-10 2xl:hidden" aria-label="Show contact details" onClick={() => setMobileDetails(true)}><PanelRight className="size-4" /></Button></>}
+          <Button variant="ghost" size="icon" className="size-10" aria-label={detailsOpen ? "Hide contact details" : "Show contact details"} onClick={toggleDetails}><PanelRight className="size-4" /></Button></>}
           <DropdownMenu><DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-10" aria-label="Conversation options" />}><MoreHorizontal className="size-5" /></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem onClick={() => setTheme(theme === "native" ? "standard" : "native")}>Channel Styling: {theme === "native" ? "On" : "Off"}</DropdownMenuItem>
             {conversation && <DropdownMenuItem disabled={saving} onClick={() => void manage({ status: conversation.status === "open" ? "closed" : "open" })}>{conversation.status === "open" ? "Close conversation" : "Reopen conversation"}</DropdownMenuItem>}
@@ -190,7 +187,6 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
       {capabilityError && <p role="alert" className="px-4 py-2 text-xs text-destructive">{capabilityError} <button type="button" onClick={refreshCapabilities} className="underline">Retry</button></p>}
       <ConversationComposer key={contactId} contact={contact} availability={capabilities?.channels ?? []} defaultChannel={conversation?.lastChannel ?? "sms"} loading={!capabilities} onSent={refreshCapabilities} />
     </article>
-    {!embedded && detailsOpen && <aside aria-label="Contact information" className="hidden min-h-0 w-[300px] shrink-0 overflow-hidden rounded-2xl border bg-card 2xl:block"><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={toggleDetails} /></aside>}
-    {!embedded && <Dialog open={mobileDetails} onOpenChange={setMobileDetails}><DialogContent className="max-h-[85dvh] overflow-y-auto p-0 sm:max-w-md"><DialogTitle className="sr-only">Contact details</DialogTitle><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={() => setMobileDetails(false)} /></DialogContent></Dialog>}
+    {!embedded && detailsOpen && <aside aria-label="Contact information" className="absolute inset-y-0 right-0 z-10 flex min-h-0 w-[min(320px,calc(100%-3rem))] shrink-0 overflow-hidden rounded-2xl border bg-card shadow-xl md:static md:w-[300px] md:shadow-none"><ConversationContactPanel contact={contact} availability={capabilities?.channels ?? []} onClose={toggleDetails} /></aside>}
   </>;
 }
