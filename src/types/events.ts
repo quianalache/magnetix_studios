@@ -33,6 +33,8 @@ export interface CalendarEvent {
   startAt: Timestamp | FieldValue | null;
   endAt: Timestamp | FieldValue | null;
   contactId: string | null;
+  /** Optional deal this appointment belongs to (Multiple Pipelines). */
+  dealId?: string | null;
   location: string;
   notes: string;
   agencyId: string;

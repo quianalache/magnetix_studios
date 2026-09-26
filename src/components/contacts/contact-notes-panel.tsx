@@ -32,10 +32,16 @@ import type { ContactNoteView, ContactNotesPage } from "@/types/contact-feed";
 export function ContactNotesPanel({
   contactId,
   focusNoteId,
+  notesUrl,
 }: {
   contactId: string;
   /** Scroll to + highlight this note (from an Activity "View in Notes"). */
   focusNoteId?: string | null;
+  /**
+   * Notes endpoint. Defaults to the contact's notes; Deal Details passes
+   * `/api/deals/{id}/notes` (same record shape + rules, separate records).
+   */
+  notesUrl?: string;
 }) {
   const [notes, setNotes] = useState<ContactNoteView[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -48,7 +54,9 @@ export function ContactNotesPanel({
   const [confirmDelete, setConfirmDelete] = useState<ContactNoteView | null>(null);
   const [deleting, setDeleting] = useState(false);
   const requestId = useRef(0);
-  const headVersion = useContactFeedHead(contactId, ["notes"]);
+  const base = notesUrl ?? `/api/contacts/${contactId}/notes`;
+  // Live refresh only exists for contact notes (a client-readable feed).
+  const headVersion = useContactFeedHead(notesUrl ? "" : contactId, ["notes"]);
 
   const loadFirst = useCallback(
     async (quiet = false) => {
@@ -56,7 +64,7 @@ export function ContactNotesPanel({
       if (!quiet) setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/contacts/${contactId}/notes`, { cache: "no-store" });
+        const res = await fetch(base, { cache: "no-store" });
         const data = (await res.json().catch(() => ({}))) as ContactNotesPage & { error?: string };
         if (!res.ok) throw new Error(data.error ?? "Couldn't load notes.");
         if (id !== requestId.current) return;
@@ -70,7 +78,7 @@ export function ContactNotesPanel({
         if (id === requestId.current) setLoading(false);
       }
     },
-    [contactId],
+    [base],
   );
 
   useEffect(() => {
@@ -93,7 +101,7 @@ export function ContactNotesPanel({
     setLoadingMore(true);
     try {
       const res = await fetch(
-        `/api/contacts/${contactId}/notes?cursor=${encodeURIComponent(cursor)}`,
+        `${base}?cursor=${encodeURIComponent(cursor)}`,
         { cache: "no-store" },
       );
       const data = (await res.json().catch(() => ({}))) as ContactNotesPage & { error?: string };
@@ -118,7 +126,7 @@ export function ContactNotesPanel({
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/contacts/${contactId}/notes/${note.id}`, {
+      const res = await fetch(`${base}/${note.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
@@ -139,7 +147,7 @@ export function ContactNotesPanel({
     if (!confirmDelete) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/contacts/${contactId}/notes/${confirmDelete.id}`, {
+      const res = await fetch(`${base}/${confirmDelete.id}`, {
         method: "DELETE",
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -156,7 +164,11 @@ export function ContactNotesPanel({
 
   return (
     <div className="space-y-4">
-      <AddNoteInput contactId={contactId} onSaved={() => void loadFirst(true)} />
+      <AddNoteInput
+        contactId={contactId}
+        postUrl={notesUrl}
+        onSaved={() => void loadFirst(true)}
+      />
 
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading notes">
@@ -283,8 +295,9 @@ export function ContactNotesPanel({
           <DialogHeader>
             <DialogTitle>Delete this note?</DialogTitle>
             <DialogDescription>
-              It will be removed for everyone, including from the contact&apos;s
-              conversation view. This can&apos;t be undone.
+              {notesUrl
+                ? "It will be removed for everyone. This can’t be undone."
+                : "It will be removed for everyone, including from the contact’s conversation view. This can’t be undone."}
             </DialogDescription>
           </DialogHeader>
           {confirmDelete && (

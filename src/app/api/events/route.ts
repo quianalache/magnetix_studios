@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { createEventServerSide } from "@/lib/server/events-service";
+import { resolveDealLink } from "@/lib/server/deal-links";
 
 /**
  * Dashboard-facing calendar-event creation. Replaces the browser's direct
@@ -56,6 +57,11 @@ export async function POST(request: Request) {
   const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
   const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
 
+  const link = await resolveDealLink(subAccountId, body.dealId);
+  if (!link.ok) {
+    return NextResponse.json({ error: "That deal wasn't found in this workspace." }, { status: 400 });
+  }
+
   const { id, event } = await createEventServerSide({
     subAccountId,
     agencyId,
@@ -65,6 +71,7 @@ export async function POST(request: Request) {
     startAt,
     endAt,
     contactId: typeof body.contactId === "string" ? body.contactId : null,
+    dealId: link.dealId,
     location: str(body.location),
     notes: str(body.notes),
     meetingUrl: typeof body.meetingUrl === "string" ? body.meetingUrl : null,

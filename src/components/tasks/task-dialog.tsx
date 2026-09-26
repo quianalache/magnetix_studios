@@ -27,6 +27,9 @@ interface TaskDialogProps {
   contacts: Contact[];
   task?: Task | null;
   defaultContactId?: string | null;
+  /** Link a NEW task to this deal (Deal Details → Add Task). */
+  defaultDealId?: string | null;
+  onSaved?: () => void;
 }
 
 function toDateInput(d: Date): string {
@@ -48,6 +51,8 @@ export function TaskDialog({
   contacts,
   task,
   defaultContactId,
+  defaultDealId,
+  onSaved,
 }: TaskDialogProps) {
   const { subAccountId } = useSubAccount();
   const isEdit = !!task;
@@ -101,7 +106,7 @@ export function TaskDialog({
       notes: notes.trim(),
       dueAt,
       contactId,
-      dealId: task?.dealId ?? null,
+      dealId: task ? (task.dealId ?? null) : (defaultDealId ?? null),
       eventId: task?.eventId ?? null,
       timeBlock,
     };
@@ -136,6 +141,7 @@ export function TaskDialog({
         toast.success("Task created");
       }
       onOpenChange(false);
+      onSaved?.();
     } catch (err) {
       console.error(err);
       toast.error("Couldn't save task. Try again.");

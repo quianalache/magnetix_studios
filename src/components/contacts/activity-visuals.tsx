@@ -87,6 +87,11 @@ export function activityVisuals(
       return { icon: i(CalendarCheck, "text-emerald-500"), label: "Event scheduled" };
     case "task_completed":
       return { icon: i(CheckSquare, "text-emerald-500"), label: "Task completed" };
+    // Deal Details feed (Multiple Pipelines, 2026-09-25).
+    case "task_created":
+      return { icon: i(CheckSquare, "text-muted-foreground"), label: "Task added" };
+    case "appointment_scheduled":
+      return { icon: i(CalendarPlus, "text-emerald-500"), label: "Appointment scheduled" };
     case "form_submitted":
       return { icon: i(FileText, "text-violet-500"), label: "Form submitted" };
     case "email_sent":

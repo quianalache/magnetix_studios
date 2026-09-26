@@ -142,6 +142,10 @@ async function main() {
   const contactNotesRoute = await import("../src/app/api/contacts/[id]/notes/route");
   const boardRoute = await import("../src/app/api/sub-accounts/[id]/pipelines/[pipelineId]/board/route");
   const listRoute = await import("../src/app/api/sub-accounts/[id]/pipelines/[pipelineId]/deals/route");
+  const tasksRoute = await import("../src/app/api/tasks/route");
+  const taskCompleteRoute = await import("../src/app/api/tasks/[id]/complete/route");
+  const eventsRoute = await import("../src/app/api/events/route");
+  const relatedRoute = await import("../src/app/api/deals/[id]/related/route");
 
   console.log("Compatibility (before migration)");
   await check("unmigrated sub-account reads one virtual default pipeline with its legacy stages", async () => {
@@ -450,6 +454,57 @@ async function main() {
       p({ id: "sa1", pipelineId: "default" }),
     )).json();
     assert.equal(listFiltered.total, boardTotal);
+  });
+
+  console.log("Deal Details: tasks, appointments, next activity");
+  await check("task/appointment links are tenant-checked", async () => {
+    const bad = await tasksRoute.POST(req("admin1", { subAccountId: "sa1", title: "x", dealId: "d4" }));
+    assert.equal(bad.status, 400); // d4 belongs to sa2
+    const badEv = await eventsRoute.POST(req("admin1", {
+      subAccountId: "sa1", title: "x", startAt: new Date(Date.now() + 864e5).toISOString(),
+      endAt: new Date(Date.now() + 864e5 + 18e5).toISOString(), dealId: "d4",
+    }));
+    assert.equal(badEv.status, 400);
+  });
+
+  await check("linked tasks + appointments show in related, activity and board cards", async () => {
+    const soon = Date.now() + 2 * 864e5;
+    const t1 = await tasksRoute.POST(req("admin1", { subAccountId: "sa1", title: "Send contract", contactId: "c2", dealId: "eur1", dueAt: new Date(soon).toISOString() }));
+    assert.equal(t1.status, 201);
+    const t2 = await tasksRoute.POST(req("admin1", { subAccountId: "sa1", title: "Later step", contactId: "c2", dealId: "eur1", dueAt: new Date(soon + 5 * 864e5).toISOString() }));
+    const { id: t2id } = await t2.json();
+    const ev = await eventsRoute.POST(req("admin1", {
+      subAccountId: "sa1", title: "Onboarding call", contactId: "c2", dealId: "eur1",
+      startAt: new Date(soon).toISOString(), endAt: new Date(soon + 36e5).toISOString(),
+    }));
+    assert.equal(ev.status, 201);
+    const rel = await (await relatedRoute.GET(req("admin1"), p({ id: "eur1" }))).json();
+    assert.equal(rel.tasks.length, 2);
+    assert.equal(rel.tasks[0].title, "Send contract");
+    assert.equal(rel.upcoming.length, 1);
+    const board = await (await boardRoute.POST(
+      req("admin1", { filters: noFilters, include: ["nextTask", "nextAppointment"], fresh: true }),
+      p({ id: "sa1", pipelineId: "default" }),
+    )).json();
+    const card = board.columns.flatMap((c: { deals: { id: string }[] }) => c.deals).find((d: { id: string }) => d.id === "eur1");
+    assert.equal(card.nextTask.title, "Send contract");
+    assert.equal(card.nextAppointment.title, "Onboarding call");
+    const plain = await (await boardRoute.POST(req("admin1", { filters: noFilters }), p({ id: "sa1", pipelineId: "default" }))).json();
+    const plainCard = plain.columns.flatMap((c: { deals: { id: string }[] }) => c.deals).find((d: { id: string }) => d.id === "eur1");
+    assert.equal(plainCard.nextTask, undefined); // not requested → not read
+    const done = await taskCompleteRoute.POST(req("admin1", { completed: true }), p({ id: t2id }));
+    assert.equal(done.status, 200);
+    const act = await (await activityRoute.GET(req("admin1"), p({ id: "eur1" }))).json();
+    const types = act.items.map((i: { type: string }) => i.type);
+    assert.ok(types.includes("task_created"));
+    assert.ok(types.includes("task_completed"));
+    assert.ok(types.includes("appointment_scheduled"));
+  });
+
+  await check("only admins can delete deals (matches the Firestore rule)", async () => {
+    const res = await dealRoute.DELETE(req("collab1", undefined, "DELETE"), p({ id: "bulk0" }));
+    assert.equal(res.status, 403);
+    assert.ok((await db.doc("deals/bulk0").get()).exists);
   });
 
   console.log(`\n${passed} checks passed.`);

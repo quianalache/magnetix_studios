@@ -120,6 +120,7 @@ export function fetchBoard(
     offsets?: Record<string, number>;
     onlyStageId?: string;
     fresh?: boolean;
+    include?: ("nextTask" | "nextAppointment")[];
   },
 ) {
   return call<BoardResponse>(`${base(sa)}/${pipelineId}/board`, {
@@ -131,7 +132,13 @@ export function fetchBoard(
 export function fetchDealList(
   sa: string,
   pipelineId: string,
-  body: { filters: DealFilters; sort: DealSort; page: number; fresh?: boolean },
+  body: {
+    filters: DealFilters;
+    sort: DealSort;
+    page: number;
+    fresh?: boolean;
+    include?: ("nextTask" | "nextAppointment")[];
+  },
 ) {
   return call<DealListResponse>(`${base(sa)}/${pipelineId}/deals`, {
     method: "POST",

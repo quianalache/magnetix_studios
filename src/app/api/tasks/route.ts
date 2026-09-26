@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { createTaskServerSide } from "@/lib/server/tasks-service";
+import { resolveDealLink } from "@/lib/server/deal-links";
 
 /**
  * Dashboard-facing task creation. Replaces the browser's direct Firestore
@@ -52,6 +53,11 @@ export async function POST(request: Request) {
   const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
   const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
 
+  const link = await resolveDealLink(subAccountId, body.dealId);
+  if (!link.ok) {
+    return NextResponse.json({ error: "That deal wasn't found in this workspace." }, { status: 400 });
+  }
+
   const { id, task } = await createTaskServerSide({
     subAccountId,
     agencyId,
@@ -61,7 +67,7 @@ export async function POST(request: Request) {
     notes: str(body.notes),
     dueAt: parseDue(body.dueAt),
     contactId: typeof body.contactId === "string" ? body.contactId : null,
-    dealId: typeof body.dealId === "string" ? body.dealId : null,
+    dealId: link.dealId,
     eventId: typeof body.eventId === "string" ? body.eventId : null,
     timeBlock: parseTimeBlock(body.timeBlock),
   });

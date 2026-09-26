@@ -13,6 +13,7 @@ import {
   type CurrencyTotals,
   type DealContactSummary,
   type DealFilters,
+  type DealNextActivity,
   type DealRowWire,
   type DealSort,
   type DealSortField,
@@ -32,9 +33,9 @@ import {
  * cards per stage (or one list page) plus exact aggregate counts/totals,
  * so statistics stay correct while cards load incrementally.
  *
- * Contacts are only loaded in bulk when a search or country filter needs
- * them (reusing the Contacts list's own cached candidate set); otherwise
- * only the contacts of the returned rows are fetched.
+ * Contact fields for search / the country filter come from the Contacts
+ * list's own cached candidate set (same territory scope, same 30s cache);
+ * the contact shown on each returned card is read by id for that page only.
  */
 
 const CACHE_TTL_MS = 30_000;
@@ -233,13 +234,14 @@ async function contactSummaries(ids: string[]): Promise<Map<string, DealContactS
   const db = getAdminDb();
   for (let i = 0; i < unique.length; i += 300) {
     const refs = unique.slice(i, i + 300).map((id) => db.doc(`contacts/${id}`));
-    const snaps = await db.getAll(...refs, { fieldMask: ["name", "email", "company"] });
+    const snaps = await db.getAll(...refs, { fieldMask: ["name", "email", "phone", "company"] });
     for (const s of snaps) {
       if (!s.exists) continue;
       out.set(s.id, {
         id: s.id,
         name: text(s.get("name")) || null,
         email: text(s.get("email")) || null,
+        phone: text(s.get("phone")) || null,
         company: text(s.get("company")) || null,
       });
     }
@@ -247,8 +249,95 @@ async function contactSummaries(ids: string[]): Promise<Map<string, DealContactS
   return out;
 }
 
-async function toRows(deals: Deal[]): Promise<DealRowWire[]> {
-  const contacts = await contactSummaries(deals.map((d) => d.contactId));
+export type RowExtra = "nextTask" | "nextAppointment";
+
+function chunks<T>(list: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Next open task (earliest due; undated last) and next upcoming appointment
+ * linked to each deal. Equality + `in` queries only (no composite index);
+ * the date comparison happens in memory over each deal's own records.
+ */
+export async function nextActivitiesForDeals(
+  subAccountId: string,
+  dealIds: string[],
+  include: Set<RowExtra>,
+): Promise<{ tasks: Map<string, DealNextActivity>; appointments: Map<string, DealNextActivity> }> {
+  const tasks = new Map<string, DealNextActivity>();
+  const appointments = new Map<string, DealNextActivity>();
+  const ids = [...new Set(dealIds)];
+  if (ids.length === 0) return { tasks, appointments };
+  const db = getAdminDb();
+  const now = Date.now();
+  await Promise.all(
+    chunks(ids, 30).map(async (chunk) => {
+      const [taskSnap, eventSnap] = await Promise.all([
+        include.has("nextTask")
+          ? db
+              .collection("tasks")
+              .where("subAccountId", "==", subAccountId)
+              .where("dealId", "in", chunk)
+              .where("completed", "==", false)
+              .get()
+          : null,
+        include.has("nextAppointment")
+          ? db
+              .collection("events")
+              .where("subAccountId", "==", subAccountId)
+              .where("dealId", "in", chunk)
+              .get()
+          : null,
+      ]);
+      for (const t of taskSnap?.docs ?? []) {
+        const dealId = String(t.get("dealId"));
+        const due = toEpochMs(t.get("dueAt"));
+        const cur = tasks.get(dealId);
+        const curDue = cur?.at ? Date.parse(cur.at) : null;
+        const better =
+          !cur || (due !== null && (curDue === null || due < curDue));
+        if (better) {
+          tasks.set(dealId, {
+            id: t.id,
+            title: text(t.get("title")),
+            at: due === null ? null : new Date(due).toISOString(),
+          });
+        }
+      }
+      for (const e of eventSnap?.docs ?? []) {
+        const status = text(e.get("status")) || "scheduled";
+        if (status === "cancelled" || status === "completed" || status === "no_show") continue;
+        const start = toEpochMs(e.get("startAt"));
+        if (start === null || start < now) continue;
+        const dealId = String(e.get("dealId"));
+        const cur = appointments.get(dealId);
+        if (!cur || start < Date.parse(cur.at!)) {
+          appointments.set(dealId, {
+            id: e.id,
+            title: text(e.get("title")),
+            at: new Date(start).toISOString(),
+          });
+        }
+      }
+    }),
+  );
+  return { tasks, appointments };
+}
+
+export async function toRows(
+  deals: Deal[],
+  opts: { subAccountId?: string; include?: Set<RowExtra> } = {},
+): Promise<DealRowWire[]> {
+  const include = opts.include ?? new Set<RowExtra>();
+  const [contacts, next] = await Promise.all([
+    contactSummaries(deals.map((d) => d.contactId)),
+    opts.subAccountId && include.size > 0
+      ? nextActivitiesForDeals(opts.subAccountId, deals.map((d) => d.id), include)
+      : null,
+  ]);
   return deals.map((d) => ({
     id: d.id,
     title: d.title ?? "",
@@ -268,7 +357,19 @@ async function toRows(deals: Deal[]): Promise<DealRowWire[]> {
     updatedAt: iso(d.updatedAt),
     stageChangedAt: iso(d.stageChangedAt),
     contact: contacts.get(d.contactId) ?? null,
+    ...(include.has("nextTask") ? { nextTask: next?.tasks.get(d.id) ?? null } : {}),
+    ...(include.has("nextAppointment")
+      ? { nextAppointment: next?.appointments.get(d.id) ?? null }
+      : {}),
   }));
+}
+
+export function parseRowExtras(raw: unknown): Set<RowExtra> {
+  const out = new Set<RowExtra>();
+  if (Array.isArray(raw)) {
+    for (const v of raw) if (v === "nextTask" || v === "nextAppointment") out.add(v);
+  }
+  return out;
 }
 
 /**
@@ -284,6 +385,7 @@ export async function buildBoardColumns(opts: {
   deals: Deal[];
   offsets?: Record<string, number>;
   onlyStageId?: string | null;
+  include?: Set<RowExtra>;
 }): Promise<BoardColumn[]> {
   const grouped = new Map<string, Deal[]>();
   for (const d of opts.deals) {
@@ -305,7 +407,10 @@ export async function buildBoardColumns(opts: {
     slices.set(stageId, slice);
     pageDeals.push(...slice);
   }
-  const rows = await toRows(pageDeals);
+  const rows = await toRows(pageDeals, {
+    subAccountId: opts.pipeline.subAccountId,
+    include: opts.include,
+  });
   const rowById = new Map(rows.map((r) => [r.id, r]));
   return order
     .filter((id) => !opts.onlyStageId || id === opts.onlyStageId)
@@ -348,6 +453,7 @@ export async function buildListPage(opts: {
   deals: Deal[];
   sort: DealSort;
   page: number;
+  include?: Set<RowExtra>;
 }): Promise<{ rows: DealRowWire[]; total: number; page: number; pageCount: number }> {
   const stageIndex = new Map(opts.pipeline.stages.map((s, i) => [s.id, i]));
   const key = (d: Deal): string | number | null => {
@@ -382,7 +488,12 @@ export async function buildListPage(opts: {
   const pageCount = Math.max(1, Math.ceil(total / DEAL_LIST_PAGE_SIZE));
   const page = Math.min(Math.max(1, Math.floor(opts.page || 1)), pageCount);
   const slice = sorted.slice((page - 1) * DEAL_LIST_PAGE_SIZE, page * DEAL_LIST_PAGE_SIZE);
-  return { rows: await toRows(slice), total, page, pageCount };
+  return {
+    rows: await toRows(slice, { subAccountId: opts.pipeline.subAccountId, include: opts.include }),
+    total,
+    page,
+    pageCount,
+  };
 }
 
 /** Parse the shared filter model from an untrusted request body. */

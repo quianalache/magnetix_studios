@@ -2,7 +2,10 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import {
+  requireSubAccountAdmin,
+  requireSubAccountMember,
+} from "@/lib/auth/require-tenancy";
 import {
   deleteDealServerSide,
   updateDealServerSide,
@@ -14,7 +17,10 @@ import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 import { DEAL_PRIORITIES } from "@/types/deals";
 import type { DealPriority, PipelineStageId } from "@/types/deals";
 import { territoryGate } from "@/lib/auth/territory-filter";
-import { PipelineError } from "@/lib/server/pipelines-service";
+import { PipelineError, getPipeline } from "@/lib/server/pipelines-service";
+import { requireDealRoute } from "@/lib/server/deal-route-guard";
+import { parseRowExtras, toRows } from "@/lib/server/pipeline-deals-service";
+import { dealPipelineId } from "@/types/pipelines";
 
 /**
  * Dashboard-facing single-deal routes:
@@ -27,6 +33,25 @@ import { PipelineError } from "@/lib/server/pipelines-service";
  */
 
 const VALID_PRIORITIES = new Set(DEAL_PRIORITIES.map((p) => p.id));
+
+/**
+ * GET /api/deals/:id — one deal for Deal Details (same row shape as the
+ * board) plus its pipeline. Member + territory gated.
+ */
+export async function GET(
+  request: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
+  const { id } = await ctx.params;
+  const guard = await requireDealRoute(request, id);
+  if (guard instanceof NextResponse) return guard;
+  const [row] = await toRows([guard.deal], {
+    subAccountId: guard.deal.subAccountId,
+    include: parseRowExtras(["nextTask", "nextAppointment"]),
+  });
+  const pipeline = await getPipeline(guard.deal.subAccountId, dealPipelineId(guard.deal));
+  return NextResponse.json({ deal: row, pipeline, canDelete: guard.isAdmin });
+}
 
 export async function PATCH(
   request: Request,
@@ -162,7 +187,9 @@ export async function DELETE(
   }
   const data = snap.data()!;
 
-  const access = await requireSubAccountMember(request, data.subAccountId);
+  // Deleting a deal is an admin action — same rule the Firestore rules
+  // already apply to direct deal deletes.
+  const access = await requireSubAccountAdmin(request, data.subAccountId);
   if (access instanceof NextResponse) return access;
   const gate = await territoryGate(access, (data.territoryId as string) ?? null);
   if (gate) return gate;

@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { writeDealActivity } from "@/lib/server/deals-service";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import {
   serializeEventForApi,
@@ -49,6 +50,8 @@ export interface CreateEventInput {
   startAt: Date;
   endAt: Date;
   contactId: string | null;
+  /** Already validated to belong to `subAccountId` (see deal-links). */
+  dealId?: string | null;
   location: string;
   notes: string;
   meetingUrl?: string | null;
@@ -72,6 +75,7 @@ export async function createEventServerSide(
     startAt: input.startAt,
     endAt: input.endAt,
     contactId: input.contactId,
+    dealId: input.dealId ?? null,
     location: input.location,
     notes: input.notes,
     meetingUrl: input.meetingUrl ?? null,
@@ -86,6 +90,15 @@ export async function createEventServerSide(
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(doc);
+  if (input.dealId) {
+    await writeDealActivity(input.dealId, {
+      type: "appointment_scheduled",
+      content: `Appointment "${input.title}" scheduled`,
+      createdBy: input.createdByUid,
+      meta: { eventId: ref.id, startAt: input.startAt.toISOString() },
+      contactId: input.contactId,
+    });
+  }
 
   // Best-effort: mirror onto the creator's own connected Google Calendar.
   // Never blocks the response — a missing connection or a Google-side

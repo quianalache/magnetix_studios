@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/serializers/tasks";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
+import { writeDealActivity } from "@/lib/server/deals-service";
 
 /**
  * Server-side Task write service — create + complete go through here so
@@ -77,6 +78,15 @@ export async function createTaskServerSide(
     updatedAt: FieldValue.serverTimestamp(),
   };
   await ref.set(doc);
+  if (input.dealId) {
+    await writeDealActivity(input.dealId, {
+      type: "task_created",
+      content: `Task added: "${input.title}"`,
+      createdBy: input.createdByUid,
+      meta: { taskId: ref.id },
+      contactId: input.contactId,
+    });
+  }
 
   const now = new Date();
   const task = serializeTaskForApi(
@@ -168,6 +178,16 @@ export async function setTaskCompletedServerSide(opts: {
     } catch (err) {
       console.warn("[tasks-service] task_completed activity failed", err);
     }
+  }
+
+  if (justCompleted && existing.dealId) {
+    await writeDealActivity(existing.dealId as string, {
+      type: "task_completed",
+      content: `Task completed: "${existing.title ?? ""}"`,
+      createdBy: opts.userId,
+      meta: { taskId: opts.taskId },
+      contactId: (existing.contactId as string | null) ?? null,
+    });
   }
 
   const fresh = await ref.get();

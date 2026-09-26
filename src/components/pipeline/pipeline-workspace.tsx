@@ -53,7 +53,7 @@ import { DealListView } from "@/components/pipeline/deal-list-view";
 import { DealFilterBar } from "@/components/pipeline/deal-filter-bar";
 import { CurrencyTotalsText } from "@/components/pipeline/currency-totals";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
-import { EditDealDialog } from "@/components/pipeline/edit-deal-dialog";
+import { DealDetailsPanel } from "@/components/pipeline/deal-details-panel";
 import { ManageStagesDialog } from "@/components/pipeline/manage-stages-dialog";
 import { CustomizeCardsDialog } from "@/components/pipeline/customize-cards-dialog";
 
@@ -144,10 +144,17 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
 
   const { fields: cardFields, setFields: setCardFields, reset: resetCardFields } =
     usePipelineCardFields(user?.uid, subAccountId, pipelineId);
+  // Next task / appointment cost extra reads — only fetch what cards show.
+  const include = useMemo(
+    () =>
+      (["nextTask", "nextAppointment"] as const).filter((k) => cardFields.includes(k)),
+    [cardFields],
+  );
+  const includeKey = include.join(",");
 
   const [newDealStage, setNewDealStage] = useState<string | null>(null);
   const [newDealOpen, setNewDealOpen] = useState(false);
-  const [editingDeal, setEditingDeal] = useState<BoardDeal | null>(null);
+  const [openDeal, setOpenDeal] = useState<BoardDeal | null>(null);
   const [manageOpen, setManageOpen] = useState(searchParams.get("manage") === "stages");
   const [cardsOpen, setCardsOpen] = useState(false);
 
@@ -170,7 +177,11 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
     async (fresh = false) => {
       const seq = ++requestSeq.current;
       try {
-        const res = await fetchBoard(subAccountId, pipelineId, { filters: queryFilters, fresh });
+        const res = await fetchBoard(subAccountId, pipelineId, {
+          filters: queryFilters,
+          fresh,
+          include: [...include],
+        });
         if (seq !== requestSeq.current) return;
         setPipeline(res.pipeline);
         setStats(res.stats);
@@ -192,7 +203,8 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
         if (seq === requestSeq.current) setLoading(false);
       }
     },
-    [subAccountId, pipelineId, queryFilters],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subAccountId, pipelineId, queryFilters, includeKey],
   );
 
   const loadList = useCallback(
@@ -204,6 +216,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
           sort,
           page,
           fresh,
+          include: [...include],
         });
         if (seq !== requestSeq.current) return;
         setPipeline(res.pipeline);
@@ -220,7 +233,8 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
         if (seq === requestSeq.current) setLoading(false);
       }
     },
-    [subAccountId, pipelineId, queryFilters, sort, page],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [subAccountId, pipelineId, queryFilters, sort, page, includeKey],
   );
 
   const reload = useCallback(
@@ -281,6 +295,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
         filters: queryFilters,
         offsets: { [stageId]: col.deals.length },
         onlyStageId: stageId,
+        include: [...include],
       });
       const more = res.columns[0];
       if (more) {
@@ -496,7 +511,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
           onToggleCollapse={toggleCollapse}
           onLoadMore={loadMore}
           loadingMore={loadingMore}
-          onOpenDeal={setEditingDeal}
+          onOpenDeal={setOpenDeal}
           onAddDeal={(stageId) => {
             setNewDealStage(stageId);
             setNewDealOpen(true);
@@ -517,7 +532,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
           pageCount={list.pageCount}
           total={list.total}
           onPage={setPage}
-          onOpenDeal={setEditingDeal}
+          onOpenDeal={setOpenDeal}
           loading={loading}
         />
       )}
@@ -530,12 +545,13 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
         onCreated={() => void reload(true)}
       />
 
-      <EditDealDialog
-        deal={editingDeal}
-        open={!!editingDeal}
-        onOpenChange={(o) => !o && setEditingDeal(null)}
+      <DealDetailsPanel
+        dealId={openDeal?.id ?? null}
+        initial={openDeal}
+        open={!!openDeal}
+        onOpenChange={(o) => !o && setOpenDeal(null)}
+        onChanged={() => void reload(true)}
         territories={territories}
-        onSaved={() => void reload(true)}
       />
 
       {pipeline && isAdmin && (

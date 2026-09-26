@@ -10,6 +10,7 @@ import {
   matchPipelineDeals,
   normalizeDealSort,
   parseDealFilters,
+  parseRowExtras,
 } from "@/lib/server/pipeline-deals-service";
 import { readJsonObject, INVALID_JSON } from "@/lib/server/pipeline-route";
 import type { DealListResponse } from "@/types/pipeline-board";
@@ -45,6 +46,7 @@ export async function POST(
   });
   const page = await buildListPage({
     pipeline,
+    include: parseRowExtras(body.include),
     deals,
     sort: normalizeDealSort(body.sort),
     page: typeof body.page === "number" ? body.page : 1,

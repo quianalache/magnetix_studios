@@ -11,9 +11,12 @@ import { useAuth } from "@/hooks/use-auth";
 
 export function AddNoteInput({
   contactId,
+  postUrl,
   onSaved,
 }: {
   contactId: string;
+  /** Post to this notes endpoint instead of the contact's (Deal Details). */
+  postUrl?: string;
   /** Called after a note is saved (the Notes tab refreshes its list). */
   onSaved?: () => void;
 }) {
@@ -28,7 +31,17 @@ export function AddNoteInput({
 
     setSaving(true);
     try {
-      await addNote(contactId, trimmed, user.uid);
+      if (postUrl) {
+        const res = await fetch(postUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: trimmed }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Failed to save note.");
+      } else {
+        await addNote(contactId, trimmed, user.uid);
+      }
       setContent("");
       onSaved?.();
     } catch (err) {

@@ -54,6 +54,7 @@ export interface DealContactSummary {
   id: string;
   name: string | null;
   email: string | null;
+  phone?: string | null;
   company: string | null;
 }
 

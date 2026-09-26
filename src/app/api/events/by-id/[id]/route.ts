@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { territoryForContact } from "@/lib/server/events-service";
+import { resolveDealLink } from "@/lib/server/deal-links";
 import { pushEventCreate, pushEventDelete, pushEventUpdate } from "@/lib/google-calendar/push";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import type { CalendarEvent } from "@/types/events";
@@ -23,6 +24,7 @@ interface PatchBody {
   startAt?: string;
   endAt?: string;
   contactId?: string | null;
+  dealId?: string | null;
   location?: string;
   notes?: string;
   meetingUrl?: string | null;
@@ -81,6 +83,13 @@ export async function PATCH(
   if (body.contactId !== undefined) {
     patch.contactId = body.contactId;
     patch.territoryId = (await territoryForContact(body.contactId)) || GLOBAL_TERRITORY_ID;
+  }
+  if (body.dealId !== undefined) {
+    const link = await resolveDealLink(event.subAccountId, body.dealId);
+    if (!link.ok) {
+      return NextResponse.json({ error: "That deal wasn't found in this workspace." }, { status: 400 });
+    }
+    patch.dealId = link.dealId;
   }
   if (body.location !== undefined) patch.location = str(body.location);
   if (body.notes !== undefined) patch.notes = str(body.notes);

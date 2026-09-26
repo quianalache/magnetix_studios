@@ -9,6 +9,7 @@ import {
   computeStats,
   matchPipelineDeals,
   parseDealFilters,
+  parseRowExtras,
 } from "@/lib/server/pipeline-deals-service";
 import { readJsonObject, INVALID_JSON } from "@/lib/server/pipeline-route";
 import type { BoardResponse } from "@/types/pipeline-board";
@@ -50,6 +51,7 @@ export async function POST(
       : undefined;
   const columns = await buildBoardColumns({
     pipeline,
+    include: parseRowExtras(body.include),
     deals,
     offsets,
     onlyStageId: typeof body.onlyStageId === "string" ? body.onlyStageId : null,

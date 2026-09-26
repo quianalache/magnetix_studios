@@ -50,6 +50,11 @@ interface EventDialogProps {
   contacts: Contact[];
   event?: CalendarEvent | null;
   defaultDate?: Date | null;
+  /** New events: pre-select this contact (Deal Details → Schedule). */
+  defaultContactId?: string | null;
+  /** Link a NEW event to this deal; existing events keep their link. */
+  dealId?: string | null;
+  onSaved?: () => void;
 }
 
 function toDateInput(d: Date): string {
@@ -82,6 +87,9 @@ export function EventDialog({
   contacts,
   event,
   defaultDate,
+  defaultContactId,
+  dealId,
+  onSaved,
 }: EventDialogProps) {
   const { subAccountId } = useSubAccount();
   const isEdit = !!event;
@@ -125,13 +133,13 @@ export function EventDialog({
       setDate(toDateInput(start));
       setStartTime(toTimeInput(start));
       setEndTime(toTimeInput(end));
-      setContactId(null);
+      setContactId(defaultContactId ?? null);
       setLocation("");
       setMeetingUrl("");
       setNotes("");
     }
     setErrors({});
-  }, [open, event, defaultDate]);
+  }, [open, event, defaultDate, defaultContactId]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -194,6 +202,7 @@ export function EventDialog({
             startAt: payload.startAt.toISOString(),
             endAt: payload.endAt.toISOString(),
             contactId: payload.contactId,
+            dealId: dealId ?? null,
             location: payload.location,
             notes: payload.notes,
             meetingUrl: payload.meetingUrl,
@@ -207,6 +216,7 @@ export function EventDialog({
         toast.success("Event created");
       }
       onOpenChange(false);
+      onSaved?.();
     } catch (err) {
       console.error(err);
       toast.error("Couldn't save event. Try again.");
