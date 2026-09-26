@@ -24,9 +24,9 @@ export function CurrencyTotalsText({
   const all = entries.map(([c, v]) => formatCurrency(v, c)).join(" · ");
   return (
     <span className={className} title={rest.length > 0 ? all : undefined}>
-      {formatCurrency(first[1], first[0])}
+      <span className="whitespace-nowrap">{formatCurrency(first[1], first[0])}</span>
       {rest.length > 0 && (
-        <span className="ml-1 text-[0.7em] font-medium text-muted-foreground">
+        <span className="ml-1 inline-block whitespace-nowrap text-[0.7em] font-medium text-muted-foreground">
           +{rest.length} {rest.length === 1 ? "currency" : "currencies"}
         </span>
       )}

@@ -365,7 +365,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
       </Link>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <GitBranch className="h-6 w-6" />
           </div>
@@ -415,7 +415,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
           <div className="flex items-center gap-1 rounded-lg border p-1" role="group" aria-label="View">
             <button
               type="button"

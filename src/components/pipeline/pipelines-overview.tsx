@@ -248,7 +248,7 @@ export function PipelinesOverview() {
             ]}
           />
         </div>
-        <div className="flex items-center gap-1 rounded-lg border p-1 md:ml-auto" role="group" aria-label="Display">
+        <div className="flex items-center gap-1 self-start rounded-lg border p-1 md:ml-auto md:self-auto" role="group" aria-label="Display">
           <ViewButton active={view === "grid"} onClick={() => changeView("grid")} label="Grid view">
             <LayoutGrid className="h-4 w-4" />
           </ViewButton>
@@ -439,8 +439,8 @@ function PipelineCard({
           <GitBranch className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="truncate text-base font-semibold">{p.name}</h2>
+          <div className="flex items-start gap-2">
+            <h2 className="line-clamp-2 text-base font-semibold">{p.name}</h2>
             <StatusBadge status={p.status} />
           </div>
           {p.description && (
@@ -450,13 +450,13 @@ function PipelineCard({
         {menu}
       </div>
 
-      <dl className="mt-4 grid grid-cols-3 divide-x text-sm">
+      <dl className="mt-4 grid grid-cols-[1fr_1.5fr_1fr] divide-x text-sm">
         <div className="pr-3">
           <dd className="text-lg font-semibold tabular-nums">{stats.openCount}</dd>
           <dt className="text-xs text-muted-foreground">Active deals</dt>
         </div>
         <div className="min-w-0 px-3">
-          <dd className="truncate text-lg font-semibold tabular-nums">
+          <dd className="text-lg font-semibold leading-tight tabular-nums">
             <CurrencyTotalsText totals={stats.openValue} />
           </dd>
           <dt className="text-xs text-muted-foreground">Open value</dt>
