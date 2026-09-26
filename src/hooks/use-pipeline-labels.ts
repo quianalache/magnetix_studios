@@ -24,6 +24,8 @@ export function usePipelineLabels(subAccountIdOverride?: string | null): {
   stageFor: (deal: { pipelineId?: string | null; stageId: string }) => PipelineStage;
   pipelineNameFor: (deal: { pipelineId?: string | null }) => string | null;
   hasMultiplePipelines: boolean;
+  /** Every pipeline (archived included), in display order; [] until loaded. */
+  pipelines: Pipeline[];
 } {
   const sa = useOptionalSubAccount();
   const subAccountId = subAccountIdOverride ?? sa?.subAccountId ?? "";
@@ -63,6 +65,7 @@ export function usePipelineLabels(subAccountIdOverride?: string | null): {
       },
       pipelineNameFor: (deal) => names.get(dealPipelineId(deal)) ?? null,
       hasMultiplePipelines: pipelines.filter((p) => p.status === "active").length > 1,
+      pipelines,
     };
   }, [pipelines]);
 }

@@ -26,7 +26,8 @@ import {
 } from "@/components/reports/charts";
 import { AttributionReport } from "@/components/reports/attribution-report";
 import { type Deal } from "@/types/deals";
-import { usePipelineStages } from "@/hooks/use-pipeline-stages";
+import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
+import { dealPipelineId, toDisplayStages } from "@/types/pipelines";
 import type { Contact } from "@/types/contacts";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,12 @@ export default function ReportsPage() {
   const [attributionVisits, setAttributionVisits] = useState<AttributionVisitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>("30d");
+  // Multiple Pipelines (2026-09-25): report on one pipeline or all of them,
+  // and in ONE currency at a time (money is never summed across
+  // currencies; deal counts include every currency).
+  const { pipelines } = usePipelineLabels();
+  const [pipelineFilter, setPipelineFilter] = useState<string>("all");
+  const [currencyChoice, setCurrencyChoice] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
 
   useEffect(() => {
@@ -105,7 +112,27 @@ export default function ReportsPage() {
   const rangeCutoff = rangeDays
     ? Date.now() - rangeDays * 24 * 60 * 60 * 1000
     : 0;
-  const currency = deals[0]?.currency ?? "USD";
+  const scopedDeals = useMemo(
+    () =>
+      pipelineFilter === "all"
+        ? deals
+        : deals.filter((d) => dealPipelineId(d) === pipelineFilter),
+    [deals, pipelineFilter],
+  );
+  const currencies = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const d of scopedDeals) {
+      const c = (d.currency || "USD").toUpperCase();
+      n.set(c, (n.get(c) ?? 0) + 1);
+    }
+    return [...n.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  }, [scopedDeals]);
+  const currency =
+    currencyChoice && currencies.includes(currencyChoice)
+      ? currencyChoice
+      : (currencies[0] ?? "USD");
+  const inCurrency = (d: Deal) => (d.currency || "USD").toUpperCase() === currency;
+  const otherCurrencies = currencies.length > 1;
 
   // Filter to range
   const inRange = useMemo(() => {
@@ -114,13 +141,13 @@ export default function ReportsPage() {
       const d = toDate(c.createdAt);
       return d && d.getTime() >= rangeCutoff;
     });
-    const dealsIn = deals.filter((d) => {
+    const dealsIn = scopedDeals.filter((d) => {
       if (!rangeDays) return true;
       const date = toDate(d.createdAt);
       return date && date.getTime() >= rangeCutoff;
     });
     return { contactsIn, dealsIn };
-  }, [contacts, deals, rangeDays, rangeCutoff]);
+  }, [contacts, scopedDeals, rangeDays, rangeCutoff]);
 
   // KPIs
   const newLeads = inRange.contactsIn.length;
@@ -129,10 +156,11 @@ export default function ReportsPage() {
   );
   const wonDeals = inRange.dealsIn.filter((d) => d.stageId === "won");
   const lostDeals = inRange.dealsIn.filter((d) => d.stageId === "lost");
-  const openValue = openDeals.reduce((s, d) => s + (d.value || 0), 0);
-  const wonValue = wonDeals.reduce((s, d) => s + (d.value || 0), 0);
+  const openValue = openDeals.filter(inCurrency).reduce((s, d) => s + (d.value || 0), 0);
+  const wonInCurrency = wonDeals.filter(inCurrency);
+  const wonValue = wonInCurrency.reduce((s, d) => s + (d.value || 0), 0);
   const avgDeal =
-    wonDeals.length > 0 ? wonValue / wonDeals.length : 0;
+    wonInCurrency.length > 0 ? wonValue / wonInCurrency.length : 0;
   const conversion =
     wonDeals.length + lostDeals.length > 0
       ? Math.round(
@@ -140,45 +168,58 @@ export default function ReportsPage() {
         )
       : 0;
 
-  // Pipeline funnel (all deals, current state — not filtered, since the
-  // funnel is a "right now" view, not a historical one)
-  const stages = usePipelineStages();
+  // Pipeline funnel (current state — not range-filtered, since the funnel
+  // is a "right now" view). One pipeline → its own stages; all pipelines →
+  // a row per pipeline (stages aren't comparable across pipelines).
+  const selectedPipeline = pipelines.find((p) => p.id === pipelineFilter) ?? null;
   const funnelData = useMemo(() => {
-    const counts = new Map<string, number>();
-    const values = new Map<string, number>();
-    for (const s of stages) {
-      counts.set(s.id, 0);
-      values.set(s.id, 0);
-    }
-    for (const d of deals) {
-      counts.set(d.stageId, (counts.get(d.stageId) ?? 0) + 1);
-      values.set(
-        d.stageId,
-        (values.get(d.stageId) ?? 0) + (d.value || 0),
+    const money = (list: Deal[]) =>
+      formatCurrency(
+        list
+          .filter((d) => (d.currency || "USD").toUpperCase() === currency)
+          .reduce((s, d) => s + (d.value || 0), 0),
+        currency,
       );
+    const palette = ["bg-slate-500", "bg-blue-500", "bg-indigo-500", "bg-amber-500", "bg-violet-500", "bg-cyan-500"];
+    if (!selectedPipeline) {
+      return pipelines
+        .filter((p) => p.status === "active")
+        .map((p, i) => {
+          const mine = deals.filter((d) => dealPipelineId(d) === p.id);
+          return {
+            label: p.name,
+            value: mine.length,
+            secondary: `${money(mine.filter((d) => d.stageId !== "won" && d.stageId !== "lost"))} open`,
+            tone: palette[i % palette.length],
+          };
+        });
     }
-    const stageTones: Record<string, string> = {
-      new: "bg-slate-500",
-      contacted: "bg-blue-500",
-      qualified: "bg-indigo-500",
-      proposal: "bg-amber-500",
-      won: "bg-emerald-500",
-      lost: "bg-rose-500",
-    };
-    return stages.map((s) => ({
-      label: s.label,
-      value: counts.get(s.id) ?? 0,
-      secondary: formatCurrency(values.get(s.id) ?? 0, currency),
-      tone: stageTones[s.id],
-    }));
-  }, [deals, currency, stages]);
+    const shown = selectedPipeline.stages.filter(
+      (s) => !s.archived || scopedDeals.some((d) => d.stageId === s.id),
+    );
+    let open = 0;
+    return toDisplayStages(shown).map((s) => {
+      const inStage = scopedDeals.filter((d) => d.stageId === s.id);
+      return {
+        label: s.label,
+        value: inStage.length,
+        secondary: money(inStage),
+        tone:
+          s.terminal === "won"
+            ? "bg-emerald-500"
+            : s.terminal === "lost"
+              ? "bg-rose-500"
+              : palette[open++ % palette.length],
+      };
+    });
+  }, [deals, scopedDeals, currency, pipelines, selectedPipeline]);
 
   // Deals won over time — bucketed daily over the selected range
   const wonTimeline = useMemo(() => {
     const buckets = bucketDaily(rangeDays ?? 30);
     const byDay = new Map<string, number>();
     for (const b of buckets) byDay.set(b.key, 0);
-    for (const d of wonDeals) {
+    for (const d of wonInCurrency) {
       const date = toDate(d.stageChangedAt) ?? toDate(d.createdAt);
       if (!date) continue;
       const key = dayKey(date);
@@ -187,7 +228,7 @@ export default function ReportsPage() {
       }
     }
     return buckets.map((b) => ({ x: b.label, y: byDay.get(b.key) ?? 0 }));
-  }, [wonDeals, rangeDays]);
+  }, [wonInCurrency, rangeDays]);
 
   // Contacts added over time
   const leadsTimeline = useMemo(() => {
@@ -238,6 +279,36 @@ export default function ReportsPage() {
               : "Live analytics across your contacts and pipeline."}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Pipeline"
+            value={pipelineFilter}
+            onChange={(e) => setPipelineFilter(e.target.value)}
+            className="h-9 rounded-xl border bg-background px-2.5 text-sm [&_option]:bg-background"
+          >
+            <option value="all">All pipelines</option>
+            {pipelines.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+                {p.status === "archived" ? " (archived)" : ""}
+              </option>
+            ))}
+          </select>
+          {otherCurrencies && (
+            <select
+              aria-label="Currency"
+              value={currency}
+              onChange={(e) => setCurrencyChoice(e.target.value)}
+              className="h-9 rounded-xl border bg-background px-2.5 text-sm [&_option]:bg-background"
+              title="Money is shown one currency at a time; deal counts include every currency."
+            >
+              {currencies.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          )}
         <div className="flex items-center gap-1 rounded-xl border bg-muted/30 p-1">
           {RANGES.map((r) => (
             <button
@@ -253,6 +324,7 @@ export default function ReportsPage() {
               {r.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
 
@@ -279,7 +351,7 @@ export default function ReportsPage() {
       ) : tab === "attribution" ? (
         <AttributionReport
           contacts={contacts}
-          deals={deals}
+          deals={scopedDeals}
           visits={attributionVisits}
           rangeDays={rangeDays}
           rangeCutoff={rangeCutoff}
@@ -301,7 +373,9 @@ export default function ReportsPage() {
               icon={<Trophy className="h-4 w-4" />}
               label="Won revenue"
               value={formatCurrency(wonValue, currency)}
-              hint={`${wonDeals.length} deal${wonDeals.length === 1 ? "" : "s"} closed`}
+              hint={`${wonDeals.length} deal${wonDeals.length === 1 ? "" : "s"} closed${
+                otherCurrencies ? ` · ${currency} only` : ""
+              }`}
               tone="text-emerald-600 dark:text-emerald-400"
               bg="bg-emerald-500/10"
             />
@@ -312,7 +386,7 @@ export default function ReportsPage() {
               hint={
                 wonDeals.length === 0
                   ? "No wins yet"
-                  : `Across ${wonDeals.length} win${wonDeals.length === 1 ? "" : "s"}`
+                  : `Across ${wonInCurrency.length} ${currency} win${wonInCurrency.length === 1 ? "" : "s"}`
               }
               tone="text-violet-600 dark:text-violet-400"
               bg="bg-violet-500/10"
@@ -332,9 +406,13 @@ export default function ReportsPage() {
             <section className="rounded-2xl border bg-card p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-semibold">Pipeline funnel</h2>
+                  <h2 className="text-sm font-semibold">
+                    {selectedPipeline ? `${selectedPipeline.name} funnel` : "Pipelines"}
+                  </h2>
                   <p className="text-xs text-muted-foreground">
-                    Current deals by stage · open + closed
+                    {selectedPipeline
+                      ? "Current deals by stage · open + closed"
+                      : "Current deals per pipeline · choose a pipeline for its stages"}
                   </p>
                 </div>
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">

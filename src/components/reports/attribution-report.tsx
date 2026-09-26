@@ -118,8 +118,11 @@ export function AttributionReport({
       if (wonInRange) {
         row.wonCount += 1;
         campaign.wonCount += 1;
-        row.wonValue += d.value || 0;
-        campaign.wonValue += d.value || 0;
+        // Revenue in the report's currency only — never mixed currencies.
+        if ((d.currency || "USD").toUpperCase() === currency) {
+          row.wonValue += d.value || 0;
+          campaign.wonValue += d.value || 0;
+        }
       }
     }
 
@@ -154,7 +157,7 @@ export function AttributionReport({
     );
 
     return { rows, totals };
-  }, [contacts, deals, rangeDays, rangeCutoff]);
+  }, [contacts, deals, rangeDays, rangeCutoff, currency]);
 
   const [visitPageFilter, setVisitPageFilter] = useState<
     "all" | "booking" | "offer"

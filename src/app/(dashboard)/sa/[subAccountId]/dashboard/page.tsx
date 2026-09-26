@@ -30,7 +30,10 @@ import { formatCurrency, toDate } from "@/lib/format";
 import { eventStatus } from "@/types/events";
 import type { CalendarEvent } from "@/types/events";
 import type { Deal } from "@/types/deals";
-import { usePipelineStages } from "@/hooks/use-pipeline-stages";
+import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
+import { CurrencyTotalsText } from "@/components/pipeline/currency-totals";
+import { activeStages, dealPipelineId } from "@/types/pipelines";
+import type { CurrencyTotals } from "@/types/pipeline-board";
 import type { Contact } from "@/types/contacts";
 import type { Quote } from "@/types/quotes";
 import type { BroadcastDoc } from "@/types/broadcasts";
@@ -120,8 +123,15 @@ export default function DashboardPage() {
     () => deals.filter((d) => d.stageId !== "won" && d.stageId !== "lost"),
     [deals],
   );
-  const currency = deals[0]?.currency ?? "USD";
-  const pipelineValue = openDeals.reduce((s, d) => s + (d.value || 0), 0);
+  // Never sum across currencies (Multiple Pipelines, 2026-09-25).
+  const pipelineValue = useMemo(() => {
+    const t: CurrencyTotals = {};
+    for (const d of openDeals) {
+      const c = (d.currency || "USD").toUpperCase();
+      t[c] = (t[c] ?? 0) + (d.value || 0);
+    }
+    return t;
+  }, [openDeals]);
 
   const { todayStart, todayEnd } = useMemo(() => {
     const start = new Date();
@@ -176,13 +186,44 @@ export default function DashboardPage() {
     return m;
   }, [contacts]);
 
-  const stages = usePipelineStages();
+  // Pipeline snapshot: one pipeline → its own stages; several → a row per
+  // active pipeline. Deals only count toward their own pipeline.
+  const { pipelines } = usePipelineLabels();
+  const activePipelines = useMemo(
+    () => pipelines.filter((p) => p.status === "active"),
+    [pipelines],
+  );
+  const onlyPipeline = activePipelines.length === 1 ? activePipelines[0] : null;
+  const stages = useMemo(
+    () =>
+      onlyPipeline
+        ? activeStages(onlyPipeline).map((s) => ({ id: s.id, label: s.name }))
+        : [],
+    [onlyPipeline],
+  );
+  const snapshotDeals = useMemo(
+    () => (onlyPipeline ? deals.filter((d) => dealPipelineId(d) === onlyPipeline.id) : deals),
+    [deals, onlyPipeline],
+  );
   const stageCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of stages) m.set(s.id, 0);
-    for (const d of deals) m.set(d.stageId, (m.get(d.stageId) ?? 0) + 1);
+    for (const d of snapshotDeals) m.set(d.stageId, (m.get(d.stageId) ?? 0) + 1);
     return m;
-  }, [deals, stages]);
+  }, [snapshotDeals, stages]);
+  const perPipeline = useMemo(
+    () =>
+      activePipelines.map((p) => {
+        const mine = openDeals.filter((d) => dealPipelineId(d) === p.id);
+        const value: CurrencyTotals = {};
+        for (const d of mine) {
+          const c = (d.currency || "USD").toUpperCase();
+          value[c] = (value[c] ?? 0) + (d.value || 0);
+        }
+        return { pipeline: p, open: mine.length, value };
+      }),
+    [activePipelines, openDeals],
+  );
 
   const activityItems = useMemo(() => {
     const items: ActivityItem[] = [];
@@ -350,7 +391,7 @@ export default function DashboardPage() {
           href={saPath("/pipeline")}
           icon={<TrendingUp className="h-4 w-4" />}
           label="Open pipeline value"
-          value={formatCurrency(pipelineValue, currency)}
+          value={<CurrencyTotalsText totals={pipelineValue} />}
           hint={`${openDeals.length} open deals`}
           tone="text-[#5E2574] dark:text-[#C892DE]"
           iconBg="bg-[#5E2574]/10 dark:bg-[#C892DE]/15"
@@ -497,32 +538,53 @@ export default function DashboardPage() {
                   Open <ArrowRight className="h-3 w-3" />
                 </Button>
               </div>
-              <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted">
-                {stages.map((s) => {
-                  const count = stageCounts.get(s.id) ?? 0;
-                  if (!count || deals.length === 0) return null;
-                  return (
-                    <span
-                      key={s.id}
-                      className={`h-full ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
-                      style={{ width: `${(count / deals.length) * 100}%` }}
-                    />
-                  );
-                })}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-                {stages.map((s) => (
-                  <span
-                    key={s.id}
-                    className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                  >
-                    <span
-                      className={`h-2 w-2 rounded-sm ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
-                    />
-                    {s.label} ({stageCounts.get(s.id) ?? 0})
-                  </span>
-                ))}
-              </div>
+              {onlyPipeline ? (
+                <>
+                  <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted">
+                    {stages.map((s) => {
+                      const count = stageCounts.get(s.id) ?? 0;
+                      if (!count || snapshotDeals.length === 0) return null;
+                      return (
+                        <span
+                          key={s.id}
+                          className={`h-full ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
+                          style={{ width: `${(count / snapshotDeals.length) * 100}%` }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+                    {stages.map((s) => (
+                      <span
+                        key={s.id}
+                        className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                      >
+                        <span
+                          className={`h-2 w-2 rounded-sm ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
+                        />
+                        {s.label} ({stageCounts.get(s.id) ?? 0})
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {perPipeline.map(({ pipeline, open, value }) => (
+                    <li key={pipeline.id}>
+                      <Link
+                        href={saPath(`/pipeline/${pipeline.id}`)}
+                        className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50"
+                      >
+                        <span className="min-w-0 truncate font-medium">{pipeline.name}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {open} open ·{" "}
+                          <CurrencyTotalsText totals={value} className="font-medium text-foreground" />
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           </div>
         </div>
