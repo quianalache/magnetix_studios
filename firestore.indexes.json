@@ -451,6 +451,20 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "stageId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "deals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "subAccountId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "territoryId",
           "order": "ASCENDING"
         }
