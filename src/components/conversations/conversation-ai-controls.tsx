@@ -100,7 +100,7 @@ function AiControls({
               disabled={busy || (!available && m.value !== "off")}
               onClick={() => update(m.value)}
               className={cn(
-                "min-h-11 rounded px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                "h-7 rounded px-2 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                 mode === m.value
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted"
@@ -117,14 +117,14 @@ function AiControls({
           onClick={() => update("resume")}
           disabled={busy || !available}
           title={!available ? reason : "Resume AI replies"}
-          className="bg-primary/10 text-primary hover:bg-primary/20 flex min-h-11 items-center gap-1 rounded-md px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="bg-primary/10 text-primary hover:bg-primary/20 flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Pause className="h-3 w-3" />
           Bot paused — Resume
         </button>
       )}
       {!available && (
-        <p role="status" className="text-muted-foreground w-full text-xs">
+        <p role="status" className="text-muted-foreground w-full text-[11px]">
           {reason}
         </p>
       )}

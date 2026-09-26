@@ -214,7 +214,7 @@ function Composer({
             aria-pressed={tab === value}
             onClick={() => setTab(value)}
             className={cn(
-              "focus-visible:outline-primary min-h-11 rounded-md px-3 text-sm font-medium",
+              "focus-visible:outline-primary h-8 rounded-md px-3 text-xs font-medium",
               tab === value
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-muted"
@@ -224,7 +224,7 @@ function Composer({
           </button>
         ))}
       </div>
-      <div hidden={tab !== "note"} className="[&_button]:min-h-11">
+      <div hidden={tab !== "note"}>
         <p className="text-muted-foreground mb-2 text-xs">
           Internal notes are saved to this contact and are never sent.
         </p>
@@ -260,7 +260,7 @@ function Composer({
           }
           rows={2}
           disabled={disabled}
-          className="min-h-24 resize-none px-3 py-2 text-sm"
+          className="min-h-20 resize-none px-3 py-2 text-sm"
         />
         {(reason || notice) && (
           <p
@@ -282,7 +282,7 @@ function Composer({
           <button
             type="button"
             onClick={() => setTemplateMode(true)}
-            className="text-primary inline-flex min-h-11 items-center text-xs underline"
+            className="text-primary inline-flex h-7 items-center text-xs underline"
           >
             Send an approved WhatsApp template
           </button>
@@ -293,7 +293,7 @@ function Composer({
               type="button"
               variant="ghost"
               size="sm"
-              className="min-h-11"
+              className="h-8"
               onClick={insertReviewMessage}
               disabled={sending}
               title="Insert a Google review request into the reply"
@@ -318,7 +318,7 @@ function Composer({
               onChange={(e) =>
                 setChannel(e.target.value as ConversationChannel)
               }
-              className="bg-background focus-visible:outline-primary min-h-11 max-w-full rounded-md border px-2 text-sm sm:max-w-64"
+              className="bg-background focus-visible:outline-primary h-8 max-w-full rounded-md border px-2 text-sm sm:max-w-64"
             >
               {(Object.keys(LABEL) as ConversationChannel[]).map((ch) => {
                 const unavailable = channelReason(ch);
@@ -333,7 +333,7 @@ function Composer({
             <Button
               type="submit"
               size="sm"
-              className="min-h-11"
+              className="h-8"
               disabled={!body.trim() || disabled}
             >
               {sending ? (
@@ -350,7 +350,7 @@ function Composer({
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium">Send an approved WhatsApp template</p>
-            <Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={() => setTemplateMode(false)}>
+            <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setTemplateMode(false)}>
               Back to reply
             </Button>
           </div>

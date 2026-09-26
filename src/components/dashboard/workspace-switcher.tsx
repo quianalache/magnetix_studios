@@ -55,13 +55,10 @@ export function WorkspaceSwitcher({
   }
 
   function handleSwitchSubAccount(targetSubId: string) {
-    if (!activeSubId) {
-      router.push(`/sa/${targetSubId}/dashboard`);
-    } else {
-      // Preserve the current section when moving between workspaces.
-      const tail = pathname.replace(/^\/sa\/[^/]+/, "");
-      router.push(`/sa/${targetSubId}${tail || "/dashboard"}`);
-    }
+    // A workspace switch is a context reset. Do not carry a contact, deal,
+    // conversation, or other record URL into the new tenant; those routes
+    // can briefly render stale state before the new provider resolves.
+    router.push(`/sa/${targetSubId}/dashboard`);
     onSwitched?.();
   }
 

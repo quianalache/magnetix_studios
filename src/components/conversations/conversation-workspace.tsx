@@ -112,6 +112,13 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   useEffect(() => {
     if (!user || authLoading) return;
     const fail = () => setError("This conversation is unavailable or you do not have access.");
+    const failSummary = () => {
+      // A contact can exist before a conversation summary is created, and a
+      // summary read can fail independently of the contact/thread reads. The
+      // profile must still render the contact and an empty composer in that
+      // case; only a failed or cross-tenant contact read blocks the surface.
+      setConversation(null);
+    };
     const timer = window.setTimeout(fail, 12000);
     const offContact = safeSubscribe(() => subscribeToContact(contactId, c => {
       clearTimeout(timer);
@@ -121,7 +128,7 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
     const offConversation = safeSubscribe(() => subscribeToConversation(contactId, c => {
       if (c && c.subAccountId !== subAccountId) { fail(); return; }
       setConversation(c);
-    }, fail), fail);
+    }, failSummary), failSummary);
     return () => { clearTimeout(timer); offContact?.(); offConversation?.(); };
   }, [contactId, subAccountId, user, authLoading]);
 

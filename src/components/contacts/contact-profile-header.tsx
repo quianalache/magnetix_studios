@@ -27,7 +27,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SourceBadge } from "@/components/contacts/source-badge";
 import { LinkContactButton } from "@/components/contacts/link-contact-button";
 import { MergeContactButton } from "@/components/contacts/merge-contact-button";
 import { ContactForm } from "@/components/contacts/contact-form";
@@ -244,7 +243,6 @@ export function ContactProfileHeader({
                 <h1 className="truncate text-xl font-bold tracking-tight sm:text-2xl">
                   {displayName}
                 </h1>
-                {contact.source && <SourceBadge source={contact.source} />}
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Added {formatContactDate(contact.createdAt)}
