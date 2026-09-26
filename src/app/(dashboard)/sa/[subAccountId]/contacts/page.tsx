@@ -30,6 +30,7 @@ import { serializeCsv, downloadCsv } from "@/lib/csv";
 import {
   accessFieldOption,
   customFieldOption,
+  formFieldOption,
   KNOWN_SOURCES,
   SOURCE_OPS,
   standardFieldOptions,
@@ -145,6 +146,7 @@ export default function ContactsPage() {
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [territories, setTerritories] = useState<TerritoryDoc[]>([]);
   const [catalog, setCatalog] = useState<AccessCatalog | null>(null);
+  const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
   const requestId = useRef(0);
   const freshNext = useRef(true);
   const openImport = useCallback(() => setImportOpen(true), []);
@@ -287,6 +289,17 @@ export default function ContactsPage() {
       .catch(() => {});
   }, [user, subAccountId, catalog, moreOpen, usesAccess]);
 
+  const usesForms = rows.conditions.some((r) => r.field === "form");
+  useEffect(() => {
+    if (!user || !subAccountId || !(moreOpen || usesForms)) return;
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/forms`)
+      .then((r) => r.json())
+      .then((body: { forms?: { id: string; name: string }[] }) => { if (!cancelled) setForms(body.forms ?? []); })
+      .catch(() => { if (!cancelled) setForms([]); });
+    return () => { cancelled = true; };
+  }, [user, subAccountId, moreOpen, usesForms]);
+
   // Territories for the Territory column.
   useEffect(() => {
     if (!scopingOn || !subAccountId) {
@@ -329,8 +342,9 @@ export default function ContactsPage() {
       ...standard,
       ...customFieldDefs.map(customFieldOption),
       accessFieldOption(catalog),
+      formFieldOption(forms),
     ];
-  }, [stages, customFieldDefs, catalog]);
+  }, [stages, customFieldDefs, catalog, forms]);
 
   const allColumns = useMemo(
     () => buildContactColumns({ showTerritory: scopingOn, customFields: customFieldDefs }),

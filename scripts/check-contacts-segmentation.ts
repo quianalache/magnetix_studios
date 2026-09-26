@@ -160,6 +160,15 @@ check("tag AND purchased-offer example from the brief", () => {
   assert.equal(evalConditionGroup(g, contact({ id: "c2", tags: ["vip"] }), { accessIndex: idx }), false);
   assert.equal(groupUsesAccessConditions(g), true);
 });
+check("form submission conditions use the tenant-resolved index", () => {
+  const idx = new Map([["form:f1", new Set(["c1"])]]);
+  const has: ConditionGroup = { all: [{ field: "form", op: "has_submitted", value: "form:f1" }] };
+  const not: ConditionGroup = { all: [{ field: "form", op: "not_has_submitted", value: "form:f1" }] };
+  assert.equal(evalConditionGroup(has, contact({ id: "c1" }), { accessIndex: idx }), true);
+  assert.equal(evalConditionGroup(has, contact({ id: "c2" }), { accessIndex: idx }), false);
+  assert.equal(evalConditionGroup(not, contact({ id: "c2" }), { accessIndex: idx }), true);
+  assert.equal(groupUsesAccessConditions(has), true);
+});
 
 console.log("Condition-group sanitizer");
 check("accepts a valid group and drops values on no-value ops", () => {
@@ -186,6 +195,7 @@ check("rejects unknown ops, bad fields, missing values, oversized groups", () =>
   assert.equal(sanitizeConditionGroup({ all: [{ field: "__proto__.x", op: "equals", value: "x" }] }).ok, false);
   assert.equal(sanitizeConditionGroup({ all: [{ field: "tags", op: "has_tag", value: "" }] }).ok, false);
   assert.equal(sanitizeConditionGroup({ all: [{ field: "email", op: "has_access", value: "offer:1" }] }).ok, false);
+  assert.equal(sanitizeConditionGroup({ all: [{ field: "form", op: "has_submitted", value: "form:1" }] }).ok, true);
   const many = Array.from({ length: 26 }, () => ({ field: "tags", op: "has_tag", value: "a" }));
   assert.equal(sanitizeConditionGroup({ all: many }).ok, false);
 });

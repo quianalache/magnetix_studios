@@ -87,11 +87,11 @@ function evalOne(
 ): boolean {
   const op: ConditionOp = c.op;
   const val = (c.value ?? "").trim();
-  if (op === "has_access" || op === "not_has_access") {
+  if (op === "has_access" || op === "not_has_access" || op === "has_submitted" || op === "not_has_submitted") {
     const holders = ctx?.accessIndex?.get(val);
     if (!ctx?.accessIndex || !val) return false;
     const has = !!holders && holders.has(contact.id);
-    return op === "has_access" ? has : !has;
+    return op === "has_access" || op === "has_submitted" ? has : !has;
   }
   const raw = getField(contact, c.field);
   switch (op) {
@@ -159,6 +159,6 @@ export function groupUsesAccessConditions(
   group: ConditionGroup | null | undefined,
 ): boolean {
   return !!group?.all?.some(
-    (c) => c.op === "has_access" || c.op === "not_has_access",
+    (c) => c.op === "has_access" || c.op === "not_has_access" || c.op === "has_submitted" || c.op === "not_has_submitted",
   );
 }

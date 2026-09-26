@@ -74,6 +74,10 @@ export const ACCESS_OPS: FieldOption["ops"] = [
   { op: "has_access", label: "has" },
   { op: "not_has_access", label: "doesn't have" },
 ];
+export const FORM_OPS: FieldOption["ops"] = [
+  { op: "has_submitted", label: "has submitted" },
+  { op: "not_has_submitted", label: "has not submitted" },
+];
 
 export const NO_VALUE_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
   "is_set",
@@ -169,6 +173,16 @@ export function accessFieldOption(catalog: AccessCatalog | null): FieldOption {
     kind: "access",
     choices,
     ops: ACCESS_OPS,
+  };
+}
+
+export function formFieldOption(forms: { id: string; name: string }[]): FieldOption {
+  return {
+    field: "form",
+    label: "Form submission",
+    kind: "select",
+    choices: forms.map((form) => ({ value: `form:${form.id}`, label: form.name, group: "Forms" })),
+    ops: FORM_OPS,
   };
 }
 

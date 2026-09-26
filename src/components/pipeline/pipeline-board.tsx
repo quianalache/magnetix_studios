@@ -143,7 +143,7 @@ export function PipelineBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDeal(null)}
       >
-        <div className="flex snap-x gap-3 overflow-x-auto pb-3">
+        <div className="flex snap-x gap-3 overflow-x-auto rounded-2xl bg-[#fbf9ff] p-2 pb-3">
           {stages.map((stage) => {
             const col = columns.get(stage.id) ?? { count: 0, totals: {}, deals: [] };
             return collapsed.has(stage.id) ? (
@@ -215,6 +215,11 @@ export function PipelineBoard({
 function stageHeaderTone(stage: PipelineStage): string {
   if (stage.terminal === "won") return "bg-emerald-500/10";
   if (stage.terminal === "lost") return "bg-rose-500/10";
+  const id = stage.id.toLowerCase();
+  if (id.includes("new")) return "bg-[#f1e3ff]";
+  if (id.includes("contact")) return "bg-[#e4edff]";
+  if (id.includes("qualif")) return "bg-[#eee8ff]";
+  if (id.includes("proposal") || id.includes("offer")) return "bg-[#fff0dc]";
   return "bg-primary/5";
 }
 
@@ -255,7 +260,7 @@ function Column({
       ref={setNodeRef}
       aria-label={`${stage.label}, ${column.count} deals`}
       className={cn(
-        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col rounded-2xl border bg-muted/20 transition-colors sm:w-72",
+        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col rounded-2xl border border-[#eadff2] bg-white shadow-sm transition-colors sm:w-72",
         isOver && "border-primary/60 bg-primary/5 ring-2 ring-primary/20",
       )}
     >

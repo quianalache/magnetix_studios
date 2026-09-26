@@ -557,6 +557,7 @@ export function PipelineWorkspace({ pipelineId }: { pipelineId: string }) {
       {pipeline && isAdmin && (
         <ManageStagesDialog
           subAccountId={subAccountId}
+          userId={user?.uid ?? "anonymous"}
           pipeline={pipeline}
           open={manageOpen}
           onOpenChange={setManageOpen}

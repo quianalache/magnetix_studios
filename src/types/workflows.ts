@@ -112,7 +112,10 @@ export type ConditionOp =
   // client-side broadcast preview, workflow filters) both ops evaluate to
   // false rather than guessing.
   | "has_access"
-  | "not_has_access";
+  | "not_has_access"
+  // Contact Lists: server-resolved form submission association.
+  | "has_submitted"
+  | "not_has_submitted";
 
 export interface Condition {
   /** Contact field path (e.g. "email", "company", "customFields.x"). */

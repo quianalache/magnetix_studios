@@ -27,9 +27,9 @@ import type { ConditionGroup } from "@/types/workflows";
  * ever contain this sub-account's contacts.
  */
 
-const KEY_RE = /^(offer|course|community):([A-Za-z0-9_-]{1,128})$/;
+const KEY_RE = /^(offer|course|community|form):([A-Za-z0-9_-]{1,128})$/;
 
-export type AccessKind = "offer" | "course" | "community";
+export type AccessKind = "offer" | "course" | "community" | "form";
 
 export function parseAccessKey(
   value: string,
@@ -43,7 +43,7 @@ export function parseAccessKey(
 export function accessKeysInGroup(group: ConditionGroup | null | undefined): string[] {
   const keys = new Set<string>();
   for (const c of group?.all ?? []) {
-    if (c.op !== "has_access" && c.op !== "not_has_access") continue;
+    if (c.op !== "has_access" && c.op !== "not_has_access" && c.op !== "has_submitted" && c.op !== "not_has_submitted") continue;
     const v = (c.value ?? "").trim();
     if (parseAccessKey(v)) keys.add(v);
   }
@@ -58,6 +58,15 @@ async function memberIdsForKey(
   if (!parsed) return [];
   const db = getAdminDb();
   const base = `subAccounts/${subAccountId}`;
+  if (parsed.kind === "form") {
+    const form = await db.doc(`forms/${parsed.id}`).get();
+    if (!form.exists || form.get("subAccountId") !== subAccountId) return [];
+    const submissions = await db.collection(`forms/${parsed.id}/submissions`).select("contactId").get();
+    return submissions.docs
+      .map((d) => d.get("contactId") as string | null | undefined)
+      .filter((id): id is string => !!id)
+      .map((contactId) => `contact:${contactId}`);
+  }
   if (parsed.kind === "community") {
     const snap = await db
       .collection(`${base}/communityGroups/${parsed.id}/memberships`)
@@ -119,8 +128,12 @@ export async function buildAccessIndexForGroup(
   keys.forEach((key, i) => {
     const contacts = new Set<string>();
     for (const memberId of perKey[i]) {
-      const contactId = contactByMember.get(memberId);
-      if (contactId) contacts.add(contactId);
+      if (memberId.startsWith("contact:")) {
+        contacts.add(memberId.slice("contact:".length));
+      } else {
+        const contactId = contactByMember.get(memberId);
+        if (contactId) contacts.add(contactId);
+      }
     }
     index.set(key, contacts);
   });

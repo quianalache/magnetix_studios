@@ -31,6 +31,8 @@ const KNOWN_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
   "more_than_days_ago",
   "has_access",
   "not_has_access",
+  "has_submitted",
+  "not_has_submitted",
 ]);
 
 const NO_VALUE_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
@@ -38,7 +40,7 @@ const NO_VALUE_OPS: ReadonlySet<ConditionOp> = new Set<ConditionOp>([
   "not_set",
 ]);
 
-const FIELD_RE = /^(access|[A-Za-z][A-Za-z0-9_]{0,63}|customFields\.[A-Za-z0-9_-]{1,64})$/;
+const FIELD_RE = /^(access|form|[A-Za-z][A-Za-z0-9_]{0,63}|customFields\.[A-Za-z0-9_-]{1,64})$/;
 
 export type SanitizeResult =
   | { ok: true; group: ConditionGroup }
@@ -75,7 +77,8 @@ export function sanitizeConditionGroup(input: unknown): SanitizeResult {
       return { ok: false, error: `Unsupported filter operator "${String(c.op)}".` };
     }
     const accessOp = op === "has_access" || op === "not_has_access";
-    if (accessOp !== (field === "access")) {
+    const formOp = op === "has_submitted" || op === "not_has_submitted";
+    if (accessOp !== (field === "access") || formOp !== (field === "form")) {
       return { ok: false, error: "Access conditions must use the access field." };
     }
     const value = typeof c.value === "string" ? c.value.trim().slice(0, MAX_VALUE) : "";

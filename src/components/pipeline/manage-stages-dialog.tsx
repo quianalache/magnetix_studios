@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   ArchiveRestore,
@@ -67,6 +67,7 @@ const nextKey = () => `new-${++keySeq}`;
 
 export function ManageStagesDialog({
   subAccountId,
+  userId,
   pipeline,
   open,
   onOpenChange,
@@ -74,6 +75,7 @@ export function ManageStagesDialog({
   onSaved,
 }: {
   subAccountId: string;
+  userId: string;
   pipeline: Pipeline;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,21 +90,44 @@ export function ManageStagesDialog({
   const [pendingReassignments, setPendingReassignments] = useState<
     PendingReassignment[]
   >([]);
+  const draftStorageKey = `magnetix:pipeline-stage-draft:${userId}:${subAccountId}:${pipeline.id}`;
+  const previousOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
-    setDraft(
-      pipeline.stages.map((s) => ({
-        id: s.id,
-        key: s.id,
-        name: s.name,
-        type: s.type,
-        archived: s.archived,
-      }))
-    );
+    if (!open || previousOpen.current) return;
+    previousOpen.current = true;
+    const initial = pipeline.stages.map((s) => ({ id: s.id, key: s.id, name: s.name, type: s.type, archived: s.archived }));
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(draftStorageKey) ?? "null") as { draft?: DraftStage[]; counts?: Record<string, number>; pending?: PendingReassignment[] } | null;
+      if (saved?.draft?.length) {
+        setDraft(saved.draft);
+        setCounts(saved.counts ?? stageCounts);
+        setPendingReassignments(saved.pending ?? []);
+        return;
+      }
+    } catch { /* malformed session draft: start from the server state */ }
+    setDraft(initial);
     setCounts(stageCounts);
     setPendingReassignments([]);
-  }, [open, pipeline, stageCounts]);
+  }, [open, pipeline.id, pipeline.stages, stageCounts, draftStorageKey]);
+
+  useEffect(() => {
+    if (open) return;
+    previousOpen.current = false;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || draft.length === 0) return;
+    try {
+      sessionStorage.setItem(draftStorageKey, JSON.stringify({ draft, counts, pending: pendingReassignments }));
+    } catch { /* session persistence is best-effort */ }
+  }, [open, draft, counts, pendingReassignments, draftStorageKey]);
+
+  function discardDraft() {
+    try { sessionStorage.removeItem(draftStorageKey); } catch { /* best effort */ }
+    setPendingReassignments([]);
+    onOpenChange(false);
+  }
 
   const active = draft.filter((s) => !s.archived);
   const archived = draft.filter((s) => s.archived);
@@ -183,6 +208,7 @@ export function ManageStagesDialog({
       );
       toast.success("Stages saved");
       onSaved(res.pipeline);
+      try { sessionStorage.removeItem(draftStorageKey); } catch { /* best effort */ }
       onOpenChange(false);
     } catch (err) {
       toast.error(
@@ -195,7 +221,7 @@ export function ManageStagesDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={(next) => next ? onOpenChange(true) : discardDraft()}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Manage stages</DialogTitle>
@@ -319,7 +345,7 @@ export function ManageStagesDialog({
           <DialogFooter>
             <Button
               variant="ghost"
-              onClick={() => onOpenChange(false)}
+              onClick={discardDraft}
               disabled={saving}
             >
               Cancel

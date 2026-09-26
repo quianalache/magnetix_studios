@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { StandaloneCourse } from "@/types/standalone-courses";
+import { AgencyCourseOffersPanel } from "@/components/agency/agency-course-offers-panel";
 
 /** Agency Standalone Courses — owner list + create. Mirrors
  *  /sa/[subAccountId]/courses/page.tsx's "Products" tab; Course Offers
@@ -16,6 +17,7 @@ export default function AgencyStandaloneCoursesPage() {
   const { agencyRole, loading: authLoading } = useAuth();
   const isOwner = agencyRole === "owner";
   const [courses, setCourses] = useState<StandaloneCourse[] | null>(null);
+  const [tab, setTab] = useState<"products" | "offers">("products");
 
   useEffect(() => {
     if (!isOwner) return;
@@ -36,38 +38,28 @@ export default function AgencyStandaloneCoursesPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 p-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Standalone Courses</h1>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">Manage or create new courses for Magnetix Studios.</p>
+      <div>
+        <h1 className="text-lg font-semibold">{tab === "products" ? "Products" : "Offers"}</h1>
+        <p className="mt-0.5 text-[13px] text-muted-foreground">{tab === "products" ? "Manage or create new courses" : "Create and manage offers for your courses"}</p>
+      </div>
+      <div className="flex items-center justify-between gap-4 border-b pb-3">
+        <div className="inline-flex rounded-lg border bg-muted/30 p-0.5 text-xs" role="tablist" aria-label="Agency Courses section">
+          {(["products", "offers"] as const).map((value) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)} className={cn("rounded-md px-3 py-1.5 font-medium capitalize", tab === value ? "bg-background shadow-sm" : "text-muted-foreground")}>{value}</button>)}
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/agency/course-offers">
-            <Button size="sm" variant="outline">Course Offers</Button>
-          </Link>
-          <Link href="/agency/standalone-courses/new">
-            <Button size="sm">
-              <Plus className="h-3.5 w-3.5" /> New course
-            </Button>
-          </Link>
-        </div>
+        {tab === "products" && <Link href="/agency/standalone-courses/new"><Button size="sm"><Plus className="h-3.5 w-3.5" /> New course</Button></Link>}
       </div>
 
-      {!courses ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : courses.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center">
-          <p className="text-[13px] text-muted-foreground">No courses yet. Create your first course to get started.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((c) => (
-            <CourseCard key={c.id} course={c} />
-          ))}
-        </div>
-      )}
+      {tab === "products" && <>
+        <div className="flex items-center justify-end"><span className="text-xs text-muted-foreground">Agency-owned course library</span></div>
+        {!courses ? (
+          <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        ) : courses.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-10 text-center"><p className="text-[13px] text-muted-foreground">No courses yet. Create your first course to get started.</p></div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">{courses.map((c) => <CourseCard key={c.id} course={c} />)}</div>
+        )}
+      </>}
+      {tab === "offers" && <AgencyCourseOffersPanel />}
     </div>
   );
 }
