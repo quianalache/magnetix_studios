@@ -26,7 +26,8 @@ import { subscribeToTasks } from "@/lib/firestore/tasks";
 import { subscribeToEvents } from "@/lib/firestore/events";
 import { subscribeToForms } from "@/lib/firestore/forms";
 import { toDate, formatCurrency } from "@/lib/format";
-import { getStage } from "@/types/deals";
+import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
+import { dealPipelineId } from "@/types/pipelines";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -130,6 +131,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const activeSubAccountId = activeMembership?.subAccountId ?? null;
   const activeAgencyId = activeMembership?.agencyId ?? null;
   const linkPrefix = activeSubAccountId ? `/sa/${activeSubAccountId}` : "";
+  const { stageFor } = usePipelineLabels(activeSubAccountId);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -199,7 +201,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         });
       }
       for (const d of deals.slice(0, 3)) {
-        const stage = getStage(d.stageId);
+        const stage = stageFor(d);
         const contact = contactById.get(d.contactId);
         out.push({
           kind: "deal",
@@ -208,7 +210,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           subtitle: `${stage.label} · ${formatCurrency(d.value, d.currency)}${
             contact ? ` · ${contact.name}` : ""
           }`,
-          href: `${linkPrefix}/pipeline`,
+          href: `${linkPrefix}/pipeline/${dealPipelineId(d)}`,
         });
       }
       for (const t of tasks.filter((x) => !x.completed).slice(0, 3)) {
@@ -241,7 +243,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
     for (const d of deals) {
       if (match(d.title)) {
-        const stage = getStage(d.stageId);
+        const stage = stageFor(d);
         const contact = contactById.get(d.contactId);
         out.push({
           kind: "deal",
@@ -250,7 +252,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           subtitle: `${stage.label} · ${formatCurrency(d.value, d.currency)}${
             contact ? ` · ${contact.name}` : ""
           }`,
-          href: `${linkPrefix}/pipeline`,
+          href: `${linkPrefix}/pipeline/${dealPipelineId(d)}`,
         });
       }
       if (out.filter((r) => r.kind === "deal").length >= 5) break;
@@ -306,7 +308,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     }
 
     return out;
-  }, [query, contacts, deals, tasks, events, forms, contactById, linkPrefix]);
+  }, [query, contacts, deals, tasks, events, forms, contactById, linkPrefix, stageFor]);
 
   const grouped = useMemo(() => {
     const order: Result["kind"][] = ["contact", "deal", "task", "event", "form"];

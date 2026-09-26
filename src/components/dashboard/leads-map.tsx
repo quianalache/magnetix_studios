@@ -15,7 +15,8 @@ import {
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useSubAccount } from "@/context/sub-account-context";
 import { formatCurrency } from "@/lib/format";
-import { getStage, type Deal } from "@/types/deals";
+import type { Deal } from "@/types/deals";
+import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
 import type { Contact } from "@/types/contacts";
 
 interface PopupState {
@@ -25,6 +26,7 @@ interface PopupState {
   city: string | null;
   country: string | null;
   dealStageId: string | null;
+  dealPipelineId: string | null;
   dealValue: number | null;
   dealCurrency: string | null;
 }
@@ -96,6 +98,7 @@ export function LeadsMap({
             city: c.city ?? null,
             country: c.country ?? null,
             dealStageId: deal?.stageId ?? null,
+            dealPipelineId: deal?.pipelineId ?? null,
             dealValue: deal?.value ?? null,
             dealCurrency: deal?.currency ?? null,
           },
@@ -131,6 +134,7 @@ export function LeadsMap({
         city: p.city ? String(p.city) : null,
         country: p.country ? String(p.country) : null,
         dealStageId: p.dealStageId ? String(p.dealStageId) : null,
+        dealPipelineId: p.dealPipelineId ? String(p.dealPipelineId) : null,
         dealValue: typeof p.dealValue === "number" ? p.dealValue : null,
         dealCurrency: p.dealCurrency ? String(p.dealCurrency) : null,
       });
@@ -315,11 +319,14 @@ export function LeadsMap({
 }
 
 function ContactPopup({ popup }: { popup: PopupState }) {
+  const { stageFor } = usePipelineLabels();
   const place =
     [popup.city, popup.country].filter(Boolean).join(", ") ||
     "Location unknown";
   const hasDeal = !!popup.dealStageId;
-  const stage = hasDeal ? getStage(popup.dealStageId) : null;
+  const stage = hasDeal
+    ? stageFor({ pipelineId: popup.dealPipelineId, stageId: popup.dealStageId! })
+    : null;
   const valueLabel =
     popup.dealValue != null
       ? formatCurrency(popup.dealValue, popup.dealCurrency ?? "USD")

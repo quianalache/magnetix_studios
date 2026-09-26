@@ -19,7 +19,8 @@ import {
   type ImportRecordError,
   type ImportSource,
 } from "@/types/import";
-import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
+import { activeStages, dealPipelineId, DEFAULT_PIPELINE_ID } from "@/types/pipelines";
+import { getPipeline } from "@/lib/server/pipelines-service";
 
 /**
  * Generic, GHL-agnostic bulk-write engine for one chunk of one entity.
@@ -117,6 +118,24 @@ export async function writeImportChunk(
     const snaps = await db.getAll(...keyList.map((k) => mappingsCol.doc(k)));
     for (const s of snaps) {
       if (s.exists) existing.set(s.id, s.data() as ImportMappingDoc);
+    }
+  }
+
+  // ── Deals only (Multiple Pipelines): imported deals land in the default
+  //    pipeline, so their stage must be one of its active stages. A deal
+  //    that was moved to another pipeline after an earlier import keeps its
+  //    pipeline + stage on re-import instead of being pulled back. ──
+  let defaultStageIds: Set<string> | null = null;
+  const dealPipelineById = new Map<string, string>();
+  if (entity === "deals") {
+    const def = await getPipeline(subAccountId, DEFAULT_PIPELINE_ID);
+    defaultStageIds = new Set(def ? activeStages(def).map((st) => st.id) : []);
+    const ids = [...existing.values()]
+      .filter((m) => m.entity === "deals" && m.leadstackId)
+      .map((m) => m.leadstackId as string);
+    for (let i = 0; i < ids.length; i += 300) {
+      const snaps = await db.getAll(...ids.slice(i, i + 300).map((id) => db.doc(`deals/${id}`)));
+      for (const d of snaps) if (d.exists) dealPipelineById.set(d.id, dealPipelineId(d.data()!));
     }
   }
 
@@ -232,6 +251,8 @@ export async function writeImportChunk(
         subAccountId,
         createdByUid,
         existing: effectiveExisting,
+        defaultStageIds,
+        dealPipelineById,
       });
       if (!built.ok) {
         fail(result, entity, externalId, built.error);
@@ -300,6 +321,10 @@ interface BuildArgs {
   subAccountId: string;
   createdByUid: string;
   existing?: ImportMappingDoc;
+  /** Deals: active stage ids of the default pipeline. */
+  defaultStageIds?: Set<string> | null;
+  /** Deals: current pipeline of already-imported deals, by deal id. */
+  dealPipelineById?: Map<string, string>;
 }
 
 /** Per-entity adapter: validate + shape the doc write (create or upsert). */
@@ -381,12 +406,19 @@ function buildWrite(db: FirebaseFirestore.Firestore, a: BuildArgs): Built {
       const v = parsed.value!;
       const cf = validateCustomFieldValues(a.raw.custom_fields, a.defs);
       if (!cf.ok) return { ok: false, error: cf.error ?? "invalid custom fields" };
+      const movedElsewhere =
+        isUpdate &&
+        (a.dealPipelineById?.get(a.existing!.leadstackId) ?? DEFAULT_PIPELINE_ID) !==
+          DEFAULT_PIPELINE_ID;
+      if (!movedElsewhere && a.defaultStageIds && !a.defaultStageIds.has(v.stage)) {
+        return { ok: false, error: `deal: stage "${v.stage}" isn't an active stage of the default pipeline` };
+      }
       const editable = {
         title: v.title,
         value: v.value,
         currency: v.currency,
         contactId: v.contactId,
-        stageId: v.stage,
+        ...(movedElsewhere ? {} : { stageId: v.stage }),
         priority: v.priority,
         customFields: cf.value,
         territoryId: v.territoryId ?? GLOBAL_TERRITORY_ID,

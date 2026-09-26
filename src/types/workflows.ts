@@ -417,6 +417,8 @@ export interface CreateDealConfig {
   title: string;
   value?: number;
   currency?: string;
+  /** Omitted → the default pipeline (workflows saved before pipelines). */
+  pipelineId?: string;
   stageId?: string;
   priority?: "high" | "medium" | "low";
 }
@@ -425,6 +427,8 @@ export interface UpdateDealConfig {
   title?: string;
   value?: number;
   currency?: string;
+  /** Move to this pipeline; requires `stageId` of that pipeline. */
+  pipelineId?: string;
   stageId?: string;
   priority?: "high" | "medium" | "low";
 }

@@ -564,6 +564,24 @@ export async function updateDealServerSide(opts: {
     }
   }
 
+  if (mode === "live" && data.contactId && stageChanged) {
+    emitWorkflowEvent({
+      eventType: "deal.stage.changed",
+      eventId: `${fresh.id}:stage:${previousStage ?? ""}>${toPipelineId}/${patch.stageId}:${Date.now()}`,
+      agencyId: existing.agencyId as string,
+      subAccountId: existing.subAccountId as string,
+      contactId: data.contactId as string,
+      source: "deals",
+      payload: {
+        dealId: fresh.id,
+        pipelineId: toPipelineId,
+        stageId: patch.stageId,
+        previousPipelineId: fromPipelineId,
+        previousStageId: previousStage ?? null,
+      },
+    });
+  }
+
   if (
     mode === "live" &&
     data.contactId &&

@@ -20,6 +20,7 @@ import { agencyAllowsSharedSms } from "@/lib/agency/policy";
 import { resolveTemplateVariables } from "@/lib/comms/whatsapp/resolve-template-variables";
 import { createTaskServerSide } from "@/lib/server/tasks-service";
 import { setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 import { createContactServerSide } from "@/lib/server/contacts-service";
 import {
   createDealServerSide,
@@ -83,6 +84,17 @@ import type {
   StopWorkflowConfig,
 } from "@/types/workflows";
 import type { PipelineStageId, DealPriority } from "@/types/deals";
+
+/** Deal events carry `pipelineId`; these triggers match one pipeline. */
+const DEAL_PIPELINE_TRIGGERS = new Set<string>([
+  "deal.created",
+  "deal.updated",
+  "deal.amount.changed",
+  "deal.stage.changed",
+  "deal.won",
+  "deal.lost",
+  "pipeline.stage.changed",
+]);
 
 const STEP_PATH = "/api/workflows/step";
 
@@ -754,6 +766,7 @@ const execCreateDeal: NodeExecutor = async (ctx) => {
     value: Number(cfg.value ?? 0),
     currency: cfg.currency ?? "USD",
     contactId: ctx.contact.id,
+    pipelineId: cfg.pipelineId || DEFAULT_PIPELINE_ID,
     stageId: (cfg.stageId ?? "new") as PipelineStageId,
     priority: (cfg.priority ?? "medium") as DealPriority,
   });
@@ -779,6 +792,8 @@ const execUpdateDeal: NodeExecutor = async (ctx) => {
       ...(cfg.stageId !== undefined
         ? { stageId: cfg.stageId as PipelineStageId }
         : {}),
+      // Moving pipelines needs the destination stage in the same config.
+      ...(cfg.pipelineId && cfg.stageId ? { pipelineId: cfg.pipelineId } : {}),
       ...(cfg.priority !== undefined
         ? { priority: cfg.priority as DealPriority }
         : {}),
@@ -1088,6 +1103,18 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       ) {
         continue;
       }
+      // Multiple Pipelines (2026-09-25): deal triggers belong to ONE
+      // pipeline. A workflow saved before pipelines existed has no
+      // pipelineId and stays on the default pipeline — it is never
+      // silently attached to newly created pipelines.
+      if (DEAL_PIPELINE_TRIGGERS.has(trigger.type)) {
+        const wanted = trigger.pipelineId || DEFAULT_PIPELINE_ID;
+        const got =
+          typeof input.context?.pipelineId === "string" && input.context.pipelineId
+            ? input.context.pipelineId
+            : DEFAULT_PIPELINE_ID;
+        if (wanted !== got) continue;
+      }
       if (
         trigger.type === "message.received" &&
         trigger.channel &&
@@ -1098,7 +1125,10 @@ export async function fireWorkflowTrigger(input: FireInput): Promise<void> {
       const filterPairs: [keyof WorkflowTrigger, string][] = [
         ["ownerUid", "ownerUid"],
         ["projectId", "projectId"],
-        ["pipelineId", "pipelineId"],
+        // pipelineId for deal triggers is handled above (default-aware).
+        ...(DEAL_PIPELINE_TRIGGERS.has(trigger.type)
+          ? []
+          : ([["pipelineId", "pipelineId"]] as [keyof WorkflowTrigger, string][])),
         ["stageId", "stageId"],
         ["courseId", "courseId"],
         ["lessonId", "lessonId"],

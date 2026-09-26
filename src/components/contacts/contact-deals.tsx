@@ -7,8 +7,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToDealsForContact } from "@/lib/firestore/deals";
 import { formatCurrency, daysSince } from "@/lib/format";
-import { getStage, type Deal } from "@/types/deals";
-import { usePipelineStages } from "@/hooks/use-pipeline-stages";
+import type { Deal } from "@/types/deals";
+import { usePipelineLabels } from "@/hooks/use-pipeline-labels";
+import { dealPipelineId } from "@/types/pipelines";
 import type { Contact } from "@/types/contacts";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export function ContactDeals({
 }) {
   const { user } = useAuth();
   const { subAccountId, agencyId, saPath } = useSubAccount();
-  const stages = usePipelineStages();
+  const { stageFor, pipelineNameFor, hasMultiplePipelines } = usePipelineLabels();
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,7 +78,7 @@ export function ContactDeals({
       ) : (
         <ul className="space-y-2">
           {deals.slice(0, MAX_SHOWN).map((deal) => {
-            const stage = getStage(deal.stageId, stages);
+            const stage = stageFor(deal);
             const days = daysSince(deal.stageChangedAt);
             return (
               <li
@@ -91,11 +92,12 @@ export function ContactDeals({
                     <p className="text-xs text-muted-foreground">
                       {formatCurrency(deal.value, deal.currency)} ·{" "}
                       {days === 0 ? "today" : `${days}d in stage`}
+                      {hasMultiplePipelines && pipelineNameFor(deal) && ` · ${pipelineNameFor(deal)}`}
                     </p>
                   </div>
                 </div>
                 <Link
-                  href={saPath("/pipeline")}
+                  href={saPath(`/pipeline/${dealPipelineId(deal)}`)}
                   className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium transition-opacity hover:opacity-80 ${stage.tone}`}
                 >
                   {stage.label}

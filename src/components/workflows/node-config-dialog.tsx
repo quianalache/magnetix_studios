@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PipelineStagePicker } from "@/components/workflows/pipeline-stage-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { PIPELINE_STAGES } from "@/types/deals";
@@ -517,10 +518,13 @@ export function NodeConfigDialog({
                   onChange={(e) => set({ value: Number(e.target.value) })}
                 />
               </Field>
-              <Field label="Stage">
-                <Input
-                  value={str("stageId") || "new"}
-                  onChange={(e) => set({ stageId: e.target.value })}
+              <Field label="Pipeline and stage">
+                <PipelineStagePicker
+                  pipelineId={str("pipelineId") || null}
+                  stageId={str("stageId") || "new"}
+                  onChange={({ pipelineId, stageId }) =>
+                    set({ pipelineId, stageId: stageId ?? "" })
+                  }
                 />
               </Field>
             </>
@@ -540,10 +544,14 @@ export function NodeConfigDialog({
                   onChange={(e) => set({ title: e.target.value })}
                 />
               </Field>
-              <Field label="Stage">
-                <Input
-                  value={str("stageId")}
-                  onChange={(e) => set({ stageId: e.target.value })}
+              <Field label="Move to pipeline and stage (optional)">
+                <PipelineStagePicker
+                  pipelineId={str("pipelineId") || null}
+                  stageId={str("stageId") || null}
+                  anyStageLabel="Don't change the stage"
+                  onChange={({ pipelineId, stageId }) =>
+                    set({ pipelineId, stageId: stageId ?? undefined })
+                  }
                 />
               </Field>
             </>

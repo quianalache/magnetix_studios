@@ -2,6 +2,8 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { PipelineError, resolveWritableStage } from "@/lib/server/pipelines-service";
+import { dealPipelineId } from "@/types/pipelines";
 import { withApiAuth } from "@/lib/api/auth";
 import { apiError, apiOk } from "@/lib/api/responses";
 import { emitDealEvents } from "@/lib/server/deals-service";
@@ -81,7 +83,26 @@ export const PATCH = withApiAuth<{ id: string }>(async ({ body, params, ctx }) =
     writePatch.customFields = cf.value;
   }
 
-  const stageChanged = patch.stage !== undefined && patch.stage !== previousStage;
+  const fromPipelineId = dealPipelineId(existing);
+  const toPipelineId = patch.pipelineId ?? fromPipelineId;
+  const pipelineChanged = toPipelineId !== fromPipelineId;
+  const stageChanged =
+    patch.stage !== undefined && (pipelineChanged || patch.stage !== previousStage);
+  if (stageChanged) {
+    try {
+      await resolveWritableStage({
+        subAccountId: ctx.subAccountId,
+        pipelineId: toPipelineId,
+        stageId: patch.stage!,
+      });
+    } catch (err) {
+      if (err instanceof PipelineError) {
+        return apiError(ctx, "invalid_request", err.code ?? "invalid_stage", err.message);
+      }
+      throw err;
+    }
+  }
+  if (pipelineChanged || !existing.pipelineId) writePatch.pipelineId = toPipelineId;
   if (patch.stage !== undefined) {
     writePatch.stageId = patch.stage;
     if (stageChanged) {
@@ -101,7 +122,10 @@ export const PATCH = withApiAuth<{ id: string }>(async ({ body, params, ctx }) =
   if (stageChanged) {
     events.push({
       type: "deal.stage.changed",
-      extra: { previous_stage: previousStage ?? null },
+      extra: {
+        previous_stage: previousStage ?? null,
+        previous_pipeline_id: fromPipelineId,
+      },
     });
     if (patch.stage === "won") events.push({ type: "deal.won" });
     else if (patch.stage === "lost") events.push({ type: "deal.lost" });
@@ -127,7 +151,8 @@ export const DELETE = withApiAuth<{ id: string }>(async ({ params, ctx }) => {
   if (existing.subAccountId !== ctx.subAccountId || existing.mode !== ctx.mode) {
     return apiError(ctx, "not_found", "deal_not_found", "Deal not found.");
   }
-  await ref.delete();
+  // Recursive: deal notes + the deal activity feed live under the deal.
+  await getAdminDb().recursiveDelete(ref);
   emitDealEvents({
     subAccountId: ctx.subAccountId,
     agencyId: ctx.agencyId,

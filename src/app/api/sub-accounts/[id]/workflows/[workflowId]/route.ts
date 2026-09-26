@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { tenantFrom } from "@/lib/comms/resend";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { getPipeline } from "@/lib/server/pipelines-service";
+import { findStage } from "@/types/pipelines";
 import {
   deleteWorkflowServerSide,
   getWorkflow,
@@ -210,6 +212,36 @@ export async function GET(
   return NextResponse.json({ workflow });
 }
 
+async function validateDealStageRefs(
+  subAccountId: string,
+  patch: WorkflowPatch,
+): Promise<string | null> {
+  const refs: { pipelineId?: string | null; stageId?: string | null }[] = [];
+  const t = patch.trigger;
+  if (t && (t.type.startsWith("deal.") || t.type === "pipeline.stage.changed")) {
+    refs.push({
+      pipelineId: t.pipelineId,
+      stageId: t.type === "pipeline.stage.changed" ? t.toStage : t.stageId,
+    });
+  }
+  for (const node of Object.values(patch.nodes ?? {})) {
+    if (node.type === "create_deal" || node.type === "update_deal") {
+      const cfg = (node.config ?? {}) as { pipelineId?: string; stageId?: string };
+      if (cfg.pipelineId || (node.type === "create_deal" && cfg.stageId)) {
+        refs.push({ pipelineId: cfg.pipelineId, stageId: cfg.stageId });
+      }
+    }
+  }
+  for (const ref of refs) {
+    const pipeline = await getPipeline(subAccountId, ref.pipelineId || "default");
+    if (!pipeline) return "That pipeline doesn't exist in this workspace.";
+    if (ref.stageId && !findStage(pipeline, ref.stageId)) {
+      return `"${pipeline.name}" has no such stage — pick a stage of that pipeline.`;
+    }
+  }
+  return null;
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; workflowId: string }> }
@@ -277,6 +309,12 @@ export async function PATCH(
           .map((key) => [key, trigger[key]])
       ),
     };
+  }
+  // Multiple Pipelines: a trigger or deal action may only reference a
+  // pipeline of THIS sub-account and a stage of that pipeline (by id).
+  const stageRefError = await validateDealStageRefs(subAccountId, patch);
+  if (stageRefError) {
+    return NextResponse.json({ error: stageRefError }, { status: 400 });
   }
   if (
     body.reentry === "every_time" ||

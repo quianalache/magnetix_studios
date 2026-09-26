@@ -146,6 +146,9 @@ async function main() {
   const taskCompleteRoute = await import("../src/app/api/tasks/[id]/complete/route");
   const eventsRoute = await import("../src/app/api/events/route");
   const relatedRoute = await import("../src/app/api/deals/[id]/related/route");
+  const workflowRoute = await import("../src/app/api/sub-accounts/[id]/workflows/[workflowId]/route");
+  const { fireWorkflowTrigger } = await import("../src/lib/workflows/engine");
+  const { serializeDealForApi } = await import("../src/lib/api/serializers/deals");
 
   console.log("Compatibility (before migration)");
   await check("unmigrated sub-account reads one virtual default pipeline with its legacy stages", async () => {
@@ -505,6 +508,68 @@ async function main() {
     const res = await dealRoute.DELETE(req("collab1", undefined, "DELETE"), p({ id: "bulk0" }));
     assert.equal(res.status, 403);
     assert.ok((await db.doc("deals/bulk0").get()).exists);
+  });
+
+  console.log("Workflows + API compatibility");
+  const wf = async (id: string, trigger: Record<string, unknown>) =>
+    db.doc(`workflows/${id}`).set({
+      agencyId: AG, subAccountId: "sa1", name: id, status: "active", reentry: "every_time",
+      trigger: { filters: { all: [] }, ...trigger }, startNodeId: "n1",
+      nodes: { n1: { id: "n1", type: "add_tag", config: { tag: "wf" }, next: null } },
+      createdAt: TS, updatedAt: TS,
+    });
+  const runs = async (id: string) =>
+    (await db.collection("workflowRuns").where("workflowId", "==", id).get()).size;
+  const fire = (type: string, context: Record<string, unknown>) =>
+    fireWorkflowTrigger({ subAccountId: "sa1", agencyId: AG, type: type as never, contactId: "c1", context });
+
+  await check("legacy workflows stay on the default pipeline", async () => {
+    await wf("wf-legacy-stage", { type: "pipeline.stage.changed", toStage: "won" });
+    await wf("wf-legacy-won", { type: "deal.won" });
+    await fire("pipeline.stage.changed", { toStage: "won", pipelineId: pid });
+    await fire("deal.won", { pipelineId: pid, eventId: "x1" });
+    assert.equal(await runs("wf-legacy-stage"), 0, "legacy fired for a custom pipeline");
+    assert.equal(await runs("wf-legacy-won"), 0);
+    await fire("pipeline.stage.changed", { toStage: "won", pipelineId: "default" });
+    await fire("deal.won", { pipelineId: "default", eventId: "x2" });
+    await fire("pipeline.stage.changed", { toStage: "won" }); // pre-pipeline event shape
+    assert.equal(await runs("wf-legacy-stage"), 2);
+    assert.equal(await runs("wf-legacy-won"), 1);
+  });
+
+  await check("pipeline-scoped workflows only fire for their pipeline + stage", async () => {
+    const stages = ((await db.doc(`subAccounts/sa1/pipelines/${pid}`).get()).data()!.stages as { id: string; archived: boolean; type: string }[]);
+    const target = stages.find((st) => !st.archived && st.type === "open")!.id;
+    await wf("wf-custom", { type: "pipeline.stage.changed", pipelineId: pid, toStage: target });
+    await fire("pipeline.stage.changed", { toStage: target, pipelineId: "default" });
+    await fire("pipeline.stage.changed", { toStage: "won", pipelineId: pid });
+    assert.equal(await runs("wf-custom"), 0);
+    await fire("pipeline.stage.changed", { toStage: target, pipelineId: pid });
+    assert.equal(await runs("wf-custom"), 1);
+  });
+
+  await check("workflow save refuses unknown pipelines / stages", async () => {
+    await db.doc("workflows/wf-edit").set({ agencyId: AG, subAccountId: "sa1", name: "e", status: "draft", trigger: null, nodes: {}, startNodeId: null, createdAt: TS, updatedAt: TS });
+    const bad = await workflowRoute.PATCH(
+      req("admin1", { trigger: { type: "pipeline.stage.changed", pipelineId: pid, toStage: "proposal", filters: { all: [] } } }, "PATCH"),
+      { params: Promise.resolve({ id: "sa1", workflowId: "wf-edit" }) },
+    );
+    assert.equal(bad.status, 400);
+    const foreign = await workflowRoute.PATCH(
+      req("admin1", { trigger: { type: "deal.won", pipelineId: "nope", filters: { all: [] } } }, "PATCH"),
+      { params: Promise.resolve({ id: "sa1", workflowId: "wf-edit" }) },
+    );
+    assert.equal(foreign.status, 400);
+    const ok = await workflowRoute.PATCH(
+      req("admin1", { trigger: { type: "pipeline.stage.changed", pipelineId: "default", toStage: "proposal", filters: { all: [] } } }, "PATCH"),
+      { params: Promise.resolve({ id: "sa1", workflowId: "wf-edit" }) },
+    );
+    assert.equal(ok.status, 200);
+  });
+
+  await check("API/webhook deal payloads carry pipeline_id (legacy → default)", async () => {
+    assert.equal(serializeDealForApi("x", { stageId: "new" }, "live").pipeline_id, "default");
+    assert.equal(serializeDealForApi("x", { stageId: "s1", pipelineId: pid }, "live").pipeline_id, pid);
   });
 
   console.log(`\n${passed} checks passed.`);

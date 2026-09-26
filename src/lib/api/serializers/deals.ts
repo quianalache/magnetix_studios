@@ -2,15 +2,18 @@ import "server-only";
 
 import type { Timestamp } from "firebase-admin/firestore";
 import type { DealPriority, PipelineStageId } from "@/types/deals";
+import { dealPipelineId } from "@/types/pipelines";
 import type { CustomFieldValue } from "@/types/custom-fields";
 import { customFieldsForApi } from "@/lib/api/serializers/contacts";
 
 /**
  * Public-API wire shape for Deal. Frozen contract.
  *
- * Stage discriminator (`stage`) carries the internal id directly —
- * `new | contacted | qualified | proposal | won | lost`. Stable across
- * versions because the dashboard UI already treats these as fixed.
+ * Stage discriminator (`stage`) carries the internal stage id. In the
+ * default pipeline these are `new | contacted | qualified | proposal |
+ * won | lost`; other pipelines (Multiple Pipelines, 2026-09-25) have their
+ * own stage ids, but `won` / `lost` mean the same in every pipeline.
+ * `pipeline_id` (additive) says which pipeline the deal belongs to.
  *
  * `stage_changed_at` is exposed so subscribers can de-dup `deal.stage.changed`
  * webhook deliveries against their own state.
@@ -34,6 +37,7 @@ export interface DealApiObject {
   title: string;
   value: number;
   currency: string;
+  pipeline_id: string;
   stage: PipelineStageId;
   priority: DealPriority;
   contact_id: string | null;
@@ -76,6 +80,7 @@ export function serializeDealForApi(
       typeof data.currency === "string" && data.currency.length === 3
         ? data.currency.toUpperCase()
         : "USD",
+    pipeline_id: dealPipelineId(data),
     stage: (data.stageId ?? "new") as PipelineStageId,
     priority: (data.priority ?? "medium") as DealPriority,
     contact_id: (data.contactId as string | null) ?? null,
@@ -93,10 +98,14 @@ export interface DealCreateInput {
   value: number;
   currency: string;
   contactId: string;
+  /** null → the default pipeline. */
+  pipelineId: string | null;
   stage: PipelineStageId;
   priority: DealPriority;
   territoryId: string | null;
 }
+
+const STAGE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export interface ParseResult<T> {
   ok: boolean;
@@ -144,15 +153,22 @@ export function parseDealCreate(raw: unknown): ParseResult<DealCreateInput> {
     return { ok: false, error: "`contact_id` is required." };
   }
 
+  // Stage ids are checked against the (default or given) pipeline by the
+  // route; here only their shape. Default-pipeline ids stay as before.
   const stageRaw = b.stage;
-  if (
-    typeof stageRaw !== "string" ||
-    !VALID_STAGES.includes(stageRaw as PipelineStageId)
-  ) {
+  if (typeof stageRaw !== "string" || !STAGE_ID_RE.test(stageRaw)) {
     return {
       ok: false,
-      error: `\`stage\` must be one of: ${VALID_STAGES.join(", ")}.`,
+      error: `\`stage\` is required: a stage id of the pipeline (default pipeline: ${VALID_STAGES.join(", ")}).`,
     };
+  }
+  const pipelineRaw = b.pipeline_id;
+  if (
+    pipelineRaw !== undefined &&
+    pipelineRaw !== null &&
+    (typeof pipelineRaw !== "string" || !STAGE_ID_RE.test(pipelineRaw))
+  ) {
+    return { ok: false, error: "`pipeline_id` must be a pipeline id." };
   }
 
   const priorityRaw = b.priority ?? "medium";
@@ -178,6 +194,7 @@ export function parseDealCreate(raw: unknown): ParseResult<DealCreateInput> {
       value: valueRaw,
       currency,
       contactId,
+      pipelineId: typeof pipelineRaw === "string" ? pipelineRaw : null,
       stage: stageRaw as PipelineStageId,
       priority: priorityRaw as DealPriority,
       territoryId: territoryId.length === 0 ? null : territoryId,
@@ -189,6 +206,8 @@ export interface DealPatchInput {
   title?: string;
   value?: number;
   currency?: string;
+  /** Move to this pipeline — requires `stage` of that pipeline. */
+  pipelineId?: string;
   stage?: PipelineStageId;
   priority?: DealPriority;
   lostReason?: string | null;
@@ -222,16 +241,22 @@ export function parseDealPatch(raw: unknown): ParseResult<DealPatchInput> {
     patch.currency = b.currency.toUpperCase();
   }
   if (b.stage !== undefined) {
-    if (
-      typeof b.stage !== "string" ||
-      !VALID_STAGES.includes(b.stage as PipelineStageId)
-    ) {
-      return {
-        ok: false,
-        error: `\`stage\` must be one of: ${VALID_STAGES.join(", ")}.`,
-      };
+    if (typeof b.stage !== "string" || !STAGE_ID_RE.test(b.stage)) {
+      return { ok: false, error: "`stage` must be a stage id of the deal's pipeline." };
     }
     patch.stage = b.stage as PipelineStageId;
+  }
+  if (b.pipeline_id !== undefined) {
+    if (typeof b.pipeline_id !== "string" || !STAGE_ID_RE.test(b.pipeline_id)) {
+      return { ok: false, error: "`pipeline_id` must be a pipeline id." };
+    }
+    if (patch.stage === undefined) {
+      return {
+        ok: false,
+        error: "Moving a deal to another pipeline needs `stage` (a stage of that pipeline).",
+      };
+    }
+    patch.pipelineId = b.pipeline_id;
   }
   if (b.priority !== undefined) {
     if (

@@ -3,6 +3,8 @@ import "server-only";
 import type { Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getStage, type Deal } from "@/types/deals";
+import { DEFAULT_PIPELINE_ID, dealPipelineId, findStage } from "@/types/pipelines";
+import { getPipeline } from "@/lib/server/pipelines-service";
 import type { Contact, Note } from "@/types/contacts";
 
 const MAX_NOTES_INCLUDED = 4;
@@ -90,27 +92,42 @@ export async function buildContactContextBlock(
   }
 
   // ---- Active (non-terminal) deals ----
-  const activeDeals = deals.filter((d) => {
-    const stage = getStage(d.stageId);
-    return stage.terminal !== "won" && stage.terminal !== "lost";
-  });
+  // "won" / "lost" are the terminal ids in every pipeline; other stage
+  // names come from the deal's own pipeline (Multiple Pipelines).
+  const activeDeals = deals.filter((d) => d.stageId !== "won" && d.stageId !== "lost");
+  const otherPipelineIds = [
+    ...new Set(deals.map((d) => dealPipelineId(d)).filter((id) => id !== DEFAULT_PIPELINE_ID)),
+  ];
+  const pipelines = new Map(
+    (
+      await Promise.all(
+        otherPipelineIds.map((id) => getPipeline(contact.subAccountId, id).catch(() => null)),
+      )
+    )
+      .filter((p) => p !== null)
+      .map((p) => [p.id, p]),
+  );
+  const stageLabel = (d: Deal): string => {
+    const p = pipelines.get(dealPipelineId(d));
+    if (p) return `${findStage(p, d.stageId)?.name ?? d.stageId} (${p.name})`;
+    return getStage(d.stageId).label;
+  };
 
   if (activeDeals.length > 0) {
     const dealLines = activeDeals.map((d) => {
-      const stage = getStage(d.stageId);
       const ageDays = ageInDays(d.stageChangedAt ?? d.createdAt);
       const value = d.value
         ? `${d.currency || "USD"} ${d.value.toLocaleString()}`
         : "no value set";
       const age = ageDays !== null ? `${ageDays}d in stage` : "";
-      return `  - "${d.title}" — ${stage.label}${age ? `, ${age}` : ""}, ${value}`;
+      return `  - "${d.title}" — ${stageLabel(d)}${age ? `, ${age}` : ""}, ${value}`;
     });
     lines.push("Active deals:");
     lines.push(...dealLines);
   }
 
   // ---- Won/lost deals (mention only the most recent terminal one if any) ----
-  const lastWon = deals.find((d) => getStage(d.stageId).terminal === "won");
+  const lastWon = deals.find((d) => d.stageId === "won");
   if (lastWon) {
     lines.push(
       `Past sale: "${lastWon.title}" (${lastWon.currency || "USD"} ${lastWon.value.toLocaleString()})`,

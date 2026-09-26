@@ -13,6 +13,7 @@ import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
 import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
+import { PipelineError, resolveWritableStage } from "@/lib/server/pipelines-service";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -131,6 +132,21 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
     return apiError(ctx, "invalid_request", "invalid_body", cf.error!);
   }
 
+  // The stage must be an active stage of the (default or given) pipeline.
+  const pipelineId = input.pipelineId ?? DEFAULT_PIPELINE_ID;
+  try {
+    await resolveWritableStage({
+      subAccountId: ctx.subAccountId,
+      pipelineId,
+      stageId: input.stage,
+    });
+  } catch (err) {
+    if (err instanceof PipelineError) {
+      return apiError(ctx, "invalid_request", err.code ?? "invalid_stage", err.message);
+    }
+    throw err;
+  }
+
   const ref = db.collection("deals").doc();
   const now = new Date();
   await ref.set({
@@ -138,7 +154,7 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
     value: input.value,
     currency: input.currency,
     contactId: input.contactId,
-    pipelineId: DEFAULT_PIPELINE_ID,
+    pipelineId,
     stageId: input.stage,
     priority: input.priority,
     lostReason: null,

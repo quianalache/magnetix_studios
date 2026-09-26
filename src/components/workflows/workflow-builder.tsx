@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PipelineStagePicker } from "@/components/workflows/pipeline-stage-picker";
 import { WorkflowStatusBadge } from "./workflow-status-badge";
 import {
   DropdownMenu,
@@ -34,7 +35,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PIPELINE_STAGES } from "@/types/deals";
 import {
   ADDABLE_TYPES,
   NODE_LABELS,
@@ -621,20 +621,26 @@ export function WorkflowBuilder({
               )}
 
               {trigger?.type === "pipeline.stage.changed" && (
-                <select
-                  value={trigger.toStage ?? ""}
-                  onChange={(e) =>
-                    setTrigger({ ...trigger, toStage: e.target.value || null })
+                <PipelineStagePicker
+                  pipelineId={trigger.pipelineId}
+                  stageId={trigger.toStage}
+                  anyStageLabel="Moved to any stage"
+                  stagePrefix="Moved to "
+                  onChange={({ pipelineId, stageId }) =>
+                    setTrigger({ ...trigger, pipelineId, toStage: stageId })
                   }
-                  className="border-input bg-background mt-2 h-9 w-full rounded-md border px-2 text-sm"
-                >
-                  <option value="">Any stage</option>
-                  {PIPELINE_STAGES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      Moved to {s.label}
-                    </option>
-                  ))}
-                </select>
+                />
+              )}
+
+              {trigger?.type.startsWith("deal.") && (
+                <PipelineStagePicker
+                  pipelineId={trigger.pipelineId}
+                  stageId={trigger.stageId}
+                  anyStageLabel="Any stage"
+                  onChange={({ pipelineId, stageId }) =>
+                    setTrigger({ ...trigger, pipelineId, stageId })
+                  }
+                />
               )}
 
               {trigger?.type === "message.received" && (
@@ -668,9 +674,6 @@ export function WorkflowBuilder({
                 [
                   "task.created",
                   "task.completed",
-                  "deal.created",
-                  "deal.won",
-                  "deal.lost",
                   "booking.completed",
                   "booking.no_show",
                   "course.enrolled",
@@ -699,15 +702,12 @@ export function WorkflowBuilder({
                         ? "Optional offer ID"
                         : trigger?.type.startsWith("community.")
                           ? "Optional Community/group ID"
-                          : trigger?.type.startsWith("deal.")
-                            ? "Optional stage ID"
-                            : "Optional entity ID"
+                          : "Optional entity ID"
                   }
                   value={
                     trigger?.courseId ??
                     trigger?.offerId ??
                     trigger?.groupId ??
-                    trigger?.stageId ??
                     ""
                   }
                   onChange={(e) => {
@@ -718,8 +718,7 @@ export function WorkflowBuilder({
                       setTrigger({ ...trigger, offerId: value });
                     else if (trigger?.type.startsWith("community."))
                       setTrigger({ ...trigger, groupId: value });
-                    else if (trigger?.type.startsWith("deal."))
-                      setTrigger({ ...trigger, stageId: value });
+
                   }}
                 />
               )}

@@ -57,7 +57,14 @@ import {
   createDealServerSide,
   updateDealServerSide,
 } from "@/lib/server/deals-service";
-import { PipelineError } from "@/lib/server/pipelines-service";
+import { PipelineError, listPipelines } from "@/lib/server/pipelines-service";
+import {
+  activeStages,
+  dealPipelineId,
+  DEFAULT_PIPELINE_ID,
+  type Pipeline,
+  type PipelineStageDef,
+} from "@/types/pipelines";
 import {
   createTaskServerSide,
   setTaskCompletedServerSide,
@@ -233,7 +240,52 @@ function textToBodyHtml(text: string): string {
     .join("");
 }
 
-const STAGE_IDS = PIPELINE_STAGES.map((s) => s.id);
+
+/** Stage label for a confirmation card: a canonical id's label, else as given. */
+function stageDisplay(stage: string): string {
+  return PIPELINE_STAGES.find((s) => s.id === stage)?.label ?? stage;
+}
+
+/**
+ * Multiple Pipelines: resolve a pipeline (name or id; default pipeline when
+ * omitted) and a stage (name or id) inside it, for the sub-account the
+ * assistant is acting in. Throws a user-facing error listing the options.
+ */
+async function resolvePipelineStageRef(
+  subAccountId: string,
+  pipelineRef: string,
+  stageRef: string,
+  opts: { requireActive?: boolean } = {},
+): Promise<{ pipeline: Pipeline; stage: PipelineStageDef | null }> {
+  const pipelines = await listPipelines(subAccountId, { includeArchived: true });
+  const needle = pipelineRef.trim().toLowerCase();
+  const pipeline = needle
+    ? pipelines.find((p) => p.id === pipelineRef || p.name.toLowerCase() === needle)
+    : pipelines.find((p) => p.id === DEFAULT_PIPELINE_ID);
+  if (!pipeline) {
+    throw new CapabilityUserError(
+      `No pipeline called “${pipelineRef}”. Pipelines: ${pipelines
+        .filter((p) => p.status === "active")
+        .map((p) => p.name)
+        .join(", ")}.`,
+    );
+  }
+  if (opts.requireActive && pipeline.status !== "active") {
+    throw new CapabilityUserError(`“${pipeline.name}” is archived.`);
+  }
+  if (!stageRef) return { pipeline, stage: null };
+  const s = stageRef.trim().toLowerCase();
+  const stage =
+    activeStages(pipeline).find((st) => st.id === stageRef || st.name.toLowerCase() === s) ?? null;
+  if (!stage) {
+    throw new CapabilityUserError(
+      `“${pipeline.name}” has no stage “${stageRef}”. Stages: ${activeStages(pipeline)
+        .map((st) => st.name)
+        .join(", ")}.`,
+    );
+  }
+  return { pipeline, stage };
+}
 
 function fmtMoney(value: number, currency: string): string {
   return `${currency} ${value.toLocaleString("en-US")}`;
@@ -1407,7 +1459,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
     readonly: true,
     menuLabel: "Search this workspace's deals (by title or pipeline stage)",
     description:
-      "Search this sub-account's deals by title fragment and/or pipeline stage. Use to answer questions about deals and ALWAYS use it to resolve a deal's id before move_deal_stage — never guess ids.",
+      "Search this sub-account's deals by title fragment, pipeline and/or stage. Use to answer questions about deals and ALWAYS use it to resolve a deal's id before move_deal_stage — never guess ids. The workspace can have several pipelines, each with its own stages.",
     parameters: {
       type: "object",
       properties: {
@@ -1415,41 +1467,54 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
           type: "string",
           description: "Optional title fragment to match.",
         },
+        pipeline: {
+          type: "string",
+          description: "Optional pipeline name to search within.",
+        },
         stage: {
           type: "string",
-          enum: STAGE_IDS,
-          description: "Optional pipeline stage to filter by.",
+          description: "Optional stage name (or id) to filter by, e.g. 'Proposal' or 'won'.",
         },
       },
       additionalProperties: false,
     },
     validate: (raw) => {
       const query = str(raw, "query").slice(0, 120);
-      const stage = str(raw, "stage");
-      if (stage && !STAGE_IDS.includes(stage as PipelineStageId)) {
-        return { ok: false, error: `stage must be one of: ${STAGE_IDS.join(", ")}` };
+      const stage = str(raw, "stage").slice(0, 64);
+      const pipeline = str(raw, "pipeline").slice(0, 80);
+      if (!query && !stage && !pipeline) {
+        return { ok: false, error: "a title fragment, pipeline or stage is required" };
       }
-      if (!query && !stage) {
-        return { ok: false, error: "a title fragment or a stage is required" };
-      }
-      return { ok: true, args: { query, stage } };
+      return { ok: true, args: { query, stage, pipeline } };
     },
     summarize: (args) =>
       `Search deals${args.query ? ` matching “${args.query}”` : ""}${
-        args.stage ? ` in ${getStage(args.stage as PipelineStageId).label}` : ""
-      }.`,
+        args.pipeline ? ` in ${args.pipeline as string}` : ""
+      }${args.stage ? ` at ${stageDisplay(args.stage as string)}` : ""}.`,
     execute: async (ctx, args) => {
       const q = ((args.query as string) || "").toLowerCase();
-      const stage = (args.stage as string) || "";
+      const stage = ((args.stage as string) || "").toLowerCase();
+      const pipelines = await listPipelines(ctx.subAccountId!, { includeArchived: true });
+      const byId = new Map(pipelines.map((p) => [p.id, p]));
+      let onlyPipeline: string | null = null;
+      if (args.pipeline) {
+        onlyPipeline = (
+          await resolvePipelineStageRef(ctx.subAccountId!, args.pipeline as string, "")
+        ).pipeline.id;
+      }
       const snap = await getAdminDb()
         .collection("deals")
         .where("subAccountId", "==", ctx.subAccountId!)
         .limit(500)
         .get();
+      const stageName = (data: FirebaseFirestore.DocumentData) =>
+        byId.get(dealPipelineId(data))?.stages.find((st) => st.id === data.stageId)?.name ??
+        getStage(data.stageId as PipelineStageId).label;
       const matches = snap.docs
         .filter((d) => {
           const data = d.data();
-          if (stage && data.stageId !== stage) return false;
+          if (onlyPipeline && dealPipelineId(data) !== onlyPipeline) return false;
+          if (stage && data.stageId !== stage && stageName(data).toLowerCase() !== stage) return false;
           if (q && !String(data.title ?? "").toLowerCase().includes(q)) return false;
           return true;
         })
@@ -1459,9 +1524,9 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       }
       const lines = matches.map((d) => {
         const data = d.data();
-        return `- ${data.title} — id: ${d.id}, stage: ${
-          getStage(data.stageId as PipelineStageId).label
-        }, value: ${fmtMoney(
+        return `- ${data.title} — id: ${d.id}, pipeline: ${
+          byId.get(dealPipelineId(data))?.name ?? "Unknown"
+        }, stage: ${stageName(data)}, value: ${fmtMoney(
           typeof data.value === "number" ? data.value : 0,
           (data.currency as string) || "USD",
         )}, contactId: ${data.contactId ?? "none"}`;
@@ -1493,10 +1558,13 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
           type: "string",
           description: "The contact's name, for the confirmation card.",
         },
+        pipeline: {
+          type: "string",
+          description: "Optional pipeline name. Defaults to the main (default) pipeline.",
+        },
         stage: {
           type: "string",
-          enum: STAGE_IDS,
-          description: "Optional starting stage. Defaults to 'new'.",
+          description: "Optional starting stage name (or id) in that pipeline. Defaults to its first stage.",
         },
       },
       required: ["title", "value", "contactId", "contactName"],
@@ -1526,10 +1594,6 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       if (!/^[A-Z]{3}$/.test(currency)) {
         return { ok: false, error: "the currency must be a 3-letter code like USD" };
       }
-      const stage = str(raw, "stage") || "new";
-      if (!STAGE_IDS.includes(stage as PipelineStageId)) {
-        return { ok: false, error: `stage must be one of: ${STAGE_IDS.join(", ")}` };
-      }
       return {
         ok: true,
         args: {
@@ -1538,7 +1602,8 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
           currency,
           contactId,
           contactName: str(raw, "contactName"),
-          stage,
+          pipeline: str(raw, "pipeline").slice(0, 80),
+          stage: str(raw, "stage").slice(0, 64),
         },
       };
     },
@@ -1546,13 +1611,23 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       `Create a deal “${args.title}” (${fmtMoney(
         args.value as number,
         args.currency as string,
-      )}) for ${args.contactName} in ${getStage(args.stage as PipelineStageId).label}.`,
+      )}) for ${args.contactName}${args.pipeline ? ` in ${args.pipeline as string}` : ""}${
+        args.stage ? ` at ${stageDisplay(args.stage as string)}` : ""
+      }.`,
     execute: async (ctx, args) => {
       // The contact id came from the model — verify it's in THIS workspace.
       const c = await getAdminDb().doc(`contacts/${args.contactId as string}`).get();
       if (!c.exists || c.data()?.subAccountId !== ctx.subAccountId) {
         throw new CapabilityUserError("That contact wasn't found in this workspace.");
       }
+      const { pipeline, stage } = await resolvePipelineStageRef(
+        ctx.subAccountId!,
+        (args.pipeline as string) || "",
+        (args.stage as string) || "",
+        { requireActive: true },
+      );
+      const startStage = stage ?? activeStages(pipeline).find((st) => st.type === "open");
+      if (!startStage) throw new CapabilityUserError(`“${pipeline.name}” has no open stage.`);
       const res = await createDealServerSide({
         subAccountId: ctx.subAccountId!,
         agencyId: ctx.agencyId,
@@ -1562,16 +1637,15 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         value: args.value as number,
         currency: args.currency as string,
         contactId: args.contactId as string,
-        stageId: args.stage as PipelineStageId,
+        pipelineId: pipeline.id,
+        stageId: startStage.id,
         priority: "medium" as DealPriority,
       }).catch(asCapabilityPipelineError);
       return {
         resultText: `Created the deal “${args.title}” (${fmtMoney(
           args.value as number,
           args.currency as string,
-        )}) for ${args.contactName} in ${
-          getStage(args.stage as PipelineStageId).label
-        }. You'll see it on the Pipeline board.`,
+        )}) for ${args.contactName} in ${pipeline.name} · ${startStage.name}. You'll see it on that pipeline's board.`,
         ref: { kind: "deal", id: res.id },
       };
     },
@@ -1582,7 +1656,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
     requiredRole: "subAccountMember",
     menuLabel: "Move a deal to another pipeline stage (including Won / Lost)",
     description:
-      "Move an existing deal to a different pipeline stage. Resolve the deal's id with find_deals first — never guess ids. When moving to 'lost', ask the user for a short lost reason.",
+      "Move an existing deal to a different stage of its own pipeline (every pipeline has 'Won' and 'Lost'). Resolve the deal's id with find_deals first — never guess ids. When moving to 'lost', ask the user for a short lost reason. Moving a deal to a DIFFERENT pipeline is done in the app, not here.",
     parameters: {
       type: "object",
       properties: {
@@ -1596,8 +1670,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         },
         stage: {
           type: "string",
-          enum: STAGE_IDS,
-          description: "The stage to move the deal to.",
+          description: "The stage name (or id) in the deal's pipeline, e.g. 'Proposal', 'won', 'lost'.",
         },
         lostReason: {
           type: "string",
@@ -1615,10 +1688,8 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
           error: "the deal id is required — I need to find it first (find_deals)",
         };
       }
-      const stage = str(raw, "stage");
-      if (!STAGE_IDS.includes(stage as PipelineStageId)) {
-        return { ok: false, error: `stage must be one of: ${STAGE_IDS.join(", ")}` };
-      }
+      const stage = str(raw, "stage").slice(0, 64);
+      if (!stage) return { ok: false, error: "the destination stage is required" };
       return {
         ok: true,
         args: {
@@ -1630,16 +1701,21 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       };
     },
     summarize: (args) =>
-      `Move the deal “${args.dealTitle || args.dealId}” to ${
-        getStage(args.stage as PipelineStageId).label
-      }${args.lostReason ? ` (reason: ${args.lostReason})` : ""}.`,
+      `Move the deal “${args.dealTitle || args.dealId}” to ${stageDisplay(
+        args.stage as string,
+      )}${args.lostReason ? ` (reason: ${args.lostReason})` : ""}.`,
     execute: async (ctx, args) => {
       // The deal id came from the model — verify it's in THIS workspace.
       const snap = await getAdminDb().doc(`deals/${args.dealId as string}`).get();
       if (!snap.exists || snap.data()?.subAccountId !== ctx.subAccountId) {
         throw new CapabilityUserError("That deal wasn't found in this workspace.");
       }
-      const stage = args.stage as PipelineStageId;
+      const { stage: target } = await resolvePipelineStageRef(
+        ctx.subAccountId!,
+        dealPipelineId(snap.data()!),
+        args.stage as string,
+      );
+      const stage = target!.id;
       await updateDealServerSide({
         dealId: snap.id,
         userId: ctx.uid,
@@ -1653,7 +1729,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
       }).catch(asCapabilityPipelineError);
       const title = (snap.data()?.title as string) || (args.dealTitle as string);
       return {
-        resultText: `Moved “${title}” to ${getStage(stage).label}.`,
+        resultText: `Moved “${title}” to ${target!.name}.`,
         ref: { kind: "deal", id: snap.id },
       };
     },
