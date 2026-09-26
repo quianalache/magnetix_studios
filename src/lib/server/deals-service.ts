@@ -8,11 +8,15 @@ import {
   serializeDealForApi,
   type DealApiObject,
 } from "@/lib/api/serializers/deals";
+import { type DealPriority, type PipelineStageId } from "@/types/deals";
+import { DEFAULT_PIPELINE_ID, dealPipelineId } from "@/types/pipelines";
 import {
-  getStage,
-  type DealPriority,
-  type PipelineStageId,
-} from "@/types/deals";
+  PipelineError,
+  dealsInStage,
+  getPipeline,
+  resolveWritableStage,
+  stageLabel,
+} from "@/lib/server/pipelines-service";
 import type { WebhookEventType } from "@/types/webhooks";
 import type { CustomFieldValue } from "@/types/custom-fields";
 import { GLOBAL_TERRITORY_ID } from "@/types";
@@ -116,16 +120,23 @@ export function emitDealEvents(opts: {
   })();
 }
 
-/** Write a `pipeline_moved` activity to the contact's timeline (Admin SDK). */
+/**
+ * Write a `pipeline_moved` activity to the contact's timeline (Admin SDK),
+ * and mirror it onto the deal's own feed (`deals/{id}/activities`, Multiple
+ * Pipelines 2026-09-25). The mirror carries `mirrorOf` = the contact
+ * activity id, so the Deal Details feed can merge older contact-only rows
+ * (which carry `meta.dealId`) without showing an event twice.
+ */
 async function writePipelineActivity(
   contactId: string,
   payload: {
     content: string;
     createdBy: string;
-    meta: Record<string, unknown>;
+    meta: Record<string, unknown> & { dealId: string };
   }
 ): Promise<void> {
-  await getAdminDb()
+  const db = getAdminDb();
+  const contactRef = await db
     .collection("contacts")
     .doc(contactId)
     .collection("activities")
@@ -136,6 +147,87 @@ async function writePipelineActivity(
       meta: payload.meta,
       createdAt: FieldValue.serverTimestamp(),
     });
+  await writeDealActivity(payload.meta.dealId, {
+    type: "pipeline_moved",
+    content: payload.content,
+    createdBy: payload.createdBy,
+    meta: payload.meta,
+    mirrorOf: contactRef.id,
+    contactId,
+  });
+}
+
+/**
+ * Append a row to a deal's activity feed. Best-effort: a failed feed write
+ * never fails the deal operation that caused it.
+ */
+export async function writeDealActivity(
+  dealId: string,
+  row: {
+    type: string;
+    content: string;
+    createdBy: string | null;
+    meta?: Record<string, unknown>;
+    mirrorOf?: string | null;
+    contactId?: string | null;
+  }
+): Promise<void> {
+  try {
+    await getAdminDb()
+      .collection("deals")
+      .doc(dealId)
+      .collection("activities")
+      .add({
+        type: row.type,
+        content: row.content,
+        createdBy: row.createdBy,
+        meta: row.meta ?? {},
+        mirrorOf: row.mirrorOf ?? null,
+        contactId: row.contactId ?? null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+  } catch (err) {
+    console.warn("[deals-service] writeDealActivity failed", dealId, err);
+  }
+}
+
+export const DEAL_DESCRIPTION_MAX = 5000;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Validate the Deal Details text fields. Throws PipelineError(400). */
+export function cleanDealDetails(input: {
+  description?: unknown;
+  expectedCloseDate?: unknown;
+}): { description?: string | null; expectedCloseDate?: string | null } {
+  const out: { description?: string | null; expectedCloseDate?: string | null } = {};
+  if (input.description !== undefined) {
+    if (input.description !== null && typeof input.description !== "string") {
+      throw new PipelineError("Description must be text.", 400);
+    }
+    const d = (input.description ?? "").trim();
+    if (d.length > DEAL_DESCRIPTION_MAX) {
+      throw new PipelineError(
+        `Keep the description under ${DEAL_DESCRIPTION_MAX} characters.`,
+        400,
+      );
+    }
+    out.description = d || null;
+  }
+  if (input.expectedCloseDate !== undefined) {
+    const v = input.expectedCloseDate;
+    if (v === null || v === "") {
+      out.expectedCloseDate = null;
+    } else if (
+      typeof v !== "string" ||
+      !DATE_RE.test(v) ||
+      Number.isNaN(Date.parse(`${v}T00:00:00Z`))
+    ) {
+      throw new PipelineError("Expected closing date must be YYYY-MM-DD.", 400);
+    } else {
+      out.expectedCloseDate = v;
+    }
+  }
+  return out;
 }
 
 export interface CreateDealInput {
@@ -147,8 +239,12 @@ export interface CreateDealInput {
   value: number;
   currency: string;
   contactId: string;
+  /** Owning pipeline. Omitted → the default pipeline. */
+  pipelineId?: string | null;
   stageId: PipelineStageId;
   priority: DealPriority;
+  description?: string | null;
+  expectedCloseDate?: string | null;
   territoryId?: string | null;
   customFields?: Record<string, CustomFieldValue> | null;
 }
@@ -158,11 +254,27 @@ export interface DealWriteResult {
   deal: DealApiObject;
 }
 
-/** Create a deal + log the create activity + emit `deal.created`. */
+/**
+ * Create a deal + log the create activity + emit `deal.created`.
+ *
+ * Throws {@link PipelineError} when the pipeline/stage isn't writable
+ * (unknown, archived, or a stage of a different pipeline) — every caller
+ * gets the same validation.
+ */
 export async function createDealServerSide(
   input: CreateDealInput
 ): Promise<DealWriteResult> {
   const db = getAdminDb();
+  const pipelineId = input.pipelineId || DEFAULT_PIPELINE_ID;
+  const { pipeline } = await resolveWritableStage({
+    subAccountId: input.subAccountId,
+    pipelineId,
+    stageId: input.stageId,
+  });
+  const details = cleanDealDetails({
+    description: input.description,
+    expectedCloseDate: input.expectedCloseDate,
+  });
   const ref = db.collection("deals").doc();
 
   const doc = {
@@ -170,8 +282,11 @@ export async function createDealServerSide(
     value: input.value,
     currency: input.currency,
     contactId: input.contactId,
+    pipelineId,
     stageId: input.stageId,
     priority: input.priority,
+    description: details.description ?? null,
+    expectedCloseDate: details.expectedCloseDate ?? null,
     lostReason: null,
     customFields: input.customFields ?? {},
     territoryId: input.territoryId ?? GLOBAL_TERRITORY_ID,
@@ -186,9 +301,9 @@ export async function createDealServerSide(
   await ref.set(doc);
 
   await writePipelineActivity(input.contactId, {
-    content: `Deal "${input.title}" created in ${getStage(input.stageId).label}`,
+    content: `Deal "${input.title}" created in ${pipeline.name} · ${stageLabel(pipeline, input.stageId)}`,
     createdBy: input.createdByUid,
-    meta: { dealId: ref.id, toStageId: input.stageId },
+    meta: { dealId: ref.id, toStageId: input.stageId, toPipelineId: pipelineId },
   });
 
   const now = new Date();
@@ -213,7 +328,7 @@ export async function createDealServerSide(
       subAccountId: input.subAccountId,
       contactId: input.contactId,
       source: "deals",
-      payload: { dealId: ref.id, stageId: input.stageId },
+      payload: { dealId: ref.id, pipelineId, stageId: input.stageId },
     });
   }
 
@@ -235,7 +350,16 @@ export interface UpdateDealPatch {
   priority?: DealPriority;
   contactId?: string;
   territoryId?: string | null;
+  /**
+   * Move to another pipeline. REQUIRES `stageId` (an explicit destination
+   * stage of that pipeline) — the service refuses a pipeline change without
+   * one rather than guessing.
+   */
+  pipelineId?: string;
   stageId?: PipelineStageId;
+  description?: string | null;
+  /** `YYYY-MM-DD` or null to clear. */
+  expectedCloseDate?: string | null;
   /** Only meaningful on a move to "lost". */
   lostReason?: string | null;
   /** "Completed" tick on a Won deal card. Stamps/clears `completedAt`. */
@@ -273,10 +397,49 @@ export async function updateDealServerSide(opts: {
   const mode = opts.mode ?? (existing.mode as Mode) ?? "live";
   const previousStage = existing.stageId as PipelineStageId | undefined;
   const { patch } = opts;
+  const subAccountId = existing.subAccountId as string;
+
+  const fromPipelineId = dealPipelineId(existing);
+  const toPipelineId = patch.pipelineId || fromPipelineId;
+  const pipelineChanged = toPipelineId !== fromPipelineId;
+  if (pipelineChanged && patch.stageId === undefined) {
+    throw new PipelineError(
+      "Choose a stage in the destination pipeline.",
+      400,
+      "destination_stage_required",
+    );
+  }
+  // A move between pipelines is a stage change even when the ids match
+  // (every pipeline has "won"/"lost").
+  const stageChanged =
+    patch.stageId !== undefined &&
+    (pipelineChanged || patch.stageId !== previousStage);
+  const fromPipeline = await getPipeline(subAccountId, fromPipelineId);
+  let toPipeline = fromPipeline;
+  if (stageChanged) {
+    toPipeline = (
+      await resolveWritableStage({
+        subAccountId,
+        pipelineId: toPipelineId,
+        stageId: patch.stageId!,
+      })
+    ).pipeline;
+  }
+  const details = cleanDealDetails({
+    description: patch.description,
+    expectedCloseDate: patch.expectedCloseDate,
+  });
 
   const write: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
   };
+  // Stamp legacy docs with their (default) pipeline on any write, and the
+  // destination on a cross-pipeline move.
+  if (pipelineChanged || !existing.pipelineId) write.pipelineId = toPipelineId;
+  if (details.description !== undefined) write.description = details.description;
+  if (details.expectedCloseDate !== undefined) {
+    write.expectedCloseDate = details.expectedCloseDate;
+  }
   if (patch.title !== undefined) write.title = patch.title;
   if (patch.value !== undefined) write.value = patch.value;
   if (patch.currency !== undefined) write.currency = patch.currency;
@@ -289,8 +452,6 @@ export async function updateDealServerSide(opts: {
     write.completedAt = patch.completed ? FieldValue.serverTimestamp() : null;
   }
 
-  const stageChanged =
-    patch.stageId !== undefined && patch.stageId !== previousStage;
   if (patch.stageId !== undefined) {
     write.stageId = patch.stageId;
     if (stageChanged) {
@@ -302,6 +463,7 @@ export async function updateDealServerSide(opts: {
       } else if (previousStage === "lost") {
         write.lostReason = null;
       }
+
     }
   }
 
@@ -316,13 +478,21 @@ export async function updateDealServerSide(opts: {
       patch.stageId === "lost" && write.lostReason
         ? ` — ${write.lostReason as string}`
         : "";
+    const from = pipelineChanged
+      ? `${fromPipeline?.name ?? "another pipeline"} · ${stageLabel(fromPipeline, previousStage)}`
+      : stageLabel(fromPipeline, previousStage);
+    const to = pipelineChanged
+      ? `${toPipeline?.name ?? "pipeline"} · ${stageLabel(toPipeline, patch.stageId!)}`
+      : stageLabel(toPipeline, patch.stageId!);
     await writePipelineActivity(data.contactId, {
-      content: `Deal "${data.title}" moved from ${getStage(previousStage).label} to ${getStage(patch.stageId!).label}${reasonSuffix}`,
+      content: `Deal "${data.title}" moved from ${from} to ${to}${reasonSuffix}`,
       createdBy: opts.userId,
       meta: {
         dealId: fresh.id,
         fromStageId: previousStage,
         toStageId: patch.stageId,
+        fromPipelineId,
+        toPipelineId,
       },
     });
   }
@@ -333,7 +503,10 @@ export async function updateDealServerSide(opts: {
   if (stageChanged) {
     events.push({
       type: "deal.stage.changed",
-      extra: { previous_stage: previousStage ?? null },
+      extra: {
+        previous_stage: previousStage ?? null,
+        previous_pipeline_id: fromPipelineId,
+      },
     });
     if (patch.stageId === "won") events.push({ type: "deal.won" });
     else if (patch.stageId === "lost") events.push({ type: "deal.lost" });
@@ -361,7 +534,8 @@ export async function updateDealServerSide(opts: {
       source: "deals",
       payload: {
         dealId: fresh.id,
-        pipelineId: data.pipelineId ?? null,
+        pipelineId: toPipelineId,
+        previousPipelineId: pipelineChanged ? fromPipelineId : null,
         stageId: data.stageId ?? null,
         amount: data.value ?? null,
         currency: data.currency ?? null,
@@ -377,7 +551,7 @@ export async function updateDealServerSide(opts: {
         source: "deals",
         payload: {
           dealId: fresh.id,
-          pipelineId: data.pipelineId ?? null,
+          pipelineId: toPipelineId,
           stageId: data.stageId ?? null,
           previousAmount: existing.value ?? null,
           newAmount: data.value ?? null,
@@ -400,7 +574,12 @@ export async function updateDealServerSide(opts: {
       subAccountId: existing.subAccountId,
       contactId: data.contactId as string,
       source: "deals",
-      payload: { dealId: fresh.id, stageId: patch.stageId },
+      payload: {
+        dealId: fresh.id,
+        pipelineId: toPipelineId,
+        previousPipelineId: pipelineChanged ? fromPipelineId : null,
+        stageId: patch.stageId,
+      },
     });
   }
 
@@ -412,7 +591,13 @@ export async function updateDealServerSide(opts: {
       agencyId: existing.agencyId as string,
       type: "pipeline.stage.changed",
       contactId: data.contactId as string,
-      context: { toStage: patch.stageId },
+      context: {
+        toStage: patch.stageId,
+        stageId: patch.stageId,
+        pipelineId: toPipelineId,
+        fromStage: previousStage ?? null,
+        fromPipelineId,
+      },
     });
   }
 
@@ -435,7 +620,8 @@ export async function deleteDealServerSide(opts: {
   const mode = opts.mode ?? (data.mode as Mode) ?? "live";
   const deal = serializeDealForApi(snap.id, data, mode);
 
-  await ref.delete();
+  // Deal notes + the deal's activity feed live under the deal doc.
+  await db.recursiveDelete(ref);
 
   emitDealEvents({
     subAccountId: data.subAccountId,
@@ -509,4 +695,58 @@ export async function emitDealCreatedById(opts: {
   } catch (err) {
     console.warn("[deals-service] emitDealCreatedById failed", err);
   }
+}
+
+/** Upper bound on deals moved by one reassignment call. */
+export const REASSIGN_MAX_DEALS = 500;
+
+/**
+ * Manage Stages → "move these deals first": re-home every deal in
+ * (pipelineId, stageId) to a destination stage (optionally in another
+ * pipeline) so the source stage can be archived. Each deal goes through
+ * {@link updateDealServerSide}, so activity, webhooks and workflow triggers
+ * fire exactly as for a manual move. Territory is NOT consulted — callers
+ * must restrict this to admins (who see every territory).
+ */
+export async function reassignStageDeals(opts: {
+  subAccountId: string;
+  pipelineId: string;
+  stageId: string;
+  toPipelineId: string;
+  toStageId: string;
+  userId: string;
+}): Promise<{ moved: number; remaining: number }> {
+  if (opts.toPipelineId === opts.pipelineId && opts.toStageId === opts.stageId) {
+    throw new PipelineError("Pick a different destination stage.", 400);
+  }
+  // Validate the destination once up front (clear error before any move).
+  await resolveWritableStage({
+    subAccountId: opts.subAccountId,
+    pipelineId: opts.toPipelineId,
+    stageId: opts.toStageId,
+  });
+  const source = await getPipeline(opts.subAccountId, opts.pipelineId);
+  if (!source || !source.stages.some((s) => s.id === opts.stageId)) {
+    throw new PipelineError("Stage not found", 404);
+  }
+  const deals = await dealsInStage({
+    subAccountId: opts.subAccountId,
+    pipelineId: opts.pipelineId,
+    stageId: opts.stageId,
+  });
+  const batch = deals.slice(0, REASSIGN_MAX_DEALS);
+  for (const d of batch) {
+    await updateDealServerSide({
+      dealId: d.id,
+      userId: opts.userId,
+      expectedSubAccountId: opts.subAccountId,
+      patch: {
+        stageId: opts.toStageId,
+        ...(opts.toPipelineId !== opts.pipelineId
+          ? { pipelineId: opts.toPipelineId }
+          : {}),
+      },
+    });
+  }
+  return { moved: batch.length, remaining: deals.length - batch.length };
 }

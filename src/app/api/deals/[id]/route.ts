@@ -11,8 +11,10 @@ import {
 import { maybeSendReviewRequest } from "@/lib/reviews/request";
 import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
 import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
-import { PIPELINE_STAGES, DEAL_PRIORITIES } from "@/types/deals";
+import { DEAL_PRIORITIES } from "@/types/deals";
 import type { DealPriority, PipelineStageId } from "@/types/deals";
+import { territoryGate } from "@/lib/auth/territory-filter";
+import { PipelineError } from "@/lib/server/pipelines-service";
 
 /**
  * Dashboard-facing single-deal routes:
@@ -24,7 +26,6 @@ import type { DealPriority, PipelineStageId } from "@/types/deals";
  * Kanban drag) so the matching webhooks fire from the shared service.
  */
 
-const VALID_STAGES = new Set(PIPELINE_STAGES.map((s) => s.id));
 const VALID_PRIORITIES = new Set(DEAL_PRIORITIES.map((p) => p.id));
 
 export async function PATCH(
@@ -41,6 +42,9 @@ export async function PATCH(
 
   const access = await requireSubAccountMember(request, data.subAccountId);
   if (access instanceof NextResponse) return access;
+  // Same territory scoping the Firestore rules apply to the deal doc.
+  const gate = await territoryGate(access, (data.territoryId as string) ?? null);
+  if (gate) return gate;
 
   let body: Record<string, unknown>;
   try {
@@ -68,10 +72,23 @@ export async function PATCH(
       typeof body.territoryId === "string" ? body.territoryId : null;
   }
   if (body.stageId !== undefined) {
-    if (!VALID_STAGES.has(body.stageId as PipelineStageId)) {
+    // Validated against the (destination) pipeline by the deal service.
+    if (typeof body.stageId !== "string" || !body.stageId) {
       return NextResponse.json({ error: "Invalid stageId" }, { status: 400 });
     }
     patch.stageId = body.stageId as PipelineStageId;
+  }
+  if (body.pipelineId !== undefined) {
+    if (typeof body.pipelineId !== "string" || !body.pipelineId) {
+      return NextResponse.json({ error: "Invalid pipelineId" }, { status: 400 });
+    }
+    patch.pipelineId = body.pipelineId;
+  }
+  if (body.description === null || typeof body.description === "string") {
+    patch.description = body.description as string | null;
+  }
+  if (body.expectedCloseDate === null || typeof body.expectedCloseDate === "string") {
+    patch.expectedCloseDate = body.expectedCloseDate as string | null;
   }
   if (body.lostReason === null || typeof body.lostReason === "string") {
     patch.lostReason =
@@ -87,12 +104,31 @@ export async function PATCH(
     patch.customFields = cf.value;
   }
 
-  const result = await updateDealServerSide({
-    dealId: id,
-    patch,
-    userId: access.uid,
-    mode: (data.mode as "live" | "test") ?? "live",
-  });
+  // Re-homing a deal to another contact changes its territory; a scoped
+  // collaborator may only move it within their own territories.
+  if (patch.territoryId !== undefined) {
+    const toGate = await territoryGate(access, patch.territoryId);
+    if (toGate) return toGate;
+  }
+
+  let result: Awaited<ReturnType<typeof updateDealServerSide>>;
+  try {
+    result = await updateDealServerSide({
+      dealId: id,
+      patch,
+      userId: access.uid,
+      mode: (data.mode as "live" | "test") ?? "live",
+      expectedSubAccountId: data.subAccountId as string,
+    });
+  } catch (err) {
+    if (err instanceof PipelineError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: err.status },
+      );
+    }
+    throw err;
+  }
   if (!result) {
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
@@ -128,6 +164,8 @@ export async function DELETE(
 
   const access = await requireSubAccountMember(request, data.subAccountId);
   if (access instanceof NextResponse) return access;
+  const gate = await territoryGate(access, (data.territoryId as string) ?? null);
+  if (gate) return gate;
 
   await deleteDealServerSide({
     dealId: id,

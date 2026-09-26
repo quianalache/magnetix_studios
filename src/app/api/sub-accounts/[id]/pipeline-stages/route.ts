@@ -5,7 +5,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { PIPELINE_STAGES } from "@/types/deals";
-import type { PipelineStageId, PipelineStageOverride } from "@/types/deals";
+import { applyLegacyOverridesToDefault } from "@/lib/server/pipelines-service";
+import type { CanonicalStageId, PipelineStageOverride } from "@/types/deals";
 
 /**
  * Per-sub-account pipeline stage label/order overrides (Phase 2 / 2A).
@@ -23,7 +24,7 @@ import type { PipelineStageId, PipelineStageOverride } from "@/types/deals";
  *   - `reset: true` removes the override field entirely → canonical defaults.
  */
 
-const CANONICAL_IDS = PIPELINE_STAGES.map((s) => s.id) as PipelineStageId[];
+const CANONICAL_IDS = PIPELINE_STAGES.map((s) => s.id) as CanonicalStageId[];
 const CANONICAL_ID_SET = new Set<string>(CANONICAL_IDS);
 const LABEL_MAX = 40;
 
@@ -56,6 +57,8 @@ export async function PATCH(
       pipelineStages: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // Multiple Pipelines: keep a stored default pipeline in step.
+    await applyLegacyOverridesToDefault(subAccountId, null);
     return NextResponse.json({ ok: true, reset: true });
   }
 
@@ -105,7 +108,7 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    cleaned.push({ id: id as PipelineStageId, label, order: Math.floor(order) });
+    cleaned.push({ id: id as CanonicalStageId, label, order: Math.floor(order) });
   }
 
   // Require the full canonical set so a save is an unambiguous full replacement.
@@ -120,5 +123,6 @@ export async function PATCH(
     pipelineStages: cleaned,
     updatedAt: FieldValue.serverTimestamp(),
   });
+  await applyLegacyOverridesToDefault(subAccountId, cleaned);
   return NextResponse.json({ ok: true });
 }

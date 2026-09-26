@@ -1,12 +1,21 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 
-export type PipelineStageId =
+/** The six stage ids of the original single pipeline (now the default pipeline). */
+export type CanonicalStageId =
   | "new"
   | "contacted"
   | "qualified"
   | "proposal"
   | "won"
   | "lost";
+
+/**
+ * A stage id. Multiple Pipelines (2026-09-25): custom pipelines mint their
+ * own open-stage ids, so this is any string. Stage ids are unique within a
+ * pipeline; "won" / "lost" are the terminal ids in EVERY pipeline (see
+ * `src/types/pipelines.ts`).
+ */
+export type PipelineStageId = string;
 
 export interface PipelineStage {
   id: PipelineStageId;
@@ -45,7 +54,7 @@ export function getStage(
  * public API / webhooks / reports math. See "Phase 2 (2A)".
  */
 export interface PipelineStageOverride {
-  id: PipelineStageId;
+  id: CanonicalStageId;
   label: string;
   order: number;
 }
@@ -62,7 +71,9 @@ export function resolvePipelineStages(
   if (!Array.isArray(overrides) || overrides.length === 0) {
     return PIPELINE_STAGES;
   }
-  const byId = new Map(overrides.map((o) => [o.id, o]));
+  const byId = new Map<string, PipelineStageOverride>(
+    overrides.map((o) => [o.id, o]),
+  );
   const withOrder = PIPELINE_STAGES.map((s, idx) => {
     const o = byId.get(s.id);
     const label =
@@ -121,8 +132,17 @@ export interface Deal {
   value: number;
   currency: string;
   contactId: string;
+  /**
+   * Owning pipeline. Absent on legacy docs → the default pipeline
+   * (`dealPipelineId()` in `types/pipelines.ts`). Always written on create.
+   */
+  pipelineId?: string | null;
   stageId: PipelineStageId;
   priority: DealPriority;
+  /** Optional free-text description (Deal Details). */
+  description?: string | null;
+  /** Optional expected closing date, `YYYY-MM-DD` (calendar date, no zone). */
+  expectedCloseDate?: string | null;
   // Tenancy keys (replace the legacy ownerId).
   agencyId: string;
   subAccountId: string;
@@ -160,7 +180,10 @@ export type DealFormData = {
   value: number;
   currency: string;
   contactId: string;
+  pipelineId?: string | null;
   stageId: PipelineStageId;
+  description?: string | null;
+  expectedCloseDate?: string | null;
   priority: DealPriority;
   territoryId?: string | null;
   customFields?: Record<string, import("./custom-fields").CustomFieldValue> | null;

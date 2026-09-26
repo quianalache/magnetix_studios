@@ -19,6 +19,7 @@ import {
   type ImportRecordError,
   type ImportSource,
 } from "@/types/import";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 
 /**
  * Generic, GHL-agnostic bulk-write engine for one chunk of one entity.
@@ -407,6 +408,9 @@ function buildWrite(db: FirebaseFirestore.Firestore, a: BuildArgs): Built {
         ref,
         data: {
           ...editable,
+          // Imported deals land in the default pipeline (stages are the
+          // canonical ids). Updates leave the existing pipeline untouched.
+          pipelineId: DEFAULT_PIPELINE_ID,
           lostReason: null,
           ...tenancy,
           ...stamp,

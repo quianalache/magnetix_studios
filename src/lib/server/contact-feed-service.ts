@@ -62,8 +62,14 @@ function tsToIso(v: unknown): string | null {
 
 /* --------------------------------- Notes -------------------------------- */
 
-function notesCol(contactId: string) {
-  return getAdminDb().collection(`contacts/${contactId}/notes`);
+/*
+ * The note store is shared by Contact notes (`contacts/{id}/notes`) and
+ * deal-specific notes (`deals/{id}/notes`, Multiple Pipelines 2026-09-25).
+ * Same record shape + authorship rules; the collection path keeps the two
+ * kinds of record separate. `*At` functions take the collection path.
+ */
+function contactNotesPath(contactId: string) {
+  return `contacts/${contactId}/notes`;
 }
 
 export async function listContactNotes(opts: {
@@ -72,7 +78,18 @@ export async function listContactNotes(opts: {
   cursor?: string | null;
   caller: { uid: string; isAdmin: boolean };
 }): Promise<ContactNotesPage> {
-  let q = notesCol(opts.contactId).orderBy("createdAt", "desc");
+  return listNotesAt(contactNotesPath(opts.contactId), opts);
+}
+
+export async function listNotesAt(
+  path: string,
+  opts: {
+    subAccountId: string;
+    cursor?: string | null;
+    caller: { uid: string; isAdmin: boolean };
+  },
+): Promise<ContactNotesPage> {
+  let q = getAdminDb().collection(path).orderBy("createdAt", "desc");
   const before = cursorToTs(opts.cursor);
   if (before) q = q.where("createdAt", "<", before);
   const snap = await q.limit(NOTES_PAGE + 1).get();
@@ -119,7 +136,14 @@ export async function createContactNote(opts: {
   uid: string;
   content: unknown;
 }): Promise<string> {
-  const ref = await notesCol(opts.contactId).add({
+  return createNoteAt(contactNotesPath(opts.contactId), opts);
+}
+
+export async function createNoteAt(
+  path: string,
+  opts: { uid: string; content: unknown },
+): Promise<string> {
+  const ref = await getAdminDb().collection(path).add({
     content: cleanContent(opts.content),
     createdBy: opts.uid,
     createdAt: FieldValue.serverTimestamp(),
@@ -137,7 +161,14 @@ export async function updateContactNote(opts: {
   uid: string;
   content: unknown;
 }): Promise<void> {
-  const ref = notesCol(opts.contactId).doc(opts.noteId);
+  return updateNoteAt(contactNotesPath(opts.contactId), opts);
+}
+
+export async function updateNoteAt(
+  path: string,
+  opts: { noteId: string; uid: string; content: unknown },
+): Promise<void> {
+  const ref = getAdminDb().collection(path).doc(opts.noteId);
   const snap = await ref.get();
   if (!snap.exists) throw new ContactFeedError("Note not found.", 404);
   if (snap.get("createdBy") !== opts.uid) {
@@ -156,7 +187,14 @@ export async function deleteContactNote(opts: {
   noteId: string;
   caller: { uid: string; isAdmin: boolean };
 }): Promise<void> {
-  const ref = notesCol(opts.contactId).doc(opts.noteId);
+  return deleteNoteAt(contactNotesPath(opts.contactId), opts);
+}
+
+export async function deleteNoteAt(
+  path: string,
+  opts: { noteId: string; caller: { uid: string; isAdmin: boolean } },
+): Promise<void> {
+  const ref = getAdminDb().collection(path).doc(opts.noteId);
   const snap = await ref.get();
   if (!snap.exists) throw new ContactFeedError("Note not found.", 404);
   if (snap.get("createdBy") !== opts.caller.uid && !opts.caller.isAdmin) {

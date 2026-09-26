@@ -19,6 +19,7 @@ import type { FormField, LeadForm } from "@/types/forms";
 import type { Contact, ContactAttribution } from "@/types/contacts";
 import { normalizeAttribution } from "@/lib/attribution";
 import { resolveNameForWrite } from "@/lib/contacts/names";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 
 type SubmitBody = {
   values: Record<string, string>;
@@ -419,6 +420,8 @@ async function handleSubmit(
       value: form.settings.dealValue || 0,
       currency: form.settings.dealCurrency || "USD",
       contactId: contactRef.id,
+      // Form "create deal" settings pick a stage of the default pipeline.
+      pipelineId: DEFAULT_PIPELINE_ID,
       stageId,
       priority: "medium",
       agencyId,

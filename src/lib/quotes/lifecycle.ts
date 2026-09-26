@@ -14,6 +14,7 @@ import type { WebhookEventType } from "@/types/webhooks";
 import { GLOBAL_TERRITORY_ID, type AutomationTriggerType } from "@/types";
 import type { Quote } from "@/types/quotes";
 import { fulfillInvoiceOfferLinesServerSide } from "@/lib/server/course-offer-purchase-service";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 
 /**
  * Side-effects fired off the back of a quote lifecycle event. Keeps the
@@ -193,6 +194,7 @@ export async function autoCreateDealForAcceptedQuote(
       value: totals.total,
       currency: quote.currency,
       contactId: quote.contactId,
+      pipelineId: DEFAULT_PIPELINE_ID,
       stageId: "won",
       priority: "medium",
       agencyId: quote.agencyId,

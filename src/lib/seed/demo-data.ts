@@ -4,6 +4,7 @@ import {
   FieldValue,
   type Firestore,
 } from "firebase-admin/firestore";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 
 /**
  * Demo-data seeder for the LeadStack public demo only.
@@ -350,6 +351,7 @@ export async function seedDemo(db: Firestore): Promise<SeedResult> {
       value: d.value,
       currency: "USD",
       contactId: d.contactRef.id,
+      pipelineId: DEFAULT_PIPELINE_ID,
       stageId: d.stageId,
       priority: pick(["high", "medium", "low"] as const),
       agencyId,

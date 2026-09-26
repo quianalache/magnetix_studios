@@ -127,9 +127,8 @@ export const DELETE = withApiAuth<{ id: string }>(async ({ params, ctx }) => {
     .where("contactId", "==", params.id)
     .get();
   if (!dealsSnap.empty) {
-    const batch = db.batch();
-    for (const d of dealsSnap.docs) batch.delete(d.ref);
-    await batch.commit();
+    // Recursive: deal notes + the deal activity feed live under each deal.
+    for (const d of dealsSnap.docs) await db.recursiveDelete(d.ref);
   }
 
   for (const collection of ["tasks", "events"] as const) {

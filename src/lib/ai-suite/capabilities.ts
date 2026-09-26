@@ -57,6 +57,7 @@ import {
   createDealServerSide,
   updateDealServerSide,
 } from "@/lib/server/deals-service";
+import { PipelineError } from "@/lib/server/pipelines-service";
 import {
   createTaskServerSide,
   setTaskCompletedServerSide,
@@ -133,6 +134,12 @@ import type { AiSuiteLevel } from "@/types/ai-suite";
  * any other thrown error stays a generic "the action failed".
  */
 export class CapabilityUserError extends Error {}
+
+/** Surface a deal-pipeline validation failure as a user-facing assistant error. */
+function asCapabilityPipelineError(err: unknown): never {
+  if (err instanceof PipelineError) throw new CapabilityUserError(err.message);
+  throw err;
+}
 
 /** Role a capability requires. Enforced server-side in the confirm route. */
 export type RequiredRole =
@@ -1557,7 +1564,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
         contactId: args.contactId as string,
         stageId: args.stage as PipelineStageId,
         priority: "medium" as DealPriority,
-      });
+      }).catch(asCapabilityPipelineError);
       return {
         resultText: `Created the deal “${args.title}” (${fmtMoney(
           args.value as number,
@@ -1643,7 +1650,7 @@ export const AI_SUITE_CAPABILITIES: AiSuiteCapability[] = [
             ? { lostReason: (args.lostReason as string) || null }
             : {}),
         },
-      });
+      }).catch(asCapabilityPipelineError);
       const title = (snap.data()?.title as string) || (args.dealTitle as string);
       return {
         resultText: `Moved “${title}” to ${getStage(stage).label}.`,

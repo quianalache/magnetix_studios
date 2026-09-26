@@ -12,6 +12,7 @@ import {
 import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
 import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
 import { GLOBAL_TERRITORY_ID } from "@/types";
+import { DEFAULT_PIPELINE_ID } from "@/types/pipelines";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -137,6 +138,7 @@ export const POST = withApiAuth(async ({ body, ctx }) => {
     value: input.value,
     currency: input.currency,
     contactId: input.contactId,
+    pipelineId: DEFAULT_PIPELINE_ID,
     stageId: input.stage,
     priority: input.priority,
     lostReason: null,

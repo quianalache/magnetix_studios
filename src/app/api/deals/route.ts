@@ -6,8 +6,11 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { createDealServerSide } from "@/lib/server/deals-service";
 import { loadCustomFieldDefs } from "@/lib/custom-fields/load-defs";
 import { validateCustomFieldValues } from "@/lib/custom-fields/validation";
-import { PIPELINE_STAGES, DEAL_PRIORITIES } from "@/types/deals";
-import type { DealPriority, PipelineStageId } from "@/types/deals";
+import { DEAL_PRIORITIES } from "@/types/deals";
+import type { DealPriority } from "@/types/deals";
+import { territoryGate } from "@/lib/auth/territory-filter";
+import { GLOBAL_TERRITORY_ID } from "@/types";
+import { PipelineError } from "@/lib/server/pipelines-service";
 
 /**
  * Dashboard-facing deal creation. Replaces the browser's direct Firestore
@@ -15,7 +18,6 @@ import type { DealPriority, PipelineStageId } from "@/types/deals";
  * the shared service.
  */
 
-const VALID_STAGES = new Set(PIPELINE_STAGES.map((s) => s.id));
 const VALID_PRIORITIES = new Set(DEAL_PRIORITIES.map((p) => p.id));
 
 export async function POST(request: Request) {
@@ -44,10 +46,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "contactId is required" }, { status: 400 });
   }
 
-  const stageId = body.stageId as PipelineStageId;
-  if (!VALID_STAGES.has(stageId)) {
+  // Pipeline + stage are validated by the deal service (the stage must be
+  // an active stage of that pipeline in this sub-account).
+  const stageId = typeof body.stageId === "string" ? body.stageId : "";
+  if (!stageId) {
     return NextResponse.json({ error: "Invalid stageId" }, { status: 400 });
   }
+  const pipelineId =
+    typeof body.pipelineId === "string" && body.pipelineId
+      ? body.pipelineId
+      : undefined;
   const priority = (
     VALID_PRIORITIES.has(body.priority as DealPriority) ? body.priority : "medium"
   ) as DealPriority;
@@ -71,6 +79,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: cf.error }, { status: 400 });
   }
 
+  // The deal inherits its contact's territory; a scoped collaborator can
+  // only create deals inside their own territories.
+  const territoryId =
+    typeof body.territoryId === "string" && body.territoryId
+      ? body.territoryId
+      : GLOBAL_TERRITORY_ID;
+  const gate = await territoryGate(access, territoryId);
+  if (gate) return gate;
+
+  try {
   const { id, deal } = await createDealServerSide({
     subAccountId,
     agencyId,
@@ -80,11 +98,25 @@ export async function POST(request: Request) {
     value,
     currency,
     contactId,
+    pipelineId,
     stageId,
     priority,
-    territoryId: typeof body.territoryId === "string" ? body.territoryId : null,
+    description:
+      typeof body.description === "string" ? body.description : undefined,
+    expectedCloseDate:
+      typeof body.expectedCloseDate === "string" ? body.expectedCloseDate : undefined,
+    territoryId,
     customFields: cf.value,
   });
 
   return NextResponse.json({ id, deal }, { status: 201 });
+  } catch (err) {
+    if (err instanceof PipelineError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: err.status },
+      );
+    }
+    throw err;
+  }
 }
