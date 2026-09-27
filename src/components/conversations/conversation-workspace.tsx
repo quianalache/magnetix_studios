@@ -100,13 +100,18 @@ export function ActiveConversation({ contactId, embedded = false }: { contactId:
   const [error, setError] = useState("");
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [capabilityError, setCapabilityError] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const refreshCapabilities = useCallback(() => setRefresh(n => n + 1), []);
 
   useEffect(() => {
-    try { setDetailsOpen(localStorage.getItem("ls.convo.detailsPanel") !== "0"); } catch {}
+    const mobile = window.matchMedia("(max-width: 767px)").matches;
+    if (mobile) {
+      setDetailsOpen(false);
+      return;
+    }
+    try { setDetailsOpen(localStorage.getItem("ls.convo.detailsPanel") !== "0"); } catch { setDetailsOpen(true); }
   }, []);
 
   useEffect(() => {

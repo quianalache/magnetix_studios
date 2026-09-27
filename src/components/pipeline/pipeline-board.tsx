@@ -143,7 +143,7 @@ export function PipelineBoard({
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveDeal(null)}
       >
-        <div className="flex snap-x gap-3 overflow-x-auto rounded-2xl bg-[#fbf9ff] p-2 pb-3">
+        <div className="flex snap-x gap-3 overflow-x-auto rounded-2xl bg-[#fbf9ff] p-2 pb-3 dark:bg-slate-950">
           {stages.map((stage) => {
             const col = columns.get(stage.id) ?? { count: 0, totals: {}, deals: [] };
             return collapsed.has(stage.id) ? (
@@ -213,14 +213,14 @@ export function PipelineBoard({
 }
 
 function stageHeaderTone(stage: PipelineStage): string {
-  if (stage.terminal === "won") return "bg-emerald-500/10";
-  if (stage.terminal === "lost") return "bg-rose-500/10";
+  if (stage.terminal === "won") return "bg-emerald-500/10 dark:bg-emerald-950/50";
+  if (stage.terminal === "lost") return "bg-rose-500/10 dark:bg-rose-950/50";
   const id = stage.id.toLowerCase();
-  if (id.includes("new")) return "bg-[#f1e3ff]";
-  if (id.includes("contact")) return "bg-[#e4edff]";
-  if (id.includes("qualif")) return "bg-[#eee8ff]";
-  if (id.includes("proposal") || id.includes("offer")) return "bg-[#fff0dc]";
-  return "bg-primary/5";
+  if (id.includes("new")) return "bg-[#f1e3ff] dark:bg-purple-950/50";
+  if (id.includes("contact")) return "bg-[#e4edff] dark:bg-blue-950/50";
+  if (id.includes("qualif")) return "bg-[#eee8ff] dark:bg-violet-950/50";
+  if (id.includes("proposal") || id.includes("offer")) return "bg-[#fff0dc] dark:bg-orange-950/50";
+  return "bg-primary/5 dark:bg-primary/15";
 }
 
 function Column({
@@ -260,7 +260,7 @@ function Column({
       ref={setNodeRef}
       aria-label={`${stage.label}, ${column.count} deals`}
       className={cn(
-        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col rounded-2xl border border-[#eadff2] bg-white shadow-sm transition-colors sm:w-72",
+        "flex w-[82vw] max-w-[18rem] shrink-0 snap-start flex-col rounded-2xl border border-[#eadff2] bg-white shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-900 sm:w-72",
         isOver && "border-primary/60 bg-primary/5 ring-2 ring-primary/20",
       )}
     >
@@ -269,7 +269,7 @@ function Column({
           <h3 className="truncate text-sm font-semibold">{stage.label}</h3>
           <DropdownMenu>
             <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`${stage.label} options`} />}
+              render={<Button variant="ghost" size="icon" className="size-11 md:size-8" aria-label={`${stage.label} options`} />}
             >
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
@@ -298,7 +298,7 @@ function Column({
           <button
             type="button"
             onClick={onAdd}
-            className="flex min-h-9 items-center justify-center gap-1 rounded-lg bg-background/70 text-xs font-medium text-primary transition-colors hover:bg-background"
+            className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-background/70 text-xs font-medium text-primary transition-colors hover:bg-background md:min-h-9"
           >
             <Plus className="h-3.5 w-3.5" /> Add deal
           </button>
@@ -357,7 +357,7 @@ function CollapsedColumn({
       onClick={onExpand}
       aria-label={`Expand ${stage.label} (${count} deals)`}
       className={cn(
-        "flex w-12 shrink-0 flex-col items-center gap-3 rounded-2xl border py-3 transition-colors hover:bg-muted/40",
+        "flex min-h-11 w-12 shrink-0 flex-col items-center gap-3 rounded-2xl border py-3 transition-colors hover:bg-muted/40 md:min-h-0",
         stageHeaderTone(stage),
         isOver && "ring-2 ring-primary/30",
       )}
