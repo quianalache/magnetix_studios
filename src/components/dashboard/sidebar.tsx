@@ -49,6 +49,7 @@ import {
   LayoutPanelTop,
   LayoutTemplate,
   Clapperboard,
+  Package,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -135,6 +136,9 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
         icon: FolderKanban,
         enabled: true,
       },
+      // Assets is its own top-level section (approved 2026-09): Resource
+      // Library · CRM Resources · Media Library · Affiliate Library.
+      { href: "/assets", label: "Assets", icon: Package, enabled: true },
     ],
   },
   {

@@ -23,6 +23,14 @@ export interface MediaAsset {
   deletedAt: Timestamp | FieldValue | null;
   bunny?: BunnyMediaAssetMetadata;
   references?: MediaAssetReference[];
+  /** Media Library display fields (Assets, 2026-09). Optional/additive. */
+  library?: MediaLibraryFields;
+}
+
+export interface MediaLibraryFields {
+  title?: string | null;
+  tags?: string[];
+  updatedByUid?: string | null;
 }
 
 export type VideoOwnerScope =

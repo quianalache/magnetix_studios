@@ -11,7 +11,8 @@ export async function DELETE(
   const { id: subAccountId, bundleId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
-  await deleteOfferBundle(bundleId);
+  const ok = await deleteOfferBundle(subAccountId, bundleId);
+  if (!ok) return NextResponse.json({ error: "Bundle not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }
 

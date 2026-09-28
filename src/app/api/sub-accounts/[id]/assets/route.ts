@@ -2,85 +2,48 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { getAdminDb } from "@/lib/firebase/admin";
-import { createAsset, listAssets, type AssetInput } from "@/lib/server/asset-service";
-import { ASSET_STATUSES } from "@/types/assets";
-import type { AssetIncludedIn, AssetStatus } from "@/types/assets";
+import { createAsset, listAssets, listOfferBundles, type AssetInput } from "@/lib/server/asset-service";
+import { AssetsInputError, parseResourceInput } from "@/lib/server/assets/inputs";
+import { tenantOf } from "@/lib/server/assets/media-library-service";
+import { isoOf, memberNames } from "@/lib/server/assets/people";
 
-function str(v: unknown, max = 2000): string {
-  return typeof v === "string" ? v.trim().slice(0, max) : "";
-}
-function nullableStr(v: unknown): string | null {
-  const s = str(v, 200);
-  return s || null;
-}
-function parseInput(body: Record<string, unknown>): AssetInput {
-  const status: AssetStatus = (ASSET_STATUSES as readonly string[]).includes(body.status as string)
-    ? (body.status as AssetStatus)
-    : "active";
-  const includedIn: AssetIncludedIn =
-    body.includedIn === "standard_membership" ||
-    body.includedIn === "premium_membership" ||
-    body.includedIn === "sold_standalone"
-      ? body.includedIn
-      : null;
-  return {
-    name: str(body.name, 200),
-    type: str(body.type, 80),
-    description: str(body.description, 5000),
-    status,
-    tags: Array.isArray(body.tags)
-      ? body.tags.filter((t): t is string => typeof t === "string").slice(0, 20)
-      : typeof body.tags === "string"
-        ? body.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 20)
-        : [],
-    accessLevel: str(body.accessLevel, 80),
-    includedIn,
-    directLink: str(body.directLink, 1000),
-    communitySafeLink: str(body.communitySafeLink, 1000),
-    landingPageLink: str(body.landingPageLink, 1000),
-    checkoutLink: str(body.checkoutLink, 1000),
-    linkedProjectId: nullableStr(body.linkedProjectId),
-    linkedContentId: nullableStr(body.linkedContentId),
-    linkedGoalId: nullableStr(body.linkedGoalId),
-    linkedOfferId: nullableStr(body.linkedOfferId),
-    internalNotes: str(body.internalNotes, 5000),
-  };
-}
-
-export async function GET(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+/** Resource Library: list (with who last updated each) + create. */
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
-  const assets = await listAssets(subAccountId);
-  return NextResponse.json({ ok: true, assets });
+  const [assets, bundles] = await Promise.all([listAssets(subAccountId), listOfferBundles(subAccountId)]);
+  const names = await memberNames(subAccountId, assets.map((a) => a.updatedByUid ?? a.createdByUid));
+  return NextResponse.json({
+    ok: true,
+    assets: assets.map((a) => ({
+      ...a,
+      createdAt: isoOf(a.createdAt),
+      updatedAt: isoOf(a.updatedAt),
+      updatedByName: names.get((a.updatedByUid ?? a.createdByUid) as string) ?? null,
+    })),
+    // Legacy offer bundles are shown read-only (never deleted automatically).
+    legacyBundles: bundles.map((b) => ({ id: b.id, name: b.name, description: b.description, assetCount: (b.assetIds ?? []).length, linkedOfferId: b.linkedOfferId })),
+  });
 }
 
-export async function POST(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
-
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const input = parseInput(body);
-  if (!input.name) {
-    return NextResponse.json({ error: "Asset name is required" }, { status: 400 });
+  try {
+    const tenant = await tenantOf(subAccountId);
+    const input = (await parseResourceInput(tenant, body, "create")) as AssetInput;
+    const asset = await createAsset(tenant.agencyId || access.agencyId || "", subAccountId, input, access.uid);
+    return NextResponse.json({ ok: true, asset }, { status: 201 });
+  } catch (err) {
+    if (err instanceof AssetsInputError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
-
-  const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
-  const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
-
-  const asset = await createAsset(agencyId, subAccountId, input);
-  return NextResponse.json({ ok: true, asset }, { status: 201 });
 }

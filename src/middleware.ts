@@ -124,6 +124,11 @@ const PUBLIC_PATHS = [
   //  - In-memory per-IP + per-session rate limits
   //  - Anonymous sessions; identity only captured via [[capture …]] marker
   "/api/web-chat",
+  // Shared video replays (Assets, 2026-09). Public by design: the page
+  // validates the HMAC-signed share token + the server-only share record
+  // (active, not expired, same tenant) on every view and only then mints a
+  // 5-minute Bunny embed token for that ONE video.
+  "/replay",
   // Embed pages — the chat widget iframe target. Public; the bot
   // can't send messages without passing the /api/web-chat/* origin check.
   "/embed",

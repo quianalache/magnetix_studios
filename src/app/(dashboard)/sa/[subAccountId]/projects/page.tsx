@@ -5,7 +5,6 @@ import {
   FolderKanban,
   Plus,
   LayoutTemplate,
-  Package,
   Archive,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/projects/project-card";
 import { ProjectDialog } from "@/components/projects/project-dialog";
 import { TemplateDialog } from "@/components/projects/template-dialog";
-import { AssetsTab } from "@/components/projects/assets-tab";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
 import {
@@ -29,7 +27,7 @@ import {
   type ProjectTemplate,
 } from "@/types/projects";
 
-type ProjectTab = "active" | "templates" | "assets" | "archived";
+type ProjectTab = "active" | "templates" | "archived";
 
 export default function ProjectsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -145,7 +143,6 @@ export default function ProjectsPage() {
       icon: FolderKanban,
     },
     { id: "templates", label: "Templates", icon: LayoutTemplate },
-    { id: "assets", label: "Assets", icon: Package },
     { id: "archived", label: "Archived", icon: Archive },
   ];
 
@@ -271,8 +268,6 @@ export default function ProjectsPage() {
             ))}
           </div>
         )
-      ) : tab === "assets" ? (
-        <AssetsTab />
       ) : archivedProjects.length === 0 ? (
         <div className="bg-card/50 rounded-xl border border-dashed p-10 text-center">
           <p className="text-muted-foreground text-sm">

@@ -45,9 +45,21 @@ export interface Asset {
   /** CRM-specific addition — not in the original popup. */
   linkedOfferId: string | null;
   internalNotes: string;
+  // ── Resource Library (Assets redesign, 2026-09) — all optional/additive.
+  // Legacy records read as an external link resource with no area.
+  /** "external" = a link (`directLink`); "internal" = a Media Library file (`mediaAssetId`). */
+  sourceKind?: ResourceSourceKind;
+  /** Media Library file for internal resources (subAccounts/{id}/mediaAssets/{mediaAssetId}). */
+  mediaAssetId?: string | null;
+  /** Business area the resource supports (Branding, Launches, …). */
+  relatedArea?: string;
+  createdByUid?: string | null;
+  updatedByUid?: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
+
+export type ResourceSourceKind = "external" | "internal";
 
 export type AffiliateLinkStatus = "active" | "inactive" | "archived";
 
@@ -77,12 +89,24 @@ export interface AffiliateLink {
   paymentNotes: string;
   // Usage
   wherePromoted: string;
+  /** Legacy — no longer shown or edited (owner decision); preserved as stored. */
   bestFitAudience: string;
   promoNotes: string;
   contentIdeas: string;
+  // ── Affiliate Library (2026-09) — optional/additive; legacy records derive
+  // these from `commissionType` / `payoutStructure` when absent.
+  /** Recurring vs one-time commission. */
+  commissionRecurrence?: AffiliateCommissionRecurrence | null;
+  /** Unit of `commissionAmount`. */
+  commissionUnit?: AffiliateCommissionUnit | null;
+  createdByUid?: string | null;
+  updatedByUid?: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
+
+export type AffiliateCommissionRecurrence = "recurring" | "one_time";
+export type AffiliateCommissionUnit = "percent" | "flat";
 
 /**
  * Groups Assets into what a customer actually receives — matches the real
@@ -146,3 +170,79 @@ export const AFFILIATE_CATEGORIES = [
 ] as const;
 export const AFFILIATE_COMMISSION_TYPES = ["Percentage", "Flat Fee", "Recurring", "Other"] as const;
 export const AFFILIATE_PAYOUT_STRUCTURES = ["One-Time", "Recurring", "Ongoing", "Limited Months", "Custom"] as const;
+
+// ── Assets redesign (2026-09) ─────────────────────────────────────────────
+
+/** Resource Library types (the approved New Resource picker). Legacy ASSET_TYPES values still display. */
+export const RESOURCE_TYPES = [
+  "Guide",
+  "Document",
+  "Form",
+  "Checklist",
+  "Template",
+  "Design Asset",
+  "Link",
+  "Tool",
+  "Lead Magnet",
+  "Workflow",
+  "Other",
+] as const;
+
+/** Suggested areas; any short custom area is accepted too. */
+export const RESOURCE_AREAS = [
+  "Branding",
+  "Marketing",
+  "Sales",
+  "Launches",
+  "Client Experience",
+  "Operations",
+  "Content",
+  "Podcast",
+  "Finance",
+  "Other",
+] as const;
+
+/** Affiliate Library categories (existing values kept, "Services" matches the approved stat tiles). */
+export const AFFILIATE_LIBRARY_CATEGORIES = [
+  "Software",
+  "Services",
+  "Course",
+  "Tool",
+  "Product",
+  "Membership",
+  "Other",
+] as const;
+
+/** Legacy category "Service" reads as "Services". */
+export function affiliateCategoryOf(link: Pick<AffiliateLink, "category">): string {
+  return link.category === "Service" ? "Services" : link.category || "Other";
+}
+
+/** Recurring / one-time, deriving it for legacy records. */
+export function affiliateRecurrenceOf(
+  link: Pick<AffiliateLink, "commissionRecurrence" | "commissionType" | "payoutStructure">
+): AffiliateCommissionRecurrence | null {
+  if (link.commissionRecurrence) return link.commissionRecurrence;
+  if (link.commissionType === "Recurring" || link.payoutStructure === "Recurring" || link.payoutStructure === "Ongoing") return "recurring";
+  if (link.payoutStructure === "One-Time") return "one_time";
+  return null;
+}
+
+/** "30% recurring", "$50 one-time" — null when nothing is recorded. */
+export function affiliatePayoutSummary(
+  link: Pick<AffiliateLink, "commissionRecurrence" | "commissionType" | "payoutStructure" | "commissionUnit" | "commissionAmount">
+): string | null {
+  const recurrence = affiliateRecurrenceOf(link);
+  const unit = link.commissionUnit ?? (link.commissionType === "Flat Fee" ? "flat" : link.commissionType === "Percentage" ? "percent" : null);
+  const amount =
+    link.commissionAmount == null
+      ? null
+      : unit === "flat"
+        ? `$${link.commissionAmount.toLocaleString()}`
+        : unit === "percent" || recurrence
+          ? `${link.commissionAmount}%`
+          : String(link.commissionAmount);
+  const when = recurrence === "recurring" ? "recurring" : recurrence === "one_time" ? "one-time" : "";
+  const out = [amount, when].filter(Boolean).join(" ");
+  return out || null;
+}
