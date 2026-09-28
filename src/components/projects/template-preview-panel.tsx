@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  Crown,
   Flag,
   FolderKanban,
   ListChecks,
@@ -90,7 +89,7 @@ export function TemplatePreviewPanel({
   favorite: boolean;
   onToggleFavorite: () => void;
   onClose: () => void;
-  /** Workspace templates only — opens the existing New Project flow. */
+  /** Opens Generate Project (system) or the New Project flow (workspace). */
   onGenerate?: () => void;
   /** Workspace templates only — opens the existing template editor. */
   onEdit?: () => void;
@@ -383,31 +382,23 @@ export function TemplatePreviewPanel({
             <Sparkles className="h-4 w-4 text-violet-500" />
             Use this template
           </p>
-          {isSystem ? (
-            <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-              <Crown className="mr-1 inline h-3 w-3" />
-              System templates are read-only. Generating a scheduled project
-              from one — with dated tasks, milestones and routines — isn&apos;t
-              available yet; it arrives with project task scheduling.
-            </p>
-          ) : (
-            <>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Create a new project with this template&apos;s steps, for a
-                client or for internal use.
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={onEdit}>
-                  <Pencil className="mr-1.5 h-4 w-4" />
-                  Edit Template
-                </Button>
-                <Button onClick={onGenerate}>
-                  <Zap className="mr-1.5 h-4 w-4" />
-                  Generate Project
-                </Button>
-              </div>
-            </>
-          )}
+          <p className="text-muted-foreground mt-1 text-xs">
+            {isSystem
+              ? "Generate a live project with scheduled tasks, milestones and routines. The system template itself stays unchanged."
+              : "Create a new project with this template's steps, for a client or for internal use."}
+          </p>
+          <div className={cn("mt-3 grid gap-2", isSystem ? "grid-cols-1" : "grid-cols-2")}>
+            {!isSystem && (
+              <Button variant="outline" onClick={onEdit}>
+                <Pencil className="mr-1.5 h-4 w-4" />
+                Edit Template
+              </Button>
+            )}
+            <Button onClick={onGenerate}>
+              <Zap className="mr-1.5 h-4 w-4" />
+              Generate Project
+            </Button>
+          </div>
         </div>
       </div>
     </aside>

@@ -42,7 +42,17 @@ import {
 } from "@/components/projects/project-workspace-tasks";
 import { ProjectWorkspaceActivity } from "@/components/projects/project-workspace-activity";
 import {
+  TaskProjectActivity,
+  TaskProjectOverview,
+  TaskProjectTasks,
+  useProjectTasks,
+} from "@/components/projects/project-task-views";
+import { TaskDetailModal } from "@/components/tasks/detail/task-detail-modal";
+import { formatDuration } from "@/types/time-tracking";
+import { useSearchParams } from "next/navigation";
+import {
   projectProgressPct,
+  projectTaskModel,
   type Project,
   type ProjectStep,
 } from "@/types/projects";
@@ -89,9 +99,24 @@ export default function ProjectWorkspacePage({
     () => projects.find((p) => p.id === projectId) ?? null,
     [projects, projectId]
   );
+  // Phase 2: task-based projects read real project tasks; step-based
+  // (pre-Phase-2) projects keep their checklist views below.
+  const isTaskProject = !!project && projectTaskModel(project) === "tasks";
+  const { tasks: projectTasks, loading: tasksLoading } = useProjectTasks(
+    isTaskProject ? project : null
+  );
+  const searchParams = useSearchParams();
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = searchParams.get("task");
+    if (id) setOpenTaskId(id);
+  }, [searchParams]);
 
   useEffect(() => {
-    if (!project) return;
+    if (!project || project.taskModel === "tasks") {
+      setStepsLoading(false);
+      return;
+    }
     setStepsLoading(true);
     const unsub = safeSubscribe(
       () =>
@@ -213,6 +238,11 @@ export default function ProjectWorkspacePage({
             {project.stepsDoneCount} of {project.stepCount}{" "}
             {project.stepCount === 1 ? "task" : "tasks"} completed
           </p>
+          {isTaskProject && (project.timeSpentSeconds ?? 0) > 0 && (
+            <p className="text-muted-foreground mt-1 text-xs">
+              {formatDuration(project.timeSpentSeconds ?? 0)} tracked
+            </p>
+          )}
         </div>
       </header>
 
@@ -241,17 +271,53 @@ export default function ProjectWorkspacePage({
         ))}
       </nav>
 
-      {tab === "overview" && (
-        <WorkspaceOverview
-          project={project}
-          steps={steps}
-          stepsLoading={stepsLoading}
-          onViewTasks={() => setTab("tasks")}
-        />
-      )}
-      {tab === "tasks" && <ProjectWorkspaceTasks project={project} steps={steps} />}
-      {tab === "activity" && (
-        <ProjectWorkspaceActivity project={project} steps={steps} />
+      {isTaskProject ? (
+        <>
+          {tab === "overview" && (
+            <TaskProjectOverview
+              project={project}
+              tasks={projectTasks}
+              loading={tasksLoading}
+              onOpenTask={setOpenTaskId}
+              onViewTasks={() => setTab("tasks")}
+            />
+          )}
+          {tab === "tasks" && (
+            <TaskProjectTasks
+              project={project}
+              tasks={projectTasks}
+              loading={tasksLoading}
+              onOpenTask={setOpenTaskId}
+            />
+          )}
+          {tab === "activity" && (
+            <TaskProjectActivity project={project} onOpenTask={setOpenTaskId} />
+          )}
+          <TaskDetailModal
+            taskId={openTaskId}
+            open={!!openTaskId}
+            onOpenChange={(o) => {
+              if (o) return;
+              setOpenTaskId(null);
+              if (searchParams.get("task")) router.replace(saPath(`/projects/${project.id}`));
+            }}
+          />
+        </>
+      ) : (
+        <>
+          {tab === "overview" && (
+            <WorkspaceOverview
+              project={project}
+              steps={steps}
+              stepsLoading={stepsLoading}
+              onViewTasks={() => setTab("tasks")}
+            />
+          )}
+          {tab === "tasks" && <ProjectWorkspaceTasks project={project} steps={steps} />}
+          {tab === "activity" && (
+            <ProjectWorkspaceActivity project={project} steps={steps} />
+          )}
+        </>
       )}
 
       <ProjectDialog

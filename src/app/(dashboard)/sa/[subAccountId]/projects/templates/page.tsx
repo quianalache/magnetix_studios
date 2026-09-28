@@ -51,6 +51,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ProjectDialog } from "@/components/projects/project-dialog";
 import { TemplateDialog } from "@/components/projects/template-dialog";
 import { TemplatePreviewPanel } from "@/components/projects/template-preview-panel";
+import { GenerateProjectDialog } from "@/components/projects/generate-project-dialog";
 import {
   CategoryBadge,
   SourceBadge,
@@ -70,6 +71,9 @@ import type { ProjectTemplate } from "@/types/projects";
  * exactly as stored and never merged, renamed or rewritten. Workspace
  * templates keep their existing create / edit / delete (TemplateDialog)
  * and generate-a-project (ProjectDialog) flows.
+ *
+ * Phase 2: system templates generate real task-based projects through the
+ * restored Generate Project dialog (scheduling, routines, milestones).
  *
  * Not shown: usage statistics ("Most used", use counts). Magnetix has no
  * usage storage for templates yet, so a "Sort: Most used" or "Used N×"
@@ -118,6 +122,7 @@ export default function TemplateLibraryPage() {
   );
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const [generateFrom, setGenerateFrom] = useState<string | null>(null);
+  const [systemGenerate, setSystemGenerate] = useState<LibraryTemplate | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -230,6 +235,10 @@ export default function TemplateLibraryPage() {
     setTemplateDialogOpen(true);
   }
   function openGenerate(t: LibraryTemplate) {
+    if (t.source === "system") {
+      setSystemGenerate(t);
+      return;
+    }
     if (!t.workspaceTemplate) return;
     setGenerateFrom(t.workspaceTemplate.id);
     setProjectDialogOpen(true);
@@ -465,6 +474,12 @@ export default function TemplateLibraryPage() {
         project={null}
         initialTemplateId={generateFrom}
       />
+      <GenerateProjectDialog
+        template={systemGenerate}
+        contacts={contacts}
+        open={!!systemGenerate}
+        onOpenChange={(o) => !o && setSystemGenerate(null)}
+      />
     </ProjectsShell>
   );
 }
@@ -598,12 +613,10 @@ function TemplateCard({
           )}
           {selected ? "Close" : "Preview"}
         </Button>
-        {!isSystem && (
-          <Button className="flex-1" onClick={onGenerate}>
-            <Zap className="mr-1.5 h-4 w-4" />
-            Generate Project
-          </Button>
-        )}
+        <Button className="flex-1" onClick={onGenerate}>
+          <Zap className="mr-1.5 h-4 w-4" />
+          Generate Project
+        </Button>
       </div>
     </article>
   );

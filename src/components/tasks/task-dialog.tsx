@@ -18,6 +18,7 @@ import { ContactPicker } from "@/components/quotes/contact-picker";
 import { useSubAccount } from "@/context/sub-account-context";
 import { updateTask, deleteTask } from "@/lib/firestore/tasks";
 import { toDate } from "@/lib/format";
+import { TaskDetailModal } from "@/components/tasks/detail/task-detail-modal";
 import { TASK_TIME_BLOCKS, type Task, type TaskFormData, type TaskTimeBlock } from "@/types/tasks";
 import type { Contact } from "@/types/contacts";
 
@@ -45,7 +46,27 @@ function toTimeInput(d: Date): string {
   return `${h}:${m}`;
 }
 
-export function TaskDialog({
+/**
+ * Projects & Tasks Phase 2: project tasks and subtasks are server-managed
+ * (history, activity, client visibility) and the browser may not write
+ * them directly — so wherever an existing surface (Contacts, Deals,
+ * Calendar, AI consoles) opens one for editing, it opens in Task Detail
+ * instead. Standalone tasks keep this dialog exactly as before.
+ */
+export function TaskDialog(props: TaskDialogProps) {
+  if (props.task && (props.task.projectId || props.task.parentTaskId)) {
+    return (
+      <TaskDetailModal
+        taskId={props.task.id}
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+      />
+    );
+  }
+  return <StandaloneTaskDialog {...props} />;
+}
+
+function StandaloneTaskDialog({
   open,
   onOpenChange,
   contacts,

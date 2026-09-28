@@ -93,7 +93,7 @@ export function ProjectDialog({
   }, [open, project, initialTemplateId]);
 
   useEffect(() => {
-    if (!open || !project) {
+    if (!open || !project || project.taskModel === "tasks") {
       setSteps([]);
       return;
     }
@@ -381,7 +381,14 @@ export function ProjectDialog({
             </div>
           )}
 
-          {isEdit && project && (
+          {isEdit && project?.taskModel === "tasks" && (
+            <p className="text-muted-foreground rounded-lg border px-3 py-2 text-xs">
+              Tasks, milestones and time for this project are managed in its
+              workspace.
+            </p>
+          )}
+
+          {isEdit && project && project.taskModel !== "tasks" && (
             <div className="space-y-1.5">
               <Label>Steps</Label>
               <div className="space-y-1 rounded-lg border p-2">

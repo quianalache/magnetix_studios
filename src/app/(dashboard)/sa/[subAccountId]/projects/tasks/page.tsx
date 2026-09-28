@@ -43,7 +43,13 @@ import {
   usePaged,
 } from "@/components/projects/projects-shell";
 import type { Contact } from "@/types/contacts";
-import { TASK_TIME_BLOCKS, type Task } from "@/types/tasks";
+import { taskStatusOf, type Task } from "@/types/tasks";
+import type { Project } from "@/types/projects";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { subscribeToProjects } from "@/lib/firestore/projects";
+import { useTaskAssignees } from "@/hooks/use-task-assignees";
+import { PriorityFlag, StatusPill } from "@/components/tasks/task-meta";
+import { TaskDetailModal } from "@/components/tasks/detail/task-detail-modal";
 
 /**
  * Projects → My Tasks (approved mockup 02). The existing CRM Tasks page,
@@ -53,13 +59,19 @@ import { TASK_TIME_BLOCKS, type Task } from "@/types/tasks";
  * activity rows and workflow triggers still fire), same Calendar /
  * contact / deal links.
  *
- * Mockup columns deliberately NOT shown: Project, Priority, Assigned to and
- * Internal/Client type. CRM Tasks carry none of those fields today — they
- * arrive with the (separately approved) project-task integration. Showing
- * them now would mean inventing values.
+ * Phase 2: Project, Status, Priority, Assigned to and Internal/Client type
+ * now come from the real task / project records (legacy tasks simply show
+ * "—"). Rows open the Task Detail modal; `?task=<id>` deep-links one.
  */
 
-type StatusFilter = "open" | "today" | "overdue" | "upcoming" | "done" | "all";
+type StatusFilter =
+  | "open"
+  | "mine"
+  | "today"
+  | "overdue"
+  | "upcoming"
+  | "done"
+  | "all";
 type TaskStatus = "overdue" | "today" | "upcoming" | "no_date" | "done";
 type SortKey = "due" | "created" | "title";
 type ViewMode = "list" | "grid";
@@ -69,6 +81,7 @@ const VIEW_STORAGE_KEY = "mx_tasks_view";
 
 const FILTER_LABELS: Record<StatusFilter, string> = {
   open: "All open",
+  mine: "Assigned to me",
   today: "Due today",
   overdue: "Overdue",
   upcoming: "Upcoming",
@@ -144,6 +157,42 @@ export default function MyTasksPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [toggling, setToggling] = useState<Set<string>>(new Set());
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const { assignees, viewerUid } = useTaskAssignees();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // `?task=<id>` deep link (Task Detail → Copy link).
+  useEffect(() => {
+    const id = searchParams.get("task");
+    if (id) setDetailId(id);
+  }, [searchParams]);
+  function closeDetail(open: boolean) {
+    if (open) return;
+    setDetailId(null);
+    if (searchParams.get("task")) router.replace(pathname);
+  }
+
+  useEffect(() => {
+    if (authLoading || !user || !agencyId) return;
+    const unsub = safeSubscribe(
+      () => subscribeToProjects({ agencyId, subAccountId }, setProjects),
+      () => setProjects([])
+    );
+    return () => unsub?.();
+  }, [user, agencyId, subAccountId, authLoading]);
+  const projectById = useMemo(
+    () => new Map(projects.map((p) => [p.id, p])),
+    [projects]
+  );
+  const assigneeName = (t: Task) =>
+    t.assigneeContactId
+      ? (t.projectId ? projectById.get(t.projectId)?.assignedContactName : null) ?? "Client"
+      : t.assigneeUid
+        ? assignees.find((a) => a.uid === t.assigneeUid)?.name ?? "Team member"
+        : null;
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -231,6 +280,10 @@ export default function MyTasksPage() {
         case "open":
           if (status === "done") return false;
           break;
+        case "mine":
+          if (status === "done" || !viewerUid || t.assigneeUid !== viewerUid)
+            return false;
+          break;
         case "today":
           // Legacy "Today" view included overdue work, so keep that.
           if (status !== "today" && status !== "overdue") return false;
@@ -247,7 +300,9 @@ export default function MyTasksPage() {
       }
       if (!q) return true;
       const contact = t.contactId ? contactById.get(t.contactId) : undefined;
+      const project = t.projectId ? projectById.get(t.projectId) : undefined;
       return (
+        (project?.title ?? "").toLowerCase().includes(q) ||
         t.title.toLowerCase().includes(q) ||
         (t.notes ?? "").toLowerCase().includes(q) ||
         (contact?.name ?? "").toLowerCase().includes(q)
@@ -268,7 +323,7 @@ export default function MyTasksPage() {
       return statusFilter === "done" ? db - da : da - db;
     });
     return list;
-  }, [withStatus, statusFilter, search, sort, contactById]);
+  }, [withStatus, statusFilter, search, sort, contactById, projectById, viewerUid]);
 
   const paged = usePaged(shown, PAGE_SIZE, page);
 
@@ -277,8 +332,7 @@ export default function MyTasksPage() {
     setDialogOpen(true);
   }
   function openEdit(task: Task) {
-    setEditTask(task);
-    setDialogOpen(true);
+    setDetailId(task.id);
   }
 
   async function toggleComplete(task: Task) {
@@ -291,10 +345,12 @@ export default function MyTasksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ completed: !task.completed }),
       });
-      if (!res.ok) {
-        const b = (await res.json().catch(() => ({}))) as { error?: string };
-        toast.error(b.error ?? "Couldn't update task.");
-      }
+      const b = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        warnings?: string[];
+      };
+      if (!res.ok) toast.error(b.error ?? "Couldn't update task.");
+      else if (b.warnings?.length) toast.warning(b.warnings.join(" "));
     } finally {
       setToggling((s) => {
         const next = new Set(s);
@@ -303,9 +359,6 @@ export default function MyTasksPage() {
       });
     }
   }
-
-  const timeBlockLabel = (v: Task["timeBlock"]) =>
-    TASK_TIME_BLOCKS.find((b) => b.value === v)?.label ?? null;
 
   return (
     <ProjectsShell
@@ -487,17 +540,19 @@ export default function MyTasksPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead>
                 <tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
                   <th className="w-10 px-3 py-3">
                     <span className="sr-only">Complete</span>
                   </th>
                   <th className="px-3 py-3">Task</th>
-                  <th className="px-3 py-3">Related to</th>
+                  <th className="px-3 py-3">Project</th>
                   <th className="px-3 py-3">Due date</th>
                   <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3">Time block</th>
+                  <th className="px-3 py-3">Priority</th>
+                  <th className="px-3 py-3">Assigned to</th>
+                  <th className="px-3 py-3">Type</th>
                   <th className="w-12 px-3 py-3">
                     <span className="sr-only">Actions</span>
                   </th>
@@ -509,8 +564,9 @@ export default function MyTasksPage() {
                   const contact = t.contactId
                     ? contactById.get(t.contactId)
                     : undefined;
-                  const pill = STATUS_PILL[status];
-                  const block = timeBlockLabel(t.timeBlock);
+                  const project = t.projectId ? projectById.get(t.projectId) : undefined;
+                  const who = assigneeName(t);
+                  const workflow = taskStatusOf(t);
                   return (
                     <tr
                       key={t.id}
@@ -544,20 +600,32 @@ export default function MyTasksPage() {
                         >
                           {t.title}
                         </p>
-                        {t.notes && (
+                        {(t.parentTaskId || contact || t.notes) && (
                           <p className="text-muted-foreground truncate text-xs">
-                            {t.notes}
+                            {t.parentTaskId && "Subtask · "}
+                            {contact ? (
+                              <Link
+                                href={saPath(`/contacts/${contact.id}`)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="hover:text-primary hover:underline"
+                              >
+                                {contact.name || contact.email}
+                              </Link>
+                            ) : (
+                              t.notes
+                            )}
                           </p>
                         )}
                       </td>
                       <td className="max-w-[180px] px-3 py-3">
-                        {contact ? (
+                        {project ? (
                           <Link
-                            href={saPath(`/contacts/${contact.id}`)}
+                            href={saPath(`/projects/${project.id}`)}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-muted-foreground hover:text-primary block truncate hover:underline"
+                            className="flex items-center gap-2 truncate hover:underline"
                           >
-                            {contact.name || contact.email}
+                            <span className={cn("h-3.5 w-1 shrink-0 rounded-full", project.assignedContactId ? "bg-teal-400" : "bg-violet-400")} />
+                            <span className="truncate">{project.title}</span>
                           </Link>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -591,17 +659,37 @@ export default function MyTasksPage() {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap",
-                            pill.cls
-                          )}
-                        >
-                          {pill.label}
-                        </span>
+                        {status === "overdue" ? (
+                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap", STATUS_PILL.overdue.cls)}>
+                            Overdue
+                          </span>
+                        ) : (
+                          <StatusPill status={workflow} />
+                        )}
                       </td>
-                      <td className="text-muted-foreground px-3 py-3">
-                        {block ?? "—"}
+                      <td className="px-3 py-3">
+                        <PriorityFlag priority={t.priority ?? null} />
+                      </td>
+                      <td className="max-w-[160px] px-3 py-3">
+                        {who ? (
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+                              {who.slice(0, 2).toUpperCase()}
+                            </span>
+                            <span className="truncate text-sm">{who}</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {project ? (
+                          <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", project.assignedContactId && t.visibility !== "internal" ? "bg-teal-500/10 text-teal-700 dark:text-teal-300" : "bg-violet-500/10 text-violet-700 dark:text-violet-300")}>
+                            {project.assignedContactId && t.visibility !== "internal" ? "Client" : "Internal"}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td
                         className="px-3 py-3"
@@ -621,7 +709,7 @@ export default function MyTasksPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem onClick={() => openEdit(t)}>
-                              Edit task
+                              Open task
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => toggleComplete(t)}
@@ -656,6 +744,11 @@ export default function MyTasksPage() {
         onOpenChange={setDialogOpen}
         contacts={contacts}
         task={editTask}
+      />
+      <TaskDetailModal
+        taskId={detailId}
+        open={!!detailId}
+        onOpenChange={closeDetail}
       />
     </ProjectsShell>
   );
