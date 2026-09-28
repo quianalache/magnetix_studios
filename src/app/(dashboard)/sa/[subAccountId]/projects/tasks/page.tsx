@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -148,6 +148,9 @@ export default function MyTasksPage() {
   const { ready: filterReady, filter: territoryFilter } =
     useEffectiveTerritoryFilter();
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Routine activities live server-side (personal routines stay private),
+  // so they come from the routines API instead of the tasks subscription.
+  const [routineTasks, setRoutineTasks] = useState<Task[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
@@ -172,6 +175,7 @@ export default function MyTasksPage() {
   }, [searchParams]);
   function closeDetail(open: boolean) {
     if (open) return;
+    if (detailId?.startsWith("rt_")) void loadRoutineTasks();
     setDetailId(null);
     if (searchParams.get("task")) router.replace(pathname);
   }
@@ -235,6 +239,34 @@ export default function MyTasksPage() {
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
+  const loadRoutineTasks = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/routines/activities`);
+      if (!res.ok) return;
+      const body = (await res.json()) as { tasks: Record<string, unknown>[] };
+      const date = (v: unknown) => (typeof v === "string" ? new Date(v) : null);
+      // ISO strings → Dates (toDate() reads both Timestamps and Dates).
+      setRoutineTasks(
+        body.tasks.map(
+          (t) =>
+            ({
+              ...t,
+              dueAt: date(t.dueAt),
+              completedAt: date(t.completedAt),
+              createdAt: date(t.createdAt),
+              updatedAt: date(t.updatedAt),
+            }) as unknown as Task
+        )
+      );
+    } catch {
+      /* routines are optional here — ordinary tasks still show */
+    }
+  }, [subAccountId]);
+  useEffect(() => {
+    if (authLoading || !user) return;
+    void loadRoutineTasks();
+  }, [authLoading, user, loadRoutineTasks]);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(VIEW_STORAGE_KEY);
@@ -263,7 +295,7 @@ export default function MyTasksPage() {
   const { withStatus, counts, today } = useMemo(() => {
     const now = Date.now();
     const todayMs = dayStart(new Date());
-    const rows = tasks
+    const rows = [...tasks, ...routineTasks]
       .map((t) => ({ t, status: taskStatus(t, now, todayMs) }))
       // A routine activity whose day has passed unfinished is a missed
       // occurrence — it stays in the routine's history, not in Overdue.
@@ -276,7 +308,7 @@ export default function MyTasksPage() {
       else c.upcoming++; // upcoming + no due date, as before
     }
     return { withStatus: rows, counts: c, today: todayMs };
-  }, [tasks]);
+  }, [tasks, routineTasks]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -356,6 +388,7 @@ export default function MyTasksPage() {
       };
       if (!res.ok) toast.error(b.error ?? "Couldn't update task.");
       else if (b.warnings?.length) toast.warning(b.warnings.join(" "));
+      if (task.routineId) await loadRoutineTasks();
     } finally {
       setToggling((s) => {
         const next = new Set(s);

@@ -3,6 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { isRoutineTaskId, taskDocRef } from "@/lib/server/task-ref";
+import { canViewRoutineTask } from "@/lib/server/routine-access";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
 import { createTaskServerSide, setTaskCompletedServerSide } from "@/lib/server/tasks-service";
@@ -60,7 +62,10 @@ export async function requireTaskAccess(
 ): Promise<
   { access: TaskAccess; task: Doc; ref: FirebaseFirestore.DocumentReference } | NextResponse
 > {
-  const ref = getAdminDb().doc(`tasks/${taskId}`);
+  if (!taskId || taskId.includes("/")) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
+  const ref = taskDocRef(taskId);
   const snap = await ref.get();
   if (!snap.exists) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -68,6 +73,11 @@ export async function requireTaskAccess(
   const task = snap.data()!;
   const access = await requireSubAccountMember(request, task.subAccountId);
   if (access instanceof NextResponse) return access;
+  // A personal routine's activities read exactly like a missing task to
+  // anyone but its owner (shared routines are visible to every member).
+  if (isRoutineTaskId(taskId) && !(await canViewRoutineTask(task, access.uid))) {
+    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  }
   const territoryDenied = await territoryDenial(access, task.territoryId);
   if (territoryDenied) return territoryDenied;
   return { access, task, ref };
@@ -240,7 +250,7 @@ export async function createFullTask(input: CreateFullTaskInput) {
     typeof b.parentTaskId === "string" && b.parentTaskId ? b.parentTaskId : null;
   let parent: Doc | null = null;
   if (parentTaskId) {
-    const ps = await db.doc(`tasks/${parentTaskId}`).get();
+    const ps = await taskDocRef(parentTaskId).get();
     parent = ps.data() ?? null;
     if (!parent || parent.subAccountId !== input.subAccountId) {
       throw new TaskInputError("Parent task not found", 404);
@@ -409,7 +419,7 @@ export async function updateFullTask(opts: {
 }) {
   const db = getAdminDb();
   const { task, patch } = opts;
-  const ref = db.doc(`tasks/${opts.taskId}`);
+  const ref = taskDocRef(opts.taskId);
   const data: Record<string, unknown> = {};
   const events: { type: Parameters<typeof recordTaskActivity>[0]["type"]; summary: string; detail?: Record<string, unknown> }[] = [];
   const keys = Object.keys(patch).filter((k) =>
@@ -542,7 +552,7 @@ export async function updateFullTask(opts: {
   if (has("dependsOnTaskIds") && !opts.fromClient) {
     const ids = parseIdList(patch.dependsOnTaskIds).filter((id) => id !== opts.taskId);
     if (ids.length) {
-      const snaps = await db.getAll(...ids.map((id) => db.doc(`tasks/${id}`)));
+      const snaps = await db.getAll(...ids.map((id) => taskDocRef(id)));
       if (snaps.some((s) => s.data()?.subAccountId !== task.subAccountId)) {
         throw new TaskInputError("A linked task wasn't found in this workspace.");
       }
@@ -555,7 +565,7 @@ export async function updateFullTask(opts: {
   if (has("relatedTaskIds") && !opts.fromClient) {
     const ids = parseIdList(patch.relatedTaskIds).filter((id) => id !== opts.taskId);
     if (ids.length) {
-      const snaps = await db.getAll(...ids.map((id) => db.doc(`tasks/${id}`)));
+      const snaps = await db.getAll(...ids.map((id) => taskDocRef(id)));
       if (snaps.some((s) => s.data()?.subAccountId !== task.subAccountId)) {
         throw new TaskInputError("A linked task wasn't found in this workspace.");
       }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { taskDocRef } from "@/lib/server/task-ref";
 import {
   deleteFullTask,
   requireTaskAccess,
@@ -52,7 +53,7 @@ export async function GET(
   ] = await Promise.all([
     task.projectId ? db.doc(`projects/${task.projectId}`).get() : null,
     db.collection("tasks").where("subAccountId", "==", sa).where("parentTaskId", "==", id).get(),
-    idsToLoad.length ? db.getAll(...idsToLoad.map((x) => db.doc(`tasks/${x}`))) : [],
+    idsToLoad.length ? db.getAll(...idsToLoad.map((x) => taskDocRef(x))) : [],
     db.collection("tasks").where("subAccountId", "==", sa).where("dependsOnTaskIds", "array-contains", id).get(),
     db.collection("taskActivity").where("taskId", "==", id).get(),
     db.collection("taskComments").where("taskId", "==", id).get(),

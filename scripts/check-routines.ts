@@ -13,7 +13,11 @@
  *   dates, untimed = no clock time), project windows, tenant isolation,
  *   project-generated routines (preserved, listed read-only), existing task
  *   regressions (standalone, recurring, rollover, My Tasks completion
- *   route), rules for the new fields, Rituals untouched.
+ *   route), rules for the new fields, Rituals untouched — plus (2026-09-28
+ *   adjustments) personal-by-default privacy against other members,
+ *   sub-account admins and the agency owner across every route, optional
+ *   sharing, the browser's `tasks` queries, and webhooks (none for routine
+ *   activities; unchanged for ordinary tasks).
  *
  * Run:
  *   echo '{"firestore":{"rules":"<repo>/firestore.rules"},
@@ -91,9 +95,9 @@ async function rule(label: string, allowed: boolean, op: () => Promise<unknown>)
 }
 
 async function seed() {
-  for (const [uid] of [["admin1"], ["outsider"]] as const) {
+  for (const [uid, agencyRole] of [["admin1", null], ["outsider", null], ["member2", null], ["admin3", null], ["boss", "owner"]] as const) {
     await auth.createUser({ uid, email: `${uid}@example.test` });
-    await auth.setCustomUserClaims(uid, { status: "active", agencyId: AG, agencyRole: null });
+    await auth.setCustomUserClaims(uid, { status: "active", agencyId: AG, agencyRole });
     await db.doc(`users/${uid}`).set({ status: "active" });
   }
   const w = (p: string, d: Record<string, unknown>) => db.doc(p).set(d);
@@ -101,6 +105,10 @@ async function seed() {
   await w(`subAccounts/${SA2}`, { agencyId: AG, name: "Other", timezone: "UTC" });
   await w(`subAccounts/${SA}/subAccountMembers/admin1`, { status: "active", role: "admin", displayName: "Quiana" });
   await w(`subAccounts/${SA2}/subAccountMembers/outsider`, { status: "active", role: "admin" });
+  await w(`subAccounts/${SA}/subAccountMembers/member2`, { status: "active", role: "collaborator", displayName: "Riley" });
+  await w(`subAccounts/${SA}/subAccountMembers/admin3`, { status: "active", role: "admin", displayName: "Morgan" });
+  // An API/webhook subscriber listening to every event (proves which events fire).
+  await w(`subAccounts/${SA}/webhookSubscriptions/hook1`, { subAccountId: SA, agencyId: AG, mode: "live", status: "active", events: [], url: "https://example.test/hook", description: null, secretHash: "x", createdAt: new Date(), updatedAt: new Date() });
   await w(`tasks/legacyTask`, { title: "Legacy follow-up", notes: "", dueAt: null, completed: false, completedAt: null, contactId: null, dealId: null, eventId: null, timeBlock: null, agencyId: AG, subAccountId: SA, createdByUid: "admin1", territoryId: "global" });
   await w(`reflectionRituals/rit1`, { subAccountId: SA, agencyId: AG, name: "Journal", description: "", frequency: "daily", timeBlock: "AM", completedDates: ["2026-09-01"] });
 }
@@ -145,7 +153,7 @@ async function main() {
   const saCtx = (id = SA) => ({ params: Promise.resolve({ id }) });
   const rCtx = (routineId: string, id = SA) => ({ params: Promise.resolve({ id, routineId }) });
   const routineTasks = async (routineId: string, date?: string) => {
-    const s = await db.collection("tasks").where("routineId", "==", routineId).get();
+    const s = await db.collection("routineTasks").where("routineId", "==", routineId).get();
     return s.docs.filter((x) => !date || x.data().occurrenceDate === date);
   };
   const post = async (body: Record<string, unknown>, uid = "admin1") => listRoute.POST(req(uid, "POST", body), saCtx());
@@ -201,6 +209,8 @@ async function main() {
     morning = routine.id;
     aIds = routine.activities.map((a: { id: string }) => a.id);
     assert.equal(routine.timeMode, "anytime", "Anytime is the default");
+    assert.equal(routine.visibility, "private", "personal by default");
+    assert.equal(routine.isOwner, true);
     assert.equal(routine.schedule.endDate, null, "no end date required");
     const tasks = await routineTasks(morning, today);
     assert.equal(tasks.length, 3);
@@ -215,6 +225,9 @@ async function main() {
       assert.equal(x.projectId, undefined);
       assert.equal(x.timeBlock, "anytime");
       assert.equal(x.routineName, "Morning Power Routine");
+      assert.equal(x.ownerUid, "admin1");
+      assert.equal(x.assigneeUid, "admin1");
+      assert.equal((await db.doc(`tasks/${t.id}`).get()).exists, false, "never in the browser-readable tasks collection");
       assert.equal(x.dueAt.toDate().toISOString(), sched.zonedDateTimeToUtc(today, "12:00", TZ).toISOString());
     }
     assert.equal((await routineTasks(morning)).length, 3, "no past or future dates were generated");
@@ -234,7 +247,7 @@ async function main() {
   await check("completing an activity today changes only today's record", async () => {
     const res = await complete(morning, { date: today, activityId: aIds[0], completed: true });
     assert.equal(res.status, 200);
-    const t = (await db.doc(`tasks/${svc.occurrenceTaskId(morning, today, aIds[0])}`).get()).data()!;
+    const t = (await db.doc(`routineTasks/${svc.occurrenceTaskId(morning, today, aIds[0])}`).get()).data()!;
     assert.equal(t.completed, true);
     assert.equal(t.status, "completed");
     const all = await routineTasks(morning);
@@ -324,7 +337,7 @@ async function main() {
     assert.equal(res.status, 200, await res.clone().text());
     const { routine } = await res.json();
     const newId = routine.activities[2].id;
-    const get = async (date: string, a: string) => (await db.doc(`tasks/${svc.occurrenceTaskId(morning, date, a)}`).get()).data();
+    const get = async (date: string, a: string) => (await db.doc(`routineTasks/${svc.occurrenceTaskId(morning, date, a)}`).get()).data();
     assert.equal((await get(today, aIds[0]))!.title, "Plan the day", "completed today keeps its title");
     assert.equal((await get(today, aIds[1]))!.title, "Inbox to zero", "open today follows the edit");
     assert.ok(await get(today, aIds[2]), "completed activity removed from the routine is kept as history");
@@ -357,7 +370,7 @@ async function main() {
     const id = (await res.json()).routine.id;
     const [t] = await routineTasks(id, today);
     assert.equal(t.data().timeBlock, "pm");
-    await svc.deleteRoutine({ subAccountId: SA, routineId: id });
+    await svc.deleteRoutine({ subAccountId: SA, routineId: id, viewer: { uid: "admin1", role: "admin" } });
   });
 
   // ── calendar ───────────────────────────────────────────────────────────
@@ -415,7 +428,7 @@ async function main() {
     await db.doc("projects/pWin").update({ status: "completed" });
     const view = (await (await oneRoute.GET(req("admin1", "GET", undefined, `http://test.local/x?from=${today}&to=${today}`), rCtx(bound.id))).json()).routine;
     assert.equal(view.windowClosed, true);
-    await db.doc(`tasks/${svc.occurrenceTaskId(bound.id, today, bound.activities[0].id)}`).delete();
+    await db.doc(`routineTasks/${svc.occurrenceTaskId(bound.id, today, bound.activities[0].id)}`).delete();
     await svc.runRoutineGeneration();
     assert.equal((await routineTasks(bound.id, today)).length, 0, "closed window generates nothing");
     assert.equal((await routineTasks(free.id, today)).length, 1);
@@ -472,10 +485,10 @@ async function main() {
   });
   await check("My Tasks completion route completes a routine activity (same Tasks engine)", async () => {
     const id = svc.occurrenceTaskId(morning, today, aIds[1]);
-    await db.doc(`tasks/${id}`).update({ completed: false, status: "todo" });
+    await db.doc(`routineTasks/${id}`).update({ completed: false, status: "todo" });
     const res = await taskCompleteRoute.POST(req("admin1", "POST", { completed: true }), { params: Promise.resolve({ id }) });
     assert.equal(res.status, 200, await res.clone().text());
-    assert.equal((await db.doc(`tasks/${id}`).get()).data()!.completed, true);
+    assert.equal((await db.doc(`routineTasks/${id}`).get()).data()!.completed, true);
     assert.equal((await db.collection("tasks").where("recurrenceSeriesId", "==", id).get()).size, 0, "no recurrence spawn");
   });
   await check("routine activity: date / repeat / rollover locked; title editable; not deletable; no subtasks", async () => {
@@ -502,24 +515,171 @@ async function main() {
     assert.equal(list.routines.some((i: { routine: { name: string } }) => i.routine.name === "CEO Reset project"), false);
   });
 
+  // ── privacy (personal by default) + sharing ───────────────────────────
+  const activitiesRoute = await import("../src/app/api/sub-accounts/[id]/routines/activities/route");
+  const timerRoute = await import("../src/app/api/time/timer/route");
+  const tId = svc.occurrenceTaskId(morning, today, aIds[1]);
+  const others = ["member2", "admin3", "boss"] as const; // collaborator, sub-account admin, agency owner
+  const asUser = (uid: string) => ({
+    list: async () => (await (await listRoute.GET(req(uid), saCtx())).json()).routines as { routine: { id: string; canManage: boolean; isOwner: boolean } }[],
+    detail: () => oneRoute.GET(req(uid, "GET", undefined, `http://test.local/x?from=${today}&to=${today}`), rCtx(morning)),
+    history: () => historyRoute.GET(req(uid), rCtx(morning)),
+    complete: (completed = true) => completeRoute.POST(req(uid, "POST", { date: today, activityId: aIds[1], completed }), rCtx(morning)),
+    patch: (body: Record<string, unknown>) => oneRoute.PATCH(req(uid, "PATCH", body), rCtx(morning)),
+    del: () => oneRoute.DELETE(req(uid, "DELETE"), rCtx(morning)),
+    calendar: async () => (await (await calendarRoute.GET(req(uid, "GET", undefined, `http://test.local/x?from=${today}&to=${d(6)}`), saCtx())).json()).entries as { routineId: string }[],
+    activities: async () => (await (await activitiesRoute.GET(req(uid), saCtx())).json()).tasks as { id: string; routineId: string }[],
+    taskGet: () => taskRoute.GET(req(uid), { params: Promise.resolve({ id: tId }) }),
+    taskComplete: () => taskCompleteRoute.POST(req(uid, "POST", { completed: true }), { params: Promise.resolve({ id: tId }) }),
+    timer: () => timerRoute.POST(req(uid, "POST", { action: "start", taskId: tId })),
+  });
+
+  await check("private routine: owner sees it everywhere (list, detail, calendar, My Tasks, Task Detail)", async () => {
+    const o = asUser("admin1");
+    assert.ok((await o.list()).some((i) => i.routine.id === morning && i.routine.isOwner && i.routine.canManage));
+    assert.equal((await o.detail()).status, 200);
+    assert.ok((await o.calendar()).some((e) => e.routineId === morning));
+    assert.ok((await o.activities()).some((t) => t.id === tId));
+    assert.equal((await o.taskGet()).status, 200);
+  });
+  await check("missed activities: kept in History with their state, never listed in My Tasks as overdue", async () => {
+    const acts = (await (await activitiesRoute.GET(req("admin1"), saCtx())).json()) as { tasks: { occurrenceDate: string; completed: boolean }[] };
+    assert.equal(acts.tasks.some((t) => t.occurrenceDate < today && !t.completed), false, "no missed activity in My Tasks");
+    assert.ok(acts.tasks.some((t) => t.occurrenceDate === d(-8) && t.completed), "completed past activities still show as done");
+    const missed = await routineTasks(morning, d(-4));
+    assert.ok(missed.length > 0 && missed.every((x) => x.data().completed === false), "the missed record is preserved as-is");
+    const hist = (await (await historyRoute.GET(req("admin1"), rCtx(morning))).json()) as { entries: { date: string; done: number }[] };
+    assert.equal(hist.entries.find((e) => e.date === d(-4))?.done, 0);
+  });
+  for (const uid of others) {
+    await check(`private routine is invisible to ${uid} on every route (list, detail, history, calendar, My Tasks, Task Detail, completion, timer, edit, delete)`, async () => {
+      const u = asUser(uid);
+      assert.equal((await u.list()).some((i) => i.routine.id === morning), false, "list");
+      assert.equal((await u.detail()).status, 404, "detail");
+      assert.equal((await u.history()).status, 404, "history");
+      assert.equal((await u.calendar()).some((e) => e.routineId === morning), false, "calendar");
+      assert.equal((await u.activities()).some((t) => t.routineId === morning), false, "My Tasks");
+      assert.equal((await u.taskGet()).status, 404, "Task Detail");
+      assert.equal((await u.taskComplete()).status, 404, "My Tasks completion route");
+      assert.equal((await u.complete()).status, 404, "routine completion");
+      assert.equal((await u.timer()).status, 404, "timer");
+      assert.equal((await u.patch({ status: "paused" })).status, 404, "pause");
+      assert.equal((await u.del()).status, 404, "delete");
+    });
+  }
+  await check("other routes can't reach a routine activity either (shared completion service, AI-style callers)", async () => {
+    const r = await tasksSvc.setTaskCompletedServerSide({ taskId: tId, completed: true, userId: "member2", expectedSubAccountId: SA });
+    assert.equal(r, null, "without the explicit routine opt-in a routine activity reads as missing");
+  });
+
+  await check("sharing: only the owner can share; members then see it and can check it off, but not manage it", async () => {
+    assert.equal((await asUser("admin3").patch({ visibility: "shared" })).status, 404, "a non-owner can't even find it to share");
+    const res = await asUser("admin1").patch({ visibility: "shared" });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).routine.visibility, "shared");
+    const m = asUser("member2");
+    const item = (await m.list()).find((i) => i.routine.id === morning)!;
+    assert.ok(item, "visible to a collaborator");
+    assert.deepEqual([item.routine.isOwner, item.routine.canManage], [false, false]);
+    assert.equal((await m.detail()).status, 200);
+    assert.ok((await m.calendar()).some((e) => e.routineId === morning));
+    assert.ok((await m.activities()).some((t) => t.id === tId));
+    await db.doc(`routineTasks/${tId}`).update({ completed: false, status: "todo" });
+    assert.equal((await m.complete()).status, 200, "members can check off a shared routine");
+    assert.equal((await m.taskGet()).status, 200);
+    assert.equal((await m.patch({ status: "paused" })).status, 403, "collaborator can't pause");
+    assert.equal((await m.del()).status, 403, "collaborator can't delete");
+  });
+  await check("sharing: a sub-account admin may manage a SHARED routine but can't change who sees it", async () => {
+    const a = asUser("admin3");
+    assert.ok((await a.list()).find((i) => i.routine.id === morning)!.routine.canManage);
+    assert.equal((await a.patch({ visibility: "private" })).status, 403);
+    assert.equal((await a.patch({ status: "paused" })).status, 200);
+    assert.equal((await a.patch({ status: "active" })).status, 200);
+  });
+  await check("un-sharing makes it private again — history intact, others lose access", async () => {
+    const before = await dayOf(morning, d(-8));
+    assert.equal((await asUser("admin1").patch({ visibility: "private" })).status, 200);
+    for (const uid of others) {
+      assert.equal((await asUser(uid).detail()).status, 404, uid);
+      assert.equal((await asUser(uid).activities()).some((t) => t.routineId === morning), false, uid);
+    }
+    assert.deepEqual(await dayOf(morning, d(-8)), before);
+  });
+
+  // ── automation / webhooks ──────────────────────────────────────────────
+  const settle = () => new Promise((r) => setTimeout(r, 400));
+  const events = async () => (await db.collection(`subAccounts/${SA}/webhookEvents`).get()).docs.map((x) => x.data());
+  await check("webhooks: ordinary tasks still emit task.created + task.completed exactly once", async () => {
+    const { id } = await tasksSvc.createTaskServerSide({ subAccountId: SA, agencyId: AG, createdByUid: "admin1", mode: "live", title: "Hook check", notes: "", dueAt: null, contactId: null, dealId: null, eventId: null });
+    await tasksSvc.setTaskCompletedServerSide({ taskId: id, completed: true, userId: "admin1" });
+    await tasksSvc.setTaskCompletedServerSide({ taskId: id, completed: true, userId: "admin1" }); // repeat: no second event
+    await settle();
+    const mine = (await events()).filter((e) => (e.payload as { task?: { id?: string } }).task?.id === id);
+    assert.deepEqual(mine.map((e) => e.type).sort(), ["task.completed", "task.created"]);
+  });
+  await check("webhooks: generating, completing, Mark All Complete and reopening routine activities emit nothing", async () => {
+    const res = await post({ name: "Hook routine", activities: [{ title: "A" }, { title: "B" }], schedule: { frequency: "daily" } });
+    const r = (await res.json()).routine;
+    await svc.runRoutineGeneration();
+    await complete(r.id, { date: today, activityId: r.activities[0].id, completed: true });
+    await complete(r.id, { date: today, activityId: r.activities[0].id, completed: false });
+    await complete(r.id, { date: today });
+    await complete(r.id, { date: today });
+    await taskCompleteRoute.POST(req("admin1", "POST", { completed: true }), { params: Promise.resolve({ id: svc.occurrenceTaskId(r.id, today, r.activities[1].id) }) });
+    await settle();
+    const leaked = (await events()).filter((e) => String((e.payload as { task?: { id?: string } }).task?.id ?? "").startsWith("rt_"));
+    assert.equal(leaked.length, 0, JSON.stringify(leaked.map((e) => e.type)));
+    assert.equal((await routineTasks(r.id, today)).filter((x) => x.data().completed).length, 2, "still recorded normally");
+    const act = await db.collection("taskActivity").where("taskId", "==", svc.occurrenceTaskId(r.id, today, r.activities[0].id)).get();
+    assert.deepEqual(act.docs.map((x) => x.data().type).sort(), ["completed", "completed", "reopened"], "internal history kept, one row per real change");
+  });
+
+  // ── Client Portal ──────────────────────────────────────────────────────
+  await check("Client Portal: routine activities are never reachable, even for a client project's routine", async () => {
+    const portal = await import("../src/lib/server/portal-tasks-service");
+    await db.doc("contacts/cP").set({ subAccountId: SA, agencyId: AG, name: "Client P" });
+    await db.doc("projects/pClient").set({ agencyId: AG, subAccountId: SA, title: "Client work", status: "active", taskModel: "tasks", assignedContactId: "cP", dueAt: null });
+    const r = (await (await post({ name: "Client-linked", activities: [{ title: "Prep" }], schedule: { frequency: "daily" }, projectId: "pClient" })).json()).routine;
+    const t = (await routineTasks(r.id, today))[0];
+    assert.equal(t.data().projectId, undefined);
+    const view = await portal.loadPortalTaskProject(
+      { id: "pClient", ...(await db.doc("projects/pClient").get()).data() } as never,
+      { id: "mP", contactId: "cP" } as never
+    );
+    assert.equal(JSON.stringify(view).includes("rt_"), false);
+  });
+
   // ── rules ──────────────────────────────────────────────────────────────
   const browser = clientAs("admin1");
+  const memberBrowser = clientAs("member2");
   const outsiderBrowser = clientAs("outsider");
-  const tId = svc.occurrenceTaskId(morning, today, aIds[1]);
-  await rule("member lists sub-account tasks incl. routine activities (My Tasks / Calendar query)", true, async () => {
+  await rule("owner's own browser tasks query returns no routine activities (they're server-only)", true, async () => {
     const s = await cGetDocs(cQuery(cCollection(browser, "tasks"), cWhere("subAccountId", "==", SA)));
-    assert.ok(s.docs.some((x) => x.data().routineId === morning));
+    assert.equal(s.docs.some((x) => x.id.startsWith("rt_") || x.data().routineId), false);
   });
-  await rule("outsider reads a routine activity", false, () => cGet(cDoc(outsiderBrowser, `tasks/${tId}`)));
+  await rule("another member's browser tasks query (My Tasks / Calendar / badge) still works and has no routine activities", true, async () => {
+    const s = await cGetDocs(cQuery(cCollection(memberBrowser, "tasks"), cWhere("subAccountId", "==", SA)));
+    assert.ok(s.size > 0, "ordinary shared tasks still listed");
+    assert.equal(s.docs.some((x) => x.id.startsWith("rt_") || x.data().routineId), false);
+  });
+  await rule("member reads a routine activity directly", false, () => cGet(cDoc(memberBrowser, `routineTasks/${tId}`)));
+  await rule("owner reads a routine activity directly (server routes only)", false, () => cGet(cDoc(browser, `routineTasks/${tId}`)));
+  await rule("member lists routineTasks", false, () => cGetDocs(cQuery(cCollection(memberBrowser, "routineTasks"), cWhere("subAccountId", "==", SA))));
+  await rule("outsider reads a routine activity", false, () => cGet(cDoc(outsiderBrowser, `routineTasks/${tId}`)));
   await rule("browser creates a task claiming a routine", false, () => cSet(cDoc(browser, "tasks/forged"), { title: "x", completed: false, agencyId: AG, subAccountId: SA, territoryId: "global", routineId: morning, occurrenceDate: today }));
-  await rule("browser edits a routine activity directly", false, () => cUpdate(cDoc(browser, `tasks/${tId}`), { title: "x" }));
-  await rule("browser completes a routine activity directly (must use the server route)", false, () => cUpdate(cDoc(browser, `tasks/${tId}`), { completed: false }));
-  await rule("browser deletes a routine activity", false, () => cDelete(cDoc(browser, `tasks/${tId}`)));
+  await rule("browser creates a task with a routine-style id", false, () => cSet(cDoc(browser, `tasks/rt_shadow`), { title: "x", completed: false, agencyId: AG, subAccountId: SA, territoryId: "global" }));
+  await rule("browser writes a routine activity", false, () => cUpdate(cDoc(browser, `routineTasks/${tId}`), { completed: false }));
   await rule("browser reads a routine definition directly", false, () => cGet(cDoc(browser, `routines/${morning}`)));
   await rule("browser still creates + edits + deletes a plain standalone task", true, async () => {
     await cSet(cDoc(browser, "tasks/plain"), { title: "Call back", notes: "", completed: false, agencyId: AG, subAccountId: SA, territoryId: "global", createdByUid: "admin1" });
     await cUpdate(cDoc(browser, "tasks/plain"), { title: "Call back tomorrow" });
     await cDelete(cDoc(browser, "tasks/plain"));
+  });
+  await rule("another member still reads + edits a shared standalone task", true, async () => {
+    await cSet(cDoc(browser, "tasks/teamTask"), { title: "Team", notes: "", completed: false, agencyId: AG, subAccountId: SA, territoryId: "global", createdByUid: "admin1" });
+    await cGet(cDoc(memberBrowser, "tasks/teamTask"));
+    await cUpdate(cDoc(memberBrowser, "tasks/teamTask"), { title: "Team (edited)" });
   });
 
   // ── delete + rituals ───────────────────────────────────────────────────

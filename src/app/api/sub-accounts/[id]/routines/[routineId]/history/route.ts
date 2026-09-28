@@ -15,7 +15,7 @@ export async function GET(
   if (access instanceof NextResponse) return access;
   const before = new URL(request.url).searchParams.get("before");
   try {
-    return NextResponse.json(await getRoutineHistory({ subAccountId, routineId, before }));
+    return NextResponse.json(await getRoutineHistory({ subAccountId, routineId, before, viewer: { uid: access.uid, role: access.subAccountRole ?? null } }));
   } catch (err) {
     return taskErrorResponse(err);
   }

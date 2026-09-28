@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { taskDocRef } from "@/lib/server/task-ref";
 import {
   activityVisibilityFor,
   actorName,
@@ -89,7 +90,7 @@ function totalsUpdate(
   if (deltaSeconds === 0) return;
   const db = getAdminDb();
   tx.set(
-    db.doc(`tasks/${task.id}`),
+    taskDocRef(task.id),
     {
       timeSpentSeconds: FieldValue.increment(deltaSeconds),
       ...(isClient ? { clientTimeSeconds: FieldValue.increment(deltaSeconds) } : {}),
@@ -159,7 +160,7 @@ async function finalizeTimerInTx(
     MAX_ENTRY_SECONDS,
     Math.max(0, Math.round((now.getTime() - started.getTime()) / 1000))
   );
-  const taskSnap = await tx.get(db.doc(`tasks/${timer.taskId}`));
+  const taskSnap = await tx.get(taskDocRef(timer.taskId));
   tx.delete(timerRef);
   if (seconds < 1 || !taskSnap.exists) return null;
   const task = { id: taskSnap.id, ...taskSnap.data() } as FirebaseFirestore.DocumentData & { id: string };
@@ -332,7 +333,7 @@ export async function reviseEntry(opts: {
       note: d.note ?? "",
     };
     const revision = { at: Timestamp.now(), byActorKey: key, action: opts.action === "delete" ? "deleted" : "edited", before };
-    const taskSnap = await tx.get(db.doc(`tasks/${d.taskId}`));
+    const taskSnap = await tx.get(taskDocRef(d.taskId));
     const taskRef = { id: d.taskId as string, projectId: (d.projectId as string | null) ?? null };
     if (opts.action === "delete") {
       tx.set(ref, { deleted: true, revisions: FieldValue.arrayUnion(revision), updatedAt: FieldValue.serverTimestamp() }, { merge: true });

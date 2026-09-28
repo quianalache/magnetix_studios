@@ -17,6 +17,9 @@ export function useDueTodayCount(): number {
   const { user, memberships } = useAuth();
   const sub = useOptionalSubAccount();
   const [count, setCount] = useState(0);
+  // Today's open routine activities the viewer can see (their own routines
+  // + shared ones). They live server-side, so they're fetched, not subscribed.
+  const [routineCount, setRoutineCount] = useState(0);
 
   const fallback = memberships[0];
   const subAccountId = sub?.subAccountId ?? fallback?.subAccountId ?? null;
@@ -54,5 +57,27 @@ export function useDueTodayCount(): number {
     return () => unsub();
   }, [user, subAccountId, agencyId]);
 
-  return count;
+  useEffect(() => {
+    if (!user || !subAccountId) {
+      setRoutineCount(0);
+      return;
+    }
+    let cancelled = false;
+    const load = () =>
+      fetch(`/api/sub-accounts/${subAccountId}/routines/activities`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((b: { today: string; tasks: { completed?: boolean; occurrenceDate?: string }[] } | null) => {
+          if (cancelled || !b) return;
+          setRoutineCount(b.tasks.filter((t) => !t.completed && t.occurrenceDate === b.today).length);
+        })
+        .catch(() => {});
+    void load();
+    window.addEventListener("focus", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", load);
+    };
+  }, [user, subAccountId]);
+
+  return count + routineCount;
 }

@@ -2,10 +2,14 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { routineCalendarEntries } from "@/lib/server/routines-service";
+import { listRoutineActivities } from "@/lib/server/routines-service";
 import { taskErrorResponse } from "@/lib/server/task-route-helpers";
 
-/** Routine entries for the Calendar grid (?from&to, ≤ 62 days). Future dates are projected, not written. */
+/**
+ * The caller's routine activities for My Tasks (their own routines + shared
+ * ones). Routine activities aren't in the browser-readable `tasks`
+ * collection (personal routines stay private), so My Tasks merges this in.
+ */
 export async function GET(
   request: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -13,16 +17,10 @@ export async function GET(
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
-  const url = new URL(request.url);
   try {
-    return NextResponse.json({
-      entries: await routineCalendarEntries({
-        subAccountId,
-        from: url.searchParams.get("from"),
-        to: url.searchParams.get("to"),
-        viewer: { uid: access.uid, role: access.subAccountRole ?? null },
-      }),
-    });
+    return NextResponse.json(
+      await listRoutineActivities(subAccountId, { uid: access.uid, role: access.subAccountRole ?? null })
+    );
   } catch (err) {
     return taskErrorResponse(err);
   }

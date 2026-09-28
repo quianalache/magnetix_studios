@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, GripVertical, Lock, Plus, Trash2, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,7 @@ interface Draft {
   time: string;
   projectId: string;
   endsWithProject: boolean;
+  visibility: "private" | "shared";
 }
 
 function localToday(): string {
@@ -110,6 +111,7 @@ function blankDraft(): Draft {
     time: "09:00",
     projectId: "",
     endsWithProject: false,
+    visibility: "private",
   };
 }
 
@@ -142,6 +144,7 @@ function draftFrom(r: RoutineView): Draft {
     time: r.time ?? "09:00",
     projectId: r.projectId ?? "",
     endsWithProject: r.endsWithProject,
+    visibility: r.visibility === "shared" ? "shared" : "private",
   };
 }
 
@@ -160,8 +163,9 @@ function scheduleBody(d: Draft) {
   };
 }
 
-function toBody(d: Draft) {
+function toBody(d: Draft, canShare: boolean) {
   return {
+    ...(canShare ? { visibility: d.visibility } : {}),
     name: d.name.trim(),
     description: d.description.trim(),
     icon: d.icon,
@@ -355,6 +359,8 @@ export function RoutineEditorDialog({
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const [datesText, setDatesText] = useState("1, 15");
   const [saving, setSaving] = useState(false);
+  // Only the owner decides who can see a routine (new routines: the creator).
+  const canShare = !routine || routine.isOwner;
 
   useEffect(() => {
     if (!open) return;
@@ -411,7 +417,7 @@ export function RoutineEditorDialog({
     }
     setSaving(true);
     try {
-      const body = toBody(draft);
+      const body = toBody(draft, canShare);
       const res = routine
         ? await updateRoutineApi(subAccountId, routine.id, body)
         : await createRoutineApi(subAccountId, body);
@@ -563,6 +569,40 @@ export function RoutineEditorDialog({
                     })}
                   </div>
                 </div>
+                {canShare && (
+                  <fieldset className="space-y-2">
+                    <legend className="mb-2 text-sm font-medium">Who can see this?</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(
+                        [
+                          { v: "private", icon: Lock, label: "Only me", hint: "Private — nobody else in the workspace sees it or its tasks." },
+                          { v: "shared", icon: Users, label: "Everyone in this workspace", hint: "Team members can see it and check off its tasks." },
+                        ] as const
+                      ).map((o) => (
+                        <label
+                          key={o.v}
+                          className={cn(
+                            "cursor-pointer rounded-xl border p-3 text-sm transition-colors",
+                            draft.visibility === o.v ? "border-primary/50 bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            <input
+                              type="radio"
+                              name="routine-visibility"
+                              className="accent-primary h-4 w-4"
+                              checked={draft.visibility === o.v}
+                              onChange={() => set("visibility", o.v)}
+                            />
+                            <o.icon className="text-muted-foreground h-4 w-4" />
+                            {o.label}
+                          </span>
+                          <span className="text-muted-foreground mt-1 block text-xs">{o.hint}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
               </div>
             )}
 
@@ -990,6 +1030,10 @@ export function RoutineEditorDialog({
                       {validActivities.length}
                       {totalMinutes > 0 && ` · ~${totalMinutes} min`}
                     </dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Visible to</dt>
+                    <dd>{draft.visibility === "shared" ? "Everyone in this workspace" : "Only me"}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Ends</dt>

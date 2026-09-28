@@ -95,6 +95,8 @@ export interface Task {
   routineName?: string | null;
   routineActivityId?: string | null;
   occurrenceDate?: string | null;
+  /** Routine activities: the routine owner (server). */
+  ownerUid?: string | null;
   /**
    * RESERVED for future content connections (Social Planner, Content
    * Library, YouTube Studio). Not read or written by any UI yet.

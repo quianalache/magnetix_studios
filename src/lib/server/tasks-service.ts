@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { isRoutineTaskId, taskDocRef } from "@/lib/server/task-ref";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import {
   serializeTaskForApi,
@@ -164,9 +165,16 @@ export async function setTaskCompletedServerSide(opts: {
   expectedSubAccountId?: string;
   /** Who did it, for the task Activity feed (Phase 2). Defaults to staff `userId`. */
   actor?: TaskActor;
+  /**
+   * Routine activities (`rt_…`, stored in routineTasks) are only reachable
+   * when the caller has already checked routine privacy and opts in —
+   * every other caller (AI Suite, workflows) sees them as missing.
+   */
+  allowRoutineTask?: boolean;
 }): Promise<(TaskWriteResult & { warnings: string[] }) | null> {
   const db = getAdminDb();
-  const ref = db.doc(`tasks/${opts.taskId}`);
+  if (isRoutineTaskId(opts.taskId) && !opts.allowRoutineTask) return null;
+  const ref = taskDocRef(opts.taskId);
   const snap = await ref.get();
   if (!snap.exists) return null;
   if (
@@ -242,7 +250,10 @@ export async function setTaskCompletedServerSide(opts: {
   const fresh = await ref.get();
   const task = serializeTaskForApi(fresh.id, fresh.data()!, mode);
 
-  if (justCompleted) {
+  // Routine activities are generated automatically, so — like their
+  // creation — their completion emits no task webhook / workflow event
+  // (owner decision). Everything else is unchanged.
+  if (justCompleted && !existing.routineId) {
     void emitWebhookEvent({
       subAccountId: existing.subAccountId,
       agencyId: existing.agencyId,

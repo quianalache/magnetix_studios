@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { taskDocRef } from "@/lib/server/task-ref";
 
 /**
  * Projects & Tasks Phase 2 (2026-09) — the relationships layered on top of
@@ -301,7 +302,7 @@ export async function unfinishedPrerequisiteWarnings(
   const ids = (task.dependsOnTaskIds as string[] | undefined) ?? [];
   if (ids.length === 0) return [];
   const db = getAdminDb();
-  const snaps = await db.getAll(...ids.map((id) => db.doc(`tasks/${id}`)));
+  const snaps = await db.getAll(...ids.map((id) => taskDocRef(id)));
   return snaps
     .filter(
       (s) =>
@@ -328,7 +329,7 @@ export async function wouldCreateDependencyCycle(
     const batch = frontier.filter((id) => !seen.has(id)).slice(0, 100);
     batch.forEach((id) => seen.add(id));
     if (batch.length === 0) break;
-    const snaps = await db.getAll(...batch.map((id) => db.doc(`tasks/${id}`)));
+    const snaps = await db.getAll(...batch.map((id) => taskDocRef(id)));
     const next: string[] = [];
     for (const s of snaps) {
       const d = s.data();

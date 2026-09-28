@@ -961,11 +961,15 @@ service cloud.firestore {
         "timeSpentSeconds", "clientTimeSeconds", "rolledOverCount",
         "originalDueAt", "recurrenceSeriesId", "occurrenceIndex",
         "createdByMemberId", "kind",
-        // Routines: activity tasks are generated server-side per date.
-        "routineId", "routineName", "routineActivityId", "occurrenceDate"];
+        // Routines: activities are generated server-side into the
+        // server-only routineTasks collection; these keys never belong in a
+        // browser-written task.
+        "routineId", "routineName", "routineActivityId", "occurrenceDate", "ownerUid"];
     }
     // Plain CRM tasks the browser may still edit / delete directly. Project
-    // tasks, subtasks and routine activities go through the server routes.
+    // tasks and subtasks go through the server routes. (routineId is also
+    // refused here as defence in depth — routine activities live in
+    // routineTasks, which has no rule and so is server-only.)
     function isStandaloneTaskData(data) {
       return data.get("projectId", null) == null
         && data.get("parentTaskId", null) == null
@@ -984,7 +988,10 @@ service cloud.firestore {
         request.resource.data.subAccountId,
         request.resource.data.agencyId,
         request.resource.data.get("territoryId", null)
-      ) && !request.resource.data.keys().hasAny(taskServerOwnedKeys());
+      ) && !request.resource.data.keys().hasAny(taskServerOwnedKeys())
+        // "rt_" ids belong to routine activities (server-only routineTasks);
+        // a browser task can't take one and shadow them in the server lookup.
+        && !taskId.matches('^rt_.*');
       allow update: if canSeeScopedDoc(
         resource.data.subAccountId,
         resource.data.agencyId,

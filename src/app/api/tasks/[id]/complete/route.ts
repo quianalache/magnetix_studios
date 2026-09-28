@@ -4,6 +4,8 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { requireTaskAccess } from "@/lib/server/project-tasks-service";
+import { isRoutineTaskId } from "@/lib/server/task-ref";
 
 /**
  * Toggle a task's completed flag server-side so `task.completed` fires (on
@@ -15,15 +17,27 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
-  const db = getAdminDb();
-  const snap = await db.doc(`tasks/${id}`).get();
-  if (!snap.exists) {
-    return NextResponse.json({ error: "Task not found" }, { status: 404 });
+  // Routine activities live in routineTasks and are private to their
+  // routine's audience — checked by requireTaskAccess. Ordinary tasks keep
+  // the original lookup below, unchanged.
+  const routine = isRoutineTaskId(id);
+  let data: FirebaseFirestore.DocumentData;
+  let access: Awaited<ReturnType<typeof requireSubAccountMember>>;
+  if (routine) {
+    const guard = await requireTaskAccess(request, id);
+    if (guard instanceof NextResponse) return guard;
+    data = guard.task;
+    access = guard.access;
+  } else {
+    const db = getAdminDb();
+    const snap = await db.doc(`tasks/${id}`).get();
+    if (!snap.exists) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+    data = snap.data()!;
+    access = await requireSubAccountMember(request, data.subAccountId);
+    if (access instanceof NextResponse) return access;
   }
-  const data = snap.data()!;
-
-  const access = await requireSubAccountMember(request, data.subAccountId);
-  if (access instanceof NextResponse) return access;
 
   let body: Record<string, unknown>;
   try {
@@ -44,6 +58,7 @@ export async function POST(
     userId: access.uid,
     mode: (data.mode as "live" | "test") ?? "live",
     actor: { kind: "staff", uid: access.uid },
+    allowRoutineTask: routine,
   });
   if (!result) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });

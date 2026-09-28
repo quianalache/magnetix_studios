@@ -7,20 +7,27 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  *
  * A routine is NOT a second task engine. `routines/{id}` only holds the
  * definition (name, look, schedule, the activity list). Each activity on
- * each scheduled date becomes an ordinary CRM task (`tasks/{id}`) with a
+ * each scheduled date becomes a task document (same shape as `tasks`) with a
  * deterministic id — `rt_{routineId}_{YYYYMMDD}_{activityId}` — so:
  * - every date keeps its OWN completion record (history is never
  *   overwritten when the next week starts),
  * - generating the same date twice can never create duplicates,
- * - My Tasks, time tracking, webhooks and completion all reuse the
- *   existing Tasks infrastructure unchanged.
+ * - completion, Task Detail, time tracking and comments reuse the shared
+ *   Tasks services (resolved through lib/server/task-ref.ts).
  *
  * Dates are calendar dates (`YYYY-MM-DD`) in the sub-account's timezone,
  * the same convention as Reflection's Rituals (`completedDates`).
  *
  * `routines/{id}` is server-only (no firestore.rules match → default deny);
  * every read and write goes through /api/sub-accounts/[id]/routines.
+ *
+ * Privacy (owner decision 2026-09-28): routines are PERSONAL by default —
+ * only the owner sees a private routine and its activities. The owner can
+ * share it with everyone in the sub-account. Occurrence tasks therefore live
+ * in the server-only `routineTasks` collection (same shape as `tasks`), not
+ * in the browser-readable `tasks` collection.
  */
+export type RoutineVisibility = "private" | "shared";
 
 export type RoutineFrequency = "daily" | "weekly" | "monthly" | "custom";
 export type RoutineUnit = "day" | "week" | "month";
@@ -70,6 +77,10 @@ export interface Routine {
   icon: RoutineIconKey;
   color: RoutineColorKey;
   status: RoutineStatus;
+  /** "private" (default — owner only) or "shared" (every sub-account member can view + check off). */
+  visibility: RoutineVisibility;
+  /** Whose routine it is. Legacy docs fall back to createdByUid. */
+  ownerUid: string;
   schedule: RoutineSchedule;
   /** Anytime is the default — no invented appointment time. */
   timeMode: RoutineTimeMode;
@@ -81,7 +92,7 @@ export interface Routine {
   projectId: string | null;
   /** When true, the routine stops after the associated project's due date (or once the project is no longer active). */
   endsWithProject: boolean;
-  /** Who the generated activities are assigned to (the creator by default). */
+  /** Generated activities are assigned to the owner. */
   assigneeUid: string | null;
   createdByUid: string;
   pausedAt?: Timestamp | FieldValue | null;
@@ -99,6 +110,10 @@ export interface RoutineView
   windowEnd: string | null;
   /** True when `endsWithProject` and the project is no longer active. */
   windowClosed: boolean;
+  /** The viewer owns it. */
+  isOwner: boolean;
+  /** The viewer may edit / pause / delete it (owner; admins for shared routines). */
+  canManage: boolean;
 }
 
 /** One scheduled or recorded date for a routine. */

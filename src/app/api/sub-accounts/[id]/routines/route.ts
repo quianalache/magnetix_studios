@@ -15,7 +15,7 @@ export async function GET(
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
   try {
-    return NextResponse.json(await listRoutines(subAccountId));
+    return NextResponse.json(await listRoutines(subAccountId, { uid: access.uid, role: access.subAccountRole ?? null }));
   } catch (err) {
     return taskErrorResponse(err);
   }
@@ -35,7 +35,7 @@ export async function POST(
     const routine = await createRoutine({
       subAccountId,
       agencyId: (sub.data()?.agencyId as string) ?? access.agencyId ?? "",
-      uid: access.uid,
+      viewer: { uid: access.uid, role: access.subAccountRole ?? null },
       body,
     });
     return NextResponse.json({ routine }, { status: 201 });

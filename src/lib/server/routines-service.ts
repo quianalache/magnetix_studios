@@ -4,7 +4,10 @@ import { randomBytes } from "node:crypto";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { GLOBAL_TERRITORY_ID } from "@/types";
-import { createTaskServerSide, setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { ROUTINE_TASKS_COLLECTION, taskDocRef } from "@/lib/server/task-ref";
+import { taskJson } from "@/lib/server/task-serialize";
+import { canManageRoutine, canViewRoutine, routineOwnerUid } from "@/lib/server/routine-access";
 import { TaskInputError } from "@/lib/server/project-tasks-service";
 import type { TaskActor } from "@/lib/server/task-graph-service";
 import {
@@ -59,7 +62,19 @@ import {
  * 4. Editing or pausing a routine only reconciles UNTOUCHED occurrences
  *    dated today or later (not completed, no tracked time). Past and
  *    completed occurrences are history and are never rewritten.
+ * 5. Privacy: routines are PERSONAL by default (see routine-access.ts).
+ *    Occurrence tasks live in the server-only `routineTasks` collection,
+ *    so the browser's `tasks` queries (My Tasks, Calendar, badges, search,
+ *    public API, AI Suite) never see them; every read below is filtered to
+ *    the viewer. Generating them emits NO `task.created` webhook, and
+ *    completing them emits no `task.completed` event.
  */
+
+export interface RoutineViewer {
+  uid: string;
+  /** Sub-account role from requireSubAccountMember (admins may manage SHARED routines). */
+  role: string | null;
+}
 
 type Doc = FirebaseFirestore.DocumentData;
 
@@ -111,6 +126,29 @@ export async function loadRoutine(
   return { ...(data as Omit<Routine, "id">), id: snap.id };
 }
 
+/** Like loadRoutine, but a routine the viewer may not see reads as missing. */
+export async function loadVisibleRoutine(
+  subAccountId: string,
+  routineId: string,
+  viewer: RoutineViewer
+): Promise<Routine> {
+  const r = await loadRoutine(subAccountId, routineId);
+  if (!canViewRoutine(r, viewer.uid)) throw new TaskInputError("Routine not found", 404);
+  return r;
+}
+
+async function loadManageableRoutine(
+  subAccountId: string,
+  routineId: string,
+  viewer: RoutineViewer
+): Promise<Routine> {
+  const r = await loadVisibleRoutine(subAccountId, routineId, viewer);
+  if (!canManageRoutine(r, viewer.uid, viewer.role)) {
+    throw new TaskInputError("Only the routine's owner can change it.", 403);
+  }
+  return r;
+}
+
 interface ProjectWindow {
   title: string | null;
   windowEnd: string | null;
@@ -141,16 +179,21 @@ async function projectWindow(
   return { title, windowEnd: ends.length ? ends.sort()[0] : null, windowClosed: closed };
 }
 
-function toView(r: Routine, w: ProjectWindow): RoutineView {
+function toView(r: Routine, w: ProjectWindow, viewer: RoutineViewer): RoutineView {
   const { createdAt, updatedAt, pausedAt: _paused, ...rest } = r;
   void _paused;
+  const ownerUid = routineOwnerUid(r) ?? r.createdByUid;
   return {
     ...rest,
+    ownerUid,
+    visibility: r.visibility === "shared" ? "shared" : "private",
     createdAt: toIso(createdAt),
     updatedAt: toIso(updatedAt),
     projectTitle: w.title,
     windowEnd: w.windowEnd,
     windowClosed: w.windowClosed,
+    isOwner: ownerUid === viewer.uid,
+    canManage: canManageRoutine(r, viewer.uid, viewer.role),
   };
 }
 
@@ -199,14 +242,6 @@ async function validateProject(subAccountId: string, projectId: unknown): Promis
   return projectId;
 }
 
-async function validateAssignee(subAccountId: string, uid: unknown, fallback: string | null): Promise<string | null> {
-  if (uid === null) return null;
-  if (typeof uid !== "string" || !uid) return fallback;
-  const m = await getAdminDb().doc(`subAccounts/${subAccountId}/subAccountMembers/${uid}`).get();
-  if (m.exists && m.data()?.status !== "removed") return uid;
-  return fallback;
-}
-
 interface RoutineFields {
   name: string;
   description: string;
@@ -219,7 +254,7 @@ interface RoutineFields {
   activities: RoutineActivity[];
   projectId: string | null;
   endsWithProject: boolean;
-  assigneeUid: string | null;
+  visibility: "private" | "shared";
 }
 
 async function parseRoutineInput(
@@ -227,7 +262,7 @@ async function parseRoutineInput(
   body: Record<string, unknown>,
   today: string,
   existing: Routine | null,
-  callerUid: string
+  viewer: RoutineViewer
 ): Promise<RoutineFields> {
   const pick = <K extends keyof Routine>(k: K): unknown =>
     k in body ? body[k as string] : existing?.[k];
@@ -271,10 +306,16 @@ async function parseRoutineInput(
   const activities = parseActivities(pick("activities"), existing?.activities ?? []);
   const projectId = await validateProject(subAccountId, pick("projectId"));
   const endsWithProject = projectId ? pick("endsWithProject") === true : false;
-  const assigneeUid =
-    "assigneeUid" in body
-      ? await validateAssignee(subAccountId, body.assigneeUid, existing?.assigneeUid ?? callerUid)
-      : existing?.assigneeUid ?? callerUid;
+  // Private by default. Only the owner decides who can see it.
+  const currentVisibility = existing?.visibility === "shared" ? "shared" : "private";
+  let visibility: "private" | "shared" = currentVisibility;
+  if ("visibility" in body && (body.visibility === "private" || body.visibility === "shared")) {
+    const isOwner = !existing || routineOwnerUid(existing) === viewer.uid;
+    if (body.visibility !== currentVisibility && !isOwner) {
+      throw new TaskInputError("Only the routine's owner can change who can see it.", 403);
+    }
+    visibility = body.visibility;
+  }
 
   return {
     name,
@@ -288,7 +329,7 @@ async function parseRoutineInput(
     activities,
     projectId,
     endsWithProject,
-    assigneeUid,
+    visibility,
   };
 }
 
@@ -318,40 +359,46 @@ function isAlreadyExists(err: unknown): boolean {
  */
 export async function ensureOccurrence(r: Routine, date: string, timeZone: string): Promise<number> {
   const db = getAdminDb();
-  const refs = r.activities.map((a) => db.doc(`tasks/${occurrenceTaskId(r.id, date, a.id)}`));
+  const refs = r.activities.map((a) => taskDocRef(occurrenceTaskId(r.id, date, a.id)));
   const existing = refs.length ? await db.getAll(...refs) : [];
   const { dueAt, timeBlock } = occurrenceTiming(r, date, timeZone);
   let created = 0;
   for (let i = 0; i < r.activities.length; i++) {
     if (existing[i]?.exists) continue;
     const a = r.activities[i];
+    const ownerUid = routineOwnerUid(r) ?? r.createdByUid;
     try {
-      await createTaskServerSide({
-        subAccountId: r.subAccountId,
-        agencyId: r.agencyId,
-        createdByUid: r.createdByUid,
-        mode: "live",
+      // Same document shape as an ordinary task (so the shared Tasks
+      // services work on it), written directly: generated activities emit
+      // no task.created webhook / workflow event (owner decision).
+      await refs[i].create({
         title: a.title,
         notes: a.notes,
-        dueAt,
+        dueAt: Timestamp.fromDate(dueAt),
+        completed: false,
+        completedAt: null,
         contactId: null,
         dealId: null,
         eventId: null,
         timeBlock,
-        territoryIdOverride: GLOBAL_TERRITORY_ID,
-        docId: occurrenceTaskId(r.id, date, a.id),
-        extra: {
-          routineId: r.id,
-          routineName: r.name,
-          routineActivityId: a.id,
-          occurrenceDate: date,
-          status: "todo",
-          priority: null,
-          assigneeUid: r.assigneeUid ?? null,
-          tags: ["routine"],
-          estimateMinutes: a.estimateMinutes,
-          autoRollover: false,
-        },
+        agencyId: r.agencyId,
+        subAccountId: r.subAccountId,
+        createdByUid: ownerUid,
+        territoryId: GLOBAL_TERRITORY_ID,
+        mode: "live",
+        routineId: r.id,
+        routineName: r.name,
+        routineActivityId: a.id,
+        occurrenceDate: date,
+        ownerUid,
+        status: "todo",
+        priority: null,
+        assigneeUid: ownerUid,
+        tags: ["routine"],
+        estimateMinutes: a.estimateMinutes,
+        autoRollover: false,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       created++;
     } catch (err) {
@@ -367,7 +414,7 @@ async function occurrenceTasksInRange(
   to: string
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
   const snap = await getAdminDb()
-    .collection("tasks")
+    .collection(ROUTINE_TASKS_COLLECTION)
     .where("subAccountId", "==", subAccountId)
     .where("occurrenceDate", ">=", from)
     .where("occurrenceDate", "<=", to)
@@ -388,7 +435,7 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
   const db = getAdminDb();
   const today = todayInTimeZone(timeZone);
   const snap = await db
-    .collection("tasks")
+    .collection(ROUTINE_TASKS_COLLECTION)
     .where("subAccountId", "==", subAccountId)
     .where("occurrenceDate", ">=", today)
     .get();
@@ -410,7 +457,6 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
         notes: activity.notes,
         estimateMinutes: activity.estimateMinutes,
         routineName: r.name,
-        assigneeUid: r.assigneeUid ?? null,
         dueAt: Timestamp.fromDate(dueAt),
         timeBlock,
         updatedAt: FieldValue.serverTimestamp(),
@@ -428,19 +474,21 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
 export async function createRoutine(opts: {
   subAccountId: string;
   agencyId: string;
-  uid: string;
+  viewer: RoutineViewer;
   body: Record<string, unknown>;
 }): Promise<RoutineView> {
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, null, opts.uid);
+  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, null, opts.viewer);
   const ref = getAdminDb().collection("routines").doc();
   const doc = {
     ...fields,
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     status: "active" as const,
-    createdByUid: opts.uid,
+    createdByUid: opts.viewer.uid,
+    ownerUid: opts.viewer.uid,
+    assigneeUid: opts.viewer.uid,
     pausedAt: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -449,19 +497,19 @@ export async function createRoutine(opts: {
   const routine = await loadRoutine(opts.subAccountId, ref.id);
   const w = await projectWindow(routine, tz);
   if (runsOn(routine, w, today)) await ensureOccurrence(routine, today, tz);
-  return toView(routine, w);
+  return toView(routine, w, opts.viewer);
 }
 
 export async function updateRoutine(opts: {
   subAccountId: string;
   routineId: string;
-  uid: string;
+  viewer: RoutineViewer;
   body: Record<string, unknown>;
 }): Promise<RoutineView> {
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const existing = await loadRoutine(opts.subAccountId, opts.routineId);
-  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, existing, opts.uid);
+  const existing = await loadManageableRoutine(opts.subAccountId, opts.routineId, opts.viewer);
+  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, existing, opts.viewer);
   const patch: Record<string, unknown> = { ...fields, updatedAt: FieldValue.serverTimestamp() };
   if (opts.body.status === "active" || opts.body.status === "paused") {
     patch.status = opts.body.status;
@@ -472,16 +520,17 @@ export async function updateRoutine(opts: {
   await getAdminDb().doc(`routines/${opts.routineId}`).update(patch);
   const routine = await loadRoutine(opts.subAccountId, opts.routineId);
   await reconcileUpcoming(routine, routine.id, routine.subAccountId, tz);
-  return toView(routine, await projectWindow(routine, tz));
+  return toView(routine, await projectWindow(routine, tz), opts.viewer);
 }
 
 export async function setRoutineStatus(opts: {
   subAccountId: string;
   routineId: string;
   status: "active" | "paused";
+  viewer: RoutineViewer;
 }): Promise<RoutineView> {
   const tz = await subAccountTimeZone(opts.subAccountId);
-  const existing = await loadRoutine(opts.subAccountId, opts.routineId);
+  const existing = await loadManageableRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   if (existing.status !== opts.status) {
     await getAdminDb()
       .doc(`routines/${opts.routineId}`)
@@ -493,13 +542,13 @@ export async function setRoutineStatus(opts: {
   }
   const routine = await loadRoutine(opts.subAccountId, opts.routineId);
   await reconcileUpcoming(routine, routine.id, routine.subAccountId, tz);
-  return toView(routine, await projectWindow(routine, tz));
+  return toView(routine, await projectWindow(routine, tz), opts.viewer);
 }
 
 /** Deletes the definition + untouched upcoming activities. Completed and past activity tasks stay as task history. */
-export async function deleteRoutine(opts: { subAccountId: string; routineId: string }) {
+export async function deleteRoutine(opts: { subAccountId: string; routineId: string; viewer: RoutineViewer }) {
   const tz = await subAccountTimeZone(opts.subAccountId);
-  await loadRoutine(opts.subAccountId, opts.routineId);
+  await loadManageableRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   await reconcileUpcoming(null, opts.routineId, opts.subAccountId, tz);
   await getAdminDb().doc(`routines/${opts.routineId}`).delete();
 }
@@ -545,16 +594,22 @@ function rangeDates(from: string, to: string): string[] {
   return out;
 }
 
-export async function listRoutines(subAccountId: string): Promise<{
+/** Routines the viewer may see in this sub-account: their own + shared ones. */
+async function visibleRoutines(subAccountId: string, viewer: RoutineViewer): Promise<Routine[]> {
+  const snap = await getAdminDb().collection("routines").where("subAccountId", "==", subAccountId).get();
+  return snap.docs
+    .map((d) => ({ ...(d.data() as Omit<Routine, "id">), id: d.id }))
+    .filter((r) => canViewRoutine(r, viewer.uid));
+}
+
+export async function listRoutines(subAccountId: string, viewer: RoutineViewer): Promise<{
   today: string;
   routines: RoutineListItem[];
   projectRoutines: ProjectRoutineItem[];
 }> {
-  const db = getAdminDb();
   const tz = await subAccountTimeZone(subAccountId);
   const today = todayInTimeZone(tz);
-  const snap = await db.collection("routines").where("subAccountId", "==", subAccountId).get();
-  const routines = snap.docs.map((d) => ({ ...(d.data() as Omit<Routine, "id">), id: d.id }));
+  const routines = await visibleRoutines(subAccountId, viewer);
 
   const weekStart = weekStartYmd(today);
   const weekEnd = addDaysYmd(weekStart, 6);
@@ -604,7 +659,7 @@ export async function listRoutines(subAccountId: string): Promise<{
       }
     }
     items.push({
-      routine: toView(r, w),
+      routine: toView(r, w, viewer),
       today,
       progress,
       week,
@@ -674,10 +729,11 @@ export async function getRoutineDetail(opts: {
   routineId: string;
   from: unknown;
   to: unknown;
+  viewer: RoutineViewer;
 }) {
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   const w = await projectWindow(r, tz);
   const { from, to } = checkRange(opts.from, opts.to);
   if (r.status === "active" && runsOn(r, w, today) && from <= today && today <= to) {
@@ -689,7 +745,7 @@ export async function getRoutineDetail(opts: {
   const byDate = groupByRoutineAndDate(docs).get(r.id) ?? new Map();
   return {
     today,
-    routine: toView(r, w),
+    routine: toView(r, w, opts.viewer),
     days: summarize(r, w, rangeDates(from, to), byDate, today),
     tasks: docs.map((d) => serializeOccurrence(d.id, d.data())),
     nextDate: r.status === "active" && !w.windowClosed ? nextOccurrenceOnOrAfter(r.schedule, today, w.windowEnd) : null,
@@ -705,10 +761,11 @@ export async function getRoutineHistory(opts: {
   subAccountId: string;
   routineId: string;
   before?: unknown;
+  viewer: RoutineViewer;
 }) {
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   const w = await projectWindow(r, tz);
   const to = isYmd(opts.before) ? addDaysYmd(opts.before, -1) : today;
   const created = toDate(r.createdAt);
@@ -761,15 +818,16 @@ export async function setRoutineActivityCompleted(opts: {
   actor: TaskActor & { kind: "staff" };
 }) {
   const tz = await subAccountTimeZone(opts.subAccountId);
-  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  // Anyone who can SEE the routine (its owner, or any member for a shared one) may check it off.
+  const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, { uid: opts.actor.uid, role: null });
   const date = await assertCompletableDate(r, opts.date, tz);
   if (typeof opts.activityId !== "string") throw new TaskInputError("Invalid activity");
   const taskId = occurrenceTaskId(r.id, date, opts.activityId);
-  let snap = await getAdminDb().doc(`tasks/${taskId}`).get();
+  let snap = await taskDocRef(taskId).get();
   if (!snap.exists) {
     if (!r.activities.some((a) => a.id === opts.activityId)) throw new TaskInputError("Activity not found", 404);
     if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
-    snap = await getAdminDb().doc(`tasks/${taskId}`).get();
+    snap = await taskDocRef(taskId).get();
     if (!snap.exists) throw new TaskInputError("Activity not found", 404);
   }
   const res = await setTaskCompletedServerSide({
@@ -778,6 +836,7 @@ export async function setRoutineActivityCompleted(opts: {
     userId: opts.actor.uid,
     expectedSubAccountId: opts.subAccountId,
     actor: opts.actor,
+    allowRoutineTask: true,
   });
   if (!res) throw new TaskInputError("Activity not found", 404);
   return { taskId };
@@ -791,7 +850,7 @@ export async function completeRoutineDate(opts: {
   actor: TaskActor & { kind: "staff" };
 }) {
   const tz = await subAccountTimeZone(opts.subAccountId);
-  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, { uid: opts.actor.uid, role: null });
   const date = await assertCompletableDate(r, opts.date, tz);
   if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
   const docs = (await occurrenceTasksInRange(opts.subAccountId, date, date)).filter(
@@ -804,6 +863,7 @@ export async function completeRoutineDate(opts: {
       userId: opts.actor.uid,
       expectedSubAccountId: opts.subAccountId,
       actor: opts.actor,
+      allowRoutineTask: true,
     });
   }
   return { completed: docs.length };
@@ -820,16 +880,16 @@ export async function routineCalendarEntries(opts: {
   subAccountId: string;
   from: unknown;
   to: unknown;
+  viewer: RoutineViewer;
 }): Promise<RoutineCalendarEntry[]> {
   const { from, to } = checkRange(opts.from, opts.to);
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const snap = await getAdminDb().collection("routines").where("subAccountId", "==", opts.subAccountId).get();
-  if (snap.empty) return [];
+  const routines = await visibleRoutines(opts.subAccountId, opts.viewer);
+  if (routines.length === 0) return [];
   const grouped = groupByRoutineAndDate(await occurrenceTasksInRange(opts.subAccountId, from, to));
   const out: RoutineCalendarEntry[] = [];
-  for (const d of snap.docs) {
-    const r = { ...(d.data() as Omit<Routine, "id">), id: d.id };
+  for (const r of routines) {
     const w = await projectWindow(r, tz);
     const byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
     const dates = new Set<string>(byDate.keys());
@@ -855,6 +915,34 @@ export async function routineCalendarEntries(opts: {
     }
   }
   return out;
+}
+
+// ── My Tasks ─────────────────────────────────────────────────────────────────
+
+/**
+ * The viewer's routine activities for My Tasks and the due-today badge:
+ * everything from routines they can see, dated from 30 days ago to 7 days
+ * ahead — EXCEPT missed ones (past and unfinished), which stay in the
+ * routine's History and are never shown as overdue ordinary tasks.
+ * Generates today's activities first so the list is current.
+ */
+export async function listRoutineActivities(subAccountId: string, viewer: RoutineViewer) {
+  const tz = await subAccountTimeZone(subAccountId);
+  const today = todayInTimeZone(tz);
+  const routines = await visibleRoutines(subAccountId, viewer);
+  if (routines.length === 0) return { today, tasks: [] as Record<string, unknown>[] };
+  for (const r of routines) {
+    if (r.status !== "active") continue;
+    const w = await projectWindow(r, tz);
+    if (runsOn(r, w, today)) await ensureOccurrence(r, today, tz);
+  }
+  const ids = new Set(routines.map((r) => r.id));
+  const docs = await occurrenceTasksInRange(subAccountId, addDaysYmd(today, -30), addDaysYmd(today, EARLY_COMPLETION_DAYS));
+  const tasks = docs
+    .filter((d) => ids.has(d.data().routineId))
+    .filter((d) => d.data().completed === true || d.data().occurrenceDate >= today)
+    .map((d) => taskJson(d.id, d.data()));
+  return { today, tasks };
 }
 
 // ── cron ─────────────────────────────────────────────────────────────────────

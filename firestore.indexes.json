@@ -58,7 +58,7 @@
       ]
     },
     {
-      "collectionGroup": "tasks",
+      "collectionGroup": "routineTasks",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "subAccountId", "order": "ASCENDING" },

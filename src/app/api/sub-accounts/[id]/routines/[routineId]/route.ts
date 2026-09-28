@@ -25,6 +25,7 @@ export async function GET(request: Request, ctx: Ctx) {
         routineId,
         from: url.searchParams.get("from"),
         to: url.searchParams.get("to"),
+        viewer: { uid: access.uid, role: access.subAccountRole ?? null },
       })
     );
   } catch (err) {
@@ -43,8 +44,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const keys = Object.keys(body);
     const routine =
       keys.length === 1 && (body.status === "active" || body.status === "paused")
-        ? await setRoutineStatus({ subAccountId, routineId, status: body.status })
-        : await updateRoutine({ subAccountId, routineId, uid: access.uid, body });
+        ? await setRoutineStatus({ subAccountId, routineId, status: body.status, viewer: { uid: access.uid, role: access.subAccountRole ?? null } })
+        : await updateRoutine({ subAccountId, routineId, viewer: { uid: access.uid, role: access.subAccountRole ?? null }, body });
     return NextResponse.json({ routine });
   } catch (err) {
     return taskErrorResponse(err);
@@ -56,7 +57,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
   try {
-    await deleteRoutine({ subAccountId, routineId });
+    await deleteRoutine({ subAccountId, routineId, viewer: { uid: access.uid, role: access.subAccountRole ?? null } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return taskErrorResponse(err);

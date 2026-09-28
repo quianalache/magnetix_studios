@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarDays, Clock, FolderKanban, MoreHorizontal, Pause, Pencil, Play, Trash2 } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, FolderKanban, Lock, MoreHorizontal, Pause, Pencil, Play, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -89,6 +89,21 @@ export function RoutineDayDot({
   );
 }
 
+/** Private (owner only) vs shared with the workspace. */
+export function RoutineVisibilityBadge({ routine, className }: { routine: RoutineView; className?: string }) {
+  const shared = routine.visibility === "shared";
+  const Icon = shared ? Users : Lock;
+  return (
+    <span
+      className={cn("bg-card/80 text-muted-foreground inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs", className)}
+      title={shared ? (routine.isOwner ? "Shared with everyone in this workspace" : "Shared with you by its owner") : "Private — only you can see it"}
+    >
+      <Icon className="h-3 w-3" />
+      {shared ? "Shared" : "Private"}
+    </span>
+  );
+}
+
 export function RoutineMetaChips({ routine, className }: { routine: RoutineView; className?: string }) {
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
@@ -100,6 +115,7 @@ export function RoutineMetaChips({ routine, className }: { routine: RoutineView;
         <Clock className="text-muted-foreground h-3 w-3" />
         {describeTime(routine.timeMode, routine.timeBlock, routine.time)}
       </span>
+      <RoutineVisibilityBadge routine={routine} />
     </div>
   );
 }
@@ -153,6 +169,7 @@ export function RoutineCard({
             <p className="text-muted-foreground mt-0.5 line-clamp-2 text-sm">{routine.description}</p>
           )}
         </button>
+        {routine.canManage && (
         <DropdownMenu>
           <DropdownMenuTrigger
             render={<Button variant="ghost" size="icon" className="-mt-1 -mr-2 h-8 w-8" aria-label={`${routine.name} actions`} />}
@@ -173,6 +190,7 @@ export function RoutineCard({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </div>
 
       <RoutineMetaChips routine={routine} />

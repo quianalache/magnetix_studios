@@ -58,6 +58,7 @@ import type {
   RoutineView,
 } from "@/types/routines";
 import { RoutineIcon, RoutineProgressBar, routineHex } from "./routine-look";
+import { RoutineVisibilityBadge } from "./routine-card";
 
 type Tab = "overview" | "tasks" | "schedule" | "history";
 
@@ -296,6 +297,7 @@ export function RoutineDetailSheet({
                     {describeSchedule(routine.schedule)} · {describeTime(routine.timeMode, routine.timeBlock, routine.time)}
                   </SheetDescription>
                 </div>
+                {routine.canManage && (
                 <label className="flex shrink-0 items-center gap-2 pt-1 text-sm">
                   <Switch
                     checked={routine.status === "active"}
@@ -305,6 +307,8 @@ export function RoutineDetailSheet({
                   />
                   <span className="hidden sm:inline">{routine.status === "active" ? "Active" : "Paused"}</span>
                 </label>
+                )}
+                {routine.canManage && (
                 <DropdownMenu>
                   <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Routine actions" />}>
                     <MoreHorizontal className="h-4 w-4" />
@@ -318,6 +322,7 @@ export function RoutineDetailSheet({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                )}
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)} aria-label="Close">
                   <X className="h-4 w-4" />
                 </Button>
@@ -359,9 +364,11 @@ export function RoutineDetailSheet({
                     <section>
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-primary text-base font-semibold">Description</h3>
-                        <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onEdit(routine)}>
-                          Edit
-                        </Button>
+                        {routine.canManage && (
+                          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onEdit(routine)}>
+                            Edit
+                          </Button>
+                        )}
                       </div>
                       <p className={cn("mt-1 text-sm", !routine.description && "text-muted-foreground")}>
                         {routine.description || "No description yet."}
@@ -378,6 +385,7 @@ export function RoutineDetailSheet({
                         <MetaChip icon={<FolderKanban className="h-3.5 w-3.5" />}>
                           {routine.projectTitle ?? "No project"}
                         </MetaChip>
+                        <RoutineVisibilityBadge routine={routine} className="rounded-lg px-2.5 py-1" />
                       </div>
                       {routine.status === "paused" && (
                         <p className="bg-muted text-muted-foreground mt-3 rounded-lg px-3 py-2 text-xs">
@@ -539,13 +547,17 @@ export function RoutineDetailSheet({
                         </li>
                       ))}
                     </ol>
-                    <Button variant="outline" size="sm" onClick={() => onEdit(routine, 1)}>
-                      <Pencil className="mr-1.5 h-4 w-4" /> Edit activities
-                    </Button>
+                    {routine.canManage && (
+                      <Button variant="outline" size="sm" onClick={() => onEdit(routine, 1)}>
+                        <Pencil className="mr-1.5 h-4 w-4" /> Edit activities
+                      </Button>
+                    )}
                   </div>
                 )}
 
-                {tab === "schedule" && <ScheduleTab routine={routine} today={today ?? ""} onEdit={() => onEdit(routine, 2)} />}
+                {tab === "schedule" && (
+                  <ScheduleTab routine={routine} today={today ?? ""} onEdit={routine.canManage ? () => onEdit(routine, 2) : null} />
+                )}
 
                 {tab === "history" && <HistoryTab routine={routine} today={today ?? ""} onPick={(d) => { setTab("overview"); goTo(d); }} />}
               </div>
@@ -643,7 +655,7 @@ function DayCell({
   );
 }
 
-function ScheduleTab({ routine, today, onEdit }: { routine: RoutineView; today: string; onEdit: () => void }) {
+function ScheduleTab({ routine, today, onEdit }: { routine: RoutineView; today: string; onEdit: (() => void) | null }) {
   const upcoming = useMemo(
     () =>
       routine.status === "active" && !routine.windowClosed
@@ -702,9 +714,11 @@ function ScheduleTab({ routine, today, onEdit }: { routine: RoutineView; today: 
           Untimed routines appear on the Calendar as all-day items{routine.timeMode === "block" ? " in their time block" : ""}, never as an invented appointment time.
         </p>
       </div>
-      <Button variant="outline" size="sm" onClick={onEdit}>
-        <Pencil className="mr-1.5 h-4 w-4" /> Change schedule
-      </Button>
+      {onEdit && (
+        <Button variant="outline" size="sm" onClick={onEdit}>
+          <Pencil className="mr-1.5 h-4 w-4" /> Change schedule
+        </Button>
+      )}
     </div>
   );
 }
