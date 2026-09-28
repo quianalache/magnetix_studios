@@ -86,6 +86,16 @@ export interface Task {
   /** Momentum OS routine marker for template-generated routines. */
   kind?: "task" | "routine";
   /**
+   * Routines (server). Set only on activity tasks a Routine generates for
+   * one date — see src/types/routines.ts. The task's `occurrenceDate`
+   * (YYYY-MM-DD, sub-account timezone) is its routine date; `dueAt` follows
+   * it and can't be moved independently.
+   */
+  routineId?: string | null;
+  routineName?: string | null;
+  routineActivityId?: string | null;
+  occurrenceDate?: string | null;
+  /**
    * RESERVED for future content connections (Social Planner, Content
    * Library, YouTube Studio). Not read or written by any UI yet.
    */

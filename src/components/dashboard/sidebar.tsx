@@ -52,6 +52,7 @@ import {
   LayoutDashboard,
   Archive,
   Package,
+  Repeat,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -147,7 +148,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
             enabled: true,
             exact: true,
             // A project's own workspace (/projects/{id}) belongs to Overview.
-            activeAlso: /^\/projects\/(?!tasks(?:\/|$)|templates(?:\/|$)|archived(?:\/|$))[^/]+/,
+            activeAlso: /^\/projects\/(?!tasks(?:\/|$)|routines(?:\/|$)|templates(?:\/|$)|archived(?:\/|$))[^/]+/,
           },
           {
             href: "/projects/tasks",
@@ -155,6 +156,12 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
             icon: CheckSquare,
             enabled: true,
             badgeKey: "dueToday",
+          },
+          {
+            href: "/projects/routines",
+            label: "Routines",
+            icon: Repeat,
+            enabled: true,
           },
           {
             href: "/projects/templates",

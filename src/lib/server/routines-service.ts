@@ -1,0 +1,886 @@
+import "server-only";
+
+import { randomBytes } from "node:crypto";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { GLOBAL_TERRITORY_ID } from "@/types";
+import { createTaskServerSide, setTaskCompletedServerSide } from "@/lib/server/tasks-service";
+import { TaskInputError } from "@/lib/server/project-tasks-service";
+import type { TaskActor } from "@/lib/server/task-graph-service";
+import {
+  addDaysYmd,
+  blockForTime,
+  isClock,
+  isYmd,
+  monthEndYmd,
+  monthStartYmd,
+  nextOccurrenceOnOrAfter,
+  normalizeSchedule,
+  occurrencesBetween,
+  occursOn,
+  previousOccurrenceOnOrBefore,
+  ScheduleError,
+  todayInTimeZone,
+  weekStartYmd,
+  zonedDateTimeToUtc,
+  formatYmd,
+} from "@/lib/routines/schedule";
+import {
+  MAX_ROUTINE_ACTIVITIES,
+  ROUTINE_COLOR_KEYS,
+  ROUTINE_ICON_KEYS,
+  type ProjectRoutineItem,
+  type Routine,
+  type RoutineActivity,
+  type RoutineCalendarEntry,
+  type RoutineColorKey,
+  type RoutineDaySummary,
+  type RoutineIconKey,
+  type RoutineListItem,
+  type RoutineOccurrenceTask,
+  type RoutineTimeBlock,
+  type RoutineTimeMode,
+  type RoutineView,
+} from "@/types/routines";
+
+/**
+ * Routines service (Projects & Tasks, 2026-09). See src/types/routines.ts
+ * for the model. The rules this file enforces:
+ *
+ * 1. Occurrence tasks are generated ONLY for a date that has arrived (the
+ *    hourly cron + opening a routine materialize "today"), or when someone
+ *    checks off a specific date. Future dates are projected from the
+ *    schedule, never written — so the Calendar and My Tasks don't fill up
+ *    with months of placeholder tasks.
+ * 2. Ids are deterministic and written with create(), so any number of
+ *    overlapping generations yields exactly one task per activity per date.
+ * 3. Completion is per task, per date. Nothing ever copies a completion
+ *    forward; last week's records are separate documents and stay intact.
+ * 4. Editing or pausing a routine only reconciles UNTOUCHED occurrences
+ *    dated today or later (not completed, no tracked time). Past and
+ *    completed occurrences are history and are never rewritten.
+ */
+
+type Doc = FirebaseFirestore.DocumentData;
+
+const TASK_ID_PREFIX = "rt_";
+/** How far ahead a date may be checked off early (e.g. doing Monday's reset on Sunday). */
+const EARLY_COMPLETION_DAYS = 7;
+/** Max range one read may span (Calendar month grid = 42 days). */
+const MAX_RANGE_DAYS = 62;
+
+export function occurrenceTaskId(routineId: string, date: string, activityId: string): string {
+  return `${TASK_ID_PREFIX}${routineId}_${date.replace(/-/g, "")}_${activityId}`;
+}
+
+function newActivityId(): string {
+  return `a${randomBytes(4).toString("hex")}`;
+}
+
+function toIso(v: unknown): string | null {
+  const t = v as { toDate?: () => Date } | null | undefined;
+  if (t && typeof t.toDate === "function") return t.toDate().toISOString();
+  if (v instanceof Date) return v.toISOString();
+  return null;
+}
+
+function toDate(v: unknown): Date | null {
+  const t = v as { toDate?: () => Date } | null | undefined;
+  if (t && typeof t.toDate === "function") return t.toDate();
+  return v instanceof Date ? v : null;
+}
+
+// ── context ──────────────────────────────────────────────────────────────────
+
+export async function subAccountTimeZone(subAccountId: string): Promise<string> {
+  const snap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
+  return (snap.data()?.timezone as string) || "UTC";
+}
+
+export async function loadRoutine(
+  subAccountId: string,
+  routineId: string
+): Promise<Routine> {
+  if (!routineId || routineId.includes("/")) throw new TaskInputError("Routine not found", 404);
+  const snap = await getAdminDb().doc(`routines/${routineId}`).get();
+  const data = snap.data();
+  // Tenant isolation: a foreign id reads exactly like a missing one.
+  if (!data || data.subAccountId !== subAccountId) {
+    throw new TaskInputError("Routine not found", 404);
+  }
+  return { ...(data as Omit<Routine, "id">), id: snap.id };
+}
+
+interface ProjectWindow {
+  title: string | null;
+  windowEnd: string | null;
+  windowClosed: boolean;
+}
+
+async function projectWindow(
+  routine: Pick<Routine, "projectId" | "endsWithProject" | "schedule" | "subAccountId">,
+  timeZone: string
+): Promise<ProjectWindow> {
+  let title: string | null = null;
+  let projectEnd: string | null = null;
+  let closed = false;
+  if (routine.projectId) {
+    const p = (await getAdminDb().doc(`projects/${routine.projectId}`).get()).data();
+    if (p && p.subAccountId === routine.subAccountId) {
+      title = (p.title as string) ?? null;
+      if (routine.endsWithProject) {
+        const due = toDate(p.dueAt);
+        if (due) projectEnd = todayInTimeZone(timeZone, due);
+        if (p.status && p.status !== "active") closed = true;
+      }
+    } else if (routine.endsWithProject) {
+      closed = true; // project deleted — a project-bound routine has nothing left to follow
+    }
+  }
+  const ends = [routine.schedule.endDate, projectEnd].filter(Boolean) as string[];
+  return { title, windowEnd: ends.length ? ends.sort()[0] : null, windowClosed: closed };
+}
+
+function toView(r: Routine, w: ProjectWindow): RoutineView {
+  const { createdAt, updatedAt, pausedAt: _paused, ...rest } = r;
+  void _paused;
+  return {
+    ...rest,
+    createdAt: toIso(createdAt),
+    updatedAt: toIso(updatedAt),
+    projectTitle: w.title,
+    windowEnd: w.windowEnd,
+    windowClosed: w.windowClosed,
+  };
+}
+
+/** Is `date` a live run date: scheduled AND inside the project window. */
+function runsOn(r: Routine, w: ProjectWindow, date: string): boolean {
+  if (w.windowClosed) return false;
+  if (w.windowEnd && date > w.windowEnd) return false;
+  return occursOn(r.schedule, date);
+}
+
+// ── input ────────────────────────────────────────────────────────────────────
+
+function str(v: unknown, max: number): string {
+  return typeof v === "string" ? v.trim().slice(0, max) : "";
+}
+
+function parseActivities(raw: unknown, existing: RoutineActivity[] = []): RoutineActivity[] {
+  if (!Array.isArray(raw)) throw new TaskInputError("Add at least one activity.");
+  const known = new Set(existing.map((a) => a.id));
+  const seen = new Set<string>();
+  const out: RoutineActivity[] = [];
+  for (const item of raw.slice(0, MAX_ROUTINE_ACTIVITIES)) {
+    const a = (item ?? {}) as Record<string, unknown>;
+    const title = str(a.title, 200);
+    if (!title) continue;
+    // Keep an id the routine already had (so history lines up); mint new ones otherwise.
+    let id = typeof a.id === "string" && known.has(a.id) && !seen.has(a.id) ? a.id : newActivityId();
+    while (seen.has(id)) id = newActivityId();
+    seen.add(id);
+    const est = typeof a.estimateMinutes === "number" ? Math.round(a.estimateMinutes) : Number(a.estimateMinutes);
+    out.push({
+      id,
+      title,
+      estimateMinutes: Number.isFinite(est) && est > 0 ? Math.min(1440, est) : null,
+      notes: str(a.notes, 2000),
+    });
+  }
+  if (out.length === 0) throw new TaskInputError("Add at least one activity.");
+  return out;
+}
+
+async function validateProject(subAccountId: string, projectId: unknown): Promise<string | null> {
+  if (typeof projectId !== "string" || !projectId) return null;
+  const p = (await getAdminDb().doc(`projects/${projectId}`).get()).data();
+  if (!p || p.subAccountId !== subAccountId) throw new TaskInputError("That project wasn't found.");
+  return projectId;
+}
+
+async function validateAssignee(subAccountId: string, uid: unknown, fallback: string | null): Promise<string | null> {
+  if (uid === null) return null;
+  if (typeof uid !== "string" || !uid) return fallback;
+  const m = await getAdminDb().doc(`subAccounts/${subAccountId}/subAccountMembers/${uid}`).get();
+  if (m.exists && m.data()?.status !== "removed") return uid;
+  return fallback;
+}
+
+interface RoutineFields {
+  name: string;
+  description: string;
+  icon: RoutineIconKey;
+  color: RoutineColorKey;
+  schedule: Routine["schedule"];
+  timeMode: RoutineTimeMode;
+  timeBlock: RoutineTimeBlock | null;
+  time: string | null;
+  activities: RoutineActivity[];
+  projectId: string | null;
+  endsWithProject: boolean;
+  assigneeUid: string | null;
+}
+
+async function parseRoutineInput(
+  subAccountId: string,
+  body: Record<string, unknown>,
+  today: string,
+  existing: Routine | null,
+  callerUid: string
+): Promise<RoutineFields> {
+  const pick = <K extends keyof Routine>(k: K): unknown =>
+    k in body ? body[k as string] : existing?.[k];
+
+  const name = str(pick("name"), 120);
+  if (!name) throw new TaskInputError("Give the routine a name.");
+  const icon = ROUTINE_ICON_KEYS.includes(pick("icon") as RoutineIconKey)
+    ? (pick("icon") as RoutineIconKey)
+    : "sparkles";
+  const color = ROUTINE_COLOR_KEYS.includes(pick("color") as RoutineColorKey)
+    ? (pick("color") as RoutineColorKey)
+    : "violet";
+
+  let schedule: Routine["schedule"];
+  try {
+    const raw = (pick("schedule") ?? {}) as Record<string, unknown>;
+    // A routine edited after it started keeps its original anchor unless the editor sends a new one.
+    schedule = normalizeSchedule(
+      { ...raw, startDate: isYmd(raw.startDate) ? raw.startDate : existing?.schedule.startDate ?? today },
+      today
+    );
+  } catch (err) {
+    if (err instanceof ScheduleError) throw new TaskInputError(err.message);
+    throw err;
+  }
+
+  const timeModeRaw = pick("timeMode");
+  const timeMode: RoutineTimeMode =
+    timeModeRaw === "block" || timeModeRaw === "time" ? timeModeRaw : "anytime";
+  const blockRaw = pick("timeBlock");
+  const timeBlock: RoutineTimeBlock | null =
+    timeMode === "block"
+      ? blockRaw === "midday" || blockRaw === "pm" ? blockRaw : "am"
+      : null;
+  const timeRaw = pick("time");
+  if (timeMode === "time" && !isClock(timeRaw)) {
+    throw new TaskInputError("Enter a specific time, or choose Anytime.");
+  }
+  const time = timeMode === "time" ? (timeRaw as string) : null;
+
+  const activities = parseActivities(pick("activities"), existing?.activities ?? []);
+  const projectId = await validateProject(subAccountId, pick("projectId"));
+  const endsWithProject = projectId ? pick("endsWithProject") === true : false;
+  const assigneeUid =
+    "assigneeUid" in body
+      ? await validateAssignee(subAccountId, body.assigneeUid, existing?.assigneeUid ?? callerUid)
+      : existing?.assigneeUid ?? callerUid;
+
+  return {
+    name,
+    description: str(pick("description"), 1000),
+    icon,
+    color,
+    schedule,
+    timeMode,
+    timeBlock,
+    time,
+    activities,
+    projectId,
+    endsWithProject,
+    assigneeUid,
+  };
+}
+
+// ── occurrence generation ────────────────────────────────────────────────────
+
+function occurrenceTiming(r: Routine, date: string, timeZone: string) {
+  if (r.timeMode === "time" && r.time) {
+    return { dueAt: zonedDateTimeToUtc(date, r.time, timeZone), timeBlock: blockForTime(r.time) };
+  }
+  // Untimed: a mid-day anchor keeps the task on the right calendar day in
+  // any nearby timezone. It is NOT an appointment time — the Calendar shows
+  // routines as all-day / time-block items, never as a clock time.
+  return {
+    dueAt: zonedDateTimeToUtc(date, "12:00", timeZone),
+    timeBlock: r.timeMode === "block" && r.timeBlock ? r.timeBlock : ("anytime" as const),
+  };
+}
+
+function isAlreadyExists(err: unknown): boolean {
+  const code = (err as { code?: number | string }).code;
+  return code === 6 || code === "already-exists" || code === "ALREADY_EXISTS";
+}
+
+/**
+ * Makes sure every current activity has its task for `date`. Idempotent:
+ * existing tasks (done or not) are left exactly as they are.
+ */
+export async function ensureOccurrence(r: Routine, date: string, timeZone: string): Promise<number> {
+  const db = getAdminDb();
+  const refs = r.activities.map((a) => db.doc(`tasks/${occurrenceTaskId(r.id, date, a.id)}`));
+  const existing = refs.length ? await db.getAll(...refs) : [];
+  const { dueAt, timeBlock } = occurrenceTiming(r, date, timeZone);
+  let created = 0;
+  for (let i = 0; i < r.activities.length; i++) {
+    if (existing[i]?.exists) continue;
+    const a = r.activities[i];
+    try {
+      await createTaskServerSide({
+        subAccountId: r.subAccountId,
+        agencyId: r.agencyId,
+        createdByUid: r.createdByUid,
+        mode: "live",
+        title: a.title,
+        notes: a.notes,
+        dueAt,
+        contactId: null,
+        dealId: null,
+        eventId: null,
+        timeBlock,
+        territoryIdOverride: GLOBAL_TERRITORY_ID,
+        docId: occurrenceTaskId(r.id, date, a.id),
+        extra: {
+          routineId: r.id,
+          routineName: r.name,
+          routineActivityId: a.id,
+          occurrenceDate: date,
+          status: "todo",
+          priority: null,
+          assigneeUid: r.assigneeUid ?? null,
+          tags: ["routine"],
+          estimateMinutes: a.estimateMinutes,
+          autoRollover: false,
+        },
+      });
+      created++;
+    } catch (err) {
+      if (!isAlreadyExists(err)) throw err;
+    }
+  }
+  return created;
+}
+
+async function occurrenceTasksInRange(
+  subAccountId: string,
+  from: string,
+  to: string
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+  const snap = await getAdminDb()
+    .collection("tasks")
+    .where("subAccountId", "==", subAccountId)
+    .where("occurrenceDate", ">=", from)
+    .where("occurrenceDate", "<=", to)
+    .get();
+  return snap.docs.filter((d) => typeof d.data().routineId === "string");
+}
+
+function untouched(t: Doc): boolean {
+  return t.completed !== true && !(Number(t.timeSpentSeconds) > 0);
+}
+
+/**
+ * After an edit / pause / delete: bring UNTOUCHED occurrences dated today
+ * or later in line with the routine (or remove them), then generate today
+ * if it's a run date. History (past or touched tasks) is never changed.
+ */
+async function reconcileUpcoming(r: Routine | null, routineId: string, subAccountId: string, timeZone: string) {
+  const db = getAdminDb();
+  const today = todayInTimeZone(timeZone);
+  const snap = await db
+    .collection("tasks")
+    .where("subAccountId", "==", subAccountId)
+    .where("occurrenceDate", ">=", today)
+    .get();
+  const w = r ? await projectWindow(r, timeZone) : null;
+  const byActivity = new Map((r?.activities ?? []).map((a) => [a.id, a]));
+  const batch = db.batch();
+  let writes = 0;
+  for (const d of snap.docs) {
+    const t = d.data();
+    if (t.routineId !== routineId || !untouched(t)) continue;
+    const activity = byActivity.get(t.routineActivityId as string);
+    const keep = r && r.status === "active" && w && activity && runsOn(r, w, t.occurrenceDate as string);
+    if (!keep) {
+      batch.delete(d.ref);
+    } else {
+      const { dueAt, timeBlock } = occurrenceTiming(r, t.occurrenceDate as string, timeZone);
+      batch.update(d.ref, {
+        title: activity.title,
+        notes: activity.notes,
+        estimateMinutes: activity.estimateMinutes,
+        routineName: r.name,
+        assigneeUid: r.assigneeUid ?? null,
+        dueAt: Timestamp.fromDate(dueAt),
+        timeBlock,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    writes++;
+    if (writes >= 450) break;
+  }
+  if (writes > 0) await batch.commit();
+  if (r && r.status === "active" && w && runsOn(r, w, today)) await ensureOccurrence(r, today, timeZone);
+}
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+
+export async function createRoutine(opts: {
+  subAccountId: string;
+  agencyId: string;
+  uid: string;
+  body: Record<string, unknown>;
+}): Promise<RoutineView> {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const today = todayInTimeZone(tz);
+  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, null, opts.uid);
+  const ref = getAdminDb().collection("routines").doc();
+  const doc = {
+    ...fields,
+    subAccountId: opts.subAccountId,
+    agencyId: opts.agencyId,
+    status: "active" as const,
+    createdByUid: opts.uid,
+    pausedAt: null,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(doc);
+  const routine = await loadRoutine(opts.subAccountId, ref.id);
+  const w = await projectWindow(routine, tz);
+  if (runsOn(routine, w, today)) await ensureOccurrence(routine, today, tz);
+  return toView(routine, w);
+}
+
+export async function updateRoutine(opts: {
+  subAccountId: string;
+  routineId: string;
+  uid: string;
+  body: Record<string, unknown>;
+}): Promise<RoutineView> {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const today = todayInTimeZone(tz);
+  const existing = await loadRoutine(opts.subAccountId, opts.routineId);
+  const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, existing, opts.uid);
+  const patch: Record<string, unknown> = { ...fields, updatedAt: FieldValue.serverTimestamp() };
+  if (opts.body.status === "active" || opts.body.status === "paused") {
+    patch.status = opts.body.status;
+    if (opts.body.status !== existing.status) {
+      patch.pausedAt = opts.body.status === "paused" ? FieldValue.serverTimestamp() : null;
+    }
+  }
+  await getAdminDb().doc(`routines/${opts.routineId}`).update(patch);
+  const routine = await loadRoutine(opts.subAccountId, opts.routineId);
+  await reconcileUpcoming(routine, routine.id, routine.subAccountId, tz);
+  return toView(routine, await projectWindow(routine, tz));
+}
+
+export async function setRoutineStatus(opts: {
+  subAccountId: string;
+  routineId: string;
+  status: "active" | "paused";
+}): Promise<RoutineView> {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const existing = await loadRoutine(opts.subAccountId, opts.routineId);
+  if (existing.status !== opts.status) {
+    await getAdminDb()
+      .doc(`routines/${opts.routineId}`)
+      .update({
+        status: opts.status,
+        pausedAt: opts.status === "paused" ? FieldValue.serverTimestamp() : null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+  }
+  const routine = await loadRoutine(opts.subAccountId, opts.routineId);
+  await reconcileUpcoming(routine, routine.id, routine.subAccountId, tz);
+  return toView(routine, await projectWindow(routine, tz));
+}
+
+/** Deletes the definition + untouched upcoming activities. Completed and past activity tasks stay as task history. */
+export async function deleteRoutine(opts: { subAccountId: string; routineId: string }) {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  await loadRoutine(opts.subAccountId, opts.routineId);
+  await reconcileUpcoming(null, opts.routineId, opts.subAccountId, tz);
+  await getAdminDb().doc(`routines/${opts.routineId}`).delete();
+}
+
+// ── reads ────────────────────────────────────────────────────────────────────
+
+function summarize(
+  r: Routine,
+  w: ProjectWindow,
+  dates: string[],
+  tasksByDate: Map<string, Doc[]>,
+  today: string
+): RoutineDaySummary[] {
+  return dates.map((date) => {
+    const tasks = tasksByDate.get(date) ?? [];
+    const scheduled = runsOn(r, w, date) || (r.status === "paused" && occursOn(r.schedule, date) && date < today);
+    return {
+      date,
+      scheduled,
+      recorded: tasks.length > 0,
+      done: tasks.filter((t) => t.completed === true).length,
+      total: tasks.length > 0 ? tasks.length : scheduled ? r.activities.length : 0,
+    };
+  });
+}
+
+function groupByRoutineAndDate(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
+  const map = new Map<string, Map<string, Doc[]>>();
+  for (const d of docs) {
+    const t = d.data();
+    const byDate = map.get(t.routineId) ?? new Map<string, Doc[]>();
+    const arr = byDate.get(t.occurrenceDate) ?? [];
+    arr.push({ ...t, id: d.id });
+    byDate.set(t.occurrenceDate, arr);
+    map.set(t.routineId, byDate);
+  }
+  return map;
+}
+
+function rangeDates(from: string, to: string): string[] {
+  const out: string[] = [];
+  for (let d = from; d <= to; d = addDaysYmd(d, 1)) out.push(d);
+  return out;
+}
+
+export async function listRoutines(subAccountId: string): Promise<{
+  today: string;
+  routines: RoutineListItem[];
+  projectRoutines: ProjectRoutineItem[];
+}> {
+  const db = getAdminDb();
+  const tz = await subAccountTimeZone(subAccountId);
+  const today = todayInTimeZone(tz);
+  const snap = await db.collection("routines").where("subAccountId", "==", subAccountId).get();
+  const routines = snap.docs.map((d) => ({ ...(d.data() as Omit<Routine, "id">), id: d.id }));
+
+  const weekStart = weekStartYmd(today);
+  const weekEnd = addDaysYmd(weekStart, 6);
+  const from = [weekStart, monthStartYmd(today)].sort()[0];
+  const to = [weekEnd, monthEndYmd(today)].sort()[1];
+  const grouped = groupByRoutineAndDate(routines.length ? await occurrenceTasksInRange(subAccountId, from, to) : []);
+
+  // Generate today for any routine the cron hasn't reached yet this hour.
+  const items: RoutineListItem[] = [];
+  for (const r of routines) {
+    const w = await projectWindow(r, tz);
+    let byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
+    if (r.status === "active" && runsOn(r, w, today) && (byDate.get(today)?.length ?? 0) < r.activities.length) {
+      if ((await ensureOccurrence(r, today, tz)) > 0) {
+        const fresh = await occurrenceTasksInRange(subAccountId, today, today);
+        byDate = new Map(byDate);
+        byDate.set(today, fresh.filter((d) => d.data().routineId === r.id).map((d) => ({ ...d.data(), id: d.id })));
+      }
+    }
+    const week = summarize(r, w, rangeDates(weekStart, weekEnd), byDate, today);
+    let progress: RoutineListItem["progress"];
+    if (r.schedule.unit === "month") {
+      const monthDays = summarize(r, w, rangeDates(monthStartYmd(today), monthEndYmd(today)), byDate, today).filter(
+        (d) => d.scheduled || d.recorded
+      );
+      progress = {
+        label: "This Month's Progress",
+        done: monthDays.reduce((s, d) => s + d.done, 0),
+        total: monthDays.reduce((s, d) => s + d.total, 0),
+        date: null,
+      };
+    } else {
+      const todays = week.find((d) => d.date === today);
+      if (todays && (todays.scheduled || todays.recorded)) {
+        progress = { label: "Today's Progress", done: todays.done, total: todays.total, date: today };
+      } else {
+        const last = previousOccurrenceOnOrBefore(r.schedule, addDaysYmd(today, -1), 62);
+        const lastTasks = last ? byDate.get(last) : undefined;
+        progress = last
+          ? {
+              label: `Last: ${formatYmd(last)}`,
+              done: lastTasks?.filter((t) => t.completed === true).length ?? 0,
+              total: lastTasks?.length || r.activities.length,
+              date: last,
+            }
+          : { label: "Not started yet", done: 0, total: r.activities.length, date: null };
+      }
+    }
+    items.push({
+      routine: toView(r, w),
+      today,
+      progress,
+      week,
+      nextDate:
+        r.status === "active" && !w.windowClosed
+          ? nextOccurrenceOnOrAfter(r.schedule, today, w.windowEnd)
+          : null,
+    });
+  }
+
+  return { today, routines: items, projectRoutines: await listProjectRoutines(subAccountId) };
+}
+
+/** Momentum OS template routines live as recurring project tasks — listed read-only, never migrated. */
+async function listProjectRoutines(subAccountId: string): Promise<ProjectRoutineItem[]> {
+  const db = getAdminDb();
+  const projects = await db.collection("projects").where("subAccountId", "==", subAccountId).get();
+  const active = projects.docs.filter((p) => p.data().taskModel === "tasks" && p.data().status === "active");
+  const out: ProjectRoutineItem[] = [];
+  for (const p of active.slice(0, 50)) {
+    const tasks = await db
+      .collection("tasks")
+      .where("subAccountId", "==", subAccountId)
+      .where("projectId", "==", p.id)
+      .get();
+    for (const t of tasks.docs) {
+      const d = t.data();
+      if (d.kind !== "routine" || d.completed === true || !d.recurrence?.type) continue;
+      out.push({
+        taskId: t.id,
+        title: d.title ?? "",
+        projectId: p.id,
+        projectTitle: (p.data().title as string) ?? "",
+        recurrenceType: d.recurrence.type,
+        timeBlock: d.timeBlock ?? null,
+        estimateMinutes: d.estimateMinutes ?? null,
+        dueAt: toIso(d.dueAt),
+      });
+    }
+  }
+  return out;
+}
+
+function serializeOccurrence(id: string, t: Doc): RoutineOccurrenceTask {
+  return {
+    id,
+    title: t.title ?? "",
+    notes: t.notes ?? "",
+    completed: t.completed === true,
+    completedAt: toIso(t.completedAt),
+    estimateMinutes: t.estimateMinutes ?? null,
+    timeSpentSeconds: Number(t.timeSpentSeconds) || 0,
+    activityId: t.routineActivityId,
+    date: t.occurrenceDate,
+  };
+}
+
+function checkRange(from: unknown, to: unknown): { from: string; to: string } {
+  if (!isYmd(from) || !isYmd(to) || to < from) throw new TaskInputError("Invalid date range");
+  if (addDaysYmd(from, MAX_RANGE_DAYS) < to) throw new TaskInputError("Date range is too long");
+  return { from, to };
+}
+
+/** Routine + per-date summaries + the activity tasks for a range (a week, or a month for monthly routines). */
+export async function getRoutineDetail(opts: {
+  subAccountId: string;
+  routineId: string;
+  from: unknown;
+  to: unknown;
+}) {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const today = todayInTimeZone(tz);
+  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const w = await projectWindow(r, tz);
+  const { from, to } = checkRange(opts.from, opts.to);
+  if (r.status === "active" && runsOn(r, w, today) && from <= today && today <= to) {
+    await ensureOccurrence(r, today, tz);
+  }
+  const docs = (await occurrenceTasksInRange(opts.subAccountId, from, to)).filter(
+    (d) => d.data().routineId === r.id
+  );
+  const byDate = groupByRoutineAndDate(docs).get(r.id) ?? new Map();
+  return {
+    today,
+    routine: toView(r, w),
+    days: summarize(r, w, rangeDates(from, to), byDate, today),
+    tasks: docs.map((d) => serializeOccurrence(d.id, d.data())),
+    nextDate: r.status === "active" && !w.windowClosed ? nextOccurrenceOnOrAfter(r.schedule, today, w.windowEnd) : null,
+  };
+}
+
+/**
+ * Past occurrences, newest first: every scheduled date since the routine
+ * started, plus any recorded date the current schedule no longer covers.
+ * `before` pages backwards.
+ */
+export async function getRoutineHistory(opts: {
+  subAccountId: string;
+  routineId: string;
+  before?: unknown;
+}) {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const today = todayInTimeZone(tz);
+  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const w = await projectWindow(r, tz);
+  const to = isYmd(opts.before) ? addDaysYmd(opts.before, -1) : today;
+  const created = toDate(r.createdAt);
+  const floor = [r.schedule.startDate, created ? todayInTimeZone(tz, created) : r.schedule.startDate].sort()[0];
+  const from = [addDaysYmd(to, -(MAX_RANGE_DAYS * 2)), floor].sort()[1];
+  if (to < from) return { entries: [], nextBefore: null };
+  const docs = (await occurrenceTasksInRange(opts.subAccountId, from, to)).filter(
+    (d) => d.data().routineId === r.id
+  );
+  const byDate = groupByRoutineAndDate(docs).get(r.id) ?? new Map<string, Doc[]>();
+  const dates = new Set<string>(byDate.keys());
+  for (const d of occurrencesBetween(r.schedule, [from, r.schedule.startDate].sort()[1], to, w.windowEnd)) {
+    dates.add(d);
+  }
+  const sorted = [...dates].sort().reverse();
+  const entries = summarize(r, w, sorted.slice(0, 30), byDate, today).map((s) => ({
+    ...s,
+    total: s.total || (byDate.get(s.date)?.length ?? 0),
+  }));
+  const reachedStart = from <= floor;
+  const oldest = sorted.length > 30 ? sorted[29] : from;
+  return { entries, nextBefore: reachedStart && sorted.length <= 30 ? null : oldest };
+}
+
+// ── completion ───────────────────────────────────────────────────────────────
+
+async function assertCompletableDate(r: Routine, date: unknown, tz: string): Promise<string> {
+  if (!isYmd(date)) throw new TaskInputError("Invalid date");
+  const today = todayInTimeZone(tz);
+  if (date > addDaysYmd(today, EARLY_COMPLETION_DAYS)) {
+    throw new TaskInputError("You can check off this date closer to the day.");
+  }
+  const w = await projectWindow(r, tz);
+  if (!occursOn(r.schedule, date) || (w.windowEnd && date > w.windowEnd)) {
+    // A date the schedule no longer covers can still be worked on if it was recorded.
+    const anyRecorded = (await occurrenceTasksInRange(r.subAccountId, date, date)).some(
+      (d) => d.data().routineId === r.id
+    );
+    if (!anyRecorded) throw new TaskInputError("This routine isn't scheduled on that date.");
+  }
+  return date;
+}
+
+export async function setRoutineActivityCompleted(opts: {
+  subAccountId: string;
+  routineId: string;
+  date: unknown;
+  activityId: unknown;
+  completed: boolean;
+  actor: TaskActor & { kind: "staff" };
+}) {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const date = await assertCompletableDate(r, opts.date, tz);
+  if (typeof opts.activityId !== "string") throw new TaskInputError("Invalid activity");
+  const taskId = occurrenceTaskId(r.id, date, opts.activityId);
+  let snap = await getAdminDb().doc(`tasks/${taskId}`).get();
+  if (!snap.exists) {
+    if (!r.activities.some((a) => a.id === opts.activityId)) throw new TaskInputError("Activity not found", 404);
+    if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
+    snap = await getAdminDb().doc(`tasks/${taskId}`).get();
+    if (!snap.exists) throw new TaskInputError("Activity not found", 404);
+  }
+  const res = await setTaskCompletedServerSide({
+    taskId,
+    completed: opts.completed,
+    userId: opts.actor.uid,
+    expectedSubAccountId: opts.subAccountId,
+    actor: opts.actor,
+  });
+  if (!res) throw new TaskInputError("Activity not found", 404);
+  return { taskId };
+}
+
+/** "Mark All Complete" for one date — completes every open activity of THAT date only. */
+export async function completeRoutineDate(opts: {
+  subAccountId: string;
+  routineId: string;
+  date: unknown;
+  actor: TaskActor & { kind: "staff" };
+}) {
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const r = await loadRoutine(opts.subAccountId, opts.routineId);
+  const date = await assertCompletableDate(r, opts.date, tz);
+  if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
+  const docs = (await occurrenceTasksInRange(opts.subAccountId, date, date)).filter(
+    (d) => d.data().routineId === r.id && d.data().completed !== true
+  );
+  for (const d of docs) {
+    await setTaskCompletedServerSide({
+      taskId: d.id,
+      completed: true,
+      userId: opts.actor.uid,
+      expectedSubAccountId: opts.subAccountId,
+      actor: opts.actor,
+    });
+  }
+  return { completed: docs.length };
+}
+
+// ── calendar ─────────────────────────────────────────────────────────────────
+
+/**
+ * Routine entries for the Calendar: one per routine per run date (projected
+ * from the schedule — nothing is written for future dates), plus recorded
+ * past dates. Untimed routines carry no clock time.
+ */
+export async function routineCalendarEntries(opts: {
+  subAccountId: string;
+  from: unknown;
+  to: unknown;
+}): Promise<RoutineCalendarEntry[]> {
+  const { from, to } = checkRange(opts.from, opts.to);
+  const tz = await subAccountTimeZone(opts.subAccountId);
+  const today = todayInTimeZone(tz);
+  const snap = await getAdminDb().collection("routines").where("subAccountId", "==", opts.subAccountId).get();
+  if (snap.empty) return [];
+  const grouped = groupByRoutineAndDate(await occurrenceTasksInRange(opts.subAccountId, from, to));
+  const out: RoutineCalendarEntry[] = [];
+  for (const d of snap.docs) {
+    const r = { ...(d.data() as Omit<Routine, "id">), id: d.id };
+    const w = await projectWindow(r, tz);
+    const byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
+    const dates = new Set<string>(byDate.keys());
+    if (r.status === "active") {
+      for (const date of occurrencesBetween(r.schedule, [from, today].sort()[1], to, w.windowEnd)) {
+        if (!w.windowClosed) dates.add(date);
+      }
+    }
+    for (const date of [...dates].sort()) {
+      const tasks = byDate.get(date) ?? [];
+      out.push({
+        routineId: r.id,
+        name: r.name,
+        icon: r.icon,
+        color: r.color,
+        date,
+        timeMode: r.timeMode,
+        timeBlock: r.timeBlock,
+        time: r.time,
+        done: tasks.filter((t) => t.completed === true).length,
+        total: tasks.length || r.activities.length,
+      });
+    }
+  }
+  return out;
+}
+
+// ── cron ─────────────────────────────────────────────────────────────────────
+
+/** Hourly: generate today's activities for every active routine whose run date it is. */
+export async function runRoutineGeneration(now = new Date()) {
+  const db = getAdminDb();
+  const snap = await db.collection("routines").where("status", "==", "active").get();
+  const tzCache = new Map<string, string>();
+  let checked = 0;
+  let created = 0;
+  for (const d of snap.docs) {
+    checked++;
+    const r = { ...(d.data() as Omit<Routine, "id">), id: d.id };
+    try {
+      let tz = tzCache.get(r.subAccountId);
+      if (!tz) {
+        tz = await subAccountTimeZone(r.subAccountId);
+        tzCache.set(r.subAccountId, tz);
+      }
+      const today = todayInTimeZone(tz, now);
+      const w = await projectWindow(r, tz);
+      if (runsOn(r, w, today)) created += await ensureOccurrence(r, today, tz);
+    } catch (err) {
+      console.warn("[routines] generation failed", r.id, err);
+    }
+  }
+  return { checked, created };
+}

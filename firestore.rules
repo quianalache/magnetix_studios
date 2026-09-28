@@ -960,11 +960,16 @@ service cloud.firestore {
       return ["projectId", "parentTaskId", "assigneeContactId", "visibility",
         "timeSpentSeconds", "clientTimeSeconds", "rolledOverCount",
         "originalDueAt", "recurrenceSeriesId", "occurrenceIndex",
-        "createdByMemberId", "kind"];
+        "createdByMemberId", "kind",
+        // Routines: activity tasks are generated server-side per date.
+        "routineId", "routineName", "routineActivityId", "occurrenceDate"];
     }
+    // Plain CRM tasks the browser may still edit / delete directly. Project
+    // tasks, subtasks and routine activities go through the server routes.
     function isStandaloneTaskData(data) {
       return data.get("projectId", null) == null
-        && data.get("parentTaskId", null) == null;
+        && data.get("parentTaskId", null) == null
+        && data.get("routineId", null) == null;
     }
 
     match /tasks/{taskId} {

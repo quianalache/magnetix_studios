@@ -54,7 +54,9 @@ function toTimeInput(d: Date): string {
  * instead. Standalone tasks keep this dialog exactly as before.
  */
 export function TaskDialog(props: TaskDialogProps) {
-  if (props.task && (props.task.projectId || props.task.parentTaskId)) {
+  // Project tasks, subtasks and routine activities can only change through
+  // the server routes (firestore.rules), so they open the full Task Detail.
+  if (props.task && (props.task.projectId || props.task.parentTaskId || props.task.routineId)) {
     return (
       <TaskDetailModal
         taskId={props.task.id}

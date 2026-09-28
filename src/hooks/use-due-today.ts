@@ -40,6 +40,9 @@ export function useDueTodayCount(): number {
           if (t.completed) continue;
           const d = toDate(t.dueAt);
           if (!d) continue;
+          // A routine activity from a past day is a missed occurrence (kept in
+          // the routine's history), not overdue work — same as My Tasks.
+          if (t.routineId && d.getTime() < today.getTime()) continue;
           // overdue or due today
           if (d.getTime() < nextDay.getTime() || d.getTime() < now) {
             n += 1;

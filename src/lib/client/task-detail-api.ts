@@ -41,6 +41,10 @@ export interface TaskJson {
   visibility?: "client" | "internal" | null;
   createdByMemberId?: string | null;
   kind?: string;
+  routineId?: string | null;
+  routineName?: string | null;
+  routineActivityId?: string | null;
+  occurrenceDate?: string | null;
   createdAt?: string | null;
 }
 

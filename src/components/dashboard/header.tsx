@@ -52,6 +52,7 @@ const TITLES: Array<[RegExp, string]> = [
   [/^\/sa\/[^/]+\/calendar/, "Calendar"],
   [/^\/sa\/[^/]+\/tasks/, "Tasks"],
   [/^\/sa\/[^/]+\/projects\/tasks/, "My Tasks"],
+  [/^\/sa\/[^/]+\/projects\/routines/, "Routines"],
   [/^\/sa\/[^/]+\/projects\/templates/, "Project templates"],
   [/^\/sa\/[^/]+\/projects\/archived/, "Archived projects"],
   [/^\/sa\/[^/]+\/projects\/[^/]+/, "Project"],

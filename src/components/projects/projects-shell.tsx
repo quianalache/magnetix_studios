@@ -7,15 +7,16 @@ import {
   FolderKanban,
   LayoutDashboard,
   LayoutTemplate,
+  Repeat,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { cn } from "@/lib/utils";
 
-export type ProjectsSection = "overview" | "tasks" | "templates" | "archived";
+export type ProjectsSection = "overview" | "tasks" | "routines" | "templates" | "archived";
 
 /**
  * Shared header + section tabs for the Projects module (approved redesign,
- * Sept 2026): Overview · My Tasks · Templates · Archived. Assets is
+ * Sept 2026): Overview · My Tasks · Routines · Templates · Archived. Assets is
  * deliberately NOT a tab here — it is moving to its own top-level module
  * (approved change A). The same four destinations are nested under
  * Projects in the sidebar.
@@ -33,6 +34,7 @@ export const PROJECTS_SECTIONS: {
     icon: LayoutDashboard,
   },
   { id: "tasks", label: "My Tasks", href: "/projects/tasks", icon: ListChecks },
+  { id: "routines", label: "Routines", href: "/projects/routines", icon: Repeat },
   {
     id: "templates",
     label: "Templates",
@@ -52,10 +54,15 @@ export function ProjectsShell({
   actions,
   children,
   wide = false,
+  heading = "Projects",
+  subheading = "Plan, manage, and deliver your work — from ideas to implementation.",
 }: {
   active: ProjectsSection;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  /** Section pages (Routines) may name themselves; defaults to "Projects". */
+  heading?: string;
+  subheading?: string;
   /** Template library with its docked preview needs the extra room. */
   wide?: boolean;
 }) {
@@ -76,11 +83,8 @@ export function ProjectsShell({
             <FolderKanban className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Plan, manage, and deliver your work — from ideas to
-              implementation.
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">{heading}</h1>
+            <p className="text-muted-foreground mt-1 text-sm">{subheading}</p>
           </div>
         </div>
         {actions && <div className="flex shrink-0 gap-2">{actions}</div>}

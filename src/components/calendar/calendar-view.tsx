@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarClock,
+  Repeat,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -20,6 +22,11 @@ import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Task } from "@/types/tasks";
 import type { ExternalCalendarEvent } from "@/types/google-calendar";
+import type { RoutineCalendarEntry } from "@/types/routines";
+import { useOptionalSubAccount } from "@/context/sub-account-context";
+import { routineCalendarApi } from "@/lib/client/routines-api";
+import { blockForTime, formatClock } from "@/lib/routines/schedule";
+import { routineHex } from "@/components/routines/routine-look";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 type CalendarViewMode = "month" | "week" | "day";
@@ -38,12 +45,35 @@ interface CalendarViewProps {
 }
 
 type DayItem =
+  | { kind: "routine"; entry: RoutineCalendarEntry }
   | { kind: "event"; event: CalendarEvent }
   | { kind: "task"; task: Task }
   | { kind: "google"; event: ExternalCalendarEvent };
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** Same key for a routine's YYYY-MM-DD calendar date. */
+function ymdDayKey(ymd: string): string {
+  return `${Number(ymd.slice(0, 4))}-${Number(ymd.slice(5, 7)) - 1}-${Number(ymd.slice(8, 10))}`;
+}
+
+function toLocalYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** All-day routines first, then AM / Midday / PM blocks, then clock times. */
+function routineRank(e: RoutineCalendarEntry): string {
+  if (e.timeMode === "time" && e.time) return `3${e.time}`;
+  if (e.timeMode === "block" && e.timeBlock) return `2${{ am: 0, midday: 1, pm: 2 }[e.timeBlock]}`;
+  return "1";
+}
+
+function routineWhen(e: RoutineCalendarEntry): string | null {
+  if (e.timeMode === "time" && e.time) return formatClock(e.time).replace(":00", "").replace(" ", "").toLowerCase();
+  if (e.timeMode === "block" && e.timeBlock) return e.timeBlock === "midday" ? "Midday" : e.timeBlock.toUpperCase();
+  return null; // untimed = all-day; never an invented clock time
 }
 
 function dayOnly(d: Date): Date {
@@ -93,6 +123,9 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
   const [defaultDate, setDefaultDate] = useState<Date | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const router = useRouter();
+  const subAccount = useOptionalSubAccount();
+  const [routineEntries, setRoutineEntries] = useState<RoutineCalendarEntry[]>([]);
 
   const title = useMemo(() => {
     if (view === "month") {
@@ -122,6 +155,31 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
     return [cursor];
   }, [cursor, view]);
 
+  // Routines come from their schedules (future dates are projected, never
+  // written), so they're fetched for the visible range rather than
+  // subscribed like tasks. Their generated activity tasks are shown through
+  // these entries instead of as separate task chips.
+  const rangeFrom = days.length ? toLocalYmd(days[0]) : "";
+  const rangeTo = days.length ? toLocalYmd(days[days.length - 1]) : "";
+  const subAccountId = subAccount?.subAccountId ?? null;
+  useEffect(() => {
+    if (!subAccountId || !rangeFrom) return;
+    let cancelled = false;
+    routineCalendarApi(subAccountId, rangeFrom, rangeTo)
+      .then((r) => !cancelled && setRoutineEntries(r.entries))
+      .catch(() => !cancelled && setRoutineEntries([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [subAccountId, rangeFrom, rangeTo]);
+  const calendarTasks = useMemo(() => tasks.filter((t) => !t.routineId), [tasks]);
+
+  function openRoutine(entry: RoutineCalendarEntry, e: React.MouseEvent) {
+    e.stopPropagation();
+    const path = `/projects/routines?routine=${encodeURIComponent(entry.routineId)}&date=${entry.date}`;
+    router.push(subAccount ? subAccount.saPath(path) : path);
+  }
+
   const cols = view === "day" ? 1 : 7;
   const rows = view === "month" ? 6 : 1;
 
@@ -143,7 +201,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
       arr.push({ kind: "google", event: ge });
       map.set(key, arr);
     }
-    for (const t of tasks) {
+    for (const t of calendarTasks) {
       if (t.completed) continue;
       const due = toDate(t.dueAt);
       if (!due) continue;
@@ -152,10 +210,19 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
       arr.push({ kind: "task", task: t });
       map.set(key, arr);
     }
-    const kindRank: Record<DayItem["kind"], number> = { event: 0, google: 1, task: 2 };
+    for (const entry of routineEntries) {
+      const key = ymdDayKey(entry.date);
+      const arr = map.get(key) ?? [];
+      arr.push({ kind: "routine", entry });
+      map.set(key, arr);
+    }
+    const kindRank: Record<DayItem["kind"], number> = { routine: 0, event: 1, google: 2, task: 3 };
     for (const arr of map.values()) {
       arr.sort((a, b) => {
         if (a.kind !== b.kind) return kindRank[a.kind] - kindRank[b.kind];
+        if (a.kind === "routine" && b.kind === "routine") {
+          return routineRank(a.entry).localeCompare(routineRank(b.entry));
+        }
         if (a.kind === "event" && b.kind === "event") {
           return (
             (toDate(a.event.startAt)?.getTime() ?? 0) -
@@ -172,7 +239,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
       });
     }
     return map;
-  }, [events, googleEvents, tasks]);
+  }, [events, googleEvents, calendarTasks, routineEntries]);
 
   const contactById = useMemo(() => {
     const m = new Map<string, Contact>();
@@ -181,7 +248,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
   }, [contacts]);
 
   const upcomingDeadlines = useMemo(() => {
-    return tasks
+    return calendarTasks
       .filter((t) => !t.completed)
       .map((t) => ({ task: t, due: toDate(t.dueAt) }))
       .filter(
@@ -190,10 +257,10 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
       )
       .sort((a, b) => a.due.getTime() - b.due.getTime())
       .slice(0, 4);
-  }, [tasks, today]);
+  }, [calendarTasks, today]);
 
   const todaysTimeBlocks = useMemo(() => {
-    const dueToday = tasks
+    const dueToday = calendarTasks
       .filter((t) => !t.completed)
       .map((t) => ({ task: t, due: toDate(t.dueAt) }))
       .filter(
@@ -208,9 +275,23 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
             x.task.timeBlock === block.value ||
             (!x.task.timeBlock && block.value === "anytime"),
         )
-        .map((x) => x.task.title),
+        .map((x) => x.task.title)
+        .concat(
+          routineEntries
+            .filter(
+              (e) =>
+                e.date === toLocalYmd(today) &&
+                e.done < e.total &&
+                (e.timeMode === "time" && e.time
+                  ? blockForTime(e.time)
+                  : e.timeMode === "block" && e.timeBlock
+                    ? e.timeBlock
+                    : "anytime") === block.value,
+            )
+            .map((e) => `${e.name} (${e.done}/${e.total})`),
+        ),
     }));
-  }, [tasks, today]);
+  }, [calendarTasks, routineEntries, today]);
 
   const searchQuery = search.trim().toLowerCase();
   const searchResults = useMemo(() => {
@@ -505,6 +586,34 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
 
                     <div className="space-y-1">
                       {visible.map((item) => {
+                        if (item.kind === "routine") {
+                          const e = item.entry;
+                          const hex = routineHex(e.color);
+                          const when = routineWhen(e);
+                          const complete = e.total > 0 && e.done >= e.total;
+                          return (
+                            <button
+                              key={`routine-${e.routineId}-${e.date}`}
+                              type="button"
+                              onClick={(ev) => openRoutine(e, ev)}
+                              title={`${e.name} · ${when ?? "All day"} · ${e.done}/${e.total} done`}
+                              className="flex w-full items-center gap-1 truncate rounded-md border px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-colors hover:brightness-95"
+                              style={{
+                                background: `color-mix(in oklab, ${hex} 12%, var(--background))`,
+                                borderColor: `color-mix(in oklab, ${hex} 30%, transparent)`,
+                              }}
+                            >
+                              <Repeat className="h-3 w-3 shrink-0" style={{ color: hex }} aria-hidden />
+                              {when && <span className="shrink-0 text-muted-foreground">{when}</span>}
+                              <span className={cn("truncate", complete && "text-muted-foreground line-through")}>
+                                {e.name}
+                              </span>
+                              <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
+                                {e.done}/{e.total}
+                              </span>
+                            </button>
+                          );
+                        }
                         if (item.kind === "event") {
                           const ev = item.event;
                           const start = toDate(ev.startAt);

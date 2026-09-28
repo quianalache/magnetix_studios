@@ -206,7 +206,8 @@ function TaskDetailBody({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={copyLink}><Link2 className="mr-2 h-4 w-4" /> Copy link</DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {!task.routineId && <DropdownMenuSeparator />}
+            {!task.routineId && (
             <DropdownMenuItem
               onClick={async () => {
                 if (!confirm(`Delete “${task.title}”${bundle.subtasks.length ? " and its subtasks" : ""}? This can't be undone.`)) return;
@@ -221,6 +222,7 @@ function TaskDetailBody({
             >
               <Trash2 className="mr-2 h-4 w-4" /> Delete task
             </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
@@ -234,7 +236,9 @@ function TaskDetailBody({
           <PrimaryFields bundle={bundle} status={status} onChanged={reload} />
           <Description bundle={bundle} onChanged={reload} />
           <div className="space-y-3">
-            <SubtasksSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />
+            {!task.routineId && (
+              <SubtasksSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />
+            )}
             <ChecklistSection bundle={bundle} onChanged={reload} />
             <AttachmentsSection bundle={bundle} onChanged={reload} />
             <ConnectionsSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />
@@ -354,6 +358,20 @@ function TitleRow({
             >
               Rolled over {rolled} {rolled === 1 ? "time" : "times"}
             </span>
+          )}
+          {task.routineId && (
+            <a
+              href={`/sa/${task.subAccountId}/projects/routines?routine=${encodeURIComponent(task.routineId)}${task.occurrenceDate ? `&date=${task.occurrenceDate}` : ""}`}
+              className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-700 hover:bg-violet-500/15 dark:text-violet-300"
+            >
+              <Repeat className="h-3 w-3" />
+              {task.routineName || "Routine"}
+              {task.occurrenceDate && (
+                <span className="opacity-75">
+                  · {new Date(`${task.occurrenceDate}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" })}
+                </span>
+              )}
+            </a>
           )}
           {task.recurrence && (
             <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
@@ -503,6 +521,17 @@ function PrimaryFields({
         </div>
         <div>
           <FieldLabel>Due date</FieldLabel>
+          {task.routineId ? (
+            <div
+              className="border-input bg-muted/40 text-muted-foreground flex h-10 items-center gap-2 rounded-lg border px-3 text-sm"
+              title="Routine activities follow the routine's schedule."
+            >
+              <CalendarDays className="h-4 w-4" />
+              {task.occurrenceDate
+                ? new Date(`${task.occurrenceDate}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+                : "Set by routine"}
+            </div>
+          ) : (
           <label className="border-input focus-within:ring-ring/40 flex h-10 items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-2">
             <CalendarDays className="text-muted-foreground h-4 w-4" />
             <input
@@ -513,6 +542,7 @@ function PrimaryFields({
               className="min-w-0 flex-1 bg-transparent outline-none"
             />
           </label>
+          )}
         </div>
         <div>
           <FieldLabel>Time block</FieldLabel>
@@ -542,6 +572,11 @@ function PrimaryFields({
         </div>
         <div>
           <FieldLabel>Repeat</FieldLabel>
+          {task.routineId ? (
+            <div className="border-input bg-muted/40 text-muted-foreground flex h-10 items-center gap-2 rounded-lg border px-3 text-sm">
+              <Repeat className="h-4 w-4" /> Follows the routine
+            </div>
+          ) : (
           <DropdownMenu>
             <SelectButton label="Repeat">
               <Repeat className="text-muted-foreground h-4 w-4" />
@@ -557,10 +592,12 @@ function PrimaryFields({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        {!task.routineId && (
         <label className="flex min-h-10 items-center gap-2 text-sm">
           <Switch
             checked={task.autoRollover === true}
@@ -572,6 +609,7 @@ function PrimaryFields({
             <Info className="text-muted-foreground h-3.5 w-3.5" />
           </span>
         </label>
+        )}
         {clientProject && (
           <button
             type="button"

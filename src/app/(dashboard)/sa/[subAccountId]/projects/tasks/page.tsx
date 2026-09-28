@@ -13,6 +13,7 @@ import {
   List,
   MoreHorizontal,
   Plus,
+  Repeat,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
@@ -262,7 +263,11 @@ export default function MyTasksPage() {
   const { withStatus, counts, today } = useMemo(() => {
     const now = Date.now();
     const todayMs = dayStart(new Date());
-    const rows = tasks.map((t) => ({ t, status: taskStatus(t, now, todayMs) }));
+    const rows = tasks
+      .map((t) => ({ t, status: taskStatus(t, now, todayMs) }))
+      // A routine activity whose day has passed unfinished is a missed
+      // occurrence — it stays in the routine's history, not in Overdue.
+      .filter((r) => !(r.t.routineId && r.status === "overdue"));
     const c = { overdue: 0, today: 0, upcoming: 0, done: 0 };
     for (const r of rows) {
       if (r.status === "overdue") c.overdue++;
@@ -626,6 +631,15 @@ export default function MyTasksPage() {
                           >
                             <span className={cn("h-3.5 w-1 shrink-0 rounded-full", project.assignedContactId ? "bg-teal-400" : "bg-violet-400")} />
                             <span className="truncate">{project.title}</span>
+                          </Link>
+                        ) : t.routineId ? (
+                          <Link
+                            href={saPath(`/projects/routines?routine=${encodeURIComponent(t.routineId)}${t.occurrenceDate ? `&date=${t.occurrenceDate}` : ""}`)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-2 truncate hover:underline"
+                          >
+                            <Repeat className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                            <span className="truncate">{t.routineName || "Routine"}</span>
                           </Link>
                         ) : (
                           <span className="text-muted-foreground">—</span>

@@ -245,6 +245,11 @@ export async function createFullTask(input: CreateFullTaskInput) {
     if (!parent || parent.subAccountId !== input.subAccountId) {
       throw new TaskInputError("Parent task not found", 404);
     }
+    if (parent.routineId) {
+      throw new TaskInputError(
+        "Routine activities can't have subtasks. Use the checklist, or add an activity to the routine."
+      );
+    }
     if (parent.parentTaskId) {
       throw new TaskInputError("Subtasks can't have their own subtasks.");
     }
@@ -411,6 +416,14 @@ export async function updateFullTask(opts: {
     opts.fromClient ? CLIENT_EDITABLE.has(k) : true
   );
   const has = (k: string) => keys.includes(k);
+
+  // Routine activities follow their routine's schedule: the date, repeat
+  // and rollover settings belong to the routine, not the single occurrence.
+  if (task.routineId && ["dueAt", "recurrence", "autoRollover"].some(has)) {
+    throw new TaskInputError(
+      "This is a routine activity. Change its schedule from the routine instead."
+    );
+  }
 
   if (has("title")) {
     const t = str(patch.title, 200);
@@ -612,6 +625,12 @@ export async function updateFullTask(opts: {
 export async function deleteFullTask(opts: { taskId: string; task: Doc; actor: TaskActor }) {
   const db = getAdminDb();
   const { task } = opts;
+  if (task.routineId) {
+    // Deleting one date's activity would just be regenerated; history stays intact.
+    throw new TaskInputError(
+      "Routine activities can't be deleted one by one. Remove the activity from the routine, or pause the routine."
+    );
+  }
   const subtasks = await db
     .collection("tasks")
     .where("subAccountId", "==", task.subAccountId)

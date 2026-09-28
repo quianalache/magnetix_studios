@@ -38,6 +38,16 @@ export const PATCH = withApiAuth<{ id: string }>(async ({ body, params, ctx }) =
     return apiError(ctx, "not_found", "task_not_found", "Task not found.");
   }
 
+  // Routine activities (generated per date) keep their routine's date.
+  if (existing.routineId && patch.dueAt !== undefined) {
+    return apiError(
+      ctx,
+      "invalid_request",
+      "routine_activity_date_locked",
+      "This task is a routine activity; its due date follows the routine's schedule."
+    );
+  }
+
   const wasCompleted = !!existing.completed;
   const writePatch: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
@@ -85,6 +95,14 @@ export const DELETE = withApiAuth<{ id: string }>(async ({ params, ctx }) => {
   const d = snap.data()!;
   if (d.subAccountId !== ctx.subAccountId || d.mode !== ctx.mode) {
     return apiError(ctx, "not_found", "task_not_found", "Task not found.");
+  }
+  if (d.routineId) {
+    return apiError(
+      ctx,
+      "invalid_request",
+      "routine_activity_not_deletable",
+      "This task is a routine activity. Remove the activity from the routine or pause the routine in the app."
+    );
   }
   await ref.delete();
   return apiOk(ctx, { id: params.id, object: "task", deleted: true });
