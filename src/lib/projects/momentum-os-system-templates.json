@@ -1,0 +1,1391 @@
+{
+  "_provenance": {
+    "source": "Compiled Momentum OS production bundle index-i5livvRV.js (constant `bSe`)",
+    "bundleSha256": "84c392def3291f4c0fcf47c58e2c26b2c03a0595da698f56f178ef1c7943ea69",
+    "bundleCapturedAt": "2026-08-08",
+    "bundleLocation": "~/Desktop/GHL Tools Export/Momentum OS — Operations Planner for Creators_files/<page>_files/index-i5livvRV.js (8 identical copies)",
+    "crossCheck": "Earlier 2026-07-20 bundle (sha256 e1b24f955a5ad222…) contains byte-identical template data.",
+    "extraction": "Array literal evaluated in an isolated vm with only two runtime helpers stubbed; see source/extract-system-templates.mjs. Verbatim literal: source/momentum-os-system-templates.source.js.",
+    "fidelityNotes": [
+      "Field names and values are exactly as in the original (snake_case).",
+      "All `id` values of tasks/routines/milestones are null: the original generated a random id per page load (pe()), so there is no stable original id to preserve.",
+      "created_at/updated_at are null: the original stamped the time of first load (new Date()), not authored data.",
+      "Fields ABSENT from the original system templates are ABSENT here (e.g. task `description`, template `suggested_goals`, template `notes`). They existed in the data model and editor but were never populated for system templates. Do not fill them in.",
+      "`offset_label` is authored display text and is not always derivable from day_offset (e.g. 'Monday AM', 'After publish', 'Week 2', 'Challenge day 1'). Preserve it verbatim.",
+      "Day offsets are 0-based (Day 0 = project start). `offset_label` 'Day N' is therefore day_offset + 1 for most tasks — the original's own convention, not an error to fix.",
+      "Some task day_offsets exceed estimated_days (e.g. Product Launch 'Launch debrief' at 32 with a 30-day duration; YouTube 'Write email' at 15 with 14 days). This is original data."
+    ]
+  },
+  "enums": {
+    "categories": {
+      "order": [
+        "launch",
+        "content_workflow",
+        "weekly_planning",
+        "visibility",
+        "product_creation",
+        "client_delivery",
+        "ceo_operations",
+        "marketing",
+        "challenge_event",
+        "custom"
+      ],
+      "labels": {
+        "launch": "🚀 Launch",
+        "content_workflow": "🎬 Content Workflow",
+        "weekly_planning": "📅 Weekly Planning",
+        "visibility": "👁️ Visibility",
+        "product_creation": "📦 Product Creation",
+        "client_delivery": "🤝 Client Delivery",
+        "ceo_operations": "👑 CEO Operations",
+        "marketing": "📣 Marketing",
+        "challenge_event": "⚡ Challenge / Event",
+        "custom": "⚙️ Custom"
+      },
+      "badgeClasses": {
+        "launch": "bg-primary/10 text-primary",
+        "content_workflow": "bg-accent/20 text-accent-foreground",
+        "weekly_planning": "bg-secondary text-secondary-foreground",
+        "visibility": "bg-muted text-foreground",
+        "product_creation": "bg-card text-card-foreground",
+        "client_delivery": "bg-secondary/60 text-foreground",
+        "ceo_operations": "bg-primary/5 text-primary",
+        "marketing": "bg-accent/10 text-accent-foreground",
+        "challenge_event": "bg-primary/10 text-primary",
+        "custom": "bg-muted text-foreground"
+      }
+    },
+    "priorities": {
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "labels": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      },
+      "dotClasses": {
+        "high": "bg-destructive",
+        "medium": "bg-secondary-foreground",
+        "low": "bg-muted-foreground"
+      }
+    },
+    "timeBlocks": {
+      "values": [
+        "AM",
+        "Midday",
+        "PM",
+        "Anytime"
+      ],
+      "badgeClasses": {
+        "AM": "bg-accent/20 text-accent-foreground",
+        "Midday": "bg-secondary/60 text-secondary-foreground",
+        "PM": "bg-primary/10 text-primary",
+        "Anytime": "bg-muted text-muted-foreground"
+      }
+    },
+    "recurrence": {
+      "values": [
+        "none",
+        "daily",
+        "weekly",
+        "monthly",
+        "annually"
+      ],
+      "labels": {
+        "none": "None",
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "annually": "Annual"
+      }
+    },
+    "newTemplateDefaults": {
+      "name": "",
+      "description": "",
+      "category": "custom",
+      "estimated_days": null,
+      "tags": [],
+      "is_favorite": false,
+      "is_system": false,
+      "tasks": [],
+      "routines": [],
+      "milestones": [],
+      "suggested_goals": [],
+      "notes": ""
+    },
+    "newTaskDefaults": {
+      "title": "",
+      "priority": "medium",
+      "time_block": "AM",
+      "estimated_minutes": "",
+      "day_offset": "0",
+      "tags": ""
+    },
+    "newRoutineDefaults": {
+      "title": "",
+      "recurrence_type": "daily",
+      "time_block": "AM",
+      "estimated_minutes": ""
+    },
+    "newMilestoneDefaults": {
+      "title": "",
+      "day_offset": "0",
+      "offset_label": ""
+    }
+  },
+  "summary": [
+    {
+      "id": "sys_youtube_video",
+      "name": "YouTube Video Workflow",
+      "category": "content_workflow",
+      "estimated_days": 14,
+      "tasks": 10,
+      "milestones": 3,
+      "routines": 0,
+      "total_estimated_minutes": 650
+    },
+    {
+      "id": "sys_product_launch",
+      "name": "Product Launch",
+      "category": "launch",
+      "estimated_days": 30,
+      "tasks": 14,
+      "milestones": 4,
+      "routines": 1,
+      "total_estimated_minutes": 1265
+    },
+    {
+      "id": "sys_weekly_ceo_reset",
+      "name": "Weekly CEO Reset",
+      "category": "weekly_planning",
+      "estimated_days": 7,
+      "tasks": 7,
+      "milestones": 1,
+      "routines": 2,
+      "total_estimated_minutes": 175
+    },
+    {
+      "id": "sys_challenge_launch",
+      "name": "Challenge Launch",
+      "category": "challenge_event",
+      "estimated_days": 21,
+      "tasks": 9,
+      "milestones": 3,
+      "routines": 0,
+      "total_estimated_minutes": 755
+    },
+    {
+      "id": "sys_content_repurposing",
+      "name": "Content Repurposing Workflow",
+      "category": "content_workflow",
+      "estimated_days": 7,
+      "tasks": 8,
+      "milestones": 1,
+      "routines": 0,
+      "total_estimated_minutes": 295
+    },
+    {
+      "id": "sys_podcast_episode",
+      "name": "Podcast Episode Workflow",
+      "category": "content_workflow",
+      "estimated_days": 10,
+      "tasks": 8,
+      "milestones": 1,
+      "routines": 0,
+      "total_estimated_minutes": 355
+    },
+    {
+      "id": "sys_offer_creation",
+      "name": "Offer Creation Workflow",
+      "category": "product_creation",
+      "estimated_days": 21,
+      "tasks": 9,
+      "milestones": 3,
+      "routines": 0,
+      "total_estimated_minutes": 1065
+    },
+    {
+      "id": "sys_monthly_planning",
+      "name": "Monthly Planning Reset",
+      "category": "ceo_operations",
+      "estimated_days": 3,
+      "tasks": 7,
+      "milestones": 1,
+      "routines": 0,
+      "total_estimated_minutes": 220
+    }
+  ],
+  "templates": [
+    {
+      "id": "sys_youtube_video",
+      "name": "YouTube Video Workflow",
+      "description": "End-to-end workflow for producing and publishing a YouTube video, from topic ideation to repurposing.",
+      "category": "content_workflow",
+      "estimated_days": 14,
+      "tags": [
+        "youtube",
+        "video",
+        "content"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Script Complete",
+          "day_offset": 3,
+          "offset_label": "3 days in"
+        },
+        {
+          "id": null,
+          "title": "Recording Done",
+          "day_offset": 7,
+          "offset_label": "1 week in"
+        },
+        {
+          "id": null,
+          "title": "Video Published",
+          "day_offset": 14,
+          "offset_label": "Launch day"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Finalize topic & research keywords",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "research"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Outline video structure",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 45,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "writing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write full script",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 120,
+          "day_offset": 2,
+          "offset_label": "Day 3",
+          "tags": [
+            "writing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Record video",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 90,
+          "day_offset": 5,
+          "offset_label": "Day 6",
+          "tags": [
+            "recording"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Edit video",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 180,
+          "day_offset": 7,
+          "offset_label": "Day 8",
+          "tags": [
+            "editing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Design thumbnail",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 45,
+          "day_offset": 9,
+          "offset_label": "Day 10",
+          "tags": [
+            "design"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write title, description & tags",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 30,
+          "day_offset": 11,
+          "offset_label": "Day 12",
+          "tags": [
+            "seo"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Upload & schedule video",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 13,
+          "offset_label": "Day 14",
+          "tags": [
+            "publishing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Repurpose: cut Shorts & Reels",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 60,
+          "day_offset": 14,
+          "offset_label": "After publish",
+          "tags": [
+            "repurposing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write email about the video",
+          "priority": "low",
+          "time_block": "Anytime",
+          "estimated_minutes": 30,
+          "day_offset": 15,
+          "offset_label": "Post-publish",
+          "tags": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_product_launch",
+      "name": "Product Launch",
+      "description": "Full launch sequence from offer finalization to cart close, including email, content, and automation setup.",
+      "category": "launch",
+      "estimated_days": 30,
+      "tags": [
+        "launch",
+        "offer",
+        "sales"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [
+        {
+          "id": null,
+          "title": "Daily launch check-in",
+          "recurrence_type": "daily",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "description": "Review launch stats and respond to questions"
+        }
+      ],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Offer Finalized",
+          "day_offset": 3,
+          "offset_label": "3 days in"
+        },
+        {
+          "id": null,
+          "title": "Sales Page Live",
+          "day_offset": 10,
+          "offset_label": "10 days in"
+        },
+        {
+          "id": null,
+          "title": "Cart Opens",
+          "day_offset": 21,
+          "offset_label": "Launch day"
+        },
+        {
+          "id": null,
+          "title": "Cart Closes",
+          "day_offset": 30,
+          "offset_label": "Close day"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Finalize offer details & pricing",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write sales page copy",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 180,
+          "day_offset": 3,
+          "offset_label": "Day 4",
+          "tags": [
+            "copywriting"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Design sales page",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 120,
+          "day_offset": 6,
+          "offset_label": "Day 7",
+          "tags": [
+            "design"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set up checkout & payment",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 8,
+          "offset_label": "Day 9",
+          "tags": [
+            "tech"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write launch email sequence (5 emails)",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 240,
+          "day_offset": 10,
+          "offset_label": "Day 11",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Create promo content (Reels, Posts)",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 120,
+          "day_offset": 14,
+          "offset_label": "Day 15",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Record launch video / webinar",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 90,
+          "day_offset": 17,
+          "offset_label": "Day 18",
+          "tags": [
+            "video"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set up automation & onboarding",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 90,
+          "day_offset": 18,
+          "offset_label": "Day 19",
+          "tags": [
+            "tech"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Prep affiliate materials",
+          "priority": "medium",
+          "time_block": "Anytime",
+          "estimated_minutes": 60,
+          "day_offset": 19,
+          "offset_label": "Day 20",
+          "tags": [
+            "affiliates"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Send cart open email",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "day_offset": 21,
+          "offset_label": "Launch day",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Go live / host launch event",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 120,
+          "day_offset": 23,
+          "offset_label": "Day 24",
+          "tags": [
+            "live"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Send deadline reminder email",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 29,
+          "offset_label": "Day 30",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Close cart & send replay",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 30,
+          "day_offset": 30,
+          "offset_label": "Close day",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Launch debrief & metrics review",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 32,
+          "offset_label": "Post-launch",
+          "tags": [
+            "strategy"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_weekly_ceo_reset",
+      "name": "Weekly CEO Reset",
+      "description": "A structured weekly planning and review system to help you operate as the CEO of your business.",
+      "category": "weekly_planning",
+      "estimated_days": 7,
+      "tags": [
+        "ceo",
+        "planning",
+        "review"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [
+        {
+          "id": null,
+          "title": "Morning CEO check-in",
+          "recurrence_type": "daily",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "description": "Review priorities and set daily intention"
+        },
+        {
+          "id": null,
+          "title": "EOD wrap-up",
+          "recurrence_type": "daily",
+          "time_block": "PM",
+          "estimated_minutes": 10,
+          "description": "Log wins, review tomorrow's tasks"
+        }
+      ],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Weekly Review Complete",
+          "day_offset": 7,
+          "offset_label": "End of week"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Review last week's wins & lessons",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Monday AM",
+          "tags": [
+            "review"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set top 3 priorities for the week",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 0,
+          "offset_label": "Monday AM",
+          "tags": [
+            "planning"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Review financial snapshot",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "day_offset": 1,
+          "offset_label": "Tuesday",
+          "tags": [
+            "finance"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Review content pipeline & schedule",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 20,
+          "day_offset": 2,
+          "offset_label": "Wednesday",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Mid-week check-in on priorities",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "day_offset": 3,
+          "offset_label": "Thursday",
+          "tags": [
+            "planning"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Complete weekly review reflection",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 45,
+          "day_offset": 6,
+          "offset_label": "Sunday",
+          "tags": [
+            "review"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Plan next week's focus & tasks",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 30,
+          "day_offset": 6,
+          "offset_label": "Sunday",
+          "tags": [
+            "planning"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_challenge_launch",
+      "name": "Challenge Launch",
+      "description": "A free or paid challenge framework — from concept to running to converting participants.",
+      "category": "challenge_event",
+      "estimated_days": 21,
+      "tags": [
+        "challenge",
+        "launch",
+        "community"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Registration Opens",
+          "day_offset": 7,
+          "offset_label": "1 week in"
+        },
+        {
+          "id": null,
+          "title": "Challenge Starts",
+          "day_offset": 14,
+          "offset_label": "2 weeks in"
+        },
+        {
+          "id": null,
+          "title": "Challenge Ends / Offer Opens",
+          "day_offset": 19,
+          "offset_label": "Day 20"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Define challenge topic & transformation",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Map out 5-day challenge curriculum",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 90,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "curriculum"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Create registration page",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 120,
+          "day_offset": 3,
+          "offset_label": "Day 4",
+          "tags": [
+            "tech"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set up community/group",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 45,
+          "day_offset": 4,
+          "offset_label": "Day 5",
+          "tags": [
+            "tech"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write promotional content",
+          "priority": "high",
+          "time_block": "PM",
+          "estimated_minutes": 120,
+          "day_offset": 5,
+          "offset_label": "Day 6",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Record or prep each day's content",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 240,
+          "day_offset": 10,
+          "offset_label": "Day 11",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Send daily challenge emails",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 14,
+          "offset_label": "Challenge day 1",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Pitch offer on final day",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 30,
+          "day_offset": 18,
+          "offset_label": "Day 5 of challenge",
+          "tags": [
+            "sales"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Follow up with non-buyers",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 20,
+          "offset_label": "Post-challenge",
+          "tags": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_content_repurposing",
+      "name": "Content Repurposing Workflow",
+      "description": "Turn one piece of pillar content into 10+ assets across platforms systematically.",
+      "category": "content_workflow",
+      "estimated_days": 7,
+      "tags": [
+        "repurposing",
+        "content",
+        "workflow"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "All Assets Distributed",
+          "day_offset": 7,
+          "offset_label": "1 week"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Select pillar content to repurpose",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Extract 3–5 key quotes or insights",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "writing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Create 3 short-form video clips",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 90,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "video"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write carousel post",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 45,
+          "day_offset": 2,
+          "offset_label": "Day 3",
+          "tags": [
+            "design"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write newsletter from content",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 3,
+          "offset_label": "Day 4",
+          "tags": [
+            "email"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Post Reels / TikToks",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 20,
+          "day_offset": 4,
+          "offset_label": "Day 5",
+          "tags": [
+            "publishing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Post Threads / caption posts",
+          "priority": "low",
+          "time_block": "PM",
+          "estimated_minutes": 20,
+          "day_offset": 5,
+          "offset_label": "Day 6",
+          "tags": [
+            "publishing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Send newsletter",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 15,
+          "day_offset": 6,
+          "offset_label": "Day 7",
+          "tags": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_podcast_episode",
+      "name": "Podcast Episode Workflow",
+      "description": "Full production pipeline for a single podcast episode from guest booking to publishing.",
+      "category": "content_workflow",
+      "estimated_days": 10,
+      "tags": [
+        "podcast",
+        "audio",
+        "content"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Episode Published",
+          "day_offset": 10,
+          "offset_label": "Publish day"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Choose episode topic or confirm guest",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "planning"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Prep interview questions / outline",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 45,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "writing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Record episode",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 3,
+          "offset_label": "Day 4",
+          "tags": [
+            "recording"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Edit audio & add intro/outro",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 90,
+          "day_offset": 5,
+          "offset_label": "Day 6",
+          "tags": [
+            "editing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Write show notes & timestamps",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 45,
+          "day_offset": 7,
+          "offset_label": "Day 8",
+          "tags": [
+            "writing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Design episode artwork",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 30,
+          "day_offset": 7,
+          "offset_label": "Day 8",
+          "tags": [
+            "design"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Upload & schedule episode",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 20,
+          "day_offset": 9,
+          "offset_label": "Day 10",
+          "tags": [
+            "publishing"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Create promo clips for social",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 45,
+          "day_offset": 10,
+          "offset_label": "Publish day",
+          "tags": [
+            "repurposing"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_offer_creation",
+      "name": "Offer Creation Workflow",
+      "description": "Build a new offer from idea to fully packaged, ready-to-sell product or service.",
+      "category": "product_creation",
+      "estimated_days": 21,
+      "tags": [
+        "offer",
+        "product",
+        "creation"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Offer Concept Locked",
+          "day_offset": 5,
+          "offset_label": "5 days in"
+        },
+        {
+          "id": null,
+          "title": "Core Content Built",
+          "day_offset": 14,
+          "offset_label": "2 weeks in"
+        },
+        {
+          "id": null,
+          "title": "Offer Ready to Sell",
+          "day_offset": 21,
+          "offset_label": "3 weeks in"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Validate offer idea with audience",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "research"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Define transformation & outcome",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Map curriculum or service delivery",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 120,
+          "day_offset": 3,
+          "offset_label": "Day 4",
+          "tags": [
+            "curriculum"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Decide pricing & offer structure",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 45,
+          "day_offset": 5,
+          "offset_label": "Day 6",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Build core content / modules",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 480,
+          "day_offset": 7,
+          "offset_label": "Week 2",
+          "tags": [
+            "creation"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Create workbooks or resources",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 120,
+          "day_offset": 12,
+          "offset_label": "Day 13",
+          "tags": [
+            "design"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set up delivery platform",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 90,
+          "day_offset": 14,
+          "offset_label": "Day 15",
+          "tags": [
+            "tech"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Test entire student experience",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 60,
+          "day_offset": 18,
+          "offset_label": "Day 19",
+          "tags": [
+            "qa"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Final review & polish",
+          "priority": "medium",
+          "time_block": "AM",
+          "estimated_minutes": 60,
+          "day_offset": 20,
+          "offset_label": "Day 21",
+          "tags": [
+            "qa"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sys_monthly_planning",
+      "name": "Monthly Planning Reset",
+      "description": "A monthly system to review performance, set goals, and plan your content, revenue, and projects.",
+      "category": "ceo_operations",
+      "estimated_days": 3,
+      "tags": [
+        "planning",
+        "monthly",
+        "ceo"
+      ],
+      "is_favorite": false,
+      "is_system": true,
+      "use_count": 0,
+      "created_at": null,
+      "updated_at": null,
+      "routines": [],
+      "milestones": [
+        {
+          "id": null,
+          "title": "Monthly Plan Complete",
+          "day_offset": 3,
+          "offset_label": "3 days in"
+        }
+      ],
+      "tasks": [
+        {
+          "id": null,
+          "title": "Review last month's revenue & expenses",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "finance"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Review goal progress from last month",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 0,
+          "offset_label": "Day 1",
+          "tags": [
+            "goals"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set revenue goal for this month",
+          "priority": "high",
+          "time_block": "Midday",
+          "estimated_minutes": 20,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "finance"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Plan content themes & topics",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 45,
+          "day_offset": 1,
+          "offset_label": "Day 2",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Identify top 3 projects for the month",
+          "priority": "high",
+          "time_block": "AM",
+          "estimated_minutes": 30,
+          "day_offset": 2,
+          "offset_label": "Day 3",
+          "tags": [
+            "strategy"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Schedule content calendar",
+          "priority": "medium",
+          "time_block": "Midday",
+          "estimated_minutes": 45,
+          "day_offset": 2,
+          "offset_label": "Day 3",
+          "tags": [
+            "content"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Set growth metric targets",
+          "priority": "medium",
+          "time_block": "PM",
+          "estimated_minutes": 20,
+          "day_offset": 2,
+          "offset_label": "Day 3",
+          "tags": [
+            "growth"
+          ]
+        }
+      ]
+    }
+  ]
+}

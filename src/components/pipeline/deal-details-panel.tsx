@@ -649,7 +649,7 @@ export function DealDetailsPanel({
                       <Button variant="secondary" size="sm" onClick={() => setTaskOpen(true)}>
                         <Plus className="mr-1 h-4 w-4" /> Add Task
                       </Button>
-                      <Link href={saPath("/tasks")} className="text-center text-xs text-muted-foreground hover:text-primary hover:underline">
+                      <Link href={saPath("/projects/tasks")} className="text-center text-xs text-muted-foreground hover:text-primary hover:underline">
                         Open Tasks
                       </Link>
                     </div>

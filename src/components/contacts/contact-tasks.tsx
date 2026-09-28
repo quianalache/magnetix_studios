@@ -88,7 +88,7 @@ export function ContactTasks({
           ))}
           {tasks.length > 5 && (
             <Link
-              href={saPath("/tasks")}
+              href={saPath("/projects/tasks")}
               className="block pt-1 text-center text-xs font-medium text-primary hover:underline"
             >
               View all {tasks.length} in Tasks

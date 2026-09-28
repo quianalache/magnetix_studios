@@ -49,6 +49,9 @@ import {
   LayoutPanelTop,
   LayoutTemplate,
   Clapperboard,
+  LayoutDashboard,
+  Archive,
+  Package,
 } from "lucide-react";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { GET_LEADS_PARKED } from "@/lib/get-leads/business-types";
@@ -75,6 +78,12 @@ interface NavItem {
   enabled: boolean;
   badgeKey?: "dueToday" | "unreadConversations";
   matchPrefix?: string;
+  /** Expandable section (Projects). The parent href is the section landing page. */
+  children?: NavItem[];
+  /** Active only on an exact path match (plus `activeAlso` patterns). */
+  exact?: boolean;
+  /** Extra sub-paths (regex on the path after the sub-account root) that also mark this item active. */
+  activeAlso?: RegExp;
 }
 
 interface NavGroup {
@@ -122,19 +131,46 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
             },
           ]),
       { href: "/pipeline", label: "Pipelines", icon: GitBranch, enabled: true },
-      {
-        href: "/tasks",
-        label: "Tasks",
-        icon: CheckSquare,
-        enabled: true,
-        badgeKey: "dueToday",
-      },
+      // Projects redesign (Sept 2026): Tasks moved under Projects → My
+      // Tasks (same Tasks engine; /tasks redirects there). Assets left the
+      // Projects page and is its own entry until its separate redesign.
       {
         href: "/projects",
         label: "Projects",
         icon: FolderKanban,
         enabled: true,
+        children: [
+          {
+            href: "/projects",
+            label: "Overview",
+            icon: LayoutDashboard,
+            enabled: true,
+            exact: true,
+            // A project's own workspace (/projects/{id}) belongs to Overview.
+            activeAlso: /^\/projects\/(?!tasks(?:\/|$)|templates(?:\/|$)|archived(?:\/|$))[^/]+/,
+          },
+          {
+            href: "/projects/tasks",
+            label: "My Tasks",
+            icon: CheckSquare,
+            enabled: true,
+            badgeKey: "dueToday",
+          },
+          {
+            href: "/projects/templates",
+            label: "Templates",
+            icon: LayoutTemplate,
+            enabled: true,
+          },
+          {
+            href: "/projects/archived",
+            label: "Archived",
+            icon: Archive,
+            enabled: true,
+          },
+        ],
       },
+      { href: "/assets", label: "Assets", icon: Package, enabled: true },
     ],
   },
   {
@@ -350,6 +386,9 @@ function SidebarContent({
   // Memberships / Insights only — Dashboard and Sub-Account Settings stay
   // fixed). Hydrated from localStorage after mount, same pattern as the
   // whole-sidebar collapse, to avoid an SSR/client markup mismatch.
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(
+    () => new Set()
+  );
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set()
   );
@@ -481,15 +520,17 @@ function SidebarContent({
       : (activeMembership.name ?? "Sub-account")
     : "Sub-account";
 
-  function renderNavItem(item: NavItem) {
+  function renderNavItem(item: NavItem, nested = false) {
     // renderNavItem is only ever called from inside the {showSubNav && ...}
     // block below, where activeSubId (and therefore subRoot) is guaranteed set.
     const fullHref = `${subRoot}${item.href}`;
-    const isActive =
-      pathname === fullHref ||
-      (item.href !== "/dashboard" &&
-        item.href !== "/email" &&
-        pathname.startsWith(fullHref));
+    const subPath = subRoot ? pathname.slice(subRoot.length) : pathname;
+    const isActive = item.exact
+      ? pathname === fullHref || !!item.activeAlso?.test(subPath)
+      : pathname === fullHref ||
+        (item.href !== "/dashboard" &&
+          item.href !== "/email" &&
+          pathname.startsWith(fullHref));
     // Agency-level gate lock. We DO render it when the gate is unknown
     // (gate === null) — assumption: legitimate sub-accounts are enabled,
     // and flashing "Locked" → "Enabled" is worse UX than a brief window
@@ -570,6 +611,7 @@ function SidebarContent({
         className={cn(
           "relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
           collapsed ? "justify-center" : "justify-between",
+          nested && "py-1 pl-4 text-[12.5px]",
           isActive
             ? "bg-sidebar-primary text-sidebar-primary-foreground"
             : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
@@ -582,7 +624,7 @@ function SidebarContent({
           />
         )}
         <span className="flex items-center gap-2.5">
-          <item.icon className="h-4 w-4 shrink-0" />
+          <item.icon className={cn("shrink-0", nested ? "h-3.5 w-3.5" : "h-4 w-4")} />
           {!collapsed && item.label}
         </span>
         {!collapsed && badge !== null && (
@@ -601,6 +643,99 @@ function SidebarContent({
           <span className="absolute ml-5 h-1.5 w-1.5 rounded-full bg-amber-500" />
         )}
       </Link>
+    );
+  }
+
+  /** Expandable section (Projects): parent row links to the section's
+   *  landing page; the chevron shows/hides its destinations. Auto-expanded
+   *  while you're inside the section. In icon-rail mode only the parent
+   *  icon renders (children need labels). */
+  function renderParentItem(item: NavItem) {
+    const fullHref = `${subRoot}${item.href}`;
+    const inSection =
+      pathname === fullHref || pathname.startsWith(`${fullHref}/`);
+    const childBadge =
+      item.children?.some((c) => c.badgeKey === "dueToday") && dueToday > 0
+        ? dueToday
+        : null;
+    if (collapsed) {
+      return (
+        <Link
+          key={item.href}
+          href={fullHref}
+          title={item.label}
+          className={cn(
+            "relative flex items-center justify-center rounded-lg px-2.5 py-1.5 transition-colors",
+            inSection
+              ? "bg-sidebar-primary text-sidebar-primary-foreground"
+              : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          )}
+        >
+          <item.icon className="h-4 w-4 shrink-0" />
+          {childBadge !== null && (
+            <span className="absolute ml-5 h-1.5 w-1.5 rounded-full bg-amber-500" />
+          )}
+        </Link>
+      );
+    }
+    const open = inSection || expandedParents.has(item.href);
+    return (
+      <div key={item.href}>
+        <div
+          className={cn(
+            "flex items-center rounded-lg transition-colors",
+            inSection
+              ? "bg-sidebar-accent text-sidebar-foreground"
+              : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+          )}
+        >
+          <Link
+            href={fullHref}
+            className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-1.5 text-[13px] font-medium"
+          >
+            <item.icon className="h-4 w-4 shrink-0" />
+            {item.label}
+            {!open && childBadge !== null && (
+              <span className="ml-auto rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 tabular-nums dark:text-amber-400">
+                {childBadge}
+              </span>
+            )}
+          </Link>
+          {!inSection && (
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedParents((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(item.href)) next.delete(item.href);
+                  else next.add(item.href);
+                  return next;
+                })
+              }
+              aria-expanded={open}
+              aria-label={`${open ? "Collapse" : "Expand"} ${item.label}`}
+              className="text-sidebar-foreground/70 hover:text-sidebar-foreground mr-1 rounded-md p-1"
+            >
+              {open ? (
+                <ChevronDown className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5" />
+              )}
+            </button>
+          )}
+          {inSection && (
+            <ChevronDown
+              className="text-sidebar-foreground/70 mr-2 h-3.5 w-3.5"
+              aria-hidden
+            />
+          )}
+        </div>
+        {open && (
+          <div className="border-sidebar-border/50 mt-0.5 ml-4 space-y-0.5 border-l pl-1.5">
+            {item.children!.map((c) => renderNavItem(c, true))}
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -910,7 +1045,12 @@ function SidebarContent({
                       {group.label}
                     </button>
                   )}
-                  {!isGroupCollapsed && visibleItems.map(renderNavItem)}
+                  {!isGroupCollapsed &&
+                    visibleItems.map((item) =>
+                      item.children
+                        ? renderParentItem(item)
+                        : renderNavItem(item)
+                    )}
                 </div>
               );
             })}

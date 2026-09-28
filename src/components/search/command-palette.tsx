@@ -220,7 +220,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           id: t.id,
           title: t.title,
           subtitle: contact ? contact.name : "Task",
-          href: `${linkPrefix}/tasks`,
+          href: `${linkPrefix}/projects/tasks`,
         });
       }
       return out;
@@ -269,7 +269,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             : t.completed
               ? "Completed"
               : "Open task",
-          href: `${linkPrefix}/tasks`,
+          href: `${linkPrefix}/projects/tasks`,
         });
       }
       if (out.filter((r) => r.kind === "task").length >= 5) break;
