@@ -78,6 +78,14 @@ export interface CourseOfferProjectTemplateBundle {
   durationDays: number | null;
   description: string;
   steps: { title: string; order: number }[];
+  /**
+   * Snapshot shape version (Projects & Tasks Phase 2). Absent/1 = the
+   * original steps-only snapshot: purchases instantiate a STEP-based
+   * project exactly as before (historical offers are never rewritten).
+   * 2 = written by offers saved after Phase 2: purchases instantiate a
+   * TASK-based project from the same `steps` list.
+   */
+  snapshotVersion?: 1 | 2;
 }
 
 export interface CourseOffer {

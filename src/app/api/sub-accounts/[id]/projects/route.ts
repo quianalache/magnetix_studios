@@ -116,6 +116,8 @@ export async function POST(
     createdByUid: access.uid,
     createdByMemberId: null,
     templateId,
+    // Projects & Tasks Phase 2: every new project uses CRM Tasks.
+    taskModel: "tasks",
   });
 
   return NextResponse.json({ ok: true, project }, { status: 201 });

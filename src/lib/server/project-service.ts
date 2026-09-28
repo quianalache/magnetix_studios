@@ -2,6 +2,7 @@ import "server-only";
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { GLOBAL_TERRITORY_ID } from "@/types";
 import type {
   Project,
   ProjectStep,
@@ -106,6 +107,12 @@ export interface CreateProjectOpts {
   sourceOfferId?: string | null;
   sourcePurchaseId?: string | null;
   sourceTemplateId?: string | null;
+  /**
+   * Phase 2: new projects use CRM Tasks ("tasks"). Omitted = "steps", the
+   * original checklist — so any caller not updated for Phase 2 keeps
+   * producing exactly the old document shape.
+   */
+  taskModel?: "steps" | "tasks";
 }
 
 export async function createProject(opts: CreateProjectOpts): Promise<Project> {
@@ -130,8 +137,31 @@ export async function createProject(opts: CreateProjectOpts): Promise<Project> {
     stepsDoneCount: 0,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+    ...(opts.taskModel === "tasks"
+      ? { taskModel: "tasks" as const, milestones: [], timeSpentSeconds: 0 }
+      : {}),
   };
   await ref.set(doc);
+
+  if (opts.taskModel === "tasks") {
+    // Template steps become real CRM tasks on the new project.
+    let steps = opts.templateSteps ?? [];
+    if (!opts.templateSteps && opts.templateId) {
+      const tSnap = await templatesCol().doc(opts.templateId).get();
+      if (tSnap.exists) steps = (tSnap.data() as ProjectTemplate).steps ?? [];
+    }
+    if (steps.length > 0) {
+      await createProjectTasksFromTitles(ref.id, {
+        agencyId: opts.agencyId,
+        subAccountId: opts.subAccountId,
+        createdByUid: opts.createdByUid,
+        clientContactId: opts.assignedContactId,
+        titles: [...steps].sort((a, b) => a.order - b.order).map((s) => s.title),
+      });
+    }
+    const snap = await ref.get();
+    return toDoc<Project>(snap);
+  }
 
   // Spawning from a template copies its steps in as real, independently
   // editable project steps — no live link back to the template afterward.
@@ -199,15 +229,146 @@ export async function updateProject(
     data.assignedContactId = patch.assignedContactId;
     data.assignedContactName = patch.assignedContactName ?? null;
   }
+  const before =
+    patch.assignedContactId !== undefined
+      ? (await projectsCol().doc(projectId).get()).data()
+      : null;
   await projectsCol().doc(projectId).set(data, { merge: true });
+
+  // Task projects: when the client changes, tasks follow the new client's
+  // territory, a client assignment to the OLD client is cleared, and tasks
+  // become client-visible (or lose visibility when made internal).
+  if (
+    before?.taskModel === "tasks" &&
+    patch.assignedContactId !== undefined &&
+    (before.assignedContactId ?? null) !== patch.assignedContactId
+  ) {
+    const db = getAdminDb();
+    const territoryId = await projectTerritoryId(patch.assignedContactId);
+    const tasks = await db
+      .collection("tasks")
+      .where("subAccountId", "==", before.subAccountId)
+      .where("projectId", "==", projectId)
+      .get();
+    for (let i = 0; i < tasks.docs.length; i += 400) {
+      const batch = db.batch();
+      for (const d of tasks.docs.slice(i, i + 400)) {
+        const t = d.data();
+        batch.update(d.ref, {
+          territoryId,
+          assigneeContactId:
+            t.assigneeContactId && t.assigneeContactId === patch.assignedContactId
+              ? t.assigneeContactId
+              : null,
+          visibility: patch.assignedContactId
+            ? t.visibility === "internal"
+              ? "internal"
+              : "client"
+            : null,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  }
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
+  const db = getAdminDb();
+  const project = await projectsCol().doc(projectId).get();
   const steps = await stepsCol(projectId).get();
-  const batch = getAdminDb().batch();
-  for (const d of steps.docs) batch.delete(d.ref);
-  batch.delete(projectsCol().doc(projectId));
-  await batch.commit();
+  const refs = steps.docs.map((d) => d.ref);
+  if (project.data()?.taskModel === "tasks") {
+    // A task project's tasks belong to it; time entries are kept (audit).
+    const tasks = await db
+      .collection("tasks")
+      .where("subAccountId", "==", project.data()!.subAccountId)
+      .where("projectId", "==", projectId)
+      .get();
+    refs.push(...tasks.docs.map((d) => d.ref));
+  }
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = db.batch();
+    refs.slice(i, i + 400).forEach((r) => batch.delete(r));
+    if (i + 400 >= refs.length) batch.delete(projectsCol().doc(projectId));
+    await batch.commit();
+  }
+  if (refs.length === 0) await projectsCol().doc(projectId).delete();
+}
+
+/**
+ * Creates plain project tasks from titles (workspace-template spawn). Client
+ * projects get client-visible tasks in the client's territory.
+ */
+export async function createProjectTasksFromTitles(
+  projectId: string,
+  opts: {
+    agencyId: string;
+    subAccountId: string;
+    createdByUid: string | null;
+    clientContactId: string | null;
+    titles: string[];
+  }
+): Promise<void> {
+  const { createTaskServerSide } = await import("@/lib/server/tasks-service");
+  const { recomputeProjectTaskCounts } = await import("@/lib/server/task-graph-service");
+  const territoryId = await projectTerritoryId(opts.clientContactId);
+  for (const title of opts.titles) {
+    await createTaskServerSide({
+      subAccountId: opts.subAccountId,
+      agencyId: opts.agencyId,
+      createdByUid: opts.createdByUid ?? "",
+      mode: "live",
+      title,
+      notes: "",
+      dueAt: null,
+      contactId: null,
+      dealId: null,
+      eventId: null,
+      territoryIdOverride: territoryId,
+      extra: projectTaskExtra(projectId, opts.clientContactId),
+    });
+  }
+  await recomputeProjectTaskCounts(projectId);
+}
+
+export async function projectTerritoryId(
+  clientContactId: string | null
+): Promise<string> {
+  if (!clientContactId) return GLOBAL_TERRITORY_ID;
+  const c = await getAdminDb().doc(`contacts/${clientContactId}`).get();
+  const t = c.data()?.territoryId;
+  return typeof t === "string" ? t : GLOBAL_TERRITORY_ID;
+}
+
+export function projectTaskExtra(
+  projectId: string,
+  clientContactId: string | null,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    projectId,
+    parentTaskId: null,
+    status: "todo",
+    priority: null,
+    assigneeUid: null,
+    assigneeContactId: null,
+    tags: [],
+    estimateMinutes: null,
+    checklist: [],
+    attachments: [],
+    dependsOnTaskIds: [],
+    relatedTaskIds: [],
+    recurrence: null,
+    autoRollover: false,
+    rolledOverCount: 0,
+    timeSpentSeconds: 0,
+    clientTimeSeconds: 0,
+    visibility: clientContactId ? "client" : null,
+    kind: "task",
+    createdByMemberId: null,
+    ...overrides,
+  };
 }
 
 async function recomputeStepCounts(projectId: string): Promise<void> {

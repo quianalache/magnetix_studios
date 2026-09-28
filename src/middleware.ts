@@ -66,6 +66,9 @@ const PUBLIC_PATHS = [
   // QStash-scheduled Community recording reconciliation; signature-verified
   // inside the route.
   "/api/cron/community-recording-reconciliation",
+  // Hourly optional task rollover (Projects & Tasks Phase 2). QStash-
+  // scheduled; signature-verified inside the route.
+  "/api/cron/task-rollover",
   "/api/landing/metrics",
   "/api/landing/recent-purchases",
   // Live-visitors heartbeat ping for the agency dashboard's world map.

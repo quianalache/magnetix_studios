@@ -14,6 +14,10 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { eventStatus, type CalendarEvent } from "@/types/events";
 import type { Quote } from "@/types/quotes";
 import type { Project, ProjectStep } from "@/types/projects";
+import {
+  loadPortalTaskProject,
+  type PortalMember,
+} from "@/lib/server/portal-tasks-service";
 import type { CourseOfferPurchase } from "@/types/course-offers";
 import type { CommunityGroup, GroupMembership } from "@/types/community";
 
@@ -329,16 +333,32 @@ export async function listPortalSessionBundles(
 }
 
 /** This contact's projects (coach-assigned or self-started), each with its steps attached — the Client Portal's "Your projects" section. */
+export type PortalProject = Project & {
+  steps: ProjectStep[];
+  /** Task-based projects only (Phase 2): the client-safe projection. */
+  taskData?: Awaited<ReturnType<typeof loadPortalTaskProject>>;
+};
+
 export async function listPortalProjects(
   subAccountId: string,
-  contactId: string
-): Promise<(Project & { steps: ProjectStep[] })[]> {
+  contactId: string,
+  /** Phase 2: needed to compute the client's permissions + own time on task projects. */
+  member?: PortalMember
+): Promise<PortalProject[]> {
   const projects = await listProjectsForContact(subAccountId, contactId);
   const active = projects
     .filter((p) => p.status === "active")
     .sort((a, b) => tsMillis(b.updatedAt) - tsMillis(a.updatedAt));
   return Promise.all(
-    active.map(async (p) => ({ ...p, steps: await listSteps(p.id) }))
+    active.map(async (p) =>
+      p.taskModel === "tasks"
+        ? {
+            ...p,
+            steps: [],
+            ...(member ? { taskData: await loadPortalTaskProject(p, member) } : {}),
+          }
+        : { ...p, steps: await listSteps(p.id) }
+    )
   );
 }
 

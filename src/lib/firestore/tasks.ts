@@ -115,6 +115,48 @@ export function subscribeToTasks(
   );
 }
 
+/**
+ * Live tasks of one task-based project (Projects & Tasks Phase 2). Same
+ * territory plan as subscribeToTasks so scoped collaborators' queries stay
+ * provable under the tasks rule.
+ */
+export function subscribeToProjectTasks(
+  scope: TenantScope,
+  projectId: string,
+  opts: TaskQueryOptions,
+  callback: (tasks: Task[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const plan = territoryQueryPlan(opts.territoryFilter);
+  if (plan.mode === "empty") {
+    callback([]);
+    return NOOP_UNSUB;
+  }
+  const constraints: QueryConstraint[] = [
+    where("subAccountId", "==", scope.subAccountId),
+    where("projectId", "==", projectId),
+  ];
+  if (plan.mode === "in") constraints.push(plan.constraint);
+  return onSnapshot(
+    query(collection(getFirebaseDb(), TASKS), ...constraints),
+    (snap) => {
+      const tasks = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<Task, "id">) }),
+      );
+      tasks.sort((a, b) => {
+        const da = toMillis(a.dueAt);
+        const db = toMillis(b.dueAt);
+        if (!da && !db) return toMillis(a.createdAt) - toMillis(b.createdAt);
+        if (!da) return 1;
+        if (!db) return -1;
+        return da - db;
+      });
+      callback(tasks);
+    },
+    (err) => onError?.(err),
+  );
+}
+
 export function subscribeToTasksForContact(
   contactId: string,
   scope: TenantScope,

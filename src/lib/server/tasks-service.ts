@@ -10,6 +10,11 @@ import {
 import { GLOBAL_TERRITORY_ID } from "@/types";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
 import { writeDealActivity } from "@/lib/server/deals-service";
+import {
+  afterTaskCompletionChange,
+  unfinishedPrerequisiteWarnings,
+  type TaskActor,
+} from "@/lib/server/task-graph-service";
 
 /**
  * Server-side Task write service — create + complete go through here so
@@ -44,6 +49,16 @@ export interface CreateTaskInput {
   dealId: string | null;
   eventId: string | null;
   timeBlock?: "am" | "midday" | "pm" | "anytime" | null;
+  /**
+   * Projects & Tasks Phase 2 — optional extra fields written verbatim
+   * (projectId, parentTaskId, priority, tags, recurrence, …). Callers that
+   * don't pass it produce exactly the pre-Phase-2 document.
+   */
+  extra?: Record<string, unknown>;
+  /** Overrides the contact-derived territory (project tasks follow their project's client). */
+  territoryIdOverride?: string;
+  /** Pre-chosen document id (deterministic ids for grants / recurrence). */
+  docId?: string;
 }
 
 export interface TaskWriteResult {
@@ -56,10 +71,14 @@ export async function createTaskServerSide(
   input: CreateTaskInput
 ): Promise<TaskWriteResult> {
   const db = getAdminDb();
-  const territoryId = await territoryForContact(input.contactId);
-  const ref = db.collection("tasks").doc();
+  const territoryId =
+    input.territoryIdOverride ?? (await territoryForContact(input.contactId));
+  const ref = input.docId
+    ? db.collection("tasks").doc(input.docId)
+    : db.collection("tasks").doc();
 
   const doc = {
+    ...(input.extra ?? {}),
     title: input.title,
     notes: input.notes,
     dueAt: input.dueAt,
@@ -77,7 +96,10 @@ export async function createTaskServerSide(
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(doc);
+  // create() (not set) when the id is deterministic, so a retry can never
+  // overwrite an existing task — the caller treats ALREADY_EXISTS as done.
+  if (input.docId) await ref.create(doc);
+  else await ref.set(doc);
   if (input.dealId) {
     await writeDealActivity(input.dealId, {
       type: "task_created",
@@ -110,7 +132,11 @@ export async function createTaskServerSide(
       subAccountId: input.subAccountId,
       contactId: input.contactId,
       source: "tasks",
-      payload: { taskId: ref.id, ownerUid: null, projectId: null },
+      payload: {
+        taskId: ref.id,
+        ownerUid: null,
+        projectId: (input.extra?.projectId as string | null | undefined) ?? null,
+      },
     });
   }
 
@@ -136,7 +162,9 @@ export async function setTaskCompletedServerSide(opts: {
    * pass this so a foreign id can't cross tenants.
    */
   expectedSubAccountId?: string;
-}): Promise<TaskWriteResult | null> {
+  /** Who did it, for the task Activity feed (Phase 2). Defaults to staff `userId`. */
+  actor?: TaskActor;
+}): Promise<(TaskWriteResult & { warnings: string[] }) | null> {
   const db = getAdminDb();
   const ref = db.doc(`tasks/${opts.taskId}`);
   const snap = await ref.get();
@@ -152,14 +180,35 @@ export async function setTaskCompletedServerSide(opts: {
   const mode = opts.mode ?? (existing.mode as Mode) ?? "live";
   const wasCompleted = !!existing.completed;
 
+  // Dependencies warn, never block (owner decision): report unfinished
+  // prerequisites to the caller and complete anyway.
+  const warnings =
+    opts.completed && !wasCompleted
+      ? await unfinishedPrerequisiteWarnings(existing)
+      : [];
+
+  const statusPatch: Record<string, unknown> = {};
+  if (opts.completed) statusPatch.status = "completed";
+  else if (existing.status === "completed") statusPatch.status = "todo";
+
   await ref.set(
     {
       completed: opts.completed,
       completedAt: opts.completed ? FieldValue.serverTimestamp() : null,
+      ...statusPatch,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
+
+  if (opts.completed !== wasCompleted) {
+    await afterTaskCompletionChange({
+      taskId: opts.taskId,
+      task: existing,
+      completed: opts.completed,
+      actor: opts.actor ?? { kind: "staff", uid: opts.userId },
+    });
+  }
 
   const justCompleted = opts.completed && !wasCompleted;
   if (justCompleted && existing.contactId) {
@@ -209,10 +258,14 @@ export async function setTaskCompletedServerSide(opts: {
         subAccountId: existing.subAccountId,
         contactId: existing.contactId as string,
         source: "tasks",
-        payload: { taskId: ref.id, ownerUid: null, projectId: null },
+        payload: {
+          taskId: ref.id,
+          ownerUid: null,
+          projectId: (existing.projectId as string | null | undefined) ?? null,
+        },
       });
     }
   }
 
-  return { id: fresh.id, task };
+  return { id: fresh.id, task, warnings };
 }

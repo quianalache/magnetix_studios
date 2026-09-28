@@ -227,6 +227,8 @@ export async function performContactMerge(params: {
     externalSubscriptions,
     externalPayments,
     projects,
+    clientAssignedTasks,
+    clientTimeEntries,
   ] = await Promise.all([
     db.collection("deals").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
     db.collection("tasks").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
@@ -245,11 +247,17 @@ export async function performContactMerge(params: {
     db.collection("externalPayments").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
     // Project assignment — different field name than the rest (assignedContactId).
     db.collection("projects").where("subAccountId", "==", sub).where("assignedContactId", "==", loserId).get(),
+    // Projects & Tasks Phase 2 — client task assignment + client time
+    // entries also point at the contact (different field names).
+    db.collection("tasks").where("subAccountId", "==", sub).where("assigneeContactId", "==", loserId).get(),
+    db.collection("timeEntries").where("subAccountId", "==", sub).where("actorContactId", "==", loserId).get(),
   ]);
   for (const snap of [deals, tasks, events, quotes, submissions, webChats, voiceCalls, members, externalSubscriptions, externalPayments]) {
     await repoint(db, snap, survivorId);
   }
   await repoint(db, projects, survivorId, "assignedContactId");
+  await repoint(db, clientAssignedTasks, survivorId, "assigneeContactId");
+  await repoint(db, clientTimeEntries, survivorId, "actorContactId");
 
   // 3. Merge the inbox conversation index.
   await mergeConversation(db, loserId, survivorId, conversationContact);

@@ -50,6 +50,37 @@ export interface Project {
   stepsDoneCount: number;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
+  /**
+   * Phase 2 (2026-09). "steps" = the original checklist in
+   * `projects/{id}/steps` (EVERY project created before Phase 2 — the field
+   * is absent there and reads as "steps"). "tasks" = project work lives in
+   * the shared `tasks` collection (`task.projectId`). For task projects
+   * `stepCount` / `stepsDoneCount` hold the top-level, non-routine task
+   * counts so every existing progress display keeps working unchanged.
+   */
+  taskModel?: ProjectTaskModel;
+  milestones?: ProjectMilestone[];
+  /** Tracked-time total across the project's task entries (server). */
+  timeSpentSeconds?: number;
+  /** Momentum OS system template this project was generated from, if any. */
+  systemTemplateId?: string | null;
+}
+
+export type ProjectTaskModel = "steps" | "tasks";
+
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  dueAt: Timestamp | FieldValue | null;
+  /** Original Momentum OS free-text label ("Launch day"), when generated from a template. */
+  offsetLabel?: string | null;
+  completedAt: Timestamp | FieldValue | null;
+}
+
+export function projectTaskModel(
+  project: Pick<Project, "taskModel">
+): ProjectTaskModel {
+  return project.taskModel === "tasks" ? "tasks" : "steps";
 }
 
 export interface ProjectStep {

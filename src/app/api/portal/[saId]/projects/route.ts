@@ -53,6 +53,8 @@ export async function POST(
     assignedContactName: member.displayName ?? null,
     createdByUid: null,
     createdByMemberId: member.id,
+    // Projects & Tasks Phase 2: client-started projects use CRM Tasks too.
+    taskModel: "tasks",
   });
 
   return NextResponse.json({ ok: true, project }, { status: 201 });

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { GLOBAL_TERRITORY_ID } from "@/types";
+
 import type Stripe from "stripe";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -68,7 +70,8 @@ function projectEntitlementProjectId(
     .slice(0, 120);
 }
 
-async function instantiateProjectEntitlements(opts: {
+/** Exported for the Projects & Tasks emulator checks (scripts/check-projects-tasks-phase2.ts). */
+export async function instantiateProjectEntitlements(opts: {
   subAccountId: string;
   agencyId: string;
   offerId: string;
@@ -115,6 +118,9 @@ async function instantiateProjectEntitlements(opts: {
     );
     const projectRef = db.doc(`projects/${projectId}`);
     const steps = [...template.steps].sort((a, b) => a.order - b.order);
+    const taskBased = template.snapshotVersion === 2;
+    const territoryId =
+      typeof contact?.territoryId === "string" ? contact.territoryId : GLOBAL_TERRITORY_ID;
     const wasCreated = await db.runTransaction(async (tx) => {
       const existing = await tx.get(projectRef);
       if (existing.exists) return false;
@@ -145,7 +151,58 @@ async function instantiateProjectEntitlements(opts: {
         stepsDoneCount: 0,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
+        ...(taskBased
+          ? { taskModel: "tasks", milestones: [], timeSpentSeconds: 0 }
+          : {}),
       });
+      if (taskBased) {
+        // v2 snapshot → CRM tasks, created in the SAME transaction with
+        // deterministic ids (`{projectId}_t000…`), so a retried grant is a
+        // no-op exactly like the step path. Assigned to the buyer so they
+        // can complete them in the Client Portal (parity with steps).
+        for (const [index, step] of steps.entries()) {
+          tx.set(db.doc(`tasks/${projectId}_t${String(index).padStart(3, "0")}`), {
+            title: step.title,
+            notes: "",
+            dueAt: null,
+            completed: false,
+            completedAt: null,
+            contactId: null,
+            dealId: null,
+            eventId: null,
+            timeBlock: null,
+            agencyId: opts.agencyId,
+            subAccountId: opts.subAccountId,
+            createdByUid: "",
+            territoryId,
+            mode: "live",
+            projectId,
+            parentTaskId: null,
+            status: "todo",
+            priority: null,
+            assigneeUid: null,
+            assigneeContactId: contactId,
+            tags: [],
+            estimateMinutes: null,
+            checklist: [],
+            attachments: [],
+            dependsOnTaskIds: [],
+            relatedTaskIds: [],
+            recurrence: null,
+            autoRollover: false,
+            rolledOverCount: 0,
+            timeSpentSeconds: 0,
+            clientTimeSeconds: 0,
+            visibility: "client",
+            kind: "task",
+            createdByMemberId: null,
+            order: step.order,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        return true;
+      }
       for (const [index, step] of steps.entries()) {
         tx.set(
           projectRef

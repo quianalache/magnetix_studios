@@ -950,6 +950,23 @@ service cloud.firestore {
       );
     }
 
+    // Projects & Tasks Phase 2 (2026-09): project tasks, subtasks and the
+    // server-maintained task fields (tracked-time totals, rollover history,
+    // recurrence series, client visibility / client assignment) are written
+    // ONLY by the server services, which record history + activity and keep
+    // project progress and Client Portal visibility correct. The browser
+    // keeps its existing create / edit / delete of plain standalone tasks.
+    function taskServerOwnedKeys() {
+      return ["projectId", "parentTaskId", "assigneeContactId", "visibility",
+        "timeSpentSeconds", "clientTimeSeconds", "rolledOverCount",
+        "originalDueAt", "recurrenceSeriesId", "occurrenceIndex",
+        "createdByMemberId", "kind"];
+    }
+    function isStandaloneTaskData(data) {
+      return data.get("projectId", null) == null
+        && data.get("parentTaskId", null) == null;
+    }
+
     match /tasks/{taskId} {
       // Territory inherited from the linked contact (null = standalone /
       // admin-triage). Same own-field scoping as deals/contacts.
@@ -962,7 +979,7 @@ service cloud.firestore {
         request.resource.data.subAccountId,
         request.resource.data.agencyId,
         request.resource.data.get("territoryId", null)
-      );
+      ) && !request.resource.data.keys().hasAny(taskServerOwnedKeys());
       allow update: if canSeeScopedDoc(
         resource.data.subAccountId,
         resource.data.agencyId,
@@ -971,12 +988,15 @@ service cloud.firestore {
         && territoryIdUnchangedOrAdmin(
           resource.data.subAccountId,
           resource.data.agencyId
-        );
+        )
+        && isStandaloneTaskData(resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(taskServerOwnedKeys());
       allow delete: if canSeeScopedDoc(
         resource.data.subAccountId,
         resource.data.agencyId,
         resource.data.get("territoryId", null)
-      );
+      ) && isStandaloneTaskData(resource.data);
     }
 
     // ---------- projects ----------

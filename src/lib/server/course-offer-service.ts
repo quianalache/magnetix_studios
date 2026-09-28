@@ -96,6 +96,10 @@ export async function buildClientProjectTemplateBundlesServerSide(
           : null,
       description: typeof data.description === "string" ? data.description : "",
       steps,
+      // Phase 2: offers saved from now on grant TASK-based client projects.
+      // Snapshots already stored on existing offers keep no version (= 1)
+      // and keep granting step-based projects exactly as before.
+      snapshotVersion: 2,
     });
   }
   return bundles;

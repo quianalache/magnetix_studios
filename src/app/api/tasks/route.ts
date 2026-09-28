@@ -5,6 +5,9 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { createTaskServerSide } from "@/lib/server/tasks-service";
 import { resolveDealLink } from "@/lib/server/deal-links";
+import { createFullTask } from "@/lib/server/project-tasks-service";
+import { taskJson } from "@/lib/server/task-serialize";
+import { taskErrorResponse } from "@/lib/server/task-route-helpers";
 
 /**
  * Dashboard-facing task creation. Replaces the browser's direct Firestore
@@ -52,6 +55,25 @@ export async function POST(request: Request) {
 
   const subSnap = await getAdminDb().doc(`subAccounts/${subAccountId}`).get();
   const agencyId = (subSnap.data()?.agencyId as string) ?? access.agencyId ?? "";
+
+  // Projects & Tasks Phase 2: project tasks, subtasks and the richer Task
+  // Detail fields go through the full service (validation, territory,
+  // activity, project progress). Plain CRM task creation below is unchanged.
+  if (body.full === true || body.projectId || body.parentTaskId) {
+    try {
+      const id = await createFullTask({
+        subAccountId,
+        agencyId,
+        actor: { kind: "staff", uid: access.uid },
+        createdByUid: access.uid,
+        body,
+      });
+      const fresh = await getAdminDb().doc(`tasks/${id}`).get();
+      return NextResponse.json({ id, task: taskJson(id, fresh.data()!) }, { status: 201 });
+    } catch (err) {
+      return taskErrorResponse(err);
+    }
+  }
 
   const link = await resolveDealLink(subAccountId, body.dealId);
   if (!link.ok) {

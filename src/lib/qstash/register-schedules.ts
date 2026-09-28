@@ -74,6 +74,13 @@ const SCHEDULES: ScheduleSpec[] = [
     description:
       "Reconcile completed or failed Community recording Egress jobs stuck in processing.",
   },
+  {
+    scheduleId: "leadstack-task-rollover",
+    path: "/api/cron/task-rollover",
+    cron: "10 * * * *",
+    description:
+      "Hourly optional overdue-task rollover (only tasks with autoRollover on).",
+  },
 ];
 
 const MARKER_PATH = "system/scheduleRegistration";

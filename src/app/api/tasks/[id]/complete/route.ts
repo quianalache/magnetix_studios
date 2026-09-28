@@ -43,9 +43,12 @@ export async function POST(
     completed: body.completed,
     userId: access.uid,
     mode: (data.mode as "live" | "test") ?? "live",
+    actor: { kind: "staff", uid: access.uid },
   });
   if (!result) {
     return NextResponse.json({ error: "Task not found" }, { status: 404 });
   }
-  return NextResponse.json({ task: result.task });
+  // `warnings` (Phase 2): unfinished prerequisites. Informational only —
+  // dependencies never block completion.
+  return NextResponse.json({ task: result.task, warnings: result.warnings });
 }
