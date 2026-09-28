@@ -16,6 +16,15 @@ export async function registerNode() {
   const { installLogRedaction } = await import("@/lib/api/redact");
   installLogRedaction();
 
+  // Vercel PREVIEW deployments run with NODE_ENV=production and (today)
+  // the production Firebase project, so without this guard every preview
+  // cold start would re-register the PRODUCTION QStash cron schedules
+  // (stable ids → an upsert) against the preview's NEXT_PUBLIC_APP_URL and
+  // write system/scheduleRegistration + system/heartbeat in production
+  // Firestore. Previews must not mutate shared production state on boot.
+  // Production (VERCEL_ENV=production) and local runs are unaffected.
+  if (process.env.VERCEL_ENV === "preview") return;
+
   // Auto-register the LeadStack daily/hourly cron schedules in QStash.
   // Lets buyers skip the "click into QStash dashboard, create schedules"
   // onboarding step — the schedules appear on the first production
