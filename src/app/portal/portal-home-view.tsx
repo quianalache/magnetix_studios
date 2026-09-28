@@ -53,7 +53,7 @@ import { projectProgressPct } from "@/types/projects";
 import { resolvePortalBranding } from "@/types/portal-branding";
 import type { PortalPromotionConfig } from "@/types/portal-branding";
 import type { SubAccountDoc } from "@/types/tenancy";
-import type { Project, ProjectStep } from "@/types/projects";
+import type { PortalProject } from "@/lib/server/portal-service";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { Quote } from "@/types/quotes";
 import { PortalLogoutButton } from "./[saId]/logout-button";
@@ -389,7 +389,7 @@ export async function PortalHomeView({
       ? listPortalQuotes(saId, member.contactId)
       : Promise.resolve([]),
     branding.modules.projects && member.contactId
-      ? listPortalProjects(saId, member.contactId)
+      ? listPortalProjects(saId, member.contactId, member)
       : Promise.resolve([]),
     branding.modules.sessions
       ? listPortalSessionBundles(saId, member.id, member.contactId)
@@ -1104,7 +1104,7 @@ function ProjectsModule({
   projects,
   projectsHref,
 }: {
-  projects: (Project & { steps: ProjectStep[] })[];
+  projects: PortalProject[];
   projectsHref: string;
 }) {
   return (
@@ -1117,7 +1117,9 @@ function ProjectsModule({
     >
       <div className="space-y-3">
         {projects.slice(0, 3).map((project) => {
-          const nextStep = project.steps.find((step) => !step.done);
+          const nextStep =
+            project.steps.find((step) => !step.done) ??
+            project.taskData?.tasks.find((t) => !t.completed && !t.parentTaskId);
           return (
             <div key={project.id}>
               <div className="flex items-start justify-between gap-3">
@@ -1196,7 +1198,7 @@ function PortalDestination({
   sessionBundles: PortalSessionBundle[];
   communities: PortalCommunity[];
   courses: PortalCourse[];
-  projects: (Project & { steps: ProjectStep[] })[];
+  projects: PortalProject[];
   quotes: Quote[];
   subscriptions: PersonSubscriptionPurchase[];
   paymentHistory: PersonPaymentHistoryItem[];
@@ -1435,6 +1437,8 @@ function PortalDestination({
         title: step.title,
         done: step.done,
       })),
+      // Phase 2 task-based projects: client-safe projection only.
+      taskData: project.taskData ?? null,
     }));
     return (
       <>

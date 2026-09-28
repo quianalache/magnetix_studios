@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import {
+  PortalTaskProject,
+  type PortalTaskData,
+  type PortalTimer,
+} from "./portal-task-project";
 
 /**
  * Client Portal — Projects. The one interactive/writable piece of the
@@ -27,6 +32,8 @@ interface ProjectView {
   stepCount: number;
   stepsDoneCount: number;
   steps: StepView[];
+  /** Phase 2: present for task-based projects (server-computed, client-safe). */
+  taskData?: PortalTaskData | null;
 }
 
 export function PortalProjectsPanel({
@@ -42,6 +49,37 @@ export function PortalProjectsPanel({
   const [newOpen, setNewOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [stepDrafts, setStepDrafts] = useState<Record<string, string>>({});
+  const [timer, setTimer] = useState<PortalTimer | null>(null);
+  const hasTaskProjects = projects.some((p) => p.taskData);
+
+  // The client's single running timer (server is the source of truth).
+  useEffect(() => {
+    if (!hasTaskProjects) return;
+    fetch(`/api/portal/${saId}/time/timer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "status" }),
+    })
+      .then((r) => r.json())
+      .then((d: { timer?: PortalTimer | null }) => setTimer(d.timer ?? null))
+      .catch(() => {});
+  }, [saId, hasTaskProjects]);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!timer) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [timer]);
+
+  async function stopTimer() {
+    await fetch(`/api/portal/${saId}/time/timer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "stop" }),
+    });
+    setTimer(null);
+    refresh();
+  }
 
   function refresh() {
     startTransition(() => router.refresh());
@@ -95,6 +133,27 @@ export function PortalProjectsPanel({
         </button>
       </div>
 
+      {timer && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[#E4E4E4] bg-white px-4 py-2.5">
+          <p className="min-w-0 truncate text-xs text-[#202124]">
+            <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-[#202124] align-middle" />
+            Timer running · {timer.taskTitle} ·{" "}
+            <span className="tabular-nums">
+              {(() => {
+                const s = Math.max(0, Math.floor((Date.now() - new Date(timer.startedAt).getTime()) / 1000));
+                return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+              })()}
+            </span>
+          </p>
+          <button
+            onClick={stopTimer}
+            className="shrink-0 rounded-lg bg-[#202124] px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
       {newOpen && (
         <div className="flex items-center gap-2 rounded-xl border border-[#E4E4E4] bg-white p-3">
           <input
@@ -140,7 +199,9 @@ export function PortalProjectsPanel({
                     <span className="text-xs tabular-nums text-[#909090]">
                       {p.stepCount > 0
                         ? `${p.stepsDoneCount} of ${p.stepCount}`
-                        : "No steps yet"}
+                        : p.taskData
+                          ? "No tasks yet"
+                          : "No steps yet"}
                     </span>
                     <span className="text-[#909090]">{isOpen ? "−" : "+"}</span>
                   </div>
@@ -157,7 +218,18 @@ export function PortalProjectsPanel({
                   </div>
                 )}
 
-                {isOpen && (
+                {isOpen && p.taskData && (
+                  <PortalTaskProject
+                    saId={saId}
+                    projectId={p.id}
+                    data={p.taskData}
+                    timer={timer}
+                    onChanged={refresh}
+                    onTimerChanged={setTimer}
+                  />
+                )}
+
+                {isOpen && !p.taskData && (
                   <div className="space-y-1.5 border-t border-[#E4E4E4] px-4 py-3">
                     {p.steps.map((s) => (
                       <label
