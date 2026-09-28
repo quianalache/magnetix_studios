@@ -2,7 +2,6 @@ import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
   where,
   type Unsubscribe,
@@ -72,23 +71,36 @@ export function subscribeToProject(
   );
 }
 
+/**
+ * Live steps for one project. The `subAccountId` filter is REQUIRED: the
+ * steps rule is `canAccessSub(resource.data.subAccountId, …)`, and Firestore
+ * only allows a list query it can prove satisfies that rule — an unfiltered
+ * list of the subcollection is denied (found by the Projects-redesign
+ * emulator check; the old unfiltered query left the Edit Project sheet's
+ * step list empty). Every step writer (staff API, Client Portal API, offer
+ * grants) stamps `subAccountId`, so the filter drops nothing. Sorted by
+ * `order` client-side so no composite index is needed.
+ */
 export function subscribeToProjectSteps(
   projectId: string,
+  subAccountId: string,
   callback: (steps: ProjectStep[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
   const q = query(
     collection(getFirebaseDb(), PROJECTS, projectId, "steps"),
-    orderBy("order", "asc")
+    where("subAccountId", "==", subAccountId)
   );
   return onSnapshot(
     q,
     (snap) => {
       callback(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<ProjectStep, "id">),
-        }))
+        snap.docs
+          .map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<ProjectStep, "id">),
+          }))
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       );
     },
     (err) => onError?.(err)

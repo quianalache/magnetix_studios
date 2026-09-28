@@ -32,6 +32,10 @@ interface ProjectDialogProps {
   contacts: Contact[];
   templates: ProjectTemplate[];
   project?: Project | null;
+  /** Preselect a workspace template when creating (Template Library → Generate Project). */
+  initialTemplateId?: string | null;
+  /** Called after a successful delete (the Project Workspace navigates back). */
+  onDeleted?: () => void;
 }
 
 function toDateInput(d: Date): string {
@@ -47,6 +51,8 @@ export function ProjectDialog({
   contacts,
   templates,
   project,
+  initialTemplateId = null,
+  onDeleted,
 }: ProjectDialogProps) {
   const { subAccountId } = useSubAccount();
   const isEdit = !!project;
@@ -81,28 +87,33 @@ export function ProjectDialog({
       setStartDate("");
       setDueDate("");
       setContactId(null);
-      setTemplateId("");
+      setTemplateId(initialTemplateId ?? "");
     }
     setErrors({});
-  }, [open, project]);
+  }, [open, project, initialTemplateId]);
 
   useEffect(() => {
     if (!open || !project) {
       setSteps([]);
       return;
     }
-    return subscribeToProjectSteps(project.id, setSteps);
-  }, [open, project]);
+    return subscribeToProjectSteps(project.id, subAccountId, setSteps);
+  }, [open, project, subAccountId]);
 
   const templateOptions = useMemo(
     () =>
-      templates.filter((t) =>
-        contactId
-          ? projectTemplateAudience(t) === "client"
-          : projectTemplateAudience(t) === "internal"
+      templates.filter(
+        (t) =>
+          // A template chosen from the library stays listed even before a
+          // client is picked; submit validates the audience (as the API does).
+          t.id === initialTemplateId ||
+          (contactId
+            ? projectTemplateAudience(t) === "client"
+            : projectTemplateAudience(t) === "internal")
       ),
-    [templates, contactId]
+    [templates, contactId, initialTemplateId]
   );
+  const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
 
   useEffect(() => {
     if (!templateId) return;
@@ -115,6 +126,14 @@ export function ProjectDialog({
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = "Title is required";
+    if (!isEdit && selectedTemplate) {
+      const audience = projectTemplateAudience(selectedTemplate);
+      if (audience === "client" && !contactId)
+        next.template = "Assign a client to use this client template.";
+      if (audience === "internal" && contactId)
+        next.template =
+          "This is an internal template — clear the client or pick a client template.";
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -193,6 +212,7 @@ export function ProjectDialog({
       });
       toast.success("Project deleted");
       onOpenChange(false);
+      onDeleted?.();
     } catch {
       toast.error("Couldn't delete this project.");
     } finally {
@@ -355,6 +375,9 @@ export function ProjectDialog({
                   ? "Only client templates are available for assigned projects."
                   : "Only internal templates are available for unassigned projects."}
               </p>
+              {errors.template && (
+                <p className="text-destructive text-xs">{errors.template}</p>
+              )}
             </div>
           )}
 
