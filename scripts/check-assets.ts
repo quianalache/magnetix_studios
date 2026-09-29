@@ -14,6 +14,7 @@
  *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' ./node_modules/.bin/tsx scripts/check-assets.ts"
  */
 import assert from "node:assert/strict";
+import { viaDispatcher } from "./_via-dispatcher";
 import { createHash } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -190,10 +191,10 @@ async function seed() {
 
 async function main() {
   await seed();
-  const mediaRoute = await import("../src/app/api/sub-accounts/[id]/media-library/route");
-  const mediaItemRoute = await import("../src/app/api/sub-accounts/[id]/media-library/[assetId]/route");
-  const mediaUrlRoute = await import("../src/app/api/sub-accounts/[id]/media-library/[assetId]/url/route");
-  const shareRoute = await import("../src/app/api/sub-accounts/[id]/media-library/[assetId]/share/route");
+  const mediaRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "");
+  const mediaItemRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "[assetId]");
+  const mediaUrlRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "[assetId]/url");
+  const shareRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "[assetId]/share");
   const resourcesRoute = await import("../src/app/api/sub-accounts/[id]/assets/route");
   const resourceRoute = await import("../src/app/api/sub-accounts/[id]/assets/[assetId]/route");
   const affiliatesRoute = await import("../src/app/api/sub-accounts/[id]/affiliate-links/route");
@@ -638,8 +639,8 @@ async function main() {
   });
 
   // ── Corrections: direct-to-storage uploads (files over the ~4.5 MB server cap) ──
-  const uploadsRoute = await import("../src/app/api/sub-accounts/[id]/media-library/uploads/route");
-  const completeRoute = await import("../src/app/api/sub-accounts/[id]/media-library/uploads/[intakeId]/complete/route");
+  const uploadsRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "uploads");
+  const completeRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "uploads/[intakeId]/complete");
   const intakeSvc = await import("../src/lib/server/assets/media-upload-intake-service");
   const iCtx = (intakeId: string, id = SA) => ({ params: Promise.resolve({ id, intakeId }) });
   const MB = 1024 * 1024;
@@ -755,7 +756,7 @@ async function main() {
   });
 
   // ── Corrections: Media Library images reused on public surfaces ──────────
-  const publicRoute = await import("../src/app/api/sub-accounts/[id]/media-library/[assetId]/public-image/route");
+  const publicRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/media-library/[[...path]]/route"), "[assetId]/public-image");
   let pubImgId = "";
   await check("public image: collaborators can't make a private image public; nothing is created", async () => {
     const f = new FormData();

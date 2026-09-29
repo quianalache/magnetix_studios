@@ -27,6 +27,7 @@
  *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' pnpm exec tsx scripts/check-routines.ts"
  */
 import assert from "node:assert/strict";
+import { viaDispatcher } from "./_via-dispatcher";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -140,11 +141,11 @@ async function main() {
   const full = await import("../src/lib/server/project-tasks-service");
   const rollover = await import("../src/lib/server/task-rollover-service");
   const gen = await import("../src/lib/server/project-generation-service");
-  const listRoute = await import("../src/app/api/sub-accounts/[id]/routines/route");
-  const oneRoute = await import("../src/app/api/sub-accounts/[id]/routines/[routineId]/route");
-  const completeRoute = await import("../src/app/api/sub-accounts/[id]/routines/[routineId]/complete/route");
-  const historyRoute = await import("../src/app/api/sub-accounts/[id]/routines/[routineId]/history/route");
-  const calendarRoute = await import("../src/app/api/sub-accounts/[id]/routines/calendar/route");
+  const listRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "");
+  const oneRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "[routineId]");
+  const completeRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "[routineId]/complete");
+  const historyRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "[routineId]/history");
+  const calendarRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "calendar");
   const taskRoute = await import("../src/app/api/tasks/[id]/route");
   const taskCompleteRoute = await import("../src/app/api/tasks/[id]/complete/route");
 
@@ -516,7 +517,7 @@ async function main() {
   });
 
   // ── privacy (personal by default) + sharing ───────────────────────────
-  const activitiesRoute = await import("../src/app/api/sub-accounts/[id]/routines/activities/route");
+  const activitiesRoute = viaDispatcher(await import("../src/app/api/sub-accounts/[id]/routines/[[...path]]/route"), "activities");
   const timerRoute = await import("../src/app/api/time/timer/route");
   const tId = svc.occurrenceTaskId(morning, today, aIds[1]);
   const others = ["member2", "admin3", "boss"] as const; // collaborator, sub-account admin, agency owner

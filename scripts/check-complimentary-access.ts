@@ -16,6 +16,7 @@
  *     "NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' pnpm exec tsx scripts/check-complimentary-access.ts"
  */
 import assert from "node:assert/strict";
+import { viaDispatcher } from "./_via-dispatcher";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -322,7 +323,7 @@ async function main() {
     memberId: "pBuyer", courseId: "aPaid", status: "enrolled", completedLessonIds: ["x"], progressPct: 30, enrolledAt: TS, completedAt: null,
   });
 
-  const agencyRoute = await import("../src/app/api/agency/standalone-courses/[courseId]/complimentary/route");
+  const agencyRoute = viaDispatcher(await import("../src/app/api/agency/standalone-courses/[[...path]]/route"), "[courseId]/complimentary");
   const { checkAgencyCourseEntitlementForPerson } = await import("../src/lib/standalone-courses/agency-course-access");
   const { getAgencyStandaloneCourse } = await import("../src/lib/server/agency-standalone-course-service");
   const { handleAgencyStandaloneCourseSubscriptionDeleted } = await import("../src/lib/server/agency-standalone-course-purchase-service");

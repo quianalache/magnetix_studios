@@ -50,109 +50,68 @@ import * as r46 from "@/lib/agency-community-api/_groupId___settings__upload";
 import * as r47 from "@/lib/agency-community-api/_groupId___voice-notes";
 import * as r48 from "@/lib/agency-community-api/root";
 
+import { createApiDispatcher } from "@/lib/server/api-dispatch";
+
 export const dynamic = "force-dynamic";
 
-type Handler = (request: Request, context: { params: Promise<unknown> }) => Response | Promise<Response>;
-type RouteModule = Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Handler>>;
-type RouteEntry = { segments: string[]; module: RouteModule };
+// Agency Community API — one route for every endpoint (Vercel route limit).
+// Uses the shared dispatcher (2026-09-29), which applies Next's precedence
+// (static segments before dynamic ones): the earlier first-match table sent
+// GET …/courses/catalog to the courses/[courseId] handler.
+const d = createApiDispatcher([
+  ["[groupId]/channels/[channelId]", r0],
+  ["[groupId]/channels", r1],
+  ["[groupId]/courses/[courseId]/lessons/[lessonId]/complete", r2],
+  ["[groupId]/courses/[courseId]/lessons/[lessonId]", r3],
+  ["[groupId]/courses/[courseId]/lessons", r4],
+  ["[groupId]/courses/[courseId]/player", r5],
+  ["[groupId]/courses/[courseId]", r6],
+  ["[groupId]/courses/[courseId]/sections/[sectionId]", r7],
+  ["[groupId]/courses/[courseId]/sections", r8],
+  ["[groupId]/courses/catalog", r9],
+  ["[groupId]/courses/product/[courseId]/lessons/[lessonId]/complete", r10],
+  ["[groupId]/courses/product/[courseId]/player", r11],
+  ["[groupId]/courses", r12],
+  ["[groupId]/events/[eventId]/join", r13],
+  ["[groupId]/events/[eventId]/moderation", r14],
+  ["[groupId]/events", r15],
+  ["[groupId]/leaderboard", r16],
+  ["[groupId]/live-rooms/moderation", r17],
+  ["[groupId]/live-rooms", r18],
+  ["[groupId]/members/[memberId]/resend", r19],
+  ["[groupId]/members/[memberId]", r20],
+  ["[groupId]/members", r21],
+  ["[groupId]/mention-members", r22],
+  ["[groupId]/points-rewards/config", r23],
+  ["[groupId]/points-rewards/levels", r24],
+  ["[groupId]/points-rewards/rewards/[rewardId]/archive", r25],
+  ["[groupId]/points-rewards/rewards/[rewardId]/eligible-winners", r26],
+  ["[groupId]/points-rewards/rewards/[rewardId]", r27],
+  ["[groupId]/points-rewards/rewards", r28],
+  ["[groupId]/points-rewards", r29],
+  ["[groupId]/points-rewards/winners/[winnerId]", r30],
+  ["[groupId]/points-rewards/winners", r31],
+  ["[groupId]/post-files", r32],
+  ["[groupId]/post-images", r33],
+  ["[groupId]/posts/[postId]/comments/[commentId]/like", r34],
+  ["[groupId]/posts/[postId]/comments/[commentId]", r35],
+  ["[groupId]/posts/[postId]/comments", r36],
+  ["[groupId]/posts/[postId]/like", r37],
+  ["[groupId]/posts/[postId]/live-watch", r38],
+  ["[groupId]/posts/[postId]/poll/vote", r39],
+  ["[groupId]/posts/[postId]/replay", r40],
+  ["[groupId]/posts/[postId]", r41],
+  ["[groupId]/posts", r42],
+  ["[groupId]", r43],
+  ["[groupId]/sections/[sectionId]", r44],
+  ["[groupId]/sections", r45],
+  ["[groupId]/settings/upload", r46],
+  ["[groupId]/voice-notes", r47],
+  ["", r48],
+]);
 
-function asModule(module: Record<string, unknown>): RouteModule {
-  return module as unknown as RouteModule;
-}
-
-const routes: RouteEntry[] = [
-  { segments: [":groupId","channels",":channelId"], module: asModule(r0) },
-  { segments: [":groupId","channels"], module: asModule(r1) },
-  { segments: [":groupId","courses",":courseId","lessons",":lessonId","complete"], module: asModule(r2) },
-  { segments: [":groupId","courses",":courseId","lessons",":lessonId"], module: asModule(r3) },
-  { segments: [":groupId","courses",":courseId","lessons"], module: asModule(r4) },
-  { segments: [":groupId","courses",":courseId","player"], module: asModule(r5) },
-  { segments: [":groupId","courses",":courseId"], module: asModule(r6) },
-  { segments: [":groupId","courses",":courseId","sections",":sectionId"], module: asModule(r7) },
-  { segments: [":groupId","courses",":courseId","sections"], module: asModule(r8) },
-  { segments: [":groupId","courses","catalog"], module: asModule(r9) },
-  { segments: [":groupId","courses","product",":courseId","lessons",":lessonId","complete"], module: asModule(r10) },
-  { segments: [":groupId","courses","product",":courseId","player"], module: asModule(r11) },
-  { segments: [":groupId","courses"], module: asModule(r12) },
-  { segments: [":groupId","events",":eventId","join"], module: asModule(r13) },
-  { segments: [":groupId","events",":eventId","moderation"], module: asModule(r14) },
-  { segments: [":groupId","events"], module: asModule(r15) },
-  { segments: [":groupId","leaderboard"], module: asModule(r16) },
-  { segments: [":groupId","live-rooms","moderation"], module: asModule(r17) },
-  { segments: [":groupId","live-rooms"], module: asModule(r18) },
-  { segments: [":groupId","members",":memberId","resend"], module: asModule(r19) },
-  { segments: [":groupId","members",":memberId"], module: asModule(r20) },
-  { segments: [":groupId","members"], module: asModule(r21) },
-  { segments: [":groupId","mention-members"], module: asModule(r22) },
-  { segments: [":groupId","points-rewards","config"], module: asModule(r23) },
-  { segments: [":groupId","points-rewards","levels"], module: asModule(r24) },
-  { segments: [":groupId","points-rewards","rewards",":rewardId","archive"], module: asModule(r25) },
-  { segments: [":groupId","points-rewards","rewards",":rewardId","eligible-winners"], module: asModule(r26) },
-  { segments: [":groupId","points-rewards","rewards",":rewardId"], module: asModule(r27) },
-  { segments: [":groupId","points-rewards","rewards"], module: asModule(r28) },
-  { segments: [":groupId","points-rewards"], module: asModule(r29) },
-  { segments: [":groupId","points-rewards","winners",":winnerId"], module: asModule(r30) },
-  { segments: [":groupId","points-rewards","winners"], module: asModule(r31) },
-  { segments: [":groupId","post-files"], module: asModule(r32) },
-  { segments: [":groupId","post-images"], module: asModule(r33) },
-  { segments: [":groupId","posts",":postId","comments",":commentId","like"], module: asModule(r34) },
-  { segments: [":groupId","posts",":postId","comments",":commentId"], module: asModule(r35) },
-  { segments: [":groupId","posts",":postId","comments"], module: asModule(r36) },
-  { segments: [":groupId","posts",":postId","like"], module: asModule(r37) },
-  { segments: [":groupId","posts",":postId","live-watch"], module: asModule(r38) },
-  { segments: [":groupId","posts",":postId","poll","vote"], module: asModule(r39) },
-  { segments: [":groupId","posts",":postId","replay"], module: asModule(r40) },
-  { segments: [":groupId","posts",":postId"], module: asModule(r41) },
-  { segments: [":groupId","posts"], module: asModule(r42) },
-  { segments: [":groupId"], module: asModule(r43) },
-  { segments: [":groupId","sections",":sectionId"], module: asModule(r44) },
-  { segments: [":groupId","sections"], module: asModule(r45) },
-  { segments: [":groupId","settings","upload"], module: asModule(r46) },
-  { segments: [":groupId","voice-notes"], module: asModule(r47) },
-  { segments: [], module: asModule(r48) },
-];
-
-function matchRoute(path: string[]): { entry: RouteEntry; params: Record<string, string> } | null {
-  for (const entry of routes) {
-    if (entry.segments.length !== path.length) continue;
-    const params: Record<string, string> = {};
-    let matched = true;
-    for (let i = 0; i < entry.segments.length; i += 1) {
-      const expected = entry.segments[i];
-      if (expected.startsWith(":")) params[expected.slice(1)] = path[i];
-      else if (expected !== path[i]) {
-        matched = false;
-        break;
-      }
-    }
-    if (matched) return { entry, params };
-  }
-  return null;
-}
-
-async function dispatch(
-  request: Request,
-  context: { params: Promise<{ path: string[] }> },
-  method: keyof RouteModule,
-) {
-  const route = matchRoute((await context.params).path);
-  const handler = route?.entry.module[method];
-  if (!handler) return new Response("Not found", { status: 404 });
-  return handler(request, { params: Promise.resolve(route.params) });
-}
-
-export function GET(request: Request, context: { params: Promise<{ path: string[] }> }) {
-  return dispatch(request, context, "GET");
-}
-
-export function POST(request: Request, context: { params: Promise<{ path: string[] }> }) {
-  return dispatch(request, context, "POST");
-}
-
-export function PATCH(request: Request, context: { params: Promise<{ path: string[] }> }) {
-  return dispatch(request, context, "PATCH");
-}
-
-export function DELETE(request: Request, context: { params: Promise<{ path: string[] }> }) {
-  return dispatch(request, context, "DELETE");
-}
+// Only the methods this API has always served; any other method is a 404.
+export const GET = d.GET;
+export const POST = d.POST;
+export const PATCH = d.PATCH;
+export const DELETE = d.DELETE;

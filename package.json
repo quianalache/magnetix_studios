@@ -12,7 +12,8 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "node scripts/check-capability-tenancy.mjs && eslint",
+    "lint": "node scripts/check-capability-tenancy.mjs && node scripts/gen-api-dispatch.mjs --check && eslint",
+    "check:api-dispatch": "node scripts/gen-api-dispatch.mjs --check",
     "check:tenancy": "node scripts/check-capability-tenancy.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\""
   },

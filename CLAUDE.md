@@ -946,6 +946,16 @@ The Workspace Assistant (and the Agency Assistant via the `_in_sub_account` wrap
 
 Execution goes through [src/lib/server/websites-service.ts](src/lib/server/websites-service.ts) — `createWebsiteForSubAccount()` + `submitWebsiteBuildForSubAccount()`, extracted from the create/build routes (which now delegate). Every guard is shared: the `websiteEnabledByAgency` gate, the 5-site cap, `GITPAGE_API_KEY` presence, config normalization + validation, gitpage error mapping (incl. the 401 key-invalid heartbeat flip), and QStash poll scheduling. **No new env vars** — reuses `FIRECRAWL_API_KEY` (optional), `GITPAGE_API_KEY`, `QSTASH_*`.
 
+## Consolidated API routes (Vercel route limit)
+
+Vercel rejects a deployment with more than **2,048 routes**, and `next build` never checks it. Every DYNAMIC route (any `[param]` in its path, page or API) costs 3 route entries; static routes cost ~0. On 2026-09-29 the Projects/Tasks/Routines/Assets release hit 2,120 and failed at deploy. The fix brought it to **1,688** by consolidating API groups:
+
+- Groups listed in `GROUPS` in [scripts/gen-api-dispatch.mjs](scripts/gen-api-dispatch.mjs) (Community member API `[groupId]`, Energetic Decoder, YouTube Studio, Client Portal, Growth, sub-account + agency Standalone Courses, Projects, Media Library, Routines) are each served by ONE generated optional catch-all, `<group>/[[...path]]/route.ts`, which dispatches through [api-dispatch.ts](src/lib/server/api-dispatch.ts) to the original, unchanged handler files in `<group>/_routes/<same sub-path>/route.ts` (private folder, never routed). URLs, methods, params, auth and responses are unchanged; precedence follows Next (static > dynamic > catch-all); unknown path → 404, unexported method → 405, HEAD/OPTIONS as Next.
+- **Adding an endpoint to a consolidated group:** put it at `<group>/_routes/<sub-path>/route.ts` and run `node scripts/gen-api-dispatch.mjs --write`. A handler that needs its own `maxDuration`/`runtime`/etc. stays a real route file outside `_routes/` (first segment below the group must be static). `pnpm lint` runs `--check` and fails when a group is out of sync.
+- **Before adding a new dynamic route area, measure:** `npx vercel build --prod` (with an env-free `.vercel/project.json`) → `.vercel/output/config.json` `routes.length`; keep it well under 2,048 — prefer adding a new group to `GROUPS` over many new dynamic route files.
+- The Agency Community API (`api/agency/community/[...path]`, handlers in `src/lib/agency-community-api/`) uses the same dispatcher.
+- Checks: `scripts/check-api-dispatch.ts` (every endpoint at `origin/main` still served, per-method/params dispatch, precedence, 404/405/HEAD/OPTIONS); emulator suites call consolidated endpoints through the dispatcher via `scripts/_via-dispatcher.ts`.
+
 ## Commands
 - `pnpm dev` — dev server (Turbopack)
 - `pnpm build` — production build
