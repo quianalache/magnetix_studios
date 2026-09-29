@@ -5,8 +5,6 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   CheckCircle2,
-  Copy,
-  HelpCircle,
   Instagram,
   Loader2,
   MessagesSquare,
@@ -29,9 +27,8 @@ import { Button } from "@/components/ui/button";
  *
  * When unlocked it shows either a "Connect" entry point (full-page redirect to
  * the OAuth start route) or the connected Page / IG handle with a Disconnect
- * button. It also surfaces the webhook callback URL + redirect URI the agency
- * needs to register in their Meta app, and reads the `?meta=…` status the
- * connect/callback routes redirect back with.
+ * button, and reads the `?meta=…` status the connect/callback routes redirect
+ * back with.
  */
 
 const STATUS_MESSAGES: Record<
@@ -106,10 +103,6 @@ export function SubAccountMetaSection() {
   // "redirect URI is not whitelisted" error. Now sourced from the identical
   // env var the server uses, no origin-guessing fallback: if it's unset,
   // this says so plainly instead of silently showing a maybe-wrong URL.
-  const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") || null;
-  const webhookUrl = appBase ? `${appBase}/api/webhooks/meta` : null;
-  const redirectUri = appBase ? `${appBase}/api/meta/callback` : null;
-
   // Gate: invisible unless admin + at least one Meta feature enabled.
   if (!isAdmin || !gateOn) return null;
 
@@ -148,11 +141,6 @@ export function SubAccountMetaSection() {
     } finally {
       setDisconnecting(false);
     }
-  }
-
-  function copy(value: string, label: string) {
-    void navigator.clipboard.writeText(value);
-    toast.success(`${label} copied.`);
   }
 
   const connected = !!cfg?.connected;
@@ -273,73 +261,17 @@ export function SubAccountMetaSection() {
         </div>
       )}
 
-      {/* Setup reference — the URLs the agency registers in their Meta app. */}
       <div className="mt-4 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-        <p className="font-medium text-foreground">Meta app setup (one-time)</p>
+        <p className="font-medium text-foreground">Development mode</p>
         <p className="mt-1">
-          The agency registers these in the Meta app (Webhooks + Facebook Login
-          → Valid OAuth redirect URIs) <strong>once for the whole deployment</strong>
-          — they&apos;re the same for every sub-account, so new clients connect with
-          no extra Meta setup. Beta access also requires Meta App Review for
-          messaging permissions.
+          Meta connection is managed centrally for this workspace. In Development
+          mode, only people with an approved role on the Meta app can connect.
+          Customer-facing technical setup values are intentionally hidden here.
         </p>
-        <div className="mt-2 space-y-2">
-          <div>
-            <p className="mb-1 text-[11px] font-medium text-foreground">
-              Webhook callback URL
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded bg-background px-2 py-1.5 text-[11px]">
-                {webhookUrl ?? "NEXT_PUBLIC_APP_URL is not set on this deployment"}
-              </code>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!webhookUrl}
-                onClick={() => webhookUrl && copy(webhookUrl, "Webhook URL")}
-              >
-                <Copy className="mr-1 h-3 w-3" />
-                Copy
-              </Button>
-            </div>
-          </div>
-          <div>
-            <p className="mb-1 text-[11px] font-medium text-foreground">
-              OAuth redirect URI
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 truncate rounded bg-background px-2 py-1.5 text-[11px]">
-                {redirectUri ?? "NEXT_PUBLIC_APP_URL is not set on this deployment"}
-              </code>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!redirectUri}
-                onClick={() => redirectUri && copy(redirectUri, "Redirect URI")}
-              >
-                <Copy className="mr-1 h-3 w-3" />
-                Copy
-              </Button>
-            </div>
-          </div>
-        </div>
-        <p className="mt-2 flex items-start gap-1.5">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-          <span>
-            Beta — Meta App Review is required for messaging permissions
-            (inbox){socialOn && " and posting permissions (Social Planner)"}.
-            Until approved, only app admins/testers can connect.
-          </span>
-        </p>
-
         <details className="mt-3 rounded-md border bg-background/60 p-3">
-          <summary className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <HelpCircle className="h-3.5 w-3.5" />
-            Testing in Development mode &amp; troubleshooting
+          <summary className="cursor-pointer text-[11px] font-medium text-foreground">
+            Testing and troubleshooting
           </summary>
-
           <div className="mt-3 space-y-3 text-[11px] leading-relaxed">
             <div>
               <p className="font-medium text-foreground">

@@ -27,7 +27,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { SOCIAL_CAPTION_MAX } from "@/types/social";
+import { SOCIAL_CAPTION_MAX, type SocialPostDoc } from "@/types/social";
+import { MediaLibraryPicker } from "@/components/social/media-library-picker";
 
 /**
  * Compose a social post — caption + optional image URL + platform targets +
@@ -47,6 +48,7 @@ export function SocialPostComposer({
   canInstagram,
   pageName,
   igUsername,
+  editingPost,
   /** Seeds the caption when the dialog opens — e.g. a Content Library
    *  card being promoted to a real scheduled post. */
   initialCaption,
@@ -60,22 +62,30 @@ export function SocialPostComposer({
   pageName?: string | null;
   igUsername?: string | null;
   initialCaption?: string;
+  editingPost?: SocialPostDoc | null;
   onCreated?: (postId: string) => void;
 }) {
-  const [caption, setCaption] = useState(initialCaption ?? "");
+  const [caption, setCaption] = useState(editingPost?.caption ?? initialCaption ?? "");
   const [imageUrl, setImageUrl] = useState("");
-  const [toFacebook, setToFacebook] = useState(canFacebook);
-  const [toInstagram, setToInstagram] = useState(false);
+  const [toFacebook, setToFacebook] = useState(editingPost?.targets.includes("facebook") ?? canFacebook);
+  const [toInstagram, setToInstagram] = useState(editingPost?.targets.includes("instagram") ?? false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState<"draft" | "schedule" | null>(null);
+  const [mediaOpen, setMediaOpen] = useState(false);
 
   // Re-seed the caption every time the dialog opens fresh (the component
   // stays mounted between opens, so a plain useState initializer only
   // fires once at first mount).
   useEffect(() => {
-    if (open) setCaption(initialCaption ?? "");
+    if (open) {
+      setCaption(editingPost?.caption ?? initialCaption ?? "");
+      setImageUrl(editingPost?.imageUrl ?? "");
+      setToFacebook(editingPost?.targets.includes("facebook") ?? canFacebook);
+      setToInstagram(editingPost?.targets.includes("instagram") ?? false);
+      setScheduledAt("");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, editingPost]);
 
   function reset() {
     setCaption("");
@@ -112,9 +122,11 @@ export function SocialPostComposer({
     setSaving(mode);
     try {
       const res = await fetch(
-        `/api/sub-accounts/${subAccountId}/social/posts`,
+        editingPost
+          ? `/api/sub-accounts/${subAccountId}/social/posts/${editingPost.id}`
+          : `/api/sub-accounts/${subAccountId}/social/posts`,
         {
-          method: "POST",
+          method: editingPost ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             caption: caption.trim(),
@@ -152,7 +164,7 @@ export function SocialPostComposer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>New post</DialogTitle>
+        <DialogTitle>{editingPost ? "Edit post" : "New post"}</DialogTitle>
           <DialogDescription>
             Schedule a post to your connected Facebook Page and Instagram. It
             publishes automatically at the time you pick.
@@ -177,19 +189,20 @@ export function SocialPostComposer({
               </p>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="sp-image">Image URL (https)</Label>
-              <Input
-                id="sp-image"
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/photo.jpg"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Optional for Facebook. Required for Instagram. Must be a public
-                https URL (uploads come in a later update).
-              </p>
+            <div className="space-y-2">
+              <Label>Media</Label>
+              <div className="rounded-xl border border-dashed p-3">
+                {imageUrl ? (
+                  <div className="relative overflow-hidden rounded-lg">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageUrl} alt="Selected media" className="aspect-video w-full object-cover" />
+                    <Button type="button" size="sm" variant="secondary" className="absolute right-2 top-2" onClick={() => setImageUrl("")}>Remove</Button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setMediaOpen(true)}><ImageIcon className="mr-2 h-4 w-4" />Choose from Media Library</Button>
+                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">Instagram feed posts require media. Use approved public media from the existing library.</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -326,6 +339,7 @@ export function SocialPostComposer({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <MediaLibraryPicker open={mediaOpen} onOpenChange={setMediaOpen} subAccountId={subAccountId} onSelect={({ url }) => setImageUrl(url)} />
     </Dialog>
   );
 }

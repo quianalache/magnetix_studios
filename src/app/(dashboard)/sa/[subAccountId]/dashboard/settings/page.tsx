@@ -70,6 +70,15 @@ export default function SettingsPage() {
   const workspaceName = subAccount?.name ?? "this sub-account";
   const [profile, setProfile] = useState<UserDoc | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [activeTab, setActiveTab] = useState("admin");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (["admin", "messaging", "api", "custom-fields", "business-brain", "import"].includes(requested ?? "")) {
+      setActiveTab(requested as string);
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -137,7 +146,7 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="admin">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="admin">Admin</TabsTrigger>
           <TabsTrigger value="messaging">Messaging</TabsTrigger>
