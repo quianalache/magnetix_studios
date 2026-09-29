@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/require-tenancy";
 import { publishSocialPost, qstashIsConfigured } from "@/lib/automations/qstash";
 import { metaCanPublish } from "@/lib/comms/meta-capabilities";
+import { isApprovedSocialImage } from "@/lib/server/social-media-validation";
 import { SOCIAL_CAPTION_MAX } from "@/types/social";
 import type {
   MetaConfig,
@@ -101,6 +102,12 @@ export async function POST(
       );
     }
     imageUrl = b.imageUrl.trim().slice(0, 2000);
+    if (!(await isApprovedSocialImage(subAccountId, imageUrl))) {
+      return NextResponse.json(
+        { error: "Choose a ready image with an administrator-approved public delivery URL from the Media Library." },
+        { status: 400 },
+      );
+    }
   }
 
   // ── Validate targets ──────────────────────────────────────────────

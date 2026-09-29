@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { metaCanPublish } from "@/lib/comms/meta-capabilities";
 import { publishSocialPost, qstashIsConfigured } from "@/lib/automations/qstash";
+import { isApprovedSocialImage } from "@/lib/server/social-media-validation";
 import { SOCIAL_CAPTION_MAX, type SocialPlatform, type SocialPostTargetResult } from "@/types/social";
 import type { MetaConfig, SocialPostDoc } from "@/types";
 
@@ -29,6 +30,7 @@ export async function PATCH(
   if (caption.length > SOCIAL_CAPTION_MAX) return NextResponse.json({ error: `Caption is too long (max ${SOCIAL_CAPTION_MAX} characters).` }, { status: 400 });
   const imageUrl = typeof body.imageUrl === "string" && body.imageUrl.trim() ? body.imageUrl.trim().slice(0, 2000) : null;
   if (imageUrl && !/^https:\/\//i.test(imageUrl)) return NextResponse.json({ error: "Selected media must use an https URL." }, { status: 400 });
+  if (imageUrl && !(await isApprovedSocialImage(subAccountId, imageUrl))) return NextResponse.json({ error: "Choose a ready image with an administrator-approved public delivery URL from the Media Library." }, { status: 400 });
   const targets = Array.isArray(body.targets) ? PLATFORMS.filter((platform) => (body.targets as unknown[]).includes(platform)) : [];
   const status = body.status === "scheduled" ? "scheduled" : "draft";
   if (status === "draft") {
