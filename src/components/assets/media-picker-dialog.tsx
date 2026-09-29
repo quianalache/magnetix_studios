@@ -20,6 +20,7 @@ export function MediaPickerDialog({
   open,
   onOpenChange,
   kind,
+  publicOnly = false,
   title = "Choose from Media Library",
   description = "Reuse a file you've already uploaded.",
   onSelect,
@@ -28,6 +29,8 @@ export function MediaPickerDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind?: MediaLibraryKind;
+  /** Only show images with an explicit, administrator-approved public copy. */
+  publicOnly?: boolean;
   title?: string;
   description?: string;
   onSelect: (item: MediaLibraryItem) => void;
@@ -51,8 +54,8 @@ export function MediaPickerDialog({
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (items ?? []).filter((i) => !s || i.title.toLowerCase().includes(s) || (i.filename ?? "").toLowerCase().includes(s) || i.tags.some((t) => t.toLowerCase().includes(s)));
-  }, [items, q]);
+    return (items ?? []).filter((i) => (!publicOnly || Boolean(i.publicUrl)) && (!s || i.title.toLowerCase().includes(s) || (i.filename ?? "").toLowerCase().includes(s) || i.tags.some((t) => t.toLowerCase().includes(s))));
+  }, [items, publicOnly, q]);
   const chosen = shown.find((i) => i.id === selected) ?? null;
 
   return (

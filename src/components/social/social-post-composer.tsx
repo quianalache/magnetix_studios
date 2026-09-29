@@ -29,11 +29,12 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { SOCIAL_CAPTION_MAX, type SocialPostDoc } from "@/types/social";
 import { MediaLibraryPicker } from "@/components/social/media-library-picker";
+import { uploadToMediaLibrary } from "@/lib/client/media-library-upload";
 
 /**
- * Compose a social post — caption + optional image URL + platform targets +
- * schedule, with a live platform-styled preview. v1 takes a pasted https
- * image URL (no upload); Instagram requires one. Posts to
+ * Compose a social post — caption + approved Media Library image + platform
+ * targets + schedule, with a live platform-styled preview. Instagram requires
+ * an image. Posts to
  * /api/sub-accounts/[id]/social/posts as a draft or scheduled.
  *
  * The preview is purely client-side (renders the caption + image in mock FB/IG
@@ -72,6 +73,7 @@ export function SocialPostComposer({
   const [scheduledAt, setScheduledAt] = useState("");
   const [saving, setSaving] = useState<"draft" | "schedule" | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   // Re-seed the caption every time the dialog opens fresh (the component
   // stays mounted between opens, so a plain useState initializer only
@@ -93,6 +95,24 @@ export function SocialPostComposer({
     setToFacebook(canFacebook);
     setToInstagram(false);
     setScheduledAt("");
+  }
+
+  async function uploadImage(file: File | undefined) {
+    if (!file) return;
+    setUploadingMedia(true);
+    try {
+      const item = await uploadToMediaLibrary(subAccountId, file);
+      if (item.publicUrl) {
+        setImageUrl(item.publicUrl);
+        toast.success("Image uploaded and ready to use.");
+      } else {
+        toast.success("Image uploaded privately. An administrator must approve public delivery in Assets before it can be published.");
+      }
+    } catch (error) {
+      toast.error((error as Error).message || "Couldn't upload the image.");
+    } finally {
+      setUploadingMedia(false);
+    }
   }
 
   async function submit(mode: "draft" | "schedule") {
@@ -199,9 +219,16 @@ export function SocialPostComposer({
                     <Button type="button" size="sm" variant="secondary" className="absolute right-2 top-2" onClick={() => setImageUrl("")}>Remove</Button>
                   </div>
                 ) : (
-                  <Button type="button" variant="outline" className="w-full" onClick={() => setMediaOpen(true)}><ImageIcon className="mr-2 h-4 w-4" />Choose from Media Library</Button>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button type="button" variant="outline" className="w-full" onClick={() => setMediaOpen(true)}><ImageIcon className="mr-2 h-4 w-4" />Choose approved image</Button>
+                    <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => document.getElementById("sp-media-upload")?.click()}>
+                      {uploadingMedia ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
+                      {uploadingMedia ? "Uploading…" : "Upload to Media Library"}
+                    </Button>
+                    <input id="sp-media-upload" type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(event) => { void uploadImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+                  </div>
                 )}
-                <p className="mt-2 text-[11px] text-muted-foreground">Instagram feed posts require media. Use approved public media from the existing library.</p>
+                <p className="mt-2 text-[11px] text-muted-foreground">Instagram feed posts require media. New uploads remain private until an administrator approves public delivery in Assets.</p>
               </div>
             </div>
 
