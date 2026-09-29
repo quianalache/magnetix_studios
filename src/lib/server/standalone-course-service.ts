@@ -2,7 +2,7 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { updateBunnyLessonReference } from "@/lib/server/bunny-stream-service";
+import { getBunnyAsset, updateBunnyLessonReference } from "@/lib/server/bunny-stream-service";
 import type { LessonVideoSource } from "@/types/media-asset";
 import { emitWebhookEvent } from "@/lib/api/webhooks/dispatch";
 import { emitWorkflowEvent } from "@/lib/workflows/events";
@@ -689,7 +689,7 @@ export async function updateStandaloneLessonServerSide(opts: {
   const updates: Record<string, unknown> = {
     updatedAt: FieldValue.serverTimestamp(),
   };
-  const p = opts.patch;
+  let p = opts.patch;
   const existingSnap = await lessonsCol(opts.subAccountId, opts.courseId).doc(opts.lessonId).get();
   const existing = existingSnap.data() as { hostedVideoId?: string | null } | undefined;
   if (typeof p.title === "string") updates.title = p.title.trim();
@@ -709,6 +709,18 @@ export async function updateStandaloneLessonServerSide(opts: {
   if (p.chartUnlockCondition !== undefined)
     updates.chartUnlockCondition = p.chartUnlockCondition;
   let videoError = false;
+  if (p.hostedVideoId) {
+    // Media Library reuse lets a lesson pick an EXISTING hosted video: it
+    // must be a live Bunny video of this same sub-account.
+    const hosted =
+      typeof p.hostedVideoId === "string" && !p.hostedVideoId.includes("/")
+        ? await getBunnyAsset({ kind: "tenant", agencyId: "", subAccountId: opts.subAccountId }, p.hostedVideoId)
+        : null;
+    if (!hosted || hosted.status === "deleted" || hosted.deletedAt) {
+      p = { ...p, hostedVideoId: undefined };
+      videoError = true;
+    }
+  }
   if (p.hostedVideoId !== undefined) {
     updates.hostedVideoId = p.hostedVideoId;
     updates.videoSource = p.hostedVideoId ? { sourceType: "hosted", hostedVideoId: p.hostedVideoId } : null;

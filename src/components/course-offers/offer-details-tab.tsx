@@ -588,6 +588,7 @@ export function OfferDetailsTab({
           onUpload={(file) =>
             uploadCourseOfferImage(file, subAccountId, offer.id)
           }
+          mediaLibrarySubAccountId={subAccountId}
         />
       </div>
 

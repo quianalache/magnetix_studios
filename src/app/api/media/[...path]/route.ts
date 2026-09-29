@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/bunny-stream-service";
 import type { VideoOwnerScope } from "@/types/media-asset";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { deleteMediaLibraryAsset } from "@/lib/server/assets/media-library-service";
 import { bunnyWebhookFingerprint, verifyBunnyStreamWebhookSignature } from "@/lib/server/bunny-webhook-signature";
 
 export const dynamic = "force-dynamic";
@@ -142,7 +143,18 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ path?: s
   const match = path.join("/").match(/^hosted-videos\/([^/]+)$/);
   const scope = parseScope(input?.ownerScope);
   if (!match || !scope) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  if (!(await authorize(request, scope))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  try { await deleteBunnyHostedVideo(scope, match[1]); return NextResponse.json({ ok: true }); }
+  const caller = await authorize(request, scope);
+  if (!caller) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    // Sub-account videos go through the Media Library delete so the same
+    // dependency checks (course lessons AND Resource Library entries) apply
+    // and replay links are revoked only after Bunny confirms the delete.
+    if (scope.kind === "tenant") {
+      await deleteMediaLibraryAsset({ agencyId: scope.agencyId, subAccountId: scope.subAccountId }, match[1], caller.uid);
+    } else {
+      await deleteBunnyHostedVideo(scope, match[1]);
+    }
+    return NextResponse.json({ ok: true });
+  }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to delete hosted video" }, { status: 409 }); }
 }

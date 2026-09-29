@@ -134,7 +134,7 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
       { href: "/pipeline", label: "Pipelines", icon: GitBranch, enabled: true },
       // Projects redesign (Sept 2026): Tasks moved under Projects → My
       // Tasks (same Tasks engine; /tasks redirects there). Assets left the
-      // Projects page and is its own entry until its separate redesign.
+      // Projects page and is its own top-level entry (below).
       {
         href: "/projects",
         label: "Projects",
@@ -177,6 +177,8 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
           },
         ],
       },
+      // Assets is its own top-level section (approved 2026-09): Resource
+      // Library · CRM Resources · Media Library · Affiliate Library.
       { href: "/assets", label: "Assets", icon: Package, enabled: true },
     ],
   },

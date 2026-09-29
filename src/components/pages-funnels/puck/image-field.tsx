@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { uploadPageImage } from "@/lib/pages-funnels/puck/upload-image";
 import { cn } from "@/lib/utils";
+import { MediaLibraryImageButton } from "@/components/assets/media-library-image-button";
 
 /**
  * Image element's Settings field editor (real user QA blocker — the Image
@@ -27,13 +28,10 @@ import { cn } from "@/lib/utils";
  * in the editor canvas, Preview, and the published page, all of which
  * already just read `src` as a plain string.
  *
- * Content Library / "Choose from Library" (browsing previously-uploaded
- * images across pages) is NOT implemented here — inspected first (task's
- * explicit instruction) and genuinely doesn't yet expose a reusable picker
- * component; implementing the smallest proper Upload flow instead and
- * reporting library-selection as a separate, real gap, per the task's own
- * explicit permission to do exactly that rather than force a raw-URL
- * fallback "because it's easier."
+ * "Choose from Media Library" (Assets corrections, 2026-09-29) reuses an
+ * image already in the sub-account's Media Library: the field still
+ * receives a plain public URL (an explicitly published public copy — the
+ * library original stays private), so the persisted shape is unchanged.
  *
  * SUB-ACCOUNT / PAGE SCOPE: same reasoning as `form-field.tsx` — Puck's
  * `CustomFieldRender` doesn't carry `puck.metadata`, so this reads
@@ -121,6 +119,15 @@ export function ImageFieldEditor({
             )}
             {uploading ? "Uploading…" : src ? "Replace Image" : "Upload Image"}
           </Button>
+          <MediaLibraryImageButton
+            subAccountId={sub!.subAccountId}
+            onPick={(url) => {
+              setError(null);
+              onChange(url);
+            }}
+            disabled={uploading}
+            className="w-full"
+          />
           {error && <p className="text-destructive text-xs">{error}</p>}
         </>
       ) : (

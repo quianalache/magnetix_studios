@@ -7,6 +7,7 @@ import {
   verifyQStashSignature,
 } from "@/lib/automations/qstash";
 import { sweepOldWatchdogRuns } from "@/lib/server/agents-watchdog-service";
+import { sweepExpiredUploadIntakes } from "@/lib/server/assets/media-upload-intake-service";
 
 /**
  * Daily cleanup sweep for the public API's TTL'd collections.
@@ -124,6 +125,9 @@ export async function POST(request: Request) {
       deleted: watchdogDeleted,
       hitCap: false,
     });
+    // Abandoned Media Library direct uploads (intake record + object).
+    const intakes = await sweepExpiredUploadIntakes();
+    results.push({ collection: "mediaUploadIntakes", deleted: intakes.deleted, hitCap: intakes.hitCap });
   } catch (err) {
     console.error("[cron/api-cleanup] sweep failed", err);
     return NextResponse.json(
