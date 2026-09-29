@@ -401,7 +401,9 @@ async function main() {
     if (!r.ok) return;
     assert.match(r.embedUrl, /\/embed\/lib1\/guid-v1\?token=[0-9a-f]{64}&expires=\d+$/);
     assert.deepEqual(Object.keys(r).sort(), ["brandName", "embedUrl", "expiresInSeconds", "ok", "title"]);
-    assert.equal(JSON.stringify(r).includes("c1"), false, "no course reference leaks");
+    // Strip the random token/expiry first — a 64-hex token can contain "c1" by chance.
+    const scrubbed = JSON.stringify({ ...r, embedUrl: r.embedUrl.split("?")[0] });
+    assert.equal(/\bc1\b|standaloneCourses|lessons/.test(scrubbed), false, "no course reference leaks");
     const course = await db.doc(`subAccounts/${SA}/standaloneCourses/c1`).get();
     assert.equal(course.data()!.published, true, "course untouched");
     await new Promise((res) => setTimeout(res, 150));
