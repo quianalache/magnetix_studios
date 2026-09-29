@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { MediaLibraryImageButton } from "@/components/assets/media-library-image-button";
 
 /**
  * Generic image upload field (cover / logo / thumbnail). Delegates the
@@ -23,6 +24,7 @@ export function ImageUpload({
   onUpload,
   aspect = "video",
   disabled,
+  mediaLibrarySubAccountId,
 }: {
   label: string;
   hint?: string;
@@ -34,6 +36,11 @@ export function ImageUpload({
   /** "video" = 16:9 cover, "square" = logo. */
   aspect?: "video" | "square";
   disabled?: boolean;
+  /**
+   * Sub-account whose Media Library can be reused here (Assets corrections,
+   * 2026-09-29). Omit for agency-scope fields — they have no library.
+   */
+  mediaLibrarySubAccountId?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -112,6 +119,14 @@ export function ImageUpload({
         >
           {uploading ? "Uploading…" : "Replace image"}
         </button>
+      )}
+      {mediaLibrarySubAccountId && !disabled && (
+        <MediaLibraryImageButton
+          subAccountId={mediaLibrarySubAccountId}
+          onPick={(url) => onChange(url)}
+          disabled={uploading}
+          className="h-7 px-2 text-xs"
+        />
       )}
       <input
         ref={inputRef}

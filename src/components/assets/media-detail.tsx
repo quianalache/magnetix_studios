@@ -65,6 +65,22 @@ export function MediaDetail({
   const [title, setTitle] = useState(item.title);
   const [tagInput, setTagInput] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+
+  async function unpublishImage() {
+    setBusy("public");
+    try {
+      await assetsCall(`${base}/public-image`, { method: "DELETE" });
+      const r = await assetsCall<{ item: MediaLibraryItem }>(base);
+      onChanged(r.item);
+      setConfirmUnpublish(false);
+      toast.success("Public link turned off");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
   const [expiry, setExpiry] = useState(localDateInput(item.share?.expiresAt ?? null));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -348,6 +364,56 @@ export function MediaDetail({
               <span className="text-muted-foreground">Optional expiry</span>
               <Input id="replay-expiry-new" type="date" value={expiry} min={new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)} onChange={(e) => setExpiry(e.target.value)} className="h-8 w-40 text-xs" />
             </label>
+          )}
+        </section>
+      )}
+
+      {item.kind === "image" && (
+        <section className="mt-5 rounded-xl border p-3" aria-labelledby="public-image-heading">
+          <h3 id="public-image-heading" className="flex items-center gap-1.5 text-sm font-semibold">
+            <Share2 className="h-4 w-4" /> Public image link
+          </h3>
+          {item.publicUrl ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex gap-2">
+                <Input id="public-image-url" readOnly value={item.publicUrl} onFocus={(e) => e.currentTarget.select()} className="h-9 font-mono text-xs" />
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    if (await copyText(item.publicUrl!)) toast.success("Image link copied");
+                    else toast.error("Couldn't copy — select the link and copy it");
+                  }}
+                >
+                  <Copy className="mr-1.5 h-4 w-4" /> Copy
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                A public copy used on pages, emails or course images. Anyone with the link can view this one image; the original stays private.
+              </p>
+              {isAdmin &&
+                (confirmUnpublish ? (
+                  <div className="border-destructive/30 bg-destructive/5 space-y-2 rounded-lg border p-2.5 text-xs">
+                    <p>Turn off the public link? Pages, emails and course images using it will show a broken image.</p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="destructive" disabled={busy === "public"} onClick={() => void unpublishImage()}>
+                        Turn off link
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmUnpublish(false)}>
+                        Keep it
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => setConfirmUnpublish(true)}>
+                    Turn off public link
+                  </Button>
+                ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground mt-2 flex gap-1.5 text-xs">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              Private — only your team can see it. It gets a public link only when an admin chooses it for a page, email or course image.
+            </p>
           )}
         </section>
       )}

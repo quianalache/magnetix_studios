@@ -21,6 +21,15 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { initializeApp as initClient, type FirebaseApp } from "firebase/app";
 import {
+  connectStorageEmulator,
+  getBytes as cGetBytes,
+  getStorage as cStorage,
+  ref as cRef,
+  uploadBytes as cUploadBytes,
+  uploadBytesResumable as cUploadResumable,
+  type FirebaseStorage as ClientStorage,
+} from "firebase/storage";
+import {
   collection as cCollection,
   connectFirestoreEmulator,
   doc as cDoc,
@@ -104,6 +113,25 @@ function clientAs(uid: string, agencyId = AG): ClientDb {
   const [host, port] = process.env.FIRESTORE_EMULATOR_HOST!.split(":");
   connectFirestoreEmulator(cdb, host, Number(port), { mockUserToken: { sub: uid, user_id: uid, status: "active", agencyId, agencyRole: null } });
   return cdb;
+}
+
+function storageAs(uid: string | null): ClientStorage {
+  const app: FirebaseApp = initClient({ projectId: PROJECT, storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }, `s${appN++}`);
+  const st = cStorage(app);
+  const [host, port] = process.env.FIREBASE_STORAGE_EMULATOR_HOST!.split(":");
+  connectStorageEmulator(st, host, Number(port), uid ? { mockUserToken: { sub: uid, user_id: uid } } : undefined);
+  return st;
+}
+async function storageRule(label: string, allowed: boolean, op: () => Promise<unknown>) {
+  await check(`${allowed ? "allow" : "deny "}  storage: ${label}`, async () => {
+    try {
+      await op();
+      assert.ok(allowed, "was ALLOWED");
+    } catch (err) {
+      if (allowed) throw err;
+      assert.equal((err as { code?: string }).code, "storage/unauthorized", String(err));
+    }
+  });
 }
 
 const bunnyVideo = (sa: string, ag: string, guid: string, status: string, refs: unknown[] = []) => ({
@@ -420,13 +448,19 @@ async function main() {
     assert.equal(!r2.ok && r2.reason, "unavailable");
     await db.doc(`subAccounts/${SA}/mediaAssets/v2`).update({ status: "ready", deletedAt: null });
   });
-  await check("replay: deleting a shared video (when allowed) revokes its links first", async () => {
+  await check("delete order: when Bunny can't delete, nothing changes — the replay link keeps working", async () => {
     await db.doc(`subAccounts/${SA}/mediaAssets/v9`).set(bunnyVideo(SA, AG, "guid-v9", "ready"));
     const s = (await json(await shareRoute.POST(req("admin1", "POST", {}), aCtx("v9")))).share as { url: string };
-    // Unreferenced Bunny delete calls the Bunny API — not available here, so it fails AFTER revoking.
-    await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v9"));
+    // Bunny isn't configured here, so the provider delete fails.
+    const del = await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v9"));
+    assert.equal(del.status, 502);
+    assert.match(String((await json(del)).error), /replay links still work/);
     const r = await shares.resolveReplay(s.url.split("/replay/")[1]);
-    assert.equal(!r.ok && r.reason, "revoked");
+    assert.ok(r.ok, `link still resolves (${!r.ok && r.reason})`);
+    const d = (await db.doc(`subAccounts/${SA}/mediaAssets/v9`).get()).data()!;
+    assert.equal(d.status, "ready");
+    assert.equal(d.deletedAt, null);
+    assert.equal(d.bunny.deletionStartedAt, undefined, "in-flight mark cleared");
   });
 
   // ── Affiliate Library ────────────────────────────────────────────────────
@@ -482,6 +516,304 @@ async function main() {
     assert.equal(s.crmResources, 9);
     assert.equal(s.affiliatePrograms, 2);
     assert.equal(s.mediaFiles, 4, "v1, v2, v3, v9 — not __usage, not the deleted image");
+  });
+
+  // ── Corrections (2026-09-29): video deletion order ──────────────────────
+  const bunnySvc = await import("../src/lib/server/bunny-stream-service");
+  const legacyMediaRoute = await import("../src/app/api/media/[...path]/route");
+  const realFetch = globalThis.fetch;
+  const bunnyCalls: string[] = [];
+  let bunnyStatus = 200;
+  const withBunny = async (fn: () => Promise<void>) => {
+    // Fake Bunny config + a fetch stub that answers ONLY the Bunny API host —
+    // no request ever leaves this machine.
+    const saved = { lib: process.env.BUNNY_STREAM_LIBRARY_ID, key: process.env.BUNNY_STREAM_API_KEY, cdn: process.env.BUNNY_STREAM_CDN_HOSTNAME };
+    process.env.BUNNY_STREAM_LIBRARY_ID = "lib1";
+    process.env.BUNNY_STREAM_API_KEY = "stub-key-not-real";
+    process.env.BUNNY_STREAM_CDN_HOSTNAME = "stub.b-cdn.test";
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = String(input instanceof Request ? input.url : input);
+      if (u.startsWith("https://video.bunnycdn.com")) {
+        bunnyCalls.push(`${init?.method ?? "GET"} ${u.replace("https://video.bunnycdn.com", "")}`);
+        return new Response(bunnyStatus < 300 ? "" : "error", { status: bunnyStatus });
+      }
+      return realFetch(input as RequestInfo, init);
+    }) as typeof fetch;
+    try {
+      await fn();
+    } finally {
+      globalThis.fetch = realFetch;
+      if (saved.lib === undefined) delete process.env.BUNNY_STREAM_LIBRARY_ID; else process.env.BUNNY_STREAM_LIBRARY_ID = saved.lib;
+      if (saved.key === undefined) delete process.env.BUNNY_STREAM_API_KEY; else process.env.BUNNY_STREAM_API_KEY = saved.key;
+      if (saved.cdn === undefined) delete process.env.BUNNY_STREAM_CDN_HOSTNAME; else process.env.BUNNY_STREAM_CDN_HOSTNAME = saved.cdn;
+      bunnyStatus = 200;
+    }
+  };
+  const tenantScope = { kind: "tenant" as const, agencyId: AG, subAccountId: SA };
+
+  await check("delete order: Bunny error (500) → record, playback and replay link untouched; retry later succeeds", async () => {
+    await db.doc(`subAccounts/${SA}/mediaAssets/v10`).set(bunnyVideo(SA, AG, "guid-v10", "ready"));
+    const s = (await json(await shareRoute.POST(req("admin1", "POST", {}), aCtx("v10")))).share as { url: string };
+    const token = s.url.split("/replay/")[1];
+    await withBunny(async () => {
+      bunnyStatus = 500;
+      bunnyCalls.length = 0;
+      assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v10"))).status, 502);
+      assert.deepEqual(bunnyCalls, ["DELETE /library/lib1/videos/guid-v10"]);
+      assert.ok((await shares.resolveReplay(token)).ok, "link still works after a failed delete");
+      assert.ok(await bunnySvc.getBunnyPlaybackUrl(tenantScope, "v10"), "playback still issued");
+      const d = (await db.doc(`subAccounts/${SA}/mediaAssets/v10`).get()).data()!;
+      assert.equal(d.status, "ready");
+      assert.equal(d.bunny.deletionStartedAt, undefined);
+      const share = (await db.collection("mediaShares").where("mediaAssetId", "==", "v10").get()).docs[0].data();
+      assert.equal(share.status, "active");
+
+      bunnyStatus = 200;
+      bunnyCalls.length = 0;
+      assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v10"))).status, 200);
+      assert.deepEqual(bunnyCalls, ["DELETE /library/lib1/videos/guid-v10"], "one provider delete, no duplicate video calls");
+    });
+    const d = (await db.doc(`subAccounts/${SA}/mediaAssets/v10`).get()).data()!;
+    assert.equal(d.status, "deleted");
+    assert.equal(d.bunny.lifecycleStatus, "deleted");
+    assert.equal(d.bunny.deletionStartedAt, null);
+    const r = await shares.resolveReplay(token);
+    assert.equal(!r.ok && r.reason, "revoked", "links revoked only after the confirmed delete");
+    assert.equal(await bunnySvc.getBunnyPlaybackUrl(tenantScope, "v10"), null, "no new token for a deleted video");
+    assert.equal((await mediaUrlRoute.GET(req("admin1"), aCtx("v10"))).status, 404);
+  });
+  await check("delete order: Bunny says the video is already gone (404) → the record is completed, not left half-deleted", async () => {
+    await db.doc(`subAccounts/${SA}/mediaAssets/v11`).set(bunnyVideo(SA, AG, "guid-v11", "ready"));
+    await withBunny(async () => {
+      bunnyStatus = 404;
+      assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v11"))).status, 200);
+    });
+    assert.equal((await db.doc(`subAccounts/${SA}/mediaAssets/v11`).get()).data()!.status, "deleted");
+  });
+  await check("delete in flight: no NEW playback token (replay or course) while Bunny is deleting; a stale mark expires", async () => {
+    await db.doc(`subAccounts/${SA}/mediaAssets/v12`).set(bunnyVideo(SA, AG, "guid-v12", "ready"));
+    const s = (await json(await shareRoute.POST(req("admin1", "POST", {}), aCtx("v12")))).share as { url: string };
+    const token = s.url.split("/replay/")[1];
+    await db.doc(`subAccounts/${SA}/mediaAssets/v12`).update({ "bunny.deletionStartedAt": Timestamp.now() });
+    assert.equal(await bunnySvc.getBunnyPlaybackUrl(tenantScope, "v12"), null);
+    assert.equal((await shares.resolveReplay(token)).ok, false);
+    assert.equal((await mediaUrlRoute.GET(req("member2"), aCtx("v12"))).status, 409);
+    // A crashed delete (mark older than the guard window) no longer blocks playback.
+    await db.doc(`subAccounts/${SA}/mediaAssets/v12`).update({ "bunny.deletionStartedAt": Timestamp.fromMillis(Date.now() - bunnySvc.BUNNY_DELETE_GUARD_MS - 1000) });
+    assert.ok(await bunnySvc.getBunnyPlaybackUrl(tenantScope, "v12"));
+    assert.ok((await shares.resolveReplay(token)).ok);
+  });
+  await check("delete dependencies: a lesson or Resource using a video blocks the delete before Bunny is called", async () => {
+    await db.doc(`subAccounts/${SA}/mediaAssets/v13`).set(bunnyVideo(SA, AG, "guid-v13", "ready"));
+    await db.doc("assets/rVid").set({ subAccountId: SA, agencyId: AG, name: "Replay resource", type: "Video", sourceKind: "internal", mediaAssetId: "v13", status: "active" });
+    await withBunny(async () => {
+      bunnyCalls.length = 0;
+      assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v1"))).status, 409, "lesson video");
+      assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx("v13"))).status, 409, "resource video");
+      // The course editor's hosted-video DELETE now applies the same checks for sub-account videos.
+      const legacy = await legacyMediaRoute.DELETE(
+        req("admin1", "DELETE", { ownerScope: tenantScope }),
+        { params: Promise.resolve({ path: ["hosted-videos", "v13"] }) }
+      );
+      assert.equal(legacy.status, 409);
+      assert.deepEqual(bunnyCalls, [], "Bunny never called");
+    });
+    for (const id of ["v1", "v13"]) {
+      const d = (await db.doc(`subAccounts/${SA}/mediaAssets/${id}`).get()).data()!;
+      assert.equal(d.status, "ready");
+      assert.equal(d.bunny.deletionStartedAt, undefined);
+    }
+    await db.doc("assets/rVid").delete();
+  });
+  await check("delete authorization: collaborators and other tenants can't delete (via either route)", async () => {
+    assert.equal((await mediaItemRoute.DELETE(req("member2", "DELETE"), aCtx("v13"))).status, 403);
+    assert.equal((await mediaItemRoute.DELETE(req("outsider", "DELETE"), aCtx("v13"))).status, 403);
+    const legacy = await legacyMediaRoute.DELETE(
+      req("outsider", "DELETE", { ownerScope: tenantScope }),
+      { params: Promise.resolve({ path: ["hosted-videos", "v13"] }) }
+    );
+    assert.equal(legacy.status, 403);
+  });
+
+  // ── Corrections: direct-to-storage uploads (files over the ~4.5 MB server cap) ──
+  const uploadsRoute = await import("../src/app/api/sub-accounts/[id]/media-library/uploads/route");
+  const completeRoute = await import("../src/app/api/sub-accounts/[id]/media-library/uploads/[intakeId]/complete/route");
+  const intakeSvc = await import("../src/lib/server/assets/media-upload-intake-service");
+  const iCtx = (intakeId: string, id = SA) => ({ params: Promise.resolve({ id, intakeId }) });
+  const MB = 1024 * 1024;
+  const pngBytes = (size: number) => {
+    const b = new Uint8Array(size);
+    b.set([137, 80, 78, 71, 13, 10, 26, 10]);
+    return b;
+  };
+  const pdfBytes = (size: number) => {
+    const b = new Uint8Array(size);
+    b.set(Buffer.from("%PDF-1.7\n"));
+    return b;
+  };
+  const start = async (uid: string, body: Record<string, unknown>, sa = SA) => uploadsRoute.POST(req(uid, "POST", body), saCtx(sa));
+
+  await check("upload intake: admins only; type + size validated before anything is written", async () => {
+    assert.equal((await start("member2", { filename: "a.pdf", mimeType: "application/pdf", sizeBytes: 10 })).status, 403);
+    assert.equal((await start("outsider", { filename: "a.pdf", mimeType: "application/pdf", sizeBytes: 10 })).status, 403);
+    assert.equal((await start("admin1", { filename: "a.pdf", mimeType: "application/pdf", sizeBytes: 15 * MB + 1 })).status, 400, "document cap");
+    assert.equal((await start("admin1", { filename: "a.png", mimeType: "image/png", sizeBytes: 5 * MB + 1 })).status, 400, "image cap");
+    assert.equal((await start("admin1", { filename: "a.exe", mimeType: "application/x-msdownload", sizeBytes: 10 })).status, 400);
+    assert.equal((await start("admin1", { filename: "a.mp4", mimeType: "video/mp4", sizeBytes: 10 })).status, 400, "videos use Bunny");
+    assert.equal((await start("admin1", { filename: "a.pdf", mimeType: "application/pdf", sizeBytes: 0 })).status, 400);
+    const r = await start("admin1", { filename: "Brand Guide.pdf", mimeType: "application/pdf", sizeBytes: 100 });
+    assert.equal(r.status, 201);
+    const b = await json(r);
+    assert.match(String(b.objectKey), /^media-uploads\/admin1\/[^/]+\/[0-9a-f-]+\.pdf$/);
+  });
+
+  const admStorage = storageAs("admin1");
+  const intake1 = await json(await start("admin1", { filename: "rules.pdf", mimeType: "application/pdf", sizeBytes: 64 }));
+  const key1 = String(intake1.objectKey);
+  await storageRule("signed-out browser writes an intake object", false, () => cUploadBytes(cRef(storageAs(null), key1), pdfBytes(64), { contentType: "application/pdf" }));
+  await storageRule("another person writes into admin1's intake folder", false, () => cUploadBytes(cRef(storageAs("member2"), key1), pdfBytes(64), { contentType: "application/pdf" }));
+  await storageRule("disallowed content type", false, () => cUploadBytes(cRef(admStorage, key1), pdfBytes(64), { contentType: "text/html" }));
+  await storageRule("over the 15 MB cap", false, () => cUploadBytes(cRef(admStorage, key1), new Uint8Array(15 * MB + 1), { contentType: "application/pdf" }));
+  await storageRule("own intake folder, allowed type + size", true, () => cUploadBytes(cRef(admStorage, key1), pdfBytes(64), { contentType: "application/pdf" }));
+  await storageRule("overwrite an existing intake object", false, () => cUploadBytes(cRef(admStorage, key1), pdfBytes(64), { contentType: "application/pdf" }));
+  await storageRule("read back an intake object", false, () => cGetBytes(cRef(admStorage, key1)));
+  await storageRule("read a private Media Library object", false, async () => {
+    const d = (await db.collection(`subAccounts/${SA}/mediaAssets`).where("mediaType", "==", "image").limit(1).get()).docs[0];
+    return cGetBytes(cRef(admStorage, (d?.data().storage.key as string) ?? `media-library/${SA}/x/y.png`));
+  });
+  await storageRule("write directly into the private media-library path", false, () => cUploadBytes(cRef(admStorage, `media-library/${SA}/evil/x.pdf`), pdfBytes(64), { contentType: "application/pdf" }));
+
+  let bigDocId = "";
+  await check("large document (12 MB, over the app-server cap): browser → Storage resumable upload → private MediaAsset", async () => {
+    const size = 12 * MB;
+    const intake = await json(await start("admin1", { filename: "Workbook.pdf", mimeType: "application/pdf", sizeBytes: size, title: "Launch Workbook" }));
+    await new Promise<void>((resolve, reject) => {
+      const t = cUploadResumable(cRef(admStorage, String(intake.objectKey)), pdfBytes(size), { contentType: "application/pdf" });
+      t.on("state_changed", undefined, reject, () => resolve());
+    });
+    const r = await completeRoute.POST(req("admin1", "POST"), iCtx(String(intake.intakeId)));
+    assert.equal(r.status, 201, JSON.stringify(await r.clone().json()));
+    const item = (await json(r)).item as { id: string; title: string; sizeBytes: number; kind: string; publicUrl: string | null };
+    bigDocId = item.id;
+    assert.equal(item.title, "Launch Workbook");
+    assert.equal(item.sizeBytes, size);
+    assert.equal(item.kind, "document");
+    assert.equal(item.publicUrl, null);
+    const doc = (await db.doc(`subAccounts/${SA}/mediaAssets/${item.id}`).get()).data()!;
+    assert.ok((doc.storage.key as string).startsWith(`media-library/${SA}/${item.id}/`));
+    assert.deepEqual(doc.access, { type: "tenant" });
+    const [meta] = await bucket.file(doc.storage.key).getMetadata();
+    assert.equal(meta.metadata?.firebaseStorageDownloadTokens, undefined, "private: no download token");
+    assert.equal(Number(meta.size), size);
+    assert.equal((await bucket.file(String(intake.objectKey)).exists())[0], false, "intake object removed");
+    // Retrying completion returns the same file — no duplicate.
+    const again = await json(await completeRoute.POST(req("admin1", "POST"), iCtx(String(intake.intakeId))));
+    assert.equal((again.item as { id: string }).id, item.id);
+  });
+  await check("large image (4.9 MB) uploads directly and passes the image check", async () => {
+    const size = Math.floor(4.9 * MB);
+    const intake = await json(await start("admin1", { filename: "banner.png", mimeType: "image/png", sizeBytes: size }));
+    await cUploadBytes(cRef(admStorage, String(intake.objectKey)), pngBytes(size), { contentType: "image/png" });
+    const r = await completeRoute.POST(req("admin1", "POST"), iCtx(String(intake.intakeId)));
+    assert.equal(r.status, 201);
+    assert.equal(((await json(r)).item as { kind: string }).kind, "image");
+  });
+  await check("completion refuses: another person / tenant, missing object, size mismatch, fake image, expired intake", async () => {
+    const intake = await json(await start("admin1", { filename: "a.pdf", mimeType: "application/pdf", sizeBytes: 64 }));
+    const id = String(intake.intakeId);
+    assert.equal((await completeRoute.POST(req("member2", "POST"), iCtx(id))).status, 403);
+    assert.equal((await completeRoute.POST(req("outsider", "POST"), iCtx(id, SA2))).status, 404, "other tenant's path");
+    assert.equal((await completeRoute.POST(req("admin1", "POST"), iCtx(id))).status, 409, "nothing uploaded yet");
+
+    await cUploadBytes(cRef(admStorage, String(intake.objectKey)), pdfBytes(80), { contentType: "application/pdf" });
+    const mism = await completeRoute.POST(req("admin1", "POST"), iCtx(id));
+    assert.equal(mism.status, 400, "size doesn't match the intake");
+    assert.equal((await bucket.file(String(intake.objectKey)).exists())[0], false, "rejected object deleted");
+    assert.equal((await completeRoute.POST(req("admin1", "POST"), iCtx(id))).status, 409, "failed intake can't be reused");
+
+    const fake = await json(await start("admin1", { filename: "x.png", mimeType: "image/png", sizeBytes: 64 }));
+    await cUploadBytes(cRef(admStorage, String(fake.objectKey)), pdfBytes(64), { contentType: "image/png" });
+    const fr = await completeRoute.POST(req("admin1", "POST"), iCtx(String(fake.intakeId)));
+    assert.equal(fr.status, 400);
+    assert.match(String((await json(fr)).error), /valid image/);
+
+    const old = await json(await start("admin1", { filename: "o.pdf", mimeType: "application/pdf", sizeBytes: 64 }));
+    await cUploadBytes(cRef(admStorage, String(old.objectKey)), pdfBytes(64), { contentType: "application/pdf" });
+    await db.doc(`${intakeSvc.INTAKE_COLLECTION}/${old.intakeId}`).update({ expiresAt: Timestamp.fromMillis(Date.now() - 2 * 60 * 60 * 1000) });
+    assert.equal((await completeRoute.POST(req("admin1", "POST"), iCtx(String(old.intakeId)))).status, 410);
+    const sweep = await intakeSvc.sweepExpiredUploadIntakes();
+    assert.ok(sweep.deleted >= 1);
+    assert.equal((await db.doc(`${intakeSvc.INTAKE_COLLECTION}/${old.intakeId}`).get()).exists, false);
+    assert.equal((await bucket.file(String(old.objectKey)).exists())[0], false, "abandoned object swept");
+  });
+  await check("small-file multipart route still works and now rejects a fake image", async () => {
+    const f = new FormData();
+    f.append("file", new File([pdfBytes(40)], "not-really.png", { type: "image/png" }));
+    assert.equal((await mediaRoute.POST(req("admin1", "POST", f), saCtx())).status, 400);
+  });
+
+  // ── Corrections: Media Library images reused on public surfaces ──────────
+  const publicRoute = await import("../src/app/api/sub-accounts/[id]/media-library/[assetId]/public-image/route");
+  let pubImgId = "";
+  await check("public image: collaborators can't make a private image public; nothing is created", async () => {
+    const f = new FormData();
+    f.append("file", new File([pngBytes(2048)], "logo.png", { type: "image/png" }));
+    pubImgId = ((await json(await mediaRoute.POST(req("admin1", "POST", f), saCtx()))).item as { id: string }).id;
+    const r = await publicRoute.POST(req("member2", "POST", {}), aCtx(pubImgId));
+    assert.equal(r.status, 403);
+    assert.match(String((await json(r)).error), /Ask a sub-account admin/);
+    assert.equal((await db.doc(`subAccounts/${SA}/mediaAssets/${pubImgId}`).get()).data()!.publicImage, null);
+    const [files] = await bucket.getFiles({ prefix: `media-public/${SA}/${pubImgId}/` });
+    assert.equal(files.length, 0);
+  });
+  let publicUrl = "";
+  await check("public image: an admin publishes a separate public copy; the original stays private", async () => {
+    const r = await publicRoute.POST(req("admin1", "POST", {}), aCtx(pubImgId));
+    assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+    const b = await json(r);
+    publicUrl = String(b.url);
+    assert.equal(b.created, true);
+    const doc = (await db.doc(`subAccounts/${SA}/mediaAssets/${pubImgId}`).get()).data()!;
+    assert.ok((doc.publicImage.key as string).startsWith(`media-public/${SA}/${pubImgId}/`));
+    assert.notEqual(doc.publicImage.key, doc.storage.key, "separate object");
+    assert.deepEqual(doc.access, { type: "tenant" }, "asset access unchanged");
+    const [origMeta] = await bucket.file(doc.storage.key).getMetadata();
+    assert.equal(origMeta.metadata?.firebaseStorageDownloadTokens, undefined, "original still has no public token");
+    const res = await realFetch(publicUrl);
+    assert.equal(res.status, 200, "public URL loads without signing in");
+    assert.equal(Buffer.from(await res.arrayBuffer()).length, 2048);
+  });
+  await check("public image: reuse returns the same copy (no duplicates) — for admins and collaborators", async () => {
+    const a = await json(await publicRoute.POST(req("admin1", "POST", {}), aCtx(pubImgId)));
+    const m = await json(await publicRoute.POST(req("member2", "POST", {}), aCtx(pubImgId)));
+    assert.equal(a.url, publicUrl);
+    assert.equal(a.created, false);
+    assert.equal(m.url, publicUrl);
+    const [files] = await bucket.getFiles({ prefix: `media-public/${SA}/${pubImgId}/` });
+    assert.equal(files.length, 1);
+    const item = (await list()).find((i) => i.id === pubImgId) as unknown as { publicUrl: string; usage: { kind: string }[] };
+    assert.equal(item.publicUrl, publicUrl);
+    assert.ok(item.usage.some((u) => u.kind === "public_image"));
+  });
+  await check("public image: documents, videos and foreign or unknown ids can never be made public", async () => {
+    assert.equal((await publicRoute.POST(req("admin1", "POST", {}), aCtx(bigDocId))).status, 400, "document");
+    assert.equal((await publicRoute.POST(req("admin1", "POST", {}), aCtx("v2"))).status, 400, "video");
+    assert.equal((await publicRoute.POST(req("admin1", "POST", {}), aCtx("vX"))).status, 404, "other tenant's asset");
+    assert.equal((await publicRoute.POST(req("outsider", "POST", {}), aCtx(pubImgId))).status, 403, "other tenant's admin");
+    assert.equal((await db.doc(`subAccounts/${SA}/mediaAssets/${bigDocId}`).get()).data()!.publicImage, null);
+  });
+  await check("public image: can't delete a published image; turning the link off (admins only) removes only the copy", async () => {
+    const del = await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx(pubImgId));
+    assert.equal(del.status, 409);
+    assert.match(String((await json(del)).error), /public link/);
+    assert.equal((await publicRoute.DELETE(req("member2", "DELETE"), aCtx(pubImgId))).status, 403);
+    assert.equal((await publicRoute.DELETE(req("admin1", "DELETE"), aCtx(pubImgId))).status, 200);
+    const doc = (await db.doc(`subAccounts/${SA}/mediaAssets/${pubImgId}`).get()).data()!;
+    assert.equal(doc.publicImage, null);
+    assert.equal((await bucket.file(doc.storage.key).exists())[0], true, "private original kept");
+    const [files] = await bucket.getFiles({ prefix: `media-public/${SA}/${pubImgId}/` });
+    assert.equal(files.length, 0);
+    assert.equal((await mediaItemRoute.DELETE(req("admin1", "DELETE"), aCtx(pubImgId))).status, 200);
   });
 
   // ── rules ────────────────────────────────────────────────────────────────

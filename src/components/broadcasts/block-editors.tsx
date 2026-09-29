@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { MediaLibraryImageButton } from "@/components/assets/media-library-image-button";
 import { ImagePlus, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -97,6 +98,14 @@ export function ImageBlockEditor({
         )}
         {block.src ? "Replace image" : "Upload image"}
       </Button>
+      {scope.kind === "tenant" && (
+        <MediaLibraryImageButton
+          subAccountId={scope.subAccountId}
+          onPick={(url) => onChange({ ...block, src: url })}
+          disabled={uploading}
+          className="ml-2"
+        />
+      )}
       <input
         ref={fileRef}
         type="file"

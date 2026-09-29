@@ -196,18 +196,59 @@ export async function updateBunnyLessonReference(scope: VideoOwnerScope, assetId
   await assetCollection(scope).doc(assetId).set({ references: refs, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 }
 
+/**
+ * How long an in-flight delete blocks new playback tokens. A delete that
+ * crashes mid-way (no success, no failure write) stops blocking after this.
+ */
+export const BUNNY_DELETE_GUARD_MS = 2 * 60 * 1000;
+
+function millisOf(v: unknown): number | null {
+  if (v instanceof Timestamp) return v.toMillis();
+  if (v && typeof (v as { toMillis?: unknown }).toMillis === "function") return (v as { toMillis: () => number }).toMillis();
+  return null;
+}
+
+/** True when a hosted video must not get a NEW playback token. */
+export function bunnyPlaybackBlocked(asset: MediaAsset, now = Date.now()): boolean {
+  if (asset.status !== "ready" || asset.deletedAt) return true;
+  if (asset.bunny?.lifecycleStatus === "deleted" || asset.bunny?.deletedAt) return true;
+  const started = millisOf(asset.bunny?.deletionStartedAt);
+  return started !== null && now - started < BUNNY_DELETE_GUARD_MS;
+}
+
+/**
+ * Delete a hosted video at Bunny, then soft-delete the record. Order matters
+ * (Assets corrections, 2026-09-29):
+ *   1. dependency check (course lessons) — refuses without touching anything;
+ *   2. mark the delete in flight → no new playback tokens meanwhile;
+ *   3. provider delete — on failure the in-flight mark is cleared and the
+ *      error rethrown, so the video (and any replay link to it) keeps
+ *      working exactly as before;
+ *   4. soft delete. A 404 from Bunny means it's already gone there — the
+ *      record is completed rather than left half-deleted.
+ * Callers revoke replay links only AFTER this resolves.
+ */
 export async function deleteBunnyHostedVideo(scope: VideoOwnerScope, assetId: string) {
   const asset = await getBunnyAsset(scope, assetId);
   if (!asset?.bunny) throw new Error("Hosted video not found");
   if ((asset.references || []).length) throw new Error("Hosted video is still referenced by a course lesson");
-  await bunnyRequest(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`, { method: "DELETE" });
-  await assetCollection(scope).doc(assetId).set({ status: "deleted", deletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), bunny: { ...asset.bunny, lifecycleStatus: "deleted", deletedAt: FieldValue.serverTimestamp() } }, { merge: true });
+  const ref = assetCollection(scope).doc(assetId);
+  await ref.update({ "bunny.deletionStartedAt": Timestamp.now() });
+  try {
+    await bunnyRequest(`/library/${asset.bunny.libraryId}/videos/${asset.bunny.videoGuid}`, { method: "DELETE" });
+  } catch (err) {
+    if (!(err instanceof BunnyRequestError && err.status === 404)) {
+      await ref.update({ "bunny.deletionStartedAt": FieldValue.delete() }).catch(() => undefined);
+      throw err;
+    }
+  }
+  await ref.set({ status: "deleted", deletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), bunny: { ...asset.bunny, lifecycleStatus: "deleted", deletedAt: FieldValue.serverTimestamp(), deletionStartedAt: null } }, { merge: true });
   await refreshBunnyUsage(scope);
 }
 
 export async function getBunnyPlaybackUrl(scope: VideoOwnerScope, assetId: string) {
   const asset = await getBunnyAsset(scope, assetId);
-  if (!asset?.bunny || asset.status !== "ready") return null;
+  if (!asset?.bunny || bunnyPlaybackBlocked(asset)) return null;
   const expires = Math.floor(Date.now() / 1000) + 300;
   const token = hash(`${tokenKey()}${asset.bunny.videoGuid}${expires}`);
   return `https://iframe.mediadelivery.net/embed/${asset.bunny.libraryId}/${asset.bunny.videoGuid}?token=${token}&expires=${expires}`;

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { assetsCall } from "@/lib/client/assets-api";
+import { uploadToMediaLibrary } from "@/lib/client/media-library-upload";
 import {
   ASSET_ACCESS_LEVELS,
   ASSET_STATUSES,
@@ -136,13 +137,8 @@ export function ResourceSheet({
   async function uploadFile(file: File) {
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", d.name || file.name);
-      const res = await fetch(`/api/sub-accounts/${subAccountId}/media-library`, { method: "POST", body: form });
-      const body = (await res.json().catch(() => ({}))) as { item?: MediaLibraryItem; error?: string };
-      if (!res.ok || !body.item) throw new Error(body.error ?? "Upload failed");
-      setD((cur) => ({ ...cur, mediaAssetId: body.item!.id, mediaLabel: `${body.item!.title} · ${formatBytes(body.item!.sizeBytes)}` }));
+      const item = await uploadToMediaLibrary(subAccountId, file, { title: d.name || file.name });
+      setD((cur) => ({ ...cur, mediaAssetId: item.id, mediaLabel: `${item.title} · ${formatBytes(item.sizeBytes)}` }));
       toast.success("Uploaded to your Media Library");
     } catch (err) {
       toast.error((err as Error).message);

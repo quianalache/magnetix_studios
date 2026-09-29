@@ -25,6 +25,20 @@ export interface MediaAsset {
   references?: MediaAssetReference[];
   /** Media Library display fields (Assets, 2026-09). Optional/additive. */
   library?: MediaLibraryFields;
+  /**
+   * Public delivery copy of a Media Library IMAGE (Assets corrections,
+   * 2026-09-29). Created only by an explicit admin action; the original
+   * object stays private. Absent/null = private.
+   */
+  publicImage?: MediaPublicImage | null;
+}
+
+export interface MediaPublicImage {
+  /** Storage key of the public copy (`media-public/{sa}/{assetId}/{uuid}.{ext}`). */
+  key: string;
+  url: string;
+  publishedAt: Timestamp | FieldValue | null;
+  publishedByUid: string;
 }
 
 export interface MediaLibraryFields {
@@ -59,6 +73,13 @@ export interface BunnyMediaAssetMetadata {
   providerStatus: number | string | null;
   providerUpdatedAt: Timestamp | FieldValue | null;
   deletedAt: Timestamp | FieldValue | null;
+  /**
+   * Set while a provider delete is in flight (Assets corrections,
+   * 2026-09-29): no new playback token is issued during that window. Cleared
+   * when the provider delete fails; honoured for a bounded time only, so a
+   * crashed delete can't block playback forever.
+   */
+  deletionStartedAt?: Timestamp | FieldValue | null;
 }
 
 export interface MediaAssetReference {

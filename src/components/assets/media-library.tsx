@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { assetsCall } from "@/lib/client/assets-api";
+import { uploadToMediaLibrary } from "@/lib/client/media-library-upload";
 import { uploadHostedVideo } from "@/lib/client/bunny-upload";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
@@ -92,14 +93,12 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
   async function uploadFiles(files: FileList | null) {
     for (const file of Array.from(files ?? [])) {
       const id = `${Date.now()}-${file.name}`;
-      setUploads((u) => [...u, { id, name: file.name, progress: null }]);
+      setUploads((u) => [...u, { id, name: file.name, progress: 0 }]);
       try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch(`/api/sub-accounts/${subAccountId}/media-library`, { method: "POST", body: form });
-        const body = (await res.json().catch(() => ({}))) as { item?: MediaLibraryItem; error?: string };
-        if (!res.ok || !body.item) throw new Error(body.error ?? `Couldn't upload ${file.name}`);
-        setItems((cur) => [body.item!, ...(cur ?? [])]);
+        const item = await uploadToMediaLibrary(subAccountId, file, {
+          onProgress: (p) => setUploads((u) => u.map((x) => (x.id === id ? { ...x, progress: Math.round(p * 100) } : x))),
+        });
+        setItems((cur) => [item, ...(cur ?? [])]);
         toast.success(`Uploaded ${file.name}`);
       } catch (e) {
         toast.error((e as Error).message);

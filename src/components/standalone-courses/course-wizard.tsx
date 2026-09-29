@@ -292,6 +292,7 @@ export function CourseWizard({
                         : uploadStandaloneCourseImage(file, subAccountId, courseIdForUploads, "cover")
                     }
                     aspect="video"
+                    mediaLibrarySubAccountId={agencyScope ? undefined : subAccountId}
                   />
                 </>
               )}

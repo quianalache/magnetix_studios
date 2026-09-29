@@ -11,7 +11,7 @@ import type { MediaAssetStatus, MediaAssetType, MediaStorageProvider } from "@/t
 export type MediaLibraryKind = "image" | "video" | "document" | "other";
 
 export interface MediaUsage {
-  kind: "course_lesson" | "resource" | "replay_link";
+  kind: "course_lesson" | "resource" | "replay_link" | "public_image";
   label: string;
   detail: string;
   /** In-app link to the place it's used. */
@@ -40,6 +40,12 @@ export interface MediaLibraryItem {
   usage: MediaUsage[];
   /** The active public replay link, if sharing is on. */
   share: MediaShareView | null;
+  /**
+   * Public delivery URL of an image an admin explicitly made public for
+   * pages / emails / course thumbnails (a separate public copy — the
+   * original stays private). Null while the image is private.
+   */
+  publicUrl: string | null;
 }
 
 export type MediaShareKind = "public_replay";

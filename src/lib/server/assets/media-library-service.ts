@@ -34,8 +34,11 @@ import type { MediaLibraryItem, MediaLibraryKind, MediaUsage } from "@/types/med
  *   short-lived signed URLs issued after a tenant check.
  * - Videos: the existing Bunny hosted-video records and upload flow
  *   (/api/media/hosted-videos/*). Nothing is duplicated or re-hosted.
- * - Deleting refuses while a course lesson or a Resource still uses the
- *   file; an active replay link is revoked first.
+ * - Deleting refuses while a course lesson, a Resource or a public image
+ *   link still uses the file; replay links are revoked only after the
+ *   provider confirms the delete.
+ * - Files larger than the app server's request cap upload straight to
+ *   Firebase Storage (media-upload-intake-service.ts).
  */
 
 export class MediaLibraryError extends Error {
@@ -129,6 +132,14 @@ async function usageMap(t: Tenant, assets: MediaAsset[]): Promise<Map<string, Me
     })
   );
 
+  // Images an admin made public (pages / emails / course thumbnails embed the
+  // public copy's URL — removing it would break them, so it counts as a use).
+  for (const a of assets) {
+    if (a.publicImage?.url) {
+      push(a.id, { kind: "public_image", label: "Public image link", detail: "Used on pages, emails or course images", href: null });
+    }
+  }
+
   // Resource Library entries that point at a file.
   const resources = await db.collection("assets").where("subAccountId", "==", t.subAccountId).get();
   for (const r of resources.docs) {
@@ -187,6 +198,7 @@ async function toItems(t: Tenant, assets: MediaAsset[]): Promise<MediaLibraryIte
         thumbnailUrl: await signedThumb(a),
         usage: u,
         share: shareV,
+        publicUrl: a.publicImage?.url ?? null,
       } satisfies MediaLibraryItem;
     })
   );
@@ -223,30 +235,69 @@ export function classifyUpload(mimeType: string): "image" | "document" | null {
   return null;
 }
 
-export async function uploadMediaFile(t: Tenant, uid: string, file: File, title?: string): Promise<MediaLibraryItem> {
-  const kind = classifyUpload(file.type);
+/** Server-side validation shared by every Media Library upload path. */
+export function validateLibraryUpload(mimeType: string, size: number): "image" | "document" {
+  const kind = classifyUpload(mimeType);
   if (!kind) {
     throw new MediaLibraryError(
-      file.type.startsWith("video/")
+      mimeType.startsWith("video/")
         ? "Upload videos with “Upload video” — they're hosted on Bunny Stream."
         : "That file type isn't supported. Use an image (JPG, PNG, GIF, WebP) or a PDF, Word, Excel, PowerPoint, CSV or text file."
     );
   }
   const max = kind === "image" ? MEDIA_IMAGE_MAX_BYTES : MEDIA_DOCUMENT_MAX_BYTES;
-  if (file.size <= 0) throw new MediaLibraryError("That file is empty.");
-  if (file.size > max) throw new MediaLibraryError(`File is too large — keep ${kind === "image" ? "images" : "documents"} under ${Math.round(max / 1024 / 1024)} MB.`);
+  if (!Number.isFinite(size) || size <= 0) throw new MediaLibraryError("That file is empty.");
+  if (size > max) throw new MediaLibraryError(`File is too large — keep ${kind === "image" ? "images" : "documents"} under ${Math.round(max / 1024 / 1024)} MB.`);
+  return kind;
+}
+
+export function mediaBucketName(): string {
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
   if (!bucketName) throw new MediaLibraryError("File uploads aren't configured on this deployment.", 503);
+  return bucketName;
+}
 
-  const ref = col(t.subAccountId).doc();
-  const key = `media-library/${t.subAccountId}/${ref.id}/${randomUUID()}.${safeExt(file.name || "", kind === "image" ? "img" : "bin")}`;
+/** Magic-byte check for images, so a renamed non-image can't be stored (or later published) as one. */
+export function looksLikeImage(buf: Buffer, mimeType: string): boolean {
+  const b = buf;
+  switch (mimeType) {
+    case "image/jpeg":
+      return b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case "image/png":
+      return b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case "image/gif":
+      return b.length > 6 && (b.subarray(0, 6).toString("latin1") === "GIF87a" || b.subarray(0, 6).toString("latin1") === "GIF89a");
+    case "image/webp":
+      return b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP";
+    default:
+      return true;
+  }
+}
+
+/**
+ * Store validated bytes as a private Media Library object + its canonical
+ * MediaAsset. Used by the small-file form route AND the direct-upload
+ * completion (which reads the bytes back from the private intake object).
+ */
+export async function storeLibraryFile(
+  t: Tenant,
+  uid: string,
+  input: { bytes: Buffer; mimeType: string; filename: string; title?: string; assetRef?: FirebaseFirestore.DocumentReference }
+): Promise<string> {
+  const kind = validateLibraryUpload(input.mimeType, input.bytes.length);
+  if (kind === "image" && !looksLikeImage(input.bytes, input.mimeType)) {
+    throw new MediaLibraryError("That file isn't a valid image.");
+  }
+  const bucketName = mediaBucketName();
+  const ref = input.assetRef ?? col(t.subAccountId).doc();
+  const key = `media-library/${t.subAccountId}/${ref.id}/${randomUUID()}.${safeExt(input.filename || "", kind === "image" ? "img" : "bin")}`;
   await getStorage()
     .bucket(bucketName)
     .file(key)
-    .save(Buffer.from(await file.arrayBuffer()), {
+    .save(input.bytes, {
       resumable: false,
       // No firebaseStorageDownloadTokens: the object is private; reads are signed URLs.
-      metadata: { contentType: file.type, metadata: { subAccountId: t.subAccountId, mediaAssetId: ref.id } },
+      metadata: { contentType: input.mimeType, metadata: { subAccountId: t.subAccountId, mediaAssetId: ref.id } },
     });
   await ref.set({
     agencyId: t.agencyId,
@@ -255,18 +306,35 @@ export async function uploadMediaFile(t: Tenant, uid: string, file: File, title?
     uploadedByPersonId: uid,
     mediaType: kind,
     source: { type: "other", id: "media-library" },
-    storage: { provider: "firebase", key, bucket: bucketName, mimeType: file.type, fileSizeBytes: file.size },
+    storage: { provider: "firebase", key, bucket: bucketName, mimeType: input.mimeType, fileSizeBytes: input.bytes.length },
     status: "ready",
     access: { type: "tenant" },
-    metadata: { originalFilename: (file.name || "").slice(0, 200) || null, durationMs: null, width: null, height: null },
+    metadata: { originalFilename: (input.filename || "").slice(0, 200) || null, durationMs: null, width: null, height: null },
     derivatives: {},
-    library: { title: (title || file.name || "Untitled").trim().slice(0, 200), tags: [], updatedByUid: uid },
+    library: { title: (input.title || input.filename || "Untitled").trim().slice(0, 200), tags: [], updatedByUid: uid },
     references: [],
+    publicImage: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     deletedAt: null,
   });
-  return getMediaLibraryItem(t, ref.id);
+  return ref.id;
+}
+
+/** Small-file path (multipart through the app server — fine under the ~4.5 MB request cap). */
+export async function uploadMediaFile(t: Tenant, uid: string, file: File, title?: string): Promise<MediaLibraryItem> {
+  validateLibraryUpload(file.type, file.size);
+  const id = await storeLibraryFile(t, uid, {
+    bytes: Buffer.from(await file.arrayBuffer()),
+    mimeType: file.type,
+    filename: file.name || "",
+    title,
+  });
+  return getMediaLibraryItem(t, id);
+}
+
+export function mediaCollection(subAccountId: string) {
+  return col(subAccountId);
 }
 
 // ── open / edit / refresh / delete ───────────────────────────────────────────
@@ -311,31 +379,48 @@ export async function refreshHostedVideo(t: Tenant, assetId: string) {
   return getMediaLibraryItem(t, a.id);
 }
 
+/**
+ * Delete order (Assets corrections, 2026-09-29): dependency check → provider
+ * delete → soft delete → revoke replay links. A provider failure leaves the
+ * record, its playback and every replay link exactly as they were; while
+ * the Bunny delete is in flight no new playback token is issued
+ * (see deleteBunnyHostedVideo).
+ */
 export async function deleteMediaLibraryAsset(t: Tenant, assetId: string, uid: string) {
   const a = await loadTenantAsset(t, assetId);
   const usage = (await usageOf(t, a)).filter((u) => u.kind !== "replay_link");
   if (usage.length) {
+    const publicOnly = usage.every((u) => u.kind === "public_image");
     throw new MediaLibraryError(
-      `This file is still used in: ${usage.map((u) => `${u.label} (${u.detail})`).join("; ")}. Remove it there first.`,
+      publicOnly
+        ? "This image has a public link used on pages, emails or course images. Turn off the public link first — anything using it will lose the image."
+        : `This file is still used in: ${usage.map((u) => `${u.label} (${u.detail})`).join("; ")}. Remove it there first.`,
       409
     );
   }
-  await revokeSharesForAsset(t.subAccountId, a.id, uid);
   if (a.storage.provider === "bunny") {
     try {
       await deleteBunnyHostedVideo(tenantScope(t), a.id);
     } catch (err) {
-      throw new MediaLibraryError(err instanceof Error ? err.message : "Couldn't delete the video.", 409);
+      throw new MediaLibraryError(
+        `Bunny couldn't delete the video, so nothing was changed — replay links still work. ${err instanceof Error ? err.message : ""}`.trim(),
+        502
+      );
     }
-    return;
+  } else {
+    if (a.storage.provider === "firebase" && a.source?.id === "media-library") {
+      // Only objects the Media Library itself stored are removed; legacy
+      // objects owned by other features are never deleted from here.
+      await mediaStorageAdapter("firebase").deleteObject(a.storage.key);
+    }
+    await col(t.subAccountId).doc(a.id).set(
+      { status: "deleted", deletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
   }
-  if (a.storage.provider === "firebase" && a.source?.id === "media-library") {
-    // Only objects the Media Library itself stored are removed; legacy
-    // objects owned by other features are never deleted from here.
-    await mediaStorageAdapter("firebase").deleteObject(a.storage.key);
-  }
-  await col(t.subAccountId).doc(a.id).set(
-    { status: "deleted", deletedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
-    { merge: true }
+  // After a confirmed delete. If this write fails the links are already dead
+  // (resolveReplay refuses a deleted asset), so it's logged, not surfaced.
+  await revokeSharesForAsset(t.subAccountId, a.id, uid).catch((err) =>
+    console.error("[media-library] revoke after delete failed", a.id, err)
   );
 }

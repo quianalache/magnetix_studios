@@ -139,6 +139,24 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // Media Library direct uploads (Assets corrections, 2026-09-29). Files
+    // too large for the app server's request cap go browser → Storage into
+    // a per-person intake folder. CREATE only — no read, overwrite or
+    // delete — only into the signed-in person's own {uid} folder, capped at
+    // the Media Library's document limit, allowed types only. Nothing here
+    // is served: the server validates the object against its intake record,
+    // moves it to the private media-library/ path and deletes it.
+    match /media-uploads/{uid}/{intakeId}/{fileName} {
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && resource == null
+        && request.resource.size > 0
+        && request.resource.size <= 15 * 1024 * 1024
+        && request.resource.contentType.matches(
+          '^(image/(jpeg|png|webp|gif)|application/pdf|application/msword|application/vnd[.]openxmlformats-officedocument[.](wordprocessingml[.]document|spreadsheetml[.]sheet|presentationml[.]presentation)|application/vnd[.]ms-(excel|powerpoint)|text/(csv|plain))$'
+        );
+    }
+
     // Default deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;
