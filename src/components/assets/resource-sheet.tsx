@@ -79,7 +79,7 @@ function fromRow(r: ResourceRow): Draft {
 
 /**
  * New / Edit Resource — the approved side panel. Required: name, type,
- * source (external link OR a Media Library file), related area,
+ * source (external link), related area,
  * description. "More options" keeps the existing status, access-level and
  * project/offer relationships so nothing the old Assets editor stored is
  * lost.
@@ -234,12 +234,7 @@ export function ResourceSheet({
           <fieldset className="space-y-2">
             <legend className="mb-2 text-sm font-medium">Source <span className="text-destructive">*</span></legend>
             <div className="grid gap-3 sm:grid-cols-2">
-              {(
-                [
-                  { v: "external", icon: Link2, label: "External Link", hint: "Link to a file or webpage" },
-                  { v: "internal", icon: FileText, label: "Internal File", hint: "A file in your Media Library" },
-                ] as const
-              ).map((o) => (
+              {([{ v: "external", icon: Link2, label: "External Link", hint: "Link to a file or webpage" }] as const).map((o) => (
                 <label
                   key={o.v}
                   className={cn(
@@ -255,6 +250,12 @@ export function ResourceSheet({
                   </span>
                 </label>
               ))}
+              {resource?.sourceKind === "internal" && (
+                <div className="flex items-center gap-3 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <FileText className="h-5 w-5 shrink-0" />
+                  <span>Legacy Media Library attachment preserved. New resources use external links.</span>
+                </div>
+              )}
             </div>
           </fieldset>
 

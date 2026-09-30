@@ -398,6 +398,9 @@ function SidebarContent({
   const [expandedParents, setExpandedParents] = useState<Set<string>>(
     () => new Set()
   );
+  const [collapsedParents, setCollapsedParents] = useState<Set<string>>(
+    () => new Set()
+  );
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set()
   );
@@ -687,7 +690,7 @@ function SidebarContent({
         </Link>
       );
     }
-    const open = inSection || expandedParents.has(item.href);
+    const open = (inSection || expandedParents.has(item.href)) && !collapsedParents.has(item.href);
     return (
       <div key={item.href}>
         <div
@@ -710,34 +713,26 @@ function SidebarContent({
               </span>
             )}
           </Link>
-          {!inSection && (
-            <button
-              type="button"
-              onClick={() =>
-                setExpandedParents((prev) => {
+          <button
+            type="button"
+            onClick={() => {
+              if (open) {
+                setCollapsedParents((prev) => new Set(prev).add(item.href));
+              } else {
+                setCollapsedParents((prev) => {
                   const next = new Set(prev);
-                  if (next.has(item.href)) next.delete(item.href);
-                  else next.add(item.href);
+                  next.delete(item.href);
                   return next;
-                })
+                });
+                setExpandedParents((prev) => new Set(prev).add(item.href));
               }
-              aria-expanded={open}
-              aria-label={`${open ? "Collapse" : "Expand"} ${item.label}`}
-              className="text-sidebar-foreground/70 hover:text-sidebar-foreground mr-1 rounded-md p-1"
-            >
-              {open ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-          {inSection && (
-            <ChevronDown
-              className="text-sidebar-foreground/70 mr-2 h-3.5 w-3.5"
-              aria-hidden
-            />
-          )}
+            }}
+            aria-expanded={open}
+            aria-label={`${open ? "Collapse" : "Expand"} ${item.label}`}
+            className="text-sidebar-foreground/70 hover:text-sidebar-foreground mr-1 rounded-md p-1"
+          >
+            {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </button>
         </div>
         {open && (
           <div className="border-sidebar-border/50 mt-0.5 ml-4 space-y-0.5 border-l pl-1.5">

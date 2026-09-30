@@ -41,6 +41,7 @@ import {
   type RoutineIconKey,
   type RoutineListItem,
   type RoutineOccurrenceTask,
+  type RoutineSchedule,
   type RoutineTimeBlock,
   type RoutineTimeMode,
   type RoutineView,
@@ -198,10 +199,10 @@ function toView(r: Routine, w: ProjectWindow, viewer: RoutineViewer): RoutineVie
 }
 
 /** Is `date` a live run date: scheduled AND inside the project window. */
-function runsOn(r: Routine, w: ProjectWindow, date: string): boolean {
+function runsOn(r: Routine, w: ProjectWindow, date: string, activity?: RoutineActivity): boolean {
   if (w.windowClosed) return false;
   if (w.windowEnd && date > w.windowEnd) return false;
-  return occursOn(r.schedule, date);
+  return activity ? occursOn(activity.schedule ?? r.schedule, date) : occursOn(r.schedule, date);
 }
 
 // ── input ────────────────────────────────────────────────────────────────────
@@ -210,7 +211,15 @@ function str(v: unknown, max: number): string {
   return typeof v === "string" ? v.trim().slice(0, max) : "";
 }
 
-function parseActivities(raw: unknown, existing: RoutineActivity[] = []): RoutineActivity[] {
+function parseActivities(
+  raw: unknown,
+  existing: RoutineActivity[] = [],
+  fallbackSchedule?: RoutineSchedule,
+  fallbackTimeMode: RoutineTimeMode = "anytime",
+  fallbackTimeBlock: RoutineTimeBlock | null = null,
+  fallbackTime: string | null = null,
+  today?: string
+): RoutineActivity[] {
   if (!Array.isArray(raw)) throw new TaskInputError("Add at least one activity.");
   const known = new Set(existing.map((a) => a.id));
   const seen = new Set<string>();
@@ -224,11 +233,33 @@ function parseActivities(raw: unknown, existing: RoutineActivity[] = []): Routin
     while (seen.has(id)) id = newActivityId();
     seen.add(id);
     const est = typeof a.estimateMinutes === "number" ? Math.round(a.estimateMinutes) : Number(a.estimateMinutes);
+    let taskSchedule = fallbackSchedule;
+    if (a.schedule && typeof a.schedule === "object" && today) {
+      try {
+        taskSchedule = normalizeSchedule(a.schedule as Record<string, unknown>, today);
+      } catch (err) {
+        if (err instanceof ScheduleError) throw new TaskInputError(`Schedule for “${title}”: ${err.message}`);
+        throw err;
+      }
+    }
+    const taskMode = a.timeMode === "block" || a.timeMode === "time" ? a.timeMode : fallbackTimeMode;
+    const taskBlock = taskMode === "block"
+      ? (a.timeBlock === "midday" || a.timeBlock === "pm" ? a.timeBlock : fallbackTimeBlock ?? "am")
+      : null;
+    const rawTime = typeof a.time === "string" ? a.time : fallbackTime;
+    if (taskMode === "time" && !isClock(rawTime)) throw new TaskInputError(`Enter a valid time for “${title}”.`);
     out.push({
       id,
       title,
       estimateMinutes: Number.isFinite(est) && est > 0 ? Math.min(1440, est) : null,
       notes: str(a.notes, 2000),
+      description: str(a.description ?? a.notes, 2000),
+      priority: typeof a.priority === "string" ? a.priority.slice(0, 30) : null,
+      tags: Array.isArray(a.tags) ? a.tags.filter((v): v is string => typeof v === "string").slice(0, 20) : [],
+      schedule: taskSchedule,
+      timeMode: taskMode,
+      timeBlock: taskBlock,
+      time: taskMode === "time" ? rawTime as string : null,
     });
   }
   if (out.length === 0) throw new TaskInputError("Add at least one activity.");
@@ -303,9 +334,15 @@ async function parseRoutineInput(
   }
   const time = timeMode === "time" ? (timeRaw as string) : null;
 
-  const activities = parseActivities(pick("activities"), existing?.activities ?? []);
-  const projectId = await validateProject(subAccountId, pick("projectId"));
-  const endsWithProject = projectId ? pick("endsWithProject") === true : false;
+  const activities = parseActivities(pick("activities"), existing?.activities ?? [], schedule, timeMode, timeBlock, time, today);
+  // New UI writes omit projectId. Keep the explicit legacy API path working
+  // for existing integrations and historical compatibility; it never affects
+  // occurrence task ownership or portal visibility.
+  const explicitProject = "projectId" in body ? body.projectId : undefined;
+  const projectId = explicitProject !== undefined
+    ? await validateProject(subAccountId, explicitProject)
+    : existing?.projectId ?? null;
+  const endsWithProject = projectId ? ("endsWithProject" in body ? body.endsWithProject === true : existing?.endsWithProject === true) : false;
   // Private by default. Only the owner decides who can see it.
   const currentVisibility = existing?.visibility === "shared" ? "shared" : "private";
   let visibility: "private" | "shared" = currentVisibility;
@@ -335,16 +372,15 @@ async function parseRoutineInput(
 
 // ── occurrence generation ────────────────────────────────────────────────────
 
-function occurrenceTiming(r: Routine, date: string, timeZone: string) {
-  if (r.timeMode === "time" && r.time) {
-    return { dueAt: zonedDateTimeToUtc(date, r.time, timeZone), timeBlock: blockForTime(r.time) };
+function activityTiming(r: Routine, a: RoutineActivity, date: string, timeZone: string) {
+  const mode = a.timeMode ?? r.timeMode;
+  const time = a.time ?? r.time;
+  if (mode === "time" && time) {
+    return { dueAt: zonedDateTimeToUtc(date, time, timeZone), timeBlock: blockForTime(time) };
   }
-  // Untimed: a mid-day anchor keeps the task on the right calendar day in
-  // any nearby timezone. It is NOT an appointment time — the Calendar shows
-  // routines as all-day / time-block items, never as a clock time.
   return {
     dueAt: zonedDateTimeToUtc(date, "12:00", timeZone),
-    timeBlock: r.timeMode === "block" && r.timeBlock ? r.timeBlock : ("anytime" as const),
+    timeBlock: mode === "block" && (a.timeBlock ?? r.timeBlock) ? (a.timeBlock ?? r.timeBlock)! : ("anytime" as const),
   };
 }
 
@@ -361,11 +397,12 @@ export async function ensureOccurrence(r: Routine, date: string, timeZone: strin
   const db = getAdminDb();
   const refs = r.activities.map((a) => taskDocRef(occurrenceTaskId(r.id, date, a.id)));
   const existing = refs.length ? await db.getAll(...refs) : [];
-  const { dueAt, timeBlock } = occurrenceTiming(r, date, timeZone);
   let created = 0;
   for (let i = 0; i < r.activities.length; i++) {
     if (existing[i]?.exists) continue;
     const a = r.activities[i];
+    if (!occursOn(a.schedule ?? r.schedule, date)) continue;
+    const { dueAt, timeBlock } = activityTiming(r, a, date, timeZone);
     const ownerUid = routineOwnerUid(r) ?? r.createdByUid;
     try {
       // Same document shape as an ordinary task (so the shared Tasks
@@ -447,11 +484,11 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
     const t = d.data();
     if (t.routineId !== routineId || !untouched(t)) continue;
     const activity = byActivity.get(t.routineActivityId as string);
-    const keep = r && r.status === "active" && w && activity && runsOn(r, w, t.occurrenceDate as string);
+    const keep = r && r.status === "active" && w && activity && runsOn(r, w, t.occurrenceDate as string, activity);
     if (!keep) {
       batch.delete(d.ref);
     } else {
-      const { dueAt, timeBlock } = occurrenceTiming(r, t.occurrenceDate as string, timeZone);
+      const { dueAt, timeBlock } = activityTiming(r, activity, t.occurrenceDate as string, timeZone);
       batch.update(d.ref, {
         title: activity.title,
         notes: activity.notes,
@@ -564,15 +601,28 @@ function summarize(
 ): RoutineDaySummary[] {
   return dates.map((date) => {
     const tasks = tasksByDate.get(date) ?? [];
-    const scheduled = runsOn(r, w, date) || (r.status === "paused" && occursOn(r.schedule, date) && date < today);
+    const scheduled = r.activities.some((a) => runsOn(r, w, date, a)) ||
+      (r.status === "paused" && r.activities.some((a) => occursOn(a.schedule ?? r.schedule, date)) && date < today);
     return {
       date,
       scheduled,
       recorded: tasks.length > 0,
       done: tasks.filter((t) => t.completed === true).length,
-      total: tasks.length > 0 ? tasks.length : scheduled ? r.activities.length : 0,
+      total: tasks.length > 0 ? tasks.length : scheduled ? r.activities.filter((a) => occursOn(a.schedule ?? r.schedule, date)).length : 0,
     };
   });
+}
+
+function scheduledActivityCount(r: Routine, w: ProjectWindow, date: string): number {
+  return r.activities.filter((a) => runsOn(r, w, date, a)).length;
+}
+
+function nextRoutineDate(r: Routine, w: ProjectWindow, from: string): string | null {
+  const dates = r.activities
+    .map((a) => nextOccurrenceOnOrAfter(a.schedule ?? r.schedule, from, w.windowEnd))
+    .filter((d): d is string => !!d)
+    .sort();
+  return dates[0] ?? null;
 }
 
 function groupByRoutineAndDate(docs: FirebaseFirestore.QueryDocumentSnapshot[]) {
@@ -622,7 +672,7 @@ export async function listRoutines(subAccountId: string, viewer: RoutineViewer):
   for (const r of routines) {
     const w = await projectWindow(r, tz);
     let byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
-    if (r.status === "active" && runsOn(r, w, today) && (byDate.get(today)?.length ?? 0) < r.activities.length) {
+    if (r.status === "active" && scheduledActivityCount(r, w, today) > 0 && (byDate.get(today)?.length ?? 0) < scheduledActivityCount(r, w, today)) {
       if ((await ensureOccurrence(r, today, tz)) > 0) {
         const fresh = await occurrenceTasksInRange(subAccountId, today, today);
         byDate = new Map(byDate);
@@ -665,7 +715,7 @@ export async function listRoutines(subAccountId: string, viewer: RoutineViewer):
       week,
       nextDate:
         r.status === "active" && !w.windowClosed
-          ? nextOccurrenceOnOrAfter(r.schedule, today, w.windowEnd)
+          ? nextRoutineDate(r, w, today)
           : null,
     });
   }

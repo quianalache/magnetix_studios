@@ -18,7 +18,6 @@ import {
   Search,
   Tag,
   Trash2,
-  Users,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -51,10 +50,8 @@ import {
   Initials,
   linkSource,
   Pager,
-  StatTile,
   StatusPill,
   TagPill,
-  type AssetsTab,
 } from "./assets-ui";
 import { ResourceSheet, type RelationOptions, type ResourceRow } from "./resource-sheet";
 
@@ -91,17 +88,14 @@ function sourceLabel(r: ResourceRow): { name: string; kind: string } {
 /** Resource Library — resources the team maintains by hand (links, guides, documents). */
 export function ResourceLibrary({
   createSignal,
-  onGoTo,
 }: {
   /** Bumped by the header's "New Resource" button. */
   createSignal: number;
-  onGoTo: (tab: AssetsTab) => void;
 }) {
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId, isAdmin } = useSubAccount();
   const [rows, setRows] = useState<ResourceRow[] | null>(null);
   const [bundles, setBundles] = useState<LegacyBundle[]>([]);
-  const [summary, setSummary] = useState<{ resources: number; crmResources: number; mediaFiles: number; affiliatePrograms: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [relations, setRelations] = useState<RelationOptions>({ projects: [], offers: [] });
   const [q, setQ] = useState("");
@@ -117,13 +111,9 @@ export function ResourceLibrary({
 
   const load = useCallback(async () => {
     try {
-      const [list, sum] = await Promise.all([
-        assetsCall<{ assets: ResourceRow[]; legacyBundles: LegacyBundle[] }>(`/api/sub-accounts/${subAccountId}/assets`),
-        assetsCall<typeof summary>(`/api/sub-accounts/${subAccountId}/assets/summary`).catch(() => null),
-      ]);
+      const list = await assetsCall<{ assets: ResourceRow[]; legacyBundles: LegacyBundle[] }>(`/api/sub-accounts/${subAccountId}/assets`);
       setRows(list.assets);
       setBundles(list.legacyBundles ?? []);
-      setSummary(sum);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -263,13 +253,6 @@ export function ResourceLibrary({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatTile icon={FileText} tone="violet" value={summary?.resources ?? rows?.length ?? "–"} label="Total Resources" />
-        <StatTile icon={Users} tone="teal" value={summary?.crmResources ?? "–"} label="Synced CRM Resources" onClick={() => onGoTo("crm")} />
-        <StatTile icon={ImageIcon} tone="pink" value={summary?.mediaFiles ?? "–"} label="Media Files" onClick={() => onGoTo("media")} />
-        <StatTile icon={Link2} tone="violet" value={summary?.affiliatePrograms ?? "–"} label="Affiliate Programs" onClick={() => onGoTo("affiliates")} />
-      </div>
-
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <label className="relative block lg:w-80">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -277,7 +260,7 @@ export function ResourceLibrary({
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <FilterSelect id="resources-type" icon={FileText} label="Type" value={type} onChange={setType} options={[{ value: "all", label: "All Types" }, ...types.map((t) => ({ value: t, label: t }))]} />
-          <FilterSelect id="resources-source" icon={Layers} label="Source" value={source} onChange={setSource} options={[{ value: "all", label: "All Sources" }, { value: "external", label: "External links" }, { value: "internal", label: "Internal files" }]} />
+          <FilterSelect id="resources-source" icon={Layers} label="Source" value={source} onChange={setSource} options={[{ value: "all", label: "All Sources" }, { value: "external", label: "External links" }]} />
           <FilterSelect id="resources-area" icon={Tag} label="Area" value={area} onChange={setArea} options={[{ value: "all", label: "All Areas" }, ...areas.map((a) => ({ value: a, label: a }))]} />
           <FilterSelect id="resources-sort" icon={ArrowUpDown} label="Sort" value={sort} onChange={setSort} options={[{ value: "updated", label: "Sort: Last updated" }, { value: "created", label: "Sort: Newest" }, { value: "name", label: "Sort: Name" }]} />
         </div>

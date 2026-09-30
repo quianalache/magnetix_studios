@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -51,6 +50,7 @@ interface ActivityDraft {
   id?: string;
   title: string;
   estimate: string;
+  frequency: RoutineFrequency;
 }
 
 interface Draft {
@@ -94,7 +94,7 @@ function blankDraft(): Draft {
     description: "",
     icon: "laptop",
     color: "violet",
-    activities: [{ key: newKey(), title: "", estimate: "" }],
+    activities: [{ key: newKey(), title: "", estimate: "", frequency: "weekly" }],
     frequency: "weekly",
     customMode: "nthWeekday",
     interval: 1,
@@ -127,6 +127,7 @@ function draftFrom(r: RoutineView): Draft {
       id: a.id,
       title: a.title,
       estimate: a.estimateMinutes ? String(a.estimateMinutes) : "",
+      frequency: a.schedule?.frequency ?? s.frequency,
     })),
     frequency: s.frequency,
     customMode: s.customMode ?? "nthWeekday",
@@ -163,6 +164,11 @@ function scheduleBody(d: Draft) {
   };
 }
 
+function taskScheduleBody(d: Draft, frequency: RoutineFrequency) {
+  const schedule = scheduleBody(d);
+  return { ...schedule, frequency, customMode: frequency === "custom" ? d.customMode : null };
+}
+
 function toBody(d: Draft, canShare: boolean) {
   return {
     ...(canShare ? { visibility: d.visibility } : {}),
@@ -176,13 +182,15 @@ function toBody(d: Draft, canShare: boolean) {
         id: a.id,
         title: a.title.trim(),
         estimateMinutes: a.estimate ? Number(a.estimate) : null,
+        schedule: taskScheduleBody(d, a.frequency),
+        timeMode: d.timeMode,
+        timeBlock: d.timeMode === "block" ? d.timeBlock : null,
+        time: d.timeMode === "time" ? d.time : null,
       })),
     schedule: scheduleBody(d),
     timeMode: d.timeMode,
     timeBlock: d.timeMode === "block" ? d.timeBlock : null,
     time: d.timeMode === "time" ? d.time : null,
-    projectId: d.projectId || null,
-    endsWithProject: !!d.projectId && d.endsWithProject,
   };
 }
 
@@ -636,7 +644,7 @@ export function RoutineEditorDialog({
                             e.preventDefault();
                             setDraft((d) => ({
                               ...d,
-                              activities: [...d.activities.slice(0, i + 1), { key: newKey(), title: "", estimate: "" }, ...d.activities.slice(i + 1)],
+                              activities: [...d.activities.slice(0, i + 1), { key: newKey(), title: "", estimate: "", frequency: "weekly" }, ...d.activities.slice(i + 1)],
                             }));
                           }
                         }}
@@ -660,6 +668,17 @@ export function RoutineEditorDialog({
                         />
                         min
                       </label>
+                      <select
+                        aria-label={`Recurrence for activity ${i + 1}`}
+                        className={cn(selectCls, "h-8 w-24 px-1.5 text-xs")}
+                        value={a.frequency}
+                        onChange={(e) => setDraft((d) => ({ ...d, activities: d.activities.map((x) => x.key === a.key ? { ...x, frequency: e.target.value as RoutineFrequency } : x) }))}
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="custom">Custom</option>
+                      </select>
                       <div className="flex shrink-0">
                         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => moveActivity(i, -1)} disabled={i === 0} aria-label="Move up">
                           <ArrowUp className="h-3.5 w-3.5" />
@@ -678,7 +697,7 @@ export function RoutineEditorDialog({
                               ...d,
                               activities:
                                 d.activities.length === 1
-                                  ? [{ key: newKey(), title: "", estimate: "" }]
+                                  ? [{ key: newKey(), title: "", estimate: "", frequency: "weekly" }]
                                   : d.activities.filter((x) => x.key !== a.key),
                             }))
                           }
@@ -695,7 +714,7 @@ export function RoutineEditorDialog({
                     variant="outline"
                     size="sm"
                     disabled={draft.activities.length >= MAX_ROUTINE_ACTIVITIES}
-                    onClick={() => set("activities", [...draft.activities, { key: newKey(), title: "", estimate: "" }])}
+                    onClick={() => set("activities", [...draft.activities, { key: newKey(), title: "", estimate: "", frequency: "weekly" }])}
                   >
                     <Plus className="mr-1.5 h-4 w-4" /> Add activity
                   </Button>
@@ -967,31 +986,6 @@ export function RoutineEditorDialog({
                       </label>
                     ))}
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="routine-project">Project (optional)</Label>
-                  <select
-                    id="routine-project"
-                    className={cn(selectCls, "w-full")}
-                    value={draft.projectId}
-                    onChange={(e) => setDraft((d) => ({ ...d, projectId: e.target.value, endsWithProject: e.target.value ? d.endsWithProject : false }))}
-                  >
-                    <option value="">No project — runs on its own</option>
-                    {projects
-                      .filter((p) => p.status === "active" || p.id === draft.projectId)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
-                  </select>
-                  {draft.projectId && (
-                    <label className="flex items-center gap-2.5 text-sm">
-                      <Switch checked={draft.endsWithProject} onCheckedChange={(v) => set("endsWithProject", v === true)} />
-                      Stop when the project ends
-                    </label>
-                  )}
                 </div>
 
                 {scheduleCheck.error && (

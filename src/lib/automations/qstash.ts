@@ -49,6 +49,14 @@ export function qstashIsConfigured(): boolean {
   return !!getClient() && !!getReceiver();
 }
 
+/** Best-effort cancellation used when an already queued social post is rescheduled. */
+export async function cancelQstashMessage(messageId: string | null | undefined): Promise<void> {
+  if (!messageId) return;
+  const client = getClient();
+  if (!client) return;
+  try { await client.messages.delete(messageId); } catch (err) { console.warn("[qstash] unable to cancel prior message", err); }
+}
+
 interface PublishCallbackInput {
   /** Path on our app, e.g. "/api/automations/step" — gets appended to NEXT_PUBLIC_APP_URL. */
   pathname: string;
@@ -103,6 +111,7 @@ interface PublishSocialPostInput {
   subAccountId: string;
   /** Seconds to defer before publishing. 0 = publish immediately. */
   delaySeconds: number;
+  deduplicationId?: string;
 }
 
 /**
@@ -119,7 +128,7 @@ export async function publishSocialPost(
     pathname: "/api/social/publish/step",
     body: { postId: input.postId, subAccountId: input.subAccountId },
     delaySeconds: input.delaySeconds,
-    deduplicationId: `social_${input.postId}`,
+    deduplicationId: input.deduplicationId ?? `social_${input.postId}`,
   });
 }
 

@@ -66,6 +66,14 @@ export interface RoutineActivity {
   title: string;
   estimateMinutes: number | null;
   notes: string;
+  description?: string;
+  priority?: string | null;
+  tags?: string[];
+  /** New routines may schedule each task independently. Legacy activities fall back to Routine.schedule. */
+  schedule?: RoutineSchedule;
+  timeMode?: RoutineTimeMode;
+  timeBlock?: RoutineTimeBlock | null;
+  time?: string | null;
 }
 
 export interface Routine {

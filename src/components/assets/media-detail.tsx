@@ -91,19 +91,20 @@ export function MediaDetail({
     setExpiry(localDateInput(item.share?.expiresAt ?? null));
   }, [item.id, item.title, item.share?.expiresAt]);
 
-  // Preview: images use their thumbnail URL; videos + documents fetch a short-lived URL on demand.
+  // Preview URLs are fetched only after the user asks to play/open. Selecting
+  // a video must not start a Bunny embed or spend bandwidth.
   useEffect(() => {
     setPreview(null);
     setPreviewError(null);
-    if (item.kind === "image" || item.kind === "document" || item.status !== "ready") return;
-    let cancelled = false;
-    assetsCall<{ url: string; embed: boolean }>(`${base}/url`)
-      .then((r) => !cancelled && setPreview(r))
-      .catch((e) => !cancelled && setPreviewError((e as Error).message));
-    return () => {
-      cancelled = true;
-    };
-  }, [base, item.id, item.kind, item.status]);
+    return undefined;
+  }, [item.id]);
+
+  async function playPreview() {
+    if (item.status !== "ready") return;
+    setPreviewError(null);
+    try { setPreview(await assetsCall<{ url: string; embed: boolean }>(`${base}/url`)); }
+    catch (e) { setPreviewError((e as Error).message); }
+  }
 
   async function openFile(download = false) {
     const win = window.open("", "_blank");
@@ -212,6 +213,11 @@ export function MediaDetail({
             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen
           />
+        ) : item.kind === "video" && item.status === "ready" ? (
+          <button type="button" onClick={() => void playPreview()} className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground"><span className="ml-1 text-xl">▶</span></span>
+            <span className="text-xs text-muted-foreground">Play preview</span>
+          </button>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
             {item.status !== "ready" ? <Loader2 className="text-muted-foreground h-7 w-7 animate-spin" /> : <KindIcon className="text-muted-foreground h-8 w-8" />}

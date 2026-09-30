@@ -585,7 +585,7 @@ export default function MyTasksPage() {
                     <span className="sr-only">Complete</span>
                   </th>
                   <th className="px-3 py-3">Task</th>
-                  <th className="px-3 py-3">Project</th>
+                  <th className="px-3 py-3">Project / Routine</th>
                   <th className="px-3 py-3">Due date</th>
                   <th className="px-3 py-3">Status</th>
                   <th className="px-3 py-3">Priority</th>

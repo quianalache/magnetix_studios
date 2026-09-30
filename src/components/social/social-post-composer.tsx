@@ -182,7 +182,7 @@ export function SocialPostComposer({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[92vh] w-[min(96vw,1100px)] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
         <DialogTitle>{editingPost ? "Edit post" : "New post"}</DialogTitle>
           <DialogDescription>

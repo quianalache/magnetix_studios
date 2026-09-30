@@ -9,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AssetsHeader, AssetsTabs, type AssetsTab } from "@/components/assets/assets-ui";
@@ -19,9 +18,9 @@ import { MediaLibrary, type MediaUploadRequest } from "@/components/assets/media
 import { AffiliateLibrary } from "@/components/assets/affiliate-library";
 
 const TABS: { id: AssetsTab; label: string; icon: typeof FileText }[] = [
-  { id: "resources", label: "Resource Library", icon: FileText },
   { id: "crm", label: "CRM Resources", icon: Users },
   { id: "media", label: "Media Library", icon: ImageIcon },
+  { id: "resources", label: "External Resources", icon: FileText },
   { id: "affiliates", label: "Affiliate Library", icon: Link2 },
 ];
 
@@ -36,12 +35,15 @@ function AssetsPageInner() {
   const pathname = usePathname();
   const params = useSearchParams();
   const tabParam = params.get("tab") as AssetsTab | null;
-  const tab: AssetsTab = TABS.some((t) => t.id === tabParam) ? (tabParam as AssetsTab) : "resources";
+  const tab: AssetsTab = TABS.some((t) => t.id === tabParam) ? (tabParam as AssetsTab) : "crm";
   const [resourceSignal, setResourceSignal] = useState(0);
   const [affiliateSignal, setAffiliateSignal] = useState(0);
   const [uploadRequest, setUploadRequest] = useState<MediaUploadRequest | null>(null);
 
   function go(next: AssetsTab) {
+    setResourceSignal(0);
+    setAffiliateSignal(0);
+    setUploadRequest(null);
     const q = new URLSearchParams(params.toString());
     q.set("tab", next);
     router.replace(`${pathname}?${q.toString()}`, { scroll: false });
@@ -60,30 +62,28 @@ function AssetsPageInner() {
     setUploadRequest({ kind, nonce: Date.now() });
   }
 
-  const primary =
-    tab === "media" && isAdmin
-      ? { label: "Upload Media", icon: Upload, run: () => upload("file") }
-      : tab === "affiliates"
-        ? { label: "New Affiliate Program", icon: Plus, run: newAffiliate }
-        : { label: "New Resource", icon: Plus, run: newResource };
+  const primary = tab === "media" && isAdmin
+    ? { label: "Upload Media", icon: Upload, run: () => upload("file") }
+    : tab === "affiliates"
+      ? { label: "New Affiliate Program", icon: Plus, run: newAffiliate }
+      : tab === "resources"
+        ? { label: "New External Resource", icon: Plus, run: newResource }
+        : null;
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <AssetsHeader
-        actions={
+        actions={primary ? (
           <div className="flex">
             <Button className="h-11 rounded-r-none px-5" onClick={primary.run}>
               <primary.icon className="mr-1.5 h-4 w-4" />
               {primary.label}
             </Button>
-            <DropdownMenu>
+            {tab === "media" && <DropdownMenu>
               <DropdownMenuTrigger render={<Button className="h-11 rounded-l-none border-l border-white/20 px-3" aria-label="More create options" />}>
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={newResource}>
-                  <FileText className="mr-2 h-4 w-4" /> New resource
-                </DropdownMenuItem>
                 {isAdmin && (
                   <>
                     <DropdownMenuItem onClick={() => upload("file")}>
@@ -94,17 +94,14 @@ function AssetsPageInner() {
                     </DropdownMenuItem>
                   </>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={newAffiliate}>
-                  <Link2 className="mr-2 h-4 w-4" /> New affiliate program
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            }
           </div>
-        }
+        ) : null}
       />
       <AssetsTabs tabs={TABS} active={tab} onChange={go} />
-      {tab === "resources" && <ResourceLibrary createSignal={resourceSignal} onGoTo={go} />}
+      {tab === "resources" && <ResourceLibrary createSignal={resourceSignal} />}
       {tab === "crm" && <CrmResources />}
       {tab === "media" && <MediaLibrary uploadRequest={uploadRequest} />}
       {tab === "affiliates" && <AffiliateLibrary createSignal={affiliateSignal} />}
