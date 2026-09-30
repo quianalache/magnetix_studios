@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -656,79 +655,36 @@ function DayCell({
 }
 
 function ScheduleTab({ routine, today, onEdit }: { routine: RoutineView; today: string; onEdit: (() => void) | null }) {
-  const upcoming = useMemo(
-    () =>
-      routine.status === "active" && !routine.windowClosed
-        ? occurrencesBetween(routine.schedule, today || routine.schedule.startDate, addDaysYmd(today || routine.schedule.startDate, 400), routine.windowEnd, 6)
-        : [],
-    [routine, today]
-  );
-  const rowsDl: [string, React.ReactNode][] = [
-    ["Repeats", describeScheduleLong(routine.schedule)],
-    ["Time", describeTime(routine.timeMode, routine.timeBlock, routine.time)],
-    ["Started", formatYmd(routine.schedule.startDate, { month: "short", day: "numeric", year: "numeric" })],
-    [
-      "Ends",
-      routine.windowEnd
-        ? formatYmd(routine.windowEnd, { month: "short", day: "numeric", year: "numeric" }) +
-          (routine.endsWithProject && routine.windowEnd !== routine.schedule.endDate ? " (project due date)" : "")
-        : routine.endsWithProject
-          ? "When the project ends"
-          : "Never — runs until you pause or delete it",
-    ],
-  ];
+  const upcoming = useMemo(() => routine.activities.map((activity) => ({
+    activity,
+    dates: routine.status === "active" && !routine.windowClosed
+      ? occurrencesBetween(activity.schedule ?? routine.schedule, today || routine.schedule.startDate, addDaysYmd(today || routine.schedule.startDate, 400), null, 4)
+      : [],
+  })), [routine, today]);
   return (
     <div className="space-y-5">
-      <dl className="divide-y rounded-xl border text-sm">
-        {rowsDl.map(([k, v]) => (
-          <div key={k} className="flex flex-col gap-0.5 px-3 py-2.5 sm:flex-row sm:gap-4">
-            <dt className="text-muted-foreground w-24 shrink-0 text-xs font-semibold tracking-wide uppercase sm:pt-0.5">{k}</dt>
-            <dd>{v}</dd>
-          </div>
-        ))}
-        {routine.projectId && (
-          <div className="flex flex-col gap-0.5 px-3 py-2.5 sm:flex-row sm:gap-4">
-            <dt className="text-muted-foreground w-24 shrink-0 text-xs font-semibold tracking-wide uppercase sm:pt-0.5">Project</dt>
-            <dd>
-              <ProjectLink id={routine.projectId} title={routine.projectTitle ?? "Project"} />
-            </dd>
-          </div>
-        )}
-      </dl>
+      <div className="divide-y rounded-xl border text-sm">
+        {routine.activities.map((activity) => <div key={activity.id} className="flex flex-col gap-1 px-3 py-2.5"><span className="font-medium">{activity.title}</span><span className="text-muted-foreground text-xs">{describeScheduleLong(activity.schedule ?? routine.schedule)} · {describeTime(activity.timeMode ?? routine.timeMode, activity.timeBlock ?? routine.timeBlock, activity.time ?? routine.time)}</span></div>)}
+      </div>
       <div>
         <h3 className="mb-2 text-sm font-semibold">Upcoming</h3>
-        {upcoming.length ? (
-          <ul className="flex flex-wrap gap-1.5">
-            {upcoming.map((d) => (
-              <li key={d} className="bg-muted rounded-full px-2.5 py-1 text-xs font-medium tabular-nums">
-                {formatYmd(d)}
-              </li>
-            ))}
-          </ul>
+        {upcoming.some((item) => item.dates.length) ? (
+          <ul className="space-y-2">{upcoming.map((item) => item.dates.length ? <li key={item.activity.id}><span className="font-medium">{item.activity.title}:</span> <span className="text-muted-foreground">{item.dates.map((d) => formatYmd(d)).join(", ")}</span></li> : null)}</ul>
         ) : (
           <p className="text-muted-foreground text-sm">
             {routine.status === "paused" ? "Paused — resume it to schedule new dates." : "No upcoming dates."}
           </p>
         )}
         <p className="text-muted-foreground mt-2 text-xs">
-          Untimed routines appear on the Calendar as all-day items{routine.timeMode === "block" ? " in their time block" : ""}, never as an invented appointment time.
+          Each task keeps its own time preference; untimed tasks appear as all-day items.
         </p>
       </div>
       {onEdit && (
         <Button variant="outline" size="sm" onClick={onEdit}>
-          <Pencil className="mr-1.5 h-4 w-4" /> Change schedule
+          <Pencil className="mr-1.5 h-4 w-4" /> Edit task schedules
         </Button>
       )}
     </div>
-  );
-}
-
-function ProjectLink({ id, title }: { id: string; title: string }) {
-  const { saPath } = useSubAccount();
-  return (
-    <Link href={saPath(`/projects/${id}`)} className="text-primary hover:underline">
-      {title}
-    </Link>
   );
 }
 

@@ -44,6 +44,8 @@ export interface SocialPostTargetResult {
   externalId: string | null;
   /** Meta's error text on failure; null otherwise. */
   error: string | null;
+  /** Provider permalink when a publishing provider returns one. */
+  providerUrl?: string | null;
 }
 
 export interface SocialPostDoc {
@@ -70,6 +72,8 @@ export interface SocialPostDoc {
 
   /** Per-target outcomes — one entry per platform in `targets`. */
   results: SocialPostTargetResult[];
+  /** Optional provider permalink for older/newer provider integrations. */
+  providerUrl?: string | null;
   /** QStash message id for the scheduled publish job (debug / future cancel). */
   qstashMessageId: string | null;
 

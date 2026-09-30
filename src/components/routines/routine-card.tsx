@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarDays, Clock, FolderKanban, Lock, MoreHorizontal, Pause, Pencil, Play, Trash2, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, Clock, Lock, MoreHorizontal, Pause, Pencil, Play, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -11,8 +11,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-  describeSchedule,
-  describeTime,
   formatYmd,
   ordinal,
   WEEKDAY_LETTER,
@@ -109,11 +107,11 @@ export function RoutineMetaChips({ routine, className }: { routine: RoutineView;
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
       <span className="bg-card/80 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
         <CalendarDays className="text-muted-foreground h-3 w-3" />
-        {describeSchedule(routine.schedule)}
+        {routine.activities.length} task {routine.activities.length === 1 ? "schedule" : "schedules"}
       </span>
       <span className="bg-card/80 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs">
         <Clock className="text-muted-foreground h-3 w-3" />
-        {describeTime(routine.timeMode, routine.timeBlock, routine.time)}
+        Independent timing
       </span>
       <RoutineVisibilityBadge routine={routine} />
     </div>
@@ -121,7 +119,7 @@ export function RoutineMetaChips({ routine, className }: { routine: RoutineView;
 }
 
 function monthlyChip(routine: RoutineView): string {
-  const s = routine.schedule;
+  const s = routine.activities[0]?.schedule ?? routine.schedule;
   if (s.monthMode === "weekdays") {
     return `${s.nthWeeks.map((n) => ordinal(n)).join(" & ")} ${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.weekday]}`;
   }
@@ -195,7 +193,7 @@ export function RoutineCard({
 
       <RoutineMetaChips routine={routine} />
 
-      {routine.schedule.unit === "month" ? (
+      {(routine.activities[0]?.schedule ?? routine.schedule).unit === "month" ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="bg-card inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 font-semibold">
             <CalendarDays className="h-3.5 w-3.5" style={{ color: routineHex(routine.color) }} />
@@ -225,12 +223,6 @@ export function RoutineCard({
               {routine.activities.length} {routine.activities.length === 1 ? "activity" : "activities"}
               {minutes > 0 && ` · ~${minutes} min`}
             </span>
-            {routine.projectTitle && (
-              <span className="inline-flex min-w-0 items-center gap-1">
-                <FolderKanban className="h-3 w-3 shrink-0" />
-                <span className="truncate">{routine.projectTitle}</span>
-              </span>
-            )}
           </div>
         </div>
         <button

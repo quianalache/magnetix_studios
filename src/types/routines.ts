@@ -89,16 +89,18 @@ export interface Routine {
   visibility: RoutineVisibility;
   /** Whose routine it is. Legacy docs fall back to createdByUid. */
   ownerUid: string;
+  /**
+   * Legacy projection retained so older documents and clients can be read.
+   * New routine behavior is defined by each activity's schedule and timing.
+   */
   schedule: RoutineSchedule;
-  /** Anytime is the default — no invented appointment time. */
+  /** Legacy routine-level timing; new activities carry their own timing. */
   timeMode: RoutineTimeMode;
   timeBlock: RoutineTimeBlock | null;
-  /** "HH:MM" (24h) when timeMode === "time". */
   time: string | null;
   activities: RoutineActivity[];
-  /** Optional association. Occurrence tasks do NOT carry projectId, so they never touch project progress or the Client Portal. */
+  /** Legacy fields are read-only compatibility data; routines are no longer project-owned. */
   projectId: string | null;
-  /** When true, the routine stops after the associated project's due date (or once the project is no longer active). */
   endsWithProject: boolean;
   /** Generated activities are assigned to the owner. */
   assigneeUid: string | null;

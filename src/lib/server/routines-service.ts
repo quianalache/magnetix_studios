@@ -160,24 +160,13 @@ async function projectWindow(
   routine: Pick<Routine, "projectId" | "endsWithProject" | "schedule" | "subAccountId">,
   timeZone: string
 ): Promise<ProjectWindow> {
-  let title: string | null = null;
-  let projectEnd: string | null = null;
-  let closed = false;
-  if (routine.projectId) {
-    const p = (await getAdminDb().doc(`projects/${routine.projectId}`).get()).data();
-    if (p && p.subAccountId === routine.subAccountId) {
-      title = (p.title as string) ?? null;
-      if (routine.endsWithProject) {
-        const due = toDate(p.dueAt);
-        if (due) projectEnd = todayInTimeZone(timeZone, due);
-        if (p.status && p.status !== "active") closed = true;
-      }
-    } else if (routine.endsWithProject) {
-      closed = true; // project deleted — a project-bound routine has nothing left to follow
-    }
-  }
-  const ends = [routine.schedule.endDate, projectEnd].filter(Boolean) as string[];
-  return { title, windowEnd: ends.length ? ends.sort()[0] : null, windowClosed: closed };
+  // Routines are independent task containers. Keep this compatibility helper
+  // for callers that still expect a window, but never derive one from a
+  // Project. Per-task end dates are evaluated from each activity schedule.
+  void routine.projectId;
+  void routine.endsWithProject;
+  void timeZone;
+  return { title: null, windowEnd: null, windowClosed: false };
 }
 
 function toView(r: Routine, w: ProjectWindow, viewer: RoutineViewer): RoutineView {
@@ -203,6 +192,10 @@ function runsOn(r: Routine, w: ProjectWindow, date: string, activity?: RoutineAc
   if (w.windowClosed) return false;
   if (w.windowEnd && date > w.windowEnd) return false;
   return activity ? occursOn(activity.schedule ?? r.schedule, date) : occursOn(r.schedule, date);
+}
+
+function routineRunsOn(r: Routine, w: ProjectWindow, date: string): boolean {
+  return r.activities.some((activity) => runsOn(r, w, date, activity));
 }
 
 // ── input ────────────────────────────────────────────────────────────────────
@@ -264,13 +257,6 @@ function parseActivities(
   }
   if (out.length === 0) throw new TaskInputError("Add at least one activity.");
   return out;
-}
-
-async function validateProject(subAccountId: string, projectId: unknown): Promise<string | null> {
-  if (typeof projectId !== "string" || !projectId) return null;
-  const p = (await getAdminDb().doc(`projects/${projectId}`).get()).data();
-  if (!p || p.subAccountId !== subAccountId) throw new TaskInputError("That project wasn't found.");
-  return projectId;
 }
 
 interface RoutineFields {
@@ -335,14 +321,6 @@ async function parseRoutineInput(
   const time = timeMode === "time" ? (timeRaw as string) : null;
 
   const activities = parseActivities(pick("activities"), existing?.activities ?? [], schedule, timeMode, timeBlock, time, today);
-  // New UI writes omit projectId. Keep the explicit legacy API path working
-  // for existing integrations and historical compatibility; it never affects
-  // occurrence task ownership or portal visibility.
-  const explicitProject = "projectId" in body ? body.projectId : undefined;
-  const projectId = explicitProject !== undefined
-    ? await validateProject(subAccountId, explicitProject)
-    : existing?.projectId ?? null;
-  const endsWithProject = projectId ? ("endsWithProject" in body ? body.endsWithProject === true : existing?.endsWithProject === true) : false;
   // Private by default. Only the owner decides who can see it.
   const currentVisibility = existing?.visibility === "shared" ? "shared" : "private";
   let visibility: "private" | "shared" = currentVisibility;
@@ -364,8 +342,8 @@ async function parseRoutineInput(
     timeBlock,
     time,
     activities,
-    projectId,
-    endsWithProject,
+    projectId: null,
+    endsWithProject: false,
     visibility,
   };
 }
@@ -503,7 +481,7 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
     if (writes >= 450) break;
   }
   if (writes > 0) await batch.commit();
-  if (r && r.status === "active" && w && runsOn(r, w, today)) await ensureOccurrence(r, today, timeZone);
+  if (r && r.status === "active" && w && routineRunsOn(r, w, today)) await ensureOccurrence(r, today, timeZone);
 }
 
 // ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -533,7 +511,7 @@ export async function createRoutine(opts: {
   await ref.set(doc);
   const routine = await loadRoutine(opts.subAccountId, ref.id);
   const w = await projectWindow(routine, tz);
-  if (runsOn(routine, w, today)) await ensureOccurrence(routine, today, tz);
+  if (routineRunsOn(routine, w, today)) await ensureOccurrence(routine, today, tz);
   return toView(routine, w, opts.viewer);
 }
 
@@ -786,7 +764,7 @@ export async function getRoutineDetail(opts: {
   const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   const w = await projectWindow(r, tz);
   const { from, to } = checkRange(opts.from, opts.to);
-  if (r.status === "active" && runsOn(r, w, today) && from <= today && today <= to) {
+  if (r.status === "active" && routineRunsOn(r, w, today) && from <= today && today <= to) {
     await ensureOccurrence(r, today, tz);
   }
   const docs = (await occurrenceTasksInRange(opts.subAccountId, from, to)).filter(
@@ -849,7 +827,7 @@ async function assertCompletableDate(r: Routine, date: unknown, tz: string): Pro
     throw new TaskInputError("You can check off this date closer to the day.");
   }
   const w = await projectWindow(r, tz);
-  if (!occursOn(r.schedule, date) || (w.windowEnd && date > w.windowEnd)) {
+  if (!routineRunsOn(r, w, date) || (w.windowEnd && date > w.windowEnd)) {
     // A date the schedule no longer covers can still be worked on if it was recorded.
     const anyRecorded = (await occurrenceTasksInRange(r.subAccountId, date, date)).some(
       (d) => d.data().routineId === r.id
@@ -871,12 +849,14 @@ export async function setRoutineActivityCompleted(opts: {
   // Anyone who can SEE the routine (its owner, or any member for a shared one) may check it off.
   const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, { uid: opts.actor.uid, role: null });
   const date = await assertCompletableDate(r, opts.date, tz);
+  const w = await projectWindow(r, tz);
   if (typeof opts.activityId !== "string") throw new TaskInputError("Invalid activity");
   const taskId = occurrenceTaskId(r.id, date, opts.activityId);
   let snap = await taskDocRef(taskId).get();
   if (!snap.exists) {
     if (!r.activities.some((a) => a.id === opts.activityId)) throw new TaskInputError("Activity not found", 404);
-    if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
+    const activity = r.activities.find((candidate) => candidate.id === opts.activityId);
+    if (activity && runsOn(r, w, date, activity)) await ensureOccurrence(r, date, tz);
     snap = await taskDocRef(taskId).get();
     if (!snap.exists) throw new TaskInputError("Activity not found", 404);
   }
@@ -902,7 +882,7 @@ export async function completeRoutineDate(opts: {
   const tz = await subAccountTimeZone(opts.subAccountId);
   const r = await loadVisibleRoutine(opts.subAccountId, opts.routineId, { uid: opts.actor.uid, role: null });
   const date = await assertCompletableDate(r, opts.date, tz);
-  if (occursOn(r.schedule, date)) await ensureOccurrence(r, date, tz);
+  if (routineRunsOn(r, await projectWindow(r, tz), date)) await ensureOccurrence(r, date, tz);
   const docs = (await occurrenceTasksInRange(opts.subAccountId, date, date)).filter(
     (d) => d.data().routineId === r.id && d.data().completed !== true
   );
@@ -984,7 +964,7 @@ export async function listRoutineActivities(subAccountId: string, viewer: Routin
   for (const r of routines) {
     if (r.status !== "active") continue;
     const w = await projectWindow(r, tz);
-    if (runsOn(r, w, today)) await ensureOccurrence(r, today, tz);
+      if (routineRunsOn(r, w, today)) await ensureOccurrence(r, today, tz);
   }
   const ids = new Set(routines.map((r) => r.id));
   const docs = await occurrenceTasksInRange(subAccountId, addDaysYmd(today, -30), addDaysYmd(today, EARLY_COMPLETION_DAYS));
@@ -1015,7 +995,7 @@ export async function runRoutineGeneration(now = new Date()) {
       }
       const today = todayInTimeZone(tz, now);
       const w = await projectWindow(r, tz);
-      if (runsOn(r, w, today)) created += await ensureOccurrence(r, today, tz);
+      if (routineRunsOn(r, w, today)) created += await ensureOccurrence(r, today, tz);
     } catch (err) {
       console.warn("[routines] generation failed", r.id, err);
     }

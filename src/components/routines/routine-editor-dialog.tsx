@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, GripVertical, Lock, Plus, Trash2, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -12,15 +12,11 @@ import { cn } from "@/lib/utils";
 import { useSubAccount } from "@/context/sub-account-context";
 import { createRoutineApi, updateRoutineApi } from "@/lib/client/routines-api";
 import {
-  addDaysYmd,
   describeScheduleLong,
   describeTime,
-  formatYmd,
   normalizeSchedule,
-  occurrencesBetween,
   ordinal,
   ScheduleError,
-  utcToYmd,
   WEEKDAY_LETTER,
   WEEKDAY_SHORT,
 } from "@/lib/routines/schedule";
@@ -42,23 +38,10 @@ import {
 import type { Project } from "@/types/projects";
 import { ROUTINE_ICONS, RoutineIcon } from "./routine-look";
 
-type Step = 0 | 1 | 2 | 3;
-const STEPS = ["Basic Info", "Tasks", "Schedule", "Review"] as const;
+type Step = 0 | 1 | 2;
+const STEPS = ["Basic Info", "Tasks", "Review"] as const;
 
-interface ActivityDraft {
-  key: string;
-  id?: string;
-  title: string;
-  estimate: string;
-  frequency: RoutineFrequency;
-}
-
-interface Draft {
-  name: string;
-  description: string;
-  icon: RoutineIconKey;
-  color: RoutineColorKey;
-  activities: ActivityDraft[];
+type ScheduleDraft = {
   frequency: RoutineFrequency;
   customMode: RoutineCustomMode;
   interval: number;
@@ -70,11 +53,26 @@ interface Draft {
   startDate: string;
   endsOn: "never" | "date";
   endDate: string;
+};
+
+interface ActivityDraft {
+  key: string;
+  id?: string;
+  title: string;
+  estimate: string;
+  description: string;
+  schedule: ScheduleDraft;
   timeMode: RoutineTimeMode;
   timeBlock: RoutineTimeBlock;
   time: string;
-  projectId: string;
-  endsWithProject: boolean;
+}
+
+interface Draft {
+  name: string;
+  description: string;
+  icon: RoutineIconKey;
+  color: RoutineColorKey;
+  activities: ActivityDraft[];
   visibility: "private" | "shared";
 }
 
@@ -86,15 +84,10 @@ function localToday(): string {
 let keySeq = 0;
 const newKey = () => `k${++keySeq}`;
 
-function blankDraft(): Draft {
+function blankSchedule(): ScheduleDraft {
   const today = localToday();
   const wd = new Date(`${today}T00:00:00Z`).getUTCDay();
   return {
-    name: "",
-    description: "",
-    icon: "laptop",
-    color: "violet",
-    activities: [{ key: newKey(), title: "", estimate: "", frequency: "weekly" }],
     frequency: "weekly",
     customMode: "nthWeekday",
     interval: 1,
@@ -106,29 +99,58 @@ function blankDraft(): Draft {
     startDate: today,
     endsOn: "never",
     endDate: "",
+  };
+}
+
+function blankActivity(): ActivityDraft {
+  return {
+    key: newKey(),
+    title: "",
+    estimate: "",
+    description: "",
+    schedule: blankSchedule(),
     timeMode: "anytime",
     timeBlock: "am",
     time: "09:00",
-    projectId: "",
-    endsWithProject: false,
+  };
+}
+
+function blankDraft(): Draft {
+  const activity = blankActivity();
+  return {
+    name: "",
+    description: "",
+    icon: "laptop",
+    color: "violet",
+    activities: [activity],
     visibility: "private",
   };
 }
 
 function draftFrom(r: RoutineView): Draft {
-  const s = r.schedule;
+  const activities = r.activities.map((a) => ({
+    key: newKey(),
+    id: a.id,
+    title: a.title,
+    estimate: a.estimateMinutes ? String(a.estimateMinutes) : "",
+    description: a.description ?? a.notes ?? "",
+    schedule: scheduleDraftFrom(a.schedule ?? r.schedule),
+    timeMode: a.timeMode ?? r.timeMode,
+    timeBlock: a.timeBlock ?? r.timeBlock ?? "am",
+    time: a.time ?? r.time ?? "09:00",
+  }));
   return {
     name: r.name,
     description: r.description,
     icon: r.icon,
     color: r.color,
-    activities: r.activities.map((a) => ({
-      key: newKey(),
-      id: a.id,
-      title: a.title,
-      estimate: a.estimateMinutes ? String(a.estimateMinutes) : "",
-      frequency: a.schedule?.frequency ?? s.frequency,
-    })),
+    activities,
+    visibility: r.visibility === "shared" ? "shared" : "private",
+  };
+}
+
+function scheduleDraftFrom(s: RoutineSchedule): ScheduleDraft {
+  return {
     frequency: s.frequency,
     customMode: s.customMode ?? "nthWeekday",
     interval: s.interval,
@@ -140,16 +162,10 @@ function draftFrom(r: RoutineView): Draft {
     startDate: s.startDate,
     endsOn: s.endDate ? "date" : "never",
     endDate: s.endDate ?? "",
-    timeMode: r.timeMode,
-    timeBlock: r.timeBlock ?? "am",
-    time: r.time ?? "09:00",
-    projectId: r.projectId ?? "",
-    endsWithProject: r.endsWithProject,
-    visibility: r.visibility === "shared" ? "shared" : "private",
   };
 }
 
-function scheduleBody(d: Draft) {
+function scheduleBody(d: ScheduleDraft) {
   return {
     frequency: d.frequency,
     customMode: d.frequency === "custom" ? d.customMode : null,
@@ -164,12 +180,8 @@ function scheduleBody(d: Draft) {
   };
 }
 
-function taskScheduleBody(d: Draft, frequency: RoutineFrequency) {
-  const schedule = scheduleBody(d);
-  return { ...schedule, frequency, customMode: frequency === "custom" ? d.customMode : null };
-}
-
 function toBody(d: Draft, canShare: boolean) {
+  const first = d.activities.find((a) => a.title.trim()) ?? blankActivity();
   return {
     ...(canShare ? { visibility: d.visibility } : {}),
     name: d.name.trim(),
@@ -182,15 +194,18 @@ function toBody(d: Draft, canShare: boolean) {
         id: a.id,
         title: a.title.trim(),
         estimateMinutes: a.estimate ? Number(a.estimate) : null,
-        schedule: taskScheduleBody(d, a.frequency),
-        timeMode: d.timeMode,
-        timeBlock: d.timeMode === "block" ? d.timeBlock : null,
-        time: d.timeMode === "time" ? d.time : null,
+        description: a.description.trim(),
+        schedule: scheduleBody(a.schedule),
+        timeMode: a.timeMode,
+        timeBlock: a.timeMode === "block" ? a.timeBlock : null,
+        time: a.timeMode === "time" ? a.time : null,
       })),
-    schedule: scheduleBody(d),
-    timeMode: d.timeMode,
-    timeBlock: d.timeMode === "block" ? d.timeBlock : null,
-    time: d.timeMode === "time" ? d.time : null,
+    // Compatibility projection for older readers. New behavior is entirely
+    // driven by the activity-level values above.
+    schedule: scheduleBody(first.schedule),
+    timeMode: first.timeMode,
+    timeBlock: first.timeMode === "block" ? first.timeBlock : null,
+    time: first.timeMode === "time" ? first.time : null,
   };
 }
 
@@ -273,53 +288,7 @@ function NumberSelect({
   );
 }
 
-function Radio({
-  checked,
-  onSelect,
-  label,
-  children,
-}: {
-  checked: boolean;
-  onSelect: () => void;
-  label: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className={cn("rounded-xl border p-3 transition-colors", checked ? "border-primary/50 bg-primary/5" : "")}>
-      <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium">
-        <input type="radio" checked={checked} onChange={onSelect} className="accent-primary h-4 w-4" />
-        {label}
-      </label>
-      {checked && children && <div className="mt-3 space-y-3 pl-6">{children}</div>}
-    </div>
-  );
-}
-
 const NTH_OPTIONS = [1, 2, 3, 4, 5, -1];
-
-function NthPicker({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Weeks of the month">
-      {NTH_OPTIONS.map((n) => {
-        const on = value.includes(n);
-        return (
-          <button
-            key={n}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((x) => x !== n) : [...value, n])}
-            className={cn(
-              "min-h-8 rounded-full border px-3 text-xs font-semibold transition-colors",
-              on ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"
-            )}
-          >
-            {n === -1 ? "Last" : ordinal(n)}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function WeekdaySelect({ id, value, onChange }: { id: string; value: number; onChange: (n: number) => void }) {
   return (
@@ -344,6 +313,85 @@ function parseDates(text: string): number[] {
   ];
 }
 
+function ActivityScheduleFields({
+  activity,
+  onChange,
+}: {
+  activity: ActivityDraft;
+  onChange: (patch: Partial<ActivityDraft>) => void;
+}) {
+  const s = activity.schedule;
+  const updateSchedule = (patch: Partial<ScheduleDraft>) => onChange({ schedule: { ...s, ...patch } });
+  const chooseFrequency = (frequency: RoutineFrequency) =>
+    updateSchedule({
+      frequency,
+      interval: 1,
+      days: frequency === "daily" ? [0, 1, 2, 3, 4, 5, 6] : s.days.length ? s.days : [new Date(`${s.startDate}T00:00:00Z`).getUTCDay()],
+      customMode: frequency === "custom" ? s.customMode : "nthWeekday",
+    });
+
+  return (
+    <div className="space-y-3 rounded-lg border border-dashed bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-semibold">Repeats</span>
+        {(["daily", "weekly", "monthly", "custom"] as RoutineFrequency[]).map((frequency) => (
+          <Chip key={frequency} active={s.frequency === frequency} onClick={() => chooseFrequency(frequency)} className="min-h-8 px-3 text-xs">
+            {frequency[0].toUpperCase() + frequency.slice(1)}
+          </Chip>
+        ))}
+      </div>
+
+      {(s.frequency === "daily" || s.frequency === "weekly") && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs">
+            Repeat every <NumberSelect id={`routine-${activity.key}-interval`} value={s.interval} max={s.frequency === "daily" ? 30 : 12} onChange={(interval) => updateSchedule({ interval })} /> {s.frequency === "daily" ? "day(s)" : "week(s)"}
+          </div>
+          <DayPicker value={s.days} onChange={(days) => updateSchedule({ days })} />
+        </div>
+      )}
+
+      {(s.frequency === "monthly" || s.frequency === "custom") && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="text-xs font-medium">Pattern
+            <select className={cn(selectCls, "mt-1 w-full")} value={s.customMode === "nthWeekday" || s.monthMode === "weekdays" ? "nthWeekday" : s.customMode} onChange={(e) => updateSchedule({ customMode: e.target.value as RoutineCustomMode, monthMode: e.target.value === "nthWeekday" ? "weekdays" : "dates" })}>
+              <option value="dates">Specific dates</option>
+              <option value="nthWeekday">Nth weekday</option>
+              {s.frequency === "custom" && <><option value="weeks">Every few weeks</option><option value="months">Every few months</option></>}
+            </select>
+          </label>
+          <label className="text-xs font-medium">Interval
+            <NumberSelect id={`routine-${activity.key}-month-interval`} value={s.interval} max={12} onChange={(interval) => updateSchedule({ interval })} />
+          </label>
+          {s.customMode === "nthWeekday" ? (
+            <><label className="text-xs font-medium">Week
+              <select className={cn(selectCls, "mt-1 w-full")} value={s.nthWeeks[0] ?? 1} onChange={(e) => updateSchedule({ nthWeeks: [Number(e.target.value)] })}>{NTH_OPTIONS.map((n) => <option key={n} value={n}>{n === -1 ? "Last" : ordinal(n)}</option>)}</select>
+            </label><label className="text-xs font-medium">Weekday
+              <WeekdaySelect id={`routine-${activity.key}-weekday`} value={s.weekday} onChange={(weekday) => updateSchedule({ weekday })} />
+            </label></>
+          ) : (
+            <label className="text-xs font-medium sm:col-span-2">Dates of month
+              <Input className="mt-1" value={s.monthDates.map((n) => (n === -1 ? "last" : n)).join(", ")} onChange={(e) => updateSchedule({ monthDates: parseDates(e.target.value) })} placeholder="1, 15 or last" />
+            </label>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="text-xs font-medium">Starts
+          <Input className="mt-1" type="date" value={s.startDate} onChange={(e) => updateSchedule({ startDate: e.target.value })} />
+        </label>
+        <label className="text-xs font-medium">Ends
+          <div className="mt-1 flex gap-2"><select className={cn(selectCls, "flex-1")} value={s.endsOn} onChange={(e) => updateSchedule({ endsOn: e.target.value as ScheduleDraft["endsOn"] })}><option value="never">Never</option><option value="date">On a date</option></select>{s.endsOn === "date" && <Input type="date" value={s.endDate} min={s.startDate} onChange={(e) => updateSchedule({ endDate: e.target.value })} />}</div>
+        </label>
+      </div>
+
+      <div className="space-y-1.5"><span className="text-xs font-semibold">Time preference</span><div className="grid gap-2 sm:grid-cols-3">
+        {(["anytime", "block", "time"] as RoutineTimeMode[]).map((mode) => <label key={mode} className={cn("rounded-md border p-2 text-xs", activity.timeMode === mode && "border-primary bg-primary/5")}><span className="flex items-center gap-1.5"><input type="radio" name={`time-${activity.key}`} checked={activity.timeMode === mode} onChange={() => onChange({ timeMode: mode })} />{mode === "anytime" ? "Anytime" : mode === "block" ? "Time block" : "Specific time"}</span>{mode === "block" && activity.timeMode === mode && <select className={cn(selectCls, "mt-1 w-full")} value={activity.timeBlock} onChange={(e) => onChange({ timeBlock: e.target.value as RoutineTimeBlock })}><option value="am">AM</option><option value="midday">Midday</option><option value="pm">PM</option></select>}{mode === "time" && activity.timeMode === mode && <Input className="mt-1" type="time" value={activity.time} onChange={(e) => onChange({ time: e.target.value })} />}</label>)}
+      </div></div>
+    </div>
+  );
+}
+
 // ── dialog ───────────────────────────────────────────────────────────────────
 
 export function RoutineEditorDialog({
@@ -358,14 +406,14 @@ export function RoutineEditorDialog({
   onOpenChange: (open: boolean) => void;
   /** null = create. */
   routine: RoutineView | null;
-  initialStep?: Step;
+  initialStep?: Step | 3;
   projects: Project[];
   onSaved: (routine: RoutineView) => void;
 }) {
   const { subAccountId } = useSubAccount();
+  void projects;
   const [step, setStep] = useState<Step>(0);
   const [draft, setDraft] = useState<Draft>(blankDraft);
-  const [datesText, setDatesText] = useState("1, 15");
   const [saving, setSaving] = useState(false);
   // Only the owner decides who can see a routine (new routines: the creator).
   const canShare = !routine || routine.isOwner;
@@ -374,49 +422,31 @@ export function RoutineEditorDialog({
     if (!open) return;
     const d = routine ? draftFrom(routine) : blankDraft();
     setDraft(d);
-    setDatesText(d.monthDates.map((n) => (n === -1 ? "last" : String(n))).join(", "));
-    setStep(initialStep);
+    setStep(initialStep === 3 ? 2 : initialStep);
   }, [open, routine, initialStep]);
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  const scheduleCheck = useMemo((): { schedule: RoutineSchedule | null; error: string | null } => {
-    try {
-      return { schedule: normalizeSchedule(scheduleBody(draft), localToday()), error: null };
-    } catch (err) {
-      return { schedule: null, error: err instanceof ScheduleError ? err.message : "Check the schedule." };
-    }
-  }, [draft]);
-
-  const selectedProject = projects.find((p) => p.id === draft.projectId) ?? null;
-  const projectEnd = useMemo(() => {
-    if (!selectedProject || !draft.endsWithProject) return null;
-    const due = selectedProject.dueAt as { toDate?: () => Date } | null;
-    const d = due && typeof due.toDate === "function" ? due.toDate() : null;
-    return d ? utcToYmd(new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))) : null;
-  }, [selectedProject, draft.endsWithProject]);
-
-  const preview = useMemo(() => {
-    if (!scheduleCheck.schedule) return [];
-    const from = [localToday(), scheduleCheck.schedule.startDate].sort()[1];
-    return occurrencesBetween(scheduleCheck.schedule, from, addDaysYmd(from, 400), projectEnd, 5);
-  }, [scheduleCheck.schedule, projectEnd]);
-
   const validActivities = draft.activities.filter((a) => a.title.trim());
   const totalMinutes = validActivities.reduce((s, a) => s + (Number(a.estimate) || 0), 0);
+  const activityErrors = validActivities.map((a) => {
+    try {
+      normalizeSchedule(scheduleBody(a.schedule), localToday());
+      if (a.timeMode === "time" && !/^\d{2}:\d{2}$/.test(a.time)) return `Enter a valid time for “${a.title}”.`;
+      return null;
+    } catch (err) {
+      return err instanceof ScheduleError ? `Schedule for “${a.title}”: ${err.message}` : "Check the task schedules.";
+    }
+  });
 
   const stepError: Record<Step, string | null> = {
     0: draft.name.trim() ? null : "Give the routine a title.",
-    1: validActivities.length ? null : "Add at least one activity.",
-    2:
-      (draft.frequency === "daily" && draft.days.length === 0 ? "Choose at least one day." : null) ??
-      scheduleCheck.error ??
-      (draft.timeMode === "time" && !/^\d{2}:\d{2}$/.test(draft.time) ? "Enter a specific time." : null),
-    3: null,
+    1: validActivities.length ? activityErrors.find(Boolean) ?? null : "Add at least one task.",
+    2: null,
   };
 
   async function save() {
-    for (const s of [0, 1, 2] as Step[]) {
+    for (const s of [0, 1] as Step[]) {
       if (stepError[s]) {
         setStep(s);
         toast.error(stepError[s]!);
@@ -444,7 +474,7 @@ export function RoutineEditorDialog({
       toast.error(stepError[step]!);
       return;
     }
-    setStep((s) => Math.min(3, s + 1) as Step);
+    setStep((s) => Math.min(2, s + 1) as Step);
   }
 
   function moveActivity(i: number, dir: -1 | 1) {
@@ -457,7 +487,7 @@ export function RoutineEditorDialog({
     });
   }
 
-  const nextLabel = ["Next: Add Tasks", "Next: Schedule", "Next: Review"][step];
+  const nextLabel = ["Next: Add Tasks", "Next: Review"][step];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -624,7 +654,8 @@ export function RoutineEditorDialog({
                 </div>
                 <ol className="space-y-2">
                   {draft.activities.map((a, i) => (
-                    <li key={a.key} className="bg-card flex items-center gap-2 rounded-xl border p-2">
+                    <li key={a.key} className="bg-card rounded-xl border p-2">
+                      <div className="flex items-center gap-2">
                       <GripVertical className="text-muted-foreground/50 hidden h-4 w-4 shrink-0 sm:block" aria-hidden />
                       <Input
                         id={`routine-activity-${a.key}`}
@@ -644,7 +675,7 @@ export function RoutineEditorDialog({
                             e.preventDefault();
                             setDraft((d) => ({
                               ...d,
-                              activities: [...d.activities.slice(0, i + 1), { key: newKey(), title: "", estimate: "", frequency: "weekly" }, ...d.activities.slice(i + 1)],
+                              activities: [...d.activities.slice(0, i + 1), blankActivity(), ...d.activities.slice(i + 1)],
                             }));
                           }
                         }}
@@ -668,17 +699,6 @@ export function RoutineEditorDialog({
                         />
                         min
                       </label>
-                      <select
-                        aria-label={`Recurrence for activity ${i + 1}`}
-                        className={cn(selectCls, "h-8 w-24 px-1.5 text-xs")}
-                        value={a.frequency}
-                        onChange={(e) => setDraft((d) => ({ ...d, activities: d.activities.map((x) => x.key === a.key ? { ...x, frequency: e.target.value as RoutineFrequency } : x) }))}
-                      >
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="custom">Custom</option>
-                      </select>
                       <div className="flex shrink-0">
                         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => moveActivity(i, -1)} disabled={i === 0} aria-label="Move up">
                           <ArrowUp className="h-3.5 w-3.5" />
@@ -697,13 +717,40 @@ export function RoutineEditorDialog({
                               ...d,
                               activities:
                                 d.activities.length === 1
-                                  ? [{ key: newKey(), title: "", estimate: "", frequency: "weekly" }]
+                                  ? [blankActivity()]
                                   : d.activities.filter((x) => x.key !== a.key),
                             }))
                           }
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
+                      </div>
+                      </div>
+                      <div className="mt-2">
+                        <Textarea
+                          aria-label={`Description for activity ${i + 1}`}
+                          value={a.description}
+                          maxLength={2000}
+                          rows={2}
+                          placeholder="Optional task description"
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              activities: d.activities.map((x) => (x.key === a.key ? { ...x, description: e.target.value } : x)),
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <ActivityScheduleFields
+                          activity={a}
+                          onChange={(patch) =>
+                            setDraft((d) => ({
+                              ...d,
+                              activities: d.activities.map((x) => (x.key === a.key ? { ...x, ...patch } : x)),
+                            }))
+                          }
+                        />
                       </div>
                     </li>
                   ))}
@@ -714,7 +761,7 @@ export function RoutineEditorDialog({
                     variant="outline"
                     size="sm"
                     disabled={draft.activities.length >= MAX_ROUTINE_ACTIVITIES}
-                    onClick={() => set("activities", [...draft.activities, { key: newKey(), title: "", estimate: "", frequency: "weekly" }])}
+                    onClick={() => set("activities", [...draft.activities, blankActivity()])}
                   >
                     <Plus className="mr-1.5 h-4 w-4" /> Add activity
                   </Button>
@@ -732,271 +779,6 @@ export function RoutineEditorDialog({
             )}
 
             {step === 2 && (
-              <div className="space-y-5">
-                <div>
-                  <DialogTitle className="text-lg font-bold">Schedule</DialogTitle>
-                  <DialogDescription>Choose when this routine repeats.</DialogDescription>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>
-                    Recurrence <span className="text-destructive">*</span>
-                  </Label>
-                  <div className="flex flex-wrap gap-2">
-                    {(["daily", "weekly", "monthly", "custom"] as const).map((f) => (
-                      <Chip
-                        key={f}
-                        active={draft.frequency === f}
-                        onClick={() =>
-                          setDraft((d) => ({
-                            ...d,
-                            frequency: f,
-                            interval: 1,
-                            days:
-                              f === "daily"
-                                ? [0, 1, 2, 3, 4, 5, 6]
-                                : f === "weekly" && (d.days.length === 0 || d.days.length === 7)
-                                  ? [new Date(`${d.startDate}T00:00:00Z`).getUTCDay()]
-                                  : d.days,
-                          }))
-                        }
-                      >
-                        {f[0].toUpperCase() + f.slice(1)}
-                      </Chip>
-                    ))}
-                  </div>
-                </div>
-
-                {draft.frequency === "daily" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Label htmlFor="routine-every">Repeat every</Label>
-                      <NumberSelect id="routine-every" value={draft.interval} max={30} onChange={(n) => set("interval", n)} />
-                      <span>{draft.interval === 1 ? "day" : "days"}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>On these days</Label>
-                      <DayPicker value={draft.days} onChange={(v) => set("days", v)} />
-                    </div>
-                  </div>
-                )}
-
-                {draft.frequency === "weekly" && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Label htmlFor="routine-every">Repeat every</Label>
-                      <NumberSelect id="routine-every" value={draft.interval} max={12} onChange={(n) => set("interval", n)} />
-                      <span>{draft.interval === 1 ? "week" : "weeks"}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>
-                        On these days <span className="text-destructive">*</span>
-                      </Label>
-                      <DayPicker value={draft.days} onChange={(v) => set("days", v)} />
-                    </div>
-                  </div>
-                )}
-
-                {draft.frequency === "monthly" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Label htmlFor="routine-every">Repeat every</Label>
-                      <NumberSelect id="routine-every" value={draft.interval} max={12} onChange={(n) => set("interval", n)} />
-                      <span>{draft.interval === 1 ? "month" : "months"}</span>
-                    </div>
-                    <Radio checked={draft.monthMode === "dates"} onSelect={() => set("monthMode", "dates")} label="On a day of the month">
-                      <select
-                        id="routine-month-day"
-                        aria-label="Day of the month"
-                        className={selectCls}
-                        value={draft.monthDates[0] ?? 1}
-                        onChange={(e) => set("monthDates", [Number(e.target.value)])}
-                      >
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>
-                            {ordinal(n)}
-                          </option>
-                        ))}
-                        <option value={-1}>Last day</option>
-                      </select>
-                      {(draft.monthDates[0] ?? 1) > 28 && (
-                        <p className="text-muted-foreground text-xs">In shorter months it runs on the last day.</p>
-                      )}
-                    </Radio>
-                    <Radio checked={draft.monthMode === "weekdays"} onSelect={() => set("monthMode", "weekdays")} label="On a weekday of the month">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          id="routine-month-nth"
-                          aria-label="Which week"
-                          className={selectCls}
-                          value={draft.nthWeeks[0] ?? 1}
-                          onChange={(e) => set("nthWeeks", [Number(e.target.value)])}
-                        >
-                          {NTH_OPTIONS.map((n) => (
-                            <option key={n} value={n}>
-                              {n === -1 ? "Last" : ordinal(n)}
-                            </option>
-                          ))}
-                        </select>
-                        <WeekdaySelect id="routine-month-weekday" value={draft.weekday} onChange={(n) => set("weekday", n)} />
-                      </div>
-                    </Radio>
-                  </div>
-                )}
-
-                {draft.frequency === "custom" && (
-                  <div className="space-y-2">
-                    <Label>Custom Recurrence</Label>
-                    <Radio checked={draft.customMode === "weeks"} onSelect={() => setDraft((d) => ({ ...d, customMode: "weeks", interval: Math.max(2, d.interval), days: d.days.length && d.days.length < 7 ? d.days : [1] }))} label="Every few weeks">
-                      <div className="flex items-center gap-2 text-sm">
-                        Every
-                        <NumberSelect id="routine-custom-weeks" value={draft.interval} max={12} onChange={(n) => set("interval", n)} />
-                        weeks, on
-                      </div>
-                      <DayPicker value={draft.days} onChange={(v) => set("days", v)} />
-                    </Radio>
-                    <Radio
-                      checked={draft.customMode === "nthWeekday"}
-                      onSelect={() => setDraft((d) => ({ ...d, customMode: "nthWeekday", interval: 1 }))}
-                      label="On specific days of the month"
-                    >
-                      <p className="text-muted-foreground text-xs">For example, the 1st and 3rd Thursday.</p>
-                      <NthPicker value={draft.nthWeeks} onChange={(v) => set("nthWeeks", v)} />
-                      <WeekdaySelect id="routine-custom-weekday" value={draft.weekday} onChange={(n) => set("weekday", n)} />
-                    </Radio>
-                    <Radio checked={draft.customMode === "months"} onSelect={() => setDraft((d) => ({ ...d, customMode: "months", interval: Math.max(2, d.interval) }))} label="Every few months">
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        Every
-                        <NumberSelect id="routine-custom-months" value={draft.interval} max={12} onChange={(n) => set("interval", n)} />
-                        months, on the
-                        <select
-                          id="routine-custom-months-day"
-                          aria-label="Day of the month"
-                          className={selectCls}
-                          value={draft.monthDates[0] ?? 1}
-                          onChange={(e) => set("monthDates", [Number(e.target.value)])}
-                        >
-                          {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => (
-                            <option key={n} value={n}>
-                              {ordinal(n)}
-                            </option>
-                          ))}
-                          <option value={-1}>last day</option>
-                        </select>
-                      </div>
-                    </Radio>
-                    <Radio checked={draft.customMode === "dates"} onSelect={() => setDraft((d) => ({ ...d, customMode: "dates", interval: 1 }))} label="On specific dates">
-                      <Input
-                        id="routine-custom-dates"
-                        value={datesText}
-                        placeholder="1, 15"
-                        onChange={(e) => {
-                          setDatesText(e.target.value);
-                          set("monthDates", parseDates(e.target.value));
-                        }}
-                      />
-                      <p className="text-muted-foreground text-xs">Days of the month, separated by commas (e.g. 1, 15, 28 or &ldquo;last&rdquo;).</p>
-                    </Radio>
-                  </div>
-                )}
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="routine-start">Starts</Label>
-                    <Input id="routine-start" type="date" value={draft.startDate} onChange={(e) => e.target.value && set("startDate", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="routine-ends">Ends</Label>
-                    <div className="flex gap-2">
-                      <select
-                        id="routine-ends"
-                        className={cn(selectCls, "flex-1")}
-                        value={draft.endsOn}
-                        onChange={(e) => set("endsOn", e.target.value as Draft["endsOn"])}
-                      >
-                        <option value="never">Never</option>
-                        <option value="date">On a date</option>
-                      </select>
-                      {draft.endsOn === "date" && (
-                        <Input
-                          id="routine-end-date"
-                          type="date"
-                          aria-label="End date"
-                          className="flex-1"
-                          value={draft.endDate}
-                          min={draft.startDate}
-                          onChange={(e) => set("endDate", e.target.value)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Time Preference</Label>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {(
-                      [
-                        { mode: "anytime", label: "Anytime", hint: "Shown as all-day on the calendar" },
-                        { mode: "block", label: "Time Block", hint: "Shown in the selected time block" },
-                        { mode: "time", label: "Specific Time", hint: "Shown at this exact time" },
-                      ] as const
-                    ).map((o) => (
-                      <label
-                        key={o.mode}
-                        className={cn(
-                          "cursor-pointer rounded-xl border p-3 text-sm transition-colors",
-                          draft.timeMode === o.mode ? "border-primary/50 bg-primary/5" : "hover:bg-muted/50"
-                        )}
-                      >
-                        <span className="flex items-center gap-2 font-medium">
-                          <input
-                            type="radio"
-                            name="routine-time-mode"
-                            className="accent-primary h-4 w-4"
-                            checked={draft.timeMode === o.mode}
-                            onChange={() => set("timeMode", o.mode)}
-                          />
-                          {o.label}
-                        </span>
-                        <span className="text-muted-foreground mt-1 block text-xs">{o.hint}</span>
-                        {o.mode === "block" && draft.timeMode === "block" && (
-                          <select
-                            id="routine-time-block"
-                            aria-label="Time block"
-                            className={cn(selectCls, "mt-2 w-full")}
-                            value={draft.timeBlock}
-                            onChange={(e) => set("timeBlock", e.target.value as RoutineTimeBlock)}
-                          >
-                            <option value="am">AM</option>
-                            <option value="midday">Midday</option>
-                            <option value="pm">PM</option>
-                          </select>
-                        )}
-                        {o.mode === "time" && draft.timeMode === "time" && (
-                          <Input
-                            id="routine-time"
-                            type="time"
-                            aria-label="Time"
-                            className="mt-2"
-                            value={draft.time}
-                            onChange={(e) => set("time", e.target.value)}
-                          />
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {scheduleCheck.error && (
-                  <p className="text-destructive text-sm" role="alert">
-                    {scheduleCheck.error}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {step === 3 && (
               <div className="space-y-4">
                 <div>
                   <DialogTitle className="text-lg font-bold">Review</DialogTitle>
@@ -1011,14 +793,6 @@ export function RoutineEditorDialog({
                 </div>
                 <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                   <div>
-                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Repeats</dt>
-                    <dd>{scheduleCheck.schedule ? describeScheduleLong(scheduleCheck.schedule) : "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Time</dt>
-                    <dd>{describeTime(draft.timeMode, draft.timeMode === "block" ? draft.timeBlock : null, draft.timeMode === "time" ? draft.time : null)}</dd>
-                  </div>
-                  <div>
                     <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Activities</dt>
                     <dd>
                       {validActivities.length}
@@ -1029,36 +803,15 @@ export function RoutineEditorDialog({
                     <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Visible to</dt>
                     <dd>{draft.visibility === "shared" ? "Everyone in this workspace" : "Only me"}</dd>
                   </div>
-                  <div>
-                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Ends</dt>
-                    <dd>
-                      {draft.endsOn === "date" && draft.endDate
-                        ? formatYmd(draft.endDate, { month: "short", day: "numeric", year: "numeric" })
-                        : draft.endsWithProject && selectedProject
-                          ? `When “${selectedProject.title}” ends`
-                          : "Never"}
-                    </dd>
-                  </div>
-                  {selectedProject && (
-                    <div className="sm:col-span-2">
-                      <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Project</dt>
-                      <dd>{selectedProject.title}</dd>
-                    </div>
-                  )}
                 </dl>
                 <div>
-                  <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">Next dates</p>
-                  {preview.length ? (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {preview.map((d) => (
-                        <li key={d} className="bg-muted rounded-full px-2.5 py-1 text-xs font-medium tabular-nums">
-                          {formatYmd(d)}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-muted-foreground text-sm">No upcoming dates with this schedule.</p>
-                  )}
+                  <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">Task schedules</p>
+                  <ol className="divide-y rounded-xl border text-sm">
+                    {validActivities.map((a) => {
+                      const schedule = (() => { try { return normalizeSchedule(scheduleBody(a.schedule), localToday()); } catch { return null; } })();
+                      return <li key={a.key} className="space-y-1 px-3 py-2"><p className="font-medium">{a.title}</p><p className="text-muted-foreground text-xs">{schedule ? describeScheduleLong(schedule) : "Schedule needs attention"} · {describeTime(a.timeMode, a.timeMode === "block" ? a.timeBlock : null, a.timeMode === "time" ? a.time : null)}{a.estimate ? ` · ${a.estimate} min` : ""}</p></li>;
+                    })}
+                  </ol>
                 </div>
                 <ol className="divide-y rounded-xl border text-sm">
                   {validActivities.map((a) => (
@@ -1084,12 +837,12 @@ export function RoutineEditorDialog({
             </Button>
           )}
           <div className="flex gap-2">
-            {routine && step < 3 && (
+            {routine && step < 2 && (
               <Button variant="outline" onClick={save} disabled={saving}>
                 Save
               </Button>
             )}
-            {step < 3 ? (
+            {step < 2 ? (
               <Button onClick={next}>
                 {nextLabel} <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>

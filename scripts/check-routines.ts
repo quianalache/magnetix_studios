@@ -186,18 +186,22 @@ async function main() {
   };
 
   // ── validation ─────────────────────────────────────────────────────────
-  await check("validation: missing name, no activities, weekly without days, time without clock, foreign project → 400", async () => {
+  await check("validation: missing name, no activities, weekly without days, time without clock → 400; legacy project fields are ignored", async () => {
     for (const bad of [
       { ...baseMorning, name: "  " },
       { ...baseMorning, activities: [{ title: " " }] },
       { ...baseMorning, schedule: { frequency: "weekly", days: [] } },
       { ...baseMorning, timeMode: "time", time: "25:00" },
-      { ...baseMorning, projectId: "nope" },
     ]) {
       const res = await post(bad);
       assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 80));
     }
     assert.equal((await db.collection("routines").get()).size, 0, "nothing written");
+    const legacy = await post({ ...baseMorning, name: "Legacy project-shaped routine", projectId: "nope", endsWithProject: true });
+    assert.equal(legacy.status, 201);
+    const legacyRoutine = (await legacy.json()).routine;
+    assert.equal(legacyRoutine.projectId, null);
+    assert.equal(legacyRoutine.endsWithProject, false);
   });
 
   // ── create + generation ────────────────────────────────────────────────
@@ -414,24 +418,24 @@ async function main() {
     assert.equal(new Set(todays.map((x) => x.id)).size, todays.length);
   });
 
-  // ── project windows ────────────────────────────────────────────────────
-  await check("project routine with 'stop when the project ends' follows the project's window; independent ones don't", async () => {
+  // ── legacy project compatibility ───────────────────────────────────────
+  await check("routine definitions remain independent of legacy project fields", async () => {
     await db.doc("projects/pWin").set({ agencyId: AG, subAccountId: SA, title: "Launch", status: "active", taskModel: "tasks", dueAt: Timestamp.fromDate(sched.zonedDateTimeToUtc(d(2), "17:00", TZ)) });
     const bound = (await (await post({ name: "Launch daily", activities: [{ title: "Post" }], schedule: { frequency: "daily" }, projectId: "pWin", endsWithProject: true })).json()).routine;
     const free = (await (await post({ name: "Keep going", activities: [{ title: "Post" }], schedule: { frequency: "daily" }, projectId: "pWin" })).json()).routine;
-    assert.equal(bound.windowEnd, d(2));
+    assert.equal(bound.projectId, null);
+    assert.equal(bound.endsWithProject, false);
+    assert.equal(bound.windowEnd, null);
+    assert.equal(free.projectId, null);
     assert.equal(free.windowEnd, null);
     const cal = await (await calendarRoute.GET(req("admin1", "GET", undefined, `http://test.local/x?from=${today}&to=${d(6)}`), saCtx())).json();
-    assert.equal(cal.entries.filter((e: { routineId: string }) => e.routineId === bound.id).length, 3);
+    assert.equal(cal.entries.filter((e: { routineId: string }) => e.routineId === bound.id).length, 7);
     assert.equal(cal.entries.filter((e: { routineId: string }) => e.routineId === free.id).length, 7);
     const t = (await routineTasks(bound.id, today))[0].data();
     assert.equal(t.projectId, undefined, "occurrences never join the project's task list / portal");
     await db.doc("projects/pWin").update({ status: "completed" });
     const view = (await (await oneRoute.GET(req("admin1", "GET", undefined, `http://test.local/x?from=${today}&to=${today}`), rCtx(bound.id))).json()).routine;
-    assert.equal(view.windowClosed, true);
-    await db.doc(`routineTasks/${svc.occurrenceTaskId(bound.id, today, bound.activities[0].id)}`).delete();
-    await svc.runRoutineGeneration();
-    assert.equal((await routineTasks(bound.id, today)).length, 0, "closed window generates nothing");
+    assert.equal(view.windowClosed, false);
     assert.equal((await routineTasks(free.id, today)).length, 1);
   });
 
