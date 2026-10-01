@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { ImageUpload } from "@/components/community/image-upload";
 import { RichTextEditor } from "@/components/community/classroom/rich-text-editor";
 import { CoursePreviewCard } from "@/components/standalone-courses/course-preview-card";
@@ -87,6 +88,12 @@ export function CourseWizard({
   );
   const [priceTextOverride, setPriceTextOverride] = useState("");
   const [published, setPublished] = useState(course?.published ?? false);
+  // Agency courses have no separate Settings page, so their one lesson-player
+  // setting lives here (tenant courses: Settings → Learning experience).
+  const showAutoplaySetting = agencyScope === true && mode === "edit";
+  const [autoplayVideos, setAutoplayVideos] = useState(
+    course?.learningExperience?.autoplayLessonVideos === true,
+  );
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const courseIdForUploads = course?.id ?? "new";
@@ -135,6 +142,9 @@ export function CourseWizard({
         paymentMode,
         priceTextOverride: priceTextOverride.trim() || null,
         published,
+        ...(showAutoplaySetting
+          ? { learningExperience: { autoplayLessonVideos: autoplayVideos } }
+          : {}),
       };
       const url = agencyScope
         ? mode === "create"
@@ -267,6 +277,18 @@ export function CourseWizard({
                       Explain what members will learn from this course.
                     </p>
                   </div>
+                  {showAutoplaySetting && (
+                    <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                      <span>
+                        <span className="block text-sm font-medium">Autoplay lesson videos</span>
+                        <span className="block text-xs text-muted-foreground">
+                          When enabled, a lesson&apos;s video starts playing as soon as the
+                          lesson opens. Off by default — students press Play.
+                        </span>
+                      </span>
+                      <Switch checked={autoplayVideos} onCheckedChange={setAutoplayVideos} />
+                    </label>
+                  )}
                 </>
               )}
 

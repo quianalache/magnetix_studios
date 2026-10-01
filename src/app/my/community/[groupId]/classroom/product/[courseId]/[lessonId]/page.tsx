@@ -1,6 +1,4 @@
 import { redirect, notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { getCurrentPerson } from "@/lib/server/person-session";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import {
@@ -17,6 +15,7 @@ import {
 } from "@/lib/server/agency-standalone-course-service";
 import { checkAgencyCourseEntitlementForPerson } from "@/lib/standalone-courses/agency-course-access";
 import { CommunityShell } from "@/components/community/community-shell";
+import { CommunityCourseBackLink } from "@/components/community/classroom/community-course-back-link";
 import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
 import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
 
@@ -84,7 +83,7 @@ export default async function MyAgencyEmbeddedProductLessonPage({
 
   const sections: PlayerSection[] = tree.sections.map((s) => ({ id: s.id, title: s.title }));
   const lessons: PlayerLesson[] = await Promise.all(
-    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId })),
+    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId }, course.learningExperience)),
   );
 
   return (
@@ -98,9 +97,7 @@ export default async function MyAgencyEmbeddedProductLessonPage({
       viewerIsModerator={false}
       embedded={false}
     >
-      <Link href={catalog} className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]">
-        <ArrowLeft className="h-4 w-4" /> {course.title}
-      </Link>
+      <CommunityCourseBackLink href={productHref} label={course.title} />
       <StandaloneLessonPlayer
         completeEndpoint={`/api/agency/community/${groupId}/courses/product/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={productHref}
