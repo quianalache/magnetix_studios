@@ -31,6 +31,10 @@ interface NominatimResult {
   display_name: string;
 }
 
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const cache = new Map<string, { expiresAt: number; results: GeocodedPlace[] }>();
+const inflight = new Map<string, Promise<GeocodedPlace[]>>();
+
 async function nominatimSearch(
   query: string,
   limit: number,
@@ -76,8 +80,23 @@ export async function searchBirthPlaces(
 ): Promise<GeocodedPlace[]> {
   const trimmed = query.trim();
   if (trimmed.length < 3) return [];
-  const results = await nominatimSearch(trimmed, limit);
-  return results
-    .map(toGeocodedPlace)
-    .filter((p): p is GeocodedPlace => p !== null);
+  const key = `${trimmed.toLowerCase()}\u0000${limit}`;
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.results;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const results = await nominatimSearch(trimmed, limit);
+    const places = results
+      .map(toGeocodedPlace)
+      .filter((p): p is GeocodedPlace => p !== null);
+    cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, results: places });
+    return places;
+  })();
+  inflight.set(key, request);
+  try {
+    return await request;
+  } finally {
+    inflight.delete(key);
+  }
 }

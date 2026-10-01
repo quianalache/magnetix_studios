@@ -908,7 +908,10 @@ async function computeBirthChart(
       ? { lat: details.lat, lng: details.lng, timeZone: details.timeZone }
       : await geocodeBirthPlace(details.birthPlace);
 
-  const timeZone = place?.timeZone ?? "UTC";
+  if (!place) {
+    throw new Error(`Couldn't find "${details.birthPlace}". Please choose a more specific birth place before continuing.`);
+  }
+  const timeZone = place.timeZone;
   const humanDesign = calculateHumanDesignProfile({
     date: details.birthDate,
     time: details.birthTime,

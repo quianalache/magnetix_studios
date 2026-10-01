@@ -90,11 +90,11 @@ export interface ChartDesign {
   personalityActivationColor: string;
   /** HD and Mandala — Design-side activation marker color. Same reuse note as personalityActivationColor above. */
   designActivationColor: string;
-  /** HD only — Variable arrow accent color, for the 4 arrows around the full chart layout (not built yet). */
+  /** HD only — Variable arrow accent color for the 4 arrows around the full chart layout. */
   arrowColor: string;
   /** HD only — Variable arrow visual style, for the same not-yet-built arrows. */
   arrowStyle: VariableArrowStyle;
-  /** HD only — currently unused by human-design-full-chart.tsx (see header comment) — kept for backward compatibility, not deleted. */
+  /** HD only — background used by fullBox planet rows. */
   planetBoxColor: string;
   /** HD only — "iconOnly" colors just the planet glyph with that side's activation color, row stays unfilled. "fullBox" fills the entire Design/Personality row with the activation color, matching Bodygraph's own real "Color Planets and Gates" mode. */
   planetBoxMode: PlanetBoxMode;

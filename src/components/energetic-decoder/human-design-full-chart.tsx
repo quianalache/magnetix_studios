@@ -51,12 +51,8 @@ import { HumanDesignChart } from "@/components/energetic-decoder/human-design-ch
 const FALLBACK = {
   personalityActivationColor: "#18181b",
   designActivationColor: "#9a3412",
-  // Currently unread below — arrows use designActivationColor/
-  // personalityActivationColor per side instead, see header comment.
-  // Kept for backward compatibility, not deleted.
   arrowColor: "#3f3f46",
   arrowStyle: "solid" as VariableArrowStyle,
-  // Currently unread below — kept for a future consumer, see chart-design.ts's header comment on why planetBoxColor is inert in both real Planet Box modes.
   planetBoxColor: "#f4f4f5",
   planetBoxMode: "fullBox" as PlanetBoxMode,
   planetBoxBorderRadius: 6,
@@ -167,6 +163,7 @@ function PlanetBox({
   label,
   value,
   activationColor,
+  boxColor,
   mode,
   borderRadius,
 }: {
@@ -174,6 +171,7 @@ function PlanetBox({
   label: string;
   value: string;
   activationColor: string;
+  boxColor: string;
   mode: PlanetBoxMode;
   borderRadius: number;
 }) {
@@ -181,7 +179,7 @@ function PlanetBox({
     return (
       <div
         className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-white"
-        style={{ backgroundColor: activationColor, borderRadius }}
+        style={{ backgroundColor: boxColor, borderRadius }}
       >
         <span className="flex min-w-0 items-center gap-2">
           <span aria-hidden="true">{symbol}</span>
@@ -213,6 +211,7 @@ function ActivationColumn({
   side,
   activations,
   color,
+  boxColor,
   mode,
   borderRadius,
   align,
@@ -220,6 +219,7 @@ function ActivationColumn({
   side: "Design" | "Personality";
   activations: HumanDesignProfile["design"] | HumanDesignProfile["personality"];
   color: string;
+  boxColor: string;
   mode: PlanetBoxMode;
   borderRadius: number;
   align: "left" | "right";
@@ -248,6 +248,7 @@ function ActivationColumn({
             label={label}
             value={a ? `${a.gate}.${a.line}` : "—"}
             activationColor={color}
+            boxColor={boxColor}
             mode={mode}
             borderRadius={borderRadius}
           />
@@ -270,6 +271,8 @@ export function HumanDesignFullChart({
   const personalityActivationColor = design?.personalityActivationColor || FALLBACK.personalityActivationColor;
   const designActivationColor = design?.designActivationColor || FALLBACK.designActivationColor;
   const arrowStyle = design?.arrowStyle || FALLBACK.arrowStyle;
+  const arrowColor = design?.arrowColor || FALLBACK.arrowColor;
+  const planetBoxColor = design?.planetBoxColor || FALLBACK.planetBoxColor;
   const planetBoxMode = design?.planetBoxMode || FALLBACK.planetBoxMode;
   // `??` not `||` — 0 is a real, legitimate "square corners" choice, not a missing value.
   const planetBoxBorderRadius = design?.planetBoxBorderRadius ?? FALLBACK.planetBoxBorderRadius;
@@ -302,12 +305,13 @@ export function HumanDesignFullChart({
           side="Design"
           activations={profile.design}
           color={designActivationColor}
+          boxColor={planetBoxColor}
           mode={planetBoxMode}
           borderRadius={planetBoxBorderRadius}
           align="left"
         />
 
-        <div className="mx-auto w-full max-w-[640px]">
+        <div className="mx-auto w-full max-w-[560px] max-h-[min(72vh,760px)] overflow-visible">
           {/*
            * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
            * badges (her prior fix's own scoping to the chart's own
@@ -323,12 +327,12 @@ export function HumanDesignFullChart({
            */}
           <div className="mb-1 flex items-start justify-between gap-4">
             <div className="space-y-1">
-              <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={designActivationColor} style={arrowStyle} align="left" />
-              <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={designActivationColor} style={arrowStyle} align="left" />
+              <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
+              <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
             </div>
             <div className="space-y-1">
-              <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={personalityActivationColor} style={arrowStyle} align="right" />
-              <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={personalityActivationColor} style={arrowStyle} align="right" />
+              <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
+              <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
             </div>
           </div>
 
@@ -348,6 +352,7 @@ export function HumanDesignFullChart({
           side="Personality"
           activations={profile.personality}
           color={personalityActivationColor}
+          boxColor={planetBoxColor}
           mode={planetBoxMode}
           borderRadius={planetBoxBorderRadius}
           align="right"

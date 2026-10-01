@@ -43,9 +43,18 @@ async function repoint(
   survivorId: string,
   field: string = "contactId",
 ): Promise<void> {
+  await repointDocuments(db, snap.docs, survivorId, field);
+}
+
+async function repointDocuments(
+  db: FirebaseFirestore.Firestore,
+  docs: FirebaseFirestore.DocumentSnapshot[],
+  survivorId: string,
+  field = "contactId",
+): Promise<void> {
   let batch = db.batch();
   let n = 0;
-  for (const d of snap.docs) {
+  for (const d of docs) {
     batch.update(d.ref, { [field]: survivorId });
     if (++n % 400 === 0) {
       await batch.commit();
@@ -229,6 +238,9 @@ export async function performContactMerge(params: {
     projects,
     clientAssignedTasks,
     clientTimeEntries,
+    energeticProfiles,
+    energeticReadings,
+    generatedReports,
   ] = await Promise.all([
     db.collection("deals").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
     db.collection("tasks").where("subAccountId", "==", sub).where("contactId", "==", loserId).get(),
@@ -251,6 +263,11 @@ export async function performContactMerge(params: {
     // entries also point at the contact (different field names).
     db.collection("tasks").where("subAccountId", "==", sub).where("assigneeContactId", "==", loserId).get(),
     db.collection("timeEntries").where("subAccountId", "==", sub).where("actorContactId", "==", loserId).get(),
+    // These use the single-field contactId index and filter the tenant after
+    // the read, avoiding a new composite-index dependency for merges.
+    db.collection("energeticProfiles").where("contactId", "==", loserId).get(),
+    db.collection("energeticDecoderReadings").where("contactId", "==", loserId).get(),
+    db.collection("generatedReports").where("contactId", "==", loserId).get(),
   ]);
   for (const snap of [deals, tasks, events, quotes, submissions, webChats, voiceCalls, members, externalSubscriptions, externalPayments]) {
     await repoint(db, snap, survivorId);
@@ -258,6 +275,9 @@ export async function performContactMerge(params: {
   await repoint(db, projects, survivorId, "assignedContactId");
   await repoint(db, clientAssignedTasks, survivorId, "assigneeContactId");
   await repoint(db, clientTimeEntries, survivorId, "actorContactId");
+  await repointDocuments(db, energeticProfiles.docs.filter((d) => d.data().subAccountId === sub), survivorId);
+  await repointDocuments(db, energeticReadings.docs.filter((d) => d.data().subAccountId === sub), survivorId);
+  await repointDocuments(db, generatedReports.docs.filter((d) => d.data().subAccountId === sub), survivorId);
 
   // 3. Merge the inbox conversation index.
   await mergeConversation(db, loserId, survivorId, conversationContact);

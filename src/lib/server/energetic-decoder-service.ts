@@ -50,6 +50,10 @@ export interface CreateReadingInput extends EnergeticDecoderRequest {
 export interface CreateReadingResult {
   reading: EnergeticDecoderReading;
   contactId: string;
+  /** True only when this call created the Contact. Used to keep the public
+   * lead-magnet route from notifying an unrelated existing Contact matched
+   * by a submitted email address. */
+  contactCreated: boolean;
 }
 
 /**
@@ -88,6 +92,7 @@ export async function createEnergeticDecoderReading(
   let birthDate: string;
   let birthTime: string;
   let place: { lat: number; lng: number; displayName: string; timeZone: string };
+  let contactCreated = false;
 
   if (input.profileId) {
     const existingProfile = await getEnergeticProfile(input.subAccountId, input.profileId);
@@ -163,6 +168,7 @@ export async function createEnergeticDecoderReading(
           tags: ["energetic-decoder"],
         });
         contactId = id;
+        contactCreated = true;
       }
     }
     // Contact.name is never touched past this point, whether the contact
@@ -390,6 +396,7 @@ export async function createEnergeticDecoderReading(
   return {
     reading: { id: readingRef.id, ...doc, createdAt: null },
     contactId,
+    contactCreated,
   };
 }
 

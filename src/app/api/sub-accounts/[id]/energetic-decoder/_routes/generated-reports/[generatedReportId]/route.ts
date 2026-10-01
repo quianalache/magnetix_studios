@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getGeneratedReport, deleteGeneratedReport } from "@/lib/server/generated-report-service";
 
 export async function GET(
@@ -22,7 +22,7 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string; generatedReportId: string }> },
 ) {
   const { id: subAccountId, generatedReportId } = await ctx.params;
-  const access = await requireSubAccountMember(request, subAccountId);
+  const access = await requireSubAccountAdmin(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
   try {

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { deleteEnergeticDecoderReading } from "@/lib/server/energetic-decoder-service";
 
 /**
@@ -15,7 +15,7 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string; readingId: string }> },
 ) {
   const { id: subAccountId, readingId } = await ctx.params;
-  const access = await requireSubAccountMember(request, subAccountId);
+  const access = await requireSubAccountAdmin(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
   const result = await deleteEnergeticDecoderReading(subAccountId, readingId);

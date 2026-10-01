@@ -493,7 +493,7 @@ const FIELD_LABEL: Record<keyof EditableFields, string> = {
   designActivationColor: "Design activation",
   arrowColor: "Variable arrows",
   arrowStyle: "Arrow style",
-  planetBoxColor: "Planet box background (unused)",
+  planetBoxColor: "Planet box background",
   planetBoxMode: "Planet box style",
   planetBoxBorderRadius: "Planet box corner radius",
   centersMode: "Centers color mode",

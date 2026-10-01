@@ -144,7 +144,7 @@ const PLANET_GLYPH_R = 32;
  * to this web version) and inspecting it, not carried over from the old
  * value.
  */
-const CENTER_CHART_PCT = 30;
+const CENTER_CHART_PCT = 38;
 
 const GATE_ARC_DEG = 360 / 64;
 

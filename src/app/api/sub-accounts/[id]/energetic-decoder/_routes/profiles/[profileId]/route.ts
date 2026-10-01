@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
+import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { updateEnergeticProfile, deleteEnergeticProfile } from "@/lib/server/energetic-profile-service";
 import { getChartDesign } from "@/lib/server/chart-design-service";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
@@ -163,7 +163,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; profileId: string }> },
 ) {
   const { id: subAccountId, profileId } = await params;
-  const access = await requireSubAccountMember(request, subAccountId);
+  const access = await requireSubAccountAdmin(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
   try {

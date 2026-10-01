@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { createEnergeticDecoderReading } from "@/lib/server/energetic-decoder-service";
 import { notifyReadingReady } from "@/lib/server/notification-producers";
+import { sanitizePublicDecoderInput } from "@/lib/energetics/public-input";
 import type { EnergeticDecoderRequest } from "@/types/energetic-decoder";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +38,12 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // Public submissions may only describe a new lead.  Never allow an
+  // unauthenticated caller to select an existing Profile or Contact (or to
+  // smuggle tenant/creator fields into the server-side save path).
+  const publicInput = sanitizePublicDecoderInput(body);
   const result = await createEnergeticDecoderReading({
-    ...body,
+    ...publicInput,
     subAccountId: saId,
     agencyId,
     createdByUid: "energetic-decoder-public",
@@ -53,14 +58,20 @@ export async function POST(
   // producer. Generation is synchronous (see notifyReadingReady's own doc
   // comment) — reaching here IS the real "ready" transition, exactly
   // once, for a brand-new reading id every call.
-  await notifyReadingReady({
-    subAccountId: saId,
-    readingId: result.reading.id,
-    contactId: result.contactId,
-    hasGeneKeys: result.reading.spheres.length > 0,
-    hasHumanDesign: !!result.reading.humanDesign,
-    hasAstrology: !!result.reading.astrology,
-  }).catch((err) => console.warn("[decoder/submit] notification failed", err));
+  // A repeated public submission can match an existing Contact by email.
+  // Do not send a Reading Ready notification to that existing Contact from
+  // an unauthenticated request; internal, authenticated creation retains
+  // the normal notification behavior.
+  if (result.contactCreated) {
+    await notifyReadingReady({
+      subAccountId: saId,
+      readingId: result.reading.id,
+      contactId: result.contactId,
+      hasGeneKeys: result.reading.spheres.length > 0,
+      hasHumanDesign: !!result.reading.humanDesign,
+      hasAstrology: !!result.reading.astrology,
+    }).catch((err) => console.warn("[decoder/submit] notification failed", err));
+  }
 
   return NextResponse.json({ ok: true, reading: result.reading });
 }
