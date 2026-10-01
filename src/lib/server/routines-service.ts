@@ -408,7 +408,15 @@ export async function ensureOccurrence(r: Routine, date: string, timeZone: strin
   const existing = refs.length ? await db.getAll(...refs) : [];
   let created = 0;
   for (let i = 0; i < r.activities.length; i++) {
-    if (existing[i]?.exists) continue;
+    if (existing[i]?.exists) {
+      // An archived routine keeps its occurrence records. On restore, only
+      // today's occurrence becomes active again; retained future records stay
+      // archived so restoring never creates a backlog.
+      if (r.status === "active" && existing[i].data()?.archived === true && date === todayInTimeZone(timeZone)) {
+        await refs[i].set({ archived: false, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+      }
+      continue;
+    }
     const a = r.activities[i];
     if (!occursOn(a.schedule ?? r.schedule, date)) continue;
     const { dueAt, timeBlock } = activityTiming(r, a, date, timeZone);
@@ -493,6 +501,12 @@ async function reconcileUpcoming(r: Routine | null, routineId: string, subAccoun
     const t = d.data();
     if (t.routineId !== routineId || !untouched(t)) continue;
     const activity = byActivity.get(t.routineActivityId as string);
+    if (r?.status === "archived") {
+      batch.update(d.ref, { archived: true, updatedAt: FieldValue.serverTimestamp() });
+      writes++;
+      if (writes >= 450) break;
+      continue;
+    }
     const keep = r && r.status === "active" && w && activity && runsOn(r, w, t.occurrenceDate as string, activity);
     if (!keep) {
       batch.delete(d.ref);
@@ -679,6 +693,7 @@ export async function listRoutines(subAccountId: string, viewer: RoutineViewer):
   // Generate today for any routine the cron hasn't reached yet this hour.
   const items: RoutineListItem[] = [];
   for (const r of routines) {
+    if (r.status === "archived") continue;
     const w = await projectWindow(r, tz);
     let byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
     if (r.status === "active" && scheduledActivityCount(r, w, today) > 0 && (byDate.get(today)?.length ?? 0) < scheduledActivityCount(r, w, today)) {
@@ -951,6 +966,7 @@ export async function routineCalendarEntries(opts: {
   const grouped = groupByRoutineAndDate(await occurrenceTasksInRange(opts.subAccountId, from, to));
   const out: RoutineCalendarEntry[] = [];
   for (const r of routines) {
+    if (r.status === "archived") continue;
     const w = await projectWindow(r, tz);
     const byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
     const dates = new Set<string>(byDate.keys());
@@ -1001,6 +1017,7 @@ export async function listRoutineActivities(subAccountId: string, viewer: Routin
   const docs = await occurrenceTasksInRange(subAccountId, addDaysYmd(today, -30), addDaysYmd(today, EARLY_COMPLETION_DAYS));
   const actual = docs
     .filter((d) => ids.has(d.data().routineId))
+    .filter((d) => d.data().archived !== true)
     .filter((d) => d.data().completed === true || d.data().occurrenceDate >= today)
     .map((d) => taskJson(d.id, d.data()));
 
