@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import {
   communityLearningProductHref,
   type CommunityLinkBase,
@@ -12,7 +14,6 @@ import {
   filterLessonsForEnrollment,
 } from "@/lib/server/standalone-course-service";
 import { CommunityShell } from "@/components/community/community-shell";
-import { CommunityCourseBackLink } from "@/components/community/classroom/community-course-back-link";
 import {
   StandaloneLessonPlayer,
   type PlayerLesson,
@@ -150,7 +151,7 @@ export async function EmbeddedProductLesson(opts: {
         kind: "tenant",
         agencyId: course.agencyId,
         subAccountId: saId,
-      }, course.learningExperience),
+      }),
     ),
   );
 
@@ -164,7 +165,12 @@ export async function EmbeddedProductLesson(opts: {
       viewerIsModerator={membership.role === "moderator"}
       {...shellExtra}
     >
-      <CommunityCourseBackLink href={productHref} label={course.title} />
+      <Link
+        href={catalogHref}
+        className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]"
+      >
+        <ArrowLeft className="h-4 w-4" /> {course.title}
+      </Link>
       <StandaloneLessonPlayer
         completeEndpoint={`/api/course/${saId}/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={productHref}

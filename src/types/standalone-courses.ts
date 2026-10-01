@@ -57,13 +57,6 @@ export interface StandaloneCourseLearningExperience {
   autoplayNextLesson: boolean;
   autoplayFirstLesson: boolean;
   autoCompleteLessons: boolean;
-  /**
-   * Start a lesson's video automatically when the lesson opens (Bunny-hosted
-   * and external providers that support it). OFF unless the creator turns it
-   * on — absent on every course saved before 2026-10-01, and `=== true` is the
-   * only read, so legacy courses never autoplay.
-   */
-  autoplayLessonVideos?: boolean;
 }
 
 export const DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE: StandaloneCourseLearningExperience =
@@ -71,7 +64,6 @@ export const DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE: StandaloneCourseLear
     autoplayNextLesson: true,
     autoplayFirstLesson: true,
     autoCompleteLessons: true,
-    autoplayLessonVideos: false,
   };
 
 export interface StandaloneCourseAdvanced {

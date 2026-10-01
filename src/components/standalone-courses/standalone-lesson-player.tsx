@@ -20,7 +20,6 @@ import {
   themeBtnStyle,
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
-import { LessonVideoFrame } from "@/components/standalone-courses/lesson-video-frame";
 import { DEFAULT_LESSON_THEME } from "@/types/course-theme";
 import type {
   LessonTheme,
@@ -250,7 +249,15 @@ export function StandaloneLessonPlayer({
               style={{ backgroundColor: lessonTheme.player.backgroundColor }}
             >
               {current.embedUrl && (
-                <LessonVideoFrame key={current.id} embedUrl={current.embedUrl} title={current.title} />
+                <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
+                  <iframe
+                    src={current.embedUrl}
+                    title={current.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="h-full w-full"
+                  />
+                </div>
               )}
 
               <h1 className="text-xl font-semibold text-[#202124]">{current.title}</h1>

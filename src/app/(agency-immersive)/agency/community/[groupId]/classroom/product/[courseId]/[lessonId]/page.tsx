@@ -1,9 +1,10 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { CommunityShell } from "@/components/community/community-shell";
-import { CommunityCourseBackLink } from "@/components/community/classroom/community-course-back-link";
 import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
 import type { CourseTheme, LessonTheme } from "@/types/course-theme";
 import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
@@ -88,7 +89,9 @@ export default function AgencyEmbeddedProductLessonPage({
       viewerIsModerator
       embedded={false}
     >
-      <CommunityCourseBackLink href={productHref} label={player.course.title} />
+      <Link href={catalog} className="mb-4 inline-flex items-center gap-1 text-sm text-[#909090] hover:text-[#202124]">
+        <ArrowLeft className="h-4 w-4" /> {player.course.title}
+      </Link>
       <StandaloneLessonPlayer
         completeEndpoint={`/api/agency/community/${groupId}/courses/product/${courseId}/lessons/${lessonId}/complete`}
         lessonHrefBase={productHref}

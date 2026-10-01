@@ -11,7 +11,6 @@ import {
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
 import { CommunityShell } from "@/components/community/community-shell";
-import { CommunityCourseBackLink, communityClassroomLabel } from "@/components/community/classroom/community-course-back-link";
 import type { AuthorView, CommunityGroup, GroupMembership, Member } from "@/types/community";
 
 export async function EmbeddedProductCourse(opts: {
@@ -73,7 +72,6 @@ export async function EmbeddedProductCourse(opts: {
       viewerIsModerator={membership.role === "moderator"}
       {...shellExtra}
     >
-      <CommunityCourseBackLink href={catalogHref} label={communityClassroomLabel(group)} />
       <CourseHomeView
         saId={saId}
         courseId={courseId}
@@ -85,7 +83,6 @@ export async function EmbeddedProductCourse(opts: {
         completedLessonIds={enrollment?.completedLessonIds ?? []}
         crossSellTargets={crossSellTargets}
         homeHref={productHref}
-        presentation="community"
       />
     </CommunityShell>
   );

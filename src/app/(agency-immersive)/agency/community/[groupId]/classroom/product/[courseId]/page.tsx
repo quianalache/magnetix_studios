@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import { CommunityShell } from "@/components/community/community-shell";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
-import { CommunityCourseBackLink, communityClassroomLabel } from "@/components/community/classroom/community-course-back-link";
 import { useAuth } from "@/hooks/use-auth";
 import type { CommunityGroup } from "@/types/community";
 import type { StandaloneCourse } from "@/types/standalone-courses";
@@ -45,8 +44,7 @@ export default function AgencyEmbeddedProductCoursePage({
   if (agencyRole !== "owner") return <div className="p-8 text-center text-sm">Community is managed by the agency owner.</div>;
   if (failed) return <div className="p-8 text-center text-sm">Course not found.</div>;
   if (!group || !data) return <div className="p-8" />;
-  const catalog = `/agency/community/${groupId}/classroom`;
-  const homeHref = `${catalog}/product/${courseId}`;
+  const homeHref = `/agency/community/${groupId}/classroom/product/${courseId}`;
   return (
     <CommunityShell
       saId=""
@@ -57,7 +55,6 @@ export default function AgencyEmbeddedProductCoursePage({
       viewerIsModerator
       embedded={false}
     >
-      <CommunityCourseBackLink href={catalog} label={communityClassroomLabel(group)} />
       <CourseHomeView
         saId="agency"
         courseId={courseId}
@@ -69,7 +66,6 @@ export default function AgencyEmbeddedProductCoursePage({
         completedLessonIds={data.completedIds}
         crossSellTargets={new Map()}
         homeHref={homeHref}
-        presentation="community"
       />
     </CommunityShell>
   );

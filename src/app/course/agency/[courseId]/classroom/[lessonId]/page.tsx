@@ -46,7 +46,7 @@ export default async function AgencyStandaloneLessonPlayerPage({
 
   const sections: PlayerSection[] = tree.sections.map((s) => ({ id: s.id, title: s.title }));
   const lessons: PlayerLesson[] = await Promise.all(
-    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId }, course.learningExperience)),
+    visibleLessons.map((l) => presentStandaloneLesson(l, { kind: "agency", agencyId })),
   );
 
   return (

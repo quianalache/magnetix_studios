@@ -94,7 +94,7 @@ export default async function StandaloneLessonPlayerPage({
         kind: "tenant",
         agencyId: course.agencyId,
         subAccountId: saId,
-      }, course.learningExperience),
+      }),
     ),
   );
 
