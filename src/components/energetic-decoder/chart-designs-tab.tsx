@@ -336,12 +336,12 @@ interface EditableFields {
   chartDefinedColor: string;
   channelsColor: string;
   gatesColor: string;
-  /** Not wired into human-design-chart.tsx yet — see chart-design.ts's header comment. Saved/reloaded correctly; the BodyGraph itself keeps its current hardcoded colors until the full chart layout exists. */
+  /** Used by the full Human Design chart layout. */
   personalityActivationColor: string;
   designActivationColor: string;
   arrowColor: string;
   arrowStyle: ChartDesign["arrowStyle"];
-  /** Currently unused by human-design-full-chart.tsx — see chart-design.ts's header comment. Still saved/reloaded correctly, control kept here for backward compatibility. */
+  /** Used by full-box planet rows in the full Human Design chart layout. */
   planetBoxColor: string;
   planetBoxMode: ChartDesign["planetBoxMode"];
   planetBoxBorderRadius: number;
@@ -425,18 +425,6 @@ const CENTER_COLOR_FIELD_TO_KEY: Record<(typeof CENTER_COLOR_KEYS)[number], Cent
  * Which of EditableFields actually apply to a given system — same
  * real-vs-not distinction as chart-design.ts's field comments.
  *
- * 2026-08-10 field audit — arrowColor and planetBoxColor deliberately
- * excluded from the humanDesign list below: confirmed neither is read
- * by any renderer any more (arrows use designActivationColor/
- * personalityActivationColor per side; Planet Boxes use the same two
- * fields or render unfilled) — an editable control that visibly does
- * nothing is worse than no control, so they're hidden from this UI. The
- * fields themselves stay on the model/service/API/EditableFields/
- * FIELD_LABEL below completely untouched — still saved, still backfilled,
- * still returned by the API — this is a display-only omission, not a
- * removal, per her explicit "keep both fields in the underlying model/
- * API for backward compatibility."
- *
  * The full-chart-layout fields still shown (personalityActivationColor,
  * designActivationColor, arrowStyle, planetBoxMode, planetBoxBorderRadius)
  * are HD-only and drive human-design-full-chart.tsx, not the BodyGraph
@@ -450,7 +438,9 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     "gatesColor",
     "personalityActivationColor",
     "designActivationColor",
+    "arrowColor",
     "arrowStyle",
+    "planetBoxColor",
     "planetBoxMode",
     "planetBoxBorderRadius",
     "centersMode",
