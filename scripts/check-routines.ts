@@ -496,17 +496,33 @@ async function main() {
     assert.equal((await db.doc(`routineTasks/${id}`).get()).data()!.completed, true);
     assert.equal((await db.collection("tasks").where("recurrenceSeriesId", "==", id).get()).size, 0, "no recurrence spawn");
   });
-  await check("routine activity: date / repeat / rollover locked; title editable; not deletable; no subtasks", async () => {
+  await check("routine activity: date / repeat / rollover locked; title editable; occurrence subtasks are isolated", async () => {
     const id = svc.occurrenceTaskId(morning, today, aIds[1]);
     const res = await taskRoute.PATCH(req("admin1", "PATCH", { dueAt: new Date().toISOString() }), { params: Promise.resolve({ id }) });
     assert.equal(res.status, 400);
     const ok = await taskRoute.PATCH(req("admin1", "PATCH", { notes: "Did it early" }), { params: Promise.resolve({ id }) });
     assert.equal(ok.status, 200, await ok.clone().text());
+    const subtask = await full.createFullTask({
+      subAccountId: SA,
+      agencyId: AG,
+      actor: { kind: "staff", uid: "admin1" },
+      createdByUid: "admin1",
+      body: { title: "Occurrence-only follow-up", parentTaskId: id },
+    });
+    assert.match(subtask, new RegExp(`^${id}_s_`));
+    assert.equal((await db.doc(`routineTasks/${subtask}`).get()).data()!.parentTaskId, id);
+    const detailRes = await taskRoute.GET(req("admin1"), { params: Promise.resolve({ id }) });
+    assert.equal(detailRes.status, 200, await detailRes.clone().text());
+    assert.equal(((await detailRes.json()) as { subtasks: unknown[] }).subtasks.length, 1);
+    await svc.ensureOccurrence(await svc.loadRoutine(SA, morning), d(1), TZ);
+    assert.equal((await routineTasks(morning, d(1))).filter((x) => x.data().parentTaskId === id).length, 0);
+    const completeSubtask = await taskCompleteRoute.POST(req("admin1", "POST", { completed: true }), { params: Promise.resolve({ id: subtask }) });
+    assert.equal(completeSubtask.status, 200, await completeSubtask.clone().text());
+    assert.equal((await db.doc(`routineTasks/${subtask}`).get()).data()!.completed, true);
+    assert.equal((await db.doc(`routineTasks/${svc.occurrenceTaskId(morning, d(1), aIds[1])}`).get()).data()!.completed, false);
     assert.equal((await taskRoute.DELETE(req("admin1", "DELETE"), { params: Promise.resolve({ id }) })).status, 400);
-    await assert.rejects(
-      full.createFullTask({ subAccountId: SA, agencyId: AG, actor: { kind: "staff", uid: "admin1" }, createdByUid: "admin1", body: { title: "sub", parentTaskId: id } }),
-      /subtasks/
-    );
+    assert.equal((await taskRoute.DELETE(req("admin1", "DELETE"), { params: Promise.resolve({ id: subtask }) })).status, 200);
+    assert.equal((await db.doc(`routineTasks/${subtask}`).get()).exists, false);
   });
   await check("project-generated (Momentum OS) routines are preserved and listed read-only, never migrated", async () => {
     const g = await gen.generateProjectFromSystemTemplate({ subAccountId: SA, agencyId: AG, createdByUid: "admin1", templateKey: "sys_weekly_ceo_reset", title: "CEO Reset project", startAt: new Date(), endAt: null, autoSchedule: true, includeRoutines: true, includeMilestones: true, assignedContactId: null });

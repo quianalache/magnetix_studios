@@ -236,9 +236,7 @@ function TaskDetailBody({
           <PrimaryFields bundle={bundle} status={status} onChanged={reload} />
           <Description bundle={bundle} onChanged={reload} />
           <div className="space-y-3">
-            {!task.routineId && (
-              <SubtasksSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />
-            )}
+            <SubtasksSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />
             <ChecklistSection bundle={bundle} onChanged={reload} />
             <AttachmentsSection bundle={bundle} onChanged={reload} />
             <ConnectionsSection bundle={bundle} onChanged={reload} onOpenTask={onOpenTask} />

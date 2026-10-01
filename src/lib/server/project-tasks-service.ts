@@ -2,8 +2,9 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { randomBytes } from "node:crypto";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { isRoutineTaskId, taskDocRef } from "@/lib/server/task-ref";
+import { isRoutineTaskId, ROUTINE_TASKS_COLLECTION, taskDocRef } from "@/lib/server/task-ref";
 import { canManageRoutine, canViewRoutineTask } from "@/lib/server/routine-access";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
@@ -255,13 +256,80 @@ export async function createFullTask(input: CreateFullTaskInput) {
     if (!parent || parent.subAccountId !== input.subAccountId) {
       throw new TaskInputError("Parent task not found", 404);
     }
-    if (parent.routineId) {
-      throw new TaskInputError(
-        "Routine activities can't have subtasks. Use the checklist, or add an activity to the routine."
-      );
-    }
     if (parent.parentTaskId) {
       throw new TaskInputError("Subtasks can't have their own subtasks.");
+    }
+    if (parent.routineId) {
+      if (input.fromClient || input.actor.kind !== "staff") {
+        throw new TaskInputError("Only staff can add subtasks to routine occurrences.", 403);
+      }
+      if (!(await canViewRoutineTask(parent, input.actor.uid))) {
+        throw new TaskInputError("Routine task not found", 404);
+      }
+      const subtaskId = `${parentTaskId}_s_${randomBytes(5).toString("hex")}`;
+      const dueAt = parseDate(b.dueAt) ?? toDate(parent.dueAt);
+      const priority =
+        typeof b.priority === "string" && PRIORITY_SET.has(b.priority as TaskPriority)
+          ? (b.priority as TaskPriority)
+          : null;
+      const estimate =
+        typeof b.estimateMinutes === "number" && Number.isFinite(b.estimateMinutes)
+          ? Math.min(100_000, Math.max(0, Math.round(b.estimateMinutes)))
+          : null;
+      await db.doc(`${ROUTINE_TASKS_COLLECTION}/${subtaskId}`).create({
+        title,
+        notes: str(b.notes ?? b.description),
+        dueAt: dueAt ? Timestamp.fromDate(dueAt) : null,
+        completed: false,
+        completedAt: null,
+        contactId: null,
+        dealId: null,
+        eventId: null,
+        timeBlock: parent.timeBlock ?? "anytime",
+        agencyId: parent.agencyId,
+        subAccountId: parent.subAccountId,
+        createdByUid: input.actor.uid,
+        ownerUid: parent.ownerUid,
+        territoryId: GLOBAL_TERRITORY_ID,
+        mode: "live",
+        kind: "routine-subtask",
+        routineId: parent.routineId,
+        routineName: parent.routineName,
+        routineActivityId: parent.routineActivityId,
+        occurrenceDate: parent.occurrenceDate,
+        parentTaskId,
+        status: "todo",
+        priority,
+        assigneeUid: parent.assigneeUid ?? parent.ownerUid,
+        tags: parseTags(b.tags),
+        estimateMinutes: estimate,
+        checklist: parseChecklist(b.checklist),
+        attachments: [],
+        dependsOnTaskIds: [],
+        relatedTaskIds: [],
+        recurrence: null,
+        autoRollover: false,
+        rolledOverCount: 0,
+        timeSpentSeconds: 0,
+        clientTimeSeconds: 0,
+        visibility: null,
+        createdByMemberId: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      await recordTaskActivity({
+        subAccountId: parent.subAccountId,
+        agencyId: parent.agencyId,
+        taskId: parentTaskId,
+        projectId: null,
+        taskTitle: parent.title ?? "",
+        type: "subtask_added",
+        actor: input.actor,
+        summary: `Added subtask “${title}”`,
+        detail: { subtaskId },
+        visibility: "internal",
+      });
+      return subtaskId;
     }
     projectId = (parent.projectId as string | null) ?? null;
   }
@@ -427,7 +495,7 @@ export async function updateFullTask(opts: {
   );
   const has = (k: string) => keys.includes(k);
 
-  if (task.routineId && ["title", "notes", "description", "estimateMinutes", "priority", "tags"].some(has)) {
+  if (task.routineId && !task.parentTaskId && ["title", "notes", "description", "estimateMinutes", "priority", "tags"].some(has)) {
     if (opts.actor.kind !== "staff") throw new TaskInputError("Only staff can edit routine task definitions.", 403);
     const routineRef = db.doc(`routines/${task.routineId}`);
     const routineSnap = await routineRef.get();
@@ -462,7 +530,7 @@ export async function updateFullTask(opts: {
 
   // Routine activities follow their routine's schedule: the date, repeat
   // and rollover settings belong to the routine, not the single occurrence.
-  if (task.routineId && ["dueAt", "recurrence", "autoRollover"].some(has)) {
+  if (task.routineId && !task.parentTaskId && ["dueAt", "recurrence", "autoRollover"].some(has)) {
     throw new TaskInputError(
       "This is a routine activity. Change its schedule from the routine instead."
     );
@@ -669,11 +737,15 @@ export async function updateFullTask(opts: {
 export async function deleteFullTask(opts: { taskId: string; task: Doc; actor: TaskActor }) {
   const db = getAdminDb();
   const { task } = opts;
-  if (task.routineId) {
+  if (task.routineId && !task.parentTaskId) {
     // Deleting one date's activity would just be regenerated; history stays intact.
     throw new TaskInputError(
       "Routine activities can't be deleted one by one. Remove the activity from the routine, or pause the routine."
     );
+  }
+  if (task.routineId && task.parentTaskId) {
+    await taskDocRef(opts.taskId).delete();
+    return;
   }
   const subtasks = await db
     .collection("tasks")

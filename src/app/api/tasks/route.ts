@@ -7,6 +7,7 @@ import { createTaskServerSide } from "@/lib/server/tasks-service";
 import { resolveDealLink } from "@/lib/server/deal-links";
 import { createFullTask } from "@/lib/server/project-tasks-service";
 import { taskJson } from "@/lib/server/task-serialize";
+import { taskDocRef } from "@/lib/server/task-ref";
 import { taskErrorResponse } from "@/lib/server/task-route-helpers";
 
 /**
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
         createdByUid: access.uid,
         body,
       });
-      const fresh = await getAdminDb().doc(`tasks/${id}`).get();
+      const fresh = await taskDocRef(id).get();
       return NextResponse.json({ id, task: taskJson(id, fresh.data()!) }, { status: 201 });
     } catch (err) {
       return taskErrorResponse(err);

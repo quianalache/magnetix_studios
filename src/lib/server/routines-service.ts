@@ -98,7 +98,7 @@ export function occurrenceTaskId(routineId: string, date: string, activityId: st
  */
 export async function routineForTaskId(taskId: string): Promise<Routine | null> {
   if (!taskId.startsWith(TASK_ID_PREFIX)) return null;
-  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)$/.exec(taskId);
+  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)(?:_s_[a-z0-9]+)?$/.exec(taskId);
   if (!match) return null;
   const routineId = match[1];
   const routine = await getAdminDb().doc(`routines/${routineId}`).get();
@@ -109,7 +109,7 @@ export async function routineForTaskId(taskId: string): Promise<Routine | null> 
 export async function materializeRoutineTaskById(taskId: string, viewerUid?: string): Promise<boolean> {
   const r = await routineForTaskId(taskId);
   if (!r || (viewerUid && !canViewRoutine(r, viewerUid))) return false;
-  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)$/.exec(taskId);
+  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)(?:_s_[a-z0-9]+)?$/.exec(taskId);
   if (!match) return false;
   const compactDate = match[2];
   const date = `${compactDate.slice(0, 4)}-${compactDate.slice(4, 6)}-${compactDate.slice(6, 8)}`;
