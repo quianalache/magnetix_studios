@@ -3,23 +3,30 @@ import "server-only";
 import { embedUrlFor } from "@/lib/community/video-embed";
 import { renderLessonBodyHtml } from "@/lib/community/lesson-html";
 import { getBunnyPlaybackUrl } from "@/lib/server/bunny-stream-service";
+import { applyLessonVideoAutoplay } from "@/lib/standalone-courses/lesson-video";
 import type { VideoOwnerScope } from "@/types/media-asset";
-import type { StandaloneLesson } from "@/types/standalone-courses";
+import type {
+  StandaloneCourseLearningExperience,
+  StandaloneLesson,
+} from "@/types/standalone-courses";
 
 /** Canonical server-side projection for every Standalone lesson surface. */
 export async function presentStandaloneLesson(
   lesson: StandaloneLesson,
   scope: VideoOwnerScope,
+  learningExperience?: Pick<StandaloneCourseLearningExperience, "autoplayLessonVideos"> | null,
 ) {
-  const hostedUrl = lesson.hostedVideoId
+  const rawUrl = lesson.hostedVideoId
     ? await getBunnyPlaybackUrl(scope, lesson.hostedVideoId)
-    : null;
+    : embedUrlFor(lesson.videoProvider, lesson.videoId);
   return {
     id: lesson.id,
     title: lesson.title,
     order: lesson.order,
     sectionId: lesson.sectionId,
-    embedUrl: lesson.hostedVideoId ? hostedUrl : embedUrlFor(lesson.videoProvider, lesson.videoId),
+    embedUrl: rawUrl
+      ? applyLessonVideoAutoplay(rawUrl, learningExperience?.autoplayLessonVideos === true)
+      : null,
     body: renderLessonBodyHtml(lesson.bodyHtml),
     resourceLinks: lesson.resourceLinks ?? [],
   };

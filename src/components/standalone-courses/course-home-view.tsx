@@ -40,6 +40,7 @@ export function CourseHomeView({
   completedLessonIds,
   crossSellTargets,
   homeHref: customHomeHref,
+  presentation = "standalone",
   interactive = true,
 }: {
   saId: string;
@@ -53,6 +54,13 @@ export function CourseHomeView({
   crossSellTargets: ReadonlyMap<string, CrossSellTargetInfo>;
   /** Optional distribution-channel home path; defaults to the direct course route. */
   homeHref?: string;
+  /**
+   * `"standalone"` (default) — the course is the whole page, so it renders
+   * its own top bar (home icon, title, avatar). `"community"` — the course is
+   * embedded in a CommunityShell, whose navigation already owns that role;
+   * the bar is omitted and only the themed course content renders.
+   */
+  presentation?: "standalone" | "community";
   /** false in the theme editor's live preview — the curriculum and the
    *  Hero's "into first lesson" CTA become non-navigating so clicking them
    *  doesn't take over the whole editor. */
@@ -84,6 +92,7 @@ export function CourseHomeView({
         />
       )}
       <div className="relative z-10">
+      {presentation === "standalone" && (
       <header
         className="border-b border-[#E4E4E4]"
         style={{ backgroundColor: theme.header.background }}
@@ -111,6 +120,7 @@ export function CourseHomeView({
           </div>
         </div>
       </header>
+      )}
 
       {theme.hero.visible && (
         <div

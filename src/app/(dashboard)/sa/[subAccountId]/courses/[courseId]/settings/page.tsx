@@ -88,6 +88,7 @@ export default function CourseSettingsExtendedPage({
   const [autoplayNext, setAutoplayNext] = useState(true);
   const [autoplayFirst, setAutoplayFirst] = useState(true);
   const [autoComplete, setAutoComplete] = useState(true);
+  const [autoplayVideos, setAutoplayVideos] = useState(false);
 
   const [customJs, setCustomJs] = useState("");
   const [customCss, setCustomCss] = useState("");
@@ -117,6 +118,7 @@ export default function CourseSettingsExtendedPage({
           setAutoplayNext(le.autoplayNextLesson);
           setAutoplayFirst(le.autoplayFirstLesson);
           setAutoComplete(le.autoCompleteLessons);
+          setAutoplayVideos(le.autoplayLessonVideos === true);
           const adv = c.advanced ?? DEFAULT_STANDALONE_COURSE_ADVANCED;
           setCustomJs(adv.customJs);
           setCustomCss(adv.customCss);
@@ -152,6 +154,7 @@ export default function CourseSettingsExtendedPage({
               autoplayNextLesson: autoplayNext,
               autoplayFirstLesson: autoplayFirst,
               autoCompleteLessons: autoComplete,
+              autoplayLessonVideos: autoplayVideos,
             },
             advanced: {
               customJs,
@@ -184,6 +187,7 @@ export default function CourseSettingsExtendedPage({
               autoplayNextLesson: autoplayNext,
               autoplayFirstLesson: autoplayFirst,
               autoCompleteLessons: autoComplete,
+              autoplayLessonVideos: autoplayVideos,
             },
           }),
         },
@@ -378,6 +382,18 @@ export default function CourseSettingsExtendedPage({
       </CollapsibleSection>
 
       <CollapsibleSection title="Learning experience">
+        <label className="flex items-center justify-between gap-3">
+          <span>
+            <span className="block text-sm font-medium">
+              Autoplay lesson videos
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              When enabled, a lesson&apos;s video starts playing as soon as the
+              lesson opens. Off by default — students press Play.
+            </span>
+          </span>
+          <Switch checked={autoplayVideos} onCheckedChange={setAutoplayVideos} />
+        </label>
         <label className="flex items-center justify-between gap-3">
           <span>
             <span className="block text-sm font-medium">

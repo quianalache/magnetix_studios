@@ -48,7 +48,7 @@ export async function GET(
   const sections = tree.sections.map((s) => ({ id: s.id, title: s.title }));
   const lessons = await Promise.all(
     visibleLessons.map((l) =>
-      presentStandaloneLesson(l, { kind: "agency", agencyId: caller.agencyId }),
+      presentStandaloneLesson(l, { kind: "agency", agencyId: caller.agencyId }, course.learningExperience),
     ),
   );
   return NextResponse.json({

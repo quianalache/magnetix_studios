@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { communityLearningProductHref, type CommunityLinkBase } from "@/lib/community/routes";
 import { CommunityShell } from "@/components/community/community-shell";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
+import { CommunityCourseBackLink, communityClassroomLabel } from "@/components/community/classroom/community-course-back-link";
 import {
   getAgencyStandaloneCourse,
   getAgencyStandaloneCourseTree,
@@ -72,6 +73,7 @@ export async function EmbeddedAgencyProductCourse(opts: {
       viewerIsModerator={false}
       {...shellExtra}
     >
+      <CommunityCourseBackLink href={catalogHref} label={communityClassroomLabel(group)} />
       <CourseHomeView
         saId="agency"
         courseId={courseId}
@@ -83,6 +85,7 @@ export async function EmbeddedAgencyProductCourse(opts: {
         completedLessonIds={enrollment?.completedLessonIds ?? []}
         crossSellTargets={crossSellTargets}
         homeHref={productHref}
+        presentation="community"
       />
     </CommunityShell>
   );
