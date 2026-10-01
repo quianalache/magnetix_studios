@@ -203,21 +203,40 @@ export function ProjectDialog({
 
   async function handleDelete() {
     if (!project) return;
-    if (!confirm(`Delete project "${project.title}"? This can't be undone.`))
-      return;
-    setDeleting(true);
     try {
-      await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`, {
-        method: "DELETE",
-      });
-      toast.success("Project deleted");
-      onOpenChange(false);
-      onDeleted?.();
-    } catch {
-      toast.error("Couldn't delete this project.");
-    } finally {
+      const previewRes = await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`);
+      const preview = (await previewRes.json()) as { taskCount?: number; stepCount?: number; canDetach?: boolean; error?: string };
+      if (!previewRes.ok) throw new Error(preview.error ?? "Couldn't inspect this project.");
+      const count = (preview.taskCount ?? 0) + (preview.stepCount ?? 0);
+      const suffix = count ? ` This affects ${count} associated ${count === 1 ? "task" : "tasks"}.` : "";
+      if (preview.canDetach) {
+        const choice = window.prompt(
+          `Delete “${project.title}”?${suffix}\n\nType KEEP to detach tasks as standalone tasks, or DELETE to permanently remove the project and its tasks.`
+        );
+        if (choice?.trim().toUpperCase() !== "KEEP" && choice?.trim().toUpperCase() !== "DELETE") return;
+        const mode = choice.trim().toUpperCase() === "KEEP" ? "detach" : "delete";
+        setDeleting(true);
+        const res = await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't delete this project.");
+      } else {
+        if (!window.confirm(`Delete “${project.title}”?${suffix} Legacy checklist steps cannot be detached as standalone CRM tasks.`)) return;
+        setDeleting(true);
+        const res = await fetch(`/api/sub-accounts/${subAccountId}/projects/${project.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Couldn't delete this project.");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete this project.");
       setDeleting(false);
+      return;
     }
+    toast.success("Project deleted");
+    onOpenChange(false);
+    onDeleted?.();
+    setDeleting(false);
   }
 
   async function handleAddStep() {

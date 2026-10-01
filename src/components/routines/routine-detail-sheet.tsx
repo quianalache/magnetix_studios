@@ -88,6 +88,7 @@ export function RoutineDetailSheet({
   onEdit,
   onDelete,
   onChanged,
+  embedded = false,
 }: {
   routineId: string | null;
   initialDate: string | null;
@@ -97,6 +98,7 @@ export function RoutineDetailSheet({
   onDelete: (routine: RoutineView) => void;
   /** Something changed (completion, pause) — refresh the library. */
   onChanged: () => void;
+  embedded?: boolean;
 }) {
   const { subAccountId } = useSubAccount();
   const [tab, setTab] = useState<Tab>("overview");
@@ -278,7 +280,11 @@ export function RoutineDetailSheet({
         <SheetContent
           side="right"
           showCloseButton={false}
-          className="w-full gap-0 overflow-hidden p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+          inline={embedded}
+          className={cn(
+            "w-full gap-0 overflow-hidden p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl",
+            embedded && "min-h-[680px] rounded-2xl border shadow-xs"
+          )}
         >
           {!routine ? (
             <div className="flex flex-1 items-center justify-center">
@@ -530,33 +536,43 @@ export function RoutineDetailSheet({
 
                 {tab === "tasks" && (
                   <div className="space-y-3">
-                    <p className="text-muted-foreground text-sm">
-                      Each row is an independent recurring task. Future dates are projected until opened; completing one date never completes another.
-                    </p>
-                    <ol className="divide-y rounded-xl border">
-                      {routine.activities.map((a, i) => {
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-muted-foreground text-sm">
+                        Each task keeps its own recurrence and next occurrence. Historical completion records are never rewritten.
+                      </p>
+                      {routine.canManage && (
+                        <Button variant="outline" size="sm" className="shrink-0" onClick={() => onEdit(routine, 1)}>
+                          <Pencil className="mr-1.5 h-4 w-4" /> Add task
+                        </Button>
+                      )}
+                    </div>
+                    {routine.activities.length === 0 ? (
+                      <div className="rounded-xl border border-dashed px-4 py-8 text-center">
+                        <p className="text-sm font-medium">No tasks yet</p>
+                        <p className="text-muted-foreground mt-1 text-xs">Add the first recurring task to this routine.</p>
+                      </div>
+                    ) : <div className="overflow-x-auto rounded-xl border">
+                      <table className="w-full min-w-[620px] text-sm">
+                        <thead><tr className="text-muted-foreground border-b text-left text-[11px] font-semibold tracking-wider uppercase">
+                          <th className="px-3 py-2.5">Task</th><th className="px-3 py-2.5">Recurrence / next</th><th className="px-3 py-2.5">Time</th><th className="px-3 py-2.5">Estimate</th><th className="px-3 py-2.5">Actions</th>
+                        </tr></thead>
+                        <tbody>{routine.activities.map((a, i) => {
                         const next = routine.status === "active" && !routine.windowClosed
                           ? occurrencesBetween(a.schedule ?? routine.schedule, today ?? routine.schedule.startDate, addDaysYmd(today ?? routine.schedule.startDate, 400), null, 1)[0] ?? null
                           : null;
                         const taskId = next ? occurrenceId(routine.id, next, a.id) : null;
                         return (
-                        <li key={a.id} className="flex items-center gap-3 px-3 py-3 text-sm">
-                          <span className="text-muted-foreground w-5 shrink-0 text-xs tabular-nums">{i + 1}</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium">{a.title}</p>
-                            <p className="text-muted-foreground mt-0.5 text-xs">{describeScheduleLong(a.schedule ?? routine.schedule)} · {describeTime(a.timeMode ?? routine.timeMode, a.timeBlock ?? routine.timeBlock, a.time ?? routine.time)}</p>
-                            <p className="text-muted-foreground text-xs">{next ? `Next: ${formatYmd(next)}` : "No upcoming date"}{a.estimateMinutes ? ` · ${a.estimateMinutes} min` : ""}</p>
-                          </div>
-                          {taskId && <Button variant="ghost" size="sm" onClick={() => setOpenTaskId(taskId)}>Open task</Button>}
-                        </li>
+                        <tr key={a.id} className="hover:bg-muted/40 border-b last:border-b-0">
+                          <td className="px-3 py-3"><div className="min-w-0"><p className="font-medium">{a.title}</p><p className="text-muted-foreground mt-0.5 text-xs">Task {i + 1}</p></div></td>
+                          <td className="text-muted-foreground px-3 py-3 text-xs"><p>{describeScheduleLong(a.schedule ?? routine.schedule)}</p><p>{next ? `Next: ${formatYmd(next)}` : "No upcoming date"}</p></td>
+                          <td className="text-muted-foreground px-3 py-3 text-xs">{describeTime(a.timeMode ?? routine.timeMode, a.timeBlock ?? routine.timeBlock, a.time ?? routine.time)}</td>
+                          <td className="text-muted-foreground px-3 py-3 text-xs">{a.estimateMinutes ? `${a.estimateMinutes} min` : "—"}</td>
+                          <td className="px-3 py-3">{taskId ? <Button variant="ghost" size="sm" onClick={() => setOpenTaskId(taskId)}>Open task</Button> : <span className="text-muted-foreground text-xs">—</span>}</td>
+                        </tr>
                         );
-                      })}
-                    </ol>
-                    {routine.canManage && (
-                      <Button variant="outline" size="sm" onClick={() => onEdit(routine, 1)}>
-                        <Pencil className="mr-1.5 h-4 w-4" /> Manage tasks
-                      </Button>
-                    )}
+                      })}</tbody>
+                      </table>
+                    </div>}
                   </div>
                 )}
 

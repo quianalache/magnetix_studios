@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import {
   deleteProject,
   getProject,
+  projectDeletePreview,
   updateProject,
 } from "@/lib/server/project-service";
 
@@ -68,6 +69,18 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
+export async function GET(
+  request: Request,
+  ctx: { params: Promise<{ id: string; projectId: string }> },
+) {
+  const { id: subAccountId, projectId } = await ctx.params;
+  const access = await requireSubAccountMember(request, subAccountId);
+  if (access instanceof NextResponse) return access;
+  const project = await loadScopedProject(subAccountId, projectId);
+  if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  return NextResponse.json(await projectDeletePreview(projectId));
+}
+
 export async function DELETE(
   request: Request,
   ctx: { params: Promise<{ id: string; projectId: string }> },
@@ -81,6 +94,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  await deleteProject(projectId);
+  let mode: "delete" | "detach" = "delete";
+  try {
+    const body = (await request.json()) as { mode?: unknown };
+    if (body.mode === "detach") mode = "detach";
+  } catch {
+    // Empty DELETE bodies retain the historical delete behavior.
+  }
+  try {
+    await deleteProject(projectId, { mode });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Couldn't delete project" }, { status: 409 });
+  }
   return NextResponse.json({ ok: true });
 }

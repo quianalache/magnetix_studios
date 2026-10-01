@@ -444,14 +444,13 @@ export function RoutineEditorDialog({
 
   const stepError: Record<Step, string | null> = {
     0: draft.name.trim() ? null : "Give the routine a title.",
-    1: validActivities.length
-      ? taskErrors.find(Boolean) ?? null
-      : "Add at least one task.",
+    1: taskErrors.find(Boolean) ?? null,
     2: null,
   };
 
   async function save() {
-    for (const s of [0, 1] as Step[]) {
+    const requiredSteps = routine ? ([0, 1] as Step[]) : ([0] as Step[]);
+    for (const s of requiredSteps) {
       if (stepError[s]) {
         setStep(s);
         toast.error(stepError[s]!);
@@ -524,8 +523,9 @@ export function RoutineEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          {/* Stepper */}
-          <nav
+          {/* Creation is intentionally Basic Info only. Existing edits keep
+              the task/review flow until workspace task editing is complete. */}
+          {routine && <nav
             aria-label="Routine steps"
             className="bg-muted/30 flex shrink-0 gap-1 border-b p-3 pr-12 sm:w-48 sm:flex-col sm:border-r sm:border-b-0 sm:p-4"
           >
@@ -558,7 +558,7 @@ export function RoutineEditorDialog({
                 </button>
               );
             })}
-          </nav>
+          </nav>}
 
           {/* Step body */}
           <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
@@ -675,7 +675,7 @@ export function RoutineEditorDialog({
               </div>
             )}
 
-            {step === 1 && (
+            {routine && step === 1 && (
               <div className="space-y-4">
                 <div>
                   <DialogTitle className="text-lg font-bold">Tasks</DialogTitle>
@@ -811,7 +811,7 @@ export function RoutineEditorDialog({
               </div>
             )}
 
-            {step === 2 && (
+            {routine && step === 2 && (
               <div className="space-y-4">
                 <div>
                   <DialogTitle className="text-lg font-bold">Review</DialogTitle>
@@ -860,7 +860,7 @@ export function RoutineEditorDialog({
         </div>
 
         <footer className="flex items-center justify-between gap-2 border-t px-5 py-3">
-          {step > 0 ? (
+          {routine && step > 0 ? (
             <Button variant="ghost" onClick={() => setStep((s) => (s - 1) as Step)} disabled={saving}>
               <ArrowLeft className="mr-1.5 h-4 w-4" /> Back
             </Button>
@@ -875,7 +875,7 @@ export function RoutineEditorDialog({
                 Save
               </Button>
             )}
-            {step < 2 ? (
+            {routine && step < 2 ? (
               <Button onClick={next}>
                 {nextLabel} <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>

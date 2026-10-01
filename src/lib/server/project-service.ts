@@ -273,10 +273,53 @@ export async function updateProject(
   }
 }
 
-export async function deleteProject(projectId: string): Promise<void> {
+export async function projectDeletePreview(projectId: string): Promise<{
+  projectId: string;
+  taskCount: number;
+  stepCount: number;
+  canDetach: boolean;
+}> {
   const db = getAdminDb();
   const project = await projectsCol().doc(projectId).get();
+  if (!project.exists) throw new Error("Project not found");
   const steps = await stepsCol(projectId).get();
+  const tasks = project.data()?.taskModel === "tasks"
+    ? await db.collection("tasks").where("subAccountId", "==", project.data()!.subAccountId).where("projectId", "==", projectId).get()
+    : null;
+  return {
+    projectId,
+    taskCount: tasks?.size ?? 0,
+    stepCount: steps.size,
+    // Legacy checklist steps have no standalone-task representation. They
+    // must remain explicit rather than being silently discarded or exposed.
+    canDetach: !!tasks && steps.size === 0,
+  };
+}
+
+export async function deleteProject(
+  projectId: string,
+  opts: { mode?: "delete" | "detach" } = {}
+): Promise<void> {
+  const db = getAdminDb();
+  const project = await projectsCol().doc(projectId).get();
+  if (!project.exists) return;
+  const steps = await stepsCol(projectId).get();
+  const mode = opts.mode ?? "delete";
+  if (mode === "detach" && (project.data()?.taskModel !== "tasks" || steps.size > 0)) {
+    throw new Error("This project uses legacy checklist steps; those steps cannot be detached as standalone CRM tasks.");
+  }
+  if (mode === "detach") {
+    const tasks = await db.collection("tasks").where("subAccountId", "==", project.data()!.subAccountId).where("projectId", "==", projectId).get();
+    for (let i = 0; i < tasks.docs.length; i += 400) {
+      const batch = db.batch();
+      for (const d of tasks.docs.slice(i, i + 400)) {
+        batch.update(d.ref, { projectId: null, updatedAt: FieldValue.serverTimestamp() });
+      }
+      await batch.commit();
+    }
+    await projectsCol().doc(projectId).delete();
+    return;
+  }
   const refs = steps.docs.map((d) => d.ref);
   if (project.data()?.taskModel === "tasks") {
     // A task project's tasks belong to it; time entries are kept (audit).

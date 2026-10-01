@@ -243,7 +243,9 @@ function parseActivities(
   fallbackTime: string | null = null,
   today?: string
 ): RoutineActivity[] {
-  if (!Array.isArray(raw)) throw new TaskInputError("Add at least one activity.");
+  // A routine can be created as an empty container. Tasks are added from its
+  // dedicated workspace after creation.
+  if (!Array.isArray(raw)) throw new TaskInputError("Activities must be a list.");
   const known = new Set(existing.map((a) => a.id));
   const seen = new Set<string>();
   const out: RoutineActivity[] = [];
@@ -285,7 +287,6 @@ function parseActivities(
       time: taskMode === "time" ? rawTime as string : null,
     });
   }
-  if (out.length === 0) throw new TaskInputError("Add at least one activity.");
   return out;
 }
 

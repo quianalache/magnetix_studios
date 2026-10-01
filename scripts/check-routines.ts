@@ -186,10 +186,9 @@ async function main() {
   };
 
   // ── validation ─────────────────────────────────────────────────────────
-  await check("validation: missing name, no activities, weekly without days, time without clock → 400; legacy project fields are ignored", async () => {
+  await check("validation: missing name, invalid schedules and time → 400; empty routines are valid; legacy project fields are ignored", async () => {
     for (const bad of [
       { ...baseMorning, name: "  " },
-      { ...baseMorning, activities: [{ title: " " }] },
       { ...baseMorning, schedule: { frequency: "weekly", days: [] } },
       { ...baseMorning, timeMode: "time", time: "25:00" },
     ]) {
@@ -197,6 +196,9 @@ async function main() {
       assert.equal(res.status, 400, JSON.stringify(bad).slice(0, 80));
     }
     assert.equal((await db.collection("routines").get()).size, 0, "nothing written");
+    const empty = await post({ ...baseMorning, name: "Empty starter routine", activities: [] });
+    assert.equal(empty.status, 201);
+    await db.doc(`routines/${(await empty.json()).routine.id}`).delete();
     const legacy = await post({ ...baseMorning, name: "Legacy project-shaped routine", projectId: "nope", endsWithProject: true });
     assert.equal(legacy.status, 201);
     const legacyRoutine = (await legacy.json()).routine;

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { FolderKanban, Plus, Repeat, Search } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -12,7 +12,6 @@ import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { deleteRoutineApi, listRoutinesApi, updateRoutineApi } from "@/lib/client/routines-api";
 import { ProjectsShell } from "@/components/projects/projects-shell";
 import { RoutineCard } from "@/components/routines/routine-card";
-import { RoutineDetailSheet } from "@/components/routines/routine-detail-sheet";
 import { RoutineEditorDialog } from "@/components/routines/routine-editor-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { isYmd } from "@/lib/routines/schedule";
 import { TASK_RECURRENCE_LABELS, type TaskRecurrenceType } from "@/types/tasks";
 import type { Project } from "@/types/projects";
 import type { ProjectRoutineItem, RoutineListItem, RoutineView } from "@/types/routines";
@@ -35,16 +33,14 @@ type Sort = "next" | "name" | "recent";
 
 /**
  * Projects → Routines. Named groups of recurring activities that don't need
- * a project. Cards + filters on the left; a routine opens in a side panel
- * (?routine=<id>&date=<YYYY-MM-DD> deep-links there, e.g. from My Tasks or
- * the Calendar).
+ * a project. Cards + filters on the left; a routine opens in its dedicated
+ * full-page workspace.
  */
 function RoutinesPageInner() {
   const { user, loading: authLoading } = useAuth();
   const { subAccountId, agencyId } = useSubAccount();
   const router = useRouter();
   const pathname = usePathname();
-  const params = useSearchParams();
 
   const [items, setItems] = useState<RoutineListItem[]>([]);
   const [projectRoutines, setProjectRoutines] = useState<ProjectRoutineItem[]>([]);
@@ -59,9 +55,6 @@ function RoutinesPageInner() {
   const [editorStep, setEditorStep] = useState<0 | 1 | 2 | 3>(0);
   const [deleting, setDeleting] = useState<RoutineView | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-
-  const openId = params.get("routine");
-  const openDate = isYmd(params.get("date")) ? params.get("date") : null;
 
   const reload = useCallback(async () => {
     try {
@@ -87,16 +80,6 @@ function RoutinesPageInner() {
       () => {}
     );
   }, [authLoading, user, agencyId, subAccountId]);
-
-  function setOpen(id: string | null, date?: string | null) {
-    const next = new URLSearchParams(params.toString());
-    if (id) next.set("routine", id);
-    else next.delete("routine");
-    if (id && date) next.set("date", date);
-    else next.delete("date");
-    const q = next.toString();
-    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
-  }
 
   const counts = useMemo(
     () => ({
@@ -160,7 +143,6 @@ function RoutinesPageInner() {
     try {
       await deleteRoutineApi(subAccountId, deleting.id);
       toast.success("Routine deleted");
-      if (openId === deleting.id) setOpen(null);
       setDeleting(null);
       await reload();
     } catch (err) {
@@ -280,7 +262,7 @@ function RoutinesPageInner() {
             <RoutineCard
               key={item.routine.id}
               item={item}
-              onOpen={() => setOpen(item.routine.id)}
+              onOpen={() => router.push(`${pathname}/${item.routine.id}`)}
               onEdit={() => openEditor(item.routine)}
               onToggleStatus={() => void toggleStatus(item.routine)}
               onDelete={() => setDeleting(item.routine)}
@@ -321,16 +303,6 @@ function RoutinesPageInner() {
         </section>
       )}
 
-      <RoutineDetailSheet
-        routineId={openId}
-        initialDate={openDate}
-        open={!!openId}
-        onOpenChange={(o) => !o && setOpen(null)}
-        onEdit={(r, step) => openEditor(r, step ?? 0)}
-        onDelete={(r) => setDeleting(r)}
-        onChanged={() => void reload()}
-      />
-
       <RoutineEditorDialog
         open={editorOpen}
         onOpenChange={setEditorOpen}
@@ -339,12 +311,7 @@ function RoutinesPageInner() {
         projects={projects}
         onSaved={(r) => {
           void reload();
-          if (!editing) setOpen(r.id);
-          else if (openId === r.id) {
-            // Re-open the panel so it reloads the edited routine.
-            setOpen(null);
-            setTimeout(() => setOpen(r.id, openDate), 0);
-          }
+          if (!editing) router.push(`${pathname}/${r.id}`);
         }}
       />
 
