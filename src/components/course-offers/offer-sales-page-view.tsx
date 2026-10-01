@@ -10,6 +10,7 @@ import { RecentPurchasePopup } from "@/components/course-offers/recent-purchase-
 import type { CourseTheme } from "@/types/course-theme";
 import type { CourseOffer } from "@/types/course-offers";
 import type { Member } from "@/types/community";
+import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 type OfferSalesOffer = Pick<
@@ -359,7 +360,7 @@ export function OfferSalesPageView({
                     <a
                       href={
                         firstCourseId
-                          ? `/course/${saId}/${firstCourseId}/classroom`
+                          ? courseEntryHref(`/course/${saId}/${firstCourseId}/classroom`)
                           : `/portal/${saId}`
                       }
                       className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"

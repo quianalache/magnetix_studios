@@ -1,8 +1,9 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   CheckCircle2,
@@ -21,6 +22,7 @@ import {
   type CrossSellTargetInfo,
 } from "@/components/standalone-courses/theme-blocks";
 import { LessonVideoFrame } from "@/components/standalone-courses/lesson-video-frame";
+import { lessonToAdvanceTo, orderLessonsByCurriculum } from "@/lib/standalone-courses/course-navigation";
 import { DEFAULT_LESSON_THEME } from "@/types/course-theme";
 import type {
   LessonTheme,
@@ -96,6 +98,7 @@ export function StandaloneLessonPlayer({
   currentLessonId,
   completedIds: initialCompleted,
   interactive = true,
+  autoAdvanceToNextLesson = false,
 }: {
   /** Full POST URL to mark the current lesson complete. */
   completeEndpoint: string;
@@ -122,14 +125,24 @@ export function StandaloneLessonPlayer({
    *  inert lookalike instead of a real POST, same pattern as the other 3
    *  page-view components' `interactive` flag. */
   interactive?: boolean;
+  /** The course's "Automatically play next lesson" setting: after Mark
+   *  Complete succeeds, open the next available lesson. Off by default. */
+  autoAdvanceToNextLesson?: boolean;
 }) {
   const lessonHref = (lessonId: string) => `${lessonHrefBase}/${lessonId}`;
   const [completed, setCompleted] = useState<Set<string>>(new Set(initialCompleted));
   const [saving, setSaving] = useState(false);
+  const router = useRouter();
+  // One completion → at most one navigation per lesson, even if the
+  // completion response/event fires again (double click, retried request).
+  const advancedFromRef = useRef<string | null>(null);
 
   const current = lessons.find((l) => l.id === currentLessonId) ?? lessons[0];
-  const idx = lessons.findIndex((l) => l.id === current.id);
-  const next = lessons[idx + 1] ?? null;
+  // Curriculum order (sections, then lessons) — the order the sidebar
+  // shows, so "next" here, the Next Lesson card and auto-advance agree.
+  const orderedLessons = orderLessonsByCurriculum(sections, lessons);
+  const idx = orderedLessons.findIndex((l) => l.id === current.id);
+  const next = orderedLessons[idx + 1] ?? null;
   const isCompleted = completed.has(current.id);
 
   const sectionIds = new Set(sections.map((s) => s.id));
@@ -159,6 +172,16 @@ export function StandaloneLessonPlayer({
       const res = await fetch(completeEndpoint, { method: "POST" });
       if (!res.ok) throw new Error();
       setCompleted((prev) => new Set(prev).add(current.id));
+      const target = lessonToAdvanceTo({
+        autoAdvance: autoAdvanceToNextLesson,
+        alreadyAdvanced: advancedFromRef.current === current.id,
+        orderedLessonIds: orderedLessons.map((l) => l.id),
+        completedLessonId: current.id,
+      });
+      if (target) {
+        advancedFromRef.current = current.id;
+        router.push(lessonHref(target));
+      }
     } catch {
       toast.error("Couldn't save progress");
     } finally {

@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 /** Human-readable custom-domain mirror for a linked canonical Course homepage. */
 export default async function CustomDomainEmbeddedProductCoursePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ groupSlug: string; courseId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { groupSlug, courseId } = await params;
   const host = (await headers()).get("host");
@@ -17,5 +19,6 @@ export default async function CustomDomainEmbeddedProductCoursePage({
   if (!sub) notFound();
   return CommunityEmbeddedProductCoursePage({
     params: Promise.resolve({ saId: sub.id, groupSlug, courseId }),
+    searchParams,
   });
 }

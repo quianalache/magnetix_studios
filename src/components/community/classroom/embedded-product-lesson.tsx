@@ -26,6 +26,7 @@ import type {
   GroupMembership,
   Member,
 } from "@/types/community";
+import { autoAdvanceEnabled } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * Shared render body for a linked Standalone Product's lesson, rendered
@@ -179,6 +180,7 @@ export async function EmbeddedProductLesson(opts: {
         lessons={lessons}
         currentLessonId={lessonId}
         completedIds={enrollment?.completedLessonIds ?? []}
+        autoAdvanceToNextLesson={autoAdvanceEnabled(course.learningExperience)}
       />
     </CommunityShell>
   );

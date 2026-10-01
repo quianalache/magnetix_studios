@@ -400,8 +400,8 @@ export default function CourseSettingsExtendedPage({
               Automatically play next lesson
             </span>
             <span className="block text-xs text-muted-foreground">
-              When enabled, the next lesson will start playing automatically
-              after the current lesson ends
+              When enabled, marking a lesson complete takes the student
+              straight to the next lesson they can open
             </span>
           </span>
           <Switch checked={autoplayNext} onCheckedChange={setAutoplayNext} />
@@ -412,8 +412,8 @@ export default function CourseSettingsExtendedPage({
               Automatically play first lesson
             </span>
             <span className="block text-xs text-muted-foreground">
-              When enabled, the first lesson in a course will start playing
-              automatically when accessed
+              When enabled, entering the course opens its first lesson the
+              student can access. The course homepage stays available
             </span>
           </span>
           <Switch checked={autoplayFirst} onCheckedChange={setAutoplayFirst} />

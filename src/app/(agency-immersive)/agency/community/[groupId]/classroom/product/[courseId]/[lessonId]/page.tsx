@@ -6,8 +6,9 @@ import { CommunityShell } from "@/components/community/community-shell";
 import { CommunityCourseBackLink } from "@/components/community/classroom/community-course-back-link";
 import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
 import type { CourseTheme, LessonTheme } from "@/types/course-theme";
-import type { StandaloneCourseInstructor } from "@/types/standalone-courses";
+import type { StandaloneCourseInstructor, StandaloneCourseLearningExperience } from "@/types/standalone-courses";
 import type { CommunityGroup } from "@/types/community";
+import { autoAdvanceEnabled } from "@/lib/standalone-courses/course-navigation";
 
 interface PlayerResponse {
   course: {
@@ -17,6 +18,7 @@ interface PlayerResponse {
     instructor: StandaloneCourseInstructor;
     theme: CourseTheme;
     lessonTheme: LessonTheme;
+    learningExperience?: Pick<StandaloneCourseLearningExperience, "autoplayNextLesson"> | null;
   };
   sections: PlayerSection[];
   lessons: PlayerLesson[];
@@ -103,6 +105,7 @@ export default function AgencyEmbeddedProductLessonPage({
         lessons={player.lessons}
         currentLessonId={lessonId}
         completedIds={player.completedIds}
+        autoAdvanceToNextLesson={autoAdvanceEnabled(player.course.learningExperience)}
       />
     </CommunityShell>
   );

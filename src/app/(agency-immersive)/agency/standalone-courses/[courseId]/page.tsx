@@ -33,6 +33,7 @@ import type {
   StandaloneCourseSection,
   StandaloneLesson,
 } from "@/types/standalone-courses";
+import { applyLessonVideoAutoplay } from "@/lib/standalone-courses/lesson-video";
 
 /**
  * Agency Standalone Course editor — sections/lessons builder. Reuses the
@@ -205,7 +206,7 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
 
         <div>
           {selectedLesson ? (
-            <LessonEditor apiBase={apiBase} agencyId={course.agencyId} courseId={courseId} lesson={selectedLesson} onDeleted={async () => { selectLesson(null); await refresh(); }} onSaved={refresh} />
+            <LessonEditor apiBase={apiBase} agencyId={course.agencyId} courseId={courseId} lesson={selectedLesson} onDeleted={async () => { selectLesson(null); await refresh(); }} onSaved={refresh} videoAutoplay={course.learningExperience?.autoplayLessonVideos === true} />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center">
               <GraduationCap className="h-8 w-8 text-muted-foreground" />
@@ -224,9 +225,11 @@ function AgencyCourseEditorPageInner({ params }: { params: Promise<{ courseId: s
 }
 
 function LessonEditor({
-  apiBase, agencyId, courseId, lesson, onDeleted, onSaved,
+  apiBase, agencyId, courseId, lesson, onDeleted, onSaved, videoAutoplay,
 }: {
   apiBase: string; agencyId: string; courseId: string; lesson: StandaloneLesson; onDeleted: () => void; onSaved: () => void;
+  /** The course's saved "Autoplay lesson videos" choice, for the preview. */
+  videoAutoplay: boolean;
 }) {
   const [title, setTitle] = useState(lesson.title);
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl ?? "");
@@ -290,7 +293,7 @@ function LessonEditor({
       {!hostedVideoId && !videoValid && <p className="text-xs text-destructive">Not a recognized YouTube, Vimeo, Loom, Descript, Wistia, or Adilo link.</p>}
       {!hostedVideoId && parsed && (
           <div className="aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-black">
-            <iframe src={parsed.embedUrl} title="preview" allowFullScreen className="h-full w-full" />
+            <iframe src={applyLessonVideoAutoplay(parsed.embedUrl, videoAutoplay)} title="preview" allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen className="h-full w-full" />
           </div>
       )}
 

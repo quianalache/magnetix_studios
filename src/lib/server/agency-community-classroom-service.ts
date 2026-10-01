@@ -15,6 +15,7 @@ import type {
   Lesson,
   ResourceLink,
 } from "@/types/community";
+import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * Agency Community Classroom — the agency-scope sibling of
@@ -488,7 +489,7 @@ export async function listAgencyClassroomCatalogForMember(opts: {
       // this group's shell); locked+purchasable -> the course's own public
       // sales page, its existing purchase destination.
       const unlockedHref = firstLessonId
-        ? communityLearningProductHref(opts.linkBase, opts.groupSlug, course.id)
+        ? courseEntryHref(communityLearningProductHref(opts.linkBase, opts.groupSlug, course.id))
         : null;
 
       return {

@@ -18,6 +18,7 @@ import { CommunityShell } from "@/components/community/community-shell";
 import { CommunityCourseBackLink } from "@/components/community/classroom/community-course-back-link";
 import { StandaloneLessonPlayer, type PlayerLesson, type PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
 import { presentStandaloneLesson } from "@/lib/server/course-lesson-presentation";
+import { autoAdvanceEnabled } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,7 @@ export default async function MyAgencyEmbeddedProductLessonPage({
         lessons={lessons}
         currentLessonId={lessonId}
         completedIds={enrollment?.completedLessonIds ?? []}
+        autoAdvanceToNextLesson={autoAdvanceEnabled(course.learningExperience)}
       />
     </CommunityShell>
   );

@@ -38,6 +38,7 @@ import type {
   StandaloneCourseSection,
   StandaloneLesson,
 } from "@/types/standalone-courses";
+import { applyLessonVideoAutoplay } from "@/lib/standalone-courses/lesson-video";
 
 /**
  * Standalone-course editor — sections/lessons builder. Forked from the
@@ -296,6 +297,7 @@ function StandaloneCourseEditorPageInner({
               courseId={courseId}
               lesson={selectedLesson}
               onDeleted={() => selectLesson(null)}
+              videoAutoplay={course.learningExperience?.autoplayLessonVideos === true}
             />
           ) : (
             <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center">
@@ -325,6 +327,7 @@ function LessonEditor({
   courseId,
   lesson,
   onDeleted,
+  videoAutoplay,
 }: {
   apiBase: string;
   saId: string;
@@ -332,6 +335,8 @@ function LessonEditor({
   courseId: string;
   lesson: StandaloneLesson;
   onDeleted: () => void;
+  /** The course's saved "Autoplay lesson videos" choice, for the preview. */
+  videoAutoplay: boolean;
 }) {
   const [title, setTitle] = useState(lesson.title);
   const [videoUrl, setVideoUrl] = useState(lesson.videoUrl ?? "");
@@ -415,8 +420,9 @@ function LessonEditor({
       {!hostedVideoId && parsed && (
           <div className="aspect-video w-full max-w-md overflow-hidden rounded-lg border bg-black">
             <iframe
-              src={parsed.embedUrl}
+              src={applyLessonVideoAutoplay(parsed.embedUrl, videoAutoplay)}
               title="preview"
+              allow="autoplay; encrypted-media; picture-in-picture"
               allowFullScreen
               className="h-full w-full"
             />

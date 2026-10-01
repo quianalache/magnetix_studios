@@ -11,6 +11,7 @@ import {
   type PlayerLesson,
   type PlayerSection,
 } from "@/components/standalone-courses/standalone-lesson-player";
+import { autoAdvanceEnabled } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function AgencyStandaloneLessonPlayerPage({
       lessons={lessons}
       currentLessonId={lessonId}
       completedIds={enrollment?.completedLessonIds ?? []}
+      autoAdvanceToNextLesson={autoAdvanceEnabled(course.learningExperience)}
     />
   );
 }

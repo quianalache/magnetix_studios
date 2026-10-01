@@ -3,13 +3,16 @@ import { getCurrentPerson } from "@/lib/server/person-session";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import { getAgencyGroupById, getAgencyMembershipForPerson } from "@/lib/server/community-agency-service";
 import { EmbeddedAgencyProductCourse } from "@/components/community/classroom/embedded-agency-product-course";
+import { isCourseEntryRequest } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function MyAgencyEmbeddedProductCoursePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ groupId: string; courseId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { groupId, courseId } = await params;
   const catalog = `/my/community/${groupId}/classroom`;
@@ -30,5 +33,6 @@ export default async function MyAgencyEmbeddedProductCoursePage({
     linkBase: { saId: "", pretty: false, agencyGroupId: groupId, agencyMemberView: true },
     groupSlug: group.slug,
     catalogHref: catalog,
+    isEntry: isCourseEntryRequest(await searchParams),
   });
 }

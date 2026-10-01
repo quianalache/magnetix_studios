@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/agency-standalone-course-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
+import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function AgencyCourseSalesPage({
   // window, revoked complimentary grant) back HERE, so an unconditional
   // redirect looped the two pages forever. Same fix as the tenant page.
   if (enrollment && person && (await checkAgencyCourseEntitlementForPerson(agencyId, course, person.id))) {
-    redirect(`/course/agency/${courseId}/classroom`);
+    redirect(courseEntryHref(`/course/agency/${courseId}/classroom`));
   }
 
   const outline = await getAgencyCurriculumOutline(agencyId, courseId);

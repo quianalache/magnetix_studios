@@ -94,6 +94,14 @@ export function CourseWizard({
   const [autoplayVideos, setAutoplayVideos] = useState(
     course?.learningExperience?.autoplayLessonVideos === true,
   );
+  // The two course-navigation settings (tenant courses edit these under
+  // Settings → Learning experience). Shown with their saved values.
+  const [autoplayFirst, setAutoplayFirst] = useState(
+    course?.learningExperience?.autoplayFirstLesson === true,
+  );
+  const [autoplayNext, setAutoplayNext] = useState(
+    course?.learningExperience?.autoplayNextLesson === true,
+  );
 
   const stepIndex = STEPS.findIndex((s) => s.id === step);
   const courseIdForUploads = course?.id ?? "new";
@@ -143,7 +151,13 @@ export function CourseWizard({
         priceTextOverride: priceTextOverride.trim() || null,
         published,
         ...(showAutoplaySetting
-          ? { learningExperience: { autoplayLessonVideos: autoplayVideos } }
+          ? {
+              learningExperience: {
+                autoplayLessonVideos: autoplayVideos,
+                autoplayFirstLesson: autoplayFirst,
+                autoplayNextLesson: autoplayNext,
+              },
+            }
           : {}),
       };
       const url = agencyScope
@@ -287,6 +301,30 @@ export function CourseWizard({
                         </span>
                       </span>
                       <Switch checked={autoplayVideos} onCheckedChange={setAutoplayVideos} />
+                    </label>
+                  )}
+                  {showAutoplaySetting && (
+                    <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                      <span>
+                        <span className="block text-sm font-medium">Automatically play first lesson</span>
+                        <span className="block text-xs text-muted-foreground">
+                          When enabled, entering the course opens its first lesson the student can
+                          access. The course homepage stays available.
+                        </span>
+                      </span>
+                      <Switch checked={autoplayFirst} onCheckedChange={setAutoplayFirst} />
+                    </label>
+                  )}
+                  {showAutoplaySetting && (
+                    <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                      <span>
+                        <span className="block text-sm font-medium">Automatically play next lesson</span>
+                        <span className="block text-xs text-muted-foreground">
+                          When enabled, marking a lesson complete takes the student straight to the
+                          next lesson they can open.
+                        </span>
+                      </span>
+                      <Switch checked={autoplayNext} onCheckedChange={setAutoplayNext} />
                     </label>
                   )}
                 </>

@@ -6,6 +6,7 @@ import {
   filterAgencyLessonsForEnrollment,
 } from "@/lib/server/agency-standalone-course-service";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
+import { isCourseEntryRequest, resolveCourseEntryLessonId } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export const dynamic = "force-dynamic";
  *  cross-sell blocks (not ported for agency this pass). */
 export default async function AgencyStandaloneCourseHomePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { courseId } = await params;
   const access = await requireAgencyCourseClassroomAccess(courseId);
@@ -31,6 +34,14 @@ export default async function AgencyStandaloneCourseHomePage({
 
   const enrollment = await getAgencyStandaloneEnrollment(agencyId, courseId, person.id);
   const visibleLessons = filterAgencyLessonsForEnrollment(tree.lessons, enrollment);
+  // "Automatically play first lesson" — same rule as the tenant homepage.
+  const entryLessonId = resolveCourseEntryLessonId({
+    isEntry: isCourseEntryRequest(await searchParams),
+    learningExperience: course.learningExperience,
+    sections: tree.sections,
+    availableLessons: visibleLessons,
+  });
+  if (entryLessonId) redirect(`/course/agency/${courseId}/classroom/${entryLessonId}`);
 
   return (
     <CourseHomeView

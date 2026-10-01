@@ -3,13 +3,16 @@ import { requireGroupPageAccess } from "@/lib/community/member-context";
 import { isCommunityPrettyRequest } from "@/lib/community/domain";
 import { communityLearningHref } from "@/lib/community/routes";
 import { EmbeddedProductCourse } from "@/components/community/classroom/embedded-product-course";
+import { isCourseEntryRequest } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function CommunityEmbeddedProductCoursePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ saId: string; groupSlug: string; courseId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { saId, groupSlug, courseId } = await params;
   const access = await requireGroupPageAccess(saId, groupSlug, {
@@ -29,5 +32,6 @@ export default async function CommunityEmbeddedProductCoursePage({
     linkBase: { saId, pretty },
     groupSlug,
     catalogHref: communityLearningHref({ saId, pretty }, groupSlug),
+    isEntry: isCourseEntryRequest(await searchParams),
   });
 }

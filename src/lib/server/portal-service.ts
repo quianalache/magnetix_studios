@@ -20,6 +20,7 @@ import {
 } from "@/lib/server/portal-tasks-service";
 import type { CourseOfferPurchase } from "@/types/course-offers";
 import type { CommunityGroup, GroupMembership } from "@/types/community";
+import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * Client Portal MVP data aggregation — one login, everything a Contact has
@@ -81,7 +82,7 @@ export async function listPortalCourses(
         progressPct: e.progressPct,
         nextLessonTitle: nextLesson?.title ?? null,
         salesPageHref: `/course/${subAccountId}/${course.id}`,
-        classroomHref: `/course/${subAccountId}/${course.id}/classroom`,
+        classroomHref: courseEntryHref(`/course/${subAccountId}/${course.id}/classroom`),
       };
       return result;
     })

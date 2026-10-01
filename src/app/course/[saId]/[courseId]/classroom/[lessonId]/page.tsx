@@ -14,6 +14,7 @@ import {
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 import { getInAppUpsellsForMember } from "@/lib/server/course-offer-upsell-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
+import { autoAdvanceEnabled } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,7 @@ export default async function StandaloneLessonPlayerPage({
         lessons={lessons}
         currentLessonId={lessonId}
         completedIds={enrollment?.completedLessonIds ?? []}
+        autoAdvanceToNextLesson={autoAdvanceEnabled(course.learningExperience)}
       />
 
       {upsellTargets.length > 0 && (
