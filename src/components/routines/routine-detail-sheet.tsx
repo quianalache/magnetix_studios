@@ -3,13 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
-  Clock,
   ExternalLink,
-  FolderKanban,
   ListChecks,
   Loader2,
   MoreHorizontal,
@@ -40,7 +37,6 @@ import {
 } from "@/lib/client/routines-api";
 import {
   addDaysYmd,
-  describeSchedule,
   describeScheduleLong,
   describeTime,
   formatYmd,
@@ -71,6 +67,10 @@ interface Detail {
 
 /** Early check-off window — mirrors EARLY_COMPLETION_DAYS on the server. */
 const EARLY_DAYS = 7;
+
+function occurrenceId(routineId: string, date: string, activityId: string) {
+  return `rt_${routineId}_${date.replace(/-/g, "")}_${activityId}`;
+}
 
 function periodFor(routine: RoutineView | null, date: string) {
   if (routine?.schedule.unit === "month") {
@@ -206,7 +206,7 @@ export function RoutineDetailSheet({
       title: a.title,
       estimateMinutes: a.estimateMinutes,
       completed: false,
-      taskId: null as string | null,
+          taskId: occurrenceId(routine.id, selected, a.id),
       timeSpentSeconds: 0,
     }));
   }, [routine, selected, selectedTasks, selectedSummary]);
@@ -293,7 +293,7 @@ export function RoutineDetailSheet({
                 <div className="min-w-0 flex-1">
                   <SheetTitle className="text-xl leading-tight font-bold">{routine.name}</SheetTitle>
                   <SheetDescription className="text-muted-foreground mt-0.5 text-xs">
-                    {describeSchedule(routine.schedule)} · {describeTime(routine.timeMode, routine.timeBlock, routine.time)}
+                    {routine.visibility === "shared" ? "Shared routine" : "Personal routine"}
                   </SheetDescription>
                 </div>
                 {routine.canManage && (
@@ -373,18 +373,16 @@ export function RoutineDetailSheet({
                         {routine.description || "No description yet."}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-1.5">
-                        <MetaChip icon={<CalendarDays className="h-3.5 w-3.5" />}>{describeSchedule(routine.schedule)}</MetaChip>
-                        <MetaChip icon={<Clock className="h-3.5 w-3.5" />}>
-                          {describeTime(routine.timeMode, routine.timeBlock, routine.time)}
-                        </MetaChip>
                         <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />}>
                           {routine.activities.length} {routine.activities.length === 1 ? "task" : "tasks"}
                         </MetaChip>
                         {totalMinutes > 0 && <MetaChip icon={<Timer className="h-3.5 w-3.5" />}>~ {totalMinutes} min</MetaChip>}
-                        <MetaChip icon={<FolderKanban className="h-3.5 w-3.5" />}>
-                          {routine.projectTitle ?? "No project"}
-                        </MetaChip>
                         <RoutineVisibilityBadge routine={routine} className="rounded-lg px-2.5 py-1" />
+                      </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                        <Aggregate label="Due today" value={selectedSummary?.date === today ? `${selectedSummary.done}/${selectedSummary.total}` : "—"} />
+                        <Aggregate label="Next scheduled task" value={detail?.nextDate ? formatYmd(detail.nextDate, { month: "short", day: "numeric" }) : "—"} />
+                        <Aggregate label="Current progress" value={`${selectedSummary?.done ?? 0}/${selectedSummary?.total ?? 0}`} />
                       </div>
                       {routine.status === "paused" && (
                         <p className="bg-muted text-muted-foreground mt-3 rounded-lg px-3 py-2 text-xs">
@@ -533,22 +531,30 @@ export function RoutineDetailSheet({
                 {tab === "tasks" && (
                   <div className="space-y-3">
                     <p className="text-muted-foreground text-sm">
-                      These activities are created as tasks on each scheduled date. Completing one date never completes another.
+                      Each row is an independent recurring task. Future dates are projected until opened; completing one date never completes another.
                     </p>
                     <ol className="divide-y rounded-xl border">
-                      {routine.activities.map((a, i) => (
-                        <li key={a.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                      {routine.activities.map((a, i) => {
+                        const next = routine.status === "active" && !routine.windowClosed
+                          ? occurrencesBetween(a.schedule ?? routine.schedule, today ?? routine.schedule.startDate, addDaysYmd(today ?? routine.schedule.startDate, 400), null, 1)[0] ?? null
+                          : null;
+                        const taskId = next ? occurrenceId(routine.id, next, a.id) : null;
+                        return (
+                        <li key={a.id} className="flex items-center gap-3 px-3 py-3 text-sm">
                           <span className="text-muted-foreground w-5 shrink-0 text-xs tabular-nums">{i + 1}</span>
-                          <span className="min-w-0 flex-1">{a.title}</span>
-                          {a.estimateMinutes ? (
-                            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{a.estimateMinutes} min</span>
-                          ) : null}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{a.title}</p>
+                            <p className="text-muted-foreground mt-0.5 text-xs">{describeScheduleLong(a.schedule ?? routine.schedule)} · {describeTime(a.timeMode ?? routine.timeMode, a.timeBlock ?? routine.timeBlock, a.time ?? routine.time)}</p>
+                            <p className="text-muted-foreground text-xs">{next ? `Next: ${formatYmd(next)}` : "No upcoming date"}{a.estimateMinutes ? ` · ${a.estimateMinutes} min` : ""}</p>
+                          </div>
+                          {taskId && <Button variant="ghost" size="sm" onClick={() => setOpenTaskId(taskId)}>Open task</Button>}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ol>
                     {routine.canManage && (
                       <Button variant="outline" size="sm" onClick={() => onEdit(routine, 1)}>
-                        <Pencil className="mr-1.5 h-4 w-4" /> Edit activities
+                        <Pencil className="mr-1.5 h-4 w-4" /> Manage tasks
                       </Button>
                     )}
                   </div>
@@ -585,6 +591,15 @@ function MetaChip({ icon, children }: { icon: React.ReactNode; children: React.R
       <span className="text-muted-foreground">{icon}</span>
       {children}
     </span>
+  );
+}
+
+function Aggregate({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-background/70 px-3 py-2">
+      <p className="text-muted-foreground text-[11px]">{label}</p>
+      <p className="mt-0.5 truncate text-sm font-semibold">{value}</p>
+    </div>
   );
 }
 

@@ -533,7 +533,7 @@ async function main() {
     patch: (body: Record<string, unknown>) => oneRoute.PATCH(req(uid, "PATCH", body), rCtx(morning)),
     del: () => oneRoute.DELETE(req(uid, "DELETE"), rCtx(morning)),
     calendar: async () => (await (await calendarRoute.GET(req(uid, "GET", undefined, `http://test.local/x?from=${today}&to=${d(6)}`), saCtx())).json()).entries as { routineId: string }[],
-    activities: async () => (await (await activitiesRoute.GET(req(uid), saCtx())).json()).tasks as { id: string; routineId: string }[],
+    activities: async () => (await (await activitiesRoute.GET(req(uid), saCtx())).json()).tasks as { id: string; routineId: string; occurrenceDate: string; derived?: boolean }[],
     taskGet: () => taskRoute.GET(req(uid), { params: Promise.resolve({ id: tId }) }),
     taskComplete: () => taskCompleteRoute.POST(req(uid, "POST", { completed: true }), { params: Promise.resolve({ id: tId }) }),
     timer: () => timerRoute.POST(req(uid, "POST", { action: "start", taskId: tId })),
@@ -546,6 +546,20 @@ async function main() {
     assert.ok((await o.calendar()).some((e) => e.routineId === morning));
     assert.ok((await o.activities()).some((t) => t.id === tId));
     assert.equal((await o.taskGet()).status, 200);
+  });
+  await check("My Tasks projects upcoming routine work without writing future placeholder documents", async () => {
+    const activities = await asUser("admin1").activities();
+    const future = activities.find((t) => t.routineId === morning && t.occurrenceDate > today && t.derived === true);
+    assert.ok(future, "next routine occurrence is visible before its date");
+    assert.equal((await routineTasks(morning, future!.occurrenceDate)).length, 0, "future projection is not stored");
+  });
+  await check("Task Detail edits update the recurring definition while preserving occurrence history", async () => {
+    const before = (await routineTasks(morning, d(-8)))[0]?.data().title;
+    const res = await taskRoute.PATCH(req("admin1", "PATCH", { title: "Plan the day — updated" }), { params: Promise.resolve({ id: tId }) });
+    assert.equal(res.status, 200, await res.clone().text());
+    const fresh = await svc.loadRoutine(SA, morning);
+    assert.equal(fresh.activities.find((a) => a.id === aIds[1])?.title, "Plan the day — updated");
+    assert.equal((await routineTasks(morning, d(-8)))[0]?.data().title, before);
   });
   await check("missed activities: kept in History with their state, never listed in My Tasks as overdue", async () => {
     const acts = (await (await activitiesRoute.GET(req("admin1"), saCtx())).json()) as { tasks: { occurrenceDate: string; completed: boolean }[] };

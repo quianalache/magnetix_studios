@@ -89,6 +89,36 @@ export function occurrenceTaskId(routineId: string, date: string, activityId: st
   return `${TASK_ID_PREFIX}${routineId}_${date.replace(/-/g, "")}_${activityId}`;
 }
 
+/**
+ * Resolve a routine task ID and materialize its projected occurrence only when
+ * a user opens or mutates it.
+ * My Tasks can therefore show future work without filling routineTasks with
+ * placeholder documents, while the shared Task Detail engine still receives
+ * a normal task document when it needs one.
+ */
+export async function routineForTaskId(taskId: string): Promise<Routine | null> {
+  if (!taskId.startsWith(TASK_ID_PREFIX)) return null;
+  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)$/.exec(taskId);
+  if (!match) return null;
+  const routineId = match[1];
+  const routine = await getAdminDb().doc(`routines/${routineId}`).get();
+  if (!routine.exists) return null;
+  return { ...(routine.data() as Omit<Routine, "id">), id: routine.id };
+}
+
+export async function materializeRoutineTaskById(taskId: string, viewerUid?: string): Promise<boolean> {
+  const r = await routineForTaskId(taskId);
+  if (!r || (viewerUid && !canViewRoutine(r, viewerUid))) return false;
+  const match = /^rt_(.+)_(\d{8})_(a[0-9a-f]+)$/.exec(taskId);
+  if (!match) return false;
+  const compactDate = match[2];
+  const date = `${compactDate.slice(0, 4)}-${compactDate.slice(4, 6)}-${compactDate.slice(6, 8)}`;
+  const tz = await subAccountTimeZone(r.subAccountId);
+  if (r.status !== "active" || !r.activities.some((a) => a.id === match[3] && occursOn(a.schedule ?? r.schedule, date))) return false;
+  await ensureOccurrence(r, date, tz);
+  return (await taskDocRef(taskId).get()).exists;
+}
+
 function newActivityId(): string {
   return `a${randomBytes(4).toString("hex")}`;
 }
@@ -968,11 +998,55 @@ export async function listRoutineActivities(subAccountId: string, viewer: Routin
   }
   const ids = new Set(routines.map((r) => r.id));
   const docs = await occurrenceTasksInRange(subAccountId, addDaysYmd(today, -30), addDaysYmd(today, EARLY_COMPLETION_DAYS));
-  const tasks = docs
+  const actual = docs
     .filter((d) => ids.has(d.data().routineId))
     .filter((d) => d.data().completed === true || d.data().occurrenceDate >= today)
     .map((d) => taskJson(d.id, d.data()));
-  return { today, tasks };
+
+  // Project the next week's work from definitions. These rows intentionally
+  // do not write Firestore documents; generated occurrences remain a server-
+  // owned record of dates that have arrived or were explicitly opened.
+  const actualIds = new Set(actual.map((t) => t.id));
+  const projected: Record<string, unknown>[] = [];
+  for (const r of routines) {
+    if (r.status !== "active") continue;
+    const w = await projectWindow(r, tz);
+    for (const activity of r.activities) {
+      for (let i = 0; i <= EARLY_COMPLETION_DAYS; i++) {
+        const date = addDaysYmd(today, i);
+        const id = occurrenceTaskId(r.id, date, activity.id);
+        if (actualIds.has(id) || !runsOn(r, w, date, activity)) continue;
+        const timing = activityTiming(r, activity, date, tz);
+        projected.push({
+          id,
+          title: activity.title,
+          notes: activity.notes,
+          dueAt: timing.dueAt.toISOString(),
+          completed: false,
+          completedAt: null,
+          contactId: null,
+          dealId: null,
+          eventId: null,
+          timeBlock: timing.timeBlock,
+          agencyId: r.agencyId,
+          subAccountId: r.subAccountId,
+          createdByUid: r.ownerUid ?? r.createdByUid,
+          routineId: r.id,
+          routineName: r.name,
+          routineActivityId: activity.id,
+          occurrenceDate: date,
+          ownerUid: r.ownerUid ?? r.createdByUid,
+          status: "todo",
+          priority: activity.priority ?? null,
+          tags: activity.tags ?? ["routine"],
+          estimateMinutes: activity.estimateMinutes,
+          timeSpentSeconds: 0,
+          derived: true,
+        });
+      }
+    }
+  }
+  return { today, tasks: [...actual, ...projected] };
 }
 
 // ── cron ─────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { isRoutineTaskId, taskDocRef } from "@/lib/server/task-ref";
-import { canViewRoutineTask } from "@/lib/server/routine-access";
+import { canManageRoutine, canViewRoutineTask } from "@/lib/server/routine-access";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { loadEffectiveTerritoryScope } from "@/lib/auth/territory-filter";
 import { createTaskServerSide, setTaskCompletedServerSide } from "@/lib/server/tasks-service";
@@ -427,6 +427,39 @@ export async function updateFullTask(opts: {
   );
   const has = (k: string) => keys.includes(k);
 
+  if (task.routineId && ["title", "notes", "description", "estimateMinutes", "priority", "tags"].some(has)) {
+    if (opts.actor.kind !== "staff") throw new TaskInputError("Only staff can edit routine task definitions.", 403);
+    const routineRef = db.doc(`routines/${task.routineId}`);
+    const routineSnap = await routineRef.get();
+    const routine = routineSnap.data();
+    if (!routine || routine.subAccountId !== task.subAccountId) throw new TaskInputError("Routine not found", 404);
+    const member = await db.doc(`subAccounts/${task.subAccountId}/subAccountMembers/${opts.actor.uid}`).get();
+    if (!canManageRoutine(routine, opts.actor.uid, member.data()?.role ?? null)) {
+      throw new TaskInputError("Only the routine owner can edit its recurring task definition.", 403);
+    }
+    const activities = Array.isArray(routine.activities) ? [...routine.activities] : [];
+    const index = activities.findIndex((a) => a?.id === task.routineActivityId);
+    if (index < 0) throw new TaskInputError("Routine task definition not found", 404);
+    const next = { ...activities[index] };
+    if (has("title")) {
+      const title = str(patch.title, 200);
+      if (!title) throw new TaskInputError("Title can't be empty");
+      next.title = title;
+    }
+    if (has("notes") || has("description")) next.notes = str(patch.notes ?? patch.description);
+    if (has("estimateMinutes")) next.estimateMinutes = typeof patch.estimateMinutes === "number" && Number.isFinite(patch.estimateMinutes)
+      ? Math.min(1440, Math.max(0, Math.round(patch.estimateMinutes))) : null;
+    if (has("priority")) {
+      next.priority =
+        typeof patch.priority === "string" && PRIORITY_SET.has(patch.priority as TaskPriority)
+          ? patch.priority
+          : null;
+    }
+    if (has("tags")) next.tags = parseTags(patch.tags);
+    activities[index] = next;
+    await routineRef.set({ activities, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+  }
+
   // Routine activities follow their routine's schedule: the date, repeat
   // and rollover settings belong to the routine, not the single occurrence.
   if (task.routineId && ["dueAt", "recurrence", "autoRollover"].some(has)) {
@@ -435,7 +468,8 @@ export async function updateFullTask(opts: {
     );
   }
 
-  if (has("title")) {
+  const preserveHistory = task.routineId && task.completed === true;
+  if (has("title") && !preserveHistory) {
     const t = str(patch.title, 200);
     if (!t) throw new TaskInputError("Title can't be empty");
     if (t !== task.title) {
@@ -443,7 +477,7 @@ export async function updateFullTask(opts: {
       events.push({ type: "renamed", summary: `Renamed to “${t}”`, detail: { from: task.title } });
     }
   }
-  if (has("notes") || has("description")) data.notes = str(patch.notes ?? patch.description);
+  if ((has("notes") || has("description")) && !preserveHistory) data.notes = str(patch.notes ?? patch.description);
   if (has("dueAt")) {
     const next = patch.dueAt === null ? null : parseDate(patch.dueAt);
     const prev = toDate(task.dueAt);
@@ -462,7 +496,7 @@ export async function updateFullTask(opts: {
         ? patch.timeBlock
         : null;
   }
-  if (has("priority")) {
+  if (has("priority") && !preserveHistory) {
     const p =
       typeof patch.priority === "string" && PRIORITY_SET.has(patch.priority as TaskPriority)
         ? patch.priority
@@ -523,8 +557,8 @@ export async function updateFullTask(opts: {
       events.push({ type: "assignee_changed", summary: cid ? "Assigned the task to the client" : "Unassigned the task", detail: { assigneeContactId: cid } });
     }
   }
-  if (has("tags")) data.tags = parseTags(patch.tags);
-  if (has("estimateMinutes") && !opts.fromClient) {
+  if (has("tags") && !preserveHistory) data.tags = parseTags(patch.tags);
+  if (has("estimateMinutes") && !opts.fromClient && !preserveHistory) {
     const e = patch.estimateMinutes;
     data.estimateMinutes =
       typeof e === "number" && Number.isFinite(e) ? Math.min(100_000, Math.max(0, Math.round(e))) : null;

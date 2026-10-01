@@ -2,12 +2,17 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { taskDocRef } from "@/lib/server/task-ref";
+import { isRoutineTaskId, taskDocRef } from "@/lib/server/task-ref";
 import {
   deleteFullTask,
   requireTaskAccess,
   updateFullTask,
 } from "@/lib/server/project-tasks-service";
+import {
+  materializeRoutineTaskById,
+  routineForTaskId,
+} from "@/lib/server/routines-service";
+import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { taskJson, toJson } from "@/lib/server/task-serialize";
 import { readJson, taskErrorResponse } from "@/lib/server/task-route-helpers";
 import {
@@ -29,6 +34,15 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
+  // Future routine rows are projected in My Tasks and are materialized only
+  // when opened, preserving the server-only collection and avoiding placeholder writes.
+  if (isRoutineTaskId(id)) {
+    const candidate = await routineForTaskId(id);
+    if (candidate) {
+      const member = await requireSubAccountMember(request, candidate.subAccountId);
+      if (!(member instanceof NextResponse)) await materializeRoutineTaskById(id, member.uid);
+    }
+  }
   const guard = await requireTaskAccess(request, id);
   if (guard instanceof NextResponse) return guard;
   const { access, task } = guard;
@@ -147,6 +161,13 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
+  if (isRoutineTaskId(id)) {
+    const candidate = await routineForTaskId(id);
+    if (candidate) {
+      const member = await requireSubAccountMember(request, candidate.subAccountId);
+      if (!(member instanceof NextResponse)) await materializeRoutineTaskById(id, member.uid);
+    }
+  }
   const guard = await requireTaskAccess(request, id);
   if (guard instanceof NextResponse) return guard;
   const body = await readJson(request);

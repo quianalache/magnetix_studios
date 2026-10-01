@@ -99,7 +99,7 @@ export function RoutineIcon({
   );
 }
 
-/** Thin progress bar in the routine's colour. */
+/** High-contrast shared progress treatment; the routine colour remains on the icon/card accents. */
 export function RoutineProgressBar({
   done,
   total,
@@ -112,17 +112,18 @@ export function RoutineProgressBar({
   className?: string;
 }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
-  const hex = routineHex(color);
+  void color;
+  const complete = total > 0 && done >= total;
   return (
     <div
       className={cn("h-1.5 w-full overflow-hidden rounded-full", className)}
-      style={{ background: `color-mix(in oklab, ${hex} 14%, var(--muted))` }}
+      style={{ background: "color-mix(in oklab, var(--foreground) 18%, var(--muted))" }}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={total}
       aria-valuenow={done}
     >
-      <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${pct}%`, background: hex }} />
+      <div className="h-full rounded-full transition-[width] duration-300" style={{ width: `${pct}%`, background: complete ? "#22c55e" : "#9EDBDD" }} />
     </div>
   );
 }

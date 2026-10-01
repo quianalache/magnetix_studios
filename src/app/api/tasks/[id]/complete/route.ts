@@ -6,6 +6,7 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { setTaskCompletedServerSide } from "@/lib/server/tasks-service";
 import { requireTaskAccess } from "@/lib/server/project-tasks-service";
 import { isRoutineTaskId } from "@/lib/server/task-ref";
+import { materializeRoutineTaskById, routineForTaskId } from "@/lib/server/routines-service";
 
 /**
  * Toggle a task's completed flag server-side so `task.completed` fires (on
@@ -21,6 +22,13 @@ export async function POST(
   // routine's audience — checked by requireTaskAccess. Ordinary tasks keep
   // the original lookup below, unchanged.
   const routine = isRoutineTaskId(id);
+  if (routine) {
+    const candidate = await routineForTaskId(id);
+    if (candidate) {
+      const member = await requireSubAccountMember(request, candidate.subAccountId);
+      if (!(member instanceof NextResponse)) await materializeRoutineTaskById(id, member.uid);
+    }
+  }
   let data: FirebaseFirestore.DocumentData;
   let access: Awaited<ReturnType<typeof requireSubAccountMember>>;
   if (routine) {

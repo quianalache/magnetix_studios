@@ -184,7 +184,7 @@ function scheduleBody(d: ScheduleDraft) {
 }
 
 function toBody(d: Draft, canShare: boolean) {
-  const first = d.activities.find((a) => a.committed && a.title.trim()) ?? blankActivity();
+  const first = d.activities.find((a) => a.title.trim()) ?? blankActivity();
   return {
     ...(canShare ? { visibility: d.visibility } : {}),
     name: d.name.trim(),
@@ -192,7 +192,7 @@ function toBody(d: Draft, canShare: boolean) {
     icon: d.icon,
     color: d.color,
     activities: d.activities
-      .filter((a) => a.committed && a.title.trim())
+      .filter((a) => a.title.trim())
       .map((a) => ({
         id: a.id,
         title: a.title.trim(),
@@ -430,7 +430,7 @@ export function RoutineEditorDialog({
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  const validActivities = draft.activities.filter((a) => a.committed && a.title.trim());
+  const validActivities = draft.activities.filter((a) => a.title.trim());
   const totalMinutes = validActivities.reduce((s, a) => s + (Number(a.estimate) || 0), 0);
   const taskErrors = validActivities.map((a) => {
     try {
@@ -445,7 +445,7 @@ export function RoutineEditorDialog({
   const stepError: Record<Step, string | null> = {
     0: draft.name.trim() ? null : "Give the routine a title.",
     1: validActivities.length
-      ? taskErrors.find(Boolean) ?? (draft.activities.some((a) => !a.committed && a.title.trim()) ? "Click Add Task to save the new task." : null)
+      ? taskErrors.find(Boolean) ?? null
       : "Add at least one task.",
     2: null,
   };
@@ -509,7 +509,9 @@ export function RoutineEditorDialog({
       }
       setDraft((d) => ({
         ...d,
-        activities: d.activities.map((a, i) => (i === pendingIndex ? { ...a, committed: true } : a)),
+        activities: d.activities
+          .map((a, i) => (i === pendingIndex ? { ...a, committed: true } : a))
+          .concat(blankActivity()),
       }));
       return;
     }
@@ -686,26 +688,29 @@ export function RoutineEditorDialog({
                     <li key={a.key} className="bg-card rounded-xl border p-2">
                       <div className="flex items-center gap-2">
                       <GripVertical className="text-muted-foreground/50 hidden h-4 w-4 shrink-0 sm:block" aria-hidden />
-                      <Input
-                        id={`routine-activity-${a.key}`}
-                        aria-label={`Task ${i + 1}`}
-                        value={a.title}
-                        maxLength={200}
-                        placeholder="e.g. Review business finances"
-                        className="min-w-0 flex-1 border-0 shadow-none focus-visible:ring-0"
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            activities: d.activities.map((x) => (x.key === a.key ? { ...x, title: e.target.value } : x)),
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && a.title.trim() && !a.committed) {
-                            e.preventDefault();
-                            addTask();
+                      <div className="min-w-0 flex-1">
+                        <Label htmlFor={`routine-activity-${a.key}`} className="text-xs font-semibold">Task name <span className="text-destructive">*</span></Label>
+                        <Input
+                          id={`routine-activity-${a.key}`}
+                          aria-label={`Task name ${i + 1}`}
+                          value={a.title}
+                          maxLength={200}
+                          placeholder="e.g. Review business finances"
+                          className="mt-1 min-w-0 border-0 px-0 shadow-none focus-visible:ring-0"
+                          onChange={(e) =>
+                            setDraft((d) => ({
+                              ...d,
+                              activities: d.activities.map((x) => (x.key === a.key ? { ...x, title: e.target.value } : x)),
+                            }))
                           }
-                        }}
-                      />
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && a.title.trim() && !a.committed) {
+                              e.preventDefault();
+                              addTask();
+                            }
+                          }}
+                        />
+                      </div>
                       <label className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
                         <Input
                           id={`routine-activity-est-${a.key}`}
@@ -753,7 +758,9 @@ export function RoutineEditorDialog({
                       </div>
                       </div>
                       <div className="mt-2">
+                        <Label htmlFor={`routine-activity-description-${a.key}`} className="text-muted-foreground text-xs">Description (optional)</Label>
                         <Textarea
+                          id={`routine-activity-description-${a.key}`}
                           aria-label={`Description for task ${i + 1}`}
                           value={a.description}
                           maxLength={2000}
@@ -789,7 +796,7 @@ export function RoutineEditorDialog({
                     disabled={draft.activities.length >= MAX_ROUTINE_ACTIVITIES}
                     onClick={addTask}
                   >
-                    <Plus className="mr-1.5 h-4 w-4" /> Add Task
+                    <Plus className="mr-1.5 h-4 w-4" /> Add another task
                   </Button>
                   <span className="text-muted-foreground text-xs tabular-nums">
                     {validActivities.length} {validActivities.length === 1 ? "task" : "tasks"}
