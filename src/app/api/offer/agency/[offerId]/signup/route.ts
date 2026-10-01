@@ -12,7 +12,6 @@ import {
 import { ensurePersonIdentity } from "@/lib/server/person-identity-service";
 import { signPersonSessionToken } from "@/lib/server/person-auth";
 import { setPersonSessionCookie } from "@/lib/server/person-session";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ off
   await setPersonSessionCookie(token);
 
   const firstCourseId = offer.courseIds[0];
-  const successUrl = firstCourseId ? courseEntryHref(`/course/agency/${firstCourseId}/classroom`) : "/my";
+  const successUrl = firstCourseId ? `/course/agency/${firstCourseId}/classroom` : "/my";
 
   const existingEnrollment = firstCourseId ? await getAgencyStandaloneEnrollment(agencyId, firstCourseId, personId) : null;
   const alreadyPaid = await hasPaidAgencyCourseOffer(agencyId, offerId, personId);

@@ -15,7 +15,6 @@ import { setMemberSessionCookie } from "@/lib/community/member-session";
 import { normalizeAttribution } from "@/lib/attribution";
 import { bumpAttributionVisit } from "@/lib/attribution-visits";
 import type { ContactAttribution } from "@/types/contacts";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +100,7 @@ export async function POST(
 
   const firstCourseId = offer.courseIds[0];
   const successUrl = firstCourseId
-    ? courseEntryHref(`/course/${saId}/${firstCourseId}/classroom`)
+    ? `/course/${saId}/${firstCourseId}/classroom`
     : `/portal/${saId}`;
 
   // Already enrolled in the bundle's first course (repeat free-join, or a

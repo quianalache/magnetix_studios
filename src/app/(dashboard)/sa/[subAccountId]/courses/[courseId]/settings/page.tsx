@@ -85,8 +85,8 @@ export default function CourseSettingsExtendedPage({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
 
-  const [autoplayNext, setAutoplayNext] = useState(true);
-  const [autoplayFirst, setAutoplayFirst] = useState(true);
+  const [autoplayNext, setAutoplayNext] = useState(false);
+  const [autoplayFirst, setAutoplayFirst] = useState(false);
   const [autoComplete, setAutoComplete] = useState(true);
   const [autoplayVideos, setAutoplayVideos] = useState(false);
 

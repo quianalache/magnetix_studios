@@ -12,7 +12,6 @@ import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { sanitizeLessonHtml } from "@/lib/community/lesson-html";
 import { CourseSalesPageView } from "@/components/standalone-courses/course-sales-page-view";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +65,7 @@ export default async function CourseSalesPage({
     member &&
     (await checkStandaloneCourseEntitlementForMember(course, member.id))
   ) {
-    redirect(courseEntryHref(`/course/${saId}/${courseId}/classroom`));
+    redirect(`/course/${saId}/${courseId}/classroom`);
   }
 
   const outline = await getCurriculumOutline(saId, courseId);

@@ -19,7 +19,6 @@ import {
   type CommunityLinkBase,
 } from "@/lib/community/routes";
 import type { GroupMembership } from "@/types/community";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * Community Classroom's combined catalog — native Community Courses
@@ -160,8 +159,10 @@ export async function listClassroomCatalogForMember(opts: {
       // this group's shell); locked+purchasable -> the Product's own
       // public sales page, its existing purchase destination.
       const unlockedHref = firstLessonId
-      ? courseEntryHref(
-            communityLearningProductHref(opts.linkBase, opts.groupSlug, course.id),
+      ? communityLearningProductHref(
+            opts.linkBase,
+            opts.groupSlug,
+            course.id,
           )
         : null;
 

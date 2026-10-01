@@ -38,7 +38,6 @@ import type {
   StandaloneEnrollment,
   StandaloneLesson,
 } from "@/types/standalone-courses";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * Agency Standalone Courses — the agency-scope sibling of
@@ -764,7 +763,7 @@ async function notifyAgencyCourseAccessGranted(opts: { agencyId: string; courseI
     objectId: opts.courseId,
     sourceObjectId: opts.courseId,
     title: `You now have access to ${courseName}`,
-    destination: courseEntryHref(`/course/agency/${opts.courseId}/classroom`),
+    destination: `/course/agency/${opts.courseId}/classroom`,
     meta: { courseName, businessName },
   });
 }

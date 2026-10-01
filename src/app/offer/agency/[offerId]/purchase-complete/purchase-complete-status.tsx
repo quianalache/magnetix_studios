@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 45_000;
@@ -43,7 +42,7 @@ export function AgencyOfferPurchaseCompleteStatus({
   const [upsell, setUpsell] = useState<OneClickUpsell | null>(null);
   const [upsellBusy, setUpsellBusy] = useState(false);
   const startedAt = useRef(Date.now());
-  const destination = firstCourseId ? courseEntryHref(`/course/agency/${firstCourseId}/classroom`) : "/my";
+  const destination = firstCourseId ? `/course/agency/${firstCourseId}/classroom` : "/my";
 
   useEffect(() => {
     let cancelled = false;

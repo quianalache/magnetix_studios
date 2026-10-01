@@ -14,7 +14,7 @@ import type { CourseTheme } from "@/types/course-theme";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import type { StandaloneCourseCurriculumSection } from "@/types/standalone-courses";
 import type { Member } from "@/types/community";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
+import { startLearningHref } from "@/lib/standalone-courses/course-navigation";
 
 type CheckoutMember = Pick<Member, "email" | "displayName" | "phone">;
 type CourseSalesCourse = Pick<
@@ -359,7 +359,7 @@ export function CourseSalesPageView({
               <div id="enroll">
                 {enrollment ? (
                   <a
-                    href={courseEntryHref(`/course/${saId}/${courseId}/classroom`)}
+                    href={startLearningHref(`/course/${saId}/${courseId}/classroom`)}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold text-white"
                     style={{ backgroundColor: theme.hero.buttonColor }}
                   >

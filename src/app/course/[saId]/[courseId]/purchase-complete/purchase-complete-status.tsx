@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 45_000;
@@ -33,7 +32,7 @@ export function PurchaseCompleteStatus({
         const data = (await res.json().catch(() => ({}))) as { paid?: boolean };
         if (cancelled) return;
         if (data.paid) {
-          router.push(courseEntryHref(`/course/${saId}/${courseId}/classroom`));
+          router.push(`/course/${saId}/${courseId}/classroom`);
           return;
         }
       } catch {

@@ -13,7 +13,6 @@ import { startStandaloneCourseStripeCheckoutServerSide } from "@/lib/server/stan
 import { ensureMember } from "@/lib/community/member-account";
 import { signMemberSessionToken } from "@/lib/community/member-auth";
 import { setMemberSessionCookie } from "@/lib/community/member-session";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +95,7 @@ export async function POST(
   const token = signMemberSessionToken(saId, member.id, member.email);
   await setMemberSessionCookie(token);
 
-  const classroomUrl = courseEntryHref(`/course/${saId}/${courseId}/classroom`);
+  const classroomUrl = `/course/${saId}/${courseId}/classroom`;
 
   // Already enrolled (repeat free-join, or a returning paid buyer re-entering
   // the popup instead of using the magic-link login) — skip straight in,

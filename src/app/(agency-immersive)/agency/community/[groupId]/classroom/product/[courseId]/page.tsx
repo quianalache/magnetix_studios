@@ -6,7 +6,7 @@ import { CommunityShell } from "@/components/community/community-shell";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
 import { CommunityCourseBackLink, communityClassroomLabel } from "@/components/community/classroom/community-course-back-link";
 import { useAuth } from "@/hooks/use-auth";
-import { COURSE_ENTRY_PARAM, resolveCourseEntryLessonId } from "@/lib/standalone-courses/course-navigation";
+import { START_LEARNING_PARAM, resolveStartLearningLessonId } from "@/lib/standalone-courses/course-navigation";
 import type { CommunityGroup } from "@/types/community";
 import type { StandaloneCourse } from "@/types/standalone-courses";
 import type { PlayerLesson, PlayerSection } from "@/components/standalone-courses/standalone-lesson-player";
@@ -29,7 +29,7 @@ export default function AgencyEmbeddedProductCoursePage({
   const [data, setData] = useState<ResponseShape | null>(null);
   const [failed, setFailed] = useState(false);
   const router = useRouter();
-  const isEntry = useSearchParams().get(COURSE_ENTRY_PARAM) === "1";
+  const isStartLearning = useSearchParams().get(START_LEARNING_PARAM) === "1";
 
   useEffect(() => {
     if (agencyRole !== "owner") return;
@@ -46,23 +46,23 @@ export default function AgencyEmbeddedProductCoursePage({
   }, [agencyRole, groupId, courseId]);
 
   // "Automatically play first lesson" — same shared rule as every other
-  // course homepage; only a learning-entry link (?enter=1) redirects.
-  const entryLessonId = data
-    ? resolveCourseEntryLessonId({
-        isEntry,
+  // course homepage; only an explicit Start / Continue learning action (?start=1) redirects.
+  const startLessonId = data
+    ? resolveStartLearningLessonId({
+        isStartLearning,
         learningExperience: data.course.learningExperience,
         sections: data.sections,
         availableLessons: data.lessons,
       })
     : null;
   useEffect(() => {
-    if (entryLessonId) router.replace(`/agency/community/${groupId}/classroom/product/${courseId}/${entryLessonId}`);
-  }, [entryLessonId, router, groupId, courseId]);
+    if (startLessonId) router.replace(`/agency/community/${groupId}/classroom/product/${courseId}/${startLessonId}`);
+  }, [startLessonId, router, groupId, courseId]);
 
   if (loading) return null;
   if (agencyRole !== "owner") return <div className="p-8 text-center text-sm">Community is managed by the agency owner.</div>;
   if (failed) return <div className="p-8 text-center text-sm">Course not found.</div>;
-  if (!group || !data || entryLessonId) return <div className="p-8" />;
+  if (!group || !data || startLessonId) return <div className="p-8" />;
   const catalog = `/agency/community/${groupId}/classroom`;
   const homeHref = `${catalog}/product/${courseId}`;
   return (

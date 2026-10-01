@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { communityLearningProductHref, type CommunityLinkBase } from "@/lib/community/routes";
 import { CommunityShell } from "@/components/community/community-shell";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
-import { resolveCourseEntryLessonId } from "@/lib/standalone-courses/course-navigation";
+import { resolveStartLearningLessonId } from "@/lib/standalone-courses/course-navigation";
 import { CommunityCourseBackLink, communityClassroomLabel } from "@/components/community/classroom/community-course-back-link";
 import {
   getAgencyStandaloneCourse,
@@ -26,8 +26,8 @@ export async function EmbeddedAgencyProductCourse(opts: {
   groupSlug: string;
   catalogHref: string;
   shellExtra?: { embedded: false };
-  /** Arrived through a learning-entry link (see course-navigation.ts). */
-  isEntry?: boolean;
+  /** Arrived through an explicit Start / Continue learning action (see course-navigation.ts). */
+  isStartLearning?: boolean;
 }) {
   const { agencyId, groupId, courseId, group, personId, membership, linkBase, groupSlug, catalogHref, shellExtra } = opts;
   const course = await getAgencyStandaloneCourse(agencyId, courseId);
@@ -40,16 +40,17 @@ export async function EmbeddedAgencyProductCourse(opts: {
   const lessons = filterAgencyLessonsForEnrollment(tree.lessons, enrollment);
   if (lessons.length === 0) redirect(catalogHref);
   const productHref = communityLearningProductHref(linkBase, groupSlug, courseId);
-  // "Automatically play first lesson": a Classroom catalog entry
-  // (`isEntry`) opens the first lesson this member can open; the plain
-  // course URL still renders the customized homepage.
-  const entryLessonId = resolveCourseEntryLessonId({
-    isEntry: opts.isEntry === true,
+  // "Automatically play first lesson": only an explicit Start / Continue
+  // learning action (`isStartLearning`) may open the first lesson this
+  // member can open. Classroom catalog cards link to the plain course URL,
+  // which always renders the customized homepage.
+  const startLessonId = resolveStartLearningLessonId({
+    isStartLearning: opts.isStartLearning === true,
     learningExperience: course.learningExperience,
     sections: tree.sections,
     availableLessons: lessons,
   });
-  if (entryLessonId) redirect(`${productHref}/${entryLessonId}`);
+  if (startLessonId) redirect(`${productHref}/${startLessonId}`);
 
   const targetIds = new Set(
     [...course.theme.body, ...course.theme.sidebar].flatMap((block) =>

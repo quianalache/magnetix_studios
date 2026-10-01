@@ -7,7 +7,7 @@ import {
 } from "@/lib/server/standalone-course-service";
 import { getCourseOffer } from "@/lib/server/course-offer-service";
 import { CourseHomeView } from "@/components/standalone-courses/course-home-view";
-import { isCourseEntryRequest, resolveCourseEntryLessonId } from "@/lib/standalone-courses/course-navigation";
+import { isStartLearningRequest, resolveStartLearningLessonId } from "@/lib/standalone-courses/course-navigation";
 import type { CrossSellTargetInfo } from "@/components/standalone-courses/theme-blocks";
 
 export const dynamic = "force-dynamic";
@@ -51,16 +51,16 @@ export default async function StandaloneCourseHomePage({
   const enrollment = await getStandaloneEnrollment(saId, courseId, member.id);
   const visibleLessons = filterLessonsForEnrollment(tree.lessons, enrollment);
 
-  // "Automatically play first lesson": a learning-entry link (?enter=1)
-  // opens the first lesson this student can actually open. The plain URL
-  // always renders this homepage.
-  const entryLessonId = resolveCourseEntryLessonId({
-    isEntry: isCourseEntryRequest(await searchParams),
+  // "Automatically play first lesson": only an explicit Start / Continue
+  // learning action (?start=1) may open the first lesson this student can
+  // open. Entering the course (the plain URL) always renders this homepage.
+  const startLessonId = resolveStartLearningLessonId({
+    isStartLearning: isStartLearningRequest(await searchParams),
     learningExperience: course.learningExperience,
     sections: tree.sections,
     availableLessons: visibleLessons,
   });
-  if (entryLessonId) redirect(`/course/${saId}/${courseId}/classroom/${entryLessonId}`);
+  if (startLessonId) redirect(`/course/${saId}/${courseId}/classroom/${startLessonId}`);
 
   // Batch-resolve every Cross Sell block's target offer, same pattern as
   // the sales page.

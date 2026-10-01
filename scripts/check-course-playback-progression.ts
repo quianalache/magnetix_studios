@@ -2,7 +2,9 @@
  * Course playback + progression — regression checks for the three course
  * settings that must stay distinct:
  *   - "Autoplay lesson videos"        (video starts on load — previews too)
- *   - "Automatically play first lesson" (learning-entry opens first lesson)
+ *   - "Automatically play first lesson" (an explicit Start / Continue
+ *     learning action may open the first lesson; entering a course — any
+ *     catalog click — always opens its homepage)
  *   - "Automatically play next lesson"  (completion advances to next lesson)
  *
  * EMULATOR ONLY (Firestore + Auth, `demo-*` project, no production
@@ -24,16 +26,18 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { viaDispatcher } from "./_via-dispatcher";
 import {
-  COURSE_ENTRY_PARAM,
+  START_LEARNING_PARAM,
   autoAdvanceEnabled,
-  courseEntryHref,
-  isCourseEntryRequest,
+  startLearningHref,
+  isStartLearningRequest,
   lessonToAdvanceTo,
   nextAvailableLessonId,
   orderLessonsByCurriculum,
-  resolveCourseEntryLessonId,
+  resolveStartLearningLessonId,
 } from "../src/lib/standalone-courses/course-navigation";
 import { applyLessonVideoAutoplay } from "../src/lib/standalone-courses/lesson-video";
+import { DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE } from "../src/types/standalone-courses";
+import { execFileSync } from "node:child_process";
 import { embedUrlFor } from "../src/lib/community/video-embed";
 
 const PROJECT = process.env.GCLOUD_PROJECT || "demo-course-progression";
@@ -109,6 +113,10 @@ async function seed() {
     await w(`agencies/${AG}/standaloneCourses/${id}`, { title: id, published: true, agencyId: AG, learningExperience: le({ autoplayLessonVideos: auto }) });
     await w(`agencies/${AG}/standaloneCourses/${id}/lessons/l1`, lesson("l1", { hostedVideoId: "av1", order: 0 }));
   }
+
+  // No saved learningExperience at all — reads the shared defaults.
+  await w(`subAccounts/${SA}/standaloneCourses/cDefault`, { title: "cDefault", published: true, agencyId: AG, updatedAt: "keep-me" });
+  await w(`subAccounts/${SA}/standaloneCourses/cDefault/lessons/l1`, lesson("l1", { hostedVideoId: "v1", order: 0 }));
 
   // Curriculum course for entry/next rules. Section B is displayed FIRST
   // even though its lessons have higher `order` values (sections were
@@ -186,21 +194,22 @@ async function main() {
   await check("I. restricted lessons are never candidates (unpublished + chart-gated filtered out)", () => {
     assert.deepEqual(ordered, ["b1", "a1", "a2", "loose"]);
   });
-  await check("D. first-lesson OFF → entry renders the homepage", () => {
-    assert.equal(resolveCourseEntryLessonId({ isEntry: true, learningExperience: { autoplayFirstLesson: false }, sections: tree.sections, availableLessons: available }), null);
+  await check("D. first-lesson OFF → Start Learning renders the homepage", () => {
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: { autoplayFirstLesson: false }, sections: tree.sections, availableLessons: available }), null);
   });
-  await check("E. first-lesson ON + learning-entry → first AVAILABLE lesson in curriculum order", () => {
-    assert.equal(resolveCourseEntryLessonId({ isEntry: true, learningExperience: tree.course.learningExperience, sections: tree.sections, availableLessons: available }), "b1");
+  await check("E. first-lesson ON + explicit Start Learning → first AVAILABLE lesson in curriculum order", () => {
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: tree.course.learningExperience, sections: tree.sections, availableLessons: available }), "b1");
   });
-  await check("F. direct homepage URL (no entry flag) stays the homepage even with first-lesson ON", () => {
-    assert.equal(resolveCourseEntryLessonId({ isEntry: false, learningExperience: { autoplayFirstLesson: true }, sections: tree.sections, availableLessons: available }), null);
-    assert.equal(isCourseEntryRequest({}), false);
-    assert.equal(isCourseEntryRequest({ [COURSE_ENTRY_PARAM]: "1" }), true);
-    assert.equal(courseEntryHref("/course/s/c/classroom"), "/course/s/c/classroom?enter=1");
-    assert.equal(courseEntryHref("/x?a=1"), "/x?a=1&enter=1");
+  await check("F. entering a course (plain URL, no Start flag) stays the homepage even with first-lesson ON", () => {
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: false, learningExperience: { autoplayFirstLesson: true }, sections: tree.sections, availableLessons: available }), null);
+    assert.equal(isStartLearningRequest({}), false);
+    assert.equal(isStartLearningRequest({ [START_LEARNING_PARAM]: "1" }), true);
+    assert.equal(isStartLearningRequest({ enter: "1" }), false, "the retired ?enter flag does nothing");
+    assert.equal(startLearningHref("/course/s/c/classroom"), "/course/s/c/classroom?start=1");
+    assert.equal(startLearningHref("/x?a=1"), "/x?a=1&start=1");
   });
   await check("first-lesson ON with no available lesson → homepage, never a locked lesson", () => {
-    assert.equal(resolveCourseEntryLessonId({ isEntry: true, learningExperience: { autoplayFirstLesson: true }, sections: tree.sections, availableLessons: [] }), null);
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: { autoplayFirstLesson: true }, sections: tree.sections, availableLessons: [] }), null);
   });
   await check("G. next-lesson OFF → completion never navigates", () => {
     assert.equal(lessonToAdvanceTo({ autoAdvance: autoAdvanceEnabled({ autoplayNextLesson: false }), alreadyAdvanced: false, orderedLessonIds: ordered, completedLessonId: "b1" }), null);
@@ -217,7 +226,7 @@ async function main() {
   });
   await check("absent settings never switch a behavior on", () => {
     assert.equal(autoAdvanceEnabled(undefined), false);
-    assert.equal(resolveCourseEntryLessonId({ isEntry: true, learningExperience: null, sections: [], availableLessons: [{ id: "x", sectionId: null }] }), null);
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: null, sections: [], availableLessons: [{ id: "x", sectionId: null }] }), null);
   });
 
   // ── Wiring: every real surface uses the shared rules (no competing renderers) ──
@@ -238,19 +247,107 @@ async function main() {
     "src/components/community/classroom/embedded-agency-product-course.tsx",
     "src/app/(agency-immersive)/agency/community/[groupId]/classroom/product/[courseId]/page.tsx",
   ];
-  await check("N/O. every course homepage (standalone + Community, tenant + Agency) applies the shared entry rule", () => {
-    for (const p of homepages) assert.match(src(p), /resolveCourseEntryLessonId\(/, p);
+  await check("N/O. every course homepage (standalone + Community, tenant + Agency) applies the shared Start Learning rule", () => {
+    for (const p of homepages) assert.match(src(p), /resolveStartLearningLessonId\(/, p);
   });
-  await check("O. Community catalog cards + custom-domain mirror carry the entry flag", () => {
-    assert.match(src("src/lib/server/classroom-catalog-service.ts"), /courseEntryHref\(\s*communityLearningProductHref/);
-    assert.match(src("src/lib/server/agency-community-classroom-service.ts"), /courseEntryHref\(communityLearningProductHref/);
+  // Owner decision 2026-10-01: the course homepage is ALWAYS the entry point.
+  const plainEntryLinks = [
+    "src/lib/server/classroom-catalog-service.ts", // Community Classroom catalog (tenant)
+    "src/lib/server/agency-community-classroom-service.ts", // Community Classroom catalog (Agency)
+    "src/lib/server/portal-service.ts", // Client Portal course list
+    "src/lib/server/notification-producers.ts", // enrollment notification (tenant)
+    "src/lib/server/agency-standalone-course-service.ts", // enrollment notification (Agency)
+    "src/app/course/[saId]/[courseId]/page.tsx", // enrolled member → course
+    "src/app/course/agency/[courseId]/page.tsx",
+    "src/app/course/[saId]/[courseId]/purchase-complete/purchase-complete-status.tsx",
+    "src/app/course/agency/[courseId]/purchase-complete/purchase-complete-status.tsx",
+    "src/app/api/course/[saId]/[courseId]/signup/route.ts",
+    "src/app/api/course/agency/[courseId]/signup/route.ts",
+    "src/app/api/offer/[saId]/[offerId]/signup/route.ts",
+    "src/app/api/offer/agency/[offerId]/signup/route.ts",
+    "src/app/offer/agency/[offerId]/purchase-complete/purchase-complete-status.tsx",
+  ];
+  await check("catalog clicks + every other course entry link open the homepage (never the Start flag)", () => {
+    for (const p of plainEntryLinks) {
+      assert.doesNotMatch(src(p), /startLearningHref|START_LEARNING_PARAM|[?&](start|enter)=1/, p);
+    }
+    assert.match(src("src/lib/server/classroom-catalog-service.ts"), /\?\s*communityLearningProductHref\(/);
+    assert.match(src("src/lib/server/agency-community-classroom-service.ts"), /\?\s*communityLearningProductHref\(/);
+  });
+  await check("only explicit 'Continue learning' buttons carry the Start Learning flag", () => {
+    for (const p of ["src/components/standalone-courses/course-sales-page-view.tsx", "src/components/course-offers/offer-sales-page-view.tsx"]) {
+      const text = src(p);
+      assert.match(text, /startLearningHref\(/, p);
+      assert.match(text, /Continue learning/, p);
+    }
+  });
+  await check("O. Community custom-domain mirror forwards searchParams (Start flag reaches the homepage)", () => {
     assert.match(src("src/app/communities/[groupSlug]/learning/product/[courseId]/page.tsx"), /searchParams,\n\s*\}\);/);
+  });
+  await check("defaults: video autoplay, first-lesson and next-lesson are all OFF", () => {
+    assert.equal(DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE.autoplayLessonVideos, false);
+    assert.equal(DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE.autoplayFirstLesson, false);
+    assert.equal(DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE.autoplayNextLesson, false);
+  });
+  await check("a course with no saved settings reads all three OFF end-to-end (tree, preview, navigation)", async () => {
+    const t = (await getStandaloneCourseTree({ subAccountId: SA, courseId: "cDefault", includeUnpublished: false }))!;
+    assert.equal(t.course.learningExperience.autoplayFirstLesson, false);
+    assert.equal(autoAdvanceEnabled(t.course.learningExperience), false);
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: t.course.learningExperience, sections: t.sections, availableLessons: t.lessons }), null);
+    assert.equal(new URL((await preview("cDefault", "l1")).body.embedUrl!).searchParams.get("autoplay"), "false");
+  });
+  await check("settings remain configurable: a course that opts in gets each behavior (podcast-style)", async () => {
+    const t = (await getStandaloneCourseTree({ subAccountId: SA, courseId: "cNav", includeUnpublished: false }))!;
+    assert.equal(autoAdvanceEnabled(t.course.learningExperience), true);
+    assert.equal(resolveStartLearningLessonId({ isStartLearning: true, learningExperience: t.course.learningExperience, sections: t.sections, availableLessons: filterLessonsForEnrollment(t.lessons, null) }), "b1");
+    assert.equal(new URL((await preview("cOn", "l1")).body.embedUrl!).searchParams.get("autoplay"), "true");
   });
   await check("advance happens only after a successful Mark Complete response (not on load/play)", () => {
     const player = src("src/components/standalone-courses/standalone-lesson-player.tsx");
     const body = player.slice(player.indexOf("async function markComplete"), player.indexOf("const courseContent"));
     assert.ok(body.indexOf("if (!res.ok) throw") < body.indexOf("lessonToAdvanceTo("), "advance follows the ok check");
     assert.doesNotMatch(player.slice(0, player.indexOf("async function markComplete")), /lessonToAdvanceTo\(/);
+  });
+
+  // ── Data update script (owner-approved; run here against the EMULATOR only) ──
+  const runScript = (...args: string[]) =>
+    execFileSync("node", ["scripts/course-navigation-settings-off.mjs", ...args], { env: process.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const coursesNow = async () => Object.fromEntries((await db.collectionGroup("standaloneCourses").get()).docs.map((d) => [d.ref.path, d.data()]));
+  const before = await coursesNow();
+  const expectChange = Object.values(before).filter((c) => c.learningExperience && (c.learningExperience.autoplayFirstLesson !== false || c.learningExperience.autoplayNextLesson !== false)).length;
+
+  await check("data script: dry run writes nothing and reports the exact plan", async () => {
+    const out = runScript();
+    assert.match(out, new RegExp(`Courses to change: ${expectChange}\\b`));
+    assert.match(out, /skip  subAccounts\/sa1\/standaloneCourses\/cDefault/);
+    assert.deepEqual(await coursesNow(), before);
+  });
+  await check("data script: --live refuses without, or with a mismatched, --expect", async () => {
+    assert.throws(() => runScript("--live"));
+    assert.throws(() => runScript("--live", "--expect", String(expectChange + 1)));
+    assert.deepEqual(await coursesNow(), before);
+  });
+  await check("data script: live run changes ONLY the two navigation fields", async () => {
+    runScript("--live", "--expect", String(expectChange));
+    const after = await coursesNow();
+    for (const [path, b] of Object.entries(before)) {
+      const a = after[path];
+      if (!b.learningExperience) {
+        assert.deepEqual(a, b, `${path} (no saved settings) untouched`);
+        continue;
+      }
+      assert.equal(a.learningExperience.autoplayFirstLesson, false, path);
+      assert.equal(a.learningExperience.autoplayNextLesson, false, path);
+      assert.equal(a.learningExperience.autoplayLessonVideos, b.learningExperience.autoplayLessonVideos, `${path} video autoplay untouched`);
+      assert.equal(a.learningExperience.autoCompleteLessons, b.learningExperience.autoCompleteLessons, `${path} autoComplete untouched`);
+      const strip = (c: Record<string, unknown>) => ({ ...c, learningExperience: undefined });
+      assert.deepEqual(strip(a), strip(b), `${path} other fields untouched`);
+    }
+  });
+  await check("data script: idempotent — a rerun plans zero changes", () => {
+    const out = runScript();
+    assert.match(out, /Courses to change: 0\b/);
+    assert.match(runScript("--live", "--expect", "0"), /0 course\(s\) updated/);
   });
 
   console.log(`\n${passes} passed, ${failures} failed`);

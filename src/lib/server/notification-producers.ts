@@ -11,7 +11,6 @@ import {
   notifyCommunityLiveStartedShared,
   type CommunityNotifyAdapter,
 } from "@/lib/server/community-notification-producers";
-import { courseEntryHref } from "@/lib/standalone-courses/course-navigation";
 
 /**
  * MyMagnetix Notifications V1 — real producers, called directly from the
@@ -212,7 +211,7 @@ export async function notifyCourseAccessGranted(opts: {
     title: `You were granted access to ${courseName}`,
     destination: enterHref(
       opts.subAccountId,
-      courseEntryHref(`/course/${opts.subAccountId}/${opts.courseId}/classroom`)
+      `/course/${opts.subAccountId}/${opts.courseId}/classroom`
     ),
     meta: { courseName, businessName },
     sourceObjectId: `${opts.courseId}:${opts.memberId}`,

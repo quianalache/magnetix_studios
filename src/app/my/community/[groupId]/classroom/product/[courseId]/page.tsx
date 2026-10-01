@@ -3,7 +3,7 @@ import { getCurrentPerson } from "@/lib/server/person-session";
 import { resolveFirstAgencyId } from "@/lib/landing/resolve-brand";
 import { getAgencyGroupById, getAgencyMembershipForPerson } from "@/lib/server/community-agency-service";
 import { EmbeddedAgencyProductCourse } from "@/components/community/classroom/embedded-agency-product-course";
-import { isCourseEntryRequest } from "@/lib/standalone-courses/course-navigation";
+import { isStartLearningRequest } from "@/lib/standalone-courses/course-navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,6 @@ export default async function MyAgencyEmbeddedProductCoursePage({
     linkBase: { saId: "", pretty: false, agencyGroupId: groupId, agencyMemberView: true },
     groupSlug: group.slug,
     catalogHref: catalog,
-    isEntry: isCourseEntryRequest(await searchParams),
+    isStartLearning: isStartLearningRequest(await searchParams),
   });
 }

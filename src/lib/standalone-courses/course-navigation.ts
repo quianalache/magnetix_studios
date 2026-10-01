@@ -2,14 +2,14 @@
  * Course navigation rules shared by every Standalone Course surface
  * (direct tenant + Agency courses, and courses opened inside a Community
  * Classroom). Pure and client-safe: the server pages use it to resolve the
- * learning-entry redirect, and `StandaloneLessonPlayer` uses it to find the
+ * Start-learning redirect, and `StandaloneLessonPlayer` uses it to find the
  * next lesson after completion.
  *
  * Three course settings stay deliberately separate:
  *  - `autoplayLessonVideos` — does a lesson's VIDEO start on load
  *    (`lesson-video.ts`, not here);
- *  - `autoplayFirstLesson` — does the normal learning-ENTRY action open the
- *    first available lesson instead of the course homepage;
+ *  - `autoplayFirstLesson` — does an explicit "Start / Continue learning"
+ *    action open the first available lesson instead of the course homepage;
  *  - `autoplayNextLesson` — does COMPLETING a lesson move the student on.
  *
  * Every function here only ever chooses among the lessons it is given. The
@@ -20,23 +20,25 @@
 import type { StandaloneCourseLearningExperience } from "@/types/standalone-courses";
 
 /**
- * Query flag carried by learning-entry links (enrollment success, "go to
- * course", Classroom catalog cards…). The course homepage URL WITHOUT it
- * always renders the homepage, so it stays directly reachable whatever the
- * course's first-lesson setting is.
+ * Query flag carried ONLY by explicit "Start / Continue learning" buttons.
+ * Entering a course — Classroom catalog cards, other course catalogs,
+ * enrollment/purchase success, notifications, the Portal — always links to
+ * the plain course homepage URL, which always renders the customized
+ * homepage whatever the course's first-lesson setting is (owner decision,
+ * 2026-10-01: the homepage is always the entry point).
  */
-export const COURSE_ENTRY_PARAM = "enter";
+export const START_LEARNING_PARAM = "start";
 
-/** The homepage URL used as a learning-entry action. */
-export function courseEntryHref(homeHref: string): string {
-  return `${homeHref}${homeHref.includes("?") ? "&" : "?"}${COURSE_ENTRY_PARAM}=1`;
+/** The homepage URL for an explicit Start / Continue learning action. */
+export function startLearningHref(homeHref: string): string {
+  return `${homeHref}${homeHref.includes("?") ? "&" : "?"}${START_LEARNING_PARAM}=1`;
 }
 
-/** True when the request arrived through a learning-entry link. */
-export function isCourseEntryRequest(
+/** True when the request came from an explicit Start / Continue learning action. */
+export function isStartLearningRequest(
   searchParams: Record<string, string | string[] | undefined> | null | undefined,
 ): boolean {
-  const value = searchParams?.[COURSE_ENTRY_PARAM];
+  const value = searchParams?.[START_LEARNING_PARAM];
   return (Array.isArray(value) ? value[0] : value) === "1";
 }
 
@@ -71,19 +73,19 @@ export function orderLessonsByCurriculum<L extends { id: string; sectionId: stri
 }
 
 /**
- * Where a learning-entry request should go: the first available lesson when
- * the course has "Automatically play first lesson" on, otherwise null
- * (render the homepage). Also null when the request isn't an entry request
- * or the student has no available lesson — the homepage then shows its
- * normal (possibly empty) curriculum, never a locked lesson.
+ * Where a Start / Continue learning action should go: the first available
+ * lesson when the course has "Automatically play first lesson" on,
+ * otherwise null (render the homepage). Also null for any other request —
+ * plain course entry always shows the homepage — or when the student has
+ * no available lesson, so a locked lesson is never opened.
  */
-export function resolveCourseEntryLessonId(opts: {
-  isEntry: boolean;
+export function resolveStartLearningLessonId(opts: {
+  isStartLearning: boolean;
   learningExperience: LearningPrefs;
   sections: ReadonlyArray<{ id: string; order?: number }>;
   availableLessons: ReadonlyArray<{ id: string; sectionId: string | null; order?: number }>;
 }): string | null {
-  if (!opts.isEntry || opts.learningExperience?.autoplayFirstLesson !== true) return null;
+  if (!opts.isStartLearning || opts.learningExperience?.autoplayFirstLesson !== true) return null;
   return orderLessonsByCurriculum(opts.sections, opts.availableLessons)[0]?.id ?? null;
 }
 

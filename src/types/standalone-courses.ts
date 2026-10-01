@@ -52,7 +52,12 @@ export const DEFAULT_STANDALONE_COURSE_INSTRUCTOR: StandaloneCourseInstructor = 
   headshotUrl: null,
 };
 
-/** Player behavior toggles — all on by default, matching the GHL reference. */
+/**
+ * Player behavior toggles. Video autoplay and both automatic lesson-
+ * navigation behaviors are OFF by default (owner decision, 2026-10-01) —
+ * creators opt in per course, e.g. for podcast-style continuous learning.
+ * `autoCompleteLessons` keeps its original default.
+ */
 export interface StandaloneCourseLearningExperience {
   autoplayNextLesson: boolean;
   autoplayFirstLesson: boolean;
@@ -68,8 +73,8 @@ export interface StandaloneCourseLearningExperience {
 
 export const DEFAULT_STANDALONE_COURSE_LEARNING_EXPERIENCE: StandaloneCourseLearningExperience =
   {
-    autoplayNextLesson: true,
-    autoplayFirstLesson: true,
+    autoplayNextLesson: false,
+    autoplayFirstLesson: false,
     autoCompleteLessons: true,
     autoplayLessonVideos: false,
   };
