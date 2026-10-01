@@ -16,6 +16,8 @@ import {
   Info,
   Link2,
   MoreHorizontal,
+  Archive,
+  ArchiveRestore,
   Repeat,
   Tag,
   Trash2,
@@ -206,6 +208,18 @@ function TaskDetailBody({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem onClick={copyLink}><Link2 className="mr-2 h-4 w-4" /> Copy link</DropdownMenuItem>
+            {!task.routineId && (
+              <DropdownMenuItem onClick={async () => {
+                try {
+                  await patchTask(task.id, { archived: task.archived !== true });
+                  toast.success(task.archived ? "Task restored" : "Task archived");
+                  onClose();
+                } catch (err) { toast.error((err as Error).message); }
+              }}>
+                {task.archived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+                {task.archived ? "Restore task" : "Archive task"}
+              </DropdownMenuItem>
+            )}
             {!task.routineId && <DropdownMenuSeparator />}
             {!task.routineId && (
             <DropdownMenuItem

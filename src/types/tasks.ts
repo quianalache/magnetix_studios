@@ -50,6 +50,8 @@ export interface Task {
   parentTaskId?: string | null;
   /** Workflow status. Absent → derived from `completed`. `completed` stays the source of truth for completion. */
   status?: TaskStatus | null;
+  /** Explicitly archived by staff; archive is reversible and preserves history. */
+  archived?: boolean;
   priority?: TaskPriority | null;
   /** Staff assignee (sub-account member uid). */
   assigneeUid?: string | null;

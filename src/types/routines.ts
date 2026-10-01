@@ -59,7 +59,7 @@ export interface RoutineSchedule {
 
 export type RoutineTimeMode = "anytime" | "block" | "time";
 export type RoutineTimeBlock = "am" | "midday" | "pm";
-export type RoutineStatus = "active" | "paused";
+export type RoutineStatus = "active" | "paused" | "archived";
 
 export interface RoutineActivity {
   id: string;

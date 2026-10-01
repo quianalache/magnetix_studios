@@ -23,6 +23,7 @@ export interface TaskJson {
   projectId?: string | null;
   parentTaskId?: string | null;
   status?: string | null;
+  archived?: boolean;
   priority?: string | null;
   assigneeUid?: string | null;
   assigneeContactId?: string | null;

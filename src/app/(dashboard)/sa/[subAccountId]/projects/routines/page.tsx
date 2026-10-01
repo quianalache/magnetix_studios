@@ -28,7 +28,7 @@ import { TASK_RECURRENCE_LABELS, type TaskRecurrenceType } from "@/types/tasks";
 import type { Project } from "@/types/projects";
 import type { ProjectRoutineItem, RoutineListItem, RoutineView } from "@/types/routines";
 
-type Filter = "all" | "active" | "paused";
+type Filter = "all" | "active" | "paused" | "archived";
 type Sort = "next" | "name" | "recent";
 
 /**
@@ -86,6 +86,7 @@ function RoutinesPageInner() {
       all: items.length,
       active: items.filter((i) => i.routine.status === "active").length,
       paused: items.filter((i) => i.routine.status === "paused").length,
+      archived: items.filter((i) => i.routine.status === "archived").length,
     }),
     [items]
   );
@@ -137,6 +138,15 @@ function RoutinesPageInner() {
     }
   }
 
+  async function toggleArchive(r: RoutineView) {
+    const status = r.status === "archived" ? "active" : "archived";
+    try {
+      await updateRoutineApi(subAccountId, r.id, { status });
+      toast.success(status === "archived" ? "Routine archived" : "Routine restored");
+      await reload();
+    } catch (err) { toast.error((err as Error).message); }
+  }
+
   async function confirmDelete() {
     if (!deleting) return;
     setDeleteBusy(true);
@@ -170,6 +180,7 @@ function RoutinesPageInner() {
               ["all", "All"],
               ["active", "Active"],
               ["paused", "Paused"],
+              ["archived", "Archived"],
             ] as [Filter, string][]
           ).map(([id, label]) => (
             <button
@@ -265,6 +276,7 @@ function RoutinesPageInner() {
               onOpen={() => router.push(`${pathname}/${item.routine.id}`)}
               onEdit={() => openEditor(item.routine)}
               onToggleStatus={() => void toggleStatus(item.routine)}
+              onArchive={() => void toggleArchive(item.routine)}
               onDelete={() => setDeleting(item.routine)}
             />
           ))}

@@ -54,6 +54,11 @@ export async function runRolloverSweep(now = new Date()) {
   for (const doc of snap.docs) {
     checked++;
     const t = doc.data();
+    if (t.archived === true) continue;
+    if (t.projectId) {
+      const parent = await db.doc(`projects/${t.projectId}`).get();
+      if (parent.data()?.status === "archived") continue;
+    }
     const due = (t.dueAt as Timestamp | null)?.toDate?.();
     if (!due || !t.subAccountId) continue;
     let tz = tzCache.get(t.subAccountId);

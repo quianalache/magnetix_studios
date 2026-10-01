@@ -634,6 +634,14 @@ export async function updateFullTask(opts: {
   if (has("checklist")) data.checklist = parseChecklist(patch.checklist);
   if (has("attachments") && !opts.fromClient) data.attachments = parseAttachments(patch.attachments);
   if (has("autoRollover") && !opts.fromClient) data.autoRollover = patch.autoRollover === true;
+  if (has("archived") && !opts.fromClient) {
+    if (typeof patch.archived !== "boolean") throw new TaskInputError("Unknown archive setting");
+    data.archived = patch.archived;
+    events.push({
+      type: "status_changed",
+      summary: patch.archived ? "Archived this task" : "Restored this task",
+    });
+  }
   if (has("recurrence") && !opts.fromClient) {
     const r = parseRecurrence(patch.recurrence);
     if (r === undefined) throw new TaskInputError("Unknown repeat setting");

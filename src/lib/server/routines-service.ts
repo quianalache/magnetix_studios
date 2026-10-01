@@ -557,7 +557,7 @@ export async function updateRoutine(opts: {
   const existing = await loadManageableRoutine(opts.subAccountId, opts.routineId, opts.viewer);
   const fields = await parseRoutineInput(opts.subAccountId, opts.body, today, existing, opts.viewer);
   const patch: Record<string, unknown> = { ...fields, updatedAt: FieldValue.serverTimestamp() };
-  if (opts.body.status === "active" || opts.body.status === "paused") {
+  if (opts.body.status === "active" || opts.body.status === "paused" || opts.body.status === "archived") {
     patch.status = opts.body.status;
     if (opts.body.status !== existing.status) {
       patch.pausedAt = opts.body.status === "paused" ? FieldValue.serverTimestamp() : null;
@@ -572,7 +572,7 @@ export async function updateRoutine(opts: {
 export async function setRoutineStatus(opts: {
   subAccountId: string;
   routineId: string;
-  status: "active" | "paused";
+  status: "active" | "paused" | "archived";
   viewer: RoutineViewer;
 }): Promise<RoutineView> {
   const tz = await subAccountTimeZone(opts.subAccountId);

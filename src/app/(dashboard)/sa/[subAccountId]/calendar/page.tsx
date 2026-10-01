@@ -7,6 +7,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToEvents } from "@/lib/firestore/events";
 import { subscribeToTasks } from "@/lib/firestore/tasks";
+import { subscribeToProjects } from "@/lib/firestore/projects";
 import { subscribeToExternalCalendarEvents } from "@/lib/firestore/external-calendar-events";
 import { safeSubscribe } from "@/lib/firestore/safe-subscribe";
 import { useEffectiveTerritoryFilter } from "@/hooks/use-effective-territory-filter";
@@ -24,6 +25,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<{ id: string; status?: string }[]>([]);
   const [googleEvents, setGoogleEvents] = useState<ExternalCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,6 +38,10 @@ export default function CalendarPage() {
     let contactsReady = false;
     let tasksReady = false;
     let googleEventsReady = false;
+    const unsubP = safeSubscribe(
+      () => subscribeToProjects(scope, (l) => setProjects(l), () => setProjects([])),
+      () => setProjects([])
+    );
     const settle = () => {
       if (eventsReady && contactsReady && tasksReady && googleEventsReady) {
         setLoading(false);
@@ -97,6 +103,7 @@ export default function CalendarPage() {
       unsubC?.();
       unsubT?.();
       unsubG?.();
+      unsubP?.();
     };
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
@@ -116,7 +123,7 @@ export default function CalendarPage() {
         <CalendarView
           events={events}
           contacts={contacts}
-          tasks={tasks}
+          tasks={tasks.filter((t) => !t.archived && !(t.projectId && projects.some((p) => p.id === t.projectId && p.status === "archived")))}
           googleEvents={googleEvents}
         />
       )}

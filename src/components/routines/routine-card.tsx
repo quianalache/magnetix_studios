@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, CalendarDays, Clock, Lock, MoreHorizontal, Pause, Pencil, Play, Trash2, Users } from "lucide-react";
+import { Archive, ArchiveRestore, ArrowRight, CalendarDays, Clock, Lock, MoreHorizontal, Pause, Pencil, Play, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -131,12 +131,14 @@ export function RoutineCard({
   onOpen,
   onEdit,
   onToggleStatus,
+  onArchive,
   onDelete,
 }: {
   item: RoutineListItem;
   onOpen: () => void;
   onEdit: () => void;
   onToggleStatus: () => void;
+  onArchive: () => void;
   onDelete: () => void;
 }) {
   const { routine, progress, week, today } = item;
@@ -181,6 +183,10 @@ export function RoutineCard({
             <DropdownMenuItem onClick={onToggleStatus}>
               {paused ? <Play className="mr-2 h-4 w-4" /> : <Pause className="mr-2 h-4 w-4" />}
               {paused ? "Resume" : "Pause"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onArchive}>
+              {routine.status === "archived" ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+              {routine.status === "archived" ? "Restore" : "Archive"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onDelete} className="text-destructive">

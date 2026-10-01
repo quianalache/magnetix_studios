@@ -296,6 +296,7 @@ export default function MyTasksPage() {
     const now = Date.now();
     const todayMs = dayStart(new Date());
     const rows = [...tasks, ...routineTasks]
+      .filter((t) => !t.archived && !(t.projectId && projectById.get(t.projectId)?.status === "archived"))
       .map((t) => ({ t, status: taskStatus(t, now, todayMs) }))
       // A routine activity whose day has passed unfinished is a missed
       // occurrence — it stays in the routine's history, not in Overdue.
@@ -308,7 +309,7 @@ export default function MyTasksPage() {
       else c.upcoming++; // upcoming + no due date, as before
     }
     return { withStatus: rows, counts: c, today: todayMs };
-  }, [tasks, routineTasks]);
+  }, [tasks, routineTasks, projectById]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();

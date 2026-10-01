@@ -33,7 +33,7 @@ export async function GET(request: Request, ctx: Ctx) {
   }
 }
 
-/** Edit the routine. A body of only `{status}` pauses / resumes it. */
+/** Edit the routine. A body of only `{status}` pauses, resumes, archives, or restores it. */
 export async function PATCH(request: Request, ctx: Ctx) {
   const { id: subAccountId, routineId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
@@ -43,7 +43,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   try {
     const keys = Object.keys(body);
     const routine =
-      keys.length === 1 && (body.status === "active" || body.status === "paused")
+      keys.length === 1 && (body.status === "active" || body.status === "paused" || body.status === "archived")
         ? await setRoutineStatus({ subAccountId, routineId, status: body.status, viewer: { uid: access.uid, role: access.subAccountRole ?? null } })
         : await updateRoutine({ subAccountId, routineId, viewer: { uid: access.uid, role: access.subAccountRole ?? null }, body });
     return NextResponse.json({ routine });
