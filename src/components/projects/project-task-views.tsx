@@ -150,10 +150,10 @@ export function TaskProjectOverview({
       <div className="grid gap-4 lg:grid-cols-3">
         <Card icon={BarChart3} title="Project Snapshot">
           <div className="grid grid-cols-2 gap-3">
-            <Tile tone="bg-violet-500/10" icon={<ListChecks className="h-4 w-4 text-violet-600 dark:text-violet-300" />} value={project.stepCount} label="Total tasks" />
-            <Tile tone="bg-emerald-500/10" icon={<CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />} value={project.stepsDoneCount} label="Completed" />
-            <Tile tone="bg-sky-500/10" icon={<Loader className="h-4 w-4 text-sky-600 dark:text-sky-300" />} value={inProgress} label="In progress" />
-            <Tile tone="bg-pink-500/10" icon={<Flag className="h-4 w-4 text-pink-600 dark:text-pink-300" />} value={milestones.length} label="Milestones" />
+            <Tile tone="bg-white border-[#EDD9EC]" icon={<ListChecks className="h-4 w-4 text-[#5E2574]" />} value={project.stepCount} label="Total tasks" />
+            <Tile tone="bg-white border-[#EDD9EC]" icon={<CheckCircle2 className="h-4 w-4 text-[#5E2574]" />} value={project.stepsDoneCount} label="Completed" />
+            <Tile tone="bg-white border-[#EDD9EC]" icon={<Loader className="h-4 w-4 text-[#5E2574]" />} value={inProgress} label="In progress" />
+            <Tile tone="bg-white border-[#EDD9EC]" icon={<Flag className="h-4 w-4 text-[#5E2574]" />} value={milestones.length} label="Milestones" />
           </div>
           {(project.timeSpentSeconds ?? 0) > 0 && (
             <p className="text-muted-foreground mt-3 flex items-center gap-1.5 text-xs">
@@ -315,7 +315,7 @@ function MilestonesCard({
       {milestones.length > 0 && (
         <div className="mb-3">
           <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-            <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} />
+            <div className="h-full rounded-full bg-[#9EDBDD]" style={{ width: `${Math.round((done / milestones.length) * 100)}%` }} />
           </div>
           <p className="text-muted-foreground mt-1 text-xs">{done} of {milestones.length} reached</p>
         </div>

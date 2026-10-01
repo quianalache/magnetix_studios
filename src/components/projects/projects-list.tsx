@@ -136,8 +136,10 @@ export function AssigneeCell({ project }: { project: Project }) {
 }
 
 function progressBarTone(index: number): string {
-  // Cycles the Magnetix accent trio so adjacent rows are distinguishable.
-  return ["bg-violet-400", "bg-teal-400", "bg-pink-400"][index % 3];
+  // Aqua Glow is the primary progress signal; the pale brand accents remain
+  // available for surrounding metadata without turning the board pink.
+  void index;
+  return "bg-[#9EDBDD]";
 }
 
 export function ProjectsList({

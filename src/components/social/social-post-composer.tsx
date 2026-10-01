@@ -31,6 +31,21 @@ import { SOCIAL_CAPTION_MAX, type SocialPostDoc } from "@/types/social";
 import { MediaLibraryPicker } from "@/components/social/media-library-picker";
 import { uploadToMediaLibrary } from "@/lib/client/media-library-upload";
 
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const candidate = value as { toDate?: () => Date; seconds?: number };
+  if (typeof candidate.toDate === "function") return candidate.toDate();
+  return typeof candidate.seconds === "number" ? new Date(candidate.seconds * 1000) : null;
+}
+
+function toDatetimeLocal(value: unknown): string {
+  const date = asDate(value);
+  if (!date) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 /**
  * Compose a social post — caption + approved Media Library image + platform
  * targets + schedule, with a live platform-styled preview. Instagram requires
@@ -84,7 +99,7 @@ export function SocialPostComposer({
       setImageUrl(editingPost?.imageUrl ?? "");
       setToFacebook(editingPost?.targets.includes("facebook") ?? canFacebook);
       setToInstagram(editingPost?.targets.includes("instagram") ?? false);
-      setScheduledAt("");
+      setScheduledAt(editingPost?.status === "scheduled" ? toDatetimeLocal(editingPost.scheduledAt) : "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editingPost]);
@@ -351,7 +366,7 @@ export function SocialPostComposer({
             {saving === "draft" ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Save draft
+            {editingPost?.status === "scheduled" ? "Unschedule" : "Save draft"}
           </Button>
           <Button
             type="button"
@@ -362,7 +377,7 @@ export function SocialPostComposer({
             {saving === "schedule" ? (
               <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
             ) : null}
-            Schedule
+            {editingPost?.status === "scheduled" ? "Save changes / reschedule" : "Schedule"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -254,6 +254,17 @@ export async function getBunnyPlaybackUrl(scope: VideoOwnerScope, assetId: strin
   return `https://iframe.mediadelivery.net/embed/${asset.bunny.libraryId}/${asset.bunny.videoGuid}?token=${token}&expires=${expires}`;
 }
 
+/** Returns the provider thumbnail without exposing the library's unsigned CDN path. */
+export function getBunnyThumbnailUrl(asset: MediaAsset): string | null {
+  if (!asset.bunny?.videoGuid || !asset.bunny.thumbnailFileName || bunnyPlaybackBlocked(asset)) return null;
+  const config = requireConfig();
+  const expires = Math.floor(Date.now() / 1000) + 1800;
+  const path = `/${asset.bunny.videoGuid}/${asset.bunny.thumbnailFileName}`;
+  const token = hash(`${config.tokenKey}${path}${expires}`);
+  const host = config.cdnHostname.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  return `https://${host}${path}?token=${token}&expires=${expires}`;
+}
+
 export async function findBunnyAssetByGuid(videoGuid: string) {
   const db = getAdminDb();
   const paths = ["agencies", "subAccounts"];

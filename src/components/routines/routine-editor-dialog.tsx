@@ -58,6 +58,7 @@ type ScheduleDraft = {
 interface ActivityDraft {
   key: string;
   id?: string;
+  committed: boolean;
   title: string;
   estimate: string;
   description: string;
@@ -105,6 +106,7 @@ function blankSchedule(): ScheduleDraft {
 function blankActivity(): ActivityDraft {
   return {
     key: newKey(),
+    committed: false,
     title: "",
     estimate: "",
     description: "",
@@ -131,6 +133,7 @@ function draftFrom(r: RoutineView): Draft {
   const activities = r.activities.map((a) => ({
     key: newKey(),
     id: a.id,
+    committed: true,
     title: a.title,
     estimate: a.estimateMinutes ? String(a.estimateMinutes) : "",
     description: a.description ?? a.notes ?? "",
@@ -181,7 +184,7 @@ function scheduleBody(d: ScheduleDraft) {
 }
 
 function toBody(d: Draft, canShare: boolean) {
-  const first = d.activities.find((a) => a.title.trim()) ?? blankActivity();
+  const first = d.activities.find((a) => a.committed && a.title.trim()) ?? blankActivity();
   return {
     ...(canShare ? { visibility: d.visibility } : {}),
     name: d.name.trim(),
@@ -189,7 +192,7 @@ function toBody(d: Draft, canShare: boolean) {
     icon: d.icon,
     color: d.color,
     activities: d.activities
-      .filter((a) => a.title.trim())
+      .filter((a) => a.committed && a.title.trim())
       .map((a) => ({
         id: a.id,
         title: a.title.trim(),
@@ -427,9 +430,9 @@ export function RoutineEditorDialog({
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
-  const validActivities = draft.activities.filter((a) => a.title.trim());
+  const validActivities = draft.activities.filter((a) => a.committed && a.title.trim());
   const totalMinutes = validActivities.reduce((s, a) => s + (Number(a.estimate) || 0), 0);
-  const activityErrors = validActivities.map((a) => {
+  const taskErrors = validActivities.map((a) => {
     try {
       normalizeSchedule(scheduleBody(a.schedule), localToday());
       if (a.timeMode === "time" && !/^\d{2}:\d{2}$/.test(a.time)) return `Enter a valid time for “${a.title}”.`;
@@ -441,7 +444,9 @@ export function RoutineEditorDialog({
 
   const stepError: Record<Step, string | null> = {
     0: draft.name.trim() ? null : "Give the routine a title.",
-    1: validActivities.length ? activityErrors.find(Boolean) ?? null : "Add at least one task.",
+    1: validActivities.length
+      ? taskErrors.find(Boolean) ?? (draft.activities.some((a) => !a.committed && a.title.trim()) ? "Click Add Task to save the new task." : null)
+      : "Add at least one task.",
     2: null,
   };
 
@@ -485,6 +490,30 @@ export function RoutineEditorDialog({
       [list[i], list[j]] = [list[j], list[i]];
       return { ...d, activities: list };
     });
+  }
+
+  function addTask() {
+    const pendingIndex = draft.activities.findIndex((a) => !a.committed);
+    if (pendingIndex >= 0) {
+      const pending = draft.activities[pendingIndex];
+      if (!pending.title.trim()) {
+        toast.error("Enter a task title before adding it.");
+        return;
+      }
+      try {
+        normalizeSchedule(scheduleBody(pending.schedule), localToday());
+        if (pending.timeMode === "time" && !/^\d{2}:\d{2}$/.test(pending.time)) throw new Error("Enter a valid time.");
+      } catch (err) {
+        toast.error(err instanceof ScheduleError ? `Schedule for “${pending.title}”: ${err.message}` : (err as Error).message);
+        return;
+      }
+      setDraft((d) => ({
+        ...d,
+        activities: d.activities.map((a, i) => (i === pendingIndex ? { ...a, committed: true } : a)),
+      }));
+      return;
+    }
+    if (draft.activities.length < MAX_ROUTINE_ACTIVITIES) set("activities", [...draft.activities, blankActivity()]);
   }
 
   const nextLabel = ["Next: Add Tasks", "Next: Review"][step];
@@ -649,7 +678,7 @@ export function RoutineEditorDialog({
                 <div>
                   <DialogTitle className="text-lg font-bold">Tasks</DialogTitle>
                   <DialogDescription>
-                    The activities you&apos;ll check off each time the routine comes around.
+                    Add the tasks you&apos;ll check off each time the routine comes around.
                   </DialogDescription>
                 </div>
                 <ol className="space-y-2">
@@ -659,7 +688,7 @@ export function RoutineEditorDialog({
                       <GripVertical className="text-muted-foreground/50 hidden h-4 w-4 shrink-0 sm:block" aria-hidden />
                       <Input
                         id={`routine-activity-${a.key}`}
-                        aria-label={`Activity ${i + 1}`}
+                        aria-label={`Task ${i + 1}`}
                         value={a.title}
                         maxLength={200}
                         placeholder="e.g. Review business finances"
@@ -671,19 +700,16 @@ export function RoutineEditorDialog({
                           }))
                         }
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && a.title.trim() && draft.activities.length < MAX_ROUTINE_ACTIVITIES) {
+                          if (e.key === "Enter" && a.title.trim() && !a.committed) {
                             e.preventDefault();
-                            setDraft((d) => ({
-                              ...d,
-                              activities: [...d.activities.slice(0, i + 1), blankActivity(), ...d.activities.slice(i + 1)],
-                            }));
+                            addTask();
                           }
                         }}
                       />
                       <label className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
                         <Input
                           id={`routine-activity-est-${a.key}`}
-                          aria-label={`Minutes for activity ${i + 1}`}
+                          aria-label={`Minutes for task ${i + 1}`}
                           inputMode="numeric"
                           value={a.estimate}
                           placeholder="15"
@@ -711,7 +737,7 @@ export function RoutineEditorDialog({
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          aria-label="Remove activity"
+                          aria-label="Remove task"
                           onClick={() =>
                             setDraft((d) => ({
                               ...d,
@@ -728,7 +754,7 @@ export function RoutineEditorDialog({
                       </div>
                       <div className="mt-2">
                         <Textarea
-                          aria-label={`Description for activity ${i + 1}`}
+                          aria-label={`Description for task ${i + 1}`}
                           value={a.description}
                           maxLength={2000}
                           rows={2}
@@ -761,12 +787,12 @@ export function RoutineEditorDialog({
                     variant="outline"
                     size="sm"
                     disabled={draft.activities.length >= MAX_ROUTINE_ACTIVITIES}
-                    onClick={() => set("activities", [...draft.activities, blankActivity()])}
+                    onClick={addTask}
                   >
-                    <Plus className="mr-1.5 h-4 w-4" /> Add activity
+                    <Plus className="mr-1.5 h-4 w-4" /> Add Task
                   </Button>
                   <span className="text-muted-foreground text-xs tabular-nums">
-                    {validActivities.length} {validActivities.length === 1 ? "activity" : "activities"}
+                    {validActivities.length} {validActivities.length === 1 ? "task" : "tasks"}
                     {totalMinutes > 0 && ` · ~${totalMinutes} min`}
                   </span>
                 </div>
@@ -793,7 +819,7 @@ export function RoutineEditorDialog({
                 </div>
                 <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
                   <div>
-                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Activities</dt>
+                    <dt className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Tasks</dt>
                     <dd>
                       {validActivities.length}
                       {totalMinutes > 0 && ` · ~${totalMinutes} min`}

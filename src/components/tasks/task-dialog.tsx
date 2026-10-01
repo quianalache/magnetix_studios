@@ -3,23 +3,18 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ContactPicker } from "@/components/quotes/contact-picker";
 import { useSubAccount } from "@/context/sub-account-context";
+import { useTaskAssignees } from "@/hooks/use-task-assignees";
 import { updateTask, deleteTask } from "@/lib/firestore/tasks";
 import { toDate } from "@/lib/format";
 import { TaskDetailModal } from "@/components/tasks/detail/task-detail-modal";
-import { TASK_TIME_BLOCKS, type Task, type TaskFormData, type TaskTimeBlock } from "@/types/tasks";
+import { TASK_PRIORITIES, TASK_RECURRENCE_LABELS, TASK_TIME_BLOCKS, type Task, type TaskFormData, type TaskPriority, type TaskRecurrenceType, type TaskTimeBlock } from "@/types/tasks";
 import type { Contact } from "@/types/contacts";
 
 interface TaskDialogProps {
@@ -30,6 +25,8 @@ interface TaskDialogProps {
   defaultContactId?: string | null;
   /** Link a NEW task to this deal (Deal Details → Add Task). */
   defaultDealId?: string | null;
+  /** Link a NEW task to a project when opened from a project workspace. */
+  defaultProjectId?: string | null;
   onSaved?: () => void;
 }
 
@@ -75,9 +72,11 @@ function StandaloneTaskDialog({
   task,
   defaultContactId,
   defaultDealId,
+  defaultProjectId,
   onSaved,
 }: TaskDialogProps) {
   const { subAccountId } = useSubAccount();
+  const { assignees } = useTaskAssignees();
   const isEdit = !!task;
 
   const [title, setTitle] = useState("");
@@ -86,6 +85,12 @@ function StandaloneTaskDialog({
   const [dueTime, setDueTime] = useState("");
   const [timeBlock, setTimeBlock] = useState<TaskTimeBlock | null>(null);
   const [contactId, setContactId] = useState<string | null>(null);
+  const [priority, setPriority] = useState<TaskPriority | null>(null);
+  const [estimateMinutes, setEstimateMinutes] = useState("");
+  const [tags, setTags] = useState("");
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceType | null>(null);
+  const [autoRollover, setAutoRollover] = useState(false);
+  const [assigneeUid, setAssigneeUid] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -100,6 +105,12 @@ function StandaloneTaskDialog({
       setDueTime(d ? toTimeInput(d) : "");
       setTimeBlock(task.timeBlock ?? null);
       setContactId(task.contactId);
+      setPriority(task.priority ?? null);
+      setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
+      setTags((task.tags ?? []).join(", "));
+      setRecurrence(task.recurrence?.type ?? null);
+      setAutoRollover(task.autoRollover === true);
+      setAssigneeUid(task.assigneeUid ?? null);
     } else {
       setTitle("");
       setNotes("");
@@ -107,6 +118,12 @@ function StandaloneTaskDialog({
       setDueTime("");
       setTimeBlock(null);
       setContactId(defaultContactId ?? null);
+      setPriority(null);
+      setEstimateMinutes("");
+      setTags("");
+      setRecurrence(null);
+      setAutoRollover(false);
+      setAssigneeUid(null);
     }
     setErrors({});
   }, [open, task, defaultContactId]);
@@ -141,7 +158,9 @@ function StandaloneTaskDialog({
         await updateTask(task.id, payload);
         toast.success("Task updated");
       } else {
-        // Create goes through the server so task.created fires.
+        // Create goes through the server so task.created fires. The full
+        // service is shared with Task Detail and owns the richer fields.
+        const useFullTaskService = !defaultDealId;
         const res = await fetch("/api/tasks", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -154,6 +173,18 @@ function StandaloneTaskDialog({
             dealId: payload.dealId,
             eventId: payload.eventId,
             timeBlock: payload.timeBlock,
+            ...(useFullTaskService
+              ? {
+                  full: true,
+                  projectId: defaultProjectId ?? null,
+                  priority,
+                  estimateMinutes: estimateMinutes ? Number(estimateMinutes) : null,
+                  tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+                  recurrence: recurrence ? { type: recurrence } : null,
+                  autoRollover,
+                  assigneeUid,
+                }
+              : {}),
           }),
         });
         if (!res.ok) {
@@ -190,18 +221,18 @@ function StandaloneTaskDialog({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? "Edit Task" : "New Task"}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit Task" : "New Task"}</DialogTitle>
+          <DialogDescription>
             {isEdit
               ? "Update this task."
               : "A follow-up, a reminder, or anything you don't want to forget."}
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
-        <form className="space-y-4 p-4 pt-0" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1.5">
             <Label htmlFor="task-title">
               Title <span className="text-destructive">*</span>
@@ -216,6 +247,35 @@ function StandaloneTaskDialog({
             {errors.title && (
               <p className="text-xs text-destructive">{errors.title}</p>
             )}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="task-priority">Priority</Label>
+              <select id="task-priority" value={priority ?? ""} onChange={(e) => setPriority((e.target.value || null) as TaskPriority | null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="">Unset</option>
+                {TASK_PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-estimate">Estimate (minutes)</Label>
+              <Input id="task-estimate" inputMode="numeric" value={estimateMinutes} onChange={(e) => setEstimateMinutes(e.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="30" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="task-recurrence">Repeats</Label>
+              <select id="task-recurrence" value={recurrence ?? ""} onChange={(e) => setRecurrence((e.target.value || null) as TaskRecurrenceType | null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <option value="">Doesn&apos;t repeat</option>
+                {(Object.keys(TASK_RECURRENCE_LABELS) as TaskRecurrenceType[]).map((r) => <option key={r} value={r}>{TASK_RECURRENCE_LABELS[r]}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="task-assignee">Assignee</Label>
+            <select id="task-assignee" value={assigneeUid ?? ""} onChange={(e) => setAssigneeUid(e.target.value || null)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <option value="">Unassigned</option>
+              {assignees.map((member) => <option key={member.uid} value={member.uid}>{member.name}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -263,6 +323,19 @@ function StandaloneTaskDialog({
               Sorts this task into a slot on the Calendar page&apos;s Today&apos;s Time Blocks panel.
             </p>
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="task-tags">Tags</Label>
+            <Input id="task-tags" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="marketing, follow-up" />
+            <p className="text-[11px] text-muted-foreground">Separate tags with commas.</p>
+          </div>
+
+          {!isEdit && !defaultDealId && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={autoRollover} onChange={(e) => setAutoRollover(e.target.checked)} className="accent-primary" />
+              Automatically roll over when overdue
+            </label>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="task-contact">Linked contact</Label>
@@ -331,7 +404,7 @@ function StandaloneTaskDialog({
             </div>
           </div>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

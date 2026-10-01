@@ -9,6 +9,7 @@ import { mediaStorageAdapter } from "@/lib/server/media-storage";
 import {
   deleteBunnyHostedVideo,
   getBunnyPlaybackUrl,
+  getBunnyThumbnailUrl,
   syncBunnyHostedVideo,
 } from "@/lib/server/bunny-stream-service";
 import { listSharesForSubAccount, revokeSharesForAsset, shareView } from "@/lib/server/assets/media-share-service";
@@ -156,6 +157,9 @@ export async function usageOf(t: Tenant, asset: MediaAsset): Promise<MediaUsage[
 // ── list / view ──────────────────────────────────────────────────────────────
 
 async function signedThumb(a: MediaAsset): Promise<string | null> {
+  if (kindOf(a) === "video" && a.storage.provider === "bunny") {
+    try { return getBunnyThumbnailUrl(a); } catch { return null; }
+  }
   if (kindOf(a) !== "image" || a.storage.provider !== "firebase") return null;
   try {
     return (await mediaStorageAdapter("firebase").createAuthorizedUrl({ key: a.storage.key, expiresInSeconds: 30 * 60 })).url;
@@ -189,7 +193,16 @@ async function toItems(t: Tenant, assets: MediaAsset[]): Promise<MediaLibraryIte
         sizeBytes: a.bunny?.storageBytes ?? a.storage.fileSizeBytes ?? null,
         width: a.metadata?.width ?? a.bunny?.width ?? null,
         height: a.metadata?.height ?? a.bunny?.height ?? null,
-        durationSeconds: a.bunny?.durationSeconds ?? (a.metadata?.durationMs ? Math.round(a.metadata.durationMs / 1000) : null),
+        durationSeconds: (() => {
+          const ms = a.metadata?.durationMs;
+          if (typeof ms === "number" && Number.isFinite(ms) && ms > 0) return Math.round(ms / 1000);
+          const seconds = a.bunny?.durationSeconds;
+          if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+            // A few legacy records stored milliseconds in the seconds field.
+            return Math.round(seconds > 86_400 ? seconds / 1000 : seconds);
+          }
+          return null;
+        })(),
         status: a.status,
         tags: a.library?.tags ?? [],
         createdAt: isoOf(a.createdAt),

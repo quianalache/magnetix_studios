@@ -35,7 +35,7 @@ export async function PATCH(
   const status = body.status === "scheduled" ? "scheduled" : "draft";
   if (status === "draft") {
     if (existing.status === "scheduled") await cancelQstashMessage(existing.qstashMessageId);
-    await ref.set({ caption, imageUrl, targets, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    await ref.set({ caption, imageUrl, targets, status: "draft", scheduledAt: null, qstashMessageId: null, results: [], updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     return NextResponse.json({ ok: true, id: postId, status });
   }
   const when = typeof body.scheduledAt === "string" ? new Date(body.scheduledAt) : null;
@@ -47,6 +47,15 @@ export async function PATCH(
   const meta = subSnap.data()?.metaConfig as MetaConfig | null | undefined;
   if (!meta || !metaCanPublish(meta)) return NextResponse.json({ error: "Reconnect a publish-capable Facebook Page and Instagram account first." }, { status: 400 });
   if (!meta.pageId || (targets.includes("instagram") && !meta.instagramBusinessAccountId)) return NextResponse.json({ error: "Reconnect a publish-capable Facebook Page and Instagram account first." }, { status: 400 });
+  const existingWhen = existing.scheduledAt && typeof (existing.scheduledAt as { toDate?: () => Date }).toDate === "function"
+    ? (existing.scheduledAt as { toDate: () => Date }).toDate().getTime()
+    : typeof (existing.scheduledAt as { seconds?: number })?.seconds === "number"
+      ? (existing.scheduledAt as { seconds: number }).seconds * 1000
+      : null;
+  if (existing.status === "scheduled" && existing.qstashMessageId && existingWhen === when.getTime()) {
+    await ref.set({ caption, imageUrl, targets, status: "scheduled", scheduledAt: when, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return NextResponse.json({ ok: true, id: postId, status });
+  }
   if (!qstashIsConfigured()) return NextResponse.json({ error: "Scheduling is unavailable on this deployment." }, { status: 503 });
   const scheduled = await publishSocialPost({ postId, subAccountId, delaySeconds: Math.max(0, Math.floor((when.getTime() - Date.now()) / 1000)), deduplicationId: `social_${postId}_${Date.now()}` });
   if (!scheduled) return NextResponse.json({ error: "Could not schedule the post." }, { status: 502 });
@@ -84,6 +93,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
+  if (post.status === "scheduled") await cancelQstashMessage(post.qstashMessageId);
   await ref.delete();
   return NextResponse.json({ ok: true, id: postId });
 }
