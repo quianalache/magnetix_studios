@@ -719,6 +719,27 @@ async function main() {
     await cUpdate(cDoc(memberBrowser, "tasks/teamTask"), { title: "Team (edited)" });
   });
 
+  await check("archived routines stay available to the Archived workspace and restore without losing identity or history", async () => {
+    const res = await post({
+      name: "Archive regression routine",
+      activities: [{ title: "Preserve history" }],
+      schedule: { frequency: "daily", startDate: today },
+    });
+    assert.equal(res.status, 201);
+    const archivedId = (await res.json()).routine.id as string;
+    const before = await db.doc("routines/" + archivedId).get();
+    const historyTask = svc.occurrenceTaskId(archivedId, today, (await before.data())!.activities[0].id);
+    await db.doc("routineTasks/" + historyTask).update({ completed: true, status: "completed" });
+    assert.equal((await oneRoute.PATCH(req("admin1", "PATCH", { status: "archived" }), rCtx(archivedId))).status, 200);
+    const activeList = await (await listRoute.GET(req("admin1"), saCtx())).json();
+    assert.equal(activeList.routines.some((item: { routine: { id: string } }) => item.routine.id === archivedId), false);
+    const archivedList = await (await listRoute.GET(req("admin1", "GET", undefined, "http://test.local/x?includeArchived=1"), saCtx())).json();
+    assert.equal(archivedList.routines.find((item: { routine: { id: string } }) => item.routine.id === archivedId)?.routine.status, "archived");
+    assert.equal((await db.doc("routineTasks/" + historyTask).get()).data()!.completed, true);
+    assert.equal((await oneRoute.PATCH(req("admin1", "PATCH", { status: "active" }), rCtx(archivedId))).status, 200);
+    assert.equal((await db.doc("routines/" + archivedId).get()).data()!.status, "active");
+  });
+
   // ── delete + rituals ───────────────────────────────────────────────────
   await check("delete: definition gone, completed activities stay in task history, untouched upcoming removed", async () => {
     const res = await oneRoute.DELETE(req("admin1", "DELETE"), rCtx(morning));

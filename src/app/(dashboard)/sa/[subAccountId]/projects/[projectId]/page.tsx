@@ -313,7 +313,13 @@ export default function ProjectWorkspacePage({
               onViewTasks={() => setTab("tasks")}
             />
           )}
-          {tab === "tasks" && <ProjectWorkspaceTasks project={project} steps={steps} />}
+          {tab === "tasks" && (
+            <ProjectWorkspaceTasks
+              project={project}
+              steps={steps}
+              onEditProject={() => setEditOpen(true)}
+            />
+          )}
           {tab === "activity" && (
             <ProjectWorkspaceActivity project={project} steps={steps} />
           )}
@@ -406,13 +412,13 @@ function StatusMenu({
           onClick={() => !active && onChange("active")}
           disabled={active}
         >
-          Active
+          Active (current)
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => active && onChange("archived")}
           disabled={!active}
         >
-          Archived
+          Archive project
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

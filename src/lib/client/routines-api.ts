@@ -23,8 +23,9 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
 
 const base = (sa: string) => `/api/sub-accounts/${sa}/routines`;
 
-export function listRoutinesApi(sa: string) {
-  return call<{ today: string; routines: RoutineListItem[]; projectRoutines: ProjectRoutineItem[] }>(base(sa));
+export function listRoutinesApi(sa: string, opts: { includeArchived?: boolean } = {}) {
+  const query = opts.includeArchived ? "?includeArchived=1" : "";
+  return call<{ today: string; routines: RoutineListItem[]; projectRoutines: ProjectRoutineItem[] }>(base(sa) + query);
 }
 
 export function getRoutineApi(sa: string, id: string, from: string, to: string) {

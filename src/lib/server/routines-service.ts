@@ -675,7 +675,11 @@ async function visibleRoutines(subAccountId: string, viewer: RoutineViewer): Pro
     .filter((r) => canViewRoutine(r, viewer.uid));
 }
 
-export async function listRoutines(subAccountId: string, viewer: RoutineViewer): Promise<{
+export async function listRoutines(
+  subAccountId: string,
+  viewer: RoutineViewer,
+  opts: { includeArchived?: boolean } = {}
+): Promise<{
   today: string;
   routines: RoutineListItem[];
   projectRoutines: ProjectRoutineItem[];
@@ -693,7 +697,7 @@ export async function listRoutines(subAccountId: string, viewer: RoutineViewer):
   // Generate today for any routine the cron hasn't reached yet this hour.
   const items: RoutineListItem[] = [];
   for (const r of routines) {
-    if (r.status === "archived") continue;
+    if (r.status === "archived" && !opts.includeArchived) continue;
     const w = await projectWindow(r, tz);
     let byDate = grouped.get(r.id) ?? new Map<string, Doc[]>();
     if (r.status === "active" && scheduledActivityCount(r, w, today) > 0 && (byDate.get(today)?.length ?? 0) < scheduledActivityCount(r, w, today)) {

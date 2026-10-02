@@ -15,7 +15,8 @@ export async function GET(
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
   try {
-    return NextResponse.json(await listRoutines(subAccountId, { uid: access.uid, role: access.subAccountRole ?? null }));
+    const includeArchived = new URL(request.url).searchParams.get("includeArchived") === "1";
+    return NextResponse.json(await listRoutines(subAccountId, { uid: access.uid, role: access.subAccountRole ?? null }, { includeArchived }));
   } catch (err) {
     return taskErrorResponse(err);
   }

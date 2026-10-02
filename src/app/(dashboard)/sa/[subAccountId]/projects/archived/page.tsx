@@ -26,7 +26,7 @@ export default function ArchivedPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const reloadRoutines = useCallback(async () => {
-    try { setRoutines((await listRoutinesApi(subAccountId)).routines); } catch { setRoutines([]); }
+    try { setRoutines((await listRoutinesApi(subAccountId, { includeArchived: true })).routines); } catch { setRoutines([]); }
   }, [subAccountId]);
   useEffect(() => { void reloadRoutines(); }, [reloadRoutines]);
   useEffect(() => {

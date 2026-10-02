@@ -48,9 +48,11 @@ type View = "list" | "board" | "calendar";
 export function ProjectWorkspaceTasks({
   project,
   steps,
+  onEditProject,
 }: {
   project: Project;
   steps: ProjectStep[];
+  onEditProject?: () => void;
 }) {
   const [view, setView] = useState<View>("list");
   const views: { id: View; label: string; icon: typeof List }[] = [
@@ -83,7 +85,7 @@ export function ProjectWorkspaceTasks({
           </button>
         ))}
       </div>
-      {view === "list" && <StepList project={project} steps={steps} />}
+      {view === "list" && <StepList project={project} steps={steps} onEditProject={onEditProject} />}
       {view === "board" && <StepBoard project={project} steps={steps} />}
       {view === "calendar" && <ProjectCalendar project={project} />}
     </div>
@@ -159,9 +161,11 @@ export function ClientAddedBadge({
 function StepList({
   project,
   steps,
+  onEditProject,
 }: {
   project: Project;
   steps: ProjectStep[];
+  onEditProject?: () => void;
 }) {
   const { setDone, deleteStep } = useProjectStepActions(project.id);
   const open = steps.filter((s) => !s.done);
@@ -169,13 +173,28 @@ function StepList({
   const row = (s: ProjectStep) => (
     <li
       key={s.id}
-      className="group hover:bg-muted/40 flex items-center gap-3 border-b px-4 py-3 last:border-b-0"
+      role={onEditProject ? "button" : undefined}
+      tabIndex={onEditProject ? 0 : undefined}
+      aria-label={onEditProject ? "Edit project for " + s.title : undefined}
+      onClick={() => onEditProject?.()}
+      onKeyDown={(event) => {
+        if (onEditProject && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onEditProject();
+        }
+      }}
+      className={cn(
+        "group hover:bg-muted/40 flex items-center gap-3 border-b px-4 py-3 last:border-b-0",
+        onEditProject && "cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      )}
     >
-      <Checkbox
+      <span onClick={(event) => event.stopPropagation()}>
+        <Checkbox
         checked={s.done}
         onCheckedChange={(v) => setDone(s, v === true)}
         aria-label={s.done ? `Reopen ${s.title}` : `Complete ${s.title}`}
-      />
+        />
+      </span>
       <span
         className={cn(
           "min-w-0 flex-1 text-sm",
@@ -197,7 +216,10 @@ function StepList({
       </span>
       <button
         type="button"
-        onClick={() => deleteStep(s)}
+        onClick={(event) => {
+          event.stopPropagation();
+          deleteStep(s);
+        }}
         aria-label={`Delete ${s.title}`}
         className="text-muted-foreground hover:text-destructive rounded-md p-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
       >
@@ -223,6 +245,11 @@ function StepList({
         </ul>
       )}
       <div className="border-t p-3">
+        {onEditProject && steps.length > 0 && (
+          <p className="text-muted-foreground mb-2 text-xs">
+            These are legacy checklist steps. Select a row to edit the project; shared Task Detail is available for modern task-based projects.
+          </p>
+        )}
         <AddStepInput projectId={project.id} />
       </div>
     </div>

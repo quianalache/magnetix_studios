@@ -48,9 +48,7 @@ function SheetContent({
   showCloseButton?: boolean
   inline?: boolean
 }) {
-  return (
-    <SheetPortal>
-      {!inline && <SheetOverlay />}
+  const popup = (
       <SheetPrimitive.Popup
         data-slot="sheet-content"
         data-side={side}
@@ -78,8 +76,11 @@ function SheetContent({
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>
-    </SheetPortal>
   )
+
+  // Inline sheets are full-page workspace content, not overlays. Keep them
+  // in the normal tree while preserving portals for ordinary sheets.
+  return inline ? popup : <SheetPortal><SheetOverlay />{popup}</SheetPortal>
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {

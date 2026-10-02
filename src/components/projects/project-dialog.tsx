@@ -496,7 +496,7 @@ export function ProjectDialog({
                   onClick={handleArchiveToggle}
                   disabled={saving || deleting}
                 >
-                  {project?.status === "active" ? "Archive" : "Reactivate"}
+                  {project?.status === "active" ? "Archive project" : "Restore project"}
                 </Button>
               </div>
             ) : (
