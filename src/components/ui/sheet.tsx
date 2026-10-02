@@ -78,9 +78,46 @@ function SheetContent({
       </SheetPrimitive.Popup>
   )
 
-  // Inline sheets are full-page workspace content, not overlays. Keep them
-  // in the normal tree while preserving portals for ordinary sheets.
-  return inline ? popup : <SheetPortal><SheetOverlay />{popup}</SheetPortal>
+  // Base UI's Dialog.Popup must be a child of Dialog.Portal. An inline
+  // workspace is intentionally not a dialog/overlay, so it cannot use Popup
+  // directly in the normal tree. Render the inline variant as a regular
+  // section while keeping ordinary sheets on the portal-backed Popup path.
+  if (inline) {
+    const inlineProps = { ...props } as Record<string, unknown>
+    delete inlineProps.finalFocus
+    delete inlineProps.initialFocus
+    delete inlineProps.render
+    return (
+      <div
+        data-slot="sheet-content"
+        data-side={side}
+        className={cn(
+          "relative inset-auto flex min-h-0 w-full max-w-none border-0 bg-card shadow-none",
+          className
+        )}
+        {...inlineProps}
+      >
+        {children}
+        {showCloseButton && (
+          <SheetPrimitive.Close
+            data-slot="sheet-close"
+            render={
+              <Button
+                variant="ghost"
+                className="absolute top-3 right-3"
+                size="icon-sm"
+              />
+            }
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        )}
+      </div>
+    )
+  }
+
+  return <SheetPortal><SheetOverlay />{popup}</SheetPortal>
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
