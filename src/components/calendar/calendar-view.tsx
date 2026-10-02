@@ -808,6 +808,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
       <CalendarMeetingPopup
         event={detailEvent}
         contact={detailEvent?.contactId ? contactById.get(detailEvent.contactId) ?? null : null}
+        bookingPath={detailEvent?.bookingPageSlug && subAccount ? subAccount.saPath(`/booking/${detailEvent.bookingPageSlug}/bookings`) : null}
         open={!!detailEvent}
         onOpenChange={(open) => !open && setDetailEvent(null)}
         onReschedule={() => {

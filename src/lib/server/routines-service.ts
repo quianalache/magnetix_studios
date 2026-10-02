@@ -143,6 +143,36 @@ export async function subAccountTimeZone(subAccountId: string): Promise<string> 
   return (snap.data()?.timezone as string) || "UTC";
 }
 
+/** Read-only compatibility normalization for older or partially-written Routine documents. */
+function compatibilityRoutine(routine: Routine, today: string): Routine {
+  let schedule: RoutineSchedule;
+  try {
+    schedule = normalizeSchedule(routine.schedule, today);
+  } catch {
+    schedule = normalizeSchedule({}, today);
+  }
+  const activities = Array.isArray(routine.activities)
+    ? routine.activities.map((activity, index) => {
+        const raw = activity as RoutineActivity;
+        let activitySchedule = schedule;
+        if (raw.schedule) {
+          try {
+            activitySchedule = normalizeSchedule(raw.schedule, today);
+          } catch {
+            activitySchedule = schedule;
+          }
+        }
+        return {
+          ...raw,
+          id: typeof raw.id === "string" && raw.id ? raw.id : `a${index + 1}`,
+          title: typeof raw.title === "string" && raw.title.trim() ? raw.title : "Routine task",
+          schedule: activitySchedule,
+        };
+      })
+    : [];
+  return { ...routine, schedule, activities };
+}
+
 export async function loadRoutine(
   subAccountId: string,
   routineId: string
@@ -154,7 +184,11 @@ export async function loadRoutine(
   if (!data || data.subAccountId !== subAccountId) {
     throw new TaskInputError("Routine not found", 404);
   }
-  return { ...(data as Omit<Routine, "id">), id: snap.id };
+  const tz = await subAccountTimeZone(subAccountId);
+  return compatibilityRoutine(
+    { ...(data as Omit<Routine, "id">), id: snap.id },
+    todayInTimeZone(tz),
+  );
 }
 
 /** Like loadRoutine, but a routine the viewer may not see reads as missing. */
@@ -667,11 +701,10 @@ function rangeDates(from: string, to: string): string[] {
   return out;
 }
 
-/** Routines the viewer may see in this sub-account: their own + shared ones. */
-async function visibleRoutines(subAccountId: string, viewer: RoutineViewer): Promise<Routine[]> {
+async function visibleRoutines(subAccountId: string, viewer: RoutineViewer, today: string): Promise<Routine[]> {
   const snap = await getAdminDb().collection("routines").where("subAccountId", "==", subAccountId).get();
   return snap.docs
-    .map((d) => ({ ...(d.data() as Omit<Routine, "id">), id: d.id }))
+    .map((d) => compatibilityRoutine({ ...(d.data() as Omit<Routine, "id">), id: d.id }, today))
     .filter((r) => canViewRoutine(r, viewer.uid));
 }
 
@@ -686,7 +719,7 @@ export async function listRoutines(
 }> {
   const tz = await subAccountTimeZone(subAccountId);
   const today = todayInTimeZone(tz);
-  const routines = await visibleRoutines(subAccountId, viewer);
+  const routines = await visibleRoutines(subAccountId, viewer, today);
 
   const weekStart = weekStartYmd(today);
   const weekEnd = addDaysYmd(weekStart, 6);
@@ -965,7 +998,7 @@ export async function routineCalendarEntries(opts: {
   const { from, to } = checkRange(opts.from, opts.to);
   const tz = await subAccountTimeZone(opts.subAccountId);
   const today = todayInTimeZone(tz);
-  const routines = await visibleRoutines(opts.subAccountId, opts.viewer);
+  const routines = await visibleRoutines(opts.subAccountId, opts.viewer, today);
   if (routines.length === 0) return [];
   const grouped = groupByRoutineAndDate(await occurrenceTasksInRange(opts.subAccountId, from, to));
   const out: RoutineCalendarEntry[] = [];
@@ -1010,7 +1043,7 @@ export async function routineCalendarEntries(opts: {
 export async function listRoutineActivities(subAccountId: string, viewer: RoutineViewer) {
   const tz = await subAccountTimeZone(subAccountId);
   const today = todayInTimeZone(tz);
-  const routines = await visibleRoutines(subAccountId, viewer);
+  const routines = await visibleRoutines(subAccountId, viewer, today);
   if (routines.length === 0) return { today, tasks: [] as Record<string, unknown>[] };
   for (const r of routines) {
     if (r.status !== "active") continue;

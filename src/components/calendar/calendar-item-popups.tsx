@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { TaskDetailModal } from "@/components/tasks/detail/task-detail-modal";
 import { setTaskCompleted } from "@/lib/client/task-detail-api";
-import { eventStatus, type CalendarEvent } from "@/types/events";
+import { eventSource, eventStatus, type CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Project } from "@/types/projects";
 import type { Task } from "@/types/tasks";
@@ -102,12 +102,14 @@ export function CalendarTaskPopup({
 export function CalendarMeetingPopup({
   event,
   contact,
+  bookingPath,
   open,
   onOpenChange,
   onReschedule,
 }: {
   event: CalendarEvent | null;
   contact: Contact | null;
+  bookingPath: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReschedule: () => void;
@@ -121,6 +123,8 @@ export function CalendarMeetingPopup({
     void navigator.clipboard.writeText(meetingLink).then(() => toast.success("Meeting link copied"));
   };
   const isCancelled = eventStatus(event) === "cancelled";
+  const isBooking = eventSource(event) === "booking_page";
+  const statusLabel = eventStatus(event).replaceAll("_", " ");
 
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
@@ -128,13 +132,15 @@ export function CalendarMeetingPopup({
       <div className="border-b bg-blue-500/5 px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
-          <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">Meeting or session</p></div>
+          <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">{isBooking ? "Booking appointment" : "Meeting or session"}</p></div>
           <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="Close"><X className="h-4 w-4" /></Button>
         </div>
       </div>
       <div className="space-y-4 px-5 py-5">
         <DetailRow icon={Clock3}>{dateTime(start, end)}</DetailRow>
         {contact && <DetailRow icon={UserRound}>{contact.name}</DetailRow>}
+        {event.assignedToName && <DetailRow icon={UserRound}>Host: {event.assignedToName}</DetailRow>}
+        {isBooking && <DetailRow icon={CalendarDays}><span className="capitalize">Status: {statusLabel}</span></DetailRow>}
         {event.location && <DetailRow icon={MapPin}>{event.location}</DetailRow>}
         {event.notes && <DetailRow icon={Clipboard}><p className="whitespace-pre-wrap text-muted-foreground">{event.notes}</p></DetailRow>}
         {meetingLink && <DetailRow icon={Video}><a className="truncate text-primary hover:underline" href={meetingLink} target="_blank" rel="noreferrer">{meetingLink}</a></DetailRow>}
@@ -142,6 +148,7 @@ export function CalendarMeetingPopup({
       <div className="flex flex-wrap gap-2 border-t bg-muted/20 px-5 py-4">
         {meetingLink && <Button onClick={() => window.open(meetingLink, "_blank", "noopener,noreferrer")} disabled={isCancelled}><Video className="mr-2 h-4 w-4" />Open Session</Button>}
         {meetingLink && <Button variant="outline" onClick={copyLink}><Clipboard className="mr-2 h-4 w-4" />Copy Link</Button>}
+        {bookingPath && <Button variant="outline" onClick={() => window.location.assign(bookingPath)}>Open Booking</Button>}
         {!isCancelled && <Button variant="outline" onClick={() => { onOpenChange(false); onReschedule(); }}>Reschedule</Button>}
       </div>
     </DialogContent>
