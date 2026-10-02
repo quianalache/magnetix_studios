@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { RoutineDetailSheet } from "@/components/routines/routine-detail-sheet";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { deleteRoutineApi } from "@/lib/client/routines-api";
 import { toast } from "sonner";
 import type { RoutineView } from "@/types/routines";
+import { routineCalendarDate } from "@/lib/calendar/navigation";
 
 /** Full-page Routine Workspace. The detail implementation is shared with the
  * legacy deep-link sheet, but is rendered inline so browser navigation and
@@ -22,11 +23,13 @@ export default function RoutineWorkspacePage({
 }) {
   const { routineId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { saPath, subAccountId } = useSubAccount();
   const [editing, setEditing] = useState<RoutineView | null>(null);
   const [deleting, setDeleting] = useState<RoutineView | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [detailKey, setDetailKey] = useState(0);
+  const initialDate = routineCalendarDate(searchParams.get("date"));
 
   return (
     <div className="momentum-scope mx-auto w-full max-w-6xl space-y-5 rounded-2xl">
@@ -40,7 +43,7 @@ export default function RoutineWorkspacePage({
       <RoutineDetailSheet
         key={detailKey}
         routineId={routineId}
-        initialDate={null}
+        initialDate={initialDate}
         open
         embedded
         onOpenChange={(open) => {

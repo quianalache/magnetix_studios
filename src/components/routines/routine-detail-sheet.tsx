@@ -73,7 +73,7 @@ function occurrenceId(routineId: string, date: string, activityId: string) {
 }
 
 function periodFor(routine: RoutineView | null, date: string) {
-  if (routine?.schedule.unit === "month") {
+  if (routine?.schedule?.unit === "month") {
     return { kind: "month" as const, from: monthStartYmd(date), to: monthEndYmd(date) };
   }
   const from = weekStartYmd(date);
@@ -125,7 +125,7 @@ export function RoutineDetailSheet({
             ? { from: monthStartYmd(anchor), to: monthEndYmd(anchor) }
             : { from: weekStartYmd(anchor), to: addDaysYmd(weekStartYmd(anchor), 6) };
         let res = await getRoutineApi(subAccountId, routineId, p.from, p.to);
-        if (!unitHint && res.routine.schedule.unit === "month") {
+        if (!unitHint && res.routine.schedule?.unit === "month") {
           const a = date ?? res.today;
           res = await getRoutineApi(subAccountId, routineId, monthStartYmd(a), monthEndYmd(a));
         }
@@ -153,7 +153,7 @@ export function RoutineDetailSheet({
   const hex = routine ? routineHex(routine.color) : "#7c3aed";
 
   async function refresh(date: string | null = selected) {
-    await load(date, routine?.schedule.unit === "month" ? "month" : "week");
+    await load(date, routine?.schedule?.unit === "month" ? "month" : "week");
   }
 
   function goTo(date: string) {

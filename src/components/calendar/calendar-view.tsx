@@ -25,6 +25,7 @@ import type { ExternalCalendarEvent } from "@/types/google-calendar";
 import type { RoutineCalendarEntry } from "@/types/routines";
 import { useOptionalSubAccount } from "@/context/sub-account-context";
 import { routineCalendarApi } from "@/lib/client/routines-api";
+import { routineCalendarPath } from "@/lib/calendar/navigation";
 import { blockForTime, formatClock } from "@/lib/routines/schedule";
 import { routineHex } from "@/components/routines/routine-look";
 
@@ -176,7 +177,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
 
   function openRoutine(entry: RoutineCalendarEntry, e: React.MouseEvent) {
     e.stopPropagation();
-    const path = `/projects/routines?routine=${encodeURIComponent(entry.routineId)}&date=${entry.date}`;
+    const path = routineCalendarPath(entry.routineId, entry.date);
     router.push(subAccount ? subAccount.saPath(path) : path);
   }
 
