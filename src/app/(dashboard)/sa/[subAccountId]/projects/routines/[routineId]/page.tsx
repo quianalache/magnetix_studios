@@ -53,47 +53,50 @@ export default function RoutineWorkspacePage({
         onDelete={(routine) => setDeleting(routine)}
         onChanged={() => setDetailKey((key) => key + 1)}
       />
-      <RoutineEditorDialog
-        open={!!editing}
-        onOpenChange={(open) => !open && setEditing(null)}
-        routine={editing}
-        projects={[]}
-        onSaved={() => {
-          setEditing(null);
-          setDetailKey((key) => key + 1);
-        }}
-      />
-      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete “{deleting?.name}”?</DialogTitle>
-            <DialogDescription>
-              This stops future recurrence and removes unfinished upcoming occurrences. Completed and historical activity records, subtasks and tracked time remain available as history. Retaining recurring activities as standalone tasks is not supported by the current occurrence model, so no ambiguous conversion is performed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</Button>
-            <Button
-              variant="destructive"
-              disabled={deleteBusy}
-              onClick={async () => {
-                if (!deleting) return;
-                setDeleteBusy(true);
-                try {
-                  await deleteRoutineApi(subAccountId, deleting.id);
-                  toast.success("Routine deleted; history preserved");
-                  router.push(saPath("/projects/routines"));
-                } catch (err) {
-                  toast.error((err as Error).message);
-                } finally {
-                  setDeleteBusy(false);
-                  setDeleting(null);
-                }
-              }}
-            >{deleteBusy ? "Deleting…" : "Delete routine"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editing && (
+        <RoutineEditorDialog
+          open
+          onOpenChange={(open) => !open && setEditing(null)}
+          routine={editing}
+          projects={[]}
+          onSaved={() => {
+            setEditing(null);
+            setDetailKey((key) => key + 1);
+          }}
+        />
+      )}
+      {deleting && (
+        <Dialog open onOpenChange={(open) => !open && setDeleting(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete “{deleting.name}”?</DialogTitle>
+              <DialogDescription>
+                This stops future recurrence and removes unfinished upcoming occurrences. Completed and historical activity records, subtasks and tracked time remain available as history. Retaining recurring activities as standalone tasks is not supported by the current occurrence model, so no ambiguous conversion is performed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteBusy}
+                onClick={async () => {
+                  setDeleteBusy(true);
+                  try {
+                    await deleteRoutineApi(subAccountId, deleting.id);
+                    toast.success("Routine deleted; history preserved");
+                    router.push(saPath("/projects/routines"));
+                  } catch (err) {
+                    toast.error((err as Error).message);
+                  } finally {
+                    setDeleteBusy(false);
+                    setDeleting(null);
+                  }
+                }}
+              >{deleteBusy ? "Deleting…" : "Delete routine"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

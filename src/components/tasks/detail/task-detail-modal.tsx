@@ -96,20 +96,19 @@ export function TaskDetailModal({
 }) {
   const [currentId, setCurrentId] = useState<string | null>(taskId);
   useEffect(() => setCurrentId(taskId), [taskId]);
+  if (!open || !currentId) return null;
   return (
-    <Dialog open={open && !!currentId} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
         className="flex h-[100dvh] max-h-[100dvh] w-full max-w-full flex-col gap-0 overflow-hidden rounded-none p-0 sm:max-w-full lg:h-[min(900px,calc(100dvh-3rem))] lg:w-[min(1240px,calc(100vw-3rem))] lg:max-w-[min(1240px,calc(100vw-3rem))] lg:rounded-2xl"
       >
-        {currentId && (
-          <TaskDetailBody
-            key={currentId}
-            taskId={currentId}
-            onClose={() => onOpenChange(false)}
-            onOpenTask={setCurrentId}
-          />
-        )}
+        <TaskDetailBody
+          key={currentId}
+          taskId={currentId}
+          onClose={() => onOpenChange(false)}
+          onOpenTask={setCurrentId}
+        />
       </DialogContent>
     </Dialog>
   );
