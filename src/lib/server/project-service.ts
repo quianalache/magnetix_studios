@@ -107,15 +107,13 @@ export interface CreateProjectOpts {
   sourceOfferId?: string | null;
   sourcePurchaseId?: string | null;
   sourceTemplateId?: string | null;
-  /**
-   * Phase 2: new projects use CRM Tasks ("tasks"). Omitted = "steps", the
-   * original checklist — so any caller not updated for Phase 2 keeps
-   * producing exactly the old document shape.
-   */
+  /** New projects use the unified CRM Tasks engine. Explicit "steps" is
+   * retained only for controlled migration fixtures and recovery tooling. */
   taskModel?: "steps" | "tasks";
 }
 
 export async function createProject(opts: CreateProjectOpts): Promise<Project> {
+  const taskModel = opts.taskModel ?? "tasks";
   const ref = projectsCol().doc();
   const doc: Omit<Project, "id"> = {
     agencyId: opts.agencyId,
@@ -137,13 +135,13 @@ export async function createProject(opts: CreateProjectOpts): Promise<Project> {
     stepsDoneCount: 0,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-    ...(opts.taskModel === "tasks"
+    ...(taskModel === "tasks"
       ? { taskModel: "tasks" as const, milestones: [], timeSpentSeconds: 0 }
       : {}),
   };
   await ref.set(doc);
 
-  if (opts.taskModel === "tasks") {
+  if (taskModel === "tasks") {
     // Template steps become real CRM tasks on the new project.
     let steps = opts.templateSteps ?? [];
     if (!opts.templateSteps && opts.templateId) {
@@ -289,10 +287,10 @@ export async function projectDeletePreview(projectId: string): Promise<{
   return {
     projectId,
     taskCount: tasks?.size ?? 0,
-    stepCount: steps.size,
-    // Legacy checklist steps have no standalone-task representation. They
-    // must remain explicit rather than being silently discarded or exposed.
-    canDetach: !!tasks && steps.size === 0,
+    // Converted projects retain their source steps as recovery data, but the
+    // active task model must not count or expose them as a second task set.
+    stepCount: project.data()?.taskModel === "tasks" ? 0 : steps.size,
+    canDetach: !!tasks,
   };
 }
 
@@ -305,7 +303,7 @@ export async function deleteProject(
   if (!project.exists) return;
   const steps = await stepsCol(projectId).get();
   const mode = opts.mode ?? "delete";
-  if (mode === "detach" && (project.data()?.taskModel !== "tasks" || steps.size > 0)) {
+  if (mode === "detach" && project.data()?.taskModel !== "tasks") {
     throw new Error("This project uses legacy checklist steps; those steps cannot be detached as standalone CRM tasks.");
   }
   if (mode === "detach") {

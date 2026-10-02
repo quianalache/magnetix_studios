@@ -150,8 +150,8 @@ async function main() {
 
   // ── compatibility ───────────────────────────────────────────────────────
   let stepProjectId = "";
-  await check("legacy createProject (no taskModel) still builds a STEP project", async () => {
-    const p = await projectSvc.createProject({ agencyId: AG, subAccountId: SA, title: "Old style", description: "", startAt: null, dueAt: null, assignedContactId: null, assignedContactName: null, createdByUid: "admin1", createdByMemberId: null, templateId: "tLegacy" });
+  await check("explicit legacy fixture still builds a STEP project during migration", async () => {
+    const p = await projectSvc.createProject({ agencyId: AG, subAccountId: SA, title: "Old style", description: "", startAt: null, dueAt: null, assignedContactId: null, assignedContactName: null, createdByUid: "admin1", createdByMemberId: null, templateId: "tLegacy", taskModel: "steps" });
     stepProjectId = p.id;
     assert.equal(p.taskModel, undefined);
     assert.equal(p.stepCount, 2);
@@ -395,14 +395,15 @@ async function main() {
   });
 
   // ── offer grants ───────────────────────────────────────────────────────
-  await check("v1 offer snapshot still grants a STEP project; v2 grants tasks; retries are no-ops", async () => {
+  await check("all offer snapshot versions grant unified CRM Tasks; retries are no-ops", async () => {
     const base = { subAccountId: SA, agencyId: AG, offerId: "offer1", memberId: "mA" };
     const bundle = { templateId: "tLegacy", templateTitle: "Legacy", templateCategory: "", durationDays: 14, description: "", steps: [{ title: "Outline", order: 0 }, { title: "Record", order: 1 }] };
     const v1 = await grants.instantiateProjectEntitlements({ ...base, purchaseId: "p1", projectTemplates: [bundle] });
     assert.deepEqual([v1.created, v1.skipped], [1, 0]);
     const p1 = (await db.doc("projects/offer_p1_tLegacy").get()).data()!;
-    assert.equal(p1.taskModel, undefined);
-    assert.equal((await db.collection("projects/offer_p1_tLegacy/steps").get()).size, 2);
+    assert.equal(p1.taskModel, "tasks");
+    assert.equal((await db.collection("projects/offer_p1_tLegacy/steps").get()).size, 0);
+    assert.equal((await db.collection("tasks").where("projectId", "==", "offer_p1_tLegacy").get()).size, 2);
     const v2 = await grants.instantiateProjectEntitlements({ ...base, purchaseId: "p2", projectTemplates: [{ ...bundle, snapshotVersion: 2 }] });
     assert.equal(v2.created, 1);
     const again = await grants.instantiateProjectEntitlements({ ...base, purchaseId: "p2", projectTemplates: [{ ...bundle, snapshotVersion: 2 }] });

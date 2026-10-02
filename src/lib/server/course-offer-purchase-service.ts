@@ -118,7 +118,10 @@ export async function instantiateProjectEntitlements(opts: {
     );
     const projectRef = db.doc(`projects/${projectId}`);
     const steps = [...template.steps].sort((a, b) => a.order - b.order);
-    const taskBased = template.snapshotVersion === 2;
+    // All newly granted Projects use the unified CRM Task engine. Legacy
+    // snapshot versions remain readable as template input but never create
+    // new checklist-step records.
+    const taskBased = true;
     const territoryId =
       typeof contact?.territoryId === "string" ? contact.territoryId : GLOBAL_TERRITORY_ID;
     const wasCreated = await db.runTransaction(async (tx) => {
@@ -156,9 +159,9 @@ export async function instantiateProjectEntitlements(opts: {
           : {}),
       });
       if (taskBased) {
-        // v2 snapshot → CRM tasks, created in the SAME transaction with
-        // deterministic ids (`{projectId}_t000…`), so a retried grant is a
-        // no-op exactly like the step path. Assigned to the buyer so they
+        // Tasks are created in the SAME transaction with deterministic ids
+        // ({projectId}_t000…), so a retried grant is a no-op. Assigned to the
+        // buyer so they
         // can complete them in the Client Portal (parity with steps).
         for (const [index, step] of steps.entries()) {
           tx.set(db.doc(`tasks/${projectId}_t${String(index).padStart(3, "0")}`), {
@@ -202,24 +205,6 @@ export async function instantiateProjectEntitlements(opts: {
           });
         }
         return true;
-      }
-      for (const [index, step] of steps.entries()) {
-        tx.set(
-          projectRef
-            .collection("steps")
-            .doc(`step_${String(index).padStart(3, "0")}`),
-          {
-            agencyId: opts.agencyId,
-            subAccountId: opts.subAccountId,
-            title: step.title,
-            done: false,
-            order: step.order,
-            createdByUid: null,
-            createdByMemberId: null,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }
-        );
       }
       return true;
     });

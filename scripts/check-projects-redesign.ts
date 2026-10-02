@@ -227,7 +227,7 @@ async function main() {
     const p = await svc.createProject({
       agencyId: AG, subAccountId: SA, title: "From template", description: "",
       startAt: null, dueAt: null, assignedContactId: null, assignedContactName: null,
-      createdByUid: "admin", createdByMemberId: null, templateId: "tLegacy",
+      createdByUid: "admin", createdByMemberId: null, templateId: "tLegacy", taskModel: "steps",
     });
     spawnedId = p.id;
     const steps = await svc.listSteps(p.id);
