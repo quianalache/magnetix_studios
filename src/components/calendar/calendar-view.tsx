@@ -10,6 +10,8 @@ import {
   Clock3,
   Plus,
   Search,
+  CalendarDays,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toDate } from "@/lib/format";
@@ -28,6 +30,8 @@ import { routineCalendarApi } from "@/lib/client/routines-api";
 import { routineCalendarPath } from "@/lib/calendar/navigation";
 import { blockForTime, formatClock } from "@/lib/routines/schedule";
 import { routineHex } from "@/components/routines/routine-look";
+import { CalendarMeetingPopup, CalendarTaskPopup } from "@/components/calendar/calendar-item-popups";
+import type { Project } from "@/types/projects";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 type CalendarViewMode = "month" | "week" | "day";
@@ -41,6 +45,7 @@ interface CalendarViewProps {
   events: CalendarEvent[];
   contacts: Contact[];
   tasks: Task[];
+  projects: Project[];
   /** Read-only events pulled in from the viewer's own connected Google Calendar. */
   googleEvents: ExternalCalendarEvent[];
 }
@@ -114,7 +119,7 @@ function formatShortDate(d: Date): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function CalendarView({ events, contacts, tasks, googleEvents }: CalendarViewProps) {
+export function CalendarView({ events, contacts, tasks, projects, googleEvents }: CalendarViewProps) {
   const today = useMemo(() => dayOnly(new Date()), []);
   const [cursor, setCursor] = useState<Date>(() => dayOnly(new Date()));
   const [view, setView] = useState<CalendarViewMode>("month");
@@ -124,6 +129,9 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
   const [defaultDate, setDefaultDate] = useState<Date | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(() => dayOnly(new Date()));
+  const [detailTask, setDetailTask] = useState<Task | null>(null);
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
   const router = useRouter();
   const subAccount = useOptionalSubAccount();
   const [routineEntries, setRoutineEntries] = useState<RoutineCalendarEntry[]>([]);
@@ -177,6 +185,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
 
   function openRoutine(entry: RoutineCalendarEntry, e: React.MouseEvent) {
     e.stopPropagation();
+    setSelectedDate(new Date(`${entry.date}T00:00:00`));
     const path = routineCalendarPath(entry.routineId, entry.date);
     router.push(subAccount ? subAccount.saPath(path) : path);
   }
@@ -321,7 +330,9 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
   }
 
   function goToday() {
-    setCursor(dayOnly(new Date()));
+    const next = dayOnly(new Date());
+    setCursor(next);
+    setSelectedDate(next);
   }
 
   function openNew(day?: Date) {
@@ -330,21 +341,31 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
     setDialogOpen(true);
   }
 
-  function openEdit(ev: CalendarEvent, e: React.MouseEvent) {
+  function openEventDetail(ev: CalendarEvent, e: React.MouseEvent) {
     e.stopPropagation();
-    setEditEvent(ev);
-    setDefaultDate(null);
-    setDialogOpen(true);
+    const start = toDate(ev.startAt);
+    if (start) setSelectedDate(dayOnly(start));
+    setDetailEvent(ev);
   }
 
   function openTask(task: Task, e: React.MouseEvent) {
     e.stopPropagation();
+    const due = toDate(task.dueAt);
+    if (due) setSelectedDate(dayOnly(due));
+    setDetailTask(task);
+  }
+
+  function editTask(task: Task) {
     setEditingTask(task);
     setTaskDialogOpen(true);
   }
 
+  const selectedDayItems = itemsByDay.get(dayKey(selectedDate)) ?? [];
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
+
   return (
     <>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="rounded-2xl border bg-card">
         {/* Header — was showing the outer card's pink through unless
             explicitly overridden; real page keeps this row on
@@ -440,7 +461,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                       <button
                         key={ev.id}
                         type="button"
-                        onClick={(e) => openEdit(ev, e)}
+                        onClick={(e) => openEventDetail(ev, e)}
                         className="flex flex-col items-start rounded-xl border p-3 text-left text-sm hover:border-primary/40"
                       >
                         <span className="font-medium">{ev.title}</span>
@@ -541,7 +562,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                 return (
                   <div
                     key={dayKey(d)}
-                    onClick={() => openNew(d)}
+                    onClick={() => setSelectedDate(d)}
                     className={cn(
                       "group relative cursor-pointer p-1.5 transition-colors hover:bg-muted/30",
                       view === "day"
@@ -572,17 +593,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                       >
                         {d.getDate()}
                       </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openNew(d);
-                        }}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-label="Add event"
-                      >
-                        <Plus className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                      </button>
+                      {isToday && <span className="text-[10px] font-medium uppercase tracking-wide text-primary">Today</span>}
                     </div>
 
                     <div className="space-y-1">
@@ -625,7 +636,7 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
                             <button
                               key={`ev-${ev.id}`}
                               type="button"
-                              onClick={(e) => openEdit(ev, e)}
+                              onClick={(e) => openEventDetail(ev, e)}
                               className="group/event flex w-full items-center gap-1 truncate rounded border border-accent/30 bg-accent/20 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
                             >
                               {start && (
@@ -695,6 +706,32 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
         )}
       </div>
 
+      <aside className="rounded-2xl border bg-card p-4">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
+            <p className="text-xs text-muted-foreground">{selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+          </div>
+          <CalendarDays className="h-5 w-5 text-primary" />
+        </div>
+        <div className="space-y-2">
+          {selectedDayItems.length === 0 && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
+          {selectedDayItems.map((item) => {
+            if (item.kind === "routine") {
+              return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className="flex w-full items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-left hover:bg-primary/10"><Repeat className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.entry.name}</span><span className="text-xs text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
+            }
+            if (item.kind === "task") {
+              return <button key={`side-task-${item.task.id}`} type="button" onClick={(e) => openTask(item.task, e)} className="flex w-full items-start gap-2 rounded-xl border border-secondary/30 bg-secondary/10 p-3 text-left hover:bg-secondary/20"><Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.task.title}</span><span className="text-xs text-muted-foreground">Task</span></span></button>;
+            }
+            if (item.kind === "event") {
+              return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className="flex w-full items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-left hover:bg-accent/20"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-accent-foreground" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
+            }
+            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => item.event.htmlLink && window.open(item.event.htmlLink, "_blank", "noopener,noreferrer")} className="flex w-full items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-left hover:bg-blue-500/10"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">Calendar item</span></span></button>;
+          })}
+        </div>
+      </aside>
+      </div>
+
       {/* Bottom panels — always visible, independent of search/view */}
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-2xl border bg-card">
@@ -758,6 +795,27 @@ export function CalendarView({ events, contacts, tasks, googleEvents }: Calendar
         onOpenChange={setTaskDialogOpen}
         contacts={contacts}
         task={editingTask}
+      />
+      <CalendarTaskPopup
+        task={detailTask}
+        project={detailTask?.projectId ? projectById.get(detailTask.projectId) ?? null : null}
+        routineName={detailTask?.routineName}
+        contacts={contacts}
+        open={!!detailTask}
+        onOpenChange={(open) => !open && setDetailTask(null)}
+        onEdit={() => { if (detailTask) editTask(detailTask); }}
+      />
+      <CalendarMeetingPopup
+        event={detailEvent}
+        contact={detailEvent?.contactId ? contactById.get(detailEvent.contactId) ?? null : null}
+        open={!!detailEvent}
+        onOpenChange={(open) => !open && setDetailEvent(null)}
+        onReschedule={() => {
+          if (!detailEvent) return;
+          setEditEvent(detailEvent);
+          setDefaultDate(null);
+          setDialogOpen(true);
+        }}
       />
     </>
   );

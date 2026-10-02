@@ -15,6 +15,7 @@ import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Task } from "@/types/tasks";
 import type { ExternalCalendarEvent } from "@/types/google-calendar";
+import type { Project } from "@/types/projects";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default function CalendarPage() {
@@ -25,7 +26,7 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<{ id: string; status?: string }[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [googleEvents, setGoogleEvents] = useState<ExternalCalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -124,6 +125,7 @@ export default function CalendarPage() {
           events={events}
           contacts={contacts}
           tasks={tasks.filter((t) => !t.archived && !(t.projectId && projects.some((p) => p.id === t.projectId && p.status === "archived")))}
+          projects={projects}
           googleEvents={googleEvents}
         />
       )}
