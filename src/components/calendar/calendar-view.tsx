@@ -30,7 +30,7 @@ import { routineCalendarApi } from "@/lib/client/routines-api";
 import { routineCalendarPath } from "@/lib/calendar/navigation";
 import { blockForTime, formatClock } from "@/lib/routines/schedule";
 import { routineHex } from "@/components/routines/routine-look";
-import { CalendarMeetingPopup, CalendarTaskPopup } from "@/components/calendar/calendar-item-popups";
+import { CalendarGooglePopup, CalendarMeetingPopup, CalendarTaskPopup } from "@/components/calendar/calendar-item-popups";
 import type { Project } from "@/types/projects";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -132,6 +132,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
   const [selectedDate, setSelectedDate] = useState<Date>(() => dayOnly(new Date()));
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
+  const [detailGoogleEvent, setDetailGoogleEvent] = useState<ExternalCalendarEvent | null>(null);
   const router = useRouter();
   const subAccount = useOptionalSubAccount();
   const [routineEntries, setRoutineEntries] = useState<RoutineCalendarEntry[]>([]);
@@ -669,7 +670,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (ge.htmlLink) window.open(ge.htmlLink, "_blank", "noopener,noreferrer");
+                                setDetailGoogleEvent(ge);
                               }}
                               className="flex w-full items-center gap-1 truncate rounded-md border border-transparent bg-blue-500/10 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-blue-700 transition-colors hover:border-blue-500/30 dark:text-blue-400"
                             >
@@ -730,7 +731,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             if (item.kind === "event") {
               return <button key={`side-event-${item.event.id}`} type="button" onClick={(e) => openEventDetail(item.event, e)} className="flex w-full items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 p-3 text-left hover:bg-accent/20"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-accent-foreground" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">{toDate(item.event.startAt) ? formatTime(toDate(item.event.startAt)!) : "Event"}</span></span></button>;
             }
-            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => item.event.htmlLink && window.open(item.event.htmlLink, "_blank", "noopener,noreferrer")} className="flex w-full items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-left hover:bg-blue-500/10"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">Calendar item</span></span></button>;
+            return <button key={`side-google-${item.event.id}`} type="button" onClick={() => setDetailGoogleEvent(item.event)} className="flex w-full items-start gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-left hover:bg-blue-500/10"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.event.title}</span><span className="text-xs text-muted-foreground">Calendar item</span></span></button>;
           })}
         </div>
       </aside>
@@ -821,6 +822,11 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
           setDefaultDate(null);
           setDialogOpen(true);
         }}
+      />
+      <CalendarGooglePopup
+        event={detailGoogleEvent}
+        open={!!detailGoogleEvent}
+        onOpenChange={(open) => !open && setDetailGoogleEvent(null)}
       />
     </>
   );

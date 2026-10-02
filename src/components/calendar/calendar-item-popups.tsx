@@ -22,6 +22,7 @@ import { eventSource, eventStatus, type CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
 import type { Project } from "@/types/projects";
 import type { Task } from "@/types/tasks";
+import type { ExternalCalendarEvent } from "@/types/google-calendar";
 import { toDate } from "@/lib/format";
 import type { ReactNode } from "react";
 
@@ -150,6 +151,40 @@ export function CalendarMeetingPopup({
         {meetingLink && <Button variant="outline" onClick={copyLink}><Clipboard className="mr-2 h-4 w-4" />Copy Link</Button>}
         {bookingPath && <Button variant="outline" onClick={() => window.location.assign(bookingPath)}>Open Booking</Button>}
         {!isCancelled && <Button variant="outline" onClick={() => { onOpenChange(false); onReschedule(); }}>Reschedule</Button>}
+      </div>
+    </DialogContent>
+  </Dialog>;
+}
+
+export function CalendarGooglePopup({
+  event,
+  open,
+  onOpenChange,
+}: {
+  event: ExternalCalendarEvent | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!event) return null;
+  const start = toDate(event.startAt);
+  const end = toDate(event.endAt);
+  return <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
+      <DialogTitle className="sr-only">{event.title}</DialogTitle>
+      <div className="border-b bg-blue-500/5 px-5 py-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
+          <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">Google Calendar event</p></div>
+          <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} aria-label="Close"><X className="h-4 w-4" /></Button>
+        </div>
+      </div>
+      <div className="space-y-4 px-5 py-5">
+        <DetailRow icon={Clock3}>{dateTime(start, end)}</DetailRow>
+        {event.location && <DetailRow icon={MapPin}>{event.location}</DetailRow>}
+        <p className="text-sm text-muted-foreground">This event is read-only in Magnetix Studios.</p>
+      </div>
+      <div className="flex gap-2 border-t bg-muted/20 px-5 py-4">
+        {event.htmlLink && <Button onClick={() => window.open(event.htmlLink!, "_blank", "noopener,noreferrer")}><ExternalLink className="mr-2 h-4 w-4" />Open in Google Calendar</Button>}
       </div>
     </DialogContent>
   </Dialog>;
