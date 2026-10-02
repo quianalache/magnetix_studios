@@ -246,6 +246,8 @@ function ChartPieceView({
           definedColor={hdDesign?.chartDefinedColor}
           channelsColor={hdDesign?.channelsColor}
           gatesColor={hdDesign?.gatesColor}
+          personalityColor={hdDesign?.personalityActivationColor}
+          designColor={hdDesign?.designActivationColor}
           backgroundColor={hdDesign?.backgroundColor}
           centersMode={hdDesign?.centersMode}
           centerColors={centerColorsFromDesign(hdDesign)}

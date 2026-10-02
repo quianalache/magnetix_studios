@@ -818,6 +818,8 @@ function CardPreview({
         definedColor={fields.chartDefinedColor}
         channelsColor={fields.channelsColor}
         gatesColor={fields.gatesColor}
+        personalityColor={fields.personalityActivationColor}
+        designColor={fields.designActivationColor}
         backgroundColor={fields.backgroundColor}
         centersMode={fields.centersMode}
         centerColors={centerColors}

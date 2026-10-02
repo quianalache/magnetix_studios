@@ -11,8 +11,6 @@ import {
   PERSONALITY_FILL,
   DESIGN_FILL,
   ACTIVATED_TEXT,
-  HANGING_PERSONALITY,
-  HANGING_DESIGN,
   CHANNEL_STROKE_WIDTH,
   CHANNEL_STROKE_WIDTH_RECESSIVE,
   CHANNEL_STROKE_OPACITY_RECESSIVE,
@@ -82,12 +80,16 @@ function GateSpine({
   personalityActive,
   designActive,
   recessiveColor,
+  personalityColor,
+  designColor,
 }: {
   gate: number;
   personalityActive: boolean;
   designActive: boolean;
   /** Color of the faint always-present network for gates with no activation at either end — the sub-account's "Channel Network Color" Chart Design field (channelsColor). This is the one piece of channel styling that's still a brand choice; Personality/Design colors on an active spine are a fixed real convention, not customizable (see file header). */
   recessiveColor: string;
+  personalityColor: string;
+  designColor: string;
 }) {
   const d = GATE_SPINE[gate];
   if (!d) return null;
@@ -107,11 +109,11 @@ function GateSpine({
   if (personalityActive && designActive) {
     return (
       <>
-        <path d={d} fill="none" stroke={HANGING_DESIGN} strokeWidth={CHANNEL_STROKE_WIDTH} strokeLinecap="round" />
+        <path d={d} fill="none" stroke={designColor} strokeWidth={CHANNEL_STROKE_WIDTH} strokeLinecap="round" />
         <path
           d={d}
           fill="none"
-          stroke={HANGING_PERSONALITY}
+          stroke={personalityColor}
           strokeWidth={CHANNEL_STROKE_WIDTH}
           strokeLinecap="round"
           strokeDasharray={halfSplitDasharray(d)}
@@ -123,7 +125,7 @@ function GateSpine({
     <path
       d={d}
       fill="none"
-      stroke={personalityActive ? HANGING_PERSONALITY : HANGING_DESIGN}
+      stroke={personalityActive ? personalityColor : designColor}
       strokeWidth={CHANNEL_STROKE_WIDTH}
       strokeLinecap="round"
     />
@@ -155,6 +157,8 @@ export function HumanDesignChart({
   definedColor = DEFAULT_DEFINED_FILL,
   gatesColor = "#e4e4e7",
   channelsColor = DEFINED_STROKE,
+  personalityColor = PERSONALITY_FILL,
+  designColor = DESIGN_FILL,
   backgroundColor = "#ffffff",
   centersMode = "uniform",
   centerColors,
@@ -167,6 +171,9 @@ export function HumanDesignChart({
   gatesColor?: string;
   /** "Channel Network Color" — the faint background color for every gate spine with no activation at either end. Was "Junction Channel Color" before the 2026-08-17 geometry rewrite (it used to color only the 6 Community-square channels' flat fill); remapped here since junction gates no longer get special treatment — every gate's spine, including 10/20/34/57's, is now colored purely by its own activation state, same as any other gate. */
   channelsColor?: string;
+  /** Saved chart-design colors for active Personality/Design spines and markers. */
+  personalityColor?: string;
+  designColor?: string;
   backgroundColor?: string;
   /** "uniform" (default, existing behavior) — every defined center fills with `definedColor`. "traditional" — each defined center uses its own real color, see TRADITIONAL_CENTER_COLORS above / `centerColors` below. */
   centersMode?: "uniform" | "traditional";
@@ -199,10 +206,10 @@ export function HumanDesignChart({
         {allGates
           .filter((g) => !personalityGates.has(g) && !designGates.has(g))
           .map((gate) => (
-            <GateSpine key={gate} gate={gate} personalityActive={false} designActive={false} recessiveColor={channelsColor} />
+            <GateSpine key={gate} gate={gate} personalityActive={false} designActive={false} recessiveColor={channelsColor} personalityColor={personalityColor} designColor={designColor} />
           ))}
         {activatedGates.map((gate) => (
-          <GateSpine key={gate} gate={gate} personalityActive={personalityGates.has(gate)} designActive={designGates.has(gate)} recessiveColor={channelsColor} />
+          <GateSpine key={gate} gate={gate} personalityActive={personalityGates.has(gate)} designActive={designGates.has(gate)} recessiveColor={channelsColor} personalityColor={personalityColor} designColor={designColor} />
         ))}
 
         {/* 9 centers */}
@@ -242,7 +249,7 @@ export function HumanDesignChart({
         {activatedGates.map((gate) => {
           const point = labelPositions.get(gate)!;
           const inDesign = designGates.has(gate);
-          const fill = inDesign ? DESIGN_FILL : PERSONALITY_FILL;
+          const fill = inDesign ? designColor : personalityColor;
           return (
             <g key={gate}>
               <circle cx={point.x} cy={point.y} r={GATE_MARKER_R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />

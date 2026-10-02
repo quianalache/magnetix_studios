@@ -149,7 +149,7 @@ function ArrowBadge({
         <p className="font-semibold uppercase tracking-wide" style={{ color }}>
           {label}
         </p>
-        <p className="text-muted-foreground/70">
+        <p className="text-foreground/75">
           {source}
           {value ? ` · ${value.arrow}` : " · —"}
         </p>
@@ -175,11 +175,16 @@ function PlanetBox({
   mode: PlanetBoxMode;
   borderRadius: number;
 }) {
+  const hex = boxColor.replace("#", "");
+  const rgb = hex.length === 6 ? [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) : null;
+  const luminance = rgb ? (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255 : 0;
+  const textColor = luminance > 0.62 ? "#18181b" : "#ffffff";
+
   if (mode === "fullBox") {
     return (
       <div
-        className="flex items-center justify-between gap-2 px-3 py-2 text-xs text-white"
-        style={{ backgroundColor: boxColor, borderRadius }}
+        className="flex items-center justify-between gap-2 border px-3 py-2 text-xs"
+        style={{ backgroundColor: boxColor, borderColor: activationColor, color: textColor, borderRadius }}
       >
         <span className="flex min-w-0 items-center gap-2">
           <span aria-hidden="true">{symbol}</span>
@@ -311,7 +316,7 @@ export function HumanDesignFullChart({
           align="left"
         />
 
-        <div className="mx-auto w-full max-w-[560px] max-h-[min(72vh,760px)] overflow-visible">
+        <div className="mx-auto w-full max-w-[360px]">
           {/*
            * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
            * badges (her prior fix's own scoping to the chart's own
@@ -342,6 +347,8 @@ export function HumanDesignFullChart({
             definedColor={design?.chartDefinedColor}
             channelsColor={design?.channelsColor}
             gatesColor={design?.gatesColor}
+            personalityColor={personalityActivationColor}
+            designColor={designActivationColor}
             backgroundColor={backgroundColor}
             centersMode={design?.centersMode}
             centerColors={centerColorsFromDesign(design)}
