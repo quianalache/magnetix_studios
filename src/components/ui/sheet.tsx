@@ -48,6 +48,7 @@ function SheetContent({
   showCloseButton?: boolean
   inline?: boolean
 }) {
+  const [inlineContainer, setInlineContainer] = React.useState<HTMLElement | null>(null)
   const popup = (
       <SheetPrimitive.Popup
         data-slot="sheet-content"
@@ -78,41 +79,16 @@ function SheetContent({
       </SheetPrimitive.Popup>
   )
 
-  // Base UI's Dialog.Popup must be a child of Dialog.Portal. An inline
-  // workspace is intentionally not a dialog/overlay, so it cannot use Popup
-  // directly in the normal tree. Render the inline variant as a regular
-  // section while keeping ordinary sheets on the portal-backed Popup path.
+  // Base UI's Dialog.Popup must be a child of Dialog.Portal. Inline workspaces
+  // still use Popup semantics, but portal into their own in-tree host so they
+  // retain the normal document layout instead of becoming an overlay.
   if (inline) {
-    const inlineProps = { ...props } as Record<string, unknown>
-    delete inlineProps.finalFocus
-    delete inlineProps.initialFocus
-    delete inlineProps.render
     return (
       <div
-        data-slot="sheet-content"
-        data-side={side}
-        className={cn(
-          "relative inset-auto flex min-h-0 w-full max-w-none border-0 bg-card shadow-none",
-          className
-        )}
-        {...inlineProps}
+        className="contents"
+        ref={setInlineContainer}
       >
-        {children}
-        {showCloseButton && (
-          <SheetPrimitive.Close
-            data-slot="sheet-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-3 right-3"
-                size="icon-sm"
-              />
-            }
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </SheetPrimitive.Close>
-        )}
+        {inlineContainer && <SheetPortal container={inlineContainer}>{popup}</SheetPortal>}
       </div>
     )
   }
