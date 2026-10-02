@@ -195,6 +195,9 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, DayItem[]>();
+    const mirroredGoogleIds = new Set(
+      events.map((event) => event.googleEventId).filter((id): id is string => !!id),
+    );
     for (const ev of events) {
       const start = toDate(ev.startAt);
       if (!start) continue;
@@ -204,6 +207,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
       map.set(key, arr);
     }
     for (const ge of googleEvents) {
+      if (mirroredGoogleIds.has(ge.googleEventId)) continue;
       const start = toDate(ge.startAt);
       if (!start) continue;
       const key = dayKey(start);
