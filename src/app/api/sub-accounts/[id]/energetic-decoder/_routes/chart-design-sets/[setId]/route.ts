@@ -30,7 +30,8 @@ export async function GET(request: Request, ctx: Ctx) {
 
 /**
  * One save for the whole unified design:
- *   { name?, humanDesign?: {…fields}, mandala?: {…}, astrology?: {…} }
+ *   { name?, humanDesign?: {…fields}, mandala?: {…}, astrology?: {…},
+ *     astrologyCalculation?: { houseSystem } }   (default design only)
  * or `{ isDefault: true }` on its own to make it the default.
  */
 export async function PATCH(request: Request, ctx: Ctx) {
@@ -57,12 +58,14 @@ export async function PATCH(request: Request, ctx: Ctx) {
       return NextResponse.json({ ok: true, set });
     }
 
-    const unknown = Object.keys(body).filter((k) => !["name", "humanDesign", "mandala", "astrology"].includes(k));
-    const { name, systems, errors } = readChartDesignSetPatch(body);
+    const unknown = Object.keys(body).filter(
+      (k) => !["name", "humanDesign", "mandala", "astrology", "astrologyCalculation"].includes(k),
+    );
+    const { name, systems, houseSystem, errors } = readChartDesignSetPatch(body);
     if (unknown.length > 0) errors.push(...unknown.map((k) => `"${k}" can't be changed here`));
     if (errors.length > 0) return NextResponse.json({ error: errors.join(" "), errors }, { status: 400 });
 
-    const set = await updateChartDesignSet(subAccountId, setId, { name, systems });
+    const set = await updateChartDesignSet(subAccountId, setId, { name, systems, houseSystem });
     return NextResponse.json({ ok: true, set });
   } catch (err) {
     return errorResponse(err);

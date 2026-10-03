@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { calculateHumanDesignProfile } from "@/lib/energetics/human-design";
 import { calculateAstrologyChart } from "@/lib/energetics/astrology";
+import { getPreviewSampleReading } from "@/lib/energetics/preview-sample-reading";
 
 /**
  * A single fixed sample chart, real (not fabricated) — computed by this
@@ -32,6 +33,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
+
+  // `?sample=full` (unified Chart Design editor): the same richer sample
+  // the Report Builder previews with — includes the Variable arrows, so the
+  // editor's arrow and planet-box controls preview on a real chart.
+  if (new URL(request.url).searchParams.get("sample") === "full") {
+    const sample = await getPreviewSampleReading();
+    return NextResponse.json({ ok: true, humanDesign: sample.humanDesign, astrology: sample.astrology });
+  }
 
   const humanDesign = calculateHumanDesignProfile(SAMPLE_BIRTH);
   const astrology = calculateAstrologyChart({ ...SAMPLE_BIRTH, houseSystem: "placidus" });
