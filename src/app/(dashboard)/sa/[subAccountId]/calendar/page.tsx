@@ -109,7 +109,7 @@ export default function CalendarPage() {
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-[1440px] space-y-5">
+    <div className="momentum-scope w-full max-w-none space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4 px-1">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Calendar</h1>
