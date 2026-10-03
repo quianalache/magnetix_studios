@@ -16,7 +16,7 @@ import {
   resolveVariableContent,
   type VariableCategory,
 } from "@/lib/server/energetic-decoder-chart-content-service";
-import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
+import { getAstrologyHouseSystem } from "@/lib/server/reading-calculation-settings-service";
 import {
   createEnergeticProfile,
   listEnergeticProfilesForContact,
@@ -317,13 +317,14 @@ export async function createEnergeticDecoderReading(
     rawHumanDesign.skills = await computeLocalSkills(input.subAccountId, rawHumanDesign);
   }
 
-  // Which house system this sub-account's default Astrology chart design
-  // uses (Chart Designs tab, 2026-08-09) — falls back to Placidus (the
-  // calculator's own default) when no design is saved yet, so this never
-  // blocks a reading from calculating.
-  const defaultAstroDesign = reportConfig.includeAstrology
-    ? await getDefaultChartDesign(input.subAccountId, "astrology")
-    : null;
+  // The house system is a reading CALCULATION setting (Reading
+  // Configuration), not part of a Chart Design. Until a sub-account's
+  // setting is saved, the same rule as before applies (its default
+  // Astrology design's value, else Placidus) — see
+  // reading-calculation-settings.ts.
+  const houseSystem = reportConfig.includeAstrology
+    ? (await getAstrologyHouseSystem(input.subAccountId, reportConfig)).houseSystem
+    : undefined;
 
   // Chiron (2026-08-09, local since 2026-08-11) — was Bodygraph's API,
   // now the free local Swiss Ephemeris calc (swiss-ephemeris.ts's
@@ -349,7 +350,7 @@ export async function createEnergeticDecoderReading(
         timeZone: place.timeZone,
         lat: place.lat,
         lng: place.lng,
-        houseSystem: defaultAstroDesign?.houseSystem,
+        houseSystem,
         chironLongitude: chiron?.longitude,
         chironRetrograde: chiron?.retrograde,
       })

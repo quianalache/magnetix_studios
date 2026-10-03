@@ -72,7 +72,8 @@ export async function PATCH(
     if (typeof body.rootCenterColor === "string") fields.rootCenterColor = body.rootCenterColor;
     if (typeof body.backgroundColor === "string") fields.backgroundColor = body.backgroundColor;
     if (typeof body.wheelAccentColor === "string") fields.wheelAccentColor = body.wheelAccentColor;
-    if (body.houseSystem === "placidus" || body.houseSystem === "whole" || body.houseSystem === "equal") fields.houseSystem = body.houseSystem;
+    // houseSystem is no longer accepted here: it's a reading calculation
+    // setting (Reading Configuration), not part of a chart design.
     // Mandala fields, added 2026-08-15 (Phase 6) — real near-miss caught
     // while wiring these up: this route's allow-list is hand-maintained,
     // separate from chart-designs-tab.tsx's SYSTEM_FIELDS, so adding a

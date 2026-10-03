@@ -15,8 +15,6 @@ import { CHART_DESIGN_PRESETS } from "./chart-design-presets";
 export type EditorValue = string | number;
 export type SystemValues = Record<string, EditorValue>;
 
-export type HouseSystem = ChartDesign["houseSystem"];
-
 export interface ChartDesignEditorState {
   setId: string;
   isDefault: boolean;
@@ -24,9 +22,6 @@ export interface ChartDesignEditorState {
   savedName: string;
   values: Record<ChartDesignSystem, SystemValues>;
   saved: Record<ChartDesignSystem, SystemValues>;
-  /** Calculation setting — editable only on the default design (it's what new readings are calculated with). */
-  houseSystem: HouseSystem | null;
-  savedHouseSystem: HouseSystem | null;
 }
 
 function systemValues(design: ChartDesign | null, system: ChartDesignSystem): SystemValues {
@@ -42,7 +37,6 @@ function systemValues(design: ChartDesign | null, system: ChartDesignSystem): Sy
 export function initChartDesignEditorState(set: ChartDesignSetWithMembers): ChartDesignEditorState {
   const values = {} as Record<ChartDesignSystem, SystemValues>;
   for (const system of CHART_DESIGN_SET_SYSTEMS) values[system] = systemValues(set.designs[system], system);
-  const house = set.isDefault ? (set.designs.astrology?.houseSystem ?? "placidus") : null;
   return {
     setId: set.id,
     isDefault: set.isDefault,
@@ -50,8 +44,6 @@ export function initChartDesignEditorState(set: ChartDesignSetWithMembers): Char
     savedName: set.name,
     values,
     saved: structuredClone(values),
-    houseSystem: house,
-    savedHouseSystem: house,
   };
 }
 
@@ -67,11 +59,6 @@ export function setEditorField(
 
 export function setEditorName(state: ChartDesignEditorState, name: string): ChartDesignEditorState {
   return { ...state, name };
-}
-
-export function setEditorHouseSystem(state: ChartDesignEditorState, houseSystem: HouseSystem): ChartDesignEditorState {
-  if (!state.isDefault) return state;
-  return { ...state, houseSystem };
 }
 
 /** Applies a named preset to ONE system's unsaved values — never another system, never saved until Save. */
@@ -101,11 +88,7 @@ export function dirtySystems(state: ChartDesignEditorState): ChartDesignSystem[]
 }
 
 export function isEditorDirty(state: ChartDesignEditorState): boolean {
-  return (
-    state.name.trim() !== state.savedName ||
-    state.houseSystem !== state.savedHouseSystem ||
-    dirtySystems(state).length > 0
-  );
+  return state.name.trim() !== state.savedName || dirtySystems(state).length > 0;
 }
 
 export interface ChartDesignSavePayload {
@@ -113,10 +96,9 @@ export interface ChartDesignSavePayload {
   humanDesign?: SystemValues;
   mandala?: SystemValues;
   astrology?: SystemValues;
-  astrologyCalculation?: { houseSystem: HouseSystem };
 }
 
-/** Exactly what one Save sends: only the changed fields, per system, plus a changed name / house system. Null = nothing to save. */
+/** Exactly what one Save sends: only the changed styling fields, per system, plus a changed name. Never a calculation setting. Null = nothing to save. */
 export function buildEditorSavePayload(state: ChartDesignEditorState): ChartDesignSavePayload | null {
   const payload: ChartDesignSavePayload = {};
   const name = state.name.trim();
@@ -124,9 +106,6 @@ export function buildEditorSavePayload(state: ChartDesignEditorState): ChartDesi
   for (const system of CHART_DESIGN_SET_SYSTEMS) {
     const changed = changedFields(state.values[system], state.saved[system]);
     if (Object.keys(changed).length > 0) payload[system] = changed;
-  }
-  if (state.isDefault && state.houseSystem && state.houseSystem !== state.savedHouseSystem) {
-    payload.astrologyCalculation = { houseSystem: state.houseSystem };
   }
   return Object.keys(payload).length > 0 ? payload : null;
 }

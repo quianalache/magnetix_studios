@@ -177,6 +177,14 @@ export interface EnergeticDecoderReportConfig {
   includeHumanDesign: boolean;
   /** Compute + store a full Western Tropical natal chart (placements/houses/aspects) alongside the others. Requires the birth place to have real coordinates (geocoded), not just a timezone. */
   includeAstrology: boolean;
+  /**
+   * House system new Astrology readings are calculated with — a
+   * CALCULATION setting, deliberately not part of any Chart Design
+   * (unified Chart Designs, 2026-10). Absent until saved; until then the
+   * previous rule applies (see reading-calculation-settings.ts). Existing
+   * readings keep the house system they were calculated with.
+   */
+  astrologyHouseSystem?: "placidus" | "whole" | "equal";
 }
 
 export function defaultEnergeticDecoderReportConfig(): EnergeticDecoderReportConfig {

@@ -22,9 +22,7 @@ import {
   isEditorDirty,
   previewDesign,
   setEditorField,
-  setEditorHouseSystem,
   setEditorName,
-  type HouseSystem,
 } from "@/lib/energetics/chart-design-editor-state";
 import {
   CHART_DESIGN_SECTIONS,
@@ -272,32 +270,13 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
               </div>
             ))}
             {system === "astrology" && (
-              <div className="rounded-2xl border border-dashed bg-card p-5">
-                <h3 className="mb-1 text-sm font-semibold">House system</h3>
-                {state.isDefault && state.houseSystem ? (
-                  <>
-                    <p className="mb-2 text-xs text-muted-foreground">
-                      A calculation setting, not a color: new readings are calculated with the default design&apos;s house
-                      system. Existing readings never change.
-                    </p>
-                    <select
-                      value={state.houseSystem}
-                      onChange={(e) => setState((s) => setEditorHouseSystem(s, e.target.value as HouseSystem))}
-                      disabled={readOnly}
-                      aria-label="House system"
-                      className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value="placidus">Placidus houses</option>
-                      <option value="whole">Whole Sign houses</option>
-                      <option value="equal">Equal houses</option>
-                    </select>
-                  </>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    A calculation setting, not a color — new readings use the house system set on your Default design.
-                  </p>
-                )}
-              </div>
+              <p className="px-1 text-xs text-muted-foreground">
+                The house system is a calculation setting, not part of a design — it lives in{" "}
+                <Link href={saPath("/energetic-decoder?tab=readings")} className="font-medium text-primary underline">
+                  Readings → Reading configuration
+                </Link>
+                .
+              </p>
             )}
           </div>
         </div>

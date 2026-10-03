@@ -1,15 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSubAccount } from "@/context/sub-account-context";
 import {
   defaultEnergeticDecoderReportConfig,
   type EnergeticDecoderReportConfig,
 } from "@/types/energetic-decoder";
+import type { AstrologyHouseSystem } from "@/lib/energetics/reading-calculation-settings";
+
+const HOUSE_SYSTEM_OPTIONS: { value: AstrologyHouseSystem; label: string }[] = [
+  { value: "placidus", label: "Placidus" },
+  { value: "whole", label: "Whole Sign" },
+  { value: "equal", label: "Equal" },
+];
+
+/** The on/off parts of the reading configuration (everything except the house system). */
+type InclusionKey = Exclude<keyof EnergeticDecoderReportConfig, "astrologyHouseSystem">;
 
 const SEQUENCES: {
-  key: keyof EnergeticDecoderReportConfig;
+  key: InclusionKey;
   name: string;
   spheres: string;
 }[] = [
@@ -57,16 +67,51 @@ export function EnergeticDecoderReadingConfiguration() {
     ...(subAccount?.energeticDecoderReportConfig ?? {}),
   });
   const [savingConfig, setSavingConfig] = useState(false);
+  /** The house system new readings use right now (saved setting, or the previous rule until it's saved). */
+  const [houseSystem, setHouseSystem] = useState<AstrologyHouseSystem | null>(null);
 
-  async function toggleSequence(key: keyof EnergeticDecoderReportConfig) {
-    const next = { ...config, [key]: !config[key] };
-    setConfig(next);
+  useEffect(() => {
+    if (!subAccountId) return;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-config`)
+      .then((r) => r.json())
+      .then((d: { astrologyHouseSystem?: AstrologyHouseSystem }) => setHouseSystem(d.astrologyHouseSystem ?? "placidus"))
+      .catch(() => setHouseSystem(null));
+  }, [subAccountId]);
+
+  async function changeHouseSystem(next: AstrologyHouseSystem) {
+    const previous = houseSystem;
+    setHouseSystem(next);
     setSavingConfig(true);
     try {
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(next),
+        body: JSON.stringify({ ...config, astrologyHouseSystem: next }),
+      });
+      if (!res.ok) throw new Error();
+      setConfig((c) => ({ ...c, astrologyHouseSystem: next }));
+      toast.success("House system saved — applies to new readings.");
+    } catch {
+      setHouseSystem(previous);
+      toast.error("Couldn't save the house system.");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function toggleSequence(key: InclusionKey) {
+    const next = { ...config, [key]: !config[key] };
+    setConfig(next);
+    setSavingConfig(true);
+    // Never re-send the house system from this (possibly stale) copy — the
+    // server keeps the saved one when the request doesn't mention it.
+    const { astrologyHouseSystem: _house, ...inclusions } = next;
+    void _house;
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(inclusions),
       });
       if (!res.ok) throw new Error();
     } catch {
@@ -149,7 +194,7 @@ export function EnergeticDecoderReadingConfiguration() {
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
           A full Western Tropical natal chart — Sun, Moon, Rising, every planet&apos;s sign and house,
-          and the aspects between them. Placidus houses by default.
+          and the aspects between them.
         </p>
         <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm">
           <input
@@ -161,6 +206,31 @@ export function EnergeticDecoderReadingConfiguration() {
           />
           <span className="flex-1 font-medium">Include Astrology in new readings</span>
         </label>
+        <div className="mt-3 space-y-1.5 rounded-lg border px-3 py-2.5">
+          <div className="flex items-center gap-3">
+            <label htmlFor="ed-house-system" className="flex-1 text-sm font-medium">
+              House system
+            </label>
+            <select
+              id="ed-house-system"
+              value={houseSystem ?? ""}
+              onChange={(e) => isAdmin && void changeHouseSystem(e.target.value as AstrologyHouseSystem)}
+              disabled={!isAdmin || savingConfig || houseSystem === null}
+              className="h-8 rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {houseSystem === null && <option value="">Loading…</option>}
+              {HOUSE_SYSTEM_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            How houses are calculated for new readings. Existing readings keep the house system they were calculated with.
+            Chart Designs never change this.
+          </p>
+        </div>
       </div>
     </div>
   );

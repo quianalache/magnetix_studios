@@ -19,7 +19,6 @@ import {
   isEditorDirty,
   previewDesign,
   setEditorField,
-  setEditorHouseSystem,
   setEditorName,
 } from "../src/lib/energetics/chart-design-editor-state";
 import { isGuardedNavigationClick } from "../src/lib/unsaved-changes";
@@ -98,7 +97,6 @@ check("loads each system's own values (only its own fields) and starts clean", (
   assert.equal(s.values.mandala.chartDefinedColor, "#111111");
   assert.equal(isEditorDirty(s), false);
   assert.equal(buildEditorSavePayload(s), null);
-  assert.equal(s.houseSystem, null); // not the default design → no calculation setting
 });
 check("editing one system never changes another (independent customization)", () => {
   let s = initChartDesignEditorState(makeSet(false));
@@ -135,13 +133,15 @@ check("reverting an edit makes it clean again; empty names are refused", () => {
   assert.ok(editorNameError(setEditorName(s, "   ")));
   assert.equal(editorNameError(s), null);
 });
-check("house system: only on the default design, sent as a calculation setting", () => {
-  const other = initChartDesignEditorState(makeSet(false));
-  assert.equal(setEditorHouseSystem(other, "equal"), other);
-  let def = initChartDesignEditorState(makeSet(true));
-  assert.equal(def.houseSystem, "whole");
-  def = setEditorHouseSystem(def, "equal");
-  assert.deepEqual(buildEditorSavePayload(def), { astrologyCalculation: { houseSystem: "equal" } });
+check("a design save never carries a calculation setting (house system lives in Reading Configuration)", () => {
+  const def = initChartDesignEditorState(makeSet(true));
+  assert.equal("houseSystem" in def, false);
+  assert.equal(setEditorField(def, "astrology", "houseSystem", "equal"), def);
+  let s = applyEditorPreset(def, "astrology", "Midnight");
+  s = setEditorField(s, "astrology", "backgroundColor", "#000000");
+  const payload = buildEditorSavePayload(s)!;
+  assert.deepEqual(Object.keys(payload), ["astrology"]);
+  assert.equal("houseSystem" in payload.astrology!, false);
 });
 check("preview shows the saved record with unsaved values on top", () => {
   let s = initChartDesignEditorState(makeSet(false));

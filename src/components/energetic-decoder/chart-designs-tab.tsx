@@ -464,7 +464,9 @@ const SYSTEM_FIELDS: Record<ChartDesignSystem, (keyof EditableFields)[]> = {
     ...CENTER_COLOR_KEYS,
     "backgroundColor",
   ],
-  astrology: ["wheelAccentColor", "backgroundColor", "houseSystem"],
+  // houseSystem is a reading calculation setting (Reading Configuration),
+  // not a design value — no longer edited from a design card.
+  astrology: ["wheelAccentColor", "backgroundColor"],
   // Expanded 2026-08-15 (Phase 6) — the Mandala rebuild added real layers
   // (zodiac ring, gate ring, quadrants, Personality/Design distinction)
   // that had no design controls before because there was nothing to

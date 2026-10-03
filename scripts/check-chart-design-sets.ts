@@ -25,6 +25,7 @@
  *     "NODE_OPTIONS='--require ./scripts/_chart-design-check-shim.cjs' pnpm exec tsx scripts/check-chart-design-sets.ts"
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
@@ -629,23 +630,6 @@ async function main() {
       }
     }
   });
-  await check("house system: calculation setting only on the default; carried over when the default changes", async () => {
-    const def = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => x.isDefault)!;
-    const other = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => !x.isDefault)!;
-    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "whole" } }), p(SA3, { setId: other.id }))).status, 409);
-    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "koch" } }), p(SA3, { setId: def.id }))).status, 400);
-    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrology: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 400);
-    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 200);
-    assert.equal((await chartDesignService.getDefaultChartDesign(SA3, "astrology"))?.houseSystem, "whole");
-    assert.notEqual(other.designs.astrology!.houseSystem, "whole");
-    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: other.id }));
-    const newDefault = await chartDesignService.getDefaultChartDesign(SA3, "astrology");
-    assert.equal(newDefault?.id, other.designs.astrology!.id);
-    assert.equal(newDefault?.houseSystem, "whole"); // new readings keep calculating the same way
-    const data = await load(SA3);
-    assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA3, ...data }), []);
-    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: def.id }));
-  });
   await check("editor sample endpoint answers members only; ?sample=full returns the richer sample", async () => {
     const full = await json(await previewRoute.GET(new Request("http://test.local/x?sample=full", { headers: { "x-user-uid": "member2" } }), p(SA1)));
     assert.equal(full.status, 200);
@@ -659,6 +643,94 @@ async function main() {
     assert.equal((await setsRoute.POST(req("admin1", "POST", { name: "Nope" }), p(SA5))).status, 409);
     assert.equal(await count("chartDesignSets", SA5), 0);
     assert.equal(JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA5).get()).docs.map((d) => [d.id, d.data()]).sort()), before);
+  });
+
+  console.log("\nCalculation settings stay separate from Chart Designs");
+  const reportConfigRoute = viaDispatcher(edDispatcher, "report-config");
+  const legacyDesignRoute2 = legacyDesignRoute;
+  const calc = await import("../src/lib/server/reading-calculation-settings-service");
+  const houseRunner = await import("./lib/house-system-setting-runner");
+  const readingsSnapshot = async () => JSON.stringify((await db.collection("energeticDecoderReadings").get()).docs.map((d) => [d.id, d.data()]).sort());
+  await check("a Chart Design save can't carry a calculation setting", async () => {
+    const def = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => x.isDefault)!;
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 400);
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrology: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 400);
+    assert.equal((await calc.getAstrologyHouseSystem(SA3)).houseSystem, "placidus");
+  });
+  await check("Reading Configuration owns the house system: members read it, admins change it, toggles keep it", async () => {
+    const before = await json(await reportConfigRoute.GET(req("member2"), p(SA1)));
+    assert.equal(before.status, 200);
+    assert.equal(before.body.astrologyHouseSystem, "placidus");
+    // SA1's default design was switched earlier in this run, which saved its
+    // house system as the explicit calculation setting first (the pin).
+    assert.equal(before.body.astrologyHouseSystemSource, "setting");
+    assert.equal((await reportConfigRoute.POST(req("member2", "POST", { astrologyHouseSystem: "whole" }), p(SA1))).status, 403);
+    assert.equal((await reportConfigRoute.POST(req("outsider", "POST", { astrologyHouseSystem: "whole" }), p(SA1))).status, 403);
+    assert.equal((await reportConfigRoute.POST(req("admin1", "POST", { astrologyHouseSystem: "koch" }), p(SA1))).status, 400);
+    assert.equal((await reportConfigRoute.POST(req("admin1", "POST", { astrologyHouseSystem: "whole" }), p(SA1))).status, 200);
+    // a sequence toggle that doesn't mention it leaves it alone
+    await reportConfigRoute.POST(req("admin1", "POST", { includeVenus: false }), p(SA1));
+    const after = await json(await reportConfigRoute.GET(req("admin1"), p(SA1)));
+    assert.equal(after.body.astrologyHouseSystem, "whole");
+    assert.equal(after.body.astrologyHouseSystemSource, "setting");
+    assert.equal((after.body.config as Record<string, unknown>).includeVenus, false);
+    // and it isn't stored on any design record
+    const astro = await chartDesignService.getDefaultChartDesign(SA1, "astrology");
+    assert.equal(astro?.houseSystem, "placidus");
+  });
+  await check("setting a new default design or applying a preset never changes the calculation", async () => {
+    const sets = (await setService.listChartDesignSets(SA3, AG)).sets;
+    const def = sets.find((x) => x.isDefault)!;
+    const other = sets.find((x) => !x.isDefault)!;
+    // legacy data: another design's Astrology record carries a different house system
+    await db.doc(`chartDesigns/${other.designs.astrology!.id}`).update({ houseSystem: "equal" });
+    const records = JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA3).get()).docs.map((d) => [d.id, d.get("houseSystem")]).sort());
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA3), { houseSystem: "placidus", source: "defaultDesign" });
+    let st = editorState.initChartDesignEditorState(def);
+    st = editorState.applyEditorPreset(st, "astrology", "Midnight");
+    await setRoute.PATCH(req("admin3", "PATCH", editorState.buildEditorSavePayload(st)!), p(SA3, { setId: def.id }));
+    assert.equal((await calc.getAstrologyHouseSystem(SA3)).houseSystem, "placidus");
+    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: other.id }));
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA3), { houseSystem: "placidus", source: "setting" });
+    assert.equal(
+      JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA3).get()).docs.map((d) => [d.id, d.get("houseSystem")]).sort()),
+      records,
+    ); // no design record's house system was rewritten
+    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: def.id }));
+    assert.equal((await calc.getAstrologyHouseSystem(SA3)).houseSystem, "placidus");
+  });
+  await check("unmigrated workspace: switching the legacy Astrology default saves the current house system first", async () => {
+    await setDoc("chartDesigns/sa5_astro_whole", legacyDesign(SA5, "astrology", "Whole Sign Look", false, "2026-08-02T00:00:00Z", { houseSystem: "whole" }));
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA5), { houseSystem: "placidus", source: "defaultDesign" });
+    assert.equal((await legacyDesignRoute2.PATCH(req("admin1", "PATCH", { isDefault: true }), p(SA5, { designId: "sa5_astro_whole" }))).status, 200);
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA5), { houseSystem: "placidus", source: "setting" });
+    // the legacy record route no longer edits house systems
+    await legacyDesignRoute2.PATCH(req("admin1", "PATCH", { houseSystem: "equal" }), p(SA5, { designId: "sa5_astro_whole" }));
+    assert.equal((await db.doc("chartDesigns/sa5_astro_whole").get()).get("houseSystem"), "whole");
+    assert.equal(await count("chartDesignSets", SA5), 0);
+  });
+  await check("reading creation reads the calculation setting, never a design", () => {
+    const src = readFileSync("src/lib/server/energetic-decoder-service.ts", "utf8");
+    assert.ok(src.includes("getAstrologyHouseSystem(input.subAccountId, reportConfig)"));
+    assert.ok(!src.includes("getDefaultChartDesign"));
+  });
+  await check("house-system copy script: dry run, --expect, live, idempotent, rollback; readings untouched", async () => {
+    const readingsBefore = await readingsSnapshot();
+    const dryRun = await houseRunner.runHouseSystemSetting({ db, subAccountIds: [SA1, SA2, SA4] });
+    assert.deepEqual(dryRun.plan, [
+      { subAccountId: SA2, houseSystem: "placidus", from: "defaultDesign" },
+      { subAccountId: SA4, houseSystem: "placidus", from: "defaultDesign" },
+    ]); // SA1 already has a saved setting
+    assert.equal((await db.doc(`subAccounts/${SA2}`).get()).get("energeticDecoderReportConfig.astrologyHouseSystem"), undefined);
+    const refused = await houseRunner.runHouseSystemSetting({ db, live: true, expect: 5, subAccountIds: [SA1, SA2, SA4] });
+    assert.ok(refused.refused);
+    const done = await houseRunner.runHouseSystemSetting({ db, live: true, expect: 2, subAccountIds: [SA1, SA2, SA4] });
+    assert.equal(done.written.length, 2);
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA2), { houseSystem: "placidus", source: "setting" });
+    assert.equal((await houseRunner.planHouseSystemSetting(db, [SA1, SA2, SA4])).length, 0);
+    assert.equal(await readingsSnapshot(), readingsBefore);
+    await houseRunner.rollbackHouseSystemSetting({ db, manifest: done.written, live: true });
+    assert.deepEqual(await calc.getAstrologyHouseSystem(SA2), { houseSystem: "placidus", source: "defaultDesign" });
   });
 
   console.log(`\n${passed} checks passed.`);

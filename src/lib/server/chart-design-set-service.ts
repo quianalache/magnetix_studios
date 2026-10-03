@@ -19,6 +19,7 @@ import {
   type ChartDesignSystemPatch,
 } from "@/lib/energetics/chart-design-fields";
 import { chartDesignSetMember, defaultChartDesignSet } from "@/lib/energetics/chart-design-resolution";
+import { pinAstrologyHouseSystem } from "@/lib/server/reading-calculation-settings-service";
 
 /**
  * Unified Chart Designs (2026-10) — one named design per look, grouping one
@@ -225,13 +226,9 @@ export function duplicateChartDesignSet(opts: { subAccountId: string; agencyId: 
 }
 
 /** Parses a PATCH body's per-system objects through the shared allow-list. */
-const HOUSE_SYSTEMS = ["placidus", "whole", "equal"] as const;
-export type ChartDesignHouseSystem = (typeof HOUSE_SYSTEMS)[number];
-
 export function readChartDesignSetPatch(body: Record<string, unknown>): {
   name?: string;
   systems: Partial<Record<ChartDesignSystem, ChartDesignSystemPatch>>;
-  houseSystem?: ChartDesignHouseSystem;
   errors: string[];
 } {
   const errors: string[] = [];
@@ -242,24 +239,12 @@ export function readChartDesignSetPatch(body: Record<string, unknown>): {
     errors.push(...e);
     if (Object.keys(patch).length > 0) systems[system] = patch;
   }
-  // The Astrology house system is a CALCULATION setting, not styling (it
-  // decides how new readings are calculated). It's kept apart from the
-  // visual fields and only accepted for the default design — the one new
-  // readings use — until it moves to the reading calculation settings.
-  let houseSystem: ChartDesignHouseSystem | undefined;
-  if (body.astrologyCalculation !== undefined) {
-    const raw = (body.astrologyCalculation as Record<string, unknown> | null)?.houseSystem;
-    const keys = body.astrologyCalculation && typeof body.astrologyCalculation === "object" ? Object.keys(body.astrologyCalculation) : [];
-    if (keys.length !== 1 || !HOUSE_SYSTEMS.includes(raw as ChartDesignHouseSystem)) {
-      errors.push(`astrologyCalculation: houseSystem must be one of ${HOUSE_SYSTEMS.join(", ")}`);
-    } else houseSystem = raw as ChartDesignHouseSystem;
-  }
   let name: string | undefined;
   if (body.name !== undefined) {
     if (typeof body.name !== "string" || !body.name.trim()) errors.push("Name can't be empty.");
     else name = cleanName(body.name, "Untitled design");
   }
-  return { name, systems, houseSystem, errors };
+  return { name, systems, errors };
 }
 
 /**
@@ -269,20 +254,10 @@ export function readChartDesignSetPatch(body: Record<string, unknown>): {
 export async function updateChartDesignSet(
   subAccountId: string,
   setId: string,
-  update: {
-    name?: string;
-    systems: Partial<Record<ChartDesignSystem, ChartDesignSystemPatch>>;
-    houseSystem?: ChartDesignHouseSystem;
-  },
+  update: { name?: string; systems: Partial<Record<ChartDesignSystem, ChartDesignSystemPatch>> },
 ): Promise<ChartDesignSetWithMembers> {
   const set = await getChartDesignSet(subAccountId, setId);
   if (!set) throw new ChartDesignSetError(404, "Chart design not found");
-  if (update.houseSystem !== undefined && !set.isDefault) {
-    throw new ChartDesignSetError(
-      409,
-      "The house system is a calculation setting — it can only be changed on the default chart design.",
-    );
-  }
 
   const batch = getAdminDb().batch();
   for (const system of CHART_DESIGN_SET_SYSTEMS) {
@@ -291,11 +266,6 @@ export async function updateChartDesignSet(
     const member = set.designs[system];
     if (!member) throw new ChartDesignSetError(409, "This chart design is incomplete — it can't be edited until it's repaired.");
     batch.update(designsCol().doc(member.id), { ...patch, updatedAt: FieldValue.serverTimestamp() });
-  }
-  if (update.houseSystem !== undefined) {
-    const astro = set.designs.astrology;
-    if (!astro) throw new ChartDesignSetError(409, "This chart design is incomplete — it can't be edited until it's repaired.");
-    batch.update(designsCol().doc(astro.id), { houseSystem: update.houseSystem, updatedAt: FieldValue.serverTimestamp() });
   }
   if (update.name !== undefined) {
     batch.update(setsCol().doc(set.id), { name: update.name, updatedAt: FieldValue.serverTimestamp() });
@@ -329,6 +299,11 @@ export async function setDefaultChartDesignSet(subAccountId: string, setId: stri
   if (CHART_DESIGN_SET_SYSTEMS.some((s) => !set.designs[s])) {
     throw new ChartDesignSetError(409, "An incomplete chart design can't be the default.");
   }
+  // Changing the default design is a styling choice. Before it happens,
+  // make sure the house system new readings use is saved as the reading
+  // calculation setting (it may still be coming from the old default
+  // design's record), so switching designs can never change calculations.
+  await pinAstrologyHouseSystem(subAccountId);
   const [setSnap, designSnap] = await Promise.all([
     setsCol().where("subAccountId", "==", subAccountId).get(),
     designsCol().where("subAccountId", "==", subAccountId).get(),
@@ -337,16 +312,7 @@ export async function setDefaultChartDesignSet(subAccountId: string, setId: stri
   for (const doc of setSnap.docs) {
     batch.update(doc.ref, { isDefault: doc.id === setId, updatedAt: FieldValue.serverTimestamp() });
   }
-  // New readings are calculated with the default design's house system.
-  // Changing which design is the default is a STYLING choice, so the
-  // current calculation setting carries over instead of silently changing.
-  const previousDefault = setSnap.docs.find((d) => d.data().isDefault === true && d.id !== setId);
-  const previousAstroId = previousDefault?.data().members?.astrology;
-  const previousHouse = designSnap.docs.find((d) => d.id === previousAstroId)?.data().houseSystem;
-  const newAstro = set.designs.astrology;
-  if (newAstro && typeof previousHouse === "string" && previousHouse !== newAstro.houseSystem) {
-    batch.update(designsCol().doc(newAstro.id), { houseSystem: previousHouse });
-  }
+
   for (const doc of designSnap.docs) {
     const shouldBeDefault = doc.data().ownerSetId === setId;
     if (doc.data().isDefault !== shouldBeDefault) batch.update(doc.ref, { isDefault: shouldBeDefault });

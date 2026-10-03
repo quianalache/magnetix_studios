@@ -6,6 +6,7 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { getEnergeticProfile } from "@/lib/server/energetic-profile-service";
 import { designsCol, freshDesignFields, loadChartDesignData, toDesign } from "@/lib/server/chart-design-records";
+import { pinAstrologyHouseSystem } from "@/lib/server/reading-calculation-settings-service";
 import {
   createChartDesignSet,
   ensureDefaultChartDesignSet,
@@ -305,6 +306,9 @@ export async function setDefaultChartDesign(subAccountId: string, designId: stri
     const updated = await ref.get();
     return toDesign(updated.id, updated.data()!);
   }
+  // A new default Astrology record must not change how readings are
+  // calculated: save the current house system as the reading setting first.
+  if (data.system === "astrology") await pinAstrologyHouseSystem(subAccountId);
 
   const siblings = await col()
     .where("subAccountId", "==", subAccountId)
