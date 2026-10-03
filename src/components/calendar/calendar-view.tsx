@@ -192,7 +192,6 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
   }
 
   const cols = view === "day" ? 1 : 7;
-  const rows = view === "month" ? 6 : 1;
 
   const itemsByDay = useMemo(() => {
     const map = new Map<string, DayItem[]>();
@@ -370,21 +369,21 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
 
   return (
     <>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <div className="rounded-2xl border bg-card">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="overflow-hidden rounded-[20px] border border-border/70 bg-background shadow-sm">
         {/* Header — was showing the outer card's pink through unless
             explicitly overridden; real page keeps this row on
             bg-background, only the outer rounded card wrapper itself
             carries the tint (and gets fully covered by its children). */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 bg-background px-5 py-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+            <span className="rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {events.length} events
             </span>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" onClick={goToday}>
+          <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" className="rounded-lg" onClick={goToday}>
               Today
             </Button>
             <Button
@@ -407,7 +406,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
         </div>
 
         {/* Toolbar: search + view toggle + new event */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-background px-5 py-3.5">
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -415,20 +414,20 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
               placeholder="Search calendar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 rounded-full pl-8 text-xs"
+              className="h-9 rounded-lg border-border/70 bg-background pl-8 text-xs shadow-none"
             />
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border/70 bg-muted/30 p-1">
               {VIEW_MODES.map((vm) => (
                 <button
                   key={vm.value}
                   type="button"
                   onClick={() => setView(vm.value)}
                   className={cn(
-                    "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                     view === vm.value
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -436,7 +435,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                 </button>
               ))}
             </div>
-            <Button size="sm" onClick={() => openNew()}>
+            <Button size="sm" className="rounded-lg" onClick={() => openNew()}>
               <Plus className="mr-1 h-3.5 w-3.5" />
               New Event
             </Button>
@@ -521,20 +520,20 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
             {/* Weekday header */}
             <div
               className={cn(
-                "grid border-b border-border/40 bg-muted/40",
+                "grid border-b border-border/60 bg-muted/20",
                 cols === 7 ? "grid-cols-7" : "grid-cols-1",
               )}
             >
               {view === "day"
                 ? (
-                    <div className="px-2 py-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                       {cursor.toLocaleDateString("en-US", { weekday: "long" })}
                     </div>
                   )
                 : WEEKDAYS.map((w) => (
                     <div
                       key={w}
-                      className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      className="px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground"
                     >
                       {w}
                     </div>
@@ -548,12 +547,12 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                 a clean white grid with color reserved for real content. */}
             <div
               className={cn(
-                "grid bg-background",
+                "grid divide-x divide-y divide-border/60 bg-background",
                 cols === 7 ? "grid-cols-7" : "grid-cols-1",
                 view === "month" && "grid-rows-6",
               )}
             >
-              {days.map((d, i) => {
+              {days.map((d) => {
                 const isCurrentMonth = view !== "month" || d.getMonth() === cursor.getMonth();
                 const isToday = d.getTime() === today.getTime();
                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -561,9 +560,6 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                 const cap = view === "day" ? 20 : 3;
                 const visible = dayItems.slice(0, cap);
                 const overflow = dayItems.length - visible.length;
-                const colIndex = i % cols;
-                const rowIndex = Math.floor(i / cols);
-
                 return (
                   <div
                     key={dayKey(d)}
@@ -574,20 +570,16 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                         ? "min-h-[420px]"
                         : view === "week"
                           ? "min-h-[220px]"
-                          : "min-h-[100px]",
-                      colIndex < cols - 1 && "border-r border-border/40",
-                      rowIndex < rows - 1 && "border-b border-border/40",
+                          : "min-h-[104px]",
                       !isCurrentMonth && "bg-muted/10",
-                      isWeekend && isCurrentMonth && !isToday && "bg-muted/5",
-                      // Real MomentumOS tints today's whole cell bg-secondary/20,
-                      // not just the day-number badge.
-                      isToday && "bg-secondary/20",
+                      isWeekend && isCurrentMonth && !isToday && "bg-muted/[0.04]",
+                      isToday && "bg-primary/[0.035]",
                     )}
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span
                         className={cn(
-                          "flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
+                          "flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium tabular-nums",
                           // Was a hardcoded indigo/violet/pink gradient, totally
                           // disconnected from the theme system — momentum-scope
                           // could never touch it. Real markup: plain bg-primary.
@@ -614,7 +606,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                               type="button"
                               onClick={(ev) => openRoutine(e, ev)}
                               title={`${e.name} · ${when ?? "All day"} · ${e.done}/${e.total} done`}
-                              className="flex w-full items-center gap-1 truncate rounded-md border px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-colors hover:brightness-95"
+                              className="flex w-full items-center gap-1 truncate rounded-lg border px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors hover:brightness-95"
                               style={{
                                 background: `color-mix(in oklab, ${hex} 12%, var(--background))`,
                                 borderColor: `color-mix(in oklab, ${hex} 30%, transparent)`,
@@ -642,7 +634,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                               key={`ev-${ev.id}`}
                               type="button"
                               onClick={(e) => openEventDetail(ev, e)}
-                              className="group/event flex w-full items-center gap-1 truncate rounded border border-accent/30 bg-accent/20 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
+                              className="group/event flex w-full items-center gap-1 truncate rounded-lg border border-accent/30 bg-accent/10 px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-accent-foreground transition-colors hover:border-accent"
                             >
                               {start && (
                                 <span className="shrink-0 text-muted-foreground">
@@ -672,7 +664,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                                 e.stopPropagation();
                                 setDetailGoogleEvent(ge);
                               }}
-                              className="flex w-full items-center gap-1 truncate rounded-md border border-transparent bg-blue-500/10 px-1.5 py-1 text-left text-[11px] font-medium leading-tight text-blue-700 transition-colors hover:border-blue-500/30 dark:text-blue-400"
+                              className="flex w-full items-center gap-1 truncate rounded-lg border border-transparent bg-blue-500/[0.07] px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-blue-700 transition-colors hover:border-blue-500/30 dark:text-blue-400"
                             >
                               <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500" />
                               {start && !ge.allDay && (
@@ -690,7 +682,7 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
                             key={`task-${t.id}`}
                             type="button"
                             onClick={(e) => openTask(t, e)}
-                            className="flex w-full items-center gap-1 truncate rounded-md border border-border/50 bg-secondary/20 px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-colors hover:border-primary/30"
+                            className="flex w-full items-center gap-1 truncate rounded-lg border border-border/60 bg-secondary/10 px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors hover:border-primary/30"
                           >
                             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full border border-secondary-foreground/50" />
                             <span className="truncate">{t.title}</span>
@@ -711,16 +703,17 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
         )}
       </div>
 
-      <aside className="rounded-2xl border bg-card p-4">
-        <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="space-y-4">
+      <aside className="rounded-[20px] border border-border/70 bg-background p-5 shadow-sm">
+        <div className="mb-4 flex items-start justify-between gap-2 border-b border-border/60 pb-4">
           <div>
-            <p className="text-sm font-semibold">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
-            <p className="text-xs text-muted-foreground">{selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+            <p className="text-base font-semibold text-foreground">{selectedDate.toLocaleDateString("en-US", { weekday: "long" })}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{selectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
           </div>
-          <CalendarDays className="h-5 w-5 text-primary" />
+          <CalendarDays className="h-5 w-5 text-primary" aria-hidden />
         </div>
         <div className="space-y-2">
-          {selectedDayItems.length === 0 && <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
+          {selectedDayItems.length === 0 && <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 p-5 text-center text-sm text-muted-foreground">Nothing scheduled</p>}
           {selectedDayItems.map((item) => {
             if (item.kind === "routine") {
               return <button key={`side-routine-${item.entry.routineId}-${item.entry.date}`} type="button" onClick={(e) => openRoutine(item.entry, e)} className="flex w-full items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-left hover:bg-primary/10"><Repeat className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.entry.name}</span><span className="text-xs text-muted-foreground">Routine · {item.entry.done}/{item.entry.total} complete</span></span></button>;
@@ -735,57 +728,36 @@ export function CalendarView({ events, contacts, tasks, projects, googleEvents }
           })}
         </div>
       </aside>
+      <section className="rounded-[20px] border border-border/70 bg-background shadow-sm">
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+          <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-primary" /><h3 className="text-sm font-semibold">Upcoming Deadlines</h3></div>
+          <span className="text-xs font-medium text-primary">View all</span>
+        </div>
+        <div className="space-y-2 p-4">
+          {upcomingDeadlines.length === 0 && <p className="rounded-xl border border-dashed border-border/70 bg-muted/10 p-4 text-center text-sm text-muted-foreground">No upcoming deadlines.</p>}
+          {upcomingDeadlines.map(({ task, due }) => (
+            <button key={task.id} type="button" onClick={(e) => openTask(task, e)} className="flex w-full items-center justify-between gap-2 rounded-xl border border-border/60 bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40">
+              <span className="truncate text-sm font-medium">{task.title}</span>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{formatShortDate(due)}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="rounded-[20px] border border-border/70 bg-background shadow-sm">
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+          <div className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-primary" /><h3 className="text-sm font-semibold">Today&apos;s Time Blocks</h3></div>
+          <span className="text-xs font-medium text-primary">Edit</span>
+        </div>
+        <div className="space-y-2 p-4">
+          {todaysTimeBlocks.map((block) => (
+            <div key={block.value} className="flex items-start gap-3">
+              <div className="w-14 pt-2 text-xs font-medium text-muted-foreground">{block.label}</div>
+              <div className="min-h-[36px] flex-1 rounded-xl border border-border/60 bg-muted/[0.04] p-2 text-xs text-foreground">{block.titles.length > 0 ? block.titles.join(", ") : <span className="text-muted-foreground">Nothing scheduled</span>}</div>
+            </div>
+          ))}
+        </div>
+      </section>
       </div>
-
-      {/* Bottom panels — always visible, independent of search/view */}
-      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border bg-card">
-          <div className="flex items-center gap-2 border-b px-4 py-3">
-            <CalendarClock className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Upcoming Deadlines</h3>
-          </div>
-          <div className="space-y-2 p-4">
-            {upcomingDeadlines.length === 0 && (
-              <p className="text-sm text-muted-foreground">No upcoming deadlines.</p>
-            )}
-            {upcomingDeadlines.map(({ task, due }) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={(e) => openTask(task, e)}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border bg-background px-3 py-2 text-left hover:bg-muted/50"
-              >
-                <span className="truncate text-sm font-medium">{task.title}</span>
-                <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">
-                  {formatShortDate(due)}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border bg-card">
-          <div className="flex items-center gap-2 border-b px-4 py-3">
-            <Clock3 className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Today&apos;s Time Blocks</h3>
-          </div>
-          <div className="space-y-2 p-4">
-            {todaysTimeBlocks.map((block) => (
-              <div key={block.value} className="flex items-start gap-3">
-                <div className="w-14 pt-2 text-xs font-medium text-muted-foreground">
-                  {block.label}
-                </div>
-                <div className="min-h-[36px] flex-1 rounded-xl border bg-background p-2 text-xs text-foreground">
-                  {block.titles.length > 0 ? (
-                    block.titles.join(", ")
-                  ) : (
-                    <span className="text-muted-foreground">Nothing scheduled</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <EventDialog

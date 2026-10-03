@@ -74,9 +74,9 @@ export function CalendarTaskPopup({
 
   return <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
+      <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-[20px] border-border/70 bg-background p-0 shadow-xl">
         <DialogTitle className="sr-only">{currentTask.title}</DialogTitle>
-        <div className="border-b bg-primary/5 px-5 py-4">
+        <div className="border-b border-border/60 bg-primary/[0.045] px-5 py-4">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><Check className="h-5 w-5" /></div>
             <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{currentTask.title}</h2><p className="text-sm text-muted-foreground">Task</p></div>
@@ -130,7 +130,7 @@ export function CalendarMeetingPopup({
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
       <DialogTitle className="sr-only">{event.title}</DialogTitle>
-      <div className="border-b bg-blue-500/5 px-5 py-4">
+        <div className="border-b border-border/60 bg-blue-500/[0.045] px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
           <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">{isBooking ? "Booking appointment" : "Meeting or session"}</p></div>
@@ -169,9 +169,9 @@ export function CalendarGooglePopup({
   const start = toDate(event.startAt);
   const end = toDate(event.endAt);
   return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-2xl p-0">
+      <DialogContent showCloseButton={false} className="max-w-xl overflow-hidden rounded-[20px] border-border/70 bg-background p-0 shadow-xl">
       <DialogTitle className="sr-only">{event.title}</DialogTitle>
-      <div className="border-b bg-blue-500/5 px-5 py-4">
+        <div className="border-b border-border/60 bg-blue-500/[0.045] px-5 py-4">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600"><CalendarDays className="h-5 w-5" /></div>
           <div className="min-w-0 flex-1"><h2 className="truncate text-lg font-semibold">{event.title}</h2><p className="text-sm text-muted-foreground">Google Calendar event</p></div>

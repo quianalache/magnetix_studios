@@ -109,13 +109,14 @@ export default function CalendarPage() {
   }, [user, agencyId, subAccountId, authLoading, filterReady, territoryFilter]);
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
-        <p className="text-sm text-muted-foreground">
-          Manual events — meetings, calls, reminders. Click any day to add
-          something.
-        </p>
+    <div className="momentum-scope mx-auto w-full max-w-[1440px] space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-1">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Calendar</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manual events — meetings, calls, reminders. Click any day to add something.
+          </p>
+        </div>
       </div>
 
       {loading ? (
