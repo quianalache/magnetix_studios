@@ -51,11 +51,18 @@ export interface EnergeticProfile {
   /** Persisted explicitly (unlike today's Reading, which re-geocodes birthPlace text at creation time) so a later Regenerate Reading action can recompute deterministically without re-resolving the place name. Null until geocoded. */
   lat: number | null;
   lng: number | null;
-  /** Saved Human Design (Traditional) ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
+  /**
+   * The unified Chart Design (`chartDesignSets/{id}`) this Profile uses for
+   * every chart system. Wins over the legacy per-system overrides below,
+   * which are read only during the migration to unified designs and are
+   * retired after it is verified. Null/absent = the sub-account default.
+   */
+  chartDesignSetId?: string | null;
+  /** LEGACY (retiring after the unified-design migration). Saved Human Design (Traditional) ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
   hdChartDesignId?: string | null;
-  /** Saved Mandala ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
+  /** LEGACY (retiring). Saved Mandala ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
   mandalaChartDesignId?: string | null;
-  /** Saved Astrology ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
+  /** LEGACY (retiring). Saved Astrology ChartDesign override for this Profile — null/absent falls back to the sub-account default. */
   astrologyChartDesignId?: string | null;
   createdAt: string | null;
   updatedAt: string | null;

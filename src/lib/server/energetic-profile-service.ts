@@ -150,6 +150,7 @@ export async function updateEnergeticProfile(
       | "timeZone"
       | "lat"
       | "lng"
+      | "chartDesignSetId"
       | "hdChartDesignId"
       | "mandalaChartDesignId"
       | "astrologyChartDesignId"

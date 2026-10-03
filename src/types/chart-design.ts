@@ -125,6 +125,15 @@ export interface ChartDesign {
   /** Mandala only — the 4 quadrant divider lines and their numbers. */
   mandalaQuadrantColor: string;
   /**
+   * The unified Chart Design (`chartDesignSets/{id}`, see
+   * chart-design-set.ts) this record belongs to. Every record belongs to
+   * exactly one set once a sub-account is migrated, so editing one unified
+   * design can never change another. Absent on records that predate the
+   * unified model (an unmigrated sub-account) — those keep resolving
+   * through the legacy per-system defaults/overrides.
+   */
+  ownerSetId?: string | null;
+  /**
    * ISO string, not a raw Firestore Timestamp — resolved server-side
    * (chart-design-service.ts's `toDesign`) before this ever reaches a
    * caller. Unused by every current consumer's render output, but real

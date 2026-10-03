@@ -2,20 +2,22 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { listChartDesigns, createChartDesign } from "@/lib/server/chart-design-service";
-import type { ChartDesignSystem } from "@/types/chart-design";
+import {
+  ChartDesignSetError,
+  createChartDesignSet,
+  listChartDesignSets,
+} from "@/lib/server/chart-design-set-service";
 
+/** Unified Chart Designs (2026-10) — list (any member) and create (admins). */
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  const designs = await listChartDesigns(subAccountId, access.agencyId ?? "");
-  return NextResponse.json({ ok: true, designs });
+  const result = await listChartDesignSets(subAccountId, access.agencyId ?? "");
+  return NextResponse.json({ ok: true, ...result });
 }
 
-// Creating/editing designs is admin-only (unified Chart Designs, 2026-10) —
-// matches the UI, which never offered it to collaborators.
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
   const access = await requireSubAccountAdmin(request, subAccountId);
@@ -27,15 +29,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   } catch {
     body = {};
   }
-  const system: ChartDesignSystem =
-    body.system === "astrology" ? "astrology" : body.system === "mandala" ? "mandala" : "humanDesign";
-  const name = typeof body.name === "string" ? body.name : "Untitled design";
-
-  const design = await createChartDesign({
-    agencyId: access.agencyId ?? "",
-    subAccountId,
-    system,
-    name,
-  });
-  return NextResponse.json({ ok: true, design });
+  try {
+    const set = await createChartDesignSet({
+      subAccountId,
+      agencyId: access.agencyId ?? "",
+      name: body.name,
+    });
+    return NextResponse.json({ ok: true, set });
+  } catch (err) {
+    if (err instanceof ChartDesignSetError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 }

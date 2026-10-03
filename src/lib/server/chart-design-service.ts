@@ -3,10 +3,20 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
-import { defaultChartDesignColor } from "@/types/chart-design";
-import type { EnergeticProfile } from "@/types/energetic-profile";
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import { getEnergeticProfile } from "@/lib/server/energetic-profile-service";
+import { designsCol, freshDesignFields, loadChartDesignData, toDesign } from "@/lib/server/chart-design-records";
+import {
+  createChartDesignSet,
+  ensureDefaultChartDesignSet,
+  setDefaultChartDesignSet,
+} from "@/lib/server/chart-design-set-service";
+import {
+  resolveChartDesign,
+  resolveReadingChartDesigns,
+  type ChartDesignProfileRefs,
+  type ResolvedReadingChartDesigns,
+} from "@/lib/energetics/chart-design-resolution";
 
 /**
  * Chart Designs — flat top-level collection, same convention as
@@ -14,93 +24,7 @@ import { getEnergeticProfile } from "@/lib/server/energetic-profile-service";
  * rather than nested). See src/types/chart-design.ts for the full context.
  */
 
-function col() {
-  return getAdminDb().collection("chartDesigns");
-}
-
-/**
- * Firestore Timestamps aren't plain-serializable — passed as-is, they
- * throw the moment a ChartDesign crosses a Server → Client Component
- * boundary (the public decoder form, the report design viewer both do).
- * Real Timestamp → ISO string; a still-in-flight FieldValue sentinel (the
- * immediate return of a create, before any re-read) → null, same "don't
- * fabricate a client-side date" convention already used for reading
- * createdAt in energetic-decoder-service.ts. Fixed 2026-08-11.
- */
-function toIsoString(value: unknown): string | null {
-  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
-    return (value as FirebaseFirestore.Timestamp).toDate().toISOString();
-  }
-  return null;
-}
-
-function toDesign(id: string, data: FirebaseFirestore.DocumentData): ChartDesign {
-  return {
-    id,
-    ...(data as Omit<ChartDesign, "id">),
-    createdAt: toIsoString(data.createdAt),
-    updatedAt: toIsoString(data.updatedAt),
-  };
-}
-
-/** Real, working defaults for the fields with no legacy value to inherit — everything a fresh design needs to render correctly with zero configuration. */
-function freshDesignFields() {
-  return {
-    chartDefinedColor: defaultChartDesignColor(),
-    channelsColor: "#52525b", // zinc-600 — the faint background channel-network color (remapped 2026-08-17, see chart-designs-tab.tsx's FIELD_LABEL comment)
-    gatesColor: "#18181b", // zinc-900 — matches the traditional Personality gate-text color
-    // 2026-08-10 — full-chart-layout fields, see chart-design.ts's header
-    // comment. Defaults match human-design-chart.tsx's current hardcoded
-    // PERSONALITY_FILL/DESIGN_FILL exactly, so the moment the full-chart
-    // component reads these, a design nobody has touched yet renders
-    // identically to what the BodyGraph already shows today — no visual
-    // jump on first load.
-    personalityActivationColor: "#18181b", // zinc-900 — same as gatesColor/PERSONALITY_FILL
-    designActivationColor: "#9a3412", // rust/brown — same as human-design-chart.tsx's DESIGN_FILL
-    arrowColor: "#3f3f46", // zinc-700 — neutral ink, matches WHEEL_TEXT already used elsewhere (astrology wheel, PDF)
-    arrowStyle: "solid" as const,
-    planetBoxColor: "#f4f4f5", // zinc-100 — currently unused by the renderer, see chart-design.ts's header comment
-    // "fullBox" as the default rather than "iconOnly": the full-chart
-    // component has always rendered a filled row (planetBoxColor, before
-    // this field existed) — fullBox is the closest continuity with that,
-    // even though the fill source changes to the activation color per
-    // side. Border radius default (6) matches the Tailwind `rounded-md`
-    // class the renderer already hardcoded before this field existed.
-    planetBoxMode: "fullBox" as const,
-    planetBoxBorderRadius: 6,
-    // "uniform" preserves current behavior exactly — every existing
-    // design keeps rendering every defined center in chartDefinedColor
-    // until someone explicitly switches to traditional. The 9 colors
-    // below are still given real defaults (not blank) so switching to
-    // traditional works correctly with zero further configuration —
-    // real values read directly off Bodygraph's own traditional-mode
-    // fields, 2026-08-10.
-    centersMode: "uniform" as const,
-    headCenterColor: "#e49e4b",
-    ajnaCenterColor: "#a19a5c",
-    throatCenterColor: "#bf5a0f",
-    gCenterColor: "#e49e4b",
-    heartCenterColor: "#a23423",
-    spleenCenterColor: "#bf5a0f",
-    sacralCenterColor: "#a23423",
-    solarPlexusCenterColor: "#bf5a0f",
-    rootCenterColor: "#bf5a0f",
-    backgroundColor: "#ffffff",
-    houseSystem: "placidus" as const,
-    wheelAccentColor: "#5E2574", // the real theme-magnetix primary purple, not an invented color
-    // Mandala-only, added 2026-08-15 (Phase 6, completing the Mandala
-    // rebuild) — defaults are this chart's own original picks, not copied
-    // from Bodygraph (whose Mandala isn't reachable through its API to
-    // even compare against). Violet for the zodiac ring ties it visually
-    // to this app's own established brand purple (wheelAccentColor above)
-    // without being the identical value, so the two rings read as
-    // related but distinct on a chart that shows both HD and astrology
-    // structure at once.
-    mandalaZodiacColor: "#8b5cf6",
-    mandalaGateRingColor: "#71717a", // zinc-500 — neutral structural ink, matches this app's other faint-ring conventions
-    mandalaQuadrantColor: "#71717a",
-  };
-}
+const col = designsCol;
 
 /**
  * Lists every saved design, seeding one default per system (Human Design,
@@ -112,7 +36,15 @@ function freshDesignFields() {
  * their color via the old single picker doesn't see it silently reset here.
  */
 export async function listChartDesigns(subAccountId: string, agencyId: string): Promise<ChartDesign[]> {
-  const snap = await col().where("subAccountId", "==", subAccountId).get();
+  let snap = await col().where("subAccountId", "==", subAccountId).get();
+  if (snap.empty) {
+    // Unified Chart Designs (2026-10): a brand-new sub-account's defaults
+    // are created as one unified design (three owned records), not three
+    // loose records. Existing sub-accounts are untouched here — grouping
+    // their records is the one-time, separately authorized migration.
+    await ensureDefaultChartDesignSet(subAccountId, agencyId);
+    snap = await col().where("subAccountId", "==", subAccountId).get();
+  }
   const existing = snap.docs.map((d) => toDesign(d.id, d.data()));
 
   const seeds: Promise<ChartDesign>[] = [];
@@ -228,90 +160,51 @@ export async function getChartDesign(subAccountId: string, designId: string): Pr
   return toDesign(snap.id, snap.data()!);
 }
 
-/** The design actually applied to the public tool/reports for a system — the one used by every existing consumer that isn't design-aware yet. */
+/**
+ * The design applied to the public tool / template previews for a system
+ * when no Profile is involved — the default unified design's record, or
+ * (unmigrated sub-account) the legacy per-system default.
+ */
 export async function getDefaultChartDesign(
   subAccountId: string,
   system: ChartDesignSystem,
 ): Promise<ChartDesign | null> {
-  const snap = await col()
-    .where("subAccountId", "==", subAccountId)
-    .where("system", "==", system)
-    .where("isDefault", "==", true)
-    .limit(1)
-    .get();
-  if (snap.empty) return null;
-  return toDesign(snap.docs[0].id, snap.docs[0].data());
+  const { designs, sets } = await loadChartDesignData(subAccountId);
+  return resolveChartDesign({ subAccountId, designs, sets, profile: null }, system).design;
 }
 
 /**
- * Which override field on an EnergeticProfile applies to a given system —
- * kept here (not in energetic-profile-service.ts) since it's purely about
- * resolving a ChartDesign, not about Profile CRUD.
- */
-function overrideIdFor(
-  profile: Pick<EnergeticProfile, "hdChartDesignId" | "mandalaChartDesignId" | "astrologyChartDesignId">,
-  system: ChartDesignSystem,
-): string | null {
-  if (system === "humanDesign") return profile.hdChartDesignId ?? null;
-  if (system === "mandala") return profile.mandalaChartDesignId ?? null;
-  return profile.astrologyChartDesignId ?? null;
-}
-
-/**
- * The design that should actually render for THIS Profile's chart, for a
- * given system — 2026-08-15, Bodygraph gap closure (the audit's "practitioner
- * picks a saved chart design from the individual person's chart
- * experience," never built before now). Single shared resolution point so
- * every consumer (practitioner Readings tab, the public report/PDF
- * surfaces) agrees on the same rule instead of re-implementing it:
- *
- *  1. No profile, or no override set for this system → sub-account default
- *     (unchanged behavior for every Profile that predates this feature).
- *  2. Override set, but the referenced design no longer exists (deleted)
- *     or somehow belongs to a different system → safe fallback to the
- *     sub-account default, never a broken/blank chart. `getChartDesign` is
- *     already tenant-scoped (returns null for a wrong-subAccountId design),
- *     so a cross-tenant reference can't leak through here either.
- *  3. Override set and valid → that design, regardless of which one is
- *     currently marked `isDefault` — this Profile's own choice always wins
- *     over the sub-account default, which is the entire point of the
- *     override.
+ * The design that renders for THIS Profile's chart, for a given system.
+ * Thin wrapper over the one shared rule in
+ * src/lib/energetics/chart-design-resolution.ts (Profile's unified design →
+ * legacy override during the migration → default unified design → legacy
+ * default → none), always tenant-scoped: a set or record from another
+ * sub-account never resolves.
  */
 export async function resolveChartDesignForProfile(
   subAccountId: string,
-  profile: Pick<EnergeticProfile, "hdChartDesignId" | "mandalaChartDesignId" | "astrologyChartDesignId"> | null,
+  profile: Partial<ChartDesignProfileRefs> | null,
   system: ChartDesignSystem,
 ): Promise<ChartDesign | null> {
-  const overrideId = profile ? overrideIdFor(profile, system) : null;
-  if (overrideId) {
-    const overridden = await getChartDesign(subAccountId, overrideId);
-    if (overridden && overridden.system === system) return overridden;
-  }
-  return getDefaultChartDesign(subAccountId, system);
+  const { designs, sets } = await loadChartDesignData(subAccountId);
+  return resolveChartDesign({ subAccountId, designs, sets, profile }, system).design;
 }
 
 /**
- * Convenience wrapper around `resolveChartDesignForProfile` for the
- * common case every client-facing/PDF surface actually has: a Reading,
- * not yet its Profile. Resolves the Profile from `reading.profileId`
- * (null for a Reading with none — pre-migration/orphan cases resolve to
- * the sub-account default automatically, same fallback as everywhere
- * else) and returns all 3 systems' designs in one call, so every
- * consumer (the public report page/design viewer, the practitioner and
- * public PDF routes, the GeneratedReport PDF/preview routes) resolves
- * designs identically instead of six near-duplicate implementations.
+ * Every system's design for a Reading (resolved through its Profile) — the
+ * single resolution point every client-facing/PDF surface uses. Also
+ * reports which unified design they came from, for generated-report
+ * style snapshots.
  */
 export async function resolveChartDesignsForReading(
   subAccountId: string,
   reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology">,
-): Promise<{ hdDesign: ChartDesign | null; mandalaDesign: ChartDesign | null; astroDesign: ChartDesign | null }> {
-  const profile = reading.profileId ? await getEnergeticProfile(subAccountId, reading.profileId) : null;
-  const [hdDesign, mandalaDesign, astroDesign] = await Promise.all([
-    reading.humanDesign ? resolveChartDesignForProfile(subAccountId, profile, "humanDesign") : Promise.resolve(null),
-    reading.humanDesign ? resolveChartDesignForProfile(subAccountId, profile, "mandala") : Promise.resolve(null),
-    reading.astrology ? resolveChartDesignForProfile(subAccountId, profile, "astrology") : Promise.resolve(null),
+): Promise<ResolvedReadingChartDesigns> {
+  const [profile, data] = await Promise.all([
+    reading.profileId ? getEnergeticProfile(subAccountId, reading.profileId) : Promise.resolve(null),
+    loadChartDesignData(subAccountId),
   ]);
-  return { hdDesign, mandalaDesign, astroDesign };
+  return resolveReadingChartDesigns({ subAccountId, ...data, profile }, reading);
 }
 
 export async function createChartDesign(opts: {
@@ -320,6 +213,16 @@ export async function createChartDesign(opts: {
   system: ChartDesignSystem;
   name: string;
 }): Promise<ChartDesign> {
+  // Migrated sub-account: a record must belong to a unified design, so the
+  // legacy single-record create makes a whole new unified design (copied
+  // from the default) and returns its record for the requested system.
+  const { sets } = await loadChartDesignData(opts.subAccountId);
+  if (sets.length > 0) {
+    const set = await createChartDesignSet({ subAccountId: opts.subAccountId, agencyId: opts.agencyId, name: opts.name });
+    const member = set.designs[opts.system];
+    if (!member) throw new Error("Couldn't create chart design");
+    return member;
+  }
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
@@ -394,6 +297,15 @@ export async function setDefaultChartDesign(subAccountId: string, designId: stri
   if (!snap.exists || snap.data()?.subAccountId !== subAccountId) throw new Error("Chart design not found");
   const data = snap.data()!;
 
+  // A record that belongs to a unified design can only become the default
+  // together with its design — never on its own, which would split the
+  // default across designs.
+  if (typeof data.ownerSetId === "string" && data.ownerSetId) {
+    await setDefaultChartDesignSet(subAccountId, data.ownerSetId);
+    const updated = await ref.get();
+    return toDesign(updated.id, updated.data()!);
+  }
+
   const siblings = await col()
     .where("subAccountId", "==", subAccountId)
     .where("system", "==", data.system)
@@ -419,5 +331,8 @@ export async function deleteChartDesign(subAccountId: string, designId: string):
   const snap = await ref.get();
   if (!snap.exists || snap.data()?.subAccountId !== subAccountId) throw new Error("Chart design not found");
   if (snap.data()?.isDefault) throw new Error("Can't delete the default design — set another one as default first.");
+  if (snap.data()?.ownerSetId) {
+    throw new Error("This design is part of a unified Chart Design — delete the unified design instead.");
+  }
   await ref.delete();
 }

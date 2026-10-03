@@ -27,7 +27,7 @@ export async function PATCH(
   ctx: { params: Promise<{ id: string; designId: string }> },
 ) {
   const { id: subAccountId, designId } = await ctx.params;
-  const access = await requireSubAccountMember(request, subAccountId);
+  const access = await requireSubAccountAdmin(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
   let body: Record<string, unknown>;

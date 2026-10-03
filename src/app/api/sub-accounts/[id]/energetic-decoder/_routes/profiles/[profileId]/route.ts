@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { updateEnergeticProfile, deleteEnergeticProfile } from "@/lib/server/energetic-profile-service";
 import { getChartDesign } from "@/lib/server/chart-design-service";
+import { getChartDesignSet } from "@/lib/server/chart-design-set-service";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import type { ChartDesignSystem } from "@/types/chart-design";
 
@@ -43,8 +44,16 @@ const DESIGN_OVERRIDE_FIELDS = {
   mandalaChartDesignId: "mandala",
   astrologyChartDesignId: "astrology",
 } as const satisfies Record<string, ChartDesignSystem>;
-type DesignOverrideKey = keyof typeof DESIGN_OVERRIDE_FIELDS;
-const DESIGN_OVERRIDE_KEYS = Object.keys(DESIGN_OVERRIDE_FIELDS) as DesignOverrideKey[];
+type LegacyDesignOverrideKey = keyof typeof DESIGN_OVERRIDE_FIELDS;
+const LEGACY_DESIGN_OVERRIDE_KEYS = Object.keys(DESIGN_OVERRIDE_FIELDS) as LegacyDesignOverrideKey[];
+/**
+ * Unified Chart Designs (2026-10): `chartDesignSetId` is the Profile's one
+ * design for every chart system. Accepted on the same design-only path as
+ * the legacy per-system keys, which stay accepted only until the migration
+ * to unified designs is verified.
+ */
+type DesignOverrideKey = LegacyDesignOverrideKey | "chartDesignSetId";
+const DESIGN_OVERRIDE_KEYS: DesignOverrideKey[] = [...LEGACY_DESIGN_OVERRIDE_KEYS, "chartDesignSetId"];
 
 /** Returns the design-override patch when the request body is ONLY override keys (and at least one), else null — signals "fall through to the full Edit Profile path" below. */
 function readDesignOverridePatch(body: Record<string, unknown>): Partial<Record<DesignOverrideKey, string | null>> | null {
@@ -81,7 +90,13 @@ export async function PATCH(
     // never trust a client-supplied designId as-is. `getChartDesign` is
     // already tenant-scoped (null for a wrong-subAccountId design), so
     // this also closes the door on a cross-tenant reference.
-    for (const key of DESIGN_OVERRIDE_KEYS) {
+    if (overridePatch.chartDesignSetId) {
+      const set = await getChartDesignSet(subAccountId, overridePatch.chartDesignSetId);
+      if (!set) {
+        return NextResponse.json({ error: "That chart design could not be found." }, { status: 404 });
+      }
+    }
+    for (const key of LEGACY_DESIGN_OVERRIDE_KEYS) {
       const value = overridePatch[key];
       if (!value) continue;
       const design = await getChartDesign(subAccountId, value);
