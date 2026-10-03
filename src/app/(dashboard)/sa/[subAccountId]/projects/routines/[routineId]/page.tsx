@@ -32,7 +32,7 @@ export default function RoutineWorkspacePage({
   const initialDate = routineCalendarDate(searchParams.get("date"));
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-5 rounded-2xl">
+    <div className="momentum-scope mx-auto w-full max-w-7xl space-y-5 rounded-2xl">
       <Button
         variant="ghost"
         className="-ml-2 gap-2"
@@ -45,7 +45,6 @@ export default function RoutineWorkspacePage({
         routineId={routineId}
         initialDate={initialDate}
         open
-        embedded
         onOpenChange={(open) => {
           if (!open) router.push(saPath("/projects/routines"));
         }}

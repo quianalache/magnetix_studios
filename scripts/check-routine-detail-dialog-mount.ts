@@ -5,11 +5,19 @@ const route = readFileSync(
   "src/app/(dashboard)/sa/[subAccountId]/projects/routines/[routineId]/page.tsx",
   "utf8",
 );
+const detail = readFileSync("src/components/routines/routine-detail-sheet.tsx", "utf8");
 const taskDetail = readFileSync("src/components/tasks/detail/task-detail-modal.tsx", "utf8");
 const sheet = readFileSync("src/components/ui/sheet.tsx", "utf8");
 
-// Base UI error #26 is Dialog.Portal being rendered without its dialog
-// context. Closed dialogs on this route must not mount their Portal content.
+// The Routine Workspace is a page, not a drawer. Its content must not inherit
+// Sheet sizing or portal layout rules, while actual Sheet consumers retain the
+// Base UI portal paths.
+assert.match(route, /max-w-7xl/);
+assert.doesNotMatch(route, /embedded/);
+assert.match(detail, /<main\s+aria-label="Routine workspace"/);
+assert.doesNotMatch(detail, /from "@\/components\/ui\/sheet"/);
+assert.match(detail, /Back to Routines/);
+assert.match(detail, /role="tablist"[\s\S]*aria-label="Routine sections"/);
 assert.match(route, /\{editing && \(\s*<RoutineEditorDialog/);
 assert.match(route, /\{deleting && \(\s*<Dialog open/);
 assert.match(taskDetail, /if \(!open \|\| !currentId\) return null;/);
@@ -19,4 +27,4 @@ assert.match(sheet, /<SheetPortal container=\{inlineContainer\}>\{popup\}<\/Shee
 assert.match(sheet, /return <SheetPortal><SheetOverlay \/>\{popup\}<\/SheetPortal>/);
 assert.doesNotMatch(sheet, /return inline \? popup/);
 
-console.log("Routine detail dialog and inline sheet regression checks: 8/8 passed");
+console.log("Routine workspace structure and Sheet regression checks: 12/12 passed");

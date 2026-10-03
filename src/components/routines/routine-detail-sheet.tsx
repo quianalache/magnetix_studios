@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -15,7 +16,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -88,7 +88,6 @@ export function RoutineDetailSheet({
   onEdit,
   onDelete,
   onChanged,
-  embedded = false,
 }: {
   routineId: string | null;
   initialDate: string | null;
@@ -98,7 +97,6 @@ export function RoutineDetailSheet({
   onDelete: (routine: RoutineView) => void;
   /** Something changed (completion, pause) — refresh the library. */
   onChanged: () => void;
-  embedded?: boolean;
 }) {
   const { subAccountId } = useSubAccount();
   const [tab, setTab] = useState<Tab>("overview");
@@ -276,31 +274,26 @@ export function RoutineDetailSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="right"
-          showCloseButton={false}
-          inline={embedded}
-          className={cn(
-            "w-full gap-0 overflow-hidden p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl",
-            embedded && "min-h-[680px] rounded-2xl border shadow-xs"
-          )}
-        >
+      {open && <main aria-label="Routine workspace" className="bg-card min-w-0 overflow-hidden rounded-2xl border shadow-xs">
           {!routine ? (
             <div className="flex flex-1 items-center justify-center">
-              <SheetTitle className="sr-only">Routine</SheetTitle>
-              <SheetDescription className="sr-only">Loading routine</SheetDescription>
+              <h1 className="sr-only">Routine</h1>
+              <p className="sr-only">Loading routine</p>
               <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
             </div>
           ) : (
             <>
-              <header className="flex items-start gap-3 border-b px-5 pt-5 pb-4">
+              <header className="flex flex-wrap items-start gap-3 border-b px-5 pt-5 pb-4">
+                <Button variant="ghost" size="sm" className="-ml-2 shrink-0" onClick={() => onOpenChange(false)}>
+                  <ArrowLeft className="mr-1.5 h-4 w-4" />
+                  Back to Routines
+                </Button>
                 <RoutineIcon icon={routine.icon} color={routine.color} />
                 <div className="min-w-0 flex-1">
-                  <SheetTitle className="text-xl leading-tight font-bold">{routine.name}</SheetTitle>
-                  <SheetDescription className="text-muted-foreground mt-0.5 text-xs">
+                  <h1 className="text-xl leading-tight font-bold">{routine.name}</h1>
+                  <p className="text-muted-foreground mt-0.5 text-xs">
                     {routine.visibility === "shared" ? "Shared routine" : "Personal routine"}
-                  </SheetDescription>
+                  </p>
                 </div>
                 {routine.canManage && (
                 <label className="flex shrink-0 items-center gap-2 pt-1 text-sm">
@@ -333,7 +326,7 @@ export function RoutineDetailSheet({
                 </Button>
               </header>
 
-              <div role="tablist" aria-label="Routine sections" className="bg-muted/50 mx-5 mt-4 grid grid-cols-4 gap-1 rounded-xl p-1">
+              <div role="tablist" aria-label="Routine sections" className="bg-muted/50 mx-5 mt-4 grid grid-cols-2 gap-1 rounded-xl p-1 sm:grid-cols-4">
                 {(
                   [
                     ["overview", "Overview"],
@@ -584,8 +577,7 @@ export function RoutineDetailSheet({
               </div>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </main>}
       <TaskDetailModal
         taskId={openTaskId}
         open={!!openTaskId}
