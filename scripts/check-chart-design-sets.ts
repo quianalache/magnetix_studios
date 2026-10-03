@@ -568,6 +568,99 @@ async function main() {
     assert.equal((preview.body.hdDesign as ChartDesign).chartDefinedColor, "#00ff00");
   });
 
+  console.log("\nLibrary and editor flows (Batch 2)");
+  const editorState = await import("../src/lib/energetics/chart-design-editor-state");
+  const previewRoute = viaDispatcher(edDispatcher, "chart-designs/preview");
+  type SetBody = { set: import("../src/types/chart-design-set").ChartDesignSetWithMembers };
+  await check("library loads unified designs, default first, with every system's record", async () => {
+    const res = await json(await setsRoute.GET(req("member2"), p(SA1)));
+    assert.equal(res.status, 200);
+    assert.equal(res.body.migrationRequired, false);
+    const sets = res.body.sets as import("../src/types/chart-design-set").ChartDesignSetWithMembers[];
+    assert.ok(sets.length >= 3);
+    assert.equal(sets[0].isDefault, true);
+    for (const set of sets) {
+      for (const sys of ["humanDesign", "mandala", "astrology"] as const) {
+        assert.equal(set.designs[sys]?.ownerSetId, set.id, `${set.name}/${sys}`);
+      }
+      assert.ok(set.updatedAt === null || typeof set.updatedAt === "string");
+    }
+  });
+  await check("a new design starts as an independent copy of the CURRENT default", async () => {
+    const def = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => x.isDefault)!;
+    await setRoute.PATCH(req("admin3", "PATCH", { mandala: { mandalaZodiacColor: "#0a0b0c" } }), p(SA3, { setId: def.id }));
+    const res = await json(await setsRoute.POST(req("admin3", "POST", { name: "Fresh" }), p(SA3)));
+    const fresh = (res.body as unknown as SetBody).set;
+    assert.equal(fresh.name, "Fresh");
+    assert.equal(fresh.designs.mandala!.mandalaZodiacColor, "#0a0b0c");
+    assert.notEqual(fresh.designs.mandala!.id, def.designs.mandala!.id);
+  });
+  await check("rename updates the design and its records' names", async () => {
+    const created = (await json(await setsRoute.POST(req("admin3", "POST", { name: "To Rename" }), p(SA3)))).body as unknown as SetBody;
+    const res = await json(await setRoute.PATCH(req("admin3", "PATCH", { name: "Renamed Design" }), p(SA3, { setId: created.set.id })));
+    assert.equal(res.status, 200);
+    const reloaded = (await setService.getChartDesignSet(SA3, created.set.id))!;
+    assert.equal(reloaded.name, "Renamed Design");
+    for (const sys of ["humanDesign", "mandala", "astrology"] as const) assert.equal(reloaded.designs[sys]!.name, "Renamed Design");
+    assert.equal((await setRoute.PATCH(req("member2", "PATCH", { name: "x" }), p(SA1, { setId: "cds_sa1_test" }))).status, 403);
+  });
+  await check("editor round trip: one save persists every section; reload matches; other designs untouched", async () => {
+    const created = (await json(await setsRoute.POST(req("admin3", "POST", { name: "Round Trip" }), p(SA3)))).body as unknown as SetBody;
+    const others = (await setService.listChartDesignSets(SA3, AG)).sets.filter((x) => x.id !== created.set.id);
+    let st = editorState.initChartDesignEditorState(created.set);
+    st = editorState.setEditorField(st, "humanDesign", "centersMode", "traditional");
+    st = editorState.setEditorField(st, "humanDesign", "rootCenterColor", "#101010");
+    st = editorState.setEditorField(st, "humanDesign", "planetBoxBorderRadius", 12);
+    st = editorState.applyEditorPreset(st, "mandala", "Warm Sunset");
+    st = editorState.setEditorField(st, "astrology", "wheelAccentColor", "#202020");
+    st = editorState.setEditorName(st, "Round Trip Saved");
+    const payload = editorState.buildEditorSavePayload(st)!;
+    const res = await json(await setRoute.PATCH(req("admin3", "PATCH", payload), p(SA3, { setId: created.set.id })));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const fresh = (await json(await setRoute.GET(req("admin3"), p(SA3, { setId: created.set.id })))).body as unknown as SetBody;
+    const again = editorState.initChartDesignEditorState(fresh.set);
+    assert.deepEqual(again.values, st.values);
+    assert.equal(again.name, "Round Trip Saved");
+    assert.equal(editorState.isEditorDirty(again), false);
+    for (const o of others) {
+      const now = (await setService.getChartDesignSet(SA3, o.id))!;
+      for (const sys of ["humanDesign", "mandala", "astrology"] as const) {
+        assert.equal(fields.chartDesignFingerprint(now.designs[sys]!), fields.chartDesignFingerprint(o.designs[sys]!), `${o.name}/${sys} changed`);
+      }
+    }
+  });
+  await check("house system: calculation setting only on the default; carried over when the default changes", async () => {
+    const def = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => x.isDefault)!;
+    const other = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => !x.isDefault)!;
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "whole" } }), p(SA3, { setId: other.id }))).status, 409);
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "koch" } }), p(SA3, { setId: def.id }))).status, 400);
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrology: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 400);
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { astrologyCalculation: { houseSystem: "whole" } }), p(SA3, { setId: def.id }))).status, 200);
+    assert.equal((await chartDesignService.getDefaultChartDesign(SA3, "astrology"))?.houseSystem, "whole");
+    assert.notEqual(other.designs.astrology!.houseSystem, "whole");
+    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: other.id }));
+    const newDefault = await chartDesignService.getDefaultChartDesign(SA3, "astrology");
+    assert.equal(newDefault?.id, other.designs.astrology!.id);
+    assert.equal(newDefault?.houseSystem, "whole"); // new readings keep calculating the same way
+    const data = await load(SA3);
+    assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA3, ...data }), []);
+    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: def.id }));
+  });
+  await check("editor sample endpoint answers members only; ?sample=full returns the richer sample", async () => {
+    const full = await json(await previewRoute.GET(new Request("http://test.local/x?sample=full", { headers: { "x-user-uid": "member2" } }), p(SA1)));
+    assert.equal(full.status, 200);
+    assert.ok(full.body.humanDesign && full.body.astrology);
+    assert.equal((await previewRoute.GET(new Request("http://test.local/x?sample=full", { headers: { "x-user-uid": "outsider" } }), p(SA1))).status, 403);
+  });
+  await check("unmigrated workspace: the library reports it and creating or editing can't group anything", async () => {
+    const before = JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA5).get()).docs.map((d) => [d.id, d.data()]).sort());
+    const list = await json(await setsRoute.GET(req("admin1"), p(SA5)));
+    assert.equal(list.body.migrationRequired, true);
+    assert.equal((await setsRoute.POST(req("admin1", "POST", { name: "Nope" }), p(SA5))).status, 409);
+    assert.equal(await count("chartDesignSets", SA5), 0);
+    assert.equal(JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA5).get()).docs.map((d) => [d.id, d.data()]).sort()), before);
+  });
+
   console.log(`\n${passed} checks passed.`);
 }
 
