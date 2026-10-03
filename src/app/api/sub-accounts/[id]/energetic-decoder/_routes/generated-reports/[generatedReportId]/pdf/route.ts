@@ -3,9 +3,8 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { getGeneratedReport } from "@/lib/server/generated-report-service";
+import { chartDesignsForGeneratedReport, getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { renderReportDesignPdfStream, reportDesignPdfFilename } from "@/lib/energetics/report-design-pdf-render";
 
 export const runtime = "nodejs";
@@ -38,11 +37,11 @@ export async function GET(
   const businessName = (sub.name as string) || "Your report";
   const businessLogoUrl = typeof sub.logoUrl === "string" ? (sub.logoUrl as string) : null;
 
-  // Honors the source reading's Profile's saved-design override, if it has
-  // one (2026-08-15, Bodygraph gap closure) — the downloaded PDF should
-  // match what the practitioner chose for this person, not silently
-  // revert to the sub-account default.
-  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(subAccountId, reading);
+  // The chart styling frozen with this report (unified Chart Designs,
+  // 2026-10) — a later Chart Design edit can't change a generated report.
+  // Reports generated before styling was frozen keep resolving the
+  // reading's Profile's current designs, exactly as they always have.
+  const { hdDesign, mandalaDesign, astroDesign } = await chartDesignsForGeneratedReport(subAccountId, generatedReport, reading);
 
   const stream = await renderReportDesignPdfStream({
     title: generatedReport.reportDesignTitleAtGeneration,

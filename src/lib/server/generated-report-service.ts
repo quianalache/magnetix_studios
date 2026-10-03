@@ -7,7 +7,10 @@ import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 import type { ReportPage } from "@/types/report-blocks";
-import type { GeneratedReport } from "@/types/generated-report";
+import type { GeneratedReport, GeneratedReportChartStyles } from "@/types/generated-report";
+import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
+import type { ChartDesign } from "@/types/chart-design";
+import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 
 /**
  * Generated Reports — Phase 2 Build Plan Task 2 (2026-08-12), data layer
@@ -119,9 +122,65 @@ export async function createGeneratedReport(opts: {
     // correct profileId (Task 2/3/4/5); just copy it, no second lookup.
     profileId: reading.profileId ?? null,
     generatedBy: opts.generatedByUid,
-    snapshot: { pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput) },
+    snapshot: {
+      pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput),
+      // Unified Chart Designs (2026-10): the chart styling is frozen with
+      // the report too, so a later edit to a Chart Design can't change a
+      // report that was already generated.
+      chartStyles: await captureReportChartStyles(opts.subAccountId, reading),
+    },
     generatedAt: FieldValue.serverTimestamp(),
   };
   const ref = await col().add(doc);
   return toGeneratedReport(ref.id, doc);
+}
+
+/**
+ * Plain copies of the designs a reading resolves to right now (same shared
+ * resolver every chart surface uses), for freezing into a report.
+ */
+async function captureReportChartStyles(
+  subAccountId: string,
+  reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology">,
+): Promise<GeneratedReportChartStyles> {
+  const resolved = await resolveChartDesignsForReading(subAccountId, reading);
+  return {
+    source: "generation",
+    frozenAt: new Date().toISOString(),
+    setId: resolved.setId,
+    setName: resolved.setName,
+    humanDesign: resolved.hdDesign,
+    mandala: resolved.mandalaDesign,
+    astrology: resolved.astroDesign,
+    frequency: null,
+  };
+}
+
+/**
+ * The chart designs a generated report renders with: its frozen styling
+ * when it has one, otherwise (reports generated before styling was frozen,
+ * not yet covered by the freeze script) the reading's current designs —
+ * exactly how those reports have always rendered.
+ */
+export async function chartDesignsForGeneratedReport(
+  subAccountId: string,
+  report: Pick<GeneratedReport, "snapshot">,
+  reading: Pick<EnergeticDecoderReading, "profileId" | "humanDesign" | "astrology">,
+): Promise<{
+  hdDesign: ChartDesign | null;
+  mandalaDesign: ChartDesign | null;
+  astroDesign: ChartDesign | null;
+  frozen: boolean;
+}> {
+  const frozen = report.snapshot?.chartStyles;
+  if (frozen) {
+    return {
+      hdDesign: frozen.humanDesign ?? null,
+      mandalaDesign: frozen.mandala ?? null,
+      astroDesign: frozen.astrology ?? null,
+      frozen: true,
+    };
+  }
+  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(subAccountId, reading);
+  return { hdDesign, mandalaDesign, astroDesign, frozen: false };
 }

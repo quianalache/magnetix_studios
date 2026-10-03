@@ -1,4 +1,5 @@
 import type { ReportPage } from "./report-blocks";
+import type { ChartDesign } from "./chart-design";
 
 /**
  * A generated report record — Phase 2 Build Plan §7/§9 (approved
@@ -45,5 +46,34 @@ export interface GeneratedReport {
   profileId?: string | null;
   generatedAt: string | null;
   generatedBy: string;
-  snapshot: { pages: ReportPage[] };
+  snapshot: {
+    pages: ReportPage[];
+    /**
+     * The chart styling frozen with this report (unified Chart Designs,
+     * 2026-10). Absent on reports generated before styling was frozen —
+     * those keep resolving the reading's current designs live, exactly as
+     * they always have, until the one-time freeze script records their
+     * current appearance (`source: "frozen-at-migration"`).
+     */
+    chartStyles?: GeneratedReportChartStyles;
+  };
+}
+
+/**
+ * Plain copies of the chart designs a report was rendered with — never
+ * references. A later edit to (or deletion of) the source designs can't
+ * change these values.
+ */
+export interface GeneratedReportChartStyles {
+  /** "generation" = captured when the report was generated. "frozen-at-migration" = captured later from the report's then-current appearance; the original generation-time styling was never recorded for these reports. */
+  source: "generation" | "frozen-at-migration";
+  frozenAt: string;
+  /** The unified Chart Design every system resolved from, when they all came from one (null = legacy/mixed resolution). */
+  setId: string | null;
+  setName: string | null;
+  humanDesign: ChartDesign | null;
+  mandala: ChartDesign | null;
+  astrology: ChartDesign | null;
+  /** Reserved — Frequency styling isn't designable yet. */
+  frequency: null;
 }

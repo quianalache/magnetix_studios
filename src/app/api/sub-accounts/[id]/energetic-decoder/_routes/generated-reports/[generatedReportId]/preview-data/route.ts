@@ -2,9 +2,8 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { getGeneratedReport } from "@/lib/server/generated-report-service";
+import { chartDesignsForGeneratedReport, getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
-import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 
 /**
  * Generate Report preview (Phase 2 Build Plan, 2026-08-12) — everything
@@ -53,10 +52,9 @@ export async function GET(
     spheres: real.spheres,
   };
 
-  // Honors the source reading's Profile's saved-design override, if it has
-  // one (2026-08-15, Bodygraph gap closure) — the practitioner's own
-  // Preview should show exactly what the client-facing surfaces show.
-  const { hdDesign, mandalaDesign, astroDesign } = await resolveChartDesignsForReading(subAccountId, real);
+  // Same frozen-styling rule as the PDF route, so the practitioner's
+  // Preview shows exactly what the report's PDF shows.
+  const { hdDesign, mandalaDesign, astroDesign } = await chartDesignsForGeneratedReport(subAccountId, generatedReport, real);
 
   return NextResponse.json({ ok: true, design, reading, sourceLabel: real.name, hdDesign, mandalaDesign, astroDesign });
 }
