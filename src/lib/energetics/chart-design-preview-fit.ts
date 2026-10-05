@@ -10,11 +10,11 @@
 
 /**
  * Width each renderer is laid out at before scaling. Human Design: the
- * compact full chart's three columns (200 + 16 + 360 + 16 + 200 = 792px)
- * plus its 16px padding each side = 824px, its natural size.
+ * compact full chart's three columns (170 + 12 + 440 + 12 + 170 = 804px)
+ * plus its 16px padding each side = 836px, its natural size.
  */
 export const CHART_PREVIEW_NATURAL_WIDTH = {
-  humanDesign: 824,
+  humanDesign: 836,
   mandala: 640,
   astrology: 640,
 } as const;

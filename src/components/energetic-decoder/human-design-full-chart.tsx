@@ -183,10 +183,10 @@ function PlanetBox({
   if (mode === "fullBox") {
     return (
       <div
-        className="flex items-center justify-between gap-2 border px-2.5 py-2 text-xs"
+        className="flex items-center justify-between gap-2 border px-2 py-2 text-xs"
         style={{ backgroundColor: boxColor, borderColor: activationColor, color: textColor, borderRadius }}
       >
-        <span className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 items-center gap-1.5">
           <span aria-hidden="true">{symbol}</span>
           <span className="truncate">{label}</span>
         </span>
@@ -196,8 +196,8 @@ function PlanetBox({
   }
   // iconOnly — row stays genuinely unfilled; only the glyph gets a colored chip.
   return (
-    <div className="flex items-center justify-between gap-2 px-2.5 py-2 text-xs" style={{ color: PLAIN_TEXT }}>
-      <span className="flex min-w-0 items-center gap-2">
+    <div className="flex items-center justify-between gap-2 px-2 py-2 text-xs" style={{ color: PLAIN_TEXT }}>
+      <span className="flex min-w-0 items-center gap-1.5">
         <span
           aria-hidden="true"
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] leading-none text-white"
@@ -294,20 +294,20 @@ export function HumanDesignFullChart({
       style={{ backgroundColor }}
     >
       {/*
-       * Compact full-chart geometry (2026-10, "Option B"). Measured before:
-       * 260px rails | 480px center track holding a BodyGraph capped at 360px
-       * | 260px rails, 24px gaps — 60px of dead space each side of the
-       * BodyGraph and three columns only from 1,024px of inner width. Now:
-       * 200px rails (a planet row needs ~140px, so full names never
-       * truncate) | 360px center (exactly the BodyGraph + Variables) |
-       * 200px rails, 16px gaps, three columns from 792px of inner width
-       * (824px with this box's 16px padding — the Chart Design editor lays
-       * the chart out at that natural width, CHART_PREVIEW_NATURAL_WIDTH).
-       * Wider containers center the composition instead of stretching it.
-       * Below 792px it stacks as before. The BodyGraph SVG itself
+       * Compact full-chart geometry (2026-10). Option B took the layout from
+       * 260 | 480 (BodyGraph capped at 360) | 260 with 24px gaps to
+       * 200 | 360 | 200 with 16px gaps. This pass gives more of the width to
+       * the BodyGraph itself, so the gate numbers inside the centers read
+       * larger: 170px rails (a planet row needs ~135px with 8px side
+       * padding, so full names never truncate) | 440px center (BodyGraph +
+       * Variables) | 170px rails, 12px gaps, centered; three columns from
+       * 804px of inner width (836px with this box's 16px padding — the
+       * Chart Design editor lays the chart out at that natural width,
+       * CHART_PREVIEW_NATURAL_WIDTH). Stacked (narrow) layouts keep the
+       * BodyGraph's 360px cap. The BodyGraph SVG itself
        * (human-design-chart.tsx) and the PDF layout are unchanged.
        */}
-      <div className="grid grid-cols-1 gap-6 @min-[792px]/hdfc:grid-cols-[200px_360px_200px] @min-[792px]/hdfc:items-start @min-[792px]/hdfc:justify-center @min-[792px]/hdfc:gap-x-4">
+      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3">
         <ActivationColumn
           side="Design"
           activations={profile.design}
@@ -318,7 +318,7 @@ export function HumanDesignFullChart({
           align="left"
         />
 
-        <div className="mx-auto w-full max-w-[360px]">
+        <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]">
           {/*
            * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
            * badges (her prior fix's own scoping to the chart's own

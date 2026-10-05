@@ -286,21 +286,22 @@ check("the preview scales uniformly to fit both width and height — never cropp
   }
   for (const system of ["humanDesign", "mandala", "astrology"] as const) assert.ok(CHART_PREVIEW_MAX_SCALE[system] >= 1);
 });
-check("Human Design full chart: compact Option B geometry, and the editor previews it at its natural width", () => {
+check("Human Design full chart: compact geometry with a larger BodyGraph, previewed at its natural width", () => {
   const renderer = readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8");
-  // 200px rails | 360px center (BodyGraph + Variables, no dead space) | 200px rails, 16px gaps, three columns from 792px of inner width.
-  assert.ok(renderer.includes("@min-[792px]/hdfc:grid-cols-[200px_360px_200px]"), "rails/center tracks changed — re-measure and update CHART_PREVIEW_NATURAL_WIDTH");
-  assert.ok(renderer.includes("@min-[792px]/hdfc:gap-x-4") && renderer.includes("@min-[792px]/hdfc:justify-center"));
-  assert.ok(!renderer.includes("@5xl/hdfc"), "the old 1,024px breakpoint is gone");
-  assert.ok(renderer.includes("mx-auto w-full max-w-[360px]"), "center column = the BodyGraph's own 360px");
+  // 170px rails | 440px center (BodyGraph + Variables) | 170px rails, 12px gaps, three columns from 804px of inner width.
+  assert.ok(renderer.includes("@min-[804px]/hdfc:grid-cols-[170px_440px_170px]"), "rails/center tracks changed — re-measure and update CHART_PREVIEW_NATURAL_WIDTH");
+  assert.ok(renderer.includes("@min-[804px]/hdfc:gap-x-3") && renderer.includes("@min-[804px]/hdfc:justify-center"));
+  assert.ok(!renderer.includes("@5xl/hdfc") && !renderer.includes("@min-[792px]"), "old breakpoints are gone");
+  // the BodyGraph fills the 440px center in three columns; stacked layouts keep their 360px cap
+  assert.ok(renderer.includes("mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]"));
   assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer), "renderer padding moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
-  assert.equal(CHART_PREVIEW_NATURAL_WIDTH.humanDesign, 200 + 16 + 360 + 16 + 200 + 2 * 16);
+  assert.equal(CHART_PREVIEW_NATURAL_WIDTH.humanDesign, 170 + 12 + 440 + 12 + 170 + 2 * 16);
   assert.equal(CHART_PREVIEW_MAX_SCALE.humanDesign, 1, "the 1.0× cap is unchanged");
-  // planet rows: 10px side padding, row height unchanged (py-2)
-  assert.equal(renderer.match(/px-2\.5 py-2 text-xs/g)?.length, 2, "both planet-box modes use the compact row padding");
-  assert.ok(!/px-3 py-2 text-xs/.test(renderer));
-  // A planet row measured at ~141px with 12px side padding (longest: "North Node" + glyph + gate.line); 200px rails leave room, so names never truncate.
-  assert.ok(200 - 2 * 10 - 2 >= 141 - 2 * 2, "rail too narrow for full planet names");
+  // planet rows: 8px side padding, row height unchanged (py-2), tighter icon-to-label gap
+  assert.equal(renderer.match(/px-2 py-2 text-xs/g)?.length, 2, "both planet-box modes use the compact row padding");
+  assert.ok(!/px-2\.5 py-2 text-xs|px-3 py-2 text-xs/.test(renderer));
+  // A planet row measured ~141px with 12px side padding (longest: "North Node" + glyph + gate.line) → ~133px at 8px; the rail's inner width must cover it.
+  assert.ok(170 - 2 * 8 - 2 >= 141 - 2 * 4, "rail too narrow for full planet names");
 });
 check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph block are untouched", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
