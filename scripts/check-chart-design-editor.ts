@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { CENTER_CHART_HEIGHT_OF_WHEEL, ZODIAC_FULL_NAMES_MIN_WIDTH } from "../src/components/energetic-decoder/mandala-chart";
 import type { ChartDesign, ChartDesignSystem } from "../src/types/chart-design";
 import type { ChartDesignSetWithMembers } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-fields";
@@ -342,6 +343,33 @@ check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph 
   const va = viewer.indexOf('case "human-design-full":');
   assert.equal(h(viewer.slice(va, viewer.indexOf('case "human-design-gates":', va))), "d90daa01645eced0", "ReportDesignViewer's human-design-full block changed");
   assert.ok(!viewer.includes("HumanDesignFullChart"), "the report viewer still draws the bare BodyGraph, not the full chart");
+});
+check("the approved Human Design browser layout (e2a7913) and the PDF Mandala are untouched by the Mandala work", () => {
+  const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
+  // Pinned from production e2a7913 (owner approved). Update a pin only when that file is changed on purpose.
+  assert.equal(h(readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8")), "f3e986bec535303d", "HumanDesignFullChart changed");
+  assert.equal(h(readFileSync("src/components/energetic-decoder/chart-design-editor-workspace.tsx", "utf8")), "47f2ca0b77a93b7e", "editor preview fit changed");
+  assert.equal(h(readFileSync("src/lib/energetics/chart-design-preview-fit.ts", "utf8")), "c5341cb88e0f58d1", "preview fit geometry changed");
+  const pdf = readFileSync("src/lib/energetics/reading-pdf-document.tsx", "utf8");
+  const ma = pdf.indexOf("export function MandalaPdf(");
+  assert.equal(h(pdf.slice(ma, pdf.indexOf("\n}\n", ma) + 3)), "00a0b5b3f8fac1ba", "MandalaPdf changed");
+});
+check("browser Mandala: no 1-4 labels, full zodiac names (abbreviations when tiny), center BodyGraph 47% of the wheel in the design's colors", () => {
+  const m = readFileSync("src/components/energetic-decoder/mandala-chart.tsx", "utf8");
+  // quadrant bands keep their geometry/shading/dividers, but no visible number
+  assert.ok(!m.includes("{q + 1}") && !m.includes("QUADRANT_LABEL_R"), "quadrant numbers are gone");
+  assert.ok(m.includes("bandPath(a0, a1, QUADRANT_OUTER, QUADRANT_INNER)") && m.includes("deriveShade(baseColor, HUE_OFFSETS[q], LIGHT_DELTAS[q])"));
+  // full names at the same size; the container-query breakpoint matches the documented constant
+  assert.equal(ZODIAC_FULL_NAMES_MIN_WIDTH, 300);
+  assert.ok(m.includes('"hidden @min-[300px]/mandala:inline"') && m.includes('"@min-[300px]/mandala:hidden"') && m.includes("@container/mandala"));
+  assert.ok(m.includes('{variant === "full" ? sign : signAbbrev(sign)}') && (m.match(/fontSize=\{4\.2\}/g)?.length ?? 0) === 1);
+  // the longest name (Sagittarius ≈ 25.1 units at 4.2) fits the segment's inner chord (2 × 73 × sin 15° ≈ 37.8)
+  assert.ok(25.1 < 2 * 73 * Math.sin(Math.PI / 12));
+  // center BodyGraph: sized against the wheel SVG, drawing = 47% of the wheel diameter, padding removed, design colors passed
+  assert.equal(CENTER_CHART_HEIGHT_OF_WHEEL, 0.47);
+  assert.ok(m.includes("data-mandala-wheel") && !m.includes("CENTER_CHART_PCT"));
+  assert.ok(m.includes('className="p-0!"') && m.includes("personalityColor={personalityColor}") && m.includes("designColor={designColor}"));
+  assert.ok(m.includes("definedColor={hdDesign?.chartDefinedColor}") && m.includes("centerColors={centerColors}"), "center/channel/gate inheritance kept");
 });
 check("the sticky preview's chart fits the visible page area (card included), with a floor for short windows", () => {
   // 1440×900: page area 836px tall, 24px padding top and bottom, 50px of card title/padding.

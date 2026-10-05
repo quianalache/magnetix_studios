@@ -28,7 +28,7 @@ import type { CenterKey } from "@/lib/energetics/human-design-data";
  *    number, line-glyph, and planet glyph all render INSIDE that same
  *    wedge instead of on 3 separate concentric "ghost rings."
  *  - GATE_SECTOR_INNER is pulled in much closer to center, and the
- *    embedded BodyGraph is rendered far larger (CENTER_CHART_PCT), so
+ *    embedded BodyGraph is rendered far larger (see the center-chart size below), so
  *    the two structures visually converge instead of leaving a dead
  *    gap between them.
  *
@@ -119,7 +119,6 @@ const CY = 100;
 
 const QUADRANT_OUTER = 98;
 const QUADRANT_INNER = 89;
-const QUADRANT_LABEL_R = (QUADRANT_OUTER + QUADRANT_INNER) / 2;
 
 const ZODIAC_OUTER = 89;
 const ZODIAC_INNER = 73;
@@ -131,20 +130,22 @@ const LINE_GLYPH_R = 52;
 const PLANET_GLYPH_R = 32;
 
 /**
- * % of the container's width the embedded BodyGraph occupies (height
- * follows automatically from CHART_VIEWBOX's own aspect ratio — CSS
- * `transform: translate(-50%, -50%)` centers correctly either way, no
- * separate height math needed here the way the PDF twin needs, see its
- * own MANDALA_CENTER_CHART_HEIGHT comment).
+ * Center BodyGraph size (2026-10, browser only — the PDF twin keeps its
+ * own MANDALA_CENTER_CHART_SIZE). Sized against the Mandala's own SVG
+ * (not the outer, padded box, whose %-padding resolves against the
+ * PARENT's width and made the ratio drift between 59% and 62% across
+ * consumers): the BodyGraph's DRAWING is CENTER_CHART_HEIGHT_OF_WHEEL of
+ * the wheel's outer diameter (2 × QUADRANT_OUTER). Owner trial target
+ * 47% (was ~59%); ring radii unchanged.
  *
- * Retuned 2026-08-17 for the Astrolo geometry port (see human-design-
- * chart-layout.ts's header) — real bounding-box math changed (a wider,
- * tighter-cropped viewBox), so this was re-derived from scratch by
- * real-rendering the Mandala PDF (identical CHART_VIEWBOX/aspect ratio
- * to this web version) and inspecting it, not carried over from the old
- * value.
+ * HumanDesignChart's SVG is CHART_VIEWBOX "18 -4 200 320" with its inner
+ * padding removed here (p-0!), and its drawing spans 305.8 of those 320
+ * units vertically (measured with getBBox) — so its width, as a fraction
+ * of this SVG's width, is height ÷ (320/200 × 305.8/320).
  */
-const CENTER_CHART_PCT = 38;
+export const CENTER_CHART_HEIGHT_OF_WHEEL = 0.47;
+const BODYGRAPH_DRAWN_HEIGHT_PER_WIDTH = (320 / 200) * (305.8 / 320);
+const CENTER_CHART_WIDTH_OF_SVG = (CENTER_CHART_HEIGHT_OF_WHEEL * ((2 * QUADRANT_OUTER) / VIEW)) / BODYGRAPH_DRAWN_HEIGHT_PER_WIDTH;
 
 const GATE_ARC_DEG = 360 / 64;
 
@@ -179,6 +180,16 @@ function signAbbrev(sign: ZodiacSign): string {
   return sign.slice(0, 3).toUpperCase();
 }
 
+/**
+ * Zodiac labels (2026-10): full sign names in mixed case at the same
+ * size — the longest ("Sagittarius", 25.1 units at fontSize 4.2) fits the
+ * ~42-unit segment with room to spare. Tiny Mandalas (the Chart Design
+ * library thumbnails) keep the 3-letter abbreviations: below
+ * ZODIAC_FULL_NAMES_MIN_WIDTH of the Mandala box's own width the full
+ * names are swapped for abbreviations by a container query on that box.
+ */
+export const ZODIAC_FULL_NAMES_MIN_WIDTH = 300;
+
 /** The bold, colored outer band — 4 quadrants, each a related shade of one configured accent so they read as genuinely distinct without a second hardcoded palette. */
 function QuadrantBand({ baseColor }: { baseColor: string }) {
   const HUE_OFFSETS = [0, 28, -28, 52];
@@ -189,16 +200,8 @@ function QuadrantBand({ baseColor }: { baseColor: string }) {
         const a0 = angleForGateIndex(q * 16);
         const a1 = angleForGateIndex(q * 16 + 16);
         const fill = deriveShade(baseColor, HUE_OFFSETS[q], LIGHT_DELTAS[q]);
-        const textColor = isDarkFill(fill) ? "#ffffff" : "#1c1e24";
-        const labelPos = toXY(angleForGateIndex(q * 16 + 8), QUADRANT_LABEL_R);
-        return (
-          <g key={q}>
-            <path d={bandPath(a0, a1, QUADRANT_OUTER, QUADRANT_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
-            <text x={labelPos.x} y={labelPos.y + 2} fontSize={6.5} fontWeight={800} textAnchor="middle" fill={textColor}>
-              {q + 1}
-            </text>
-          </g>
-        );
+        // No visible 1-4 label (2026-10): these bands start at gate 41, two gates off the canonical Human Design Quarters, so they're left unlabeled rather than mislabeled.
+        return <path key={q} d={bandPath(a0, a1, QUADRANT_OUTER, QUADRANT_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />;
       })}
     </>
   );
@@ -221,18 +224,23 @@ function ZodiacRing({ baseColor }: { baseColor: string }) {
         return (
           <g key={sign}>
             <path d={bandPath(a0, a1, ZODIAC_OUTER, ZODIAC_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
-            <text
-              x={labelPos.x}
-              y={labelPos.y}
-              fontSize={4.2}
-              fontWeight={700}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fill={textColor}
-              transform={`rotate(${midA + 90}, ${labelPos.x}, ${labelPos.y})`}
-            >
-              {signAbbrev(sign)}
-            </text>
+            {(["full", "abbrev"] as const).map((variant) => (
+              <text
+                key={variant}
+                data-zodiac-label={variant}
+                className={variant === "full" ? "hidden @min-[300px]/mandala:inline" : "@min-[300px]/mandala:hidden"}
+                x={labelPos.x}
+                y={labelPos.y}
+                fontSize={4.2}
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill={textColor}
+                transform={`rotate(${midA + 90}, ${labelPos.x}, ${labelPos.y})`}
+              >
+                {variant === "full" ? sign : signAbbrev(sign)}
+              </text>
+            ))}
           </g>
         );
       })}
@@ -326,7 +334,10 @@ export function MandalaChart({
     : undefined;
 
   return (
-    <div className={className} style={{ background: backgroundColor, borderRadius: 12, padding: "4%", position: "relative" }}>
+    // @container/mandala: the zodiac labels switch to abbreviations on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
+    <div className={`@container/mandala ${className ?? ""}`} style={{ background: backgroundColor, borderRadius: 12, padding: "4%", position: "relative" }}>
+      {/* The wheel and the center BodyGraph share this box, so the BodyGraph is sized against the wheel itself. */}
+      <div data-mandala-wheel style={{ position: "relative" }} className="[&>svg]:block">
       <svg viewBox={`0 0 ${VIEW} ${VIEW}`} role="img" aria-label="Mandala chart">
         <QuadrantBand baseColor={quadrantColor} />
         <ZodiacRing baseColor={zodiacColor} />
@@ -403,25 +414,32 @@ export function MandalaChart({
 
       {showCenterChart && (
         <div
+          data-mandala-center-chart
+          className="[&_svg]:block"
           style={{
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: `${CENTER_CHART_PCT}%`,
+            width: `${(CENTER_CHART_WIDTH_OF_SVG * 100).toFixed(3)}%`,
           }}
         >
+          {/* Activations use this Mandala's own Personality/Design colors (the same ones its gate wedges use), not HumanDesignChart's fixed black/rust defaults. */}
           <HumanDesignChart
             profile={profile}
+            className="p-0!"
             definedColor={hdDesign?.chartDefinedColor}
             channelsColor={hdDesign?.channelsColor}
             gatesColor={hdDesign?.gatesColor}
+            personalityColor={personalityColor}
+            designColor={designColor}
             backgroundColor="transparent"
             centersMode={hdDesign?.centersMode as CentersMode | undefined}
             centerColors={centerColors}
           />
         </div>
       )}
+      </div>
     </div>
   );
 }
