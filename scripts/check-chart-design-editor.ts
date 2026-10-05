@@ -6,6 +6,7 @@
  */
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import type { ChartDesign, ChartDesignSystem } from "../src/types/chart-design";
 import type { ChartDesignSetWithMembers } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-fields";
@@ -285,12 +286,33 @@ check("the preview scales uniformly to fit both width and height — never cropp
   }
   for (const system of ["humanDesign", "mandala", "astrology"] as const) assert.ok(CHART_PREVIEW_MAX_SCALE[system] >= 1);
 });
-check("Human Design previews at a width that keeps its Design | BodyGraph | Personality columns", () => {
+check("Human Design full chart: compact Option B geometry, and the editor previews it at its natural width", () => {
   const renderer = readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8");
-  // The renderer switches to three columns at its own container's @5xl (64rem = 1024px of inner width) and pads 1rem each side.
-  assert.ok(renderer.includes("@5xl/hdfc:grid-cols-["), "renderer breakpoint moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
+  // 200px rails | 360px center (BodyGraph + Variables, no dead space) | 200px rails, 16px gaps, three columns from 792px of inner width.
+  assert.ok(renderer.includes("@min-[792px]/hdfc:grid-cols-[200px_360px_200px]"), "rails/center tracks changed — re-measure and update CHART_PREVIEW_NATURAL_WIDTH");
+  assert.ok(renderer.includes("@min-[792px]/hdfc:gap-x-4") && renderer.includes("@min-[792px]/hdfc:justify-center"));
+  assert.ok(!renderer.includes("@5xl/hdfc"), "the old 1,024px breakpoint is gone");
+  assert.ok(renderer.includes("mx-auto w-full max-w-[360px]"), "center column = the BodyGraph's own 360px");
   assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer), "renderer padding moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
-  assert.ok(CHART_PREVIEW_NATURAL_WIDTH.humanDesign - 32 >= 1024);
+  assert.equal(CHART_PREVIEW_NATURAL_WIDTH.humanDesign, 200 + 16 + 360 + 16 + 200 + 2 * 16);
+  assert.equal(CHART_PREVIEW_MAX_SCALE.humanDesign, 1, "the 1.0× cap is unchanged");
+  // planet rows: 10px side padding, row height unchanged (py-2)
+  assert.equal(renderer.match(/px-2\.5 py-2 text-xs/g)?.length, 2, "both planet-box modes use the compact row padding");
+  assert.ok(!/px-3 py-2 text-xs/.test(renderer));
+  // A planet row measured at ~141px with 12px side padding (longest: "North Node" + glyph + gate.line); 200px rails leave room, so names never truncate.
+  assert.ok(200 - 2 * 10 - 2 >= 141 - 2 * 2, "rail too narrow for full planet names");
+});
+check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph block are untouched", () => {
+  const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
+  // Pinned from origin/main at 1a105b1. Update a pin only when that file is changed on purpose (and re-check its consumers).
+  assert.equal(h(readFileSync("src/components/energetic-decoder/human-design-chart.tsx", "utf8")), "3567d53238cdca9f", "human-design-chart.tsx (bare BodyGraph SVG) changed");
+  const pdf = readFileSync("src/lib/energetics/reading-pdf-document.tsx", "utf8");
+  const pa = pdf.indexOf("export function HumanDesignFullChartPdf(");
+  assert.equal(h(pdf.slice(pa, pdf.indexOf("\n}\n", pa) + 3)), "bd0cb864288e521a", "HumanDesignFullChartPdf changed");
+  const viewer = readFileSync("src/components/energetic-decoder/report-design-viewer.tsx", "utf8");
+  const va = viewer.indexOf('case "human-design-full":');
+  assert.equal(h(viewer.slice(va, viewer.indexOf('case "human-design-gates":', va))), "d90daa01645eced0", "ReportDesignViewer's human-design-full block changed");
+  assert.ok(!viewer.includes("HumanDesignFullChart"), "the report viewer still draws the bare BodyGraph, not the full chart");
 });
 check("the sticky preview's chart fits the visible page area (card included), with a floor for short windows", () => {
   // 1440×900: page area 836px tall, 24px padding top and bottom, 50px of card title/padding.
