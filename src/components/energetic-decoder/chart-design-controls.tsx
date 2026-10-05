@@ -161,7 +161,7 @@ export function ChartDesignFieldControl({
           value={String(value ?? "")}
           onChange={(e) => onChange(field, e.target.value)}
           disabled={disabled}
-          className="h-9 w-full rounded-md border bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-9 w-full rounded-md border bg-background px-2 text-xs disabled:cursor-not-allowed disabled:opacity-60"
         >
           {SELECT_OPTIONS[field].map((o) => (
             <option key={o.value} value={o.value}>

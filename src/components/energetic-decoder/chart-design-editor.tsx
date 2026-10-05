@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -114,6 +114,23 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   // Which control sections are expanded, per system — kept while switching tabs.
   const [openSections, setOpenSections] = useState<Partial<Record<ChartDesignSystem, string[]>>>({});
 
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  const headerActionsRef = useRef<HTMLDivElement>(null);
+  const [headerActionsVisible, setHeaderActionsVisible] = useState(true);
+
+  // Is the header's Duplicate / Save row still on screen? (Drives the compact Save in the sticky tab bar.)
+  useEffect(() => {
+    const el = headerActionsRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setHeaderActionsVisible(entry.isIntersecting), {
+      root: el.closest("main"),
+      // The sticky tab bar covers the top of the page area, so count the row as hidden once it slides under it.
+      rootMargin: `-${tabBarRef.current?.offsetHeight ?? 48}px 0px 0px 0px`,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [isAdmin]);
+
   const libraryHref = saPath("/energetic-decoder?tab=chartDesigns");
   const dirty = isEditorDirty(state);
   const changed = dirtySystems(state);
@@ -225,7 +242,7 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           </p>
         </div>
         {!readOnly && (
-          <div className="flex shrink-0 items-center gap-2 pt-6">
+          <div ref={headerActionsRef} className="flex shrink-0 items-center gap-2 pt-6">
             <Button variant="outline" onClick={() => void duplicate()} disabled={duplicating || saving}>
               {duplicating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
               Duplicate
@@ -249,38 +266,57 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
         </div>
       )}
 
-      {/* System tabs */}
-      <div className="flex flex-wrap gap-1 border-b">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const isFrequency = t.key === "frequency";
-          const hasChanges = !isFrequency && changed.includes(t.key as ChartDesignSystem);
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
-                tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {t.label}
-              {isFrequency && (
-                <span className="rounded-full border border-dashed px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Coming soon
-                </span>
-              )}
-              {hasChanges && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="unsaved changes" />}
-            </button>
-          );
-        })}
+      {/*
+        System tabs — sticky at the top of the page area, so once the header
+        above scrolls away the tabs stay put and the workspace below gets the
+        rest of the height. The negative offset matches <main>'s padding
+        (p-4 / md:p-6): sticky offsets count from inside that padding, so this
+        pins the bar flush to the top edge. When the header's Save scrolls out of view, a
+        compact Save joins the bar so it's always one click away.
+      */}
+      <div ref={tabBarRef} data-editor-sticky-bar className="sticky -top-4 z-20 bg-background md:-top-6">
+        <div className="flex flex-wrap items-center gap-x-1 border-b">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const isFrequency = t.key === "frequency";
+            const hasChanges = !isFrequency && changed.includes(t.key as ChartDesignSystem);
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
+                  tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {t.label}
+                {isFrequency && (
+                  <span className="rounded-full border border-dashed px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Coming soon
+                  </span>
+                )}
+                {hasChanges && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="unsaved changes" />}
+              </button>
+            );
+          })}
+          {!readOnly && !headerActionsVisible && (
+            <div data-editor-compact-save className="ml-auto flex items-center gap-2 py-1">
+              {dirty && <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Unsaved changes</span>}
+              <Button size="sm" onClick={() => void save()} disabled={!dirty || saving}>
+                {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
+                Save Changes
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {system ? (
         <ChartDesignEditorWorkspace
           key={system}
+          stickyBarRef={tabBarRef}
           previewTitle={`${CHART_SYSTEM_LABEL[system]} preview`}
           previewNote="Sample chart · updates as you edit"
           preview={({ fill }) => (

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   EDITOR_TWO_COLUMN_MIN_WIDTH,
   editorWorkspaceHeight,
+  editorWorkspaceHeightBelowStickyBar,
   previewFitScale,
 } from "@/lib/energetics/chart-design-preview-fit";
 
@@ -16,12 +17,15 @@ import {
  * shared — each system passes in its own controls and its own renderer.
  * Frequency will slot into the same shell once its editor exists.
  *
- * Wide workspaces (≥ EDITOR_TWO_COLUMN_MIN_WIDTH) sit side by side and fill
- * the page area below the header, so the page itself doesn't scroll.
+ * Wide workspaces (≥ EDITOR_TWO_COLUMN_MIN_WIDTH) sit side by side. With a
+ * sticky bar (the editor's tabs) they fill the page area below that bar: the
+ * header above scrolls away and the workspace gets nearly the full height.
+ * The controls column scrolls on its own; at its ends the scroll carries on
+ * to the page (no overscroll trap), so the header is always reachable.
  * Narrower ones stack: preview first, then the controls, scrolling with the page.
  */
 
-function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>) {
+function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>, stickyBarRef?: RefObject<HTMLElement | null>) {
   const [layout, setLayout] = useState<{ wide: boolean; height: number }>({ wide: true, height: 0 });
 
   useLayoutEffect(() => {
@@ -42,7 +46,16 @@ function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>) {
             const cs = getComputedStyle(node);
             bottomGap += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
           }
-          height = editorWorkspaceHeight({ workspaceTop: rect.top + area.scrollTop, areaBottom: areaRect.bottom - bottomGap });
+          const bar = stickyBarRef?.current;
+          height = bar
+            ? // Header scrolls away; the workspace fills the page area below the sticky bar.
+              editorWorkspaceHeightBelowStickyBar({
+                areaHeight: area.clientHeight,
+                stickyBarHeight: bar.offsetHeight,
+                gapAbove: parseFloat(getComputedStyle(el).marginTop) || 0,
+                bottomGap,
+              })
+            : editorWorkspaceHeight({ workspaceTop: rect.top + area.scrollTop, areaBottom: areaRect.bottom - bottomGap });
         } else {
           height = editorWorkspaceHeight({ workspaceTop: rect.top + window.scrollY, areaBottom: window.innerHeight - 24 });
         }
@@ -56,12 +69,13 @@ function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>) {
     // The header above can change height (unsaved / view-only notices), which moves the workspace.
     if (el.parentElement) ro.observe(el.parentElement);
     if (area) ro.observe(area);
+    if (stickyBarRef?.current) ro.observe(stickyBarRef.current);
     window.addEventListener("resize", update);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [ref]);
+  }, [ref, stickyBarRef]);
 
   return layout;
 }
@@ -71,15 +85,18 @@ export function ChartDesignEditorWorkspace({
   preview,
   previewTitle,
   previewNote,
+  stickyBarRef,
 }: {
   controls: ReactNode;
   /** Render-prop so the preview can fill the box in the side-by-side layout and size itself by width when stacked. */
   preview: (fit: { fill: boolean }) => ReactNode;
   previewTitle: string;
   previewNote?: string;
+  /** The editor's sticky tab bar: when given, the side-by-side workspace is sized to fill the page area below it once the header has scrolled away. */
+  stickyBarRef?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { wide, height } = useWorkspaceLayout(ref);
+  const { wide, height } = useWorkspaceLayout(ref, stickyBarRef);
 
   const previewCard = (
     <section
@@ -104,7 +121,7 @@ export function ChartDesignEditorWorkspace({
     >
       <div
         data-editor-controls
-        className={cn("space-y-3", wide ? "min-h-0 overflow-y-auto overscroll-contain pr-1" : "order-2")}
+        className={cn("space-y-3", wide ? "min-h-0 overflow-y-auto pr-1" : "order-2")}
       >
         {controls}
       </div>
@@ -167,10 +184,11 @@ export function ChartPreviewFit({
         style={{
           position: "absolute",
           left: "50%",
-          top: fill ? "50%" : 0,
+          // Top-aligned: a chart limited by width starts right under the preview title, with any spare room below it.
+          top: 0,
           width: naturalWidth,
-          transform: `translate(-50%, ${fill ? "-50%" : "0"}) scale(${scale || 1})`,
-          transformOrigin: fill ? "center center" : "top center",
+          transform: `translate(-50%, 0) scale(${scale || 1})`,
+          transformOrigin: "top center",
           visibility: scale ? "visible" : "hidden",
         }}
       >

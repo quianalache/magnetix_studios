@@ -55,3 +55,20 @@ export function editorWorkspaceHeight(input: { workspaceTop: number; areaBottom:
   const { workspaceTop, areaBottom, minHeight = EDITOR_WORKSPACE_MIN_HEIGHT } = input;
   return Math.max(minHeight, Math.floor(areaBottom - workspaceTop));
 }
+
+/**
+ * Height for the side-by-side workspace when the editor's tab bar is sticky:
+ * the page area's visible height, minus the bar, the gap between bar and
+ * workspace, and any bottom padding — i.e. exactly the room left once the
+ * header above has scrolled out of view. Never below the minimum.
+ */
+export function editorWorkspaceHeightBelowStickyBar(input: {
+  areaHeight: number;
+  stickyBarHeight: number;
+  gapAbove: number;
+  bottomGap: number;
+  minHeight?: number;
+}): number {
+  const { areaHeight, stickyBarHeight, gapAbove, bottomGap, minHeight = EDITOR_WORKSPACE_MIN_HEIGHT } = input;
+  return Math.max(minHeight, Math.floor(areaHeight - stickyBarHeight - gapAbove - bottomGap));
+}
