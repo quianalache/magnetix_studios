@@ -14,7 +14,6 @@ import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import {
-  applyEditorPreset,
   buildEditorSavePayload,
   dirtySystems,
   editorNameError,
@@ -28,7 +27,6 @@ import {
   CHART_DESIGN_SECTIONS,
   CHART_SYSTEM_LABEL,
   ChartDesignFieldControl,
-  ChartDesignPresetChips,
   ChartDesignPreview,
 } from "@/components/energetic-decoder/chart-design-controls";
 
@@ -38,6 +36,10 @@ import {
  * chart-system tabs keeps every unsaved edit, and Save Changes sends only
  * what changed, for every system at once. Each system's values stay its
  * own — nothing here copies one system's colors into another.
+ *
+ * Ready-made looks (Magnetix Violet, Monochrome, Warm Sunset, Midnight) are
+ * whole designs in the library, not editor presets: choose one there, then
+ * customize it here or duplicate it for a variation.
  */
 
 type EditorTab = ChartDesignSystem | "frequency";
@@ -241,17 +243,6 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
 
           {/* Controls */}
           <div className="space-y-4 lg:col-span-5">
-            <div className="rounded-2xl border bg-card p-5">
-              <h3 className="mb-2 text-sm font-semibold">Color presets</h3>
-              <ChartDesignPresetChips
-                system={system}
-                disabled={readOnly}
-                onApply={(name) => setState((s) => applyEditorPreset(s, system, name))}
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Fills this chart&apos;s colors as a starting point — adjust anything, then Save Changes.
-              </p>
-            </div>
             {CHART_DESIGN_SECTIONS[system].map((section) => (
               <div key={section.title} className="rounded-2xl border bg-card p-5">
                 <h3 className="mb-3 text-sm font-semibold">{section.title}</h3>

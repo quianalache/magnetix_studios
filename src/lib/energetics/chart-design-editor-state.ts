@@ -2,14 +2,13 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import { CHART_DESIGN_SET_SYSTEMS } from "@/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "./chart-design-fields";
-import { CHART_DESIGN_PRESETS } from "./chart-design-presets";
 
 /**
  * The unified Chart Design editor's state, as pure functions (2026-10).
  * The editor component is a thin layer over this, so the behavior that
- * matters — independent per-system values, presets touching only their
- * own system, unsaved-change tracking across sections, and exactly what
- * one Save sends — is covered by the checks without a browser.
+ * matters — independent per-system values, unsaved-change tracking across
+ * sections, and exactly what one Save sends — is covered by the checks
+ * without a browser.
  */
 
 export type EditorValue = string | number;
@@ -59,22 +58,6 @@ export function setEditorField(
 
 export function setEditorName(state: ChartDesignEditorState, name: string): ChartDesignEditorState {
   return { ...state, name };
-}
-
-/** Applies a named preset to ONE system's unsaved values — never another system, never saved until Save. */
-export function applyEditorPreset(
-  state: ChartDesignEditorState,
-  system: ChartDesignSystem,
-  presetName: string,
-): ChartDesignEditorState {
-  const preset = CHART_DESIGN_PRESETS[system].find((p) => p.name === presetName);
-  if (!preset) return state;
-  const allowed = CHART_DESIGN_SYSTEM_FIELDS[system] as readonly string[];
-  const next = { ...state.values[system] };
-  for (const [key, value] of Object.entries(preset.values)) {
-    if (allowed.includes(key) && (typeof value === "string" || typeof value === "number")) next[key] = value;
-  }
-  return { ...state, values: { ...state.values, [system]: next } };
 }
 
 function changedFields(current: SystemValues, saved: SystemValues): SystemValues {

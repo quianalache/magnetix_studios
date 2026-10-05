@@ -7,7 +7,6 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
-import { CHART_DESIGN_PRESETS } from "@/lib/energetics/chart-design-presets";
 import type { EditorValue, SystemValues } from "@/lib/energetics/chart-design-editor-state";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
@@ -216,39 +215,6 @@ export function ChartDesignFieldControl({
         </label>
       </div>
       {FIELD_HELP[field] && <p className="pl-11 text-[11px] leading-snug text-muted-foreground/80">{FIELD_HELP[field]}</p>}
-    </div>
-  );
-}
-
-/** The four existing presets for one chart system. Applying one only changes that system's unsaved values. */
-export function ChartDesignPresetChips({
-  system,
-  disabled,
-  onApply,
-}: {
-  system: ChartDesignSystem;
-  disabled?: boolean;
-  onApply: (presetName: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {CHART_DESIGN_PRESETS[system].map((preset) => (
-        <button
-          key={preset.name}
-          type="button"
-          disabled={disabled}
-          onClick={() => onApply(preset.name)}
-          title={`Apply "${preset.name}" to ${CHART_SYSTEM_LABEL[system]} — review the preview, then Save Changes`}
-          className="inline-flex items-center gap-1.5 rounded-full border bg-background/70 px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:border-foreground/30 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-        >
-          <span className="flex -space-x-1">
-            {preset.swatch.map((c, i) => (
-              <span key={i} className="h-3.5 w-3.5 rounded-full border border-background" style={{ backgroundColor: c }} />
-            ))}
-          </span>
-          {preset.name}
-        </button>
-      ))}
     </div>
   );
 }

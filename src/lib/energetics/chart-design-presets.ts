@@ -2,10 +2,12 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ChartDesignEditableField } from "./chart-design-fields";
 
 /*
- * Moved unchanged from chart-designs-tab.tsx (2026-10, unified Chart
- * Designs) so the unified editor, the legacy cards and the checks share
- * one copy. Same four presets, same values, same behavior: applying one
- * only fills that chart system's unsaved fields.
+ * The four established color looks (values unchanged since chart-designs-
+ * tab.tsx, 2026-08). Since 2026-10 they are no longer editor presets: they
+ * build the ready-made Chart Designs (chart-design-starters.ts), and the
+ * legacy per-system cards (shown only to a workspace not yet migrated to
+ * unified designs) still offer them. Keep the values here while either
+ * needs them.
  */
 
 /**
