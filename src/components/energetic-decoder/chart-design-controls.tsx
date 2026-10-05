@@ -248,6 +248,7 @@ export function ChartDesignPreview({
   sampleAstro,
   size,
   className,
+  hdFill,
 }: {
   system: ChartDesignSystem;
   design: ChartDesign | null;
@@ -257,13 +258,15 @@ export function ChartDesignPreview({
   sampleAstro: AstrologyChart | null;
   size: "thumb" | "large";
   className?: string;
+  /** Human Design large preview only: the editor's unscaled fill layout (see HumanDesignFullChart `fill`). */
+  hdFill?: { height: number };
 }): ReactNode {
   const placeholderClass = size === "thumb" ? "aspect-square w-full" : "aspect-[4/3] w-full";
   if (!design) return <PreviewPlaceholder className={placeholderClass} />;
 
   if (system === "humanDesign") {
     if (!sampleHd) return <PreviewPlaceholder className={placeholderClass} />;
-    if (size === "large") return <HumanDesignFullChart profile={sampleHd} design={design} className={className} />;
+    if (size === "large") return <HumanDesignFullChart profile={sampleHd} design={design} className={className} fill={hdFill} />;
     return (
       <HumanDesignChart
         profile={sampleHd}

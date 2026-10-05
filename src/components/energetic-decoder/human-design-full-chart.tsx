@@ -1,8 +1,10 @@
+import type { CSSProperties } from "react";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { VariableArrowDirection, VariableArrowSource } from "@/lib/energetics/human-design-variables";
 import type { ChartDesign, PlanetBoxMode, VariableArrowStyle } from "@/types/chart-design";
 import { HD_BODY_LABELS, type CenterKey } from "@/lib/energetics/human-design-data";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
+import { HD_FILL, humanDesignFillGeometry } from "@/lib/energetics/chart-design-preview-fit";
 
 /**
  * The full Human Design chart layout — Design activation column (left) +
@@ -220,6 +222,7 @@ function ActivationColumn({
   mode,
   borderRadius,
   align,
+  rowGap,
 }: {
   side: "Design" | "Personality";
   activations: HumanDesignProfile["design"] | HumanDesignProfile["personality"];
@@ -228,7 +231,10 @@ function ActivationColumn({
   mode: PlanetBoxMode;
   borderRadius: number;
   align: "left" | "right";
+  /** Fill layout only: rows start at the top and spread evenly with this gap (see humanDesignFillGeometry). */
+  rowGap?: number;
 }) {
+  const fill = rowGap !== undefined;
   return (
     // pt-11 correction-pass-2, 2026-08-17: lines this column's own "DESIGN"/
     // "PERSONALITY" header up with roughly where the BodyGraph itself
@@ -237,7 +243,8 @@ function ActivationColumn({
     // columns starting at the grid's top edge while the chart started
     // noticeably lower, reading as two unrelated pieces instead of one
     // chart composition.
-    <div data-hd-rail className="space-y-2.5 pt-11">
+    // (Not in the fill layout, where the Variables sit beside the head and the rails start at the top.)
+    <div data-hd-rail className={fill ? "flex flex-col" : "space-y-2.5 pt-11"} style={fill ? { rowGap } : undefined}>
       <p
         className={`mb-2 text-xs font-semibold uppercase tracking-wide ${align === "right" ? "text-right" : ""}`}
         style={{ color }}
@@ -267,8 +274,17 @@ export function HumanDesignFullChart({
   profile,
   design,
   className,
+  fill,
 }: {
   profile: HumanDesignProfile;
+  /**
+   * Chart Design editor only: lay the chart out to fill a canvas of this
+   * height at the given (container) width, unscaled — rails at their fixed
+   * readable size, the BodyGraph sized independently from the space left in
+   * the center column, the Variables beside the head. Every other consumer
+   * (Readings, public report/decoder, stacked layouts) omits it.
+   */
+  fill?: { height: number };
   /** The sub-account's Human Design Chart Design — falls back to the same defaults chart-design-service.ts seeds a fresh design with, so this always renders correctly even with no design saved yet. */
   design?: ChartDesign | null;
   className?: string;
@@ -288,6 +304,103 @@ export function HumanDesignFullChart({
   // than breaking when a specific arrow is missing.
   const arrows = profile.variableArrows;
 
+  const variablesLeft = (
+    <div className="space-y-1">
+      <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
+      <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
+    </div>
+  );
+  const variablesRight = (
+    <div className="space-y-1">
+      <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
+      <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
+    </div>
+  );
+  const bodygraph = (className: string) => (
+    <HumanDesignChart
+      profile={profile}
+      className={className}
+      definedColor={design?.chartDefinedColor}
+      channelsColor={design?.channelsColor}
+      gatesColor={design?.gatesColor}
+      personalityColor={personalityActivationColor}
+      designColor={designActivationColor}
+      backgroundColor={backgroundColor}
+      centersMode={design?.centersMode}
+      centerColors={centerColorsFromDesign(design)}
+    />
+  );
+  const rail = (side: "Design" | "Personality", rowGap?: number) => (
+    <ActivationColumn
+      side={side}
+      activations={side === "Design" ? profile.design : profile.personality}
+      color={side === "Design" ? designActivationColor : personalityActivationColor}
+      boxColor={planetBoxColor}
+      mode={planetBoxMode}
+      borderRadius={planetBoxBorderRadius}
+      align={side === "Design" ? "left" : "right"}
+      rowGap={rowGap}
+    />
+  );
+
+  if (fill) {
+    const geometry = humanDesignFillGeometry(fill.height);
+    return (
+      /*
+       * Decoupled fill layout (2026-10): [Design rail | BodyGraph | Personality
+       * rail] across the whole canvas, nothing scaled. The rails stay 170px
+       * with 12px text; the BodyGraph column is a size container and the
+       * BodyGraph takes the largest 200:320 box whose drawing fits it (its
+       * blank viewBox margin may overhang into the padding/gaps), top-aligned
+       * so the four Variables sit in the empty space either side of the head (the head spans ~39–61% of the
+       * BodyGraph's width). The SVG's own 6%/4% inner padding is dropped
+       * here (p-0!) — the canvas padding already frames it.
+       */
+      <div
+        data-hd-fill
+        className={`rounded-2xl ${className ?? ""}`}
+        style={{ backgroundColor, height: geometry.height, padding: HD_FILL.padding }}
+      >
+        <div
+          className="grid h-full"
+          style={{
+            gridTemplateColumns: `${HD_FILL.railWidth}px minmax(0,1fr) ${HD_FILL.railWidth}px`,
+            columnGap: HD_FILL.columnGap,
+          }}
+        >
+          {rail("Design", geometry.railRowGap)}
+          <div data-hd-center className="relative min-h-0 min-w-0" style={{ containerType: "size" }}>
+            <div
+              data-hd-bodygraph
+              className="relative [&_svg]:block"
+              style={
+                {
+                  // Largest 200:320 box whose DRAWING fits the column; only the SVG's blank viewBox margin overhangs it.
+                  "--hd-bg-w": `min(calc(100cqw / ${1 - 2 * HD_FILL.bleedX}), calc(100cqh / ${1 - HD_FILL.bleedTop - HD_FILL.bleedBottom} * ${HD_FILL.bodygraphAspect}))`,
+                  width: "var(--hd-bg-w)",
+                  marginLeft: "calc((100cqw - var(--hd-bg-w)) / 2)",
+                  marginTop: `calc(var(--hd-bg-w) * ${-HD_FILL.bleedTop / HD_FILL.bodygraphAspect})`,
+                } as CSSProperties
+              }
+            >
+              {/* The Variables in the BodyGraph's own top corners, either side of the head (it spans ~39–61% of the width). */}
+              <div
+                data-hd-variables
+                className="absolute z-10 flex items-start justify-between gap-4"
+                style={{ top: `${HD_FILL.bleedTop * 100}%`, left: `${HD_FILL.bleedX * 100}%`, right: `${HD_FILL.bleedX * 100}%` }}
+              >
+                {variablesLeft}
+                {variablesRight}
+              </div>
+              {bodygraph("w-full p-0!")}
+            </div>
+          </div>
+          {rail("Personality", geometry.railRowGap)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`@container/hdfc rounded-2xl p-4 ${className ?? ""}`}
@@ -299,28 +412,20 @@ export function HumanDesignFullChart({
        * 200 | 360 | 200 with 16px gaps. This pass gives more of the width to
        * the BodyGraph itself, so the gate numbers inside the centers read
        * larger: 170px rails (a planet row needs ~135px with 8px side
-       * padding, so full names never truncate) on the outer edges, the
-       * center taking all the rest of the width; three columns from 804px
-       * of inner width. The BodyGraph is centered in that column at up to
-       * --hd-bodygraph-max (default 440px) — the Chart Design editor sets
-       * it to the largest size that fits the visible height, so the chart
-       * fills its canvas instead of growing taller and shrinking (see
-       * humanDesignFillLayout). Stacked (narrow) layouts keep the
-       * BodyGraph's 360px cap. The BodyGraph SVG itself
-       * (human-design-chart.tsx) and the PDF layout are unchanged.
+       * padding, so full names never truncate) | 440px center (BodyGraph +
+       * Variables) | 170px rails, 12px gaps, centered; three columns from
+       * 804px of inner width (836px with this box's 16px padding). Used by
+       * Readings and the public report/decoder; the Chart Design editor
+       * uses the fill layout above when its preview is wide enough, and
+       * otherwise scales this layout from CHART_PREVIEW_NATURAL_WIDTH.
+       * Stacked (narrow) layouts keep the BodyGraph's 360px cap. The
+       * BodyGraph SVG itself (human-design-chart.tsx) and the PDF layout
+       * are unchanged.
        */}
-      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_minmax(0,1fr)_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:gap-x-3">
-        <ActivationColumn
-          side="Design"
-          activations={profile.design}
-          color={designActivationColor}
-          boxColor={planetBoxColor}
-          mode={planetBoxMode}
-          borderRadius={planetBoxBorderRadius}
-          align="left"
-        />
+      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3">
+        {rail("Design")}
 
-        <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[var(--hd-bodygraph-max,440px)]">
+        <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]">
           {/*
            * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
            * badges (her prior fix's own scoping to the chart's own
@@ -335,39 +440,14 @@ export function HumanDesignFullChart({
            * two fixed 2-item stacks instead of 4 items that could wrap.
            */}
           <div data-hd-variables className="mb-1 flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
-              <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />
-            </div>
-            <div className="space-y-1">
-              <ArrowBadge label="Perspective" source="Personality Node" value={arrows?.perspective} color={arrowColor} style={arrowStyle} align="right" />
-              <ArrowBadge label="Motivation" source="Personality Sun" value={arrows?.motivation} color={arrowColor} style={arrowStyle} align="right" />
-            </div>
+            {variablesLeft}
+            {variablesRight}
           </div>
 
-          <HumanDesignChart
-            profile={profile}
-            className="w-full"
-            definedColor={design?.chartDefinedColor}
-            channelsColor={design?.channelsColor}
-            gatesColor={design?.gatesColor}
-            personalityColor={personalityActivationColor}
-            designColor={designActivationColor}
-            backgroundColor={backgroundColor}
-            centersMode={design?.centersMode}
-            centerColors={centerColorsFromDesign(design)}
-          />
+          {bodygraph("w-full")}
         </div>
 
-        <ActivationColumn
-          side="Personality"
-          activations={profile.personality}
-          color={personalityActivationColor}
-          boxColor={planetBoxColor}
-          mode={planetBoxMode}
-          borderRadius={planetBoxBorderRadius}
-          align="right"
-        />
+        {rail("Personality")}
       </div>
     </div>
   );

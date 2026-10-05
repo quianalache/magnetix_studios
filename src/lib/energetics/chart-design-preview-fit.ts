@@ -20,52 +20,61 @@ export const CHART_PREVIEW_NATURAL_WIDTH = {
 } as const;
 
 /**
- * Human Design full chart, fixed horizontal parts (human-design-full-chart.tsx):
- * 16px padding each side, two 170px rails, two 12px gaps — 396px. The center
- * (BodyGraph + Variables) gets everything else.
+ * Human Design "fill" layout (2026-10, decoupled): the Chart Design editor
+ * renders the full chart UNSCALED at the preview's real width and height.
+ * The two planet rails keep a fixed, readable size (170px, 12px text, all 13
+ * rows with full names); the BodyGraph is sized on its own from the center
+ * column's width and height (CSS container units in
+ * human-design-full-chart.tsx), so making it larger never shrinks the rail
+ * text. Only the spacing between rail rows stretches with the height.
  */
-export const HD_FULL_CHART_FIXED_WIDTH = 2 * 16 + 2 * 170 + 2 * 12;
-/** The BodyGraph is never laid out smaller than Option B's 360px or (when the width allows) narrower than 440px of center. */
-export const HD_MIN_BODYGRAPH = 360;
-export const HD_MIN_CENTER = 440;
+export const HD_FILL = {
+  /** Rails, each side. */
+  railWidth: 170,
+  /** Gap between a rail and the BodyGraph column. */
+  columnGap: 12,
+  /** Canvas padding (each side). */
+  padding: 8,
+  /** Rail header ("DESIGN"/"PERSONALITY") line + its margin. */
+  railHeader: 24,
+  /** Tallest planet row (icon-only rows: 20px chip + 2 × 8px padding). */
+  rowHeight: 36,
+  rows: 13,
+  minRowGap: 4,
+  maxRowGap: 30,
+  /** Narrowest BodyGraph column the fill layout is used for; narrower previews fall back to the scaled 836px chart. */
+  minCenterWidth: 300,
+  /** BodyGraph width ÷ height (the SVG's 200 × 320 viewBox). */
+  bodygraphAspect: 200 / 320,
+  /**
+   * Empty margin inside that viewBox, measured (getBBox): the drawing spans
+   * x 25.6–208.2 of 18–218 and y 4.0–309.8 of −4–316. The fill layout lets
+   * this blank margin (only) run into the canvas padding / column gaps, so
+   * the drawn BodyGraph fills the center column. Fractions of the viewBox,
+   * kept a little under the measured margins.
+   */
+  bleedX: 0.035,
+  bleedTop: 0.02,
+  bleedBottom: 0.018,
+} as const;
+
+/** Narrowest preview the fill layout is used for. */
+export const HD_FILL_MIN_WIDTH = 2 * HD_FILL.padding + 2 * HD_FILL.railWidth + 2 * HD_FILL.columnGap + HD_FILL.minCenterWidth;
+
+/** Shortest the fill layout gets: both rails at the minimum row gap. */
+export const HD_FILL_MIN_HEIGHT =
+  2 * HD_FILL.padding + HD_FILL.railHeader + HD_FILL.rows * HD_FILL.rowHeight + HD_FILL.rows * HD_FILL.minRowGap;
 
 /**
- * Human Design preview layout that USES the preview's whole width.
- *
- * The chart is laid out exactly as wide as the preview box (÷ scale), so the
- * cream canvas always fills it and the rails sit at its edges. The scale is
- * the largest that keeps the rails at least as legible as at the minimum
- * 836px width, keeps the rails within the visible height, and still fits a
- * 360px BodyGraph. The BodyGraph then takes the largest size that fits both
- * the center width and the visible height — the chart never grows taller
- * than the preview and never makes the whole composition scale down.
- *
- * `railsHeight` / `centerFixedHeight` (padding + Variables above the
- * BodyGraph, at natural size) and `bodygraphAspect` (height ÷ width of the
- * BodyGraph box) are measured from the rendered chart.
+ * Fill-layout geometry for a preview of the given height: the canvas height
+ * (never below the rails' minimum) and the rail row gap that spreads the 13
+ * rows over it (clamped, so rows never crowd or drift far apart).
  */
-export function humanDesignFillLayout(input: {
-  boxWidth: number;
-  maxHeight: number;
-  railsHeight: number;
-  centerFixedHeight: number;
-  bodygraphAspect: number;
-  maxScale?: number;
-}): { scale: number; naturalWidth: number; bodygraphMax: number } | null {
-  const { boxWidth, maxHeight, railsHeight, centerFixedHeight, bodygraphAspect, maxScale = 1 } = input;
-  if (!(boxWidth > 0) || !(maxHeight > 0) || !(railsHeight > 0) || !(bodygraphAspect > 0)) return null;
-  const minNatural = HD_FULL_CHART_FIXED_WIDTH + HD_MIN_CENTER;
-  const scale = Math.min(
-    maxScale,
-    boxWidth / minNatural,
-    maxHeight / railsHeight,
-    maxHeight / (centerFixedHeight + bodygraphAspect * HD_MIN_BODYGRAPH),
-  );
-  const naturalWidth = boxWidth / scale;
-  const centerWidth = naturalWidth - HD_FULL_CHART_FIXED_WIDTH;
-  const byHeight = (maxHeight / scale - centerFixedHeight) / bodygraphAspect;
-  const bodygraphMax = Math.floor(Math.max(HD_MIN_BODYGRAPH, Math.min(centerWidth, byHeight)));
-  return { scale, naturalWidth, bodygraphMax };
+export function humanDesignFillGeometry(height: number): { height: number; railRowGap: number } {
+  const h = Math.max(HD_FILL_MIN_HEIGHT, Math.floor(height));
+  const free = h - 2 * HD_FILL.padding - HD_FILL.railHeader - HD_FILL.rows * HD_FILL.rowHeight;
+  const railRowGap = Math.min(HD_FILL.maxRowGap, Math.max(HD_FILL.minRowGap, Math.floor((free / HD_FILL.rows) * 10) / 10));
+  return { height: h, railRowGap };
 }
 
 /** Largest scale a preview may grow to (text stays crisp; square charts may grow a little). */

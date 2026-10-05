@@ -1,12 +1,13 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  CHART_PREVIEW_NATURAL_WIDTH,
   EDITOR_TWO_COLUMN_MIN_WIDTH,
+  HD_FILL_MIN_WIDTH,
   STACKED_PREVIEW_MAX_HEIGHT,
-  humanDesignFillLayout,
   previewFitScale,
   stickyPreviewChartMaxHeight,
 } from "@/lib/energetics/chart-design-preview-fit";
@@ -175,13 +176,13 @@ export function ChartPreviewFit({
 }
 
 /**
- * Human Design's preview fit: unlike ChartPreviewFit (a fixed natural width,
- * scaled to fit), this lays the full chart out exactly as wide as the
- * preview so its canvas fills it, and gives the BodyGraph the largest size
- * that fits the visible height (humanDesignFillLayout). It measures the
- * rendered chart for the parts that don't change with that size: the rails'
- * height, the padding + Variables above the BodyGraph, and the BodyGraph
- * box's height-to-width ratio.
+ * Human Design's preview fit (2026-10, decoupled). When the preview is wide
+ * enough, the full chart is rendered UNSCALED in its fill layout: exactly
+ * the preview's width and the visible height, rails at their real readable
+ * size, the BodyGraph sized on its own from the space left in the center
+ * (HumanDesignFullChart `fill`). No transform is applied, so enlarging the
+ * BodyGraph never shrinks the planet text. Narrower previews (stacked
+ * editor, small windows) fall back to the scaled 836px chart.
  */
 export function HumanDesignPreviewFit({
   maxHeight,
@@ -190,70 +191,36 @@ export function HumanDesignPreviewFit({
 }: {
   maxHeight: number;
   maxScale?: number;
-  children: ReactNode;
+  /** Renders the chart: with `fill` for the unscaled fill layout, or without it for the scaled fallback. */
+  children: (fill: { height: number } | undefined) => ReactNode;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [m, setM] = useState({ boxWidth: 0, naturalHeight: 0, railsHeight: 0, centerFixedHeight: 0, bodygraphAspect: 0 });
+  const [boxWidth, setBoxWidth] = useState(0);
 
   useLayoutEffect(() => {
     const box = boxRef.current;
-    const inner = innerRef.current;
-    if (!box || !inner) return;
-    const update = () => {
-      const k = inner.offsetWidth ? inner.getBoundingClientRect().width / inner.offsetWidth : 1;
-      const root = inner.firstElementChild as HTMLElement | null;
-      const rail = inner.querySelector<HTMLElement>("[data-hd-rail]");
-      const wrap = inner.querySelector('svg[aria-label="Human Design bodygraph"]')?.parentElement ?? null;
-      let railsHeight = 0;
-      let centerFixedHeight = 0;
-      let bodygraphAspect = 0;
-      if (root && rail && wrap && k > 0) {
-        const rootTop = root.getBoundingClientRect().top;
-        const padBottom = parseFloat(getComputedStyle(root).paddingBottom) || 0;
-        const wr = wrap.getBoundingClientRect();
-        railsHeight = Math.round((rail.getBoundingClientRect().bottom - rootTop) / k + padBottom);
-        centerFixedHeight = Math.round((wr.top - rootTop) / k + padBottom);
-        bodygraphAspect = wr.width ? Math.round((wr.height / wr.width) * 1000) / 1000 : 0;
-      }
-      const next = { boxWidth: box.clientWidth, naturalHeight: inner.offsetHeight, railsHeight, centerFixedHeight, bodygraphAspect };
-      setM((prev) => (Object.keys(next).every((key) => prev[key as keyof typeof prev] === next[key as keyof typeof next]) ? prev : next));
-    };
+    if (!box) return;
+    const update = () => setBoxWidth(box.clientWidth);
     update();
     const ro = new ResizeObserver(update);
     ro.observe(box);
-    ro.observe(inner);
     return () => ro.disconnect();
   }, []);
 
-  const layout = humanDesignFillLayout({ ...m, maxHeight, maxScale });
-  const scale = layout?.scale ?? 0;
-
+  const useFill = boxWidth >= HD_FILL_MIN_WIDTH;
   return (
-    <div
-      ref={boxRef}
-      data-chart-preview-scale={scale ? scale.toFixed(3) : undefined}
-      className="relative w-full overflow-hidden"
-      style={{ height: scale && m.naturalHeight ? Math.ceil(m.naturalHeight * scale) : 320 }}
-    >
-      <div
-        ref={innerRef}
-        style={
-          {
-            position: "absolute",
-            left: 0,
-            top: 0,
-            // Before the first measurement, lay out at the minimum width so the parts can be measured.
-            width: layout?.naturalWidth ?? 836,
-            transform: `scale(${scale || 1})`,
-            transformOrigin: "top left",
-            visibility: scale ? "visible" : "hidden",
-            "--hd-bodygraph-max": `${layout?.bodygraphMax ?? 440}px`,
-          } as CSSProperties
-        }
-      >
-        {children}
-      </div>
+    <div ref={boxRef} className="w-full">
+      {boxWidth === 0 ? (
+        <div style={{ height: 320 }} />
+      ) : useFill ? (
+        <div data-chart-preview-scale="1.000" data-hd-preview="fill">
+          {children({ height: maxHeight })}
+        </div>
+      ) : (
+        <ChartPreviewFit naturalWidth={CHART_PREVIEW_NATURAL_WIDTH.humanDesign} maxScale={maxScale} maxHeight={maxHeight}>
+          {children(undefined)}
+        </ChartPreviewFit>
+      )}
     </div>
   );
 }

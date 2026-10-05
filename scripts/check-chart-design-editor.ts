@@ -36,10 +36,10 @@ import { CHART_DESIGN_SECTIONS } from "../src/components/energetic-decoder/chart
 import {
   CHART_PREVIEW_MAX_SCALE,
   CHART_PREVIEW_NATURAL_WIDTH,
-  HD_FULL_CHART_FIXED_WIDTH,
-  HD_MIN_BODYGRAPH,
-  HD_MIN_CENTER,
-  humanDesignFillLayout,
+  HD_FILL,
+  HD_FILL_MIN_HEIGHT,
+  HD_FILL_MIN_WIDTH,
+  humanDesignFillGeometry,
   STICKY_PREVIEW_MIN_HEIGHT,
   previewFitScale,
   stickyPreviewChartMaxHeight,
@@ -290,46 +290,46 @@ check("the preview scales uniformly to fit both width and height — never cropp
   }
   for (const system of ["humanDesign", "mandala", "astrology"] as const) assert.ok(CHART_PREVIEW_MAX_SCALE[system] >= 1);
 });
-check("Human Design full chart: compact rails at the edges, the center takes the rest", () => {
+check("Human Design full chart: Readings/public layout is production's compact 170 | 440 | 170", () => {
   const renderer = readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8");
-  // 170px rails on the outer edges, the center (BodyGraph + Variables) takes all remaining width, 12px gaps, three columns from 804px of inner width.
-  assert.ok(renderer.includes("@min-[804px]/hdfc:grid-cols-[170px_minmax(0,1fr)_170px]"), "rails/center tracks changed — re-check HD_FULL_CHART_FIXED_WIDTH");
-  assert.ok(renderer.includes("@min-[804px]/hdfc:gap-x-3") && !renderer.includes("hdfc:justify-center"), "the composition fills its canvas (no centered fixed tracks)");
-  assert.ok(!renderer.includes("@5xl/hdfc") && !renderer.includes("@min-[792px]"), "old breakpoints are gone");
-  // The BodyGraph is centered in that column at up to --hd-bodygraph-max (440px by default); stacked layouts keep their 360px cap
-  assert.ok(renderer.includes("mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[var(--hd-bodygraph-max,440px)]"));
-  assert.ok(renderer.includes("data-hd-rail") && renderer.includes("data-hd-variables"), "the editor's fit measures these");
-  assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer), "renderer padding moved — re-check HD_FULL_CHART_FIXED_WIDTH");
-  assert.equal(HD_FULL_CHART_FIXED_WIDTH, 2 * 16 + 2 * 170 + 2 * 12);
-  assert.equal(CHART_PREVIEW_NATURAL_WIDTH.humanDesign, HD_FULL_CHART_FIXED_WIDTH + HD_MIN_CENTER);
+  // Non-editor consumers keep the deployed geometry exactly: 170px rails | 440px center, 12px gaps, centered; three columns from 804px; stacked keeps 360px.
+  assert.ok(renderer.includes("@min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3"));
+  assert.ok(renderer.includes("mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]"));
+  assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer));
+  assert.ok(renderer.includes('"space-y-2.5 pt-11"'), "non-fill rails unchanged");
+  assert.equal(CHART_PREVIEW_NATURAL_WIDTH.humanDesign, 2 * 16 + 2 * 170 + 2 * 12 + 440);
   assert.equal(CHART_PREVIEW_MAX_SCALE.humanDesign, 1, "the 1.0× cap is unchanged");
   assert.equal(renderer.match(/px-2 py-2 text-xs/g)?.length, 2, "both planet-box modes use the compact row padding");
-  assert.ok(170 - 2 * 8 - 2 >= 141 - 2 * 4, "rail too narrow for full planet names");
+  assert.ok(!renderer.includes("--hd-bodygraph-max"), "the fill-canvas scaling variable is gone");
 });
-check("Human Design preview fills the preview width and never grows taller than the visible area", () => {
-  const m = { railsHeight: 662, centerFixedHeight: 100, bodygraphAspect: 1.592 };
-  // tall window (1440×900-class, 767×738): width-bound — same as the minimum-width layout, BodyGraph at 440
-  let L = humanDesignFillLayout({ boxWidth: 767, maxHeight: 738, ...m })!;
-  assert.ok(Math.abs(L.naturalWidth * L.scale - 767) < 0.01, "the canvas fills the preview width exactly");
-  assert.equal(L.bodygraphMax, 440);
-  // laptop-height window (767×628): the canvas still fills the width (never shrinks to a compact natural width) …
-  L = humanDesignFillLayout({ boxWidth: 767, maxHeight: 628, ...m })!;
-  assert.ok(Math.abs(L.naturalWidth * L.scale - 767) < 0.01);
-  // … and the chart's height fits: BodyGraph limited by height, not inflated so the whole chart scales down
-  const height = Math.max(m.railsHeight, m.centerFixedHeight + m.bodygraphAspect * L.bodygraphMax) * L.scale;
-  assert.ok(height <= 628 + 1, `chart ${height}px tall in a 628px area`);
-  assert.ok(L.scale > 0.9, "the rails keep the minimum-width scale");
-  // very wide + tall (1082×918): scale 1, canvas = preview width, BodyGraph grows into the extra width up to the height
-  L = humanDesignFillLayout({ boxWidth: 1082, maxHeight: 918, ...m })!;
-  assert.equal(L.scale, 1);
-  assert.equal(L.naturalWidth, 1082);
-  assert.equal(L.bodygraphMax, Math.floor((918 - 100) / 1.592));
-  // never below Option B's 360px BodyGraph; nothing until measured
-  L = humanDesignFillLayout({ boxWidth: 767, maxHeight: 400, ...m })!;
-  assert.ok(L.bodygraphMax >= HD_MIN_BODYGRAPH);
-  assert.equal(humanDesignFillLayout({ boxWidth: 767, maxHeight: 628, railsHeight: 0, centerFixedHeight: 100, bodygraphAspect: 1.592 }), null);
+check("Human Design editor fill layout: rails fixed and readable, the BodyGraph sized independently", () => {
+  const renderer = readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8");
+  // Rails stay 170px with 12px text; the center is a size container and the BodyGraph is the largest 200:320 box that fits it.
+  assert.equal(HD_FILL.railWidth, 170);
+  assert.equal(HD_FILL.bodygraphAspect, 200 / 320);
+  assert.ok(renderer.includes('style={{ containerType: "size" }}'), "the BodyGraph column is a size container");
+  assert.ok(renderer.includes("min(calc(100cqw / ${1 - 2 * HD_FILL.bleedX}), calc(100cqh / ${1 - HD_FILL.bleedTop - HD_FILL.bleedBottom} * ${HD_FILL.bodygraphAspect}))"), "BodyGraph sized from the center's own width and height");
+  // Only blank viewBox margin overhangs: measured drawing x 25.6–208.2 of 18–218, y 4.0–309.8 of −4–316.
+  assert.ok(HD_FILL.bleedX * 200 < 25.6 - 18 && HD_FILL.bleedX * 200 < 218 - 208.2);
+  assert.ok(HD_FILL.bleedTop * 320 < 4 + 4 && HD_FILL.bleedBottom * 320 < 316 - 309.8);
+  assert.ok(renderer.includes('bodygraph("w-full p-0!")'), "fill drops only the SVG wrapper's inner padding (via className, the component is untouched)");
+  assert.ok(/data-hd-variables\s+className="absolute z-10/.test(renderer), "Variables sit in the BodyGraph's top corners beside the head");
+  // Geometry: rows spread over the height, clamped; never shorter than the rails' minimum.
+  assert.equal(HD_FILL_MIN_WIDTH, 2 * 8 + 2 * 170 + 2 * 12 + 300);
+  assert.equal(humanDesignFillGeometry(100).height, HD_FILL_MIN_HEIGHT);
+  assert.equal(humanDesignFillGeometry(100).railRowGap, HD_FILL.minRowGap);
+  assert.equal(humanDesignFillGeometry(5000).railRowGap, HD_FILL.maxRowGap);
+  for (const h of [600, 640, 700, 800, 900]) {
+    const g = humanDesignFillGeometry(h);
+    const rails = 2 * HD_FILL.padding + HD_FILL.railHeader + HD_FILL.rows * (HD_FILL.rowHeight + g.railRowGap);
+    assert.ok(rails <= g.height + 0.5, `rails ${rails}px fit a ${g.height}px canvas`);
+  }
+  // The editor renders it unscaled (no transform) when wide enough, else the scaled 836px chart.
+  const ws = readFileSync("src/components/energetic-decoder/chart-design-editor-workspace.tsx", "utf8");
+  assert.ok(ws.includes('data-chart-preview-scale="1.000" data-hd-preview="fill"') && ws.includes("boxWidth >= HD_FILL_MIN_WIDTH"));
   const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
-  assert.ok(/system === "humanDesign" \? \(\s*<HumanDesignPreviewFit/.test(editor), "Human Design uses the fill-width preview fit");
+  assert.ok(/system === "humanDesign" \? \(\s*<HumanDesignPreviewFit/.test(editor), "Human Design uses the fill preview");
+  assert.ok(editor.includes("hdFill={hdFill}"));
 });
 check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph block are untouched", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);

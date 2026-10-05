@@ -287,7 +287,7 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           previewTitle={`${CHART_SYSTEM_LABEL[system]} preview`}
           previewNote="Sample chart · updates as you edit"
           preview={({ maxHeight }) => {
-            const chart = (
+            const chart = (hdFill?: { height: number }) => (
               <ChartDesignPreview
                 system={system}
                 design={previews[system]}
@@ -296,16 +296,17 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
                 sampleAstro={sampleAstro}
                 size="large"
                 className="w-full"
+                hdFill={hdFill}
               />
             );
-            // Human Design fills the preview's width (rails at the edges, the BodyGraph as large as the visible height allows); the square charts scale to fit.
+            // Human Design fills the preview unscaled (fixed-size rails, the BodyGraph sized on its own from the rest); the square charts scale to fit.
             return system === "humanDesign" ? (
               <HumanDesignPreviewFit maxScale={CHART_PREVIEW_MAX_SCALE.humanDesign} maxHeight={maxHeight}>
-                {chart}
+                {(fill) => chart(fill)}
               </HumanDesignPreviewFit>
             ) : (
               <ChartPreviewFit naturalWidth={CHART_PREVIEW_NATURAL_WIDTH[system]} maxScale={CHART_PREVIEW_MAX_SCALE[system]} maxHeight={maxHeight}>
-                {chart}
+                {chart()}
               </ChartPreviewFit>
             );
           }}
