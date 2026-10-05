@@ -35,10 +35,9 @@ import { CHART_DESIGN_SECTIONS } from "../src/components/energetic-decoder/chart
 import {
   CHART_PREVIEW_MAX_SCALE,
   CHART_PREVIEW_NATURAL_WIDTH,
-  EDITOR_WORKSPACE_MIN_HEIGHT,
-  editorWorkspaceHeight,
-  editorWorkspaceHeightBelowStickyBar,
+  STICKY_PREVIEW_MIN_HEIGHT,
   previewFitScale,
+  stickyPreviewChartMaxHeight,
 } from "../src/lib/energetics/chart-design-preview-fit";
 
 let passed = 0;
@@ -293,33 +292,25 @@ check("Human Design previews at a width that keeps its Design | BodyGraph | Pers
   assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer), "renderer padding moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
   assert.ok(CHART_PREVIEW_NATURAL_WIDTH.humanDesign - 32 >= 1024);
 });
-check("the side-by-side workspace fills the page area below the header, with a floor for short windows", () => {
-  assert.equal(editorWorkspaceHeight({ workspaceTop: 278, areaBottom: 876 }), 598);
-  assert.equal(editorWorkspaceHeight({ workspaceTop: 600, areaBottom: 700 }), EDITOR_WORKSPACE_MIN_HEIGHT);
+check("the sticky preview's chart fits the visible page area (card included), with a floor for short windows", () => {
+  // 1440×900: page area 836px tall, 24px padding top and bottom, 50px of card title/padding.
+  assert.equal(stickyPreviewChartMaxHeight({ areaHeight: 836, areaPaddingTop: 24, areaPaddingBottom: 24, cardChrome: 50 }), 738);
+  assert.equal(stickyPreviewChartMaxHeight({ areaHeight: 300, areaPaddingTop: 24, areaPaddingBottom: 24, cardChrome: 50 }), STICKY_PREVIEW_MIN_HEIGHT);
+  // a chart limited by width is shorter than the cap — the card then hugs the chart
+  const k = previewFitScale({ boxWidth: 800, boxHeight: 738, naturalWidth: 1080, naturalHeight: 672 });
+  assert.ok(672 * k < 738);
 });
-check("with the sticky tab bar, the workspace fills the page area below it once the header scrolls away", () => {
-  // 1440×900: page area 836px tall, tab bar 49px, 16px gap, 48px of bottom padding (page + wrapper).
-  assert.equal(editorWorkspaceHeightBelowStickyBar({ areaHeight: 836, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }), 723);
-  // independent of how tall the header above is — that part scrolls away
-  assert.ok(
-    editorWorkspaceHeightBelowStickyBar({ areaHeight: 836, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }) >
-      editorWorkspaceHeight({ workspaceTop: 278, areaBottom: 812 }),
-    "reclaims the header's height",
-  );
-  assert.equal(editorWorkspaceHeightBelowStickyBar({ areaHeight: 300, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }), EDITOR_WORKSPACE_MIN_HEIGHT);
-});
-check("the tab bar is the one sticky element: header scrolls away, Save stays reachable, no scroll trap", () => {
+check("one continuous page: nothing sticky but the preview, no inner scroll box, no fixed-height workspace", () => {
   const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
   const shell = readFileSync("src/components/energetic-decoder/chart-design-editor-workspace.tsx", "utf8");
-  const layout = readFileSync("src/app/(dashboard)/layout.tsx", "utf8");
-  assert.equal(editor.match(/data-editor-sticky-bar/g)?.length, 1, "exactly one tab bar");
-  assert.equal(editor.match(/className="[^"]*\bsticky\b/g)?.length, 1, "only the tab bar is sticky (the header scrolls)");
-  // The bar's negative offset must equal the page area's padding (p-4 / md:p-6) so it pins flush to the top.
-  assert.ok(layout.includes('"flex-1 overflow-y-auto p-4 md:p-6"'), "page padding changed — update the tab bar's -top-4 / md:-top-6");
-  assert.ok(/sticky -top-4 [^"]*md:-top-6/.test(editor));
-  assert.ok(editor.includes("stickyBarRef={tabBarRef}"), "the workspace sizes itself below the tab bar");
-  assert.ok(editor.includes("data-editor-compact-save") && /!readOnly && !headerActionsVisible/.test(editor), "compact Save only for admins, only once the header's Save is out of view");
-  assert.ok(!shell.includes("overscroll-contain"), "the controls column must let scrolling continue to the page at its ends");
+  assert.equal(editor.match(/className="[^"]*\bsticky\b/g), null, "the header and tabs scroll with the page");
+  assert.ok(!editor.includes("data-editor-compact-save") && !editor.includes("IntersectionObserver"), "no sticky Save bar");
+  assert.equal(shell.match(/\bsticky top-0\b/g)?.length, 1, "exactly one sticky element: the preview card");
+  assert.ok(/data-editor-preview[\s\S]{0,200}"sticky top-0"/.test(shell), "the sticky element is the preview card");
+  assert.ok(!/overflow-y-auto|overscroll/.test(shell), "controls have no scroll box of their own");
+  assert.ok(!/style=\{wide && height/.test(shell) && !shell.includes("editorWorkspaceHeight"), "no fixed-height workspace");
+  assert.ok(shell.includes("grid-cols-[minmax(300px,min(30%,360px))_minmax(0,1fr)]") && shell.includes("items-start"), "controls ≈30% (300–360px), the rest goes to the preview; the preview column does not stretch");
+  assert.ok(!shell.includes("bg-white p-"), "no inner white frame around the chart");
 });
 check("each section can tell whether its own fields have unsaved edits", () => {
   let s = initChartDesignEditorState(makeSet(false));
