@@ -252,24 +252,28 @@ async function main() {
   });
 
   console.log("\nDefault unified design for new workspaces");
-  await check("fresh workspace: concurrent first loads create exactly one default design with three owned records", async () => {
+  await check("fresh workspace: concurrent first loads create exactly one Default plus the four ready-made designs, all with their own records", async () => {
     await Promise.all([
       setService.ensureDefaultChartDesignSet(SA_NEW, AG),
       setService.ensureDefaultChartDesignSet(SA_NEW, AG),
       setService.ensureDefaultChartDesignSet(SA_NEW, AG),
     ]);
     const data = await load(SA_NEW);
-    assert.equal(data.sets.length, 1);
-    assert.equal(data.designs.length, 3);
-    assert.equal(data.sets[0].isDefault, true);
+    // Default + the four ready-made designs, each with its own three records.
+    assert.equal(data.sets.length, 5);
+    assert.equal(data.designs.length, 15);
+    assert.equal(data.sets.filter((x) => x.isDefault).length, 1);
+    assert.equal(data.sets.find((x) => x.isDefault)?.name, "Default");
+    assert.deepEqual(data.sets.filter((x) => x.starter).map((x) => x.name).sort(), ["Magnetix Violet", "Midnight", "Monochrome", "Warm Sunset"]);
+    assert.deepEqual(((await db.doc(`subAccounts/${SA_NEW}`).get()).get("chartDesignStarters.seeded") as string[]).sort(), ["magnetix-violet", "midnight", "monochrome", "warm-sunset"]);
     assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA_NEW, ...data }), []);
   });
   await check("fresh workspace through the legacy list endpoint is created as a unified design too", async () => {
     const res = await json(await legacyListRoute.GET(req("admin1"), p(SA_NEW2)));
     assert.equal(res.status, 200);
-    assert.equal((res.body.designs as unknown[]).length, 3);
+    assert.equal((res.body.designs as unknown[]).length, 15);
     const data = await load(SA_NEW2);
-    assert.equal(data.sets.length, 1);
+    assert.equal(data.sets.length, 5);
     assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA_NEW2, ...data }), []);
   });
   await check("unmigrated workspace: listing unified designs creates nothing and reports migration required", async () => {
@@ -338,7 +342,7 @@ async function main() {
     assert.ok(noExpect.refused?.includes("don't match"));
     const wrong = await runner.runChartDesignSetMigration({ db, live: true, subAccountIds: [SA1, SA3], expect: { sets: 1, copies: 0, stamps: 0, profiles: 0 } });
     assert.ok(wrong.refused?.includes("don't match"));
-    assert.equal(await count("chartDesignSets"), 2); // only the two fresh workspaces' defaults
+    assert.equal(await count("chartDesignSets"), 10); // only the two fresh workspaces' Default + 4 ready-made designs each
   });
   let live: Awaited<ReturnType<typeof runner.runChartDesignSetMigration>>;
   await check("live run writes the plan, passes integrity, and changes no existing record's values", async () => {
@@ -612,7 +616,8 @@ async function main() {
     st = editorState.setEditorField(st, "humanDesign", "centersMode", "traditional");
     st = editorState.setEditorField(st, "humanDesign", "rootCenterColor", "#101010");
     st = editorState.setEditorField(st, "humanDesign", "planetBoxBorderRadius", 12);
-    st = editorState.applyEditorPreset(st, "mandala", "Warm Sunset");
+    st = editorState.setEditorField(st, "mandala", "chartDefinedColor", "#c2410c");
+    st = editorState.setEditorField(st, "mandala", "mandalaZodiacColor", "#ea580c");
     st = editorState.setEditorField(st, "astrology", "wheelAccentColor", "#202020");
     st = editorState.setEditorName(st, "Round Trip Saved");
     const payload = editorState.buildEditorSavePayload(st)!;
@@ -678,7 +683,7 @@ async function main() {
     const astro = await chartDesignService.getDefaultChartDesign(SA1, "astrology");
     assert.equal(astro?.houseSystem, "placidus");
   });
-  await check("setting a new default design or applying a preset never changes the calculation", async () => {
+  await check("setting a new default design or saving styling never changes the calculation", async () => {
     const sets = (await setService.listChartDesignSets(SA3, AG)).sets;
     const def = sets.find((x) => x.isDefault)!;
     const other = sets.find((x) => !x.isDefault)!;
@@ -687,7 +692,7 @@ async function main() {
     const records = JSON.stringify((await db.collection("chartDesigns").where("subAccountId", "==", SA3).get()).docs.map((d) => [d.id, d.get("houseSystem")]).sort());
     assert.deepEqual(await calc.getAstrologyHouseSystem(SA3), { houseSystem: "placidus", source: "defaultDesign" });
     let st = editorState.initChartDesignEditorState(def);
-    st = editorState.applyEditorPreset(st, "astrology", "Midnight");
+    st = editorState.setEditorField(st, "astrology", "wheelAccentColor", "#818cf8");
     await setRoute.PATCH(req("admin3", "PATCH", editorState.buildEditorSavePayload(st)!), p(SA3, { setId: def.id }));
     assert.equal((await calc.getAstrologyHouseSystem(SA3)).houseSystem, "placidus");
     await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: other.id }));
@@ -731,6 +736,124 @@ async function main() {
     assert.equal(await readingsSnapshot(), readingsBefore);
     await houseRunner.rollbackHouseSystemSetting({ db, manifest: done.written, live: true });
     assert.deepEqual(await calc.getAstrologyHouseSystem(SA2), { houseSystem: "placidus", source: "defaultDesign" });
+  });
+
+  console.log("\nReady-made designs for existing workspaces");
+  const starters = await import("../src/lib/energetics/chart-design-starters");
+  const starterRunner = await import("./lib/chart-design-starters-runner");
+  const snapshotAll = async (col: string) => JSON.stringify((await db.collection(col).get()).docs.map((d) => [d.id, d.data()]).sort());
+  // A workspace design that already uses one of the ready-made names.
+  const collision = (await json(await setsRoute.POST(req("admin1", "POST", { name: "Monochrome" }), p(SA1)))).body as unknown as SetBody;
+  await setRoute.PATCH(req("admin1", "PATCH", { humanDesign: { chartDefinedColor: "#0f0f0f" } }), p(SA1, { setId: collision.set.id }));
+  const existingBefore: Record<string, Awaited<ReturnType<typeof load>>> = { [SA1]: await load(SA1), [SA3]: await load(SA3) };
+  const others = { profiles: await snapshotAll("energeticProfiles"), reports: await snapshotAll("generatedReports"), readings: await snapshotAll("energeticDecoderReadings") };
+  let starterPlan: Awaited<ReturnType<typeof starterRunner.runStarterSeeding>>;
+  await check("dry run: four designs per migrated workspace, collisions renamed, others skipped, zero writes", async () => {
+    const designsBefore = await snapshotAll("chartDesigns");
+    starterPlan = await starterRunner.runStarterSeeding({ db, subAccountIds: [SA1, SA3, SA5, SA_NEW] });
+    assert.equal(await snapshotAll("chartDesigns"), designsBefore);
+    const byId = Object.fromEntries(starterPlan.plans.map((x) => [x.subAccountId, x]));
+    assert.equal(byId[SA1].status, "ready");
+    assert.deepEqual(byId[SA1].creates.map((c) => c.name), ["Magnetix Violet", "Monochrome (ready-made)", "Warm Sunset", "Midnight"]);
+    assert.equal(byId[SA1].creates[1].renamedBecauseTaken, "Monochrome");
+    assert.equal(byId[SA3].creates.length, 4);
+    assert.equal(byId[SA5].status, "not-migrated");
+    assert.equal(byId[SA_NEW].status, "nothing-to-do"); // seeded at creation
+    assert.deepEqual(starterPlan.totals, { sets: 8, records: 24 });
+  });
+  await check("live run needs matching --expect; writes complete, independent designs; verification OK", async () => {
+    assert.ok((await starterRunner.runStarterSeeding({ db, live: true, subAccountIds: [SA1, SA3, SA5, SA_NEW], expect: { sets: 1, records: 3 } })).refused);
+    const live = await starterRunner.runStarterSeeding({ db, live: true, subAccountIds: [SA1, SA3, SA5, SA_NEW], expect: { sets: 8, records: 24 } });
+    assert.equal(live.refused, null);
+    for (const v of live.verification) assert.deepEqual(v.problems, [], `${v.subAccountId}: ${v.problems.join("; ")}`);
+    for (const sa of [SA1, SA3]) {
+      const after = await load(sa);
+      const def = after.sets.find((x) => x.isDefault)!;
+      for (const starter of starters.CHART_DESIGN_STARTERS) {
+        const set = after.sets.find((x) => x.starter?.key === starter.key)!;
+        assert.ok(set, `${sa}/${starter.key}`);
+        assert.equal(set.isDefault, false);
+        for (const sys of ["humanDesign", "mandala", "astrology"] as const) {
+          const member = after.designs.find((d) => d.id === set.members[sys])!;
+          const defMember = after.designs.find((d) => d.id === def.members[sys])!;
+          assert.equal(member.ownerSetId, set.id);
+          assert.notEqual(member.id, defMember.id);
+          assert.equal(fields.chartDesignFingerprint(member), fields.chartDesignFingerprint(starters.starterSystemValues(defMember, starter.key, sys)), `${sa}/${starter.key}/${sys} values`);
+        }
+      }
+      assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: sa, ...after }), []);
+    }
+    (globalThis as Record<string, unknown>).__starterManifest = live.written;
+  });
+  await check("existing Default, custom designs (incl. the same-named one), Profiles, readings and reports are unchanged", async () => {
+    for (const sa of [SA1, SA3]) {
+      const before = existingBefore[sa];
+      const after = await load(sa);
+      for (const d of before.designs) {
+        const now = after.designs.find((x) => x.id === d.id)!;
+        assert.equal(fields.chartDesignFingerprint(now), fields.chartDesignFingerprint(d), `${d.id}`);
+        assert.equal(now.isDefault, d.isDefault);
+        assert.equal(now.name, d.name);
+      }
+      for (const set of before.sets) {
+        const now = after.sets.find((x) => x.id === set.id)!;
+        assert.equal(now.name, set.name);
+        assert.equal(now.isDefault, set.isDefault);
+        assert.deepEqual(now.members, set.members);
+      }
+    }
+    assert.equal((await setService.getChartDesignSet(SA1, collision.set.id))!.designs.humanDesign!.chartDefinedColor, "#0f0f0f");
+    assert.equal(await snapshotAll("energeticProfiles"), others.profiles);
+    assert.equal(await snapshotAll("generatedReports"), others.reports);
+    assert.equal(await snapshotAll("energeticDecoderReadings"), others.readings);
+  });
+  await check("idempotent: a re-run adds nothing, and a deleted ready-made design is never re-added", async () => {
+    const again = await starterRunner.planStarterSeeding(db, [SA1, SA3]);
+    assert.deepEqual(again.totals, { sets: 0, records: 0 });
+    const midnight = (await load(SA3)).sets.find((x) => x.starter?.key === "midnight")!;
+    assert.equal((await setRoute.DELETE(req("admin3", "DELETE"), p(SA3, { setId: midnight.id }))).status, 200);
+    const afterDelete = await starterRunner.planStarterSeeding(db, [SA3]);
+    assert.deepEqual(afterDelete.totals, { sets: 0, records: 0 });
+  });
+  await check("ready-made designs are ordinary designs: editing one changes nothing else; duplicates aren't marked ready-made", async () => {
+    const sets = (await load(SA3)).sets;
+    const violet = sets.find((x) => x.starter?.key === "magnetix-violet")!;
+    const before = await load(SA3);
+    await setRoute.PATCH(req("admin3", "PATCH", { mandala: { mandalaQuadrantColor: "#123123" }, name: "Violet Custom" }), p(SA3, { setId: violet.id }));
+    const after = await load(SA3);
+    for (const d of before.designs) {
+      if (d.ownerSetId === violet.id) continue;
+      assert.equal(fields.chartDesignFingerprint(after.designs.find((x) => x.id === d.id)!), fields.chartDesignFingerprint(d), d.id);
+    }
+    const dup = (await json(await dupRoute.POST(req("admin3", "POST"), p(SA3, { setId: violet.id })))).body as unknown as SetBody;
+    assert.equal((await db.doc(`chartDesignSets/${dup.set.id}`).get()).get("starter"), undefined);
+    assert.equal(dup.set.designs.mandala!.mandalaQuadrantColor, "#123123");
+    // and it can become the default like any design (flags mirrored), then back
+    const def = sets.find((x) => x.isDefault)!;
+    assert.equal((await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: violet.id }))).status, 200);
+    assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA3, ...(await load(SA3)) }), []);
+    await setRoute.PATCH(req("admin3", "PATCH", { isDefault: true }), p(SA3, { setId: def.id }));
+  });
+  await check("ready-made designs keep admin-only writes and tenant isolation", async () => {
+    const warm = (await load(SA1)).sets.find((x) => x.starter?.key === "warm-sunset")!;
+    assert.equal((await setRoute.PATCH(req("member2", "PATCH", { name: "x" }), p(SA1, { setId: warm.id }))).status, 403);
+    assert.equal((await setRoute.DELETE(req("member2", "DELETE"), p(SA1, { setId: warm.id }))).status, 403);
+    assert.equal((await setRoute.GET(req("outsider"), p(SA2, { setId: warm.id }))).status, 404);
+    assert.equal((await setRoute.PATCH(req("admin1", "PATCH", { name: "x" }), p(SA3, { setId: warm.id }))).status, 404);
+  });
+  await check("rollback removes exactly what the run added and restores the marker; a re-run recreates the same ids", async () => {
+    const manifest = ((globalThis as Record<string, unknown>).__starterManifest as Awaited<ReturnType<typeof starterRunner.runStarterSeeding>>["written"]).filter((m) => m.subAccountId === SA1);
+    const before = await load(SA1);
+    const preview = await starterRunner.rollbackStarterSeeding({ db, manifest });
+    assert.ok(preview.actions.length > 0);
+    assert.equal((await load(SA1)).sets.length, before.sets.length); // dry
+    await starterRunner.rollbackStarterSeeding({ db, manifest, live: true });
+    const after = await load(SA1);
+    assert.equal(after.sets.filter((x) => x.starter).length, 0);
+    assert.equal((await db.doc(`subAccounts/${SA1}`).get()).get("chartDesignStarters"), undefined);
+    assert.deepEqual(migration.checkChartDesignSetIntegrity({ subAccountId: SA1, ...after }), []);
+    const replan = await starterRunner.planStarterSeeding(db, [SA1]);
+    assert.deepEqual(replan.plans[0].creates.map((c) => c.setId), manifest[0].sets);
   });
 
   console.log(`\n${passed} checks passed.`);

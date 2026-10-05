@@ -11,7 +11,6 @@ import type { ChartDesignSetWithMembers } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-fields";
 import { CHART_DESIGN_PRESETS } from "../src/lib/energetics/chart-design-presets";
 import {
-  applyEditorPreset,
   buildEditorSavePayload,
   dirtySystems,
   editorNameError,
@@ -22,6 +21,15 @@ import {
   setEditorName,
 } from "../src/lib/energetics/chart-design-editor-state";
 import { isGuardedNavigationClick } from "../src/lib/unsaved-changes";
+import { readFileSync } from "node:fs";
+import {
+  CHART_DESIGN_STARTERS,
+  planStarterDesigns,
+  starterPresetValues,
+  starterSetId,
+  starterSystemValues,
+} from "../src/lib/energetics/chart-design-starters";
+import type { ChartDesignSet } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SECTIONS } from "../src/components/energetic-decoder/chart-design-controls";
 
 let passed = 0;
@@ -137,7 +145,7 @@ check("a design save never carries a calculation setting (house system lives in 
   const def = initChartDesignEditorState(makeSet(true));
   assert.equal("houseSystem" in def, false);
   assert.equal(setEditorField(def, "astrology", "houseSystem", "equal"), def);
-  let s = applyEditorPreset(def, "astrology", "Midnight");
+  let s = setEditorField(def, "astrology", "wheelAccentColor", "#818cf8");
   s = setEditorField(s, "astrology", "backgroundColor", "#000000");
   const payload = buildEditorSavePayload(s)!;
   assert.deepEqual(Object.keys(payload), ["astrology"]);
@@ -159,9 +167,9 @@ check("every editable field appears in exactly one editor section", () => {
   }
 });
 
-console.log("\nPresets");
-check("the four presets are exactly the ones on origin/main, value for value", () => {
-  const original = execSync("git show origin/main:src/components/energetic-decoder/chart-designs-tab.tsx", { encoding: "utf8" });
+console.log("\nReady-made designs (former presets)");
+check("the four looks keep exactly their established values (pre-unification source, 0046d99)", () => {
+  const original = execSync("git show 0046d99:src/components/energetic-decoder/chart-designs-tab.tsx", { encoding: "utf8" });
   const block = original.slice(original.indexOf("const PRESETS"), original.indexOf("function ChartDesignCard("));
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     assert.deepEqual(CHART_DESIGN_PRESETS[system].map((p) => p.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
@@ -169,29 +177,86 @@ check("the four presets are exactly the ones on origin/main, value for value", (
       const literal = `{ name: "${preset.name}", swatch: ${JSON.stringify(preset.swatch).replace(/,/g, ", ")}, values: { ${Object.entries(preset.values)
         .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
         .join(", ")} } }`;
-      assert.ok(block.includes(literal), `${system} / ${preset.name} differs from origin/main`);
+      assert.ok(block.includes(literal), `${system} / ${preset.name} differs from the established values`);
     }
   }
+  assert.deepEqual(CHART_DESIGN_STARTERS.map((x) => x.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
 });
-check("applying a preset changes only that system's unsaved values, never the 9 center colors", () => {
-  let s = initChartDesignEditorState(makeSet(false));
-  const before = structuredClone(s.values);
-  s = applyEditorPreset(s, "mandala", "Midnight");
-  const preset = CHART_DESIGN_PRESETS.mandala.find((p) => p.name === "Midnight")!;
-  for (const [k, v] of Object.entries(preset.values)) assert.equal(s.values.mandala[k], v);
-  assert.deepEqual(s.values.humanDesign, before.humanDesign);
-  assert.deepEqual(s.values.astrology, before.astrology);
-  assert.deepEqual(dirtySystems(s), ["mandala"]);
-  let h = initChartDesignEditorState(makeSet(false));
-  h = applyEditorPreset(h, "humanDesign", "Warm Sunset");
-  assert.equal(h.values.humanDesign.headCenterColor, base.headCenterColor);
-  assert.equal(applyEditorPreset(h, "humanDesign", "Not a preset"), h);
+check("each system gets only its own preset values; everything else comes from the Default", () => {
+  const def = makeSet(true);
+  for (const starter of CHART_DESIGN_STARTERS) {
+    for (const system of ["humanDesign", "mandala", "astrology"] as const) {
+      const preset = CHART_DESIGN_PRESETS[system].find((p) => p.name === starter.name)!;
+      assert.deepEqual(starterPresetValues(starter.key, system), preset.values, `${starter.key}/${system}`);
+      const values = starterSystemValues(def.designs[system]!, starter.key, system);
+      for (const [k, v] of Object.entries(preset.values)) assert.equal(values[k], v, `${starter.key}/${system}.${k}`);
+      for (const [k, v] of Object.entries(def.designs[system]!)) {
+        if (["id", "subAccountId", "agencyId", "system", "name", "isDefault", "ownerSetId", "createdAt", "updatedAt"].includes(k)) {
+          assert.equal(k in values, false, `${k} must not be copied`);
+        } else if (!(k in preset.values)) assert.deepEqual(values[k], v, `${starter.key}/${system}.${k} should come from the Default`);
+      }
+    }
+  }
+  // Human Design colors never land on Mandala/Astrology: the Mandala record keeps its own (Default) center colors etc.
+  const mandala = starterSystemValues(makeSet(true).designs.mandala!, "warm-sunset", "mandala");
+  assert.equal(mandala.channelsColor, base.channelsColor);
+  assert.equal(mandala.chartDefinedColor, "#c2410c"); // Warm Sunset's own Mandala value
+  const astro = starterSystemValues(makeSet(true).designs.astrology!, "midnight", "astrology");
+  assert.equal(astro.chartDefinedColor, base.chartDefinedColor);
+  assert.equal(astro.houseSystem, "whole"); // copied from the Default record as is; not a design setting
 });
-check("a preset is a starting point, not a saved design: nothing persists until Save", () => {
-  let s = initChartDesignEditorState(makeSet(false));
-  s = applyEditorPreset(s, "astrology", "Monochrome");
-  s = setEditorField(s, "astrology", "backgroundColor", "#eeeeee");
-  assert.deepEqual(buildEditorSavePayload(s), { astrology: { wheelAccentColor: "#27272a", backgroundColor: "#eeeeee" } });
+function setsFor(...extra: Partial<ChartDesignSet>[]): ChartDesignSet[] {
+  const def = makeSet(true);
+  const { designs: _d, ...defSet } = def;
+  void _d;
+  return [defSet, ...extra.map((e, i) => ({ ...defSet, id: `custom${i}`, isDefault: false, name: "Custom", members: { humanDesign: "x", mandala: "y", astrology: "z", frequency: null }, ...e }) as ChartDesignSet)];
+}
+const defDesigns = Object.values(makeSet(true).designs) as ChartDesign[];
+check("plans four complete, independent designs with deterministic ids from the Default", () => {
+  const plan = planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: setsFor(), marker: null });
+  assert.equal(plan.status, "ready");
+  assert.deepEqual(plan.creates.map((c) => [c.key, c.name, c.setId]), CHART_DESIGN_STARTERS.map((s) => [s.key, s.name, starterSetId("sa", s.key)]));
+  const ids = plan.creates.flatMap((c) => Object.values(c.members).map((m) => m.id));
+  assert.equal(new Set(ids).size, 12, "12 distinct records — nothing shared");
+  for (const c of plan.creates) {
+    assert.deepEqual(Object.keys(c.members).sort(), ["astrology", "humanDesign", "mandala"]);
+    assert.deepEqual(Object.values(c.members).map((m) => m.copiedFrom).sort(), ["as", "hd", "md"]);
+  }
+});
+check("name collisions: the workspace's own design is untouched; the ready-made one gets a distinct name", () => {
+  const plan = planStarterDesigns({
+    subAccountId: "sa",
+    designs: defDesigns,
+    sets: setsFor({ name: "monochrome " }, { id: "c2", name: "Midnight" }, { id: "c3", name: "Midnight (ready-made)" }),
+    marker: null,
+  });
+  const byKey = Object.fromEntries(plan.creates.map((c) => [c.key, c]));
+  assert.equal(byKey.monochrome.name, "Monochrome (ready-made)");
+  assert.equal(byKey.monochrome.renamedBecauseTaken, "Monochrome");
+  assert.equal(byKey.midnight.name, "Midnight (ready-made 2)");
+  assert.equal(byKey["magnetix-violet"].name, "Magnetix Violet");
+});
+check("idempotent: already-added (even if deleted since) or existing ready-made designs are never added again", () => {
+  const marked = planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: setsFor(), marker: { version: 1, seeded: ["magnetix-violet", "monochrome"] } });
+  assert.deepEqual(marked.creates.map((c) => c.key), ["warm-sunset", "midnight"]);
+  const existing = planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: setsFor({ id: "renamedStarter", name: "My Sunset", starter: { key: "warm-sunset", version: 1 } }), marker: null });
+  assert.equal(existing.creates.some((c) => c.key === "warm-sunset"), false);
+  const all = planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: setsFor(), marker: { version: 1, seeded: CHART_DESIGN_STARTERS.map((x) => x.key) } });
+  assert.equal(all.status, "nothing-to-do");
+});
+check("unmigrated or incomplete workspaces are never seeded", () => {
+  assert.equal(planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: [], marker: null }).status, "not-migrated");
+  const broken = setsFor();
+  broken[0] = { ...broken[0], members: { ...broken[0].members, mandala: "missing" } };
+  assert.equal(planStarterDesigns({ subAccountId: "sa", designs: defDesigns, sets: broken, marker: null }).status, "blocked");
+});
+check("the editor has no color presets any more", () => {
+  for (const file of ["src/components/energetic-decoder/chart-design-editor.tsx", "src/components/energetic-decoder/chart-design-controls.tsx", "src/lib/energetics/chart-design-editor-state.ts"]) {
+    const src = readFileSync(file, "utf8");
+    for (const banned of ["Color presets", "ChartDesignPresetChips", "applyEditorPreset", "CHART_DESIGN_PRESETS", "chart-design-presets"]) {
+      assert.equal(src.includes(banned), false, `${file} still contains ${banned}`);
+    }
+  }
 });
 
 console.log("\nUnsaved-changes guard");
