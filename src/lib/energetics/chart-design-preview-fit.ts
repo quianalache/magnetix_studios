@@ -25,8 +25,11 @@ export const CHART_PREVIEW_MAX_SCALE = {
 /** Below this workspace width the controls and preview stack instead of sitting side by side. */
 export const EDITOR_TWO_COLUMN_MIN_WIDTH = 896;
 
-/** Shortest the side-by-side workspace gets; on short windows the page scrolls rather than squashing the preview. */
-export const EDITOR_WORKSPACE_MIN_HEIGHT = 440;
+/** Stacked (narrow) layout: the preview never takes more than this much height. */
+export const STACKED_PREVIEW_MAX_HEIGHT = 560;
+
+/** Shortest the sticky preview's chart area gets on very short windows. */
+export const STICKY_PREVIEW_MIN_HEIGHT = 280;
 
 /**
  * The uniform scale that fits a chart of natural size into a box.
@@ -48,27 +51,18 @@ export function previewFitScale(input: {
 }
 
 /**
- * Height for the side-by-side workspace: from its own top to the bottom of
- * the scrolling page area (as if scrolled to the top), never below the minimum.
+ * Tallest the chart may be inside the sticky preview card: the visible page
+ * area (it sticks inside the page's top padding) minus that padding at both
+ * ends and the card's own title row/padding — so the whole card always fits
+ * on screen while the controls scroll. Never below the minimum.
  */
-export function editorWorkspaceHeight(input: { workspaceTop: number; areaBottom: number; minHeight?: number }): number {
-  const { workspaceTop, areaBottom, minHeight = EDITOR_WORKSPACE_MIN_HEIGHT } = input;
-  return Math.max(minHeight, Math.floor(areaBottom - workspaceTop));
-}
-
-/**
- * Height for the side-by-side workspace when the editor's tab bar is sticky:
- * the page area's visible height, minus the bar, the gap between bar and
- * workspace, and any bottom padding — i.e. exactly the room left once the
- * header above has scrolled out of view. Never below the minimum.
- */
-export function editorWorkspaceHeightBelowStickyBar(input: {
+export function stickyPreviewChartMaxHeight(input: {
   areaHeight: number;
-  stickyBarHeight: number;
-  gapAbove: number;
-  bottomGap: number;
+  areaPaddingTop: number;
+  areaPaddingBottom: number;
+  cardChrome: number;
   minHeight?: number;
 }): number {
-  const { areaHeight, stickyBarHeight, gapAbove, bottomGap, minHeight = EDITOR_WORKSPACE_MIN_HEIGHT } = input;
-  return Math.max(minHeight, Math.floor(areaHeight - stickyBarHeight - gapAbove - bottomGap));
+  const { areaHeight, areaPaddingTop, areaPaddingBottom, cardChrome, minHeight = STICKY_PREVIEW_MIN_HEIGHT } = input;
+  return Math.max(minHeight, Math.floor(areaHeight - areaPaddingTop - areaPaddingBottom - cardChrome));
 }

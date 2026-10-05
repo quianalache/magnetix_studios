@@ -5,28 +5,29 @@ import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   EDITOR_TWO_COLUMN_MIN_WIDTH,
-  editorWorkspaceHeight,
-  editorWorkspaceHeightBelowStickyBar,
+  STACKED_PREVIEW_MAX_HEIGHT,
   previewFitScale,
+  stickyPreviewChartMaxHeight,
 } from "@/lib/energetics/chart-design-preview-fit";
 
 /**
  * The shared Chart Design editor shell (2026-10). Every chart system uses
- * the same workspace: its own controls on the left (scrolling on their own)
- * and its live preview on the right (always visible). Only the layout is
- * shared — each system passes in its own controls and its own renderer.
- * Frequency will slot into the same shell once its editor exists.
+ * the same page: its own controls on the left and its live preview on the
+ * right. Only the layout is shared — each system passes in its own controls
+ * and its own renderer. Frequency will slot into the same shell later.
  *
- * Wide workspaces (≥ EDITOR_TWO_COLUMN_MIN_WIDTH) sit side by side. With a
- * sticky bar (the editor's tabs) they fill the page area below that bar: the
- * header above scrolls away and the workspace gets nearly the full height.
- * The controls column scrolls on its own; at its ends the scroll carries on
- * to the page (no overscroll trap), so the header is always reachable.
- * Narrower ones stack: preview first, then the controls, scrolling with the page.
+ * One continuous page (no fixed-height box, no inner scrollbars): the header,
+ * tabs and controls scroll with the page, and on wide screens only the
+ * preview card is sticky — it stays beside the controls, sized to fit the
+ * visible page area, and stops at the end of the editor. Narrow screens
+ * stack (preview first, then controls) with nothing sticky.
  */
 
-function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>, stickyBarRef?: RefObject<HTMLElement | null>) {
-  const [layout, setLayout] = useState<{ wide: boolean; height: number }>({ wide: true, height: 0 });
+function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>, cardRef: RefObject<HTMLElement | null>) {
+  const [layout, setLayout] = useState<{ wide: boolean; previewMaxHeight: number }>({
+    wide: true,
+    previewMaxHeight: STACKED_PREVIEW_MAX_HEIGHT,
+  });
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -35,47 +36,32 @@ function useWorkspaceLayout(ref: RefObject<HTMLDivElement | null>, stickyBarRef?
 
     const update = () => {
       const wide = el.clientWidth >= EDITOR_TWO_COLUMN_MIN_WIDTH;
-      let height = 0;
-      if (wide) {
-        const rect = el.getBoundingClientRect();
-        if (area) {
-          const areaRect = area.getBoundingClientRect();
-          // Bottom padding/borders of the page area and every wrapper between it and the workspace.
-          let bottomGap = 0;
-          for (let node: HTMLElement | null = el.parentElement; node; node = node === area ? null : node.parentElement) {
-            const cs = getComputedStyle(node);
-            bottomGap += (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
-          }
-          const bar = stickyBarRef?.current;
-          height = bar
-            ? // Header scrolls away; the workspace fills the page area below the sticky bar.
-              editorWorkspaceHeightBelowStickyBar({
-                areaHeight: area.clientHeight,
-                stickyBarHeight: bar.offsetHeight,
-                gapAbove: parseFloat(getComputedStyle(el).marginTop) || 0,
-                bottomGap,
-              })
-            : editorWorkspaceHeight({ workspaceTop: rect.top + area.scrollTop, areaBottom: areaRect.bottom - bottomGap });
-        } else {
-          height = editorWorkspaceHeight({ workspaceTop: rect.top + window.scrollY, areaBottom: window.innerHeight - 24 });
-        }
+      let previewMaxHeight = STACKED_PREVIEW_MAX_HEIGHT;
+      const card = cardRef.current;
+      const box = card?.querySelector<HTMLElement>("[data-chart-preview-box]");
+      if (wide && card && box) {
+        const cs = area ? getComputedStyle(area) : null;
+        previewMaxHeight = stickyPreviewChartMaxHeight({
+          areaHeight: area ? area.clientHeight : window.innerHeight,
+          areaPaddingTop: cs ? parseFloat(cs.paddingTop) || 0 : 0,
+          areaPaddingBottom: cs ? parseFloat(cs.paddingBottom) || 0 : 0,
+          // The card's own title row, padding and borders around the chart box.
+          cardChrome: card.offsetHeight - box.offsetHeight,
+        });
       }
-      setLayout((prev) => (prev.wide === wide && prev.height === height ? prev : { wide, height }));
+      setLayout((prev) => (prev.wide === wide && prev.previewMaxHeight === previewMaxHeight ? prev : { wide, previewMaxHeight }));
     };
 
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    // The header above can change height (unsaved / view-only notices), which moves the workspace.
-    if (el.parentElement) ro.observe(el.parentElement);
     if (area) ro.observe(area);
-    if (stickyBarRef?.current) ro.observe(stickyBarRef.current);
     window.addEventListener("resize", update);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [ref, stickyBarRef]);
+  }, [ref, cardRef]);
 
   return layout;
 }
@@ -85,106 +71,95 @@ export function ChartDesignEditorWorkspace({
   preview,
   previewTitle,
   previewNote,
-  stickyBarRef,
 }: {
   controls: ReactNode;
-  /** Render-prop so the preview can fill the box in the side-by-side layout and size itself by width when stacked. */
-  preview: (fit: { fill: boolean }) => ReactNode;
+  /** Render-prop: the preview fits the card's width, never taller than `maxHeight` (the visible page area when sticky). */
+  preview: (fit: { maxHeight: number }) => ReactNode;
   previewTitle: string;
   previewNote?: string;
-  /** The editor's sticky tab bar: when given, the side-by-side workspace is sized to fill the page area below it once the header has scrolled away. */
-  stickyBarRef?: RefObject<HTMLElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { wide, height } = useWorkspaceLayout(ref, stickyBarRef);
-
-  const previewCard = (
-    <section
-      aria-label={previewTitle}
-      className={cn("flex min-w-0 flex-col rounded-2xl border bg-card p-4", wide && "h-full min-h-0")}
-    >
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold">{previewTitle}</h2>
-        {previewNote && <span className="text-xs text-muted-foreground">{previewNote}</span>}
-      </div>
-      <div className={cn("rounded-xl border bg-white p-2", wide && "min-h-0 flex-1")}>{preview({ fill: wide })}</div>
-    </section>
-  );
+  const cardRef = useRef<HTMLElement>(null);
+  const { wide, previewMaxHeight } = useWorkspaceLayout(ref, cardRef);
 
   // One root element in both layouts, so the size observers never lose it.
   return (
     <div
       ref={ref}
       data-editor-layout={wide ? "side-by-side" : "stacked"}
-      className={cn(wide ? "grid grid-cols-[minmax(300px,340px)_minmax(0,1fr)] gap-5" : "flex flex-col gap-4")}
-      style={wide && height ? { height } : undefined}
+      className={cn(wide ? "grid grid-cols-[minmax(300px,min(30%,360px))_minmax(0,1fr)] items-start gap-4" : "flex flex-col gap-4")}
     >
-      <div
-        data-editor-controls
-        className={cn("space-y-3", wide ? "min-h-0 overflow-y-auto pr-1" : "order-2")}
-      >
+      <div data-editor-controls className={cn("min-w-0 space-y-3", !wide && "order-2")}>
         {controls}
       </div>
-      <div className={cn("min-w-0", wide ? "h-full min-h-0" : "order-1")}>{previewCard}</div>
+      {/* Only the preview is sticky; it stops at the end of this grid, so it never overlaps what follows. */}
+      <section
+        ref={cardRef}
+        aria-label={previewTitle}
+        data-editor-preview
+        className={cn("min-w-0 rounded-2xl border bg-card p-2", wide ? "sticky top-0" : "order-1")}
+      >
+        <div className="mb-2 flex items-baseline justify-between gap-2 px-2 pt-1">
+          <h2 className="text-sm font-semibold">{previewTitle}</h2>
+          {previewNote && <span className="text-xs text-muted-foreground">{previewNote}</span>}
+        </div>
+        <div data-chart-preview-box className="overflow-hidden rounded-xl">
+          {preview({ maxHeight: previewMaxHeight })}
+        </div>
+      </section>
     </div>
   );
 }
 
 /**
- * Lays a chart out at its natural width, then scales it uniformly to fit:
- * `fill` = fit inside the box's width AND height (side by side);
- * otherwise fit the width, capped at `maxHeight` (stacked).
+ * Lays a chart out at its natural width, then scales it uniformly to fit the
+ * box's width, never taller than `maxHeight`. Uniform scaling can't distort,
+ * and the box is exactly as tall as the scaled chart, so nothing is cropped.
  */
 export function ChartPreviewFit({
   naturalWidth,
   maxScale = 1,
-  fill,
   maxHeight,
   children,
 }: {
   naturalWidth: number;
   maxScale?: number;
-  fill: boolean;
-  maxHeight?: number;
+  maxHeight: number;
   children: ReactNode;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ boxWidth: 0, boxHeight: 0, naturalHeight: 0 });
+  const [size, setSize] = useState({ boxWidth: 0, naturalHeight: 0 });
 
   useLayoutEffect(() => {
     const box = boxRef.current;
     const inner = innerRef.current;
     if (!box || !inner) return;
     const update = () => {
-      const next = { boxWidth: box.clientWidth, boxHeight: fill ? box.clientHeight : 0, naturalHeight: inner.offsetHeight };
-      setSize((prev) =>
-        prev.boxWidth === next.boxWidth && prev.boxHeight === next.boxHeight && prev.naturalHeight === next.naturalHeight ? prev : next,
-      );
+      const next = { boxWidth: box.clientWidth, naturalHeight: inner.offsetHeight };
+      setSize((prev) => (prev.boxWidth === next.boxWidth && prev.naturalHeight === next.naturalHeight ? prev : next));
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(box);
     ro.observe(inner);
     return () => ro.disconnect();
-  }, [fill]);
+  }, []);
 
-  const cap = fill ? size.boxHeight : (maxHeight ?? 0);
-  const scale = previewFitScale({ boxWidth: size.boxWidth, boxHeight: cap, naturalWidth, naturalHeight: size.naturalHeight, maxScale });
+  const scale = previewFitScale({ boxWidth: size.boxWidth, boxHeight: maxHeight, naturalWidth, naturalHeight: size.naturalHeight, maxScale });
 
   return (
     <div
       ref={boxRef}
       data-chart-preview-scale={scale ? scale.toFixed(3) : undefined}
-      className={cn("relative w-full overflow-hidden", fill && "h-full")}
-      style={fill ? undefined : { height: scale ? Math.ceil(size.naturalHeight * scale) : 320 }}
+      className="relative w-full overflow-hidden"
+      style={{ height: scale ? Math.ceil(size.naturalHeight * scale) : 320 }}
     >
       <div
         ref={innerRef}
         style={{
           position: "absolute",
           left: "50%",
-          // Top-aligned: a chart limited by width starts right under the preview title, with any spare room below it.
           top: 0,
           width: naturalWidth,
           transform: `translate(-50%, 0) scale(${scale || 1})`,

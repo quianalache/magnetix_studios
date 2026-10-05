@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -64,8 +64,9 @@ import { CHART_PREVIEW_MAX_SCALE, CHART_PREVIEW_NATURAL_WIDTH } from "@/lib/ener
  * own — nothing here copies one system's colors into another.
  *
  * Every system uses the same workspace (chart-design-editor-workspace.tsx):
- * its own controls on the left, scrolling on their own, and its live preview
- * on the right, scaled to fit and always visible.
+ * one continuous page — header, tabs and the system's own controls scroll
+ * with the page — and its live preview on the right, sticky beside the
+ * controls and scaled to fit.
  *
  * Ready-made looks (Magnetix Violet, Monochrome, Warm Sunset, Midnight) are
  * whole designs in the library, not editor presets: choose one there, then
@@ -93,9 +94,6 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   Wheel: Orbit,
 };
 
-/** Stacked (narrow) layout: the preview never takes more than this much height. */
-const STACKED_PREVIEW_MAX_HEIGHT = 560;
-
 /** The first two sections of each system start expanded. */
 function defaultOpenSections(system: ChartDesignSystem): string[] {
   return CHART_DESIGN_SECTIONS[system].slice(0, 2).map((s) => s.title);
@@ -113,23 +111,6 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   const [sampleAstro, setSampleAstro] = useState<AstrologyChart | null>(null);
   // Which control sections are expanded, per system — kept while switching tabs.
   const [openSections, setOpenSections] = useState<Partial<Record<ChartDesignSystem, string[]>>>({});
-
-  const tabBarRef = useRef<HTMLDivElement>(null);
-  const headerActionsRef = useRef<HTMLDivElement>(null);
-  const [headerActionsVisible, setHeaderActionsVisible] = useState(true);
-
-  // Is the header's Duplicate / Save row still on screen? (Drives the compact Save in the sticky tab bar.)
-  useEffect(() => {
-    const el = headerActionsRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([entry]) => setHeaderActionsVisible(entry.isIntersecting), {
-      root: el.closest("main"),
-      // The sticky tab bar covers the top of the page area, so count the row as hidden once it slides under it.
-      rootMargin: `-${tabBarRef.current?.offsetHeight ?? 48}px 0px 0px 0px`,
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [isAdmin]);
 
   const libraryHref = saPath("/energetic-decoder?tab=chartDesigns");
   const dirty = isEditorDirty(state);
@@ -213,7 +194,9 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-[1400px] space-y-4 rounded-2xl">
+    // The editor trims momentum-scope's 1.5rem padding to 0.75rem so the preview gets more width
+    // (momentum-scope is unlayered CSS, so a Tailwind padding class wouldn't win — hence the inline style).
+    <div className="momentum-scope mx-auto w-full max-w-[1400px] space-y-4 rounded-2xl" style={{ padding: "0.75rem" }}>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
@@ -242,7 +225,7 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           </p>
         </div>
         {!readOnly && (
-          <div ref={headerActionsRef} className="flex shrink-0 items-center gap-2 pt-6">
+          <div className="flex shrink-0 items-center gap-2 pt-6">
             <Button variant="outline" onClick={() => void duplicate()} disabled={duplicating || saving}>
               {duplicating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Copy className="mr-1.5 h-4 w-4" />}
               Duplicate
@@ -266,65 +249,45 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
         </div>
       )}
 
-      {/*
-        System tabs — sticky at the top of the page area, so once the header
-        above scrolls away the tabs stay put and the workspace below gets the
-        rest of the height. The negative offset matches <main>'s padding
-        (p-4 / md:p-6): sticky offsets count from inside that padding, so this
-        pins the bar flush to the top edge. When the header's Save scrolls out of view, a
-        compact Save joins the bar so it's always one click away.
-      */}
-      <div ref={tabBarRef} data-editor-sticky-bar className="sticky -top-4 z-20 bg-background md:-top-6">
-        <div className="flex flex-wrap items-center gap-x-1 border-b">
-          {TABS.map((t) => {
-            const Icon = t.icon;
-            const isFrequency = t.key === "frequency";
-            const hasChanges = !isFrequency && changed.includes(t.key as ChartDesignSystem);
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={cn(
-                  "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
-                  tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {t.label}
-                {isFrequency && (
-                  <span className="rounded-full border border-dashed px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Coming soon
-                  </span>
-                )}
-                {hasChanges && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="unsaved changes" />}
-              </button>
-            );
-          })}
-          {!readOnly && !headerActionsVisible && (
-            <div data-editor-compact-save className="ml-auto flex items-center gap-2 py-1">
-              {dirty && <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Unsaved changes</span>}
-              <Button size="sm" onClick={() => void save()} disabled={!dirty || saving}>
-                {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
-                Save Changes
-              </Button>
-            </div>
-          )}
-        </div>
+      {/* System tabs — in normal page flow: they scroll away with the header. */}
+      <div data-editor-tabs className="flex flex-wrap gap-1 border-b">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          const isFrequency = t.key === "frequency";
+          const hasChanges = !isFrequency && changed.includes(t.key as ChartDesignSystem);
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
+                tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {t.label}
+              {isFrequency && (
+                <span className="rounded-full border border-dashed px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Coming soon
+                </span>
+              )}
+              {hasChanges && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="unsaved changes" />}
+            </button>
+          );
+        })}
       </div>
 
       {system ? (
         <ChartDesignEditorWorkspace
           key={system}
-          stickyBarRef={tabBarRef}
           previewTitle={`${CHART_SYSTEM_LABEL[system]} preview`}
           previewNote="Sample chart · updates as you edit"
-          preview={({ fill }) => (
+          preview={({ maxHeight }) => (
             <ChartPreviewFit
               naturalWidth={CHART_PREVIEW_NATURAL_WIDTH[system]}
               maxScale={CHART_PREVIEW_MAX_SCALE[system]}
-              fill={fill}
-              maxHeight={STACKED_PREVIEW_MAX_HEIGHT}
+              maxHeight={maxHeight}
             >
               <ChartDesignPreview
                 system={system}
