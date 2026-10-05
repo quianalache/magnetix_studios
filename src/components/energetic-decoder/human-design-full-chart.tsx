@@ -237,7 +237,7 @@ function ActivationColumn({
     // columns starting at the grid's top edge while the chart started
     // noticeably lower, reading as two unrelated pieces instead of one
     // chart composition.
-    <div className="space-y-2.5 pt-11">
+    <div data-hd-rail className="space-y-2.5 pt-11">
       <p
         className={`mb-2 text-xs font-semibold uppercase tracking-wide ${align === "right" ? "text-right" : ""}`}
         style={{ color }}
@@ -299,15 +299,17 @@ export function HumanDesignFullChart({
        * 200 | 360 | 200 with 16px gaps. This pass gives more of the width to
        * the BodyGraph itself, so the gate numbers inside the centers read
        * larger: 170px rails (a planet row needs ~135px with 8px side
-       * padding, so full names never truncate) | 440px center (BodyGraph +
-       * Variables) | 170px rails, 12px gaps, centered; three columns from
-       * 804px of inner width (836px with this box's 16px padding — the
-       * Chart Design editor lays the chart out at that natural width,
-       * CHART_PREVIEW_NATURAL_WIDTH). Stacked (narrow) layouts keep the
+       * padding, so full names never truncate) on the outer edges, the
+       * center taking all the rest of the width; three columns from 804px
+       * of inner width. The BodyGraph is centered in that column at up to
+       * --hd-bodygraph-max (default 440px) — the Chart Design editor sets
+       * it to the largest size that fits the visible height, so the chart
+       * fills its canvas instead of growing taller and shrinking (see
+       * humanDesignFillLayout). Stacked (narrow) layouts keep the
        * BodyGraph's 360px cap. The BodyGraph SVG itself
        * (human-design-chart.tsx) and the PDF layout are unchanged.
        */}
-      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_440px_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:justify-center @min-[804px]/hdfc:gap-x-3">
+      <div className="grid grid-cols-1 gap-6 @min-[804px]/hdfc:grid-cols-[170px_minmax(0,1fr)_170px] @min-[804px]/hdfc:items-start @min-[804px]/hdfc:gap-x-3">
         <ActivationColumn
           side="Design"
           activations={profile.design}
@@ -318,7 +320,7 @@ export function HumanDesignFullChart({
           align="left"
         />
 
-        <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[440px]">
+        <div className="mx-auto w-full max-w-[360px] @min-[804px]/hdfc:max-w-[var(--hd-bodygraph-max,440px)]">
           {/*
            * Correction-pass-2, 2026-08-17: the single flex-wrap row of 4
            * badges (her prior fix's own scoping to the chart's own
@@ -332,7 +334,7 @@ export function HumanDesignFullChart({
            * calculated arrows/directions/colors as before, arranged as
            * two fixed 2-item stacks instead of 4 items that could wrap.
            */}
-          <div className="mb-1 flex items-start justify-between gap-4">
+          <div data-hd-variables className="mb-1 flex items-start justify-between gap-4">
             <div className="space-y-1">
               <ArrowBadge label="Digestion" source="Design Sun" value={arrows?.digestion} color={arrowColor} style={arrowStyle} align="left" />
               <ArrowBadge label="Environment" source="Design Node" value={arrows?.environment} color={arrowColor} style={arrowStyle} align="left" />

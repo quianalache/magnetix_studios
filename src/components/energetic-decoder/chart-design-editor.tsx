@@ -53,6 +53,7 @@ import {
   ChartDesignControlSection,
   ChartDesignEditorWorkspace,
   ChartPreviewFit,
+  HumanDesignPreviewFit,
 } from "@/components/energetic-decoder/chart-design-editor-workspace";
 import { CHART_PREVIEW_MAX_SCALE, CHART_PREVIEW_NATURAL_WIDTH } from "@/lib/energetics/chart-design-preview-fit";
 
@@ -285,12 +286,8 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           key={system}
           previewTitle={`${CHART_SYSTEM_LABEL[system]} preview`}
           previewNote="Sample chart · updates as you edit"
-          preview={({ maxHeight }) => (
-            <ChartPreviewFit
-              naturalWidth={CHART_PREVIEW_NATURAL_WIDTH[system]}
-              maxScale={CHART_PREVIEW_MAX_SCALE[system]}
-              maxHeight={maxHeight}
-            >
+          preview={({ maxHeight }) => {
+            const chart = (
               <ChartDesignPreview
                 system={system}
                 design={previews[system]}
@@ -300,8 +297,18 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
                 size="large"
                 className="w-full"
               />
-            </ChartPreviewFit>
-          )}
+            );
+            // Human Design fills the preview's width (rails at the edges, the BodyGraph as large as the visible height allows); the square charts scale to fit.
+            return system === "humanDesign" ? (
+              <HumanDesignPreviewFit maxScale={CHART_PREVIEW_MAX_SCALE.humanDesign} maxHeight={maxHeight}>
+                {chart}
+              </HumanDesignPreviewFit>
+            ) : (
+              <ChartPreviewFit naturalWidth={CHART_PREVIEW_NATURAL_WIDTH[system]} maxScale={CHART_PREVIEW_MAX_SCALE[system]} maxHeight={maxHeight}>
+                {chart}
+              </ChartPreviewFit>
+            );
+          }}
           controls={
             <>
               {CHART_DESIGN_SECTIONS[system].map((section) => {

@@ -19,6 +19,55 @@ export const CHART_PREVIEW_NATURAL_WIDTH = {
   astrology: 640,
 } as const;
 
+/**
+ * Human Design full chart, fixed horizontal parts (human-design-full-chart.tsx):
+ * 16px padding each side, two 170px rails, two 12px gaps — 396px. The center
+ * (BodyGraph + Variables) gets everything else.
+ */
+export const HD_FULL_CHART_FIXED_WIDTH = 2 * 16 + 2 * 170 + 2 * 12;
+/** The BodyGraph is never laid out smaller than Option B's 360px or (when the width allows) narrower than 440px of center. */
+export const HD_MIN_BODYGRAPH = 360;
+export const HD_MIN_CENTER = 440;
+
+/**
+ * Human Design preview layout that USES the preview's whole width.
+ *
+ * The chart is laid out exactly as wide as the preview box (÷ scale), so the
+ * cream canvas always fills it and the rails sit at its edges. The scale is
+ * the largest that keeps the rails at least as legible as at the minimum
+ * 836px width, keeps the rails within the visible height, and still fits a
+ * 360px BodyGraph. The BodyGraph then takes the largest size that fits both
+ * the center width and the visible height — the chart never grows taller
+ * than the preview and never makes the whole composition scale down.
+ *
+ * `railsHeight` / `centerFixedHeight` (padding + Variables above the
+ * BodyGraph, at natural size) and `bodygraphAspect` (height ÷ width of the
+ * BodyGraph box) are measured from the rendered chart.
+ */
+export function humanDesignFillLayout(input: {
+  boxWidth: number;
+  maxHeight: number;
+  railsHeight: number;
+  centerFixedHeight: number;
+  bodygraphAspect: number;
+  maxScale?: number;
+}): { scale: number; naturalWidth: number; bodygraphMax: number } | null {
+  const { boxWidth, maxHeight, railsHeight, centerFixedHeight, bodygraphAspect, maxScale = 1 } = input;
+  if (!(boxWidth > 0) || !(maxHeight > 0) || !(railsHeight > 0) || !(bodygraphAspect > 0)) return null;
+  const minNatural = HD_FULL_CHART_FIXED_WIDTH + HD_MIN_CENTER;
+  const scale = Math.min(
+    maxScale,
+    boxWidth / minNatural,
+    maxHeight / railsHeight,
+    maxHeight / (centerFixedHeight + bodygraphAspect * HD_MIN_BODYGRAPH),
+  );
+  const naturalWidth = boxWidth / scale;
+  const centerWidth = naturalWidth - HD_FULL_CHART_FIXED_WIDTH;
+  const byHeight = (maxHeight / scale - centerFixedHeight) / bodygraphAspect;
+  const bodygraphMax = Math.floor(Math.max(HD_MIN_BODYGRAPH, Math.min(centerWidth, byHeight)));
+  return { scale, naturalWidth, bodygraphMax };
+}
+
 /** Largest scale a preview may grow to (text stays crisp; square charts may grow a little). */
 export const CHART_PREVIEW_MAX_SCALE = {
   humanDesign: 1,
