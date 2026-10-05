@@ -12,6 +12,7 @@ import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-f
 import { CHART_DESIGN_PRESETS } from "../src/lib/energetics/chart-design-presets";
 import {
   buildEditorSavePayload,
+  dirtyFields,
   dirtySystems,
   editorNameError,
   initChartDesignEditorState,
@@ -31,6 +32,13 @@ import {
 } from "../src/lib/energetics/chart-design-starters";
 import type { ChartDesignSet } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SECTIONS } from "../src/components/energetic-decoder/chart-design-controls";
+import {
+  CHART_PREVIEW_MAX_SCALE,
+  CHART_PREVIEW_NATURAL_WIDTH,
+  EDITOR_WORKSPACE_MIN_HEIGHT,
+  editorWorkspaceHeight,
+  previewFitScale,
+} from "../src/lib/energetics/chart-design-preview-fit";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -257,6 +265,61 @@ check("the editor has no color presets any more", () => {
       assert.equal(src.includes(banned), false, `${file} still contains ${banned}`);
     }
   }
+});
+
+console.log("\nEditor layout (shared shell: controls left, live preview right)");
+check("the preview scales uniformly to fit both width and height — never cropped, never distorted", () => {
+  // width-bound
+  assert.equal(previewFitScale({ boxWidth: 540, boxHeight: 900, naturalWidth: 1080, naturalHeight: 700 }), 0.5);
+  // height-bound
+  assert.equal(previewFitScale({ boxWidth: 800, boxHeight: 320, naturalWidth: 640, naturalHeight: 640 }), 0.5);
+  // never above the system's cap; width-only when no height is given (stacked layout)
+  assert.equal(previewFitScale({ boxWidth: 2000, boxHeight: 2000, naturalWidth: 640, naturalHeight: 640, maxScale: 1.2 }), 1.2);
+  assert.equal(previewFitScale({ boxWidth: 320, boxHeight: 0, naturalWidth: 640, naturalHeight: 9999 }), 0.5);
+  // nothing shown until sizes are known
+  assert.equal(previewFitScale({ boxWidth: 0, boxHeight: 500, naturalWidth: 640, naturalHeight: 640 }), 0);
+  assert.equal(previewFitScale({ boxWidth: 500, boxHeight: 500, naturalWidth: 640, naturalHeight: 0 }), 0);
+  for (const [w, h, nw, nh] of [[708, 490, 1080, 672], [548, 390, 640, 640], [940, 670, 1080, 672]]) {
+    const k = previewFitScale({ boxWidth: w, boxHeight: h, naturalWidth: nw, naturalHeight: nh, maxScale: 1.2 });
+    assert.ok(nw * k <= w + 1e-9 && nh * k <= h + 1e-9, "scaled chart fits inside the box");
+  }
+  for (const system of ["humanDesign", "mandala", "astrology"] as const) assert.ok(CHART_PREVIEW_MAX_SCALE[system] >= 1);
+});
+check("Human Design previews at a width that keeps its Design | BodyGraph | Personality columns", () => {
+  const renderer = readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8");
+  // The renderer switches to three columns at its own container's @5xl (64rem = 1024px of inner width) and pads 1rem each side.
+  assert.ok(renderer.includes("@5xl/hdfc:grid-cols-["), "renderer breakpoint moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
+  assert.ok(/@container\/hdfc rounded-2xl p-4/.test(renderer), "renderer padding moved — re-check CHART_PREVIEW_NATURAL_WIDTH");
+  assert.ok(CHART_PREVIEW_NATURAL_WIDTH.humanDesign - 32 >= 1024);
+});
+check("the side-by-side workspace fills the page area below the header, with a floor for short windows", () => {
+  assert.equal(editorWorkspaceHeight({ workspaceTop: 278, areaBottom: 876 }), 598);
+  assert.equal(editorWorkspaceHeight({ workspaceTop: 600, areaBottom: 700 }), EDITOR_WORKSPACE_MIN_HEIGHT);
+});
+check("each section can tell whether its own fields have unsaved edits", () => {
+  let s = initChartDesignEditorState(makeSet(false));
+  assert.deepEqual(dirtyFields(s, "humanDesign"), []);
+  s = setEditorField(s, "humanDesign", "arrowStyle", "outline");
+  s = setEditorField(s, "mandala", "mandalaZodiacColor", "#000000");
+  assert.deepEqual(dirtyFields(s, "humanDesign"), ["arrowStyle"]);
+  assert.deepEqual(dirtyFields(s, "mandala"), ["mandalaZodiacColor"]);
+  assert.deepEqual(dirtyFields(s, "astrology"), []);
+});
+check("every system's sections are described, and each system keeps only its own options", () => {
+  for (const system of ["humanDesign", "mandala", "astrology"] as const) {
+    for (const section of CHART_DESIGN_SECTIONS[system]) assert.ok(section.description.trim().length > 0, `${system}/${section.title}`);
+  }
+  assert.deepEqual(CHART_DESIGN_SECTIONS.astrology.map((x) => x.title), ["Wheel", "Background"]);
+  assert.equal(CHART_DESIGN_SECTIONS.astrology.flatMap((x) => x.fields).includes("houseSystem"), false);
+  assert.equal(CHART_DESIGN_SECTIONS.mandala.flatMap((x) => x.fields).includes("arrowStyle"), false);
+});
+check("one shared shell hosts every system's controls + preview (no per-system layout copies)", () => {
+  const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
+  assert.equal(editor.match(/<ChartDesignEditorWorkspace\b/g)?.length, 1);
+  assert.equal(editor.match(/<ChartPreviewFit\b/g)?.length, 1);
+  assert.ok(editor.includes('size="large"'), "the editor previews with the real large renderers");
+  assert.ok(!/lg:col-span-|lg:grid-cols-12/.test(editor), "the old preview/controls grid is gone");
+  assert.ok(editor.includes("Frequency styling is coming soon"), "Frequency stays Coming soon");
 });
 
 console.log("\nUnsaved-changes guard");
