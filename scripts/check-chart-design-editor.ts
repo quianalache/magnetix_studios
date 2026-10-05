@@ -312,6 +312,17 @@ check("one continuous page: nothing sticky but the preview, no inner scroll box,
   assert.ok(shell.includes("grid-cols-[minmax(300px,min(30%,360px))_minmax(0,1fr)]") && shell.includes("items-start"), "controls ≈30% (300–360px), the rest goes to the preview; the preview column does not stretch");
   assert.ok(!shell.includes("bg-white p-"), "no inner white frame around the chart");
 });
+check("only the Chart Design editor runs wider (1500px), and its loading/missing states match", () => {
+  const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
+  const page = readFileSync("src/app/(dashboard)/sa/[subAccountId]/energetic-decoder/chart-designs/[setId]/page.tsx", "utf8");
+  assert.ok(editor.includes("max-w-[1500px]") && !editor.includes("max-w-[1400px]"));
+  assert.equal(page.match(/max-w-\[1500px\]/g)?.length, 2, "loading + missing states use the editor's width");
+  assert.ok(!page.includes("max-w-[1400px]"));
+  // the wider shell is this editor only — the Report Builder editor keeps the usual width
+  assert.ok(readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8").includes("max-w-[1400px]"));
+  // at 1500px (minus 0.75rem padding each side, 360px controls, 16px gap, 8px card padding + borders) Human Design reaches its natural size
+  assert.ok(1500 - 24 - 360 - 16 - 18 >= CHART_PREVIEW_NATURAL_WIDTH.humanDesign);
+});
 check("each section can tell whether its own fields have unsaved edits", () => {
   let s = initChartDesignEditorState(makeSet(false));
   assert.deepEqual(dirtyFields(s, "humanDesign"), []);

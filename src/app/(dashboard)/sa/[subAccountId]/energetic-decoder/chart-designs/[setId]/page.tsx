@@ -7,7 +7,7 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { ChartDesignEditor } from "@/components/energetic-decoder/chart-design-editor";
 import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 
-/** Full-screen unified Chart Design editor — opened from Energetic Decoder → Chart Designs (same page pattern as the Report Builder editor). */
+/** Full-screen unified Chart Design editor — opened from Energetic Decoder → Chart Designs (same page pattern as the Report Builder editor, but 1500px wide so the chart preview gets the extra room; loading/missing states match so the width never jumps). */
 export default function ChartDesignEditorPage() {
   const { subAccountId, saPath } = useSubAccount();
   const params = useParams<{ setId: string }>();
@@ -32,7 +32,7 @@ export default function ChartDesignEditorPage() {
 
   if (missing) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-[1400px] rounded-2xl p-10 text-center">
+      <div className="momentum-scope mx-auto w-full max-w-[1500px] rounded-2xl p-10 text-center">
         <p className="text-sm text-muted-foreground">That chart design doesn&apos;t exist in this workspace.</p>
         <Link href={saPath("/energetic-decoder?tab=chartDesigns")} className="mt-3 inline-block text-sm font-medium text-primary underline">
           Back to Chart Designs
@@ -40,7 +40,7 @@ export default function ChartDesignEditorPage() {
       </div>
     );
   }
-  if (!set) return <div className="mx-auto h-[640px] w-full max-w-[1400px] animate-pulse rounded-2xl bg-muted/20" />;
+  if (!set) return <div className="mx-auto h-[640px] w-full max-w-[1500px] animate-pulse rounded-2xl bg-muted/20" />;
 
   // Keyed by id so moving to a duplicate starts a fresh editor.
   return <ChartDesignEditor key={set.id} initial={set} />;

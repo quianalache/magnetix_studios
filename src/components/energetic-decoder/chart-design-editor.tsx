@@ -194,9 +194,11 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   }
 
   return (
-    // The editor trims momentum-scope's 1.5rem padding to 0.75rem so the preview gets more width
-    // (momentum-scope is unlayered CSS, so a Tailwind padding class wouldn't win — hence the inline style).
-    <div className="momentum-scope mx-auto w-full max-w-[1400px] space-y-4 rounded-2xl" style={{ padding: "0.75rem" }}>
+    // A purpose-built editing workspace, so it may run wider than the usual dashboard page (1500px vs 1400px):
+    // the extra width goes to the preview, letting Human Design reach its natural size on wide screens.
+    // The editor also trims momentum-scope's 1.5rem padding to 0.75rem (momentum-scope is unlayered CSS,
+    // so a Tailwind padding class wouldn't win — hence the inline style).
+    <div className="momentum-scope mx-auto w-full max-w-[1500px] space-y-4 rounded-2xl" style={{ padding: "0.75rem" }}>
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
