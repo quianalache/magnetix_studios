@@ -118,6 +118,7 @@ const NON_STYLE_KEYS = new Set([
   "createdAt",
   "updatedAt",
   "migration",
+  "starterCopiedFrom",
 ]);
 
 /** Every styling value of a record (all systems' fields, plus houseSystem) — used to make independent copies. */

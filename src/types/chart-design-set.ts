@@ -29,6 +29,12 @@ export interface ChartDesignSet {
   members: ChartDesignSetMembers;
   /** Present on sets created by the one-time migration (audit + rollback). */
   migration?: ChartDesignSetMigrationInfo | null;
+  /**
+   * Present on the ready-made designs (Magnetix Violet, Monochrome, Warm
+   * Sunset, Midnight — see chart-design-starters.ts). Bookkeeping only: they
+   * are ordinary, fully editable designs. Never copied to a duplicate.
+   */
+  starter?: { key: string; version: number } | null;
   createdAt: string | null;
   updatedAt: string | null;
 }

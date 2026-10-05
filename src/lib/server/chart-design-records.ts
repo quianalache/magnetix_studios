@@ -118,6 +118,7 @@ export function toSet(id: string, data: FirebaseFirestore.DocumentData): ChartDe
       frequency: null,
     },
     migration: data.migration ?? null,
+    starter: data.starter ?? null,
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
   };

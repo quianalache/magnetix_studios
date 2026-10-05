@@ -53,6 +53,7 @@ export function toPlainSet(id: string, data: DocumentData): ChartDesignSet {
       frequency: data.members?.frequency ?? null,
     },
     migration: data.migration ?? null,
+    starter: data.starter ?? null,
     createdAt: iso(data.createdAt),
     updatedAt: iso(data.updatedAt),
   };

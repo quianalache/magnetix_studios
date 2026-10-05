@@ -20,6 +20,13 @@ import {
 } from "@/lib/energetics/chart-design-fields";
 import { chartDesignSetMember, defaultChartDesignSet } from "@/lib/energetics/chart-design-resolution";
 import { pinAstrologyHouseSystem } from "@/lib/server/reading-calculation-settings-service";
+import {
+  CHART_DESIGN_STARTERS,
+  CHART_DESIGN_STARTERS_VERSION,
+  starterMemberId,
+  starterSetId,
+  starterSystemValues,
+} from "@/lib/energetics/chart-design-starters";
 
 /**
  * Unified Chart Designs (2026-10) — one named design per look, grouping one
@@ -72,8 +79,10 @@ export function setMemberId(setId: string, system: ChartDesignSystem): string {
  * Makes sure a sub-account has its default unified design.
  *  - Already has unified designs → returns the default one.
  *  - Brand-new sub-account (no chart designs at all) → creates the default
- *    design and its three records in one transaction (idempotent:
- *    deterministic ids + create()).
+ *    design and its three records, plus the four ready-made designs
+ *    (chart-design-starters.ts), in one transaction (idempotent:
+ *    deterministic ids + create()). Existing workspaces get the ready-made
+ *    designs only through scripts/seed-chart-design-starters.ts.
  *  - Has legacy per-system records but no unified designs yet → returns
  *    null and creates NOTHING: grouping existing records is the one-time
  *    migration's job (scripts/migrate-chart-design-sets.ts), run only with
@@ -133,6 +142,55 @@ export async function ensureDefaultChartDesignSet(
       updatedAt: FieldValue.serverTimestamp(),
     };
     tx.create(setsCol().doc(setId), setDoc);
+
+    // The four ready-made designs, each an independent copy of this new
+    // Default with that system's own preset values on top (see
+    // chart-design-starters.ts). Recorded on the workspace so they're
+    // never added twice, or re-added after the workspace deletes one.
+    for (const starter of CHART_DESIGN_STARTERS) {
+      const starterId = starterSetId(subAccountId, starter.key);
+      const starterMembers = {} as Record<ChartDesignSystem, string>;
+      for (const system of CHART_DESIGN_SET_SYSTEMS) {
+        const memberId = starterMemberId(starterId, system);
+        starterMembers[system] = memberId;
+        const base = {
+          ...fresh,
+          ...(system === "humanDesign" && typeof legacyColor === "string" && legacyColor ? { chartDefinedColor: legacyColor } : {}),
+        };
+        tx.create(designsCol().doc(memberId), {
+          ...starterSystemValues(base, starter.key, system),
+          subAccountId,
+          agencyId,
+          system,
+          name: starter.name,
+          isDefault: false,
+          ownerSetId: starterId,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      tx.create(setsCol().doc(starterId), {
+        subAccountId,
+        agencyId,
+        name: starter.name,
+        isDefault: false,
+        members: { ...starterMembers, frequency: null },
+        starter: { key: starter.key, version: CHART_DESIGN_STARTERS_VERSION },
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    tx.set(
+      getAdminDb().doc(`subAccounts/${subAccountId}`),
+      {
+        chartDesignStarters: {
+          version: CHART_DESIGN_STARTERS_VERSION,
+          seeded: CHART_DESIGN_STARTERS.map((s) => s.key),
+          seededAt: new Date().toISOString(),
+        },
+      },
+      { merge: true },
+    );
     return toSet(setId, setDoc);
   });
 }
