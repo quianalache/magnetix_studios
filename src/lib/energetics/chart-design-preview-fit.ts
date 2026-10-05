@@ -8,9 +8,13 @@
  * means nothing is cropped.
  */
 
-/** Width each renderer is laid out at before scaling. Human Design needs ≥1024px of inner width for its three-column layout. */
+/**
+ * Width each renderer is laid out at before scaling. Human Design: the
+ * compact full chart's three columns (200 + 16 + 360 + 16 + 200 = 792px)
+ * plus its 16px padding each side = 824px, its natural size.
+ */
 export const CHART_PREVIEW_NATURAL_WIDTH = {
-  humanDesign: 1080,
+  humanDesign: 824,
   mandala: 640,
   astrology: 640,
 } as const;
