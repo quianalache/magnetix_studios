@@ -37,6 +37,7 @@ import {
   CHART_PREVIEW_NATURAL_WIDTH,
   EDITOR_WORKSPACE_MIN_HEIGHT,
   editorWorkspaceHeight,
+  editorWorkspaceHeightBelowStickyBar,
   previewFitScale,
 } from "../src/lib/energetics/chart-design-preview-fit";
 
@@ -295,6 +296,30 @@ check("Human Design previews at a width that keeps its Design | BodyGraph | Pers
 check("the side-by-side workspace fills the page area below the header, with a floor for short windows", () => {
   assert.equal(editorWorkspaceHeight({ workspaceTop: 278, areaBottom: 876 }), 598);
   assert.equal(editorWorkspaceHeight({ workspaceTop: 600, areaBottom: 700 }), EDITOR_WORKSPACE_MIN_HEIGHT);
+});
+check("with the sticky tab bar, the workspace fills the page area below it once the header scrolls away", () => {
+  // 1440×900: page area 836px tall, tab bar 49px, 16px gap, 48px of bottom padding (page + wrapper).
+  assert.equal(editorWorkspaceHeightBelowStickyBar({ areaHeight: 836, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }), 723);
+  // independent of how tall the header above is — that part scrolls away
+  assert.ok(
+    editorWorkspaceHeightBelowStickyBar({ areaHeight: 836, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }) >
+      editorWorkspaceHeight({ workspaceTop: 278, areaBottom: 812 }),
+    "reclaims the header's height",
+  );
+  assert.equal(editorWorkspaceHeightBelowStickyBar({ areaHeight: 300, stickyBarHeight: 49, gapAbove: 16, bottomGap: 48 }), EDITOR_WORKSPACE_MIN_HEIGHT);
+});
+check("the tab bar is the one sticky element: header scrolls away, Save stays reachable, no scroll trap", () => {
+  const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
+  const shell = readFileSync("src/components/energetic-decoder/chart-design-editor-workspace.tsx", "utf8");
+  const layout = readFileSync("src/app/(dashboard)/layout.tsx", "utf8");
+  assert.equal(editor.match(/data-editor-sticky-bar/g)?.length, 1, "exactly one tab bar");
+  assert.equal(editor.match(/className="[^"]*\bsticky\b/g)?.length, 1, "only the tab bar is sticky (the header scrolls)");
+  // The bar's negative offset must equal the page area's padding (p-4 / md:p-6) so it pins flush to the top.
+  assert.ok(layout.includes('"flex-1 overflow-y-auto p-4 md:p-6"'), "page padding changed — update the tab bar's -top-4 / md:-top-6");
+  assert.ok(/sticky -top-4 [^"]*md:-top-6/.test(editor));
+  assert.ok(editor.includes("stickyBarRef={tabBarRef}"), "the workspace sizes itself below the tab bar");
+  assert.ok(editor.includes("data-editor-compact-save") && /!readOnly && !headerActionsVisible/.test(editor), "compact Save only for admins, only once the header's Save is out of view");
+  assert.ok(!shell.includes("overscroll-contain"), "the controls column must let scrolling continue to the page at its ends");
 });
 check("each section can tell whether its own fields have unsaved edits", () => {
   let s = initChartDesignEditorState(makeSet(false));
