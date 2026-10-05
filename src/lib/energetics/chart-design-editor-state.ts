@@ -70,6 +70,11 @@ export function dirtySystems(state: ChartDesignEditorState): ChartDesignSystem[]
   return CHART_DESIGN_SET_SYSTEMS.filter((s) => Object.keys(changedFields(state.values[s], state.saved[s])).length > 0);
 }
 
+/** The fields of one system with unsaved edits. */
+export function dirtyFields(state: ChartDesignEditorState, system: ChartDesignSystem): string[] {
+  return Object.keys(changedFields(state.values[system], state.saved[system]));
+}
+
 export function isEditorDirty(state: ChartDesignEditorState): boolean {
   return state.name.trim() !== state.savedName || dirtySystems(state).length > 0;
 }

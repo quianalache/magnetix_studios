@@ -4,7 +4,26 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Activity, ArrowLeft, Check, CircleDot, Copy, Loader2, Moon, Star, Triangle } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  Check,
+  Circle,
+  CircleDot,
+  Copy,
+  Hexagon,
+  Loader2,
+  Moon,
+  MoveHorizontal,
+  Orbit,
+  PaintBucket,
+  Rows3,
+  Share2,
+  Sparkles,
+  Star,
+  Triangle,
+  type LucideIcon,
+} from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,6 +34,7 @@ import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import {
   buildEditorSavePayload,
+  dirtyFields,
   dirtySystems,
   editorNameError,
   initChartDesignEditorState,
@@ -29,6 +49,12 @@ import {
   ChartDesignFieldControl,
   ChartDesignPreview,
 } from "@/components/energetic-decoder/chart-design-controls";
+import {
+  ChartDesignControlSection,
+  ChartDesignEditorWorkspace,
+  ChartPreviewFit,
+} from "@/components/energetic-decoder/chart-design-editor-workspace";
+import { CHART_PREVIEW_MAX_SCALE, CHART_PREVIEW_NATURAL_WIDTH } from "@/lib/energetics/chart-design-preview-fit";
 
 /**
  * The unified Chart Design editor (2026-10) — its own screen, opened from
@@ -36,6 +62,10 @@ import {
  * chart-system tabs keeps every unsaved edit, and Save Changes sends only
  * what changed, for every system at once. Each system's values stay its
  * own — nothing here copies one system's colors into another.
+ *
+ * Every system uses the same workspace (chart-design-editor-workspace.tsx):
+ * its own controls on the left, scrolling on their own, and its live preview
+ * on the right, scaled to fit and always visible.
  *
  * Ready-made looks (Magnetix Violet, Monochrome, Warm Sunset, Midnight) are
  * whole designs in the library, not editor presets: choose one there, then
@@ -51,7 +81,25 @@ const TABS: { key: EditorTab; label: string; icon: typeof Triangle }[] = [
   { key: "frequency", label: "Frequency", icon: Activity },
 ];
 
-const SYSTEMS: ChartDesignSystem[] = ["humanDesign", "mandala", "astrology"];
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  Centers: Hexagon,
+  "Channels and gates": Share2,
+  Activations: Sparkles,
+  Variables: MoveHorizontal,
+  "Planet boxes": Rows3,
+  Background: PaintBucket,
+  Gates: CircleDot,
+  "Rings and quadrants": Circle,
+  Wheel: Orbit,
+};
+
+/** Stacked (narrow) layout: the preview never takes more than this much height. */
+const STACKED_PREVIEW_MAX_HEIGHT = 560;
+
+/** The first two sections of each system start expanded. */
+function defaultOpenSections(system: ChartDesignSystem): string[] {
+  return CHART_DESIGN_SECTIONS[system].slice(0, 2).map((s) => s.title);
+}
 
 export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMembers }) {
   const { subAccountId, saPath, isAdmin } = useSubAccount();
@@ -63,6 +111,8 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   const [duplicating, setDuplicating] = useState(false);
   const [sampleHd, setSampleHd] = useState<HumanDesignProfile | null>(null);
   const [sampleAstro, setSampleAstro] = useState<AstrologyChart | null>(null);
+  // Which control sections are expanded, per system — kept while switching tabs.
+  const [openSections, setOpenSections] = useState<Partial<Record<ChartDesignSystem, string[]>>>({});
 
   const libraryHref = saPath("/energetic-decoder?tab=chartDesigns");
   const dirty = isEditorDirty(state);
@@ -136,9 +186,17 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   }
 
   const system = tab === "frequency" ? null : tab;
+  const changedFields = system ? dirtyFields(state, system) : [];
+
+  function toggleSection(sys: ChartDesignSystem, title: string) {
+    setOpenSections((prev) => {
+      const current = prev[sys] ?? defaultOpenSections(sys);
+      return { ...prev, [sys]: current.includes(title) ? current.filter((t) => t !== title) : [...current, title] };
+    });
+  }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-[1400px] space-y-5 rounded-2xl">
+    <div className="momentum-scope mx-auto w-full max-w-[1400px] space-y-4 rounded-2xl">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-2">
@@ -221,14 +279,17 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
       </div>
 
       {system ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-          {/* Large live preview */}
-          <div className="rounded-2xl border bg-card p-5 lg:col-span-7">
-            <div className="mb-3 flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold">{CHART_SYSTEM_LABEL[system]} preview</h2>
-              <span className="text-xs text-muted-foreground">Sample chart · updates as you edit</span>
-            </div>
-            <div className="flex min-h-[560px] items-center justify-center rounded-xl border bg-white p-4">
+        <ChartDesignEditorWorkspace
+          key={system}
+          previewTitle={`${CHART_SYSTEM_LABEL[system]} preview`}
+          previewNote="Sample chart · updates as you edit"
+          preview={({ fill }) => (
+            <ChartPreviewFit
+              naturalWidth={CHART_PREVIEW_NATURAL_WIDTH[system]}
+              maxScale={CHART_PREVIEW_MAX_SCALE[system]}
+              fill={fill}
+              maxHeight={STACKED_PREVIEW_MAX_HEIGHT}
+            >
               <ChartDesignPreview
                 system={system}
                 design={previews[system]}
@@ -236,41 +297,49 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
                 sampleHd={sampleHd}
                 sampleAstro={sampleAstro}
                 size="large"
-                className="mx-auto w-full max-w-[760px]"
+                className="w-full"
               />
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className="space-y-4 lg:col-span-5">
-            {CHART_DESIGN_SECTIONS[system].map((section) => (
-              <div key={section.title} className="rounded-2xl border bg-card p-5">
-                <h3 className="mb-3 text-sm font-semibold">{section.title}</h3>
-                <div className="space-y-2.5">
-                  {section.fields.map((field) => (
-                    <ChartDesignFieldControl
-                      key={field}
-                      system={system}
-                      field={field}
-                      values={state.values[system]}
-                      disabled={readOnly}
-                      onChange={(f, v) => setState((s) => setEditorField(s, system, f, v))}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-            {system === "astrology" && (
-              <p className="px-1 text-xs text-muted-foreground">
-                The house system is a calculation setting, not part of a design — it lives in{" "}
-                <Link href={saPath("/energetic-decoder?tab=readings")} className="font-medium text-primary underline">
-                  Readings → Reading configuration
-                </Link>
-                .
-              </p>
-            )}
-          </div>
-        </div>
+            </ChartPreviewFit>
+          )}
+          controls={
+            <>
+              {CHART_DESIGN_SECTIONS[system].map((section) => {
+                const open = (openSections[system] ?? defaultOpenSections(system)).includes(section.title);
+                return (
+                  <ChartDesignControlSection
+                    key={section.title}
+                    title={section.title}
+                    description={section.description}
+                    icon={SECTION_ICONS[section.title]}
+                    open={open}
+                    onToggle={() => toggleSection(system, section.title)}
+                    hasChanges={section.fields.some((f) => changedFields.includes(f))}
+                  >
+                    {section.fields.map((field) => (
+                      <ChartDesignFieldControl
+                        key={field}
+                        system={system}
+                        field={field}
+                        values={state.values[system]}
+                        disabled={readOnly}
+                        onChange={(f, v) => setState((s) => setEditorField(s, system, f, v))}
+                      />
+                    ))}
+                  </ChartDesignControlSection>
+                );
+              })}
+              {system === "astrology" && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  The house system is a calculation setting, not part of a design — it lives in{" "}
+                  <Link href={saPath("/energetic-decoder?tab=readings")} className="font-medium text-primary underline">
+                    Readings → Reading configuration
+                  </Link>
+                  .
+                </p>
+              )}
+            </>
+          }
+        />
       ) : (
         <div className="rounded-2xl border border-dashed bg-card p-10 text-center">
           <Activity className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
@@ -281,34 +350,6 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
           </p>
         </div>
       )}
-
-      {/* The other charts in this design */}
-      <div className="rounded-2xl border bg-card p-5">
-        <h3 className="mb-3 text-sm font-semibold">Also in this design</h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {SYSTEMS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setTab(s)}
-              className={cn(
-                "flex flex-col items-center gap-2 rounded-xl border p-3 text-sm transition hover:border-primary/40",
-                tab === s && "border-primary/60 bg-primary/5",
-              )}
-            >
-              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border bg-white p-1">
-                <ChartDesignPreview system={s} design={previews[s]} sampleHd={sampleHd} sampleAstro={sampleAstro} size="thumb" className="h-full w-full" />
-              </div>
-              <span className="font-medium">{CHART_SYSTEM_LABEL[s]}</span>
-            </button>
-          ))}
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-3 text-center text-sm text-muted-foreground">
-            <Activity className="h-6 w-6" />
-            <span className="font-medium">Frequency</span>
-            <span className="text-[11px]">Coming soon</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -103,25 +103,29 @@ const SELECT_OPTIONS: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
-/** The editor's sections per chart system — every editable field of that system appears in exactly one section. */
-export const CHART_DESIGN_SECTIONS: Record<ChartDesignSystem, { title: string; fields: readonly string[] }[]> = {
+/**
+ * The editor's sections per chart system — every editable field of that
+ * system appears in exactly one section. Each system lists only the options
+ * it supports; the systems share the editor's layout, not its controls.
+ */
+export const CHART_DESIGN_SECTIONS: Record<ChartDesignSystem, { title: string; description: string; fields: readonly string[] }[]> = {
   humanDesign: [
-    { title: "Centers", fields: ["chartDefinedColor", "centersMode", ...CENTER_COLOR_FIELDS] },
-    { title: "Channels and gates", fields: ["channelsColor", "gatesColor"] },
-    { title: "Activations", fields: ["personalityActivationColor", "designActivationColor"] },
-    { title: "Variables", fields: ["arrowColor", "arrowStyle"] },
-    { title: "Planet boxes", fields: ["planetBoxMode", "planetBoxColor", "planetBoxBorderRadius"] },
-    { title: "Background", fields: ["backgroundColor"] },
+    { title: "Centers", description: "Defined center color and how centers are colored.", fields: ["chartDefinedColor", "centersMode", ...CENTER_COLOR_FIELDS] },
+    { title: "Channels and gates", description: "Channel network and gate accent colors.", fields: ["channelsColor", "gatesColor"] },
+    { title: "Activations", description: "Personality and Design colors.", fields: ["personalityActivationColor", "designActivationColor"] },
+    { title: "Variables", description: "Variable arrow color and style.", fields: ["arrowColor", "arrowStyle"] },
+    { title: "Planet boxes", description: "Style, color and corners of the planet columns.", fields: ["planetBoxMode", "planetBoxColor", "planetBoxBorderRadius"] },
+    { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
   ],
   mandala: [
-    { title: "Gates", fields: ["chartDefinedColor"] },
-    { title: "Activations", fields: ["personalityActivationColor", "designActivationColor"] },
-    { title: "Rings and quadrants", fields: ["mandalaZodiacColor", "mandalaGateRingColor", "mandalaQuadrantColor"] },
-    { title: "Background", fields: ["backgroundColor"] },
+    { title: "Gates", description: "Color of activated gates.", fields: ["chartDefinedColor"] },
+    { title: "Activations", description: "Personality and Design colors.", fields: ["personalityActivationColor", "designActivationColor"] },
+    { title: "Rings and quadrants", description: "Zodiac ring, gate ring and quadrant dividers.", fields: ["mandalaZodiacColor", "mandalaGateRingColor", "mandalaQuadrantColor"] },
+    { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
   ],
   astrology: [
-    { title: "Wheel", fields: ["wheelAccentColor"] },
-    { title: "Background", fields: ["backgroundColor"] },
+    { title: "Wheel", description: "Wheel and planet accent color.", fields: ["wheelAccentColor"] },
+    { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
   ],
 };
 
