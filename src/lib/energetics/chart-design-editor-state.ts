@@ -2,7 +2,7 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import { CHART_DESIGN_SET_SYSTEMS } from "@/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "./chart-design-fields";
-import { MANDALA_ELEMENT_FIELDS, resolveMandalaElementColors } from "./mandala-spec";
+import { MANDALA_OPTIONAL_COLOR_FIELDS, resolveMandalaColors, resolvedMandalaFieldValue } from "./mandala-spec";
 
 /**
  * The unified Chart Design editor's state, as pure functions (2026-10).
@@ -22,14 +22,14 @@ export interface ChartDesignEditorState {
   savedName: string;
   values: Record<ChartDesignSystem, SystemValues>;
   saved: Record<ChartDesignSystem, SystemValues>;
-  /** Mandala element colors shown from the read-time fallback (the saved record has no value yet) — written explicitly with the first Mandala save, so what was shown stays exactly what's stored. */
+  /** Mandala colors shown from the read-time fallback (the saved record has no value yet) — written explicitly with the first Mandala save, so what was shown stays exactly what's stored. */
   implicitMandalaFields?: string[];
 }
 
 function implicitMandalaFields(design: ChartDesign | null): string[] {
   if (!design) return [];
   const rec = design as unknown as Record<string, unknown>;
-  return Object.values(MANDALA_ELEMENT_FIELDS).filter((f) => typeof rec[f] !== "string" || !rec[f]);
+  return MANDALA_OPTIONAL_COLOR_FIELDS.filter((f) => typeof rec[f] !== "string" || !rec[f]);
 }
 
 function systemValues(design: ChartDesign | null, system: ChartDesignSystem): SystemValues {
@@ -43,9 +43,12 @@ function systemValues(design: ChartDesign | null, system: ChartDesignSystem): Sy
   // compare against) the colors they actually render with, so the pickers
   // aren't blank and nothing reads as an unsaved change until edited.
   if (system === "mandala") {
-    const resolved = resolveMandalaElementColors(design);
-    for (const [element, field] of Object.entries(MANDALA_ELEMENT_FIELDS)) {
-      if (out[field] === undefined) out[field] = resolved[element as keyof typeof resolved];
+    const resolved = resolveMandalaColors(design);
+    for (const field of MANDALA_OPTIONAL_COLOR_FIELDS) {
+      if (out[field] === undefined) {
+        const v = resolvedMandalaFieldValue(resolved, field);
+        if (v !== undefined) out[field] = v;
+      }
     }
   }
   return out;

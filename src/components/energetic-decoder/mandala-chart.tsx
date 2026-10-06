@@ -14,9 +14,9 @@ import {
   bandPath,
   buildMandalaModel,
   mandalaBodygraphBox,
-  resolveMandalaElementColors,
+  resolveMandalaColors,
   textArcPath,
-  type MandalaElementColors,
+  type ResolvedMandalaColors,
 } from "@/lib/energetics/mandala-spec";
 
 /**
@@ -45,7 +45,7 @@ export function MandalaChart({
   backgroundColor,
   className,
   zodiacColor = "#8b5cf6",
-  elementColors,
+  mandalaColors,
   gateRingColor = "#71717a",
   quadrantColor = "#71717a",
   personalityColor = PERSONALITY_FILL,
@@ -56,14 +56,14 @@ export function MandalaChart({
   showDesign = true,
 }: {
   profile: HumanDesignProfile;
-  /** "Activated gates" accent — the rim arc on each activated gate. */
+  /** "Activated gate edge" — the rim arc on each activated gate. */
   gateColor: string;
   backgroundColor: string;
   className?: string;
   /** Legacy single zodiac color — only used to resolve element colors when `elementColors` isn't passed. */
   zodiacColor?: string;
-  /** The design's four zodiac element colors (resolveMandalaElementColors(design)). */
-  elementColors?: MandalaElementColors;
+  /** Every Mandala color of the design, resolved (resolveMandalaColors(design)) — consumers pass this; the single-color props above only seed a fallback. */
+  mandalaColors?: ResolvedMandalaColors;
   gateRingColor?: string;
   quadrantColor?: string;
   personalityColor?: string;
@@ -76,12 +76,18 @@ export function MandalaChart({
   showPersonality?: boolean;
   showDesign?: boolean;
 }) {
-  const elements = elementColors ?? resolveMandalaElementColors({ mandalaZodiacColor: zodiacColor });
-  const model = buildMandalaModel(
-    { personality: profile.personality, design: profile.design },
-    { backgroundColor, personalityColor, designColor, gateColor, gateRingColor, quadrantColor, elements },
-    { showPersonality, showDesign },
-  );
+  const colors =
+    mandalaColors ??
+    resolveMandalaColors({
+      backgroundColor,
+      personalityActivationColor: personalityColor,
+      designActivationColor: designColor,
+      chartDefinedColor: gateColor,
+      mandalaGateRingColor: gateRingColor,
+      mandalaQuadrantColor: quadrantColor,
+      mandalaZodiacColor: zodiacColor,
+    });
+  const model = buildMandalaModel({ personality: profile.personality, design: profile.design }, colors, { showPersonality, showDesign });
   const bodySymbol = new Map<string, string>(HD_BODY_LABELS.map((b) => [b.body, b.symbol]));
   const R = MANDALA_RINGS;
   const glowId = `mandala-glow-${model.glow.color.replace("#", "")}`;
@@ -106,7 +112,7 @@ export function MandalaChart({
 
   return (
     // @container/mandala: labels shorten on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
-    <div className={`@container/mandala ${className ?? ""}`} style={{ background: backgroundColor, borderRadius: 12, padding: "4%", position: "relative" }}>
+    <div className={`@container/mandala ${className ?? ""}`} style={{ background: colors.background, borderRadius: 12, padding: "4%", position: "relative" }}>
       {/* The wheel and the center BodyGraph share this box, so the BodyGraph is sized against the wheel itself. */}
       <div data-mandala-wheel style={{ position: "relative" }} className="[&>svg]:block">
         <svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} role="img" aria-label="Mandala chart">
@@ -153,26 +159,26 @@ export function MandalaChart({
           ))}
 
           {/* Gate field */}
-          <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={backgroundColor} />
+          <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={colors.background} />
 
-          {/* Activation wedges, running inward from the field edge (split down the gate's center when both sides are active) */}
+          {/* Activation wedges, running inward from the field edge, in the color of the Human Design center each gate belongs to (Personality / Design show in the planet symbols) */}
           {model.gates.flatMap((g) =>
             g.wedges.map((w, k) => (
-              <path key={`${g.gate}-${k}`} data-gate-wedge={g.gate} d={bandPath(w.start, w.end, R.field, 0)} fill={w.fill} fillOpacity={WEDGE_OPACITY} />
+              <path key={`${g.gate}-${k}`} data-gate-wedge={g.gate} data-center={g.center} d={bandPath(w.start, w.end, R.field, 0)} fill={w.fill} fillOpacity={WEDGE_OPACITY} />
             )),
           )}
 
           {model.spokes.map((s, i) => (
-            <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={gateRingColor} strokeOpacity={0.45} strokeWidth={0.18} />
+            <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={colors.gateLines} strokeOpacity={0.45} strokeWidth={0.18} />
           ))}
-          <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill="none" stroke={gateRingColor} strokeOpacity={0.6} strokeWidth={0.3} />
+          <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill="none" stroke={colors.gateLines} strokeOpacity={0.6} strokeWidth={0.3} />
 
           {/* Center glow — wedges and spokes fade toward the BodyGraph */}
           <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.glowOuter} fill={`url(#${glowId})`} />
 
           {model.gates.map((g) => (
             <g key={g.gate} data-gate={g.gate}>
-              {g.rim && <path d={bandPath(g.rim.start, g.rim.end, R.field, R.field - 1.1)} fill={gateColor} />}
+              {g.rim && <path d={bandPath(g.rim.start, g.rim.end, R.field, R.field - 1.1)} fill={colors.activatedEdge} />}
               {g.hexagram.segments.map((s, k) => (
                 <line key={k} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={g.hexagram.stroke} strokeWidth={R.hexagramLineThickness} />
               ))}
@@ -200,7 +206,7 @@ export function MandalaChart({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill={p.fill}
-                  stroke={backgroundColor}
+                  stroke={colors.background}
                   strokeWidth={0.7}
                   paintOrder="stroke"
                 >
@@ -229,8 +235,8 @@ export function MandalaChart({
               definedColor={hdDesign?.chartDefinedColor}
               channelsColor={hdDesign?.channelsColor}
               gatesColor={hdDesign?.gatesColor}
-              personalityColor={personalityColor}
-              designColor={designColor}
+              personalityColor={colors.personality}
+              designColor={colors.design}
               backgroundColor="transparent"
               centersMode={hdDesign?.centersMode as CentersMode | undefined}
               centerColors={centerColors}

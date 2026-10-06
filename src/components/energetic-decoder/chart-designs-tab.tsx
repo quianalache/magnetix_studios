@@ -21,7 +21,7 @@ import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
-import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { CHART_DESIGN_PRESETS } from "@/lib/energetics/chart-design-presets";
 import { ChartDesignLibrary } from "@/components/energetic-decoder/chart-design-library";
@@ -809,7 +809,7 @@ function CardPreview({
         personalityColor={fields.personalityActivationColor}
         designColor={fields.designActivationColor}
         zodiacColor={fields.mandalaZodiacColor}
-            elementColors={resolveMandalaElementColors(fields)}
+            mandalaColors={resolveMandalaColors(fields)}
         gateRingColor={fields.mandalaGateRingColor}
         quadrantColor={fields.mandalaQuadrantColor}
         // This 220px card thumbnail previews the Mandala's OWN ring

@@ -32,9 +32,9 @@ import {
   buildMandalaModel,
   mandalaBodygraphBox,
   polar,
-  resolveMandalaElementColors,
+  resolveMandalaColors,
   tangentialTextRotation,
-  type MandalaElementColors,
+  type ResolvedMandalaColors,
 } from "./mandala-spec";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
 import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
@@ -555,7 +555,7 @@ export function MandalaPdf({
   personalityColor = PERSONALITY_FILL,
   designColor = DESIGN_FILL,
   zodiacColor = "#8b5cf6",
-  elementColors,
+  mandalaColors,
   gateRingColor = "#71717a",
   quadrantColor = "#71717a",
   hdDesign,
@@ -567,16 +567,24 @@ export function MandalaPdf({
   designColor?: string;
   /** Legacy single zodiac color — only used when `elementColors` isn't passed. */
   zodiacColor?: string;
-  elementColors?: MandalaElementColors;
+  /** Every Mandala color of the design, resolved (resolveMandalaColors(design)); the single-color props only seed a fallback. */
+  mandalaColors?: ResolvedMandalaColors;
   gateRingColor?: string;
   quadrantColor?: string;
   hdDesign?: ChartDesign | null;
 }) {
-  const elements = elementColors ?? resolveMandalaElementColors({ mandalaZodiacColor: zodiacColor });
-  const model = buildMandalaModel(
-    { personality: profile.personality, design: profile.design },
-    { backgroundColor, personalityColor, designColor, gateColor, gateRingColor, quadrantColor, elements },
-  );
+  const colors =
+    mandalaColors ??
+    resolveMandalaColors({
+      backgroundColor,
+      personalityActivationColor: personalityColor,
+      designActivationColor: designColor,
+      chartDefinedColor: gateColor,
+      mandalaGateRingColor: gateRingColor,
+      mandalaQuadrantColor: quadrantColor,
+      mandalaZodiacColor: zodiacColor,
+    });
+  const model = buildMandalaModel({ personality: profile.personality, design: profile.design }, colors);
   const R = MANDALA_RINGS;
   const k = MANDALA_SIZE / MANDALA_VIEW; // pt per Mandala unit
   const box = mandalaBodygraphBox();
@@ -584,7 +592,7 @@ export function MandalaPdf({
   const abbr = (body: string) => PLANET_ABBR[body] ?? body.slice(0, 2);
 
   return (
-    <View style={{ backgroundColor, borderRadius: 12, padding: MANDALA_SIZE * 0.04, position: "relative" }}>
+    <View style={{ backgroundColor: colors.background, borderRadius: 12, padding: MANDALA_SIZE * 0.04, position: "relative" }}>
       <View style={{ position: "relative", width: MANDALA_SIZE, height: MANDALA_SIZE }}>
         <Svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} style={{ width: MANDALA_SIZE, height: MANDALA_SIZE }}>
           <Defs>
@@ -624,22 +632,22 @@ export function MandalaPdf({
             );
           })}
 
-          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={backgroundColor} />
+          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={colors.background} />
 
           {model.gates.flatMap((g) =>
             g.wedges.map((w, i) => <Path key={`${g.gate}-${i}`} d={bandPath(w.start, w.end, R.field, 0)} fill={w.fill} fillOpacity={WEDGE_OPACITY} />),
           )}
 
           {model.spokes.map((s, i) => (
-            <Line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={gateRingColor} strokeOpacity={0.45} strokeWidth={0.18} />
+            <Line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={colors.gateLines} strokeOpacity={0.45} strokeWidth={0.18} />
           ))}
-          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill="none" stroke={gateRingColor} strokeOpacity={0.6} strokeWidth={0.3} />
+          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill="none" stroke={colors.gateLines} strokeOpacity={0.6} strokeWidth={0.3} />
 
           <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.glowOuter} fill={`url(#${glowId})`} />
 
           {model.gates.map((g) => (
             <G key={g.gate}>
-              {g.rim && <Path d={bandPath(g.rim.start, g.rim.end, R.field, R.field - 1.1)} fill={gateColor} />}
+              {g.rim && <Path d={bandPath(g.rim.start, g.rim.end, R.field, R.field - 1.1)} fill={colors.activatedEdge} />}
               {g.hexagram.segments.map((s, i) => (
                 <Line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={g.hexagram.stroke} strokeWidth={R.hexagramLineThickness} />
               ))}
@@ -651,7 +659,7 @@ export function MandalaPdf({
               {/* Two-letter abbreviations are turned along the band (like the gate numbers) so stacked ones never run into each other on the sides of the wheel. */}
               {g.planets.map((p, i) => (
                 <G key={i} transform={`rotate(${g.number.rotate.toFixed(2)} ${p.x.toFixed(3)} ${p.y.toFixed(3)})`}>
-                  <Text x={p.x} y={p.y + p.fontSize * 0.35} style={{ fontSize: p.fontSize * 0.8, fontWeight: 700, fill: backgroundColor, stroke: backgroundColor, strokeWidth: 0.7, textAnchor: "middle" }}>
+                  <Text x={p.x} y={p.y + p.fontSize * 0.35} style={{ fontSize: p.fontSize * 0.8, fontWeight: 700, fill: colors.background, stroke: colors.background, strokeWidth: 0.7, textAnchor: "middle" }}>
                     {abbr(p.body)}
                   </Text>
                   <Text x={p.x} y={p.y + p.fontSize * 0.35} style={{ fontSize: p.fontSize * 0.8, fontWeight: 700, fill: p.fill, textAnchor: "middle" }}>
@@ -674,8 +682,8 @@ export function MandalaPdf({
             gatesColor={hdDesign?.gatesColor || "#e4e4e7"}
             backgroundColor="transparent"
             size={box.w * k}
-            personalityColor={personalityColor}
-            designColor={designColor}
+            personalityColor={colors.personality}
+            designColor={colors.design}
           />
         </View>
       </View>
@@ -1039,7 +1047,7 @@ export function ReadingPdfDocument({
                   personalityColor={mandalaDesign.personalityActivationColor}
                   designColor={mandalaDesign.designActivationColor}
                   zodiacColor={mandalaDesign.mandalaZodiacColor}
-                  elementColors={resolveMandalaElementColors(mandalaDesign)}
+                  mandalaColors={resolveMandalaColors(mandalaDesign)}
                   gateRingColor={mandalaDesign.mandalaGateRingColor}
                   quadrantColor={mandalaDesign.mandalaQuadrantColor}
                   hdDesign={hdDesign}

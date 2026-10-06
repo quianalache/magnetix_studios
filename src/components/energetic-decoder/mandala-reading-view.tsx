@@ -21,7 +21,7 @@ import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
 import type { HumanDesignReadingContent } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
-import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { SkillLayerList } from "@/components/energetic-decoder/reading-summary";
 import { cn } from "@/lib/utils";
@@ -154,16 +154,19 @@ function MandalaLegend({ mandalaDesign }: { mandalaDesign: ChartDesign }) {
     <div className="rounded-2xl border bg-card p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
       <div className="space-y-3">
-        <LegendSwatch color={mandalaDesign.mandalaQuadrantColor} label="Quarters" description="The outer band shows the four Human Design Quarters: Initiation, Civilization, Duality and Mutation." />
-        <LegendSwatch
-          colors={(() => { const e = resolveMandalaElementColors(mandalaDesign); return [e.fire, e.earth, e.air, e.water]; })()}
-          label="Zodiac Ring"
-          description="Places the 64 gates within the 12 zodiac signs, colored by element (Fire, Earth, Air, Water)."
-        />
-        <LegendSwatch color={mandalaDesign.mandalaGateRingColor} label="64 Gates & I Ching" description="Each of the 64 gates shows its number and its I Ching hexagram." />
-        <LegendSwatch color={mandalaDesign.personalityActivationColor} label="Personality (Conscious)" description="Planets calculated at birth. The conscious side of the design." />
-        <LegendSwatch color={mandalaDesign.designActivationColor} label="Design (Unconscious)" description="Planets calculated ~88 days before birth. The unconscious side of the design." />
-        <LegendSwatch colors={[mandalaDesign.personalityActivationColor, mandalaDesign.designActivationColor, mandalaDesign.personalityActivationColor, mandalaDesign.designActivationColor]} label="Both Activated" description="A gate activated by both Personality and Design is split between the two colors." />
+        {(() => {
+          const c = resolveMandalaColors(mandalaDesign);
+          return (
+            <>
+              <LegendSwatch colors={[c.quarters.initiation.background, c.quarters.civilization.background, c.quarters.duality.background, c.quarters.mutation.background]} label="Quarters" description="The outer band shows the four Human Design Quarters: Initiation, Civilization, Duality and Mutation." />
+              <LegendSwatch colors={[c.elements.fire, c.elements.earth, c.elements.air, c.elements.water]} label="Zodiac Ring" description="Places the 64 gates within the 12 zodiac signs, colored by element (Fire, Earth, Air, Water)." />
+              <LegendSwatch color={c.hexagram} label="64 Gates & I Ching" description="Each of the 64 gates shows its number and its I Ching hexagram." />
+              <LegendSwatch colors={[c.centers.head, c.centers.throat, c.centers.g, c.centers.sacral]} label="Activated Gates" description="An activated gate's wedge takes the color of the Human Design center that gate belongs to." />
+              <LegendSwatch color={c.personality} label="Personality (Conscious)" description="Planets calculated at birth — their symbols on the wheel. The conscious side of the design." />
+              <LegendSwatch color={c.design} label="Design (Unconscious)" description="Planets calculated ~88 days before birth — their symbols on the wheel. The unconscious side of the design." />
+            </>
+          );
+        })()}
       </div>
     </div>
   );
@@ -375,7 +378,7 @@ const UNDERSTANDING_CARDS = [
   },
   {
     title: "Both Activated",
-    body: "When a gate is activated by both Personality and Design, its wedge in the Mandala is split between the two colors, so both activations stay visible.",
+    body: "A gate can be activated by both Personality and Design. Its wedge keeps the color of its Human Design center, and its planet symbols appear in both the Personality and the Design color.",
   },
 ];
 
@@ -439,7 +442,7 @@ export function MandalaReadingView({
             personalityColor={mandalaDesign.personalityActivationColor}
             designColor={mandalaDesign.designActivationColor}
             zodiacColor={mandalaDesign.mandalaZodiacColor}
-            elementColors={resolveMandalaElementColors(mandalaDesign)}
+            mandalaColors={resolveMandalaColors(mandalaDesign)}
             gateRingColor={mandalaDesign.mandalaGateRingColor}
             quadrantColor={mandalaDesign.mandalaQuadrantColor}
             hdDesign={hdDesign}

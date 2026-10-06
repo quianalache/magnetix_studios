@@ -1,3 +1,4 @@
+import { MANDALA_OPTIONAL_COLOR_FIELDS } from "@/lib/energetics/mandala-spec";
 import "server-only";
 
 import { NextResponse } from "next/server";
@@ -87,6 +88,8 @@ export async function PATCH(
     if (typeof body.mandalaEarthColor === "string") fields.mandalaEarthColor = body.mandalaEarthColor;
     if (typeof body.mandalaAirColor === "string") fields.mandalaAirColor = body.mandalaAirColor;
     if (typeof body.mandalaWaterColor === "string") fields.mandalaWaterColor = body.mandalaWaterColor;
+    // The 2026-10 Mandala design controls (all optional colors).
+    for (const f of MANDALA_OPTIONAL_COLOR_FIELDS) if (typeof body[f] === "string") (fields as Record<string, unknown>)[f] = body[f];
 
     const design = await updateChartDesign(subAccountId, designId, fields);
     return NextResponse.json({ ok: true, design });

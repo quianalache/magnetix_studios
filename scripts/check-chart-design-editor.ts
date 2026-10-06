@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { ZODIAC_FULL_NAMES_MIN_WIDTH } from "../src/components/energetic-decoder/mandala-chart";
-import { MANDALA_ELEMENT_FIELDS, MANDALA_ELEMENT_PALETTES } from "../src/lib/energetics/mandala-spec";
+import { MANDALA_ELEMENT_FIELDS, MANDALA_ELEMENT_PALETTES, MANDALA_OPTIONAL_COLOR_FIELDS } from "../src/lib/energetics/mandala-spec";
 import type { ChartDesign, ChartDesignSystem } from "../src/types/chart-design";
 import type { ChartDesignSetWithMembers } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-fields";
@@ -90,6 +90,8 @@ const base = {
   mandalaEarthColor: "#a68a64",
   mandalaAirColor: "#8f9a6a",
   mandalaWaterColor: "#7f9bb0",
+  // the rest of the optional Mandala colors, explicit (as new designs have them)
+  ...Object.fromEntries(MANDALA_OPTIONAL_COLOR_FIELDS.filter((f) => !/^mandala(Fire|Earth|Air|Water)Color$/.test(f)).map((f) => [f, "#999999"])),
 } as const;
 
 function record(id: string, system: ChartDesignSystem, extra: Partial<ChartDesign> = {}): ChartDesign {
@@ -181,17 +183,17 @@ check("preview shows the saved record with unsaved values on top", () => {
 check("Mandala element colors: legacy designs show the fallback, aren't dirty, and the first Mandala save pins them", () => {
   const set = makeSet(true);
   const md = set.designs.mandala as unknown as Record<string, unknown>;
-  for (const f of Object.values(MANDALA_ELEMENT_FIELDS)) delete md[f];
+  for (const f of MANDALA_OPTIONAL_COLOR_FIELDS) delete md[f];
   let s = initChartDesignEditorState(set);
   assert.equal(s.values.mandala.mandalaFireColor, MANDALA_ELEMENT_PALETTES.default.fire, "fallback shown");
   assert.equal(buildEditorSavePayload(s), null, "nothing to save");
   s = setEditorField(s, "mandala", "backgroundColor", "#fafafa");
   const pay = buildEditorSavePayload(s)!;
-  assert.deepEqual(Object.keys(pay.mandala!).sort(), ["backgroundColor", ...Object.values(MANDALA_ELEMENT_FIELDS)].sort());
+  assert.deepEqual(Object.keys(pay.mandala!).sort(), ["backgroundColor", ...MANDALA_OPTIONAL_COLOR_FIELDS].sort());
   assert.equal(pay.mandala!.mandalaWaterColor, MANDALA_ELEMENT_PALETTES.default.water);
   // a design that already has them sends only what changed
   const withFields = makeSet(true);
-  Object.assign(withFields.designs.mandala!, { mandalaFireColor: "#111111", mandalaEarthColor: "#222222", mandalaAirColor: "#333333", mandalaWaterColor: "#444444" });
+  Object.assign(withFields.designs.mandala!, Object.fromEntries(MANDALA_OPTIONAL_COLOR_FIELDS.map((f) => [f, "#999999"])), { mandalaFireColor: "#111111", mandalaEarthColor: "#222222", mandalaAirColor: "#333333", mandalaWaterColor: "#444444" });
   let t = initChartDesignEditorState(withFields);
   assert.equal(t.values.mandala.mandalaAirColor, "#333333", "saved values win over the fallback");
   t = setEditorField(t, "mandala", "mandalaFireColor", "#ff0000");
@@ -202,7 +204,8 @@ check("every editable field appears in exactly one editor section", () => {
     const inSections = CHART_DESIGN_SECTIONS[system].flatMap((sec) => sec.fields);
     assert.equal(new Set(inSections).size, inSections.length, `${system}: a field is listed twice`);
     // mandalaZodiacColor stays stored and accepted (it seeds the element-color fallback of designs saved before the four element fields) but is no longer shown — the four element colors replace it in the editor.
-    const hidden = system === "mandala" ? ["mandalaZodiacColor"] : [];
+    // mandalaQuadrantColor likewise stays as the legacy seed of the quarter-color fallback (four independent quarter colors replace it in the editor).
+    const hidden = system === "mandala" ? ["mandalaZodiacColor", "mandalaQuadrantColor"] : [];
     assert.deepEqual([...inSections].sort(), CHART_DESIGN_SYSTEM_FIELDS[system].filter((f) => !hidden.includes(f)).sort(), `${system}: sections don't match the allow-list`);
   }
 });
@@ -214,7 +217,7 @@ check("the four looks keep exactly their established values (pre-unification sou
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     assert.deepEqual(CHART_DESIGN_PRESETS[system].map((p) => p.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
     for (const preset of CHART_DESIGN_PRESETS[system]) {
-      const elementKeys = Object.values(MANDALA_ELEMENT_FIELDS) as string[];
+      const elementKeys = MANDALA_OPTIONAL_COLOR_FIELDS as readonly string[];
       const literal = `{ name: "${preset.name}", swatch: ${JSON.stringify(preset.swatch).replace(/,/g, ", ")}, values: { ${Object.entries(preset.values)
         .filter(([k]) => !elementKeys.includes(k))
         .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)

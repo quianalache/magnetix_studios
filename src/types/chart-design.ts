@@ -137,6 +137,40 @@ export interface ChartDesign {
   mandalaAirColor?: string;
   mandalaWaterColor?: string;
   /**
+   * Mandala only (2026-10, BodyGraph-style design controls) — all optional,
+   * resolved at read time by resolveMandalaColors() in mandala-spec.ts
+   * (nothing is written on read; the first Mandala save pins them).
+   * Basic: hexagram + gate text + center glow. Quarters: background + text
+   * per Human Design Quarter. Zodiac: text per element + the symbol color.
+   * Centers: an activated gate's wedge color, by the Human Design center
+   * the gate belongs to.
+   */
+  mandalaHexagramColor?: string;
+  mandalaGateTextColor?: string;
+  mandalaGlowColor?: string;
+  mandalaInitiationColor?: string;
+  mandalaInitiationTextColor?: string;
+  mandalaCivilizationColor?: string;
+  mandalaCivilizationTextColor?: string;
+  mandalaDualityColor?: string;
+  mandalaDualityTextColor?: string;
+  mandalaMutationColor?: string;
+  mandalaMutationTextColor?: string;
+  mandalaFireTextColor?: string;
+  mandalaEarthTextColor?: string;
+  mandalaAirTextColor?: string;
+  mandalaWaterTextColor?: string;
+  mandalaHeadCenterColor?: string;
+  mandalaAjnaCenterColor?: string;
+  mandalaThroatCenterColor?: string;
+  mandalaGCenterColor?: string;
+  mandalaHeartCenterColor?: string;
+  mandalaSplenicCenterColor?: string;
+  mandalaSacralCenterColor?: string;
+  mandalaSolarPlexusCenterColor?: string;
+  mandalaRootCenterColor?: string;
+  mandalaZodiacSymbolColor?: string;
+  /**
    * The unified Chart Design (`chartDesignSets/{id}`, see
    * chart-design-set.ts) this record belongs to. Every record belongs to
    * exactly one set once a sub-account is migrated, so editing one unified

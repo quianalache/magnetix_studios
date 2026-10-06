@@ -6,7 +6,7 @@ import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
-import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
@@ -290,7 +290,7 @@ function ChartPieceView({
           personalityColor={mandalaDesign.personalityActivationColor}
           designColor={mandalaDesign.designActivationColor}
           zodiacColor={mandalaDesign.mandalaZodiacColor}
-            elementColors={resolveMandalaElementColors(mandalaDesign)}
+            mandalaColors={resolveMandalaColors(mandalaDesign)}
           gateRingColor={mandalaDesign.mandalaGateRingColor}
           quadrantColor={mandalaDesign.mandalaQuadrantColor}
           hdDesign={hdDesign}

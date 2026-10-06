@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG, SIGNS } from "../src/lib/energetics/gate-data";
+import { GATE_CENTER } from "../src/lib/energetics/human-design-data";
 import {
   GATE_ARC_DEG,
   KING_WEN_HEXAGRAMS,
@@ -23,6 +24,15 @@ import {
   MANDALA_SIGNS,
   ZODIAC_ELEMENT,
   buildMandalaModel,
+  fieldInk,
+  inkOn,
+  quarterFills,
+  resolveMandalaColors,
+  MANDALA_COLOR_FIELDS,
+  MANDALA_OPTIONAL_COLOR_FIELDS,
+  MANDALA_QUARTER_KEYS,
+  MANDALA_CENTER_KEYS,
+  MANDALA_CENTER_PALETTES,
   gateIndex,
   gateSpan,
   gateStartLongitude,
@@ -231,29 +241,111 @@ check("center glow follows the background (no white hole on dark designs)", () =
 });
 
 console.log("\nActivations + BodyGraph");
-check("activations attach to their own gates; split wedge when both sides; symbols colored per side; data untouched", () => {
-  const personality = [
-    { gate: 13, line: 4, body: "sun" },
-    { gate: 13, line: 2, body: "mercury" },
-    { gate: 7, line: 1, body: "moon" },
-  ];
-  const design = [{ gate: 7, line: 6, body: "venus" }];
+console.log("\nDesign controls (BodyGraph model)");
+const SA = "xvnedVCmQpEvHrcPhEDI";
+const legacyStarter = (key: string, extra: Record<string, unknown> = {}) => ({ id: `cd_cds_starter_${SA}_${key}_mandala`, subAccountId: SA, ownerSetId: `cds_starter_${SA}_${key}`, isDefault: false, ...extra });
+check("29 optional Mandala color fields, all accepted by the Chart Design allow-list", () => {
+  assert.equal(MANDALA_OPTIONAL_COLOR_FIELDS.length, 29);
+  for (const f of MANDALA_OPTIONAL_COLOR_FIELDS) assert.ok((CHART_DESIGN_SYSTEM_FIELDS.mandala as readonly string[]).includes(f), f);
+  const svc = readFileSync("src/lib/server/chart-design-service.ts", "utf8");
+  for (const f of MANDALA_OPTIONAL_COLOR_FIELDS) assert.ok(!svc.includes(f), `${f} must not be backfilled on read`);
+});
+check("basic colors: hexagrams, gate text, background, glow — each its own value, applied uniformly (BodyGraph keeps the chosen color over wedges too)", () => {
+  const c = resolveMandalaColors({ backgroundColor: "#fafafa", mandalaHexagramColor: "#110000", mandalaGateTextColor: "#001100", mandalaGlowColor: "#000011" });
+  const m = buildMandalaModel({ personality: [{ gate: 13, line: 1, body: "sun" }], design: [] }, c);
+  assert.equal(c.background, "#fafafa");
+  assert.ok(m.gates.every((g) => g.hexagram.stroke === "#110000" && g.number.fill === "#001100"), "same color on activated and inactive gates");
+  assert.equal(m.glow.color, "#000011");
+  // legacy fallbacks reproduce today's rendering
+  const legacy = resolveMandalaColors({ backgroundColor: "#0f1115" });
+  assert.equal(legacy.gateText, fieldInk("#0f1115"));
+  assert.equal(legacy.hexagram, legacy.gateText);
+  assert.equal(legacy.glow, glowColor("#0f1115"));
+});
+check("quarters: four independent backgrounds and four independent text colors", () => {
+  const fields = Object.fromEntries(MANDALA_QUARTER_KEYS.flatMap((q, i) => [[MANDALA_COLOR_FIELDS.quarterBackground[q], `#00000${i + 1}`], [MANDALA_COLOR_FIELDS.quarterText[q], `#10000${i + 1}`]]));
+  const m = buildMandalaModel({ personality: [], design: [] }, resolveMandalaColors({ mandalaQuadrantColor: "#71717a", ...fields }));
+  assert.deepEqual(m.quarters.map((q) => [q.quarter.name, q.fill, q.ink]), [["Initiation", "#000001", "#100001"], ["Civilization", "#000002", "#100002"], ["Duality", "#000003", "#100003"], ["Mutation", "#000004", "#100004"]]);
+  // one changed, the others untouched (no derivation between them)
+  const one = resolveMandalaColors({ mandalaQuadrantColor: "#71717a", mandalaDualityColor: "#ff0000" });
+  const legacy = quarterFills("#71717a");
+  assert.deepEqual(MANDALA_QUARTER_KEYS.map((q) => one.quarters[q].background), [legacy[0], legacy[1], "#ff0000", legacy[3]]);
+  // legacy: today's generated shades + automatic label ink
+  const old = resolveMandalaColors({ mandalaQuadrantColor: "#d6a373" });
+  assert.deepEqual(MANDALA_QUARTER_KEYS.map((q) => old.quarters[q].background), quarterFills("#d6a373"));
+  assert.deepEqual(MANDALA_QUARTER_KEYS.map((q) => old.quarters[q].text), quarterFills("#d6a373").map(inkOn));
+});
+check("zodiac: four element backgrounds + four element text colors + a stored symbol color", () => {
+  const c = resolveMandalaColors({ mandalaFireColor: "#a00000", mandalaFireTextColor: "#0a0000", mandalaWaterTextColor: "#00000a", mandalaZodiacSymbolColor: "#123456" });
+  const m = buildMandalaModel({ personality: [], design: [] }, c);
+  const sign = (n: string) => m.signs.find((x) => x.sign === n)!;
+  for (const n of ["Aries", "Leo", "Sagittarius"]) assert.deepEqual([sign(n).fill, sign(n).ink], ["#a00000", "#0a0000"]);
+  for (const n of ["Cancer", "Scorpio", "Pisces"]) assert.equal(sign(n).ink, "#00000a");
+  assert.equal(c.zodiacSymbol, "#123456");
+  assert.equal(new Set(m.signs.map((x) => x.fill)).size, 4, "four element groups, not 12 sign colors");
+  // legacy text = today's automatic ink
+  const old = resolveMandalaColors({ mandalaZodiacColor: "#8b5cf6" });
+  assert.equal(old.elementText.air, inkOn(old.elements.air));
+});
+check("center colors: nine fields, canonical gate → center mapping, activated wedges take their center's color", () => {
+  const counts: Record<string, number> = {};
+  for (const g of GATE_WHEEL_ORDER) counts[GATE_CENTER[g]] = (counts[GATE_CENTER[g]] ?? 0) + 1;
+  assert.deepEqual(counts, { head: 3, ajna: 6, throat: 11, g: 8, heart: 4, spleen: 7, sacral: 9, solarplexus: 7, root: 9 });
+  assert.deepEqual([...MANDALA_CENTER_KEYS].sort(), Object.keys(counts).sort());
+  const centers = Object.fromEntries(MANDALA_CENTER_KEYS.map((c, i) => [MANDALA_COLOR_FIELDS.centers[c], `#c0000${i}`]));
+  const colors = resolveMandalaColors(centers);
+  // activate every gate on the Personality side
+  const m = buildMandalaModel({ personality: GATE_WHEEL_ORDER.map((gate) => ({ gate, line: 1, body: "sun" })), design: [] }, colors);
+  for (const g of m.gates) {
+    assert.equal(g.center, GATE_CENTER[g.gate]);
+    assert.deepEqual(g.wedges.map((w) => w.fill), [colors.centers[GATE_CENTER[g.gate]]], `gate ${g.gate}`);
+  }
+  assert.equal(m.gates.find((g) => g.gate === 64)!.wedges[0].fill, "#c00000"); // head
+  assert.equal(m.gates.find((g) => g.gate === 41)!.wedges[0].fill, "#c00008"); // root
+});
+check("activation sides: one center-colored wedge per gate; Personality/Design (and both) live in the planet symbols; data untouched", () => {
+  const personality = [{ gate: 13, line: 4, body: "sun" }, { gate: 13, line: 2, body: "mercury" }, { gate: 7, line: 1, body: "moon" }];
+  const design = [{ gate: 7, line: 6, body: "venus" }, { gate: 5, line: 3, body: "mars" }];
   const before = JSON.stringify({ personality, design });
-  const m = buildMandalaModel({ personality, design }, {
-    backgroundColor: "#ffffff", personalityColor: "#111111", designColor: "#aa3300", gateColor: "#c2410c", gateRingColor: "#71717a", quadrantColor: "#71717a", elements: MANDALA_ELEMENT_PALETTES.default,
-  });
+  const colors = resolveMandalaColors({ personalityActivationColor: "#111111", designActivationColor: "#aa3300", mandalaGCenterColor: "#00aa00", mandalaSacralCenterColor: "#0000aa" });
+  const m = buildMandalaModel({ personality, design }, colors);
   assert.equal(JSON.stringify({ personality, design }), before, "input not mutated");
-  const g13 = m.gates.find((g) => g.gate === 13)!, g7 = m.gates.find((g) => g.gate === 7)!, g1 = m.gates.find((g) => g.gate === 1)!;
-  assert.deepEqual(g13.wedges.map((w) => w.fill), ["#111111"]);
-  assert.deepEqual(g7.wedges.map((w) => w.fill), ["#111111", "#aa3300"], "both sides → split, both colors kept");
-  assert.equal(g1.wedges.length, 0);
-  assert.deepEqual(g13.planets.map((p) => [p.body, p.fill]), [["sun", "#111111"], ["mercury", "#111111"]]);
-  assert.deepEqual(g7.planets.map((p) => [p.body, p.fill]), [["moon", "#111111"], ["venus", "#aa3300"]]);
-  assert.equal(m.gates.length, 64);
-  assert.ok(m.gates.every((g) => g.number.fill === m.fieldInk || g.wedges.length > 0), "every inactive gate number uses the same ink");
-  // layer toggles hide drawing only
-  const hidden = buildMandalaModel({ personality, design }, { backgroundColor: "#ffffff", personalityColor: "#111111", designColor: "#aa3300", gateColor: "#c2410c", gateRingColor: "#71717a", quadrantColor: "#71717a", elements: MANDALA_ELEMENT_PALETTES.default }, { showPersonality: false });
-  assert.deepEqual(hidden.gates.find((g) => g.gate === 7)!.wedges.map((w) => w.fill), ["#aa3300"]);
+  const g = (n: number) => m.gates.find((x) => x.gate === n)!;
+  assert.deepEqual(g(13).wedges.map((w) => w.fill), ["#00aa00"], "G gate, Personality only");
+  assert.deepEqual(g(7).wedges.map((w) => w.fill), ["#00aa00"], "G gate, both sides: one wedge, center color (no split, no third color)");
+  assert.deepEqual(g(5).wedges.map((w) => w.fill), ["#0000aa"], "Sacral gate, Design only");
+  assert.deepEqual(g(13).planets.map((p) => [p.body, p.side, p.fill]), [["sun", "personality", "#111111"], ["mercury", "personality", "#111111"]]);
+  assert.deepEqual(g(7).planets.map((p) => [p.body, p.side, p.fill]), [["moon", "personality", "#111111"], ["venus", "design", "#aa3300"]], "both sides stay visible");
+  assert.deepEqual(g(5).planets.map((p) => [p.side, p.fill]), [["design", "#aa3300"]]);
+  assert.equal(g(1).wedges.length, 0);
+  // layer toggles hide that side's symbols and (if nothing else activates it) its wedge
+  const noP = buildMandalaModel({ personality, design }, colors, { showPersonality: false });
+  assert.equal(noP.gates.find((x) => x.gate === 13)!.wedges.length, 0);
+  assert.deepEqual(noP.gates.find((x) => x.gate === 7)!.planets.map((p) => p.side), ["design"]);
+});
+check("backward compatibility: old ready-made / Default / custom / partial records; explicit values win", () => {
+  // old ready-made (identity) → that design's own center palette and symbol color
+  assert.deepEqual(resolveMandalaColors(legacyStarter("midnight", { mandalaZodiacColor: "#a78bfa" })).centers, MANDALA_CENTER_PALETTES.midnight);
+  assert.deepEqual(resolveMandalaColors(legacyStarter("magnetix-violet", { mandalaZodiacColor: "#8b5cf6" })).centers, MANDALA_CENTER_PALETTES["magnetix-violet"]);
+  assert.deepEqual(resolveMandalaColors({ subAccountId: SA, ownerSetId: "cds_x", isDefault: true, mandalaZodiacColor: "#8b5cf6" }).centers, MANDALA_CENTER_PALETTES.default);
+  // old custom with a non-built-in zodiac color → nine distinct derived colors
+  const custom = resolveMandalaColors({ subAccountId: SA, ownerSetId: "cds_c", isDefault: false, mandalaZodiacColor: "#0e7490" });
+  assert.equal(new Set(Object.values(custom.centers)).size, 9);
+  // partial: some new fields saved, the rest resolve
+  const partial = resolveMandalaColors({ ...legacyStarter("monochrome", { mandalaZodiacColor: "#52525b" }), mandalaRootCenterColor: "#abcdef", mandalaGlowColor: "#fefefe" });
+  assert.equal(partial.centers.root, "#abcdef");
+  assert.equal(partial.centers.head, MANDALA_CENTER_PALETTES.monochrome.head);
+  assert.equal(partial.glow, "#fefefe");
+  // presets: explicit values, the quarters equal today's generated shades (so nothing changes visually)
+  const preset = (n: string) => CHART_DESIGN_PRESETS.mandala.find((p) => p.name === n)!.values as Record<string, string>;
+  for (const [n, key] of [["Magnetix Violet", "magnetix-violet"], ["Monochrome", "monochrome"], ["Warm Sunset", "warm-sunset"], ["Midnight", "midnight"]] as const) {
+    const v = preset(n);
+    for (const f of MANDALA_OPTIONAL_COLOR_FIELDS) assert.match(v[f] ?? "", /^#[0-9a-f]{6}$/, `${n}.${f}`);
+    assert.deepEqual(MANDALA_QUARTER_KEYS.map((q) => v[MANDALA_COLOR_FIELDS.quarterBackground[q]]), quarterFills(v.mandalaQuadrantColor), `${n} quarters = today's rendering`);
+    assert.equal(v.mandalaGlowColor, glowColor(v.backgroundColor));
+    assert.deepEqual(MANDALA_CENTER_KEYS.map((c) => v[MANDALA_COLOR_FIELDS.centers[c]]), MANDALA_CENTER_KEYS.map((c) => MANDALA_CENTER_PALETTES[key][c]));
+    assert.ok(new Set(MANDALA_CENTER_KEYS.map((c) => v[MANDALA_COLOR_FIELDS.centers[c]])).size >= 8, `${n}: centers distinguishable`);
+  }
 });
 check("center BodyGraph: drawing 55% of the wheel, centered, clear of the planet symbols", () => {
   const b = mandalaBodygraphBox();
@@ -279,10 +371,10 @@ check("browser and PDF both draw from mandala-spec (no private geometry left)", 
     assert.ok(!/GATE_WHEEL_ORDER|WHEEL_START_LONGITUDE_DEG|QUADRANT_OUTER\s*=|const .*_R = \d/.test(src), "no local geometry constants");
   }
   for (const f of ["reading-summary.tsx", "mandala-reading-view.tsx", "report-design-viewer.tsx", "chart-design-controls.tsx", "chart-designs-tab.tsx"]) {
-    assert.ok(readFileSync(`src/components/energetic-decoder/${f}`, "utf8").includes("elementColors={resolveMandalaElementColors("), f);
+    assert.ok(readFileSync(`src/components/energetic-decoder/${f}`, "utf8").includes("mandalaColors={resolveMandalaColors("), f);
   }
-  assert.equal((pdf.match(/elementColors=\{resolveMandalaElementColors\(mandalaDesign\)\}/g) ?? []).length, 1);
-  assert.ok(readFileSync("src/lib/energetics/report-design-pdf-document.tsx", "utf8").includes("elementColors={resolveMandalaElementColors(mandalaDesign)}"));
+  assert.equal((pdf.match(/mandalaColors=\{resolveMandalaColors\(mandalaDesign\)\}/g) ?? []).length, 1);
+  assert.ok(readFileSync("src/lib/energetics/report-design-pdf-document.tsx", "utf8").includes("mandalaColors={resolveMandalaColors(mandalaDesign)}"));
 });
 check("protected Human Design surfaces are unchanged", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
@@ -293,7 +385,7 @@ check("protected Human Design surfaces are unchanged", () => {
   assert.equal(h(pdf.slice(pa, pdf.indexOf("\n}\n", pa) + 3)), "bd0cb864288e521a", "HumanDesignFullChartPdf");
   // the PDF BodyGraph's new activation-color props default to the original constants, and only the Mandala passes them
   assert.ok(pdf.includes("personalityColor = PERSONALITY_FILL,\n  designColor = DESIGN_FILL,"));
-  assert.equal((pdf.match(/personalityColor=\{personalityColor\}/g) ?? []).length, 1);
+  assert.equal((pdf.match(/personalityColor=\{colors\.personality\}/g) ?? []).length, 1, "only the Mandala passes activation colors to the PDF BodyGraph");
 });
 
 console.log(`\n${passed} checks passed.`);

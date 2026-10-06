@@ -21,6 +21,8 @@
 
 import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG, SIGNS, type ZodiacSign } from "./gate-data";
 import { CHART_DESIGN_STARTERS, starterMemberId, starterSetId, type ChartDesignStarterKey } from "./chart-design-starters";
+import { GATE_CENTER, type CenterKey } from "./human-design-data";
+import { PERSONALITY_FILL, DESIGN_FILL } from "./human-design-chart-constants";
 
 // ── Frame ─────────────────────────────────────────────────────────────
 
@@ -482,18 +484,211 @@ export function resolveMandalaElementColors(design: MandalaElementColorSource | 
   };
 }
 
-// ── The drawing model (everything both renderers draw) ──────────────
+// ── Full Mandala color model (2026-10, BodyGraph-style controls) ─────
+//
+// Every Mandala color a Chart Design can set. All fields are OPTIONAL so
+// existing designs stay valid; resolveMandalaColors() fills the missing ones
+// at read time only (nothing is ever written on read):
+//   - colors that reproduce today's rendering (quarter backgrounds/text,
+//     zodiac text, hexagrams, gate text, glow) are derived from the design's
+//     own current values, so an existing design looks exactly as before;
+//   - genuinely new colors (the nine center colors, the zodiac symbol color)
+//     come from the built-in design's own palette when the record IS a
+//     built-in design (by identity), else from the built-in palette sharing
+//     its zodiac color, else derived deterministically from that color.
+// The first intentional Mandala save in the editor pins every value shown.
 
-export interface MandalaColors {
-  backgroundColor: string;
-  personalityColor: string;
-  designColor: string;
-  /** "Activated gates" accent: the rim arc on each activated gate. */
-  gateColor: string;
-  gateRingColor: string;
-  quadrantColor: string;
-  elements: MandalaElementColors;
+export type MandalaQuarterKey = "initiation" | "civilization" | "duality" | "mutation";
+export const MANDALA_QUARTER_KEYS: readonly MandalaQuarterKey[] = ["initiation", "civilization", "duality", "mutation"];
+export const MANDALA_CENTER_KEYS: readonly CenterKey[] = ["head", "ajna", "throat", "g", "heart", "spleen", "sacral", "solarplexus", "root"];
+
+export const MANDALA_COLOR_FIELDS = {
+  hexagram: "mandalaHexagramColor",
+  gateText: "mandalaGateTextColor",
+  glow: "mandalaGlowColor",
+  quarterBackground: {
+    initiation: "mandalaInitiationColor",
+    civilization: "mandalaCivilizationColor",
+    duality: "mandalaDualityColor",
+    mutation: "mandalaMutationColor",
+  },
+  quarterText: {
+    initiation: "mandalaInitiationTextColor",
+    civilization: "mandalaCivilizationTextColor",
+    duality: "mandalaDualityTextColor",
+    mutation: "mandalaMutationTextColor",
+  },
+  elementBackground: MANDALA_ELEMENT_FIELDS,
+  elementText: {
+    fire: "mandalaFireTextColor",
+    earth: "mandalaEarthTextColor",
+    air: "mandalaAirTextColor",
+    water: "mandalaWaterTextColor",
+  },
+  zodiacSymbol: "mandalaZodiacSymbolColor",
+  centers: {
+    head: "mandalaHeadCenterColor",
+    ajna: "mandalaAjnaCenterColor",
+    throat: "mandalaThroatCenterColor",
+    g: "mandalaGCenterColor",
+    heart: "mandalaHeartCenterColor",
+    spleen: "mandalaSplenicCenterColor",
+    sacral: "mandalaSacralCenterColor",
+    solarplexus: "mandalaSolarPlexusCenterColor",
+    root: "mandalaRootCenterColor",
+  },
+} as const;
+
+/** Every optional Mandala color field (element backgrounds included) — what the editor pins on the first save. */
+export const MANDALA_OPTIONAL_COLOR_FIELDS: readonly string[] = [
+  MANDALA_COLOR_FIELDS.hexagram,
+  MANDALA_COLOR_FIELDS.gateText,
+  MANDALA_COLOR_FIELDS.glow,
+  ...MANDALA_QUARTER_KEYS.flatMap((q) => [MANDALA_COLOR_FIELDS.quarterBackground[q], MANDALA_COLOR_FIELDS.quarterText[q]]),
+  ...(["fire", "earth", "air", "water"] as const).flatMap((e) => [MANDALA_COLOR_FIELDS.elementBackground[e], MANDALA_COLOR_FIELDS.elementText[e]]),
+  MANDALA_COLOR_FIELDS.zodiacSymbol,
+  ...MANDALA_CENTER_KEYS.map((c) => MANDALA_COLOR_FIELDS.centers[c]),
+];
+
+export type BuiltInMandalaKey = "default" | ChartDesignStarterKey;
+
+/** Which built-in design a record is (identity only — see builtInElementPalette), or null for a custom design. */
+export function builtInMandalaKey(design: MandalaElementColorSource | null | undefined): BuiltInMandalaKey | null {
+  if (!design) return null;
+  if (design.subAccountId) {
+    for (const { key } of CHART_DESIGN_STARTERS) {
+      const setId = starterSetId(design.subAccountId, key);
+      if (design.ownerSetId === setId || design.id === starterMemberId(setId, "mandala")) return key;
+    }
+  }
+  return design.isDefault === true ? "default" : null;
 }
+
+/** The built-in design whose (unchanged) zodiac color a custom design carries. */
+const ZODIAC_SEED_KEY: Record<string, BuiltInMandalaKey> = {
+  "#8b5cf6": "default",
+  "#52525b": "monochrome",
+  "#ea580c": "warm-sunset",
+  "#a78bfa": "midnight",
+};
+
+/**
+ * The nine center colors of each built-in design: the color of an
+ * activated gate's wedge, by the Human Design center the gate belongs to.
+ * Chosen to fit each design while keeping the centers distinguishable.
+ */
+export const MANDALA_CENTER_PALETTES: Record<BuiltInMandalaKey, Record<CenterKey, string>> = {
+  default: { head: "#e0b25c", ajna: "#8f9a6a", throat: "#c9a27e", g: "#d4a24c", heart: "#b5524f", spleen: "#a68a64", sacral: "#c0645a", solarplexus: "#cf8a4c", root: "#9c7a5b" },
+  "magnetix-violet": { head: "#f0abfc", ajna: "#a78bfa", throat: "#c084fc", g: "#e879f9", heart: "#be185d", spleen: "#6366f1", sacral: "#db2777", solarplexus: "#9333ea", root: "#7c3aed" },
+  monochrome: { head: "#d4d4d8", ajna: "#a1a1aa", throat: "#71717a", g: "#e4e4e7", heart: "#3f3f46", spleen: "#52525b", sacral: "#27272a", solarplexus: "#8a8a93", root: "#5f5f68" },
+  "warm-sunset": { head: "#fcd34d", ajna: "#d6a373", throat: "#fb923c", g: "#f59e0b", heart: "#b91c1c", spleen: "#a16207", sacral: "#dc2626", solarplexus: "#ea580c", root: "#92400e" },
+  midnight: { head: "#fde68a", ajna: "#86efac", throat: "#67e8f9", g: "#fcd34d", heart: "#f87171", spleen: "#34d399", sacral: "#fb7185", solarplexus: "#fb923c", root: "#a78bfa" },
+};
+
+/** Zodiac symbol color of each built-in design (dormant while the Mandala shows sign names). */
+export const MANDALA_SYMBOL_COLORS: Record<BuiltInMandalaKey, string> = {
+  default: "#ffffff",
+  "magnetix-violet": "#ffffff",
+  monochrome: "#ffffff",
+  "warm-sunset": "#ffffff",
+  midnight: "#ffffff",
+};
+
+export interface ResolvedMandalaColors {
+  background: string;
+  glow: string;
+  hexagram: string;
+  gateText: string;
+  /** Spokes + field edge. */
+  gateLines: string;
+  /** Rim accent on activated gates. */
+  activatedEdge: string;
+  /** Planet symbols + the center BodyGraph's activation markers. */
+  personality: string;
+  design: string;
+  quarters: Record<MandalaQuarterKey, { background: string; text: string }>;
+  elements: MandalaElementColors;
+  elementText: MandalaElementColors;
+  zodiacSymbol: string;
+  centers: Record<CenterKey, string>;
+}
+
+/** The record fields resolveMandalaColors reads (a ChartDesign, a frozen copy, or the editor's preview). */
+export type MandalaDesignColorSource = MandalaElementColorSource & {
+  backgroundColor?: string | null;
+  personalityActivationColor?: string | null;
+  designActivationColor?: string | null;
+  chartDefinedColor?: string | null;
+  mandalaGateRingColor?: string | null;
+  mandalaQuadrantColor?: string | null;
+};
+
+function centersDerivedFrom(zodiac: string): Record<CenterKey, string> {
+  const offsets: Record<CenterKey, [number, number]> = {
+    head: [60, 0.12], ajna: [100, -0.04], throat: [30, 0.06], g: [45, 0.1], heart: [-20, -0.12],
+    spleen: [140, -0.06], sacral: [-35, -0.02], solarplexus: [15, 0.02], root: [-70, -0.1],
+  };
+  return Object.fromEntries(MANDALA_CENTER_KEYS.map((c) => [c, deriveShade(zodiac, offsets[c][0], offsets[c][1])])) as Record<CenterKey, string>;
+}
+
+export function resolveMandalaColors(design: MandalaDesignColorSource | object | null | undefined): ResolvedMandalaColors {
+  const d = (design ?? {}) as MandalaDesignColorSource;
+  const rec = d as unknown as Record<string, unknown>;
+  const str = (k: string): string | null => (typeof rec[k] === "string" && (rec[k] as string) ? (rec[k] as string) : null);
+  const F = MANDALA_COLOR_FIELDS;
+  const background = d.backgroundColor || "#ffffff";
+  const elements = resolveMandalaElementColors(d);
+  const legacyQuarterFills = quarterFills(d.mandalaQuadrantColor || "#71717a");
+  const zodiac = (d.mandalaZodiacColor || "#8b5cf6").toLowerCase();
+  const key = builtInMandalaKey(d) ?? ZODIAC_SEED_KEY[zodiac] ?? null;
+  const centerFallback = key ? MANDALA_CENTER_PALETTES[key] : centersDerivedFrom(zodiac);
+  const quarters = Object.fromEntries(
+    MANDALA_QUARTER_KEYS.map((q, i) => {
+      const bg = str(F.quarterBackground[q]) ?? legacyQuarterFills[i];
+      return [q, { background: bg, text: str(F.quarterText[q]) ?? inkOn(bg) }];
+    }),
+  ) as ResolvedMandalaColors["quarters"];
+  const elementText = Object.fromEntries(
+    (["fire", "earth", "air", "water"] as const).map((e) => [e, str(F.elementText[e]) ?? inkOn(elements[e])]),
+  ) as MandalaElementColors;
+  const gateText = str(F.gateText) ?? fieldInk(background);
+  return {
+    background,
+    glow: str(F.glow) ?? glowColor(background),
+    hexagram: str(F.hexagram) ?? gateText,
+    gateText,
+    gateLines: d.mandalaGateRingColor || "#71717a",
+    activatedEdge: d.chartDefinedColor || "#c2410c",
+    personality: d.personalityActivationColor || PERSONALITY_FILL,
+    design: d.designActivationColor || DESIGN_FILL,
+    quarters,
+    elements,
+    elementText,
+    zodiacSymbol: str(F.zodiacSymbol) ?? (key ? MANDALA_SYMBOL_COLORS[key] : "#ffffff"),
+    centers: Object.fromEntries(MANDALA_CENTER_KEYS.map((c) => [c, str(F.centers[c]) ?? centerFallback[c]])) as Record<CenterKey, string>,
+  };
+}
+
+/** A resolved color by its field name (the editor's fallback for pickers of fields a design hasn't saved yet). */
+export function resolvedMandalaFieldValue(colors: ResolvedMandalaColors, field: string): string | undefined {
+  const F = MANDALA_COLOR_FIELDS;
+  if (field === F.hexagram) return colors.hexagram;
+  if (field === F.gateText) return colors.gateText;
+  if (field === F.glow) return colors.glow;
+  if (field === F.zodiacSymbol) return colors.zodiacSymbol;
+  for (const q of MANDALA_QUARTER_KEYS) {
+    if (field === F.quarterBackground[q]) return colors.quarters[q].background;
+    if (field === F.quarterText[q]) return colors.quarters[q].text;
+  }
+  for (const e of ["fire", "earth", "air", "water"] as const) {
+    if (field === F.elementBackground[e]) return colors.elements[e];
+    if (field === F.elementText[e]) return colors.elementText[e];
+  }
+  for (const c of MANDALA_CENTER_KEYS) if (field === F.centers[c]) return colors.centers[c];
+  return undefined;
+}
+
+// ── The drawing model (everything both renderers draw) ──────────────
 
 export interface MandalaActivationInput {
   gate: number;
@@ -505,14 +700,17 @@ export interface MandalaGateModel {
   gate: number;
   index: number;
   span: AngularSpan;
+  /** The Human Design center this gate belongs to (GATE_CENTER). */
+  center: CenterKey;
   personality: MandalaActivationInput[];
   design: MandalaActivationInput[];
-  /** Activation wedges, center → field edge: one (one side) or two halves (both sides, split down the gate's center). */
+  /** The activation wedge, center → field edge, in the color of the gate's center (one wedge whether one or both sides activate it). */
   wedges: { start: number; end: number; fill: string }[];
   /** Rim accent arc for activated gates. */
   rim: { start: number; end: number } | null;
   number: { x: number; y: number; rotate: number; fill: string };
   hexagram: { segments: ReturnType<typeof hexagramSegments>; stroke: string };
+  /** Planet symbols: Personality ones in the Personality color, Design ones in the Design color — this is where the side (and "both") is shown. */
   planets: { x: number; y: number; fontSize: number; body: string; fill: string; side: "personality" | "design" }[];
 }
 
@@ -522,72 +720,54 @@ export interface MandalaModel {
   gates: MandalaGateModel[];
   spokes: { x1: number; y1: number; x2: number; y2: number }[];
   glow: { color: string; solidStop: number };
-  fieldInk: string;
+  colors: ResolvedMandalaColors;
 }
 
 /**
  * Everything a Mandala draws, from the profile's activations and the
- * design's colors. `showPersonality` / `showDesign` (the Reading page's
- * layer toggles) hide a side's wedges and symbols only — never data.
+ * design's resolved colors. `showPersonality` / `showDesign` (the Reading
+ * page's layer toggles) hide a side's wedge/symbols only — never data.
  */
 export function buildMandalaModel(
   activations: { personality: MandalaActivationInput[]; design: MandalaActivationInput[] },
-  colors: MandalaColors,
+  colors: ResolvedMandalaColors,
   opts: { showPersonality?: boolean; showDesign?: boolean } = {},
 ): MandalaModel {
   const showP = opts.showPersonality !== false;
   const showD = opts.showDesign !== false;
-  const bg = colors.backgroundColor;
-  const ink = fieldInk(bg);
-  const quarterFill = quarterFills(colors.quadrantColor);
   const R = MANDALA_RINGS;
 
   const quarters = MANDALA_QUARTERS.map((quarter, q) => {
     const span = quarterSpan(quarter);
-    return { quarter, span, fill: quarterFill[q], ink: inkOn(quarterFill[q]), labelAngle: span.mid };
+    const c = colors.quarters[MANDALA_QUARTER_KEYS[q]];
+    return { quarter, span, fill: c.background, ink: c.text, labelAngle: span.mid };
   });
-  const signs = MANDALA_SIGNS.map(({ sign, element, span }) => {
-    const fill = colors.elements[element];
-    return { sign, element, span, fill, ink: inkOn(fill) };
-  });
+  const signs = MANDALA_SIGNS.map(({ sign, element, span }) => ({ sign, element, span, fill: colors.elements[element], ink: colors.elementText[element] }));
 
   const gates: MandalaGateModel[] = GATE_WHEEL_ORDER.map((gate, index) => {
     const span = gateSpan(index);
+    const center = GATE_CENTER[gate];
     const personality = showP ? activations.personality.filter((a) => a.gate === gate) : [];
     const design = showD ? activations.design.filter((a) => a.gate === gate) : [];
-    const pOn = personality.length > 0, dOn = design.length > 0;
-    const wedges =
-      pOn && dOn
-        ? [
-            // Personality on the half that comes first going counterclockwise (the higher-longitude side), Design on the other — fixed, so a split always reads the same way.
-            { start: span.start, end: span.mid, fill: colors.personalityColor },
-            { start: span.mid, end: span.end, fill: colors.designColor },
-          ]
-        : pOn || dOn
-          ? [{ start: span.start, end: span.end, fill: pOn ? colors.personalityColor : colors.designColor }]
-          : [];
-    // Ink for the number + hexagram: the field ink, or white/dark against the wedge they sit on.
-    const shown = wedges.map((w) => blend(w.fill, bg, WEDGE_OPACITY));
-    const avg = shown.length
-      ? rgbToHex(...([0, 1, 2].map((c) => shown.reduce((s, h) => s + hexToRgb(h)[c], 0) / shown.length) as [number, number, number]))
-      : null;
-    const gateInk = avg ? inkOn(avg) : ink;
+    const activated = personality.length > 0 || design.length > 0;
+    const wedges = activated ? [{ start: span.start, end: span.end, fill: colors.centers[center] }] : [];
     const numberPos = polar(span.mid, R.gateNumber);
     const symbols = [
-      ...personality.map((a) => ({ body: a.body, side: "personality" as const, fill: colors.personalityColor })),
-      ...design.map((a) => ({ body: a.body, side: "design" as const, fill: colors.designColor })),
+      ...personality.map((a) => ({ body: a.body, side: "personality" as const, fill: colors.personality })),
+      ...design.map((a) => ({ body: a.body, side: "design" as const, fill: colors.design })),
     ];
     const positions = planetSymbolPositions(index, symbols.length);
     return {
       gate,
       index,
       span,
+      center,
       personality,
       design,
       wedges,
-      rim: wedges.length ? { start: span.start, end: span.end } : null,
-      number: { ...numberPos, rotate: tangentialTextRotation(span.mid), fill: gateInk },
-      hexagram: { segments: hexagramSegments(index, gate), stroke: gateInk },
+      rim: activated ? { start: span.start, end: span.end } : null,
+      number: { ...numberPos, rotate: tangentialTextRotation(span.mid), fill: colors.gateText },
+      hexagram: { segments: hexagramSegments(index, gate), stroke: colors.hexagram },
       planets: symbols.map((s, k) => ({ ...positions[k], ...s })),
     };
   });
@@ -598,5 +778,5 @@ export function buildMandalaModel(
     return { x1: MANDALA_CX, y1: MANDALA_CY, x2: p.x, y2: p.y };
   });
 
-  return { quarters, signs, gates, spokes, glow: { color: glowColor(bg), solidStop: R.glowSolid / R.glowOuter }, fieldInk: ink };
+  return { quarters, signs, gates, spokes, glow: { color: colors.glow, solidStop: R.glowSolid / R.glowOuter }, colors };
 }

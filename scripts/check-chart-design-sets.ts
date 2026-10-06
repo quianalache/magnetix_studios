@@ -644,7 +644,7 @@ async function main() {
     for (const sys of ["humanDesign", "mandala", "astrology"] as const) {
       const rec = { ...(base.designs[sys] as unknown as Record<string, unknown>) };
       delete rec.id;
-      for (const f of Object.values(spec.MANDALA_ELEMENT_FIELDS)) delete rec[f];
+      for (const f of spec.MANDALA_OPTIONAL_COLOR_FIELDS) delete rec[f];
       await db.collection("chartDesigns").doc(ids[sys]).set({ ...rec, name: "Magnetix Violet", isDefault: false, ownerSetId: setId, mandalaZodiacColor: "#8b5cf6", updatedAt: Timestamp.fromMillis(1_700_000_000_000) });
     }
     await db.collection("chartDesignSets").doc(setId).set({ subAccountId: SA3, agencyId: AG, name: "Magnetix Violet", isDefault: false, members: { ...ids, frequency: null }, starter: { key: "magnetix-violet", version: 1 }, createdAt: Timestamp.fromMillis(1_700_000_000_000), updatedAt: Timestamp.fromMillis(1_700_000_000_000) });
@@ -655,7 +655,9 @@ async function main() {
     await setService.listChartDesignSets(SA3, AG);
     const rawAfter = (await db.collection("chartDesigns").doc(ids.mandala).get()).data()!;
     assert.deepEqual(rawAfter, rawBefore, "reading must not write or backfill");
-    for (const f of Object.values(spec.MANDALA_ELEMENT_FIELDS)) assert.equal(f in rawAfter, false, `${f} must not be written on read`);
+    for (const f of spec.MANDALA_OPTIONAL_COLOR_FIELDS) assert.equal(f in rawAfter, false, `${f} must not be written on read`);
+    const shown = spec.resolveMandalaColors(got.set.designs.mandala);
+    assert.deepEqual(shown.centers, spec.MANDALA_CENTER_PALETTES["magnetix-violet"], "ready-made center palette by identity");
     // shown: Magnetix Violet's palette, not Default's (same legacy zodiac color)
     assert.deepEqual(spec.resolveMandalaElementColors(got.set.designs.mandala), spec.MANDALA_ELEMENT_PALETTES.magnetixViolet);
     let st = editorState.initChartDesignEditorState(got.set);
@@ -667,6 +669,9 @@ async function main() {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const saved = (await db.collection("chartDesigns").doc(ids.mandala).get()).data()!;
     for (const [element, f] of Object.entries(spec.MANDALA_ELEMENT_FIELDS)) assert.equal(saved[f], spec.MANDALA_ELEMENT_PALETTES.magnetixViolet[element as "fire"], f);
+    // every one of the 29 optional colors is pinned to exactly what was shown
+    for (const f of spec.MANDALA_OPTIONAL_COLOR_FIELDS) assert.equal(saved[f], spec.resolvedMandalaFieldValue(shown, f), `${f} pinned`);
+    assert.equal(saved.mandalaQuadrantColor, rawBefore.mandalaQuadrantColor, "legacy quarter seed preserved");
     assert.equal(saved.mandalaZodiacColor, "#8b5cf6", "legacy field preserved");
     assert.equal(saved.backgroundColor, "#fdfdfd");
     } finally {

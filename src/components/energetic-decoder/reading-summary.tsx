@@ -8,7 +8,7 @@ import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
-import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import type { ChartDesign } from "@/types/chart-design";
@@ -290,7 +290,7 @@ export function HumanDesignSummary({
             personalityColor={mandalaDesign.personalityActivationColor}
             designColor={mandalaDesign.designActivationColor}
             zodiacColor={mandalaDesign.mandalaZodiacColor}
-            elementColors={resolveMandalaElementColors(mandalaDesign)}
+            mandalaColors={resolveMandalaColors(mandalaDesign)}
             gateRingColor={mandalaDesign.mandalaGateRingColor}
             quadrantColor={mandalaDesign.mandalaQuadrantColor}
             hdDesign={hdDesign}

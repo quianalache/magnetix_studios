@@ -11,7 +11,7 @@ import type { EditorValue, SystemValues } from "@/lib/energetics/chart-design-ed
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
-import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 
 /**
@@ -76,16 +76,41 @@ const FIELD_LABEL: Record<string, string> = {
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   mandalaZodiacColor: "Zodiac ring",
-  mandalaFireColor: "Fire signs",
-  mandalaEarthColor: "Earth signs",
-  mandalaAirColor: "Air signs",
-  mandalaWaterColor: "Water signs",
+  mandalaFireColor: "Fire background",
+  mandalaEarthColor: "Earth background",
+  mandalaAirColor: "Air background",
+  mandalaWaterColor: "Water background",
   mandalaGateRingColor: "Gate lines",
+  mandalaHexagramColor: "Hexagrams",
+  mandalaGateTextColor: "Gate text",
+  mandalaGlowColor: "Center glow",
+  mandalaInitiationColor: "Initiation background",
+  mandalaInitiationTextColor: "Initiation text",
+  mandalaCivilizationColor: "Civilization background",
+  mandalaCivilizationTextColor: "Civilization text",
+  mandalaDualityColor: "Duality background",
+  mandalaDualityTextColor: "Duality text",
+  mandalaMutationColor: "Mutation background",
+  mandalaMutationTextColor: "Mutation text",
+  mandalaFireTextColor: "Fire text",
+  mandalaEarthTextColor: "Earth text",
+  mandalaAirTextColor: "Air text",
+  mandalaWaterTextColor: "Water text",
+  mandalaZodiacSymbolColor: "Zodiac symbols",
+  mandalaHeadCenterColor: "Head",
+  mandalaAjnaCenterColor: "Ajna",
+  mandalaThroatCenterColor: "Throat",
+  mandalaGCenterColor: "G",
+  mandalaHeartCenterColor: "Heart",
+  mandalaSplenicCenterColor: "Splenic",
+  mandalaSacralCenterColor: "Sacral",
+  mandalaSolarPlexusCenterColor: "Solar Plexus",
+  mandalaRootCenterColor: "Root",
   mandalaQuadrantColor: "Quarter band",
 };
 
 export function chartFieldLabel(system: ChartDesignSystem, key: string): string {
-  if (key === "chartDefinedColor" && system === "mandala") return "Activated gates";
+  if (key === "chartDefinedColor" && system === "mandala") return "Activated gate edge";
   return FIELD_LABEL[key] ?? key;
 }
 
@@ -123,11 +148,11 @@ export const CHART_DESIGN_SECTIONS: Record<ChartDesignSystem, { title: string; d
     { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
   ],
   mandala: [
-    { title: "Gates", description: "Color of activated gates.", fields: ["chartDefinedColor"] },
-    { title: "Activations", description: "Personality and Design colors.", fields: ["personalityActivationColor", "designActivationColor"] },
-    { title: "Zodiac", description: "One color per element: Fire (Aries, Leo, Sagittarius), Earth (Taurus, Virgo, Capricorn), Air (Gemini, Libra, Aquarius), Water (Cancer, Scorpio, Pisces).", fields: ["mandalaFireColor", "mandalaEarthColor", "mandalaAirColor", "mandalaWaterColor"] },
-    { title: "Rings and quarters", description: "Human Design Quarter band and the gate field's lines.", fields: ["mandalaQuadrantColor", "mandalaGateRingColor"] },
-    { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
+    { title: "Basic colors", description: "Hexagrams, gate numbers, the background, the center glow and the gate field's lines.", fields: ["mandalaHexagramColor", "mandalaGateTextColor", "backgroundColor", "mandalaGlowColor", "mandalaGateRingColor"] },
+    { title: "Quarters", description: "Background and label color of each Human Design Quarter.", fields: ["mandalaInitiationColor", "mandalaInitiationTextColor", "mandalaCivilizationColor", "mandalaCivilizationTextColor", "mandalaDualityColor", "mandalaDualityTextColor", "mandalaMutationColor", "mandalaMutationTextColor"] },
+    { title: "Zodiac", description: "Background and text per element: Fire (Aries, Leo, Sagittarius), Earth (Taurus, Virgo, Capricorn), Air (Gemini, Libra, Aquarius), Water (Cancer, Scorpio, Pisces). Zodiac symbols applies when signs are shown as symbols.", fields: ["mandalaFireColor", "mandalaFireTextColor", "mandalaEarthColor", "mandalaEarthTextColor", "mandalaAirColor", "mandalaAirTextColor", "mandalaWaterColor", "mandalaWaterTextColor", "mandalaZodiacSymbolColor"] },
+    { title: "Center colors", description: "An activated gate's wedge takes the color of the Human Design center that gate belongs to.", fields: ["mandalaHeadCenterColor", "mandalaAjnaCenterColor", "mandalaThroatCenterColor", "mandalaGCenterColor", "mandalaHeartCenterColor", "mandalaSplenicCenterColor", "mandalaSacralCenterColor", "mandalaSolarPlexusCenterColor", "mandalaRootCenterColor"] },
+    { title: "Activations", description: "Personality and Design colors (planet symbols and the center BodyGraph's activations), and the edge marking each activated gate.", fields: ["personalityActivationColor", "designActivationColor", "chartDefinedColor"] },
   ],
   astrology: [
     { title: "Wheel", description: "Wheel and planet accent color.", fields: ["wheelAccentColor"] },
@@ -300,7 +325,7 @@ export function ChartDesignPreview({
         personalityColor={design.personalityActivationColor}
         designColor={design.designActivationColor}
         zodiacColor={design.mandalaZodiacColor}
-            elementColors={resolveMandalaElementColors(design)}
+            mandalaColors={resolveMandalaColors(design)}
         gateRingColor={design.mandalaGateRingColor}
         quadrantColor={design.mandalaQuadrantColor}
         hdDesign={size === "large" ? (hdDesign ?? null) : null}
