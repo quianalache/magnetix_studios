@@ -171,6 +171,30 @@ export interface ChartDesign {
   mandalaRootCenterColor?: string;
   mandalaZodiacSymbolColor?: string;
   /**
+   * Astrology only (2026-10 Chart Designs → Astrology) — all optional,
+   * resolved at read time by resolveAstrologyColors() in astrology-spec.ts
+   * (saved value → the built-in design's palette by identity → the legacy
+   * look; nothing is written on read, the first Astrology save pins them).
+   * `wheelAccentColor` (planet symbols) and `backgroundColor` are the two
+   * pre-existing Astrology fields.
+   */
+  astroHousesBackgroundColor?: string;
+  astroAspectsBackgroundColor?: string;
+  astroWheelLineColor?: string;
+  astroHouseLineColor?: string;
+  astroHouseNumberColor?: string;
+  astroAngleColor?: string;
+  astroFireColor?: string;
+  astroEarthColor?: string;
+  astroAirColor?: string;
+  astroWaterColor?: string;
+  astroZodiacSymbolColor?: string;
+  astroConjunctionColor?: string;
+  astroSextileColor?: string;
+  astroSquareColor?: string;
+  astroTrineColor?: string;
+  astroOppositionColor?: string;
+  /**
    * The unified Chart Design (`chartDesignSets/{id}`, see
    * chart-design-set.ts) this record belongs to. Every record belongs to
    * exactly one set once a sub-account is migrated, so editing one unified

@@ -21,6 +21,7 @@ import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { CHART_DESIGN_PRESETS } from "@/lib/energetics/chart-design-presets";
@@ -826,8 +827,7 @@ function CardPreview({
     <AstrologyWheelChart
       chart={sampleAstro}
       className="mx-auto w-full max-w-[220px]"
-      wheelAccentColor={fields.wheelAccentColor}
-      backgroundColor={fields.backgroundColor}
+      colors={resolveAstrologyColors({ wheelAccentColor: fields.wheelAccentColor, backgroundColor: fields.backgroundColor })}
     />
   );
 }

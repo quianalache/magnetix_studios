@@ -3,6 +3,7 @@ import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import { CHART_DESIGN_SET_SYSTEMS } from "@/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "./chart-design-fields";
 import { MANDALA_OPTIONAL_COLOR_FIELDS, resolveMandalaColors, resolvedMandalaFieldValue } from "./mandala-spec";
+import { ASTROLOGY_OPTIONAL_COLOR_FIELDS, resolveAstrologyColors, resolvedAstrologyFieldValue } from "./astrology-spec";
 
 /**
  * The unified Chart Design editor's state, as pure functions (2026-10).
@@ -24,12 +25,14 @@ export interface ChartDesignEditorState {
   saved: Record<ChartDesignSystem, SystemValues>;
   /** Mandala colors shown from the read-time fallback (the saved record has no value yet) — written explicitly with the first Mandala save, so what was shown stays exactly what's stored. */
   implicitMandalaFields?: string[];
+  /** The same for the 16 optional Astrology colors: written with the first Astrology save. */
+  implicitAstrologyFields?: string[];
 }
 
-function implicitMandalaFields(design: ChartDesign | null): string[] {
+function implicitFields(design: ChartDesign | null, fields: readonly string[]): string[] {
   if (!design) return [];
   const rec = design as unknown as Record<string, unknown>;
-  return MANDALA_OPTIONAL_COLOR_FIELDS.filter((f) => typeof rec[f] !== "string" || !rec[f]);
+  return fields.filter((f) => typeof rec[f] !== "string" || !rec[f]);
 }
 
 function systemValues(design: ChartDesign | null, system: ChartDesignSystem): SystemValues {
@@ -51,6 +54,16 @@ function systemValues(design: ChartDesign | null, system: ChartDesignSystem): Sy
       }
     }
   }
+  // Astrology: same — designs saved before the 16 Astrology colors existed show what they render with.
+  if (system === "astrology") {
+    const resolved = resolveAstrologyColors(design);
+    for (const field of ASTROLOGY_OPTIONAL_COLOR_FIELDS) {
+      if (out[field] === undefined) {
+        const v = resolvedAstrologyFieldValue(resolved, field);
+        if (v !== undefined) out[field] = v;
+      }
+    }
+  }
   return out;
 }
 
@@ -64,7 +77,8 @@ export function initChartDesignEditorState(set: ChartDesignSetWithMembers): Char
     savedName: set.name,
     values,
     saved: structuredClone(values),
-    implicitMandalaFields: implicitMandalaFields(set.designs.mandala),
+    implicitMandalaFields: implicitFields(set.designs.mandala, MANDALA_OPTIONAL_COLOR_FIELDS),
+    implicitAstrologyFields: implicitFields(set.designs.astrology, ASTROLOGY_OPTIONAL_COLOR_FIELDS),
   };
 }
 
@@ -118,6 +132,8 @@ export function buildEditorSavePayload(state: ChartDesignEditorState): ChartDesi
     if (Object.keys(changed).length > 0) {
       // A Mandala save also pins element colors that were only shown from the fallback.
       if (system === "mandala") for (const f of state.implicitMandalaFields ?? []) if (!(f in changed)) changed[f] = state.values.mandala[f];
+      // …and an Astrology save the colors shown from the Astrology fallback.
+      if (system === "astrology") for (const f of state.implicitAstrologyFields ?? []) if (!(f in changed)) changed[f] = state.values.astrology[f];
       payload[system] = changed;
     }
   }

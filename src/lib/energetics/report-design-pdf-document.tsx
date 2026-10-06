@@ -3,6 +3,7 @@ import "server-only";
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { resolveMandalaColors } from "./mandala-spec";
 import { HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf, GeneKeysChartPdf } from "./reading-pdf-document";
+import { resolveAstrologyColors } from "./astrology-spec";
 import { DEFAULT_DEFINED_FILL } from "./human-design-chart-constants";
 import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
@@ -104,7 +105,7 @@ function ChartPiecePdf({
       );
     case "astrology-wheel":
       return astrology ? (
-        <AstrologyWheelPdf chart={astrology} wheelAccentColor={astroDesign?.wheelAccentColor || "#7c3aed"} />
+        <AstrologyWheelPdf chart={astrology} colors={resolveAstrologyColors(astroDesign)} />
       ) : (
         <Text style={styles.missingPiece}>Astrology wheel isn&apos;t part of this reading.</Text>
       );

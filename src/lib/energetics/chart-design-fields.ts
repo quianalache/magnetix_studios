@@ -80,7 +80,26 @@ export const CHART_DESIGN_SYSTEM_FIELDS = {
     "mandalaQuadrantColor",
     "backgroundColor",
   ],
-  astrology: ["wheelAccentColor", "backgroundColor"],
+  astrology: [
+    "backgroundColor",
+    "astroHousesBackgroundColor",
+    "astroAspectsBackgroundColor",
+    "astroWheelLineColor",
+    "astroHouseLineColor",
+    "astroHouseNumberColor",
+    "astroAngleColor",
+    "wheelAccentColor",
+    "astroFireColor",
+    "astroEarthColor",
+    "astroAirColor",
+    "astroWaterColor",
+    "astroZodiacSymbolColor",
+    "astroConjunctionColor",
+    "astroSextileColor",
+    "astroSquareColor",
+    "astroTrineColor",
+    "astroOppositionColor",
+  ],
 } as const satisfies Record<ChartDesignSystem, readonly (keyof ChartDesign)[]>;
 
 export type ChartDesignEditableField<S extends ChartDesignSystem> = (typeof CHART_DESIGN_SYSTEM_FIELDS)[S][number];

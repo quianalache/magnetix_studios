@@ -136,6 +136,23 @@ export function freshDesignFields() {
     mandalaSolarPlexusCenterColor: "#cf8a4c",
     mandalaRootCenterColor: "#9c7a5b",
     mandalaZodiacSymbolColor: "#ffffff",
+    // Astrology design controls (2026-10) — the Default palette, explicit on brand-new designs only; existing designs resolve at read time (resolveAstrologyColors).
+    astroHousesBackgroundColor: "#faf9f7",
+    astroAspectsBackgroundColor: "#ffffff",
+    astroWheelLineColor: "#a1a1aa",
+    astroHouseLineColor: "#c4c4cc",
+    astroHouseNumberColor: "#52525b",
+    astroAngleColor: "#5e2574",
+    astroFireColor: "#c06e6e",
+    astroEarthColor: "#9c7f58",
+    astroAirColor: "#828d5d",
+    astroWaterColor: "#6f8ca3",
+    astroZodiacSymbolColor: "#ffffff",
+    astroConjunctionColor: "#3f3f46",
+    astroSextileColor: "#0d9488",
+    astroSquareColor: "#dc2626",
+    astroTrineColor: "#2563eb",
+    astroOppositionColor: "#b91c1c",
   };
 }
 

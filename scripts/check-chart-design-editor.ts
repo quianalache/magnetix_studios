@@ -4,6 +4,7 @@
  *
  * Run: pnpm exec tsx scripts/check-chart-design-editor.ts
  */
+import { ASTROLOGY_OPTIONAL_COLOR_FIELDS } from "../src/lib/energetics/astrology-spec";
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -92,6 +93,8 @@ const base = {
   mandalaWaterColor: "#7f9bb0",
   // the rest of the optional Mandala colors, explicit (as new designs have them)
   ...Object.fromEntries(MANDALA_OPTIONAL_COLOR_FIELDS.filter((f) => !/^mandala(Fire|Earth|Air|Water)Color$/.test(f)).map((f) => [f, "#999999"])),
+  // the 16 optional Astrology colors, explicit (as new designs have them) — the implicit first-save pinning is covered in check-astrology-spec.ts
+  ...Object.fromEntries(ASTROLOGY_OPTIONAL_COLOR_FIELDS.map((f) => [f, "#888888"])),
 } as const;
 
 function record(id: string, system: ChartDesignSystem, extra: Partial<ChartDesign> = {}): ChartDesign {
@@ -217,7 +220,8 @@ check("the four looks keep exactly their established values (pre-unification sou
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     assert.deepEqual(CHART_DESIGN_PRESETS[system].map((p) => p.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
     for (const preset of CHART_DESIGN_PRESETS[system]) {
-      const elementKeys = MANDALA_OPTIONAL_COLOR_FIELDS as readonly string[];
+      // The design-control colors added since (Mandala, Astrology 2026-10) are pinned by their own spec checks; the original values stay unchanged.
+      const elementKeys = [...MANDALA_OPTIONAL_COLOR_FIELDS, ...ASTROLOGY_OPTIONAL_COLOR_FIELDS] as readonly string[];
       const literal = `{ name: "${preset.name}", swatch: ${JSON.stringify(preset.swatch).replace(/,/g, ", ")}, values: { ${Object.entries(preset.values)
         .filter(([k]) => !elementKeys.includes(k))
         .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
@@ -435,7 +439,8 @@ check("every system's sections are described, and each system keeps only its own
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     for (const section of CHART_DESIGN_SECTIONS[system]) assert.ok(section.description.trim().length > 0, `${system}/${section.title}`);
   }
-  assert.deepEqual(CHART_DESIGN_SECTIONS.astrology.map((x) => x.title), ["Wheel", "Background"]);
+  assert.deepEqual(CHART_DESIGN_SECTIONS.astrology.map((x) => x.title), ["Basic colors", "Planets and angles", "Zodiac", "Aspects"]);
+  assert.equal(CHART_DESIGN_SECTIONS.astrology.flatMap((x) => x.fields).length, 18);
   assert.equal(CHART_DESIGN_SECTIONS.astrology.flatMap((x) => x.fields).includes("houseSystem"), false);
   assert.equal(CHART_DESIGN_SECTIONS.mandala.flatMap((x) => x.fields).includes("arrowStyle"), false);
 });

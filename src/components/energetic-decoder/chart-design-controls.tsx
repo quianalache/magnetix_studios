@@ -11,6 +11,7 @@ import type { EditorValue, SystemValues } from "@/lib/energetics/chart-design-ed
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { ASTRO_EDITOR_MARGIN, resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { MANDALA_EDITOR_CANVAS_PADDING, resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 
@@ -74,7 +75,23 @@ const FIELD_LABEL: Record<string, string> = {
   solarPlexusCenterColor: "Solar Plexus",
   rootCenterColor: "Root",
   backgroundColor: "Background",
-  wheelAccentColor: "Wheel / planets",
+  wheelAccentColor: "Planet symbols",
+  astroHousesBackgroundColor: "Houses background",
+  astroAspectsBackgroundColor: "Aspect circle background",
+  astroWheelLineColor: "Wheel lines",
+  astroHouseLineColor: "House lines",
+  astroHouseNumberColor: "House numbers",
+  astroAngleColor: "Angles (AC / DC / MC / IC)",
+  astroFireColor: "Fire",
+  astroEarthColor: "Earth",
+  astroAirColor: "Air",
+  astroWaterColor: "Water",
+  astroZodiacSymbolColor: "Zodiac symbols",
+  astroConjunctionColor: "Conjunction",
+  astroSextileColor: "Sextile",
+  astroSquareColor: "Square",
+  astroTrineColor: "Trine",
+  astroOppositionColor: "Opposition",
   mandalaZodiacColor: "Zodiac ring",
   mandalaFireColor: "Fire background",
   mandalaEarthColor: "Earth background",
@@ -155,8 +172,10 @@ export const CHART_DESIGN_SECTIONS: Record<ChartDesignSystem, { title: string; d
     { title: "Activations", description: "Personality and Design colors (planet symbols and the center BodyGraph's activations), and the edge marking each activated gate.", fields: ["personalityActivationColor", "designActivationColor", "chartDefinedColor"] },
   ],
   astrology: [
-    { title: "Wheel", description: "Wheel and planet accent color.", fields: ["wheelAccentColor"] },
-    { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
+    { title: "Basic colors", description: "The background, the house ring and aspect circle, and the wheel's lines and house numbers.", fields: ["backgroundColor", "astroHousesBackgroundColor", "astroAspectsBackgroundColor", "astroWheelLineColor", "astroHouseLineColor", "astroHouseNumberColor"] },
+    { title: "Planets and angles", description: "Planet symbols (with their true-degree ticks) and the AC / DC / MC / IC axes.", fields: ["wheelAccentColor", "astroAngleColor"] },
+    { title: "Zodiac", description: "Band color per element: Fire (Aries, Leo, Sagittarius), Earth (Taurus, Virgo, Capricorn), Air (Gemini, Libra, Aquarius), Water (Cancer, Scorpio, Pisces), and the zodiac symbols.", fields: ["astroFireColor", "astroEarthColor", "astroAirColor", "astroWaterColor", "astroZodiacSymbolColor"] },
+    { title: "Aspects", description: "One color per aspect, in the wheel and the aspect grid. Tighter aspects draw bolder; oppositions are dashed.", fields: ["astroConjunctionColor", "astroSextileColor", "astroSquareColor", "astroTrineColor", "astroOppositionColor"] },
   ],
 };
 
@@ -341,8 +360,9 @@ export function ChartDesignPreview({
     <AstrologyWheelChart
       chart={sampleAstro}
       className={className}
-      wheelAccentColor={design.wheelAccentColor}
-      backgroundColor={design.backgroundColor}
+      colors={resolveAstrologyColors(design)}
+      // Editor preview only: the wheel fills ~92% of its canvas (the AC/DC/MC/IC labels use the rest); every other Astrology chart keeps the default margin.
+      margin={size === "large" ? ASTRO_EDITOR_MARGIN : undefined}
     />
   );
 }

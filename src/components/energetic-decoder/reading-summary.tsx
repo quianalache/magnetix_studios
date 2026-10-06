@@ -8,6 +8,7 @@ import type { HumanDesignReadingContent, AstrologyReadingContent } from "@/types
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
 import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
+import { HOUSE_SYSTEM_LABEL, resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
@@ -490,14 +491,13 @@ export function AstrologySummary({
         <AstrologyWheelChart
           chart={chart}
           className="mx-auto w-full max-w-[520px]"
-          wheelAccentColor={astroDesign?.wheelAccentColor}
-          backgroundColor={astroDesign?.backgroundColor}
+          colors={resolveAstrologyColors(astroDesign)}
         />
       </div>
 
       <div className="rounded-2xl border bg-card p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Astrology — Western Tropical, {chart.houses.system === "placidus" ? "Placidus" : "Whole Sign"} houses
+          Astrology — Western Tropical, {HOUSE_SYSTEM_LABEL[chart.houses.system] ?? chart.houses.system} houses
         </p>
         <div className="mt-1.5 grid gap-3 sm:grid-cols-3">
           <div>
@@ -582,7 +582,7 @@ export function AstrologySummary({
           <p className="mb-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Aspect Grid
           </p>
-          <AspectGrid placements={chart.placements} aspects={chart.aspects} accentColor={astroDesign?.wheelAccentColor} />
+          <AspectGrid placements={chart.placements} aspects={chart.aspects} colors={resolveAstrologyColors(astroDesign)} />
         </div>
       )}
 

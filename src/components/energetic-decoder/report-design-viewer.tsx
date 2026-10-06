@@ -6,6 +6,7 @@ import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
@@ -270,8 +271,7 @@ function ChartPieceView({
       return astro ? (
         <AstrologyWheelChart
           chart={astro}
-          wheelAccentColor={astroDesign?.wheelAccentColor}
-          backgroundColor={astroDesign?.backgroundColor}
+          colors={resolveAstrologyColors(astroDesign)}
         />
       ) : (
         <MissingPiece label="Astrology wheel" />

@@ -1,4 +1,13 @@
-import type { AstrologyAspect, AstrologyBodyName, AspectType, AstrologyPlacement } from "@/lib/energetics/astrology";
+import type { AstrologyAspect, AstrologyPlacement } from "@/lib/energetics/astrology";
+import {
+  ASPECT_META,
+  ASTRO_GLYPH_FONT,
+  BODY_LABEL,
+  PLANET_GLYPH,
+  glyphText,
+  resolveAstrologyColors,
+  type ResolvedAstrologyColors,
+} from "@/lib/energetics/astrology-spec";
 
 /**
  * The planet-by-planet aspect grid — added 2026-08-15, Phase 4 of the
@@ -17,66 +26,24 @@ import type { AstrologyAspect, AstrologyBodyName, AspectType, AstrologyPlacement
  * convention real astrology software and Bodygraph's own grid use.
  */
 
-const BODY_GLYPH: Record<AstrologyBodyName, string> = {
-  sun: "☉",
-  moon: "☽",
-  mercury: "☿",
-  venus: "♀",
-  mars: "♂",
-  jupiter: "♃",
-  saturn: "♄",
-  uranus: "♅",
-  neptune: "♆",
-  pluto: "♇",
-  northNode: "☊",
-  southNode: "☋",
-  lilith: "⚸",
-  chiron: "⚷",
-};
-
-const BODY_LABEL: Record<AstrologyBodyName, string> = {
-  sun: "Sun",
-  moon: "Moon",
-  mercury: "Mercury",
-  venus: "Venus",
-  mars: "Mars",
-  jupiter: "Jupiter",
-  saturn: "Saturn",
-  uranus: "Uranus",
-  neptune: "Neptune",
-  pluto: "Pluto",
-  northNode: "North Node",
-  southNode: "South Node",
-  lilith: "Lilith",
-  chiron: "Chiron",
-};
-
-const ASPECT_GLYPH: Record<AspectType, string> = {
-  Conjunction: "☌",
-  Opposition: "☍",
-  Square: "□",
-  Trine: "△",
-  Sextile: "⚹",
-};
-
-/** Same 5 hues already used for aspect chords in the wheel (astrology-wheel-chart.tsx) — the grid glyph and the chord it corresponds to should read as the same aspect at a glance, not two unrelated color systems. */
-const ASPECT_COLOR: Record<AspectType, string> = {
-  Conjunction: "#3f3f46",
-  Opposition: "#b3241f",
-  Square: "#b3241f",
-  Trine: "#14795a",
-  Sextile: "#14795a",
-};
-
+/**
+ * Glyphs, labels and aspect colors come from astrology-spec.ts — the same
+ * values the wheel draws (2026-10: the grid kept its own colors before and
+ * had drifted from the wheel's). Each aspect cell sits on the design's
+ * aspect-circle background, so a dark design's light aspect colors read
+ * here exactly as they do in the wheel.
+ */
 export function AspectGrid({
   placements,
   aspects,
-  accentColor,
+  colors,
 }: {
   placements: AstrologyPlacement[];
   aspects: AstrologyAspect[];
-  accentColor?: string;
+  /** The design's resolved Astrology colors (resolveAstrologyColors(design)). */
+  colors?: ResolvedAstrologyColors;
 }) {
+  const c = colors ?? resolveAstrologyColors(null);
   if (placements.length < 2) return null;
 
   const lookup = new Map<string, AstrologyAspect>();
@@ -98,7 +65,7 @@ export function AspectGrid({
             <th className="w-7" />
             {bodies.slice(0, -1).map((b) => (
               <th key={b} className="w-7 pb-1 font-normal text-muted-foreground" title={BODY_LABEL[b]}>
-                {BODY_GLYPH[b]}
+                <span style={{ fontFamily: ASTRO_GLYPH_FONT }}>{glyphText(PLANET_GLYPH[b])}</span>
               </th>
             ))}
           </tr>
@@ -107,7 +74,7 @@ export function AspectGrid({
           {bodies.slice(1).map((rowBody, rowIdx) => (
             <tr key={rowBody}>
               <th className="pr-1.5 text-right font-normal text-muted-foreground" title={BODY_LABEL[rowBody]}>
-                {BODY_GLYPH[rowBody]}
+                <span style={{ fontFamily: ASTRO_GLYPH_FONT }}>{glyphText(PLANET_GLYPH[rowBody])}</span>
               </th>
               {bodies.slice(0, -1).map((colBody, colIdx) => {
                 if (colIdx > rowIdx) return <td key={colBody} />;
@@ -116,6 +83,8 @@ export function AspectGrid({
                   <td
                     key={colBody}
                     className="h-7 w-7 border border-border/60"
+                    data-aspect-cell={asp?.type}
+                    style={asp ? { background: c.aspectsBackground } : undefined}
                     title={
                       asp
                         ? `${BODY_LABEL[rowBody]} ${asp.type.toLowerCase()} ${BODY_LABEL[colBody]} (${asp.orb.toFixed(1)}° from exact)`
@@ -123,9 +92,7 @@ export function AspectGrid({
                     }
                   >
                     {asp && (
-                      <span style={{ color: asp.type === "Conjunction" ? accentColor || ASPECT_COLOR.Conjunction : ASPECT_COLOR[asp.type] }}>
-                        {ASPECT_GLYPH[asp.type]}
-                      </span>
+                      <span style={{ color: c.aspects[asp.type], fontFamily: ASTRO_GLYPH_FONT }}>{glyphText(ASPECT_META[asp.type].glyph)}</span>
                     )}
                   </td>
                 );
