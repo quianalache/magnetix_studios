@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Activity,
@@ -42,6 +42,10 @@ import {
   previewDesign,
   setEditorField,
   setEditorName,
+  CHART_DESIGN_EDITOR_TAB_PARAM,
+  editorTabFromParam,
+  editorTabSearch,
+  type ChartDesignEditorTab,
 } from "@/lib/energetics/chart-design-editor-state";
 import {
   CHART_DESIGN_SECTIONS,
@@ -74,7 +78,7 @@ import { CHART_PREVIEW_MAX_SCALE, CHART_PREVIEW_NATURAL_WIDTH } from "@/lib/ener
  * customize it here or duplicate it for a variation.
  */
 
-type EditorTab = ChartDesignSystem | "frequency";
+type EditorTab = ChartDesignEditorTab;
 
 const TABS: { key: EditorTab; label: string; icon: typeof Triangle }[] = [
   { key: "humanDesign", label: "Human Design", icon: Triangle },
@@ -105,7 +109,9 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
   const router = useRouter();
   const [set, setSet] = useState(initial);
   const [state, setState] = useState(() => initChartDesignEditorState(initial));
-  const [tab, setTab] = useState<EditorTab>("humanDesign");
+  // The active tab comes from the URL (`?tab=`), so a refresh or a shared link keeps it; unknown values → Human Design.
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<EditorTab>(() => editorTabFromParam(searchParams.get(CHART_DESIGN_EDITOR_TAB_PARAM)));
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [sampleHd, setSampleHd] = useState<HumanDesignProfile | null>(null);
@@ -176,12 +182,19 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
       toast.success("Duplicated.");
       // Unsaved edits were already confirmed away above.
       setState(initChartDesignEditorState(set));
-      router.push(saPath(`/energetic-decoder/chart-designs/${body.set.id}`));
+      router.push(saPath(`/energetic-decoder/chart-designs/${body.set.id}${editorTabSearch("", tab)}`));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't duplicate.");
     } finally {
       setDuplicating(false);
     }
+  }
+
+  /** Switch tabs and record it in the URL (replacing the current history entry, so Back still leaves the editor). */
+  function selectTab(next: EditorTab) {
+    setTab(next);
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(window.history.state, "", `${pathname}${editorTabSearch(search, next)}${hash}`);
   }
 
   const system = tab === "frequency" ? null : tab;
@@ -262,7 +275,7 @@ export function ChartDesignEditor({ initial }: { initial: ChartDesignSetWithMemb
             <button
               key={t.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => selectTab(t.key)}
               className={cn(
                 "relative -mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition",
                 tab === t.key ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",

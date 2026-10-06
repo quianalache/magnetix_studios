@@ -153,3 +153,32 @@ export function previewDesign(
   if (!record) return null;
   return { ...record, ...values } as ChartDesign;
 }
+
+// ── Active tab (URL state) ───────────────────────────────────────────
+
+/**
+ * The editor's chart-system tab lives in the URL (`?tab=mandala`), the same
+ * `?tab=` convention the Energetic Decoder page already uses, so a refresh
+ * or a shared link reopens the same tab (it used to be plain component
+ * state that always started on Human Design). Tab switches replace the
+ * current history entry rather than adding one: Back still leaves the
+ * editor instead of stepping through tabs.
+ */
+export const CHART_DESIGN_EDITOR_TABS = ["humanDesign", "mandala", "astrology", "frequency"] as const;
+export type ChartDesignEditorTab = (typeof CHART_DESIGN_EDITOR_TABS)[number];
+export const CHART_DESIGN_EDITOR_TAB_PARAM = "tab";
+export const DEFAULT_CHART_DESIGN_EDITOR_TAB: ChartDesignEditorTab = "humanDesign";
+
+/** The tab a URL asks for; missing or unknown values fall back to Human Design. */
+export function editorTabFromParam(value: string | null | undefined): ChartDesignEditorTab {
+  return (CHART_DESIGN_EDITOR_TABS as readonly string[]).includes(value ?? "") ? (value as ChartDesignEditorTab) : DEFAULT_CHART_DESIGN_EDITOR_TAB;
+}
+
+/** `search` (e.g. location.search) with the tab set — other parameters kept; the default tab leaves no parameter, so the plain editor URL stays canonical. */
+export function editorTabSearch(search: string, tab: ChartDesignEditorTab): string {
+  const params = new URLSearchParams(search);
+  if (tab === DEFAULT_CHART_DESIGN_EDITOR_TAB) params.delete(CHART_DESIGN_EDITOR_TAB_PARAM);
+  else params.set(CHART_DESIGN_EDITOR_TAB_PARAM, tab);
+  const out = params.toString();
+  return out ? `?${out}` : "";
+}

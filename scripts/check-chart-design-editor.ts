@@ -24,6 +24,9 @@ import {
   previewDesign,
   setEditorField,
   setEditorName,
+  CHART_DESIGN_EDITOR_TABS,
+  editorTabFromParam,
+  editorTabSearch,
 } from "../src/lib/energetics/chart-design-editor-state";
 import { isGuardedNavigationClick } from "../src/lib/unsaved-changes";
 import { readFileSync } from "node:fs";
@@ -451,6 +454,28 @@ check("one shared shell hosts every system's controls + preview (no per-system l
   assert.ok(editor.includes('size="large"'), "the editor previews with the real large renderers");
   assert.ok(!/lg:col-span-|lg:grid-cols-12/.test(editor), "the old preview/controls grid is gone");
   assert.ok(editor.includes("Frequency styling is coming soon"), "Frequency stays Coming soon");
+});
+
+console.log("\nActive tab survives a refresh (URL state)");
+check("every tab round-trips through the URL; missing/unknown values fall back to Human Design", () => {
+  assert.deepEqual([...CHART_DESIGN_EDITOR_TABS], ["humanDesign", "mandala", "astrology", "frequency"]);
+  for (const tab of CHART_DESIGN_EDITOR_TABS) {
+    const search = editorTabSearch("", tab);
+    assert.equal(editorTabFromParam(new URLSearchParams(search).get("tab")), tab, tab);
+  }
+  assert.equal(editorTabSearch("", "mandala"), "?tab=mandala");
+  assert.equal(editorTabSearch("", "astrology"), "?tab=astrology");
+  assert.equal(editorTabSearch("?tab=astrology", "humanDesign"), "", "the default tab keeps the plain URL");
+  assert.equal(editorTabSearch("?x=1&tab=mandala", "astrology"), "?x=1&tab=astrology", "other parameters are kept");
+  for (const bad of [null, undefined, "", "Mandala", "bodygraph", "mandala;", "__proto__", "toString"]) assert.equal(editorTabFromParam(bad), "humanDesign", String(bad));
+});
+check("the editor starts on the URL's tab and records each switch in the URL (Mandala/Astrology can't reset to Human Design on reload)", () => {
+  const editor = readFileSync("src/components/energetic-decoder/chart-design-editor.tsx", "utf8");
+  assert.ok(editor.includes("useState<EditorTab>(() => editorTabFromParam(searchParams.get(CHART_DESIGN_EDITOR_TAB_PARAM)))"), "initial tab from the URL");
+  assert.ok(!/useState<EditorTab>\("humanDesign"\)/.test(editor), "no hard-coded Human Design start");
+  assert.ok(editor.includes("onClick={() => selectTab(t.key)}") && !editor.includes("onClick={() => setTab(t.key)}"), "tab buttons go through selectTab");
+  assert.ok(editor.includes("window.history.replaceState(window.history.state, \"\", `${pathname}${editorTabSearch(search, next)}${hash}`)"), "switches replace the history entry (Next's state kept)");
+  assert.ok(editor.includes("chart-designs/${body.set.id}${editorTabSearch(\"\", tab)}"), "Duplicate opens the copy on the same tab");
 });
 
 console.log("\nUnsaved-changes guard");
