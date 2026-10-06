@@ -78,6 +78,15 @@ export const MANDALA_BODYGRAPH = {
   drawn: { x: 25.58, y: 4.0, w: 182.6, h: 305.79 },
 } as const;
 
+/**
+ * Chart Design editor preview only: padding between the canvas and the
+ * wheel (every other Mandala uses 4%). With the wheel's own 2% inset in its
+ * SVG, the wheel spans ~97% of the canvas — a ~1.5% margin each side
+ * (≈9–12px at editor sizes), enough that the outer Quarter labels never
+ * touch the canvas edge.
+ */
+export const MANDALA_EDITOR_CANVAS_PADDING = "0.5%";
+
 /** The BodyGraph box (CHART_VIEWBOX) in this Mandala's viewBox units: its drawing is centered on the wheel and drawnHeightOfWheel tall. */
 export function mandalaBodygraphBox(): { x: number; y: number; w: number; h: number; drawnW: number; drawnH: number } {
   const { viewBox: vb, drawn, drawnHeightOfWheel } = MANDALA_BODYGRAPH;

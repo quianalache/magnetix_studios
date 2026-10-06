@@ -33,6 +33,8 @@ import {
   MANDALA_QUARTER_KEYS,
   MANDALA_CENTER_KEYS,
   MANDALA_CENTER_PALETTES,
+  MANDALA_EDITOR_CANVAS_PADDING,
+  MANDALA_VIEW,
   gateIndex,
   gateSpan,
   gateStartLongitude,
@@ -375,6 +377,21 @@ check("browser and PDF both draw from mandala-spec (no private geometry left)", 
   }
   assert.equal((pdf.match(/mandalaColors=\{resolveMandalaColors\(mandalaDesign\)\}/g) ?? []).length, 1);
   assert.ok(readFileSync("src/lib/energetics/report-design-pdf-document.tsx", "utf8").includes("mandalaColors={resolveMandalaColors(mandalaDesign)}"));
+});
+check("editor preview only: the wheel fills ~97% of its canvas; every other Mandala keeps the 4% canvas padding", () => {
+  const web = readFileSync("src/components/energetic-decoder/mandala-chart.tsx", "utf8");
+  assert.ok(web.includes('canvasPadding = "4%"') && web.includes("padding: canvasPadding"), "default stays 4%");
+  assert.equal(MANDALA_EDITOR_CANVAS_PADDING, "0.5%");
+  // only the large (editor) ChartDesignPreview passes it — thumbnails and all other consumers don't
+  const controls = readFileSync("src/components/energetic-decoder/chart-design-controls.tsx", "utf8");
+  assert.ok(controls.includes('canvasPadding={size === "large" ? MANDALA_EDITOR_CANVAS_PADDING : undefined}'));
+  for (const f of ["reading-summary.tsx", "mandala-reading-view.tsx", "report-design-viewer.tsx", "chart-designs-tab.tsx"]) {
+    assert.ok(!readFileSync(`src/components/energetic-decoder/${f}`, "utf8").includes("canvasPadding"), f);
+  }
+  // wheel span = (1 − 2·padding) × 98% of the canvas; the margin stays ≥ 1% each side
+  const pad = parseFloat(MANDALA_EDITOR_CANVAS_PADDING) / 100;
+  const span = (1 - 2 * pad) * (2 * MANDALA_RINGS.quarterOuter) / MANDALA_VIEW;
+  assert.ok(span > 0.96 && span < 0.98, `wheel spans ${span}`);
 });
 check("protected Human Design surfaces are unchanged", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);

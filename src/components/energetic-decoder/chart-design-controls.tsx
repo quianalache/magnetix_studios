@@ -11,7 +11,7 @@ import type { EditorValue, SystemValues } from "@/lib/energetics/chart-design-ed
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
-import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
+import { MANDALA_EDITOR_CANVAS_PADDING, resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 
 /**
@@ -330,6 +330,8 @@ export function ChartDesignPreview({
         quadrantColor={design.mandalaQuadrantColor}
         hdDesign={size === "large" ? (hdDesign ?? null) : null}
         showCenterChart={size === "large"}
+        // Editor preview only: the wheel fills ~97% of its canvas (was ~90%); thumbnails and every other Mandala keep the default 4%.
+        canvasPadding={size === "large" ? MANDALA_EDITOR_CANVAS_PADDING : undefined}
       />
     );
   }

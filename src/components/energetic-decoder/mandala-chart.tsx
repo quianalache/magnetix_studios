@@ -54,6 +54,7 @@ export function MandalaChart({
   showCenterChart = true,
   showPersonality = true,
   showDesign = true,
+  canvasPadding = "4%",
 }: {
   profile: HumanDesignProfile;
   /** "Activated gate edge" — the rim arc on each activated gate. */
@@ -75,6 +76,14 @@ export function MandalaChart({
   /** The Reading page's "Show in Mandala" layer toggles — hide a side's wedges and symbols, never its data. */
   showPersonality?: boolean;
   showDesign?: boolean;
+  /**
+   * Space between the canvas (the design-background box) and the wheel.
+   * Every consumer keeps the default; the Chart Design editor preview
+   * passes a smaller value so the wheel fills more of its canvas. The box
+   * stays square either way, so its size (and any fit around it) doesn't
+   * change — only how much of it the wheel uses.
+   */
+  canvasPadding?: string;
 }) {
   const colors =
     mandalaColors ??
@@ -112,7 +121,7 @@ export function MandalaChart({
 
   return (
     // @container/mandala: labels shorten on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
-    <div className={`@container/mandala ${className ?? ""}`} style={{ background: colors.background, borderRadius: 12, padding: "4%", position: "relative" }}>
+    <div className={`@container/mandala ${className ?? ""}`} style={{ background: colors.background, borderRadius: 12, padding: canvasPadding, position: "relative" }}>
       {/* The wheel and the center BodyGraph share this box, so the BodyGraph is sized against the wheel itself. */}
       <div data-mandala-wheel style={{ position: "relative" }} className="[&>svg]:block">
         <svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} role="img" aria-label="Mandala chart">
