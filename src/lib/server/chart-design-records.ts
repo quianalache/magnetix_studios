@@ -147,7 +147,7 @@ export function freshDesignFields() {
     astroEarthColor: "#9c7f58",
     astroAirColor: "#828d5d",
     astroWaterColor: "#6f8ca3",
-    astroZodiacSymbolColor: "#ffffff",
+    astroZodiacSymbolColor: "#1f1b24",
     astroConjunctionColor: "#3f3f46",
     astroSextileColor: "#0d9488",
     astroSquareColor: "#dc2626",

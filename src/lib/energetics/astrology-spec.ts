@@ -233,7 +233,9 @@ type AstrologyPalette = Omit<ResolvedAstrologyColors, "background" | "planets">;
 export type BuiltInAstrologyKey = "default" | ChartDesignStarterKey;
 
 /**
- * The built-in designs' Astrology palettes. Zodiac bands start from each
+ * The built-in designs' Astrology palettes — deliberately restrained: each
+ * coordinates with its design rather than restyling the chart (every design
+ * shares one visual system; only these colors vary). Zodiac bands start from each
  * design's Mandala element colors (so a design reads as one family across
  * its charts), tuned for the wheel: every zodiac-symbol color clears ~3:1
  * against all four of its bands, house numbers / planets / angles clear
@@ -245,7 +247,7 @@ export type BuiltInAstrologyKey = "default" | ChartDesignStarterKey;
 export const ASTROLOGY_PALETTES: Record<BuiltInAstrologyKey, AstrologyPalette> = {
   default: {
     housesBackground: "#faf9f7", aspectsBackground: "#ffffff", wheelLines: "#a1a1aa", houseLines: "#c4c4cc", houseNumbers: "#52525b", angles: "#5e2574",
-    elements: { fire: "#c06e6e", earth: "#9c7f58", air: "#828d5d", water: "#6f8ca3" }, zodiacSymbols: "#ffffff",
+    elements: { fire: "#c06e6e", earth: "#9c7f58", air: "#828d5d", water: "#6f8ca3" }, zodiacSymbols: "#1f1b24", // dark symbols: the traditional chart look, and crisper than white on these muted bands
     aspects: { Conjunction: "#3f3f46", Sextile: "#0d9488", Square: "#dc2626", Trine: "#2563eb", Opposition: "#b91c1c" },
   },
   "magnetix-violet": {
@@ -260,7 +262,8 @@ export const ASTROLOGY_PALETTES: Record<BuiltInAstrologyKey, AstrologyPalette> =
   },
   "warm-sunset": {
     housesBackground: "#fffbf5", aspectsBackground: "#ffffff", wheelLines: "#d6a373", houseLines: "#f1d5b8", houseNumbers: "#7c2d12", angles: "#9a3412",
-    elements: { fire: "#c2410c", earth: "#a16207", air: "#d97706", water: "#b45309" }, zodiacSymbols: "#ffffff",
+    // terracotta / olive-sage / muted gold / dusty rose: still warm and quiet, but the four elements read apart (the Mandala's four orange-browns didn't), with one deep-brown symbol color for all four
+    elements: { fire: "#cf7f63", earth: "#a6a174", air: "#ddb86a", water: "#bf8693" }, zodiacSymbols: "#2a1a10",
     aspects: { Conjunction: "#7c2d12", Sextile: "#a16207", Square: "#b91c1c", Trine: "#ea580c", Opposition: "#9a3412" },
   },
   midnight: {

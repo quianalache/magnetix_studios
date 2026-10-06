@@ -285,6 +285,23 @@ check("ready-made palettes are contrast-checked (symbols on every band, ink on i
   for (const c of [m.housesBackground, m.aspectsBackground]) assert.ok(lum(c) < 0.05, "Midnight fills are dark");
   assert.ok(lum(m.houseNumbers) > 0.5 && lum(m.angles) > 0.5, "Midnight ink is light");
 });
+check("element bands stay distinguishable (CIE76 ΔE between every pair of bands); Monochrome is grays by design", () => {
+  const lab = (hex: string) => {
+    const h = hex.replace("#", "");
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    const f = (v: number) => (v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116);
+    const X = f((0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047), Y = f(0.2126 * r + 0.7152 * g + 0.0722 * b), Z = f((0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883);
+    return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+  };
+  const minDeltaE = (bands: string[]) => Math.min(...bands.flatMap((x, i) => bands.slice(i + 1).map((y) => Math.hypot(...lab(x).map((v, k) => v - lab(y)[k])))));
+  for (const [key, p] of Object.entries(ASTROLOGY_PALETTES)) {
+    if (key === "monochrome") continue;
+    const bands = (["fire", "earth", "air", "water"] as const).map((e) => p.elements[e]);
+    assert.ok(minDeltaE(bands) >= 12, `${key}: two element bands are too close (ΔE ${minDeltaE(bands).toFixed(1)})`);
+  }
+  // Warm Sunset's four orange-browns were the one real problem (ΔE 13.8 between fire-adjacent tones); its retune keeps the elements clearly apart
+  assert.ok(minDeltaE((["fire", "earth", "air", "water"] as const).map((e) => ASTROLOGY_PALETTES["warm-sunset"].elements[e])) >= 20);
+});
 check("presets and new-design defaults carry exactly the palette values (no drift between the three copies)", () => {
   const names: Record<string, Exclude<BuiltInAstrologyKey, "default">> = { "Magnetix Violet": "magnetix-violet", Monochrome: "monochrome", "Warm Sunset": "warm-sunset", Midnight: "midnight" };
   for (const preset of CHART_DESIGN_PRESETS.astrology) {
