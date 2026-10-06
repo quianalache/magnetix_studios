@@ -199,6 +199,63 @@ export const MANDALA_SIGNS: readonly { sign: ZodiacSign; element: ZodiacElement;
   span: spanForLongitudes(i * 30, i * 30 + 30),
 }));
 
+// ── Zodiac glyphs ────────────────────────────────────────────────────
+//
+// Each sign's label is its glyph beside its name. The browser draws the
+// Unicode glyph as text (with U+FE0E so it never turns into an emoji, and a
+// symbol font stack); the PDF can't (its only font, WinAnsi Helvetica, has
+// no zodiac glyphs and would print garbage), so it draws these simple
+// vector equivalents instead — original line drawings in a 10 × 10 box,
+// stroked, no fill. Both are colored with the design's "Zodiac symbols"
+// color.
+
+export const ZODIAC_GLYPH: Record<ZodiacSign, string> = {
+  Aries: "\u2648", Taurus: "\u2649", Gemini: "\u264A", Cancer: "\u264B", Leo: "\u264C", Virgo: "\u264D",
+  Libra: "\u264E", Scorpio: "\u264F", Sagittarius: "\u2650", Capricorn: "\u2651", Aquarius: "\u2652", Pisces: "\u2653",
+};
+/** Forces the text (not emoji) presentation of a glyph. */
+export const TEXT_PRESENTATION = "\uFE0E";
+/** Glyph size relative to the sign name — symbol fonts draw zodiac glyphs small for their em, so they're set a little larger to read as equals. */
+export const ZODIAC_GLYPH_SCALE = 1.25;
+export const ZODIAC_GLYPH_FONT = "'Apple Symbols', 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Noto Sans Symbols', 'DejaVu Sans', sans-serif";
+
+/** Vector zodiac glyphs (PDF), 10 × 10 box, drawn as strokes. */
+export const ZODIAC_GLYPH_PATHS: Record<ZodiacSign, string> = {
+  Aries: "M1.6 4.2 C1.2 1.6 4.4 0.9 5 4.4 L5 9.2 M8.4 4.2 C8.8 1.6 5.6 0.9 5 4.4",
+  Taurus: "M1.2 1.2 C2.2 4.2 7.8 4.2 8.8 1.2 M5 3.6 C3.3 3.6 2.4 4.9 2.4 6.3 C2.4 7.8 3.5 8.9 5 8.9 C6.5 8.9 7.6 7.8 7.6 6.3 C7.6 4.9 6.7 3.6 5 3.6 Z",
+  Gemini: "M3.2 2.4 L3.2 7.6 M6.8 2.4 L6.8 7.6 M1.4 1.4 Q5 3.2 8.6 1.4 M1.4 8.6 Q5 6.8 8.6 8.6",
+  Cancer: "M8.6 3.4 C6.6 1.2 2.4 1.6 1.6 4 M3.1 2.9 C2.3 2.9 1.6 3.5 1.6 4.3 C1.6 5.1 2.3 5.7 3.1 5.7 C3.9 5.7 4.5 5.1 4.5 4.3 C4.5 3.5 3.9 2.9 3.1 2.9 Z M1.4 6.6 C3.4 8.8 7.6 8.4 8.4 6 M6.9 4.3 C6.1 4.3 5.5 4.9 5.5 5.7 C5.5 6.5 6.1 7.1 6.9 7.1 C7.7 7.1 8.4 6.5 8.4 5.7 C8.4 4.9 7.7 4.3 6.9 4.3 Z",
+  Leo: "M3 5.2 C2 5.2 1.3 5.9 1.3 6.9 C1.3 7.9 2 8.6 3 8.6 C4 8.6 4.7 7.9 4.7 6.9 C4.7 6.3 4.4 5.8 4.1 5.3 C3.4 4.2 3.4 2.6 4.4 1.8 C5.6 0.9 7.6 1.2 8 2.8 C8.4 4.2 7.4 5.4 6.8 6.4 C6.2 7.6 6.8 8.8 8.2 8.6",
+  Virgo: "M1.4 2.4 L1.4 7.6 M1.4 3.6 C1.4 1.8 3.8 1.8 3.8 3.6 L3.8 7.6 M3.8 3.6 C3.8 1.8 6.2 1.8 6.2 3.6 L6.2 7.2 C6.2 8.8 8.6 8.9 8.6 7.1 C8.6 5.6 7 5.5 6.2 6.6",
+  Libra: "M1.2 8.4 L8.8 8.4 M1.2 6.3 L3.2 6.3 C2.6 3 7.4 3 6.8 6.3 L8.8 6.3",
+  Scorpio: "M1.2 2.4 L1.2 7.6 M1.2 3.6 C1.2 1.8 3.5 1.8 3.5 3.6 L3.5 7.6 M3.5 3.6 C3.5 1.8 5.8 1.8 5.8 3.6 L5.8 7 C5.8 8.4 7 8.8 8.6 8.2 M7.6 7.1 L8.7 8.2 L7.8 9.3",
+  Sagittarius: "M1.6 8.6 L8.6 1.6 M5 1.6 L8.6 1.6 L8.6 5.2 M2.8 4.6 L5.4 7.2",
+  Capricorn: "M1.2 2.2 L2.6 7.6 L4.2 2.2 C4.8 1.6 5.8 2 5.8 3.6 L5.8 6.8 C5.8 8.9 8.8 9 8.8 7.1 C8.8 5.4 6.6 5.4 5.8 7",
+  Aquarius: "M1.2 4.2 L3.1 2.8 L5 4.2 L6.9 2.8 L8.8 4.2 M1.2 7.4 L3.1 6 L5 7.4 L6.9 6 L8.8 7.4",
+  Pisces: "M2.6 1.2 C4.8 3.4 4.8 6.6 2.6 8.8 M7.4 1.2 C5.2 3.4 5.2 6.6 7.4 8.8 M1.8 5 L8.2 5",
+};
+
+/** Helvetica advance widths (1/1000 em) for the letters in the sign names — the PDF's label font (react-pdf draws Svg text in regular Helvetica), so its glyph + name layout is exact. */
+const HELVETICA: Record<string, number> = {
+  A: 667, C: 722, G: 778, L: 556, P: 667, S: 667, T: 611, V: 667,
+  a: 556, b: 556, c: 500, e: 556, g: 556, i: 222, l: 222, m: 833, n: 556, o: 556, p: 556, q: 556, r: 333, s: 500, t: 278, u: 556,
+};
+export function helveticaWidth(text: string, fontSize: number): number {
+  return ([...text].reduce((w, ch) => w + (HELVETICA[ch] ?? 600), 0) / 1000) * fontSize;
+}
+
+/**
+ * PDF zodiac label layout along the label's own (tangential) baseline,
+ * centered on the sign: the glyph box first, a small gap, then the name.
+ * x positions are relative to the label center; glyph size = font size.
+ */
+export function zodiacLabelLayout(sign: ZodiacSign, fontSize: number): { glyphX: number; glyphSize: number; textX: number } {
+  const glyphSize = fontSize * 1.1; // the vector glyph fills its box (a font glyph has side bearings), so ~1.1× matches the browser's 1.25× font glyph
+  const gap = fontSize * 0.35;
+  const total = glyphSize + gap + helveticaWidth(sign, fontSize);
+  return { glyphX: -total / 2, glyphSize, textX: -total / 2 + glyphSize + gap };
+}
+
 // ── I Ching hexagrams (King Wen) ─────────────────────────────────────
 //
 // Human Design gate N is I Ching hexagram N (King Wen numbering). Lines
@@ -594,7 +651,7 @@ export const MANDALA_CENTER_PALETTES: Record<BuiltInMandalaKey, Record<CenterKey
   midnight: { head: "#fde68a", ajna: "#86efac", throat: "#67e8f9", g: "#fcd34d", heart: "#f87171", spleen: "#34d399", sacral: "#fb7185", solarplexus: "#fb923c", root: "#a78bfa" },
 };
 
-/** Zodiac symbol color of each built-in design (dormant while the Mandala shows sign names). */
+/** Zodiac symbol color of each built-in design (the glyph beside each sign name). */
 export const MANDALA_SYMBOL_COLORS: Record<BuiltInMandalaKey, string> = {
   default: "#ffffff",
   "magnetix-violet": "#ffffff",
@@ -725,7 +782,7 @@ export interface MandalaGateModel {
 
 export interface MandalaModel {
   quarters: { quarter: MandalaQuarter; span: AngularSpan; fill: string; ink: string; labelAngle: number }[];
-  signs: { sign: ZodiacSign; element: ZodiacElement; span: AngularSpan; fill: string; ink: string }[];
+  signs: { sign: ZodiacSign; element: ZodiacElement; span: AngularSpan; fill: string; ink: string; glyph: string; glyphColor: string }[];
   gates: MandalaGateModel[];
   spokes: { x1: number; y1: number; x2: number; y2: number }[];
   glow: { color: string; solidStop: number };
@@ -751,7 +808,15 @@ export function buildMandalaModel(
     const c = colors.quarters[MANDALA_QUARTER_KEYS[q]];
     return { quarter, span, fill: c.background, ink: c.text, labelAngle: span.mid };
   });
-  const signs = MANDALA_SIGNS.map(({ sign, element, span }) => ({ sign, element, span, fill: colors.elements[element], ink: colors.elementText[element] }));
+  const signs = MANDALA_SIGNS.map(({ sign, element, span }) => ({
+    sign,
+    element,
+    span,
+    fill: colors.elements[element],
+    ink: colors.elementText[element],
+    glyph: ZODIAC_GLYPH[sign],
+    glyphColor: colors.zodiacSymbol,
+  }));
 
   const gates: MandalaGateModel[] = GATE_WHEEL_ORDER.map((gate, index) => {
     const span = gateSpan(index);

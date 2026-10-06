@@ -35,6 +35,8 @@ import {
   resolveMandalaColors,
   tangentialTextRotation,
   type ResolvedMandalaColors,
+  ZODIAC_GLYPH_PATHS,
+  zodiacLabelLayout,
 } from "./mandala-spec";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
 import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
@@ -618,13 +620,21 @@ export function MandalaPdf({
             );
           })}
 
-          {model.signs.map(({ sign, span, fill, ink }) => {
+          {model.signs.map(({ sign, span, fill, ink, glyphColor }) => {
             const p = polar(span.mid, (R.zodiacOuter + R.zodiacInner) / 2);
+            // Helvetica has no zodiac glyphs, so the PDF draws the vector
+            // equivalent (ZODIAC_GLYPH_PATHS) beside the name.
+            const fs = MANDALA_TYPE.zodiacLabel;
+            const lay = zodiacLabelLayout(sign, fs);
+            const k = lay.glyphSize / 10;
             return (
               <G key={sign}>
                 <Path d={bandPath(span.start, span.end, R.zodiacOuter, R.zodiacInner)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
                 <G transform={`rotate(${tangentialTextRotation(span.mid).toFixed(2)} ${p.x.toFixed(3)} ${p.y.toFixed(3)})`}>
-                  <Text x={p.x} y={p.y + MANDALA_TYPE.zodiacLabel * 0.35} style={{ fontSize: MANDALA_TYPE.zodiacLabel, fontWeight: 700, fill: ink, textAnchor: "middle" }}>
+                  <G transform={`translate(${(p.x + lay.glyphX).toFixed(3)} ${(p.y - lay.glyphSize / 2).toFixed(3)}) scale(${k.toFixed(4)})`}>
+                    <Path d={ZODIAC_GLYPH_PATHS[sign]} fill="none" stroke={glyphColor} strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round" />
+                  </G>
+                  <Text x={p.x + lay.textX} y={p.y + fs * 0.35} style={{ fontSize: fs, fontWeight: 700, fill: ink }}>
                     {sign}
                   </Text>
                 </G>

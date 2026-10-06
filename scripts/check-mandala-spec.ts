@@ -23,6 +23,11 @@ import {
   MANDALA_RINGS,
   MANDALA_SIGNS,
   ZODIAC_ELEMENT,
+  ZODIAC_GLYPH,
+  ZODIAC_GLYPH_PATHS,
+  TEXT_PRESENTATION,
+  helveticaWidth,
+  zodiacLabelLayout,
   buildMandalaModel,
   fieldInk,
   inkOn,
@@ -392,6 +397,51 @@ check("editor preview only: the wheel fills ~97% of its canvas; every other Mand
   const pad = parseFloat(MANDALA_EDITOR_CANVAS_PADDING) / 100;
   const span = (1 - 2 * pad) * (2 * MANDALA_RINGS.quarterOuter) / MANDALA_VIEW;
   assert.ok(span > 0.96 && span < 0.98, `wheel spans ${span}`);
+});
+check("zodiac labels: glyph (Zodiac symbols color) + name (element text color) in browser and PDF", () => {
+  // the 12 standard glyphs, in sign order, U+2648..U+2653
+  assert.deepEqual(MANDALA_SIGNS.map(({ sign }) => ZODIAC_GLYPH[sign].codePointAt(0)), Array.from({ length: 12 }, (_, i) => 0x2648 + i));
+  assert.equal(TEXT_PRESENTATION, "\uFE0E");
+  const colors = resolveMandalaColors({ backgroundColor: "#ffffff", mandalaZodiacSymbolColor: "#123456", mandalaFireTextColor: "#abcdef" });
+  const model = buildMandalaModel({ personality: [], design: [] }, colors);
+  for (const s of model.signs) {
+    assert.equal(s.glyph, ZODIAC_GLYPH[s.sign]);
+    assert.equal(s.glyphColor, "#123456", `${s.sign} glyph uses Zodiac symbols color`);
+    assert.equal(s.ink, colors.elementText[s.element], `${s.sign} name uses its element text color`);
+  }
+  assert.equal(model.signs.find((s) => s.sign === "Leo")!.ink, "#abcdef");
+  // PDF vector glyphs: one per sign, every coordinate inside the 10 × 10 box
+  for (const { sign } of MANDALA_SIGNS) {
+    const nums = (ZODIAC_GLYPH_PATHS[sign].match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    assert.ok(nums.length >= 4, sign);
+    assert.ok(nums.every((n) => n >= 0 && n <= 10), `${sign} path stays in its box`);
+  }
+  // PDF layout: glyph + gap + name, centered on the sign
+  for (const { sign } of MANDALA_SIGNS) {
+    const l = zodiacLabelLayout(sign, 3.1);
+    const right = l.textX + helveticaWidth(sign, 3.1);
+    assert.ok(Math.abs(l.glyphX + right) < 1e-9, `${sign} label centered`);
+    assert.ok(l.textX > l.glyphX + l.glyphSize, `${sign} gap between glyph and name`);
+  }
+  // fits its band: the longest label stays inside the sign's arc at the label radius
+  const arc = (30 * Math.PI) / 180 * ((MANDALA_RINGS.zodiacOuter + MANDALA_RINGS.zodiacInner) / 2);
+  const l = zodiacLabelLayout("Sagittarius", 3.1);
+  assert.ok(-2 * l.glyphX < arc * 0.7, "Sagittarius label fits its arc");
+  // browser draws glyph + full name, compact sizes glyph + 3 letters; the PDF draws the vector glyph (Helvetica has no zodiac glyphs)
+  const chart = readFileSync("src/components/energetic-decoder/mandala-chart.tsx", "utf8");
+  assert.ok(chart.includes("data-zodiac-glyph={sign} fill={glyphColor}"));
+  assert.ok(chart.includes("{glyph + TEXT_PRESENTATION}"));
+  const pdf = readFileSync("src/lib/energetics/reading-pdf-document.tsx", "utf8");
+  assert.ok(pdf.includes("d={ZODIAC_GLYPH_PATHS[sign]}") && pdf.includes("stroke={glyphColor}"));
+  const mp = pdf.slice(pdf.indexOf("export function MandalaPdf("), pdf.indexOf("\n}\n", pdf.indexOf("export function MandalaPdf(")));
+  assert.ok(mp.length > 1000 && !/[\u2648-\u2653]|ZODIAC_GLYPH\[|\.glyph\b/.test(mp), "no Unicode zodiac glyph text reaches the Helvetica PDF");
+});
+check("Reading → Mandala top section: heading, Mandala, Activations rail; no Legend or Show in Mandala", () => {
+  const v = readFileSync("src/components/energetic-decoder/mandala-reading-view.tsx", "utf8");
+  for (const gone of ["function MandalaLegend", "function VisibilityCard", "function LegendSwatch", "showPersonality", "showDesign", ">Legend<", ">Show in Mandala<"]) assert.ok(!v.includes(gone), gone);
+  const order = ["Your Mandala</p>", "data-mandala-reading-card", "data-mandala-activations-rail", "<HumanDesignCard", "<GatesGridCard", "<SkillsCard", "<UnderstandingMandalaCard"].map((m) => v.indexOf(m));
+  assert.ok(order.every((i) => i > 0) && order.every((i, k) => k === 0 || i > order[k - 1]), `section order ${order}`);
+  assert.ok(v.includes("@min-[880px]/mandalaview:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]"));
 });
 check("protected Human Design surfaces are unchanged", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);

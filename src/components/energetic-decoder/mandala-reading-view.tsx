@@ -30,7 +30,8 @@ import { cn } from "@/lib/utils";
  * The Mandala reading workspace — approved mockup (2026-08-17). Replaces
  * the old `<HumanDesignSummary chartStyle="mandala">` call for the
  * Mandala tab specifically (see human-design-reading-workspace.tsx) with
- * a dedicated composition: Mandala + legend + activations on top, then
+ * a dedicated composition: the Mandala with an Activations rail on top
+ * (the Legend and "Show in Mandala" cards were removed 2026-10), then
  * the person's core Human Design info, their 64 gates, Skills &
  * Attributes, and a compact "Understanding Your Mandala" reference
  * section near the bottom.
@@ -38,9 +39,8 @@ import { cn } from "@/lib/utils";
  * Deliberately does NOT touch `HumanDesignSummary`/`MandalaChart` in a
  * way that changes their existing output — `HumanDesignSummary` itself
  * (still used by the public report page and the public decoder form) is
- * untouched; `MandalaChart` only gained two new OPTIONAL props
- * (showPersonality/showDesign, both default true — see its own header
- * comment), so every other caller renders identically to before. Skills
+ * untouched; this view passes `MandalaChart` the same design colors every
+ * other caller does. Skills
  * & Attributes reuses the exact same `SkillLayerList` + `profile.skills`
  * data `HumanDesignSummary` already renders (exported from reading-
  * summary.tsx for this reuse, not reimplemented).
@@ -121,57 +121,6 @@ function HumanDesignCard({ profile }: { profile: HumanDesignProfile }) {
   );
 }
 
-function LegendSwatch({ color, colors, label, description }: { color?: string; colors?: string[]; label: string; description: string }) {
-  return (
-    <div className="flex items-start gap-2.5">
-      {colors ? (
-        <span className="mt-0.5 grid h-3 w-3 shrink-0 grid-cols-2 overflow-hidden rounded-full" aria-hidden="true">
-          {colors.map((c, i) => (
-            <span key={i} style={{ backgroundColor: c }} />
-          ))}
-        </span>
-      ) : (
-        <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-      )}
-      <div>
-        <p className="text-xs font-semibold text-foreground">{label}</p>
-        <p className="text-[11px] leading-snug text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Mandala legend — real bug avoided here: the two color swatches below
- * read from `mandalaDesign.personalityActivationColor`/
- * `designActivationColor` (the SAME Chart Design fields MandalaChart
- * itself renders with), not a hardcoded "orange"/"purple" — changing
- * Chart Design changes these swatches automatically, same as the chart.
- * Labels never name a specific color, only what each ring/swatch means.
- */
-function MandalaLegend({ mandalaDesign }: { mandalaDesign: ChartDesign }) {
-  return (
-    <div className="rounded-2xl border bg-card p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
-      <div className="space-y-3">
-        {(() => {
-          const c = resolveMandalaColors(mandalaDesign);
-          return (
-            <>
-              <LegendSwatch colors={[c.quarters.initiation.background, c.quarters.civilization.background, c.quarters.duality.background, c.quarters.mutation.background]} label="Quarters" description="The outer band shows the four Human Design Quarters: Initiation, Civilization, Duality and Mutation." />
-              <LegendSwatch colors={[c.elements.fire, c.elements.earth, c.elements.air, c.elements.water]} label="Zodiac Ring" description="Places the 64 gates within the 12 zodiac signs, colored by element (Fire, Earth, Air, Water)." />
-              <LegendSwatch color={c.hexagram} label="64 Gates & I Ching" description="Each of the 64 gates shows its number and its I Ching hexagram." />
-              <LegendSwatch colors={[c.centers.head, c.centers.throat, c.centers.g, c.centers.sacral]} label="Activated Gates" description="An activated gate's wedge takes the color of the Human Design center that gate belongs to." />
-              <LegendSwatch color={c.personality} label="Personality (Conscious)" description="Planets calculated at birth — their symbols on the wheel. The conscious side of the design." />
-              <LegendSwatch color={c.design} label="Design (Unconscious)" description="Planets calculated ~88 days before birth — their symbols on the wheel. The unconscious side of the design." />
-            </>
-          );
-        })()}
-      </div>
-    </div>
-  );
-}
-
 /** "Your Activations" — the same real gate.line data ActivationColumn (human-design-full-chart.tsx) shows, just both sides in one compact list instead of two separate columns (more useful at this panel's narrower width). Uses the same HD_BODY_LABELS order/order-of-truth as every other activation list in the app. */
 function ActivationsCard({ profile, mandalaDesign }: { profile: HumanDesignProfile; mandalaDesign: ChartDesign }) {
   const byPersonality = new Map<string, (typeof profile.personality)[number]>(profile.personality.map((a) => [a.body, a]));
@@ -204,43 +153,6 @@ function ActivationsCard({ profile, mandalaDesign }: { profile: HumanDesignProfi
           );
         })}
       </div>
-    </div>
-  );
-}
-
-/**
- * "Show in Mandala" — real, functional layer toggles (see MandalaChart's
- * own header comment for why this is safe/additive: two new optional
- * props, both default true, zero behavior change for every other
- * caller). No literal "Both" checkbox: a gate showing both colors is
- * just what happens automatically once a gate has real activations on
- * both sides and both toggles below are on — a 3rd checkbox here
- * wouldn't control anything independent, so it isn't faked as one.
- */
-function VisibilityCard({
-  showPersonality,
-  showDesign,
-  onChangePersonality,
-  onChangeDesign,
-  mandalaDesign,
-}: {
-  showPersonality: boolean;
-  showDesign: boolean;
-  onChangePersonality: (v: boolean) => void;
-  onChangeDesign: (v: boolean) => void;
-  mandalaDesign: ChartDesign;
-}) {
-  return (
-    <div className="rounded-2xl border bg-card p-4">
-      <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Show in Mandala</p>
-      <label className="flex items-center gap-2 py-1 text-sm">
-        <input type="checkbox" checked={showPersonality} onChange={(e) => onChangePersonality(e.target.checked)} className="h-3.5 w-3.5 rounded border-muted-foreground/40" style={{ accentColor: mandalaDesign.personalityActivationColor }} />
-        Personality (Conscious)
-      </label>
-      <label className="flex items-center gap-2 py-1 text-sm">
-        <input type="checkbox" checked={showDesign} onChange={(e) => onChangeDesign(e.target.checked)} className="h-3.5 w-3.5 rounded border-muted-foreground/40" style={{ accentColor: mandalaDesign.designActivationColor }} />
-        Design (Unconscious)
-      </label>
     </div>
   );
 }
@@ -407,60 +319,42 @@ export function MandalaReadingView({
   mandalaDesign: ChartDesign;
   hdDesign?: ChartDesign | null;
 }) {
-  const [showPersonality, setShowPersonality] = useState(true);
-  const [showDesign, setShowDesign] = useState(true);
-
   return (
     <div className="space-y-6">
       {/*
-       * Real bug caught rendering this for real (not assumed correct
-       * from the JSX alone): a container query can't query the same
-       * element it's declared on — @container has to live on an
-       * ancestor of whatever uses @5xl:, the same split human-design-
-       * full-chart.tsx's own @container/hdfc + @5xl/hdfc: already uses.
-       * Putting both on one div silently never matched, so this stayed
-       * single-column at every width until caught here.
+       * Top section (2026-10 cleanup): heading above, then the Mandala as
+       * the dominant column with "Your Activations" as a right rail. The
+       * former Legend and "Show in Mandala" cards are gone — the
+       * "Understanding Your Mandala" section below explains the chart.
+       * The container query lives on an ancestor (a container can't query
+       * itself); below 880px of content width the two stack.
        */}
+      <div>
+        <p className="text-xl font-bold text-foreground">Your Mandala</p>
+        <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+          See how your planetary activations are distributed across the 64 Human Design gates and the zodiac.
+        </p>
+      </div>
       <div className="@container/mandalaview">
-        <div className="grid grid-cols-1 gap-6 @5xl/mandalaview:grid-cols-[260px_minmax(0,1fr)_280px] @5xl/mandalaview:items-start">
-        <div className="space-y-4">
-          <div>
-            <p className="text-lg font-bold text-foreground">Your Mandala</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              See how your planetary activations are distributed across the 64 Human Design gates and the zodiac.
-            </p>
+        <div className="grid grid-cols-1 items-start gap-6 @min-[880px]/mandalaview:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]">
+          <div data-mandala-reading-card className="rounded-2xl border bg-card p-4">
+            <MandalaChart
+              profile={profile}
+              className="mx-auto w-full max-w-[640px] @min-[880px]/mandalaview:max-w-none"
+              gateColor={mandalaDesign.chartDefinedColor}
+              backgroundColor={mandalaDesign.backgroundColor}
+              personalityColor={mandalaDesign.personalityActivationColor}
+              designColor={mandalaDesign.designActivationColor}
+              zodiacColor={mandalaDesign.mandalaZodiacColor}
+              mandalaColors={resolveMandalaColors(mandalaDesign)}
+              gateRingColor={mandalaDesign.mandalaGateRingColor}
+              quadrantColor={mandalaDesign.mandalaQuadrantColor}
+              hdDesign={hdDesign}
+            />
           </div>
-          <MandalaLegend mandalaDesign={mandalaDesign} />
-        </div>
-
-        <div className="rounded-2xl border bg-card p-4">
-          <MandalaChart
-            profile={profile}
-            className="mx-auto w-full max-w-[600px]"
-            gateColor={mandalaDesign.chartDefinedColor}
-            backgroundColor={mandalaDesign.backgroundColor}
-            personalityColor={mandalaDesign.personalityActivationColor}
-            designColor={mandalaDesign.designActivationColor}
-            zodiacColor={mandalaDesign.mandalaZodiacColor}
-            mandalaColors={resolveMandalaColors(mandalaDesign)}
-            gateRingColor={mandalaDesign.mandalaGateRingColor}
-            quadrantColor={mandalaDesign.mandalaQuadrantColor}
-            hdDesign={hdDesign}
-            showPersonality={showPersonality}
-            showDesign={showDesign}
-          />
-        </div>
-
-        <div className="space-y-4">
-          <ActivationsCard profile={profile} mandalaDesign={mandalaDesign} />
-          <VisibilityCard
-            showPersonality={showPersonality}
-            showDesign={showDesign}
-            onChangePersonality={setShowPersonality}
-            onChangeDesign={setShowDesign}
-            mandalaDesign={mandalaDesign}
-          />
-        </div>
+          <div data-mandala-activations-rail>
+            <ActivationsCard profile={profile} mandalaDesign={mandalaDesign} />
+          </div>
         </div>
       </div>
 

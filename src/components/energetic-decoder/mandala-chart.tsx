@@ -17,6 +17,9 @@ import {
   resolveMandalaColors,
   textArcPath,
   type ResolvedMandalaColors,
+  ZODIAC_GLYPH_FONT,
+  ZODIAC_GLYPH_SCALE,
+  TEXT_PRESENTATION,
 } from "@/lib/energetics/mandala-spec";
 
 /**
@@ -155,11 +158,16 @@ export function MandalaChart({
           ))}
 
           {/* Zodiac, one color per element */}
-          {model.signs.map(({ sign, element, span, fill, ink }) => (
+          {model.signs.map(({ sign, element, span, fill, ink, glyph, glyphColor }) => (
             <g key={sign} data-mandala-sign={sign} data-element={element}>
               <path d={bandPath(span.start, span.end, R.zodiacOuter, R.zodiacInner)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
               <text fontSize={MANDALA_TYPE.zodiacLabel} fontWeight={700} fill={ink} dominantBaseline="central">
                 <textPath href={`#mandala-arc-${sign}`} startOffset="50%" textAnchor="middle">
+                  {/* Glyph (Zodiac symbols color) then the name (element text color); compact sizes keep the glyph with a 3-letter name. */}
+                  <tspan data-zodiac-glyph={sign} fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={MANDALA_TYPE.zodiacLabel * ZODIAC_GLYPH_SCALE} fontWeight={400}>
+                    {glyph + TEXT_PRESENTATION}
+                  </tspan>
+                  <tspan>{"\u00a0"}</tspan>
                   <tspan data-zodiac-label="full" className={full}>{sign}</tspan>
                   <tspan data-zodiac-label="abbrev" className={compact}>{SIGN_ABBREV(sign)}</tspan>
                 </textPath>
