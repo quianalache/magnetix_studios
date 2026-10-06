@@ -37,13 +37,19 @@ export function AspectGrid({
   placements,
   aspects,
   colors,
+  size = "default",
 }: {
   placements: AstrologyPlacement[];
   aspects: AstrologyAspect[];
   /** The design's resolved Astrology colors (resolveAstrologyColors(design)). */
   colors?: ResolvedAstrologyColors;
+  /** "large": bigger cells and glyphs on wider screens (the practitioner Reading page); "default" is unchanged for every other caller. */
+  size?: "default" | "large";
 }) {
   const c = colors ?? resolveAstrologyColors(null);
+  const large = size === "large";
+  const cellSize = large ? "h-6 w-6 sm:h-9 sm:w-9 lg:h-10 lg:w-10" : "h-7 w-7";
+  const headSize = large ? "w-6 sm:w-9 lg:w-10" : "w-7";
   if (placements.length < 2) return null;
 
   const lookup = new Map<string, AstrologyAspect>();
@@ -59,12 +65,12 @@ export function AspectGrid({
 
   return (
     <div className="overflow-x-auto">
-      <table className="border-collapse text-center text-[11px]">
+      <table data-aspect-grid-size={size} className={large ? "border-collapse text-center text-[11px] sm:text-sm lg:text-base" : "border-collapse text-center text-[11px]"}>
         <thead>
           <tr>
-            <th className="w-7" />
+            <th className={headSize} />
             {bodies.slice(0, -1).map((b) => (
-              <th key={b} className="w-7 pb-1 font-normal text-muted-foreground" title={BODY_LABEL[b]}>
+              <th key={b} className={`${headSize} pb-1 font-normal text-muted-foreground`} title={BODY_LABEL[b]}>
                 <span style={{ fontFamily: ASTRO_GLYPH_FONT }}>{glyphText(PLANET_GLYPH[b])}</span>
               </th>
             ))}
@@ -82,7 +88,7 @@ export function AspectGrid({
                 return (
                   <td
                     key={colBody}
-                    className="h-7 w-7 border border-border/60"
+                    className={`${cellSize} border border-border/60`}
                     data-aspect-cell={asp?.type}
                     style={asp ? { background: c.aspectsBackground } : undefined}
                     title={

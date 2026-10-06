@@ -1,0 +1,245 @@
+import type { AstrologyChart, ChartAngle, HouseCusp } from "@/lib/energetics/astrology";
+import type { AstrologyReadingContent } from "@/types/energetic-decoder";
+import type { ChartDesign } from "@/types/chart-design";
+import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
+import {
+  ASPECT_META,
+  ASTRO_GLYPH_FONT,
+  BODY_LABEL,
+  HOUSE_SYSTEM_LABEL,
+  PLANET_GLYPH,
+  ZODIAC_GLYPH,
+  glyphText,
+  resolveAstrologyColors,
+} from "@/lib/energetics/astrology-spec";
+import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
+
+/**
+ * The practitioner Reading → Astrology page (2026-10 redesign). Same data
+ * and interpretation content as before, recomposed: Key Placements at the
+ * top, a large natal chart with its chart details, Houses, Planetary
+ * Placements, then a full-width Aspect Grid and a full-width Aspects list
+ * (stacked — never side by side, because the list's height varies with
+ * the reading; it grows naturally, no internal scrolling, every aspect
+ * shown).
+ *
+ * Page composition only: the wheel is the shared, approved
+ * AstrologyWheelChart and every color comes from the selected Chart Design
+ * via resolveAstrologyColors. Nothing here calculates — positions,
+ * houses, aspects and text are the reading's own. The public report and
+ * the public decoder keep their own layout (AstrologySummary).
+ */
+
+type Chart = AstrologyChart & { content?: AstrologyReadingContent };
+
+const fmtDeg = (d: number) => `${d.toFixed(1)}°`;
+
+function Glyph({ children, className, style }: { children: string; className?: string; style?: React.CSSProperties }) {
+  return (
+    <span aria-hidden="true" className={className} style={{ fontFamily: ASTRO_GLYPH_FONT, ...style }}>
+      {glyphText(children)}
+    </span>
+  );
+}
+
+function SectionCard({ id, title, children, aside }: { id: string; title: string; children: React.ReactNode; aside?: React.ReactNode }) {
+  return (
+    <section data-astro-section={id} aria-labelledby={`astro-${id}`} className="rounded-2xl border bg-card p-4 sm:p-5">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id={`astro-${id}`} className="text-base font-semibold text-foreground">
+          {title}
+        </h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** The house a longitude falls in, read off the reading's own cusps (display only — for the Midheaven's house when the house system doesn't put it on a cusp). */
+function houseContaining(cusps: HouseCusp[], longitude: number): number | null {
+  if (cusps.length !== 12) return null;
+  const lon = ((longitude % 360) + 360) % 360;
+  // A point on a cusp (the MC under Placidus) belongs to that cusp's house — the two are computed separately, so allow float noise.
+  const onCusp = cusps.find((c) => Math.abs(((c.longitude - lon + 540) % 360) - 180) < 1e-6);
+  if (onCusp) return onCusp.house;
+  for (let i = 0; i < 12; i++) {
+    const start = cusps[i].longitude, end = cusps[(i + 1) % 12].longitude;
+    if (start <= end ? lon >= start && lon < end : lon >= start || lon < end) return cusps[i].house;
+  }
+  return null;
+}
+
+export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; astroDesign?: ChartDesign | null }) {
+  const colors = resolveAstrologyColors(astroDesign);
+  const content = chart.content;
+  const { ascendant, descendant, mc, ic } = chart.angles;
+  const sun = chart.placements.find((p) => p.body === "sun");
+  const moon = chart.placements.find((p) => p.body === "moon");
+  const houseSystem = HOUSE_SYSTEM_LABEL[chart.houses.system] ?? chart.houses.system;
+  const mcHouse = houseContaining(chart.houses.cusps, mc.longitude);
+
+  const key: { id: string; label: string; icon: string; isText?: boolean; sign: string; degree: number; house: number | null }[] = [
+    ...(sun ? [{ id: "sun", label: "Sun", icon: PLANET_GLYPH.sun, sign: sun.sign, degree: sun.degInSign, house: sun.house }] : []),
+    ...(moon ? [{ id: "moon", label: "Moon", icon: PLANET_GLYPH.moon, sign: moon.sign, degree: moon.degInSign, house: moon.house }] : []),
+    { id: "rising", label: "Rising (Ascendant)", icon: "AC", isText: true, sign: ascendant.sign, degree: ascendant.degInSign, house: 1 },
+    { id: "midheaven", label: "Midheaven (MC)", icon: "MC", isText: true, sign: mc.sign, degree: mc.degInSign, house: mcHouse },
+  ];
+
+  const angles: [string, string, ChartAngle][] = [
+    ["AC", "Ascendant", ascendant],
+    ["DC", "Descendant", descendant],
+    ["MC", "Midheaven", mc],
+    ["IC", "Imum Coeli", ic],
+  ];
+
+  return (
+    <div data-astro-reading className="space-y-6">
+      {/* 1. Key Placements */}
+      <SectionCard id="key-placements" title="Key Placements">
+        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
+          {key.map((k) => (
+            <div key={k.id} data-key-placement={k.id} className="flex min-w-0 items-center gap-3 rounded-xl border bg-background/60 p-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {k.isText ? <span className="text-sm font-bold">{k.icon}</span> : <Glyph className="text-xl leading-none">{k.icon}</Glyph>}
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">{k.label}</p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  <Glyph className="mr-1">{ZODIAC_GLYPH[k.sign as keyof typeof ZODIAC_GLYPH]}</Glyph>
+                  {k.sign} {fmtDeg(k.degree)}
+                </p>
+                {k.house !== null && <p className="text-xs text-muted-foreground">House {k.house}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* 2. Natal Chart + its details */}
+      <SectionCard id="natal-chart" title="Natal Chart">
+        <div data-astro-wheel-wrap className="mx-auto w-full max-w-[840px]">
+          <AstrologyWheelChart chart={chart} className="w-full" colors={colors} />
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div data-chart-detail="system" className="rounded-xl border bg-background/60 p-3">
+            <p className="text-xs text-muted-foreground">Chart Details</p>
+            <p className="text-sm font-semibold text-foreground">Western · Tropical · {houseSystem} Houses</p>
+            {chart.houses.fallbackReason && <p className="mt-1 text-xs italic text-muted-foreground">{chart.houses.fallbackReason}</p>}
+          </div>
+          <div data-chart-detail="angles" className="rounded-xl border bg-background/60 p-3">
+            <p className="text-xs text-muted-foreground">Angles</p>
+            <dl className="mt-0.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-sm">
+              {angles.map(([abbr, name, a]) => (
+                <div key={abbr} data-angle={abbr} className="flex min-w-0 items-baseline gap-1.5" title={name}>
+                  <dt className="w-6 shrink-0 text-xs font-bold text-muted-foreground">{abbr}</dt>
+                  <dd className="truncate font-medium text-foreground">
+                    {a.sign} {fmtDeg(a.degInSign)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <div data-chart-detail="design" className="rounded-xl border bg-background/60 p-3">
+            <p className="text-xs text-muted-foreground">Chart Design</p>
+            <p className="text-sm font-semibold text-foreground">{astroDesign?.name || "Default"}</p>
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* 3. Houses */}
+      <SectionCard id="houses" title="Houses">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {chart.houses.cusps.map((c) => (
+            <div key={c.house} data-house={c.house} className="rounded-xl border bg-background/60 px-3 py-2.5">
+              <p className="text-xs text-muted-foreground">House {c.house}</p>
+              <p className="text-sm font-semibold text-foreground">
+                <Glyph className="mr-1">{ZODIAC_GLYPH[c.sign]}</Glyph>
+                {c.sign} {fmtDeg(c.degInSign)}
+              </p>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+      {/* 4. Planetary Placements */}
+      <SectionCard id="placements" title="Planetary Placements">
+        <div role="table" aria-label="Planetary placements" className="text-sm">
+          <div role="row" className="hidden grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] gap-4 border-b pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
+            <span role="columnheader">Planet</span>
+            <span role="columnheader">Sign &amp; Degree</span>
+            <span role="columnheader">House</span>
+            <span role="columnheader">Interpretation</span>
+          </div>
+          <div className="divide-y">
+            {chart.placements.map((p) => (
+              <div
+                key={p.body}
+                role="row"
+                data-placement={p.body}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-2.5 md:grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] md:items-baseline"
+              >
+                <span role="cell" className="flex items-center gap-2 font-semibold text-foreground">
+                  <Glyph className="w-5 text-center text-base">{PLANET_GLYPH[p.body]}</Glyph>
+                  {BODY_LABEL[p.body]}
+                </span>
+                <span role="cell" className="text-right text-foreground md:text-left">
+                  <Glyph className="mr-1">{ZODIAC_GLYPH[p.sign]}</Glyph>
+                  {p.sign} {fmtDeg(p.degInSign)}
+                  {p.retrograde && (
+                    <span className="ml-1 font-semibold text-muted-foreground" title="Retrograde">
+                      {glyphText("℞")}
+                    </span>
+                  )}
+                </span>
+                <span role="cell" className="text-muted-foreground md:text-foreground">
+                  House {p.house}
+                </span>
+                <span role="cell" className="col-span-2 text-xs leading-relaxed text-muted-foreground md:col-span-1 md:text-sm">
+                  {content?.signs[p.sign] ?? ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SectionCard>
+
+      {/* 5. Aspect Grid — full width, its own row */}
+      {chart.aspects.length > 0 && (
+        <SectionCard id="aspect-grid" title="Aspect Grid">
+          <div className="flex justify-center">
+            <AspectGrid placements={chart.placements} aspects={chart.aspects} colors={colors} size="large" />
+          </div>
+        </SectionCard>
+      )}
+
+      {/* 6. Aspects — full width below the grid; grows with the reading, every aspect listed */}
+      {chart.aspects.length > 0 && (
+        <SectionCard id="aspects" title={`Aspects (${chart.aspects.length})`}>
+          <ul className="divide-y">
+            {chart.aspects.map((a, i) => (
+              <li key={i} data-aspect-row={a.type} className="flex items-start gap-3 py-2.5">
+                <span
+                  className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-base"
+                  style={{ background: colors.aspectsBackground, color: colors.aspects[a.type], fontFamily: ASTRO_GLYPH_FONT }}
+                  aria-hidden="true"
+                >
+                  {glyphText(ASPECT_META[a.type].glyph)}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">
+                    <span className="font-semibold">{BODY_LABEL[a.bodyA]}</span> {a.type.toLowerCase()}{" "}
+                    <span className="font-semibold">{BODY_LABEL[a.bodyB]}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">({a.orb.toFixed(1)}° from exact)</span>
+                  </p>
+                  <p className="text-xs leading-relaxed text-muted-foreground sm:text-sm">{content?.aspectTypes[a.type] || ASPECT_TYPE_CONTENT[a.type]}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      )}
+    </div>
+  );
+}

@@ -29,7 +29,8 @@ import type { GeneratedReport } from "@/types/generated-report";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
-import { HumanDesignSummary, SphereList, AstrologySummary } from "@/components/energetic-decoder/reading-summary";
+import { HumanDesignSummary, SphereList } from "@/components/energetic-decoder/reading-summary";
+import { AstrologyReadingView } from "@/components/energetic-decoder/astrology-reading-view";
 import { MandalaReadingView } from "@/components/energetic-decoder/mandala-reading-view";
 
 /**
@@ -44,6 +45,7 @@ import { MandalaReadingView } from "@/components/energetic-decoder/mandala-readi
  *
  * Scope, deliberately narrow: only the Traditional Human Design system
  * view gets the new 3-column (Design | BodyGraph | Personality) treatment
+ * (and, 2026-10, Astrology its own AstrologyReadingView — the public pages keep AstrologySummary)
  * and the new compact Chart Information strip below it — both built new
  * for this mockup. Mandala/Frequency/Astrology render through this same
  * header/nav chrome (so switching systems doesn't feel like leaving the
@@ -393,7 +395,7 @@ export function HumanDesignReadingWorkspace({
 
       {currentSystem === "frequency" && <SphereList spheres={reading.spheres} />}
 
-      {currentSystem === "astro" && reading.astrology && <AstrologySummary chart={reading.astrology} astroDesign={astroDesign} />}
+      {currentSystem === "astro" && reading.astrology && <AstrologyReadingView chart={reading.astrology} astroDesign={astroDesign} />}
     </div>
   );
 }
