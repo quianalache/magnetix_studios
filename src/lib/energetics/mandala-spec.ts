@@ -20,6 +20,7 @@
  */
 
 import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG, SIGNS, type ZodiacSign } from "./gate-data";
+import { CHART_DESIGN_STARTERS, starterMemberId, starterSetId, type ChartDesignStarterKey } from "./chart-design-starters";
 
 // ── Frame ─────────────────────────────────────────────────────────────
 
@@ -406,34 +407,73 @@ export const MANDALA_ELEMENT_PALETTES = {
   midnight: { fire: "#f472b6", earth: "#a78bfa", air: "#38bdf8", water: "#6366f1" },
 } as const satisfies Record<string, MandalaElementColors>;
 
-/**
- * A design's four element colors. Designs saved before the element fields
- * existed have only `mandalaZodiacColor` (kept, never overwritten); for
- * those the missing colors fall back — read-time only, nothing is written —
- * to the built-in palette whose zodiac color they carry (the original
- * Default / ready-made values), otherwise to four distinct shades derived
- * from their own zodiac color, so a custom design keeps its color family.
- */
-export function resolveMandalaElementColors(design: {
+/** Each ready-made design's element palette, by its stable starter key (CHART_DESIGN_STARTERS). */
+const STARTER_ELEMENT_PALETTES: Record<ChartDesignStarterKey, MandalaElementColors> = {
+  "magnetix-violet": MANDALA_ELEMENT_PALETTES.magnetixViolet,
+  monochrome: MANDALA_ELEMENT_PALETTES.monochrome,
+  "warm-sunset": MANDALA_ELEMENT_PALETTES.warmSunset,
+  midnight: MANDALA_ELEMENT_PALETTES.midnight,
+};
+
+/** The design record fields the element-color fallback reads. */
+export interface MandalaElementColorSource {
+  id?: string | null;
+  subAccountId?: string | null;
+  ownerSetId?: string | null;
+  isDefault?: boolean | null;
   mandalaZodiacColor?: string | null;
   mandalaFireColor?: string | null;
   mandalaEarthColor?: string | null;
   mandalaAirColor?: string | null;
   mandalaWaterColor?: string | null;
-} | null | undefined): MandalaElementColors {
+}
+
+/**
+ * Which built-in design a record is, by stable identity — never by name or
+ * color: a ready-made design's records belong to the set
+ * starterSetId(subAccountId, key) (their ownerSetId, and their own id is
+ * starterMemberId(thatSet, system)), written when the ready-made designs
+ * were added; the workspace's Default record carries isDefault: true.
+ */
+export function builtInElementPalette(design: MandalaElementColorSource | null | undefined): MandalaElementColors | null {
+  if (!design) return null;
+  if (design.subAccountId) {
+    for (const { key } of CHART_DESIGN_STARTERS) {
+      const setId = starterSetId(design.subAccountId, key);
+      if (design.ownerSetId === setId || design.id === starterMemberId(setId, "mandala")) return STARTER_ELEMENT_PALETTES[key];
+    }
+  }
+  if (design.isDefault === true) return MANDALA_ELEMENT_PALETTES.default;
+  return null;
+}
+
+/**
+ * A design's four element colors. Explicitly saved colors always win.
+ * Designs saved before the element fields existed have only
+ * `mandalaZodiacColor` (kept, never overwritten); for those the missing
+ * colors fall back — at read time only, nothing is ever written:
+ *   1. a built-in design (the Default, or a ready-made design, identified
+ *      by builtInElementPalette above) → its own intended palette;
+ *   2. any other (custom) design → from its own zodiac color: the built-in
+ *      palette carrying that same zodiac color, otherwise four distinct
+ *      shades derived from it, so a custom design keeps its color family.
+ * The first Mandala save in the editor writes the four colors shown.
+ */
+export function resolveMandalaElementColors(design: MandalaElementColorSource | null | undefined): MandalaElementColors {
   const z = (design?.mandalaZodiacColor || "#8b5cf6").toLowerCase();
-  const known: Record<string, MandalaElementColors> = {
+  const bySeed: Record<string, MandalaElementColors> = {
     "#8b5cf6": MANDALA_ELEMENT_PALETTES.default,
     "#52525b": MANDALA_ELEMENT_PALETTES.monochrome,
     "#ea580c": MANDALA_ELEMENT_PALETTES.warmSunset,
     "#a78bfa": MANDALA_ELEMENT_PALETTES.midnight,
   };
-  const fallback: MandalaElementColors = known[z] ?? {
-    fire: deriveShade(z, -35, 0.02),
-    earth: deriveShade(z, 25, -0.1),
-    air: deriveShade(z, 70, 0.08),
-    water: deriveShade(z, -80, -0.04),
-  };
+  const fallback: MandalaElementColors = builtInElementPalette(design) ??
+    bySeed[z] ?? {
+      fire: deriveShade(z, -35, 0.02),
+      earth: deriveShade(z, 25, -0.1),
+      air: deriveShade(z, 70, 0.08),
+      water: deriveShade(z, -80, -0.04),
+    };
   return {
     fire: design?.mandalaFireColor || fallback.fire,
     earth: design?.mandalaEarthColor || fallback.earth,

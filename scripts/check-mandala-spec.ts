@@ -195,6 +195,36 @@ check("fallback for designs saved before the element fields: read-time only, bui
   const svc = readFileSync("src/lib/server/chart-design-service.ts", "utf8");
   assert.ok(!/mandala(Fire|Earth|Air|Water)Color/.test(svc), "chart-design-service must not backfill the element fields");
 });
+check("built-in designs saved before the element fields resolve by identity (never by name or color)", () => {
+  const SA = "xvnedVCmQpEvHrcPhEDI";
+  // shaped like production's records (ids, ownerSetId, isDefault, legacy zodiac color, no element fields)
+  const starter = (key: string, zodiac: string) => ({ id: `cd_cds_starter_${SA}_${key}_mandala`, subAccountId: SA, ownerSetId: `cds_starter_${SA}_${key}`, isDefault: false, mandalaZodiacColor: zodiac });
+  // 1. the workspace Default
+  assert.deepEqual(resolveMandalaElementColors({ id: "CqKUt6HdL06G0HYCpD3z", subAccountId: SA, ownerSetId: "cds_kBWb00bC7OSPWEG9lXY8", isDefault: true, mandalaZodiacColor: "#8b5cf6" }), MANDALA_ELEMENT_PALETTES.default);
+  // 2. Magnetix Violet, even though its legacy zodiac color is Default's
+  assert.deepEqual(resolveMandalaElementColors(starter("magnetix-violet", "#8b5cf6")), MANDALA_ELEMENT_PALETTES.magnetixViolet);
+  // 3. the other ready-made designs
+  assert.deepEqual(resolveMandalaElementColors(starter("monochrome", "#52525b")), MANDALA_ELEMENT_PALETTES.monochrome);
+  assert.deepEqual(resolveMandalaElementColors(starter("warm-sunset", "#ea580c")), MANDALA_ELEMENT_PALETTES.warmSunset);
+  assert.deepEqual(resolveMandalaElementColors(starter("midnight", "#a78bfa")), MANDALA_ELEMENT_PALETTES.midnight);
+  // identity, not color: a ready-made design whose legacy zodiac color was changed still gets its own palette
+  assert.deepEqual(resolveMandalaElementColors(starter("midnight", "#123456")), MANDALA_ELEMENT_PALETTES.midnight);
+  // the id alone also identifies it; another workspace's set id does not
+  assert.deepEqual(resolveMandalaElementColors({ id: `cd_cds_starter_${SA}_monochrome_mandala`, subAccountId: SA, mandalaZodiacColor: "#52525b" }), MANDALA_ELEMENT_PALETTES.monochrome);
+  assert.notDeepEqual(resolveMandalaElementColors({ subAccountId: "other", ownerSetId: `cds_starter_${SA}_magnetix-violet`, mandalaZodiacColor: "#0e7490" }), MANDALA_ELEMENT_PALETTES.magnetixViolet);
+  // the name is never used
+  assert.notDeepEqual(resolveMandalaElementColors({ subAccountId: SA, ownerSetId: "cds_custom", isDefault: false, mandalaZodiacColor: "#0e7490", name: "Magnetix Violet" } as never), MANDALA_ELEMENT_PALETTES.magnetixViolet);
+  // 4. a custom design derives from its own zodiac color
+  const custom = resolveMandalaElementColors({ id: "cd_cds_600JRBXdFnEqhrnW1Qyd_mandala", subAccountId: SA, ownerSetId: "cds_600JRBXdFnEqhrnW1Qyd", isDefault: false, mandalaZodiacColor: "#0e7490" });
+  assert.equal(new Set(Object.values(custom)).size, 4);
+  assert.notDeepEqual(custom, MANDALA_ELEMENT_PALETTES.default);
+  const custom2 = resolveMandalaElementColors({ subAccountId: SA, ownerSetId: "cds_x", isDefault: false, mandalaZodiacColor: "#be123c" });
+  assert.notDeepEqual(custom, custom2, "different zodiac colors → different derived palettes");
+  // 7. explicitly saved element colors always win over any built-in fallback
+  const pinned = { mandalaFireColor: "#010101", mandalaEarthColor: "#020202", mandalaAirColor: "#030303", mandalaWaterColor: "#040404" };
+  assert.deepEqual(resolveMandalaElementColors({ ...starter("midnight", "#a78bfa"), ...pinned }), { fire: "#010101", earth: "#020202", air: "#030303", water: "#040404" });
+  assert.deepEqual(resolveMandalaElementColors({ ...starter("magnetix-violet", "#8b5cf6"), mandalaAirColor: "#030303" }), { ...MANDALA_ELEMENT_PALETTES.magnetixViolet, air: "#030303" });
+});
 check("center glow follows the background (no white hole on dark designs)", () => {
   assert.equal(glowColor("#0f1115"), "#0f1115");
   assert.notEqual(glowColor("#fff7ed"), "#ffffff");

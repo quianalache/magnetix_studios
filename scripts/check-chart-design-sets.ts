@@ -635,6 +635,46 @@ async function main() {
       }
     }
   });
+  await check("old ready-made Mandala record (no element fields): read writes nothing, shows its own palette; the first save pins exactly those colors", async () => {
+    const spec = await import("../src/lib/energetics/mandala-spec");
+    // A Magnetix Violet design as production stores it: ready-made identity, the legacy zodiac color it shares with Default, no element fields.
+    const base = (await setService.listChartDesignSets(SA3, AG)).sets.find((x) => x.isDefault)!;
+    const setId = `cds_starter_${SA3}_magnetix-violet`;
+    const ids = { humanDesign: `cd_${setId}_humanDesign`, mandala: `cd_${setId}_mandala`, astrology: `cd_${setId}_astrology` } as const;
+    for (const sys of ["humanDesign", "mandala", "astrology"] as const) {
+      const rec = { ...(base.designs[sys] as unknown as Record<string, unknown>) };
+      delete rec.id;
+      for (const f of Object.values(spec.MANDALA_ELEMENT_FIELDS)) delete rec[f];
+      await db.collection("chartDesigns").doc(ids[sys]).set({ ...rec, name: "Magnetix Violet", isDefault: false, ownerSetId: setId, mandalaZodiacColor: "#8b5cf6", updatedAt: Timestamp.fromMillis(1_700_000_000_000) });
+    }
+    await db.collection("chartDesignSets").doc(setId).set({ subAccountId: SA3, agencyId: AG, name: "Magnetix Violet", isDefault: false, members: { ...ids, frequency: null }, starter: { key: "magnetix-violet", version: 1 }, createdAt: Timestamp.fromMillis(1_700_000_000_000), updatedAt: Timestamp.fromMillis(1_700_000_000_000) });
+    try {
+    const rawBefore = (await db.collection("chartDesigns").doc(ids.mandala).get()).data()!;
+    // read through the real API (twice) — nothing written
+    const got = (await json(await setRoute.GET(req("admin3"), p(SA3, { setId })))).body as unknown as SetBody;
+    await setService.listChartDesignSets(SA3, AG);
+    const rawAfter = (await db.collection("chartDesigns").doc(ids.mandala).get()).data()!;
+    assert.deepEqual(rawAfter, rawBefore, "reading must not write or backfill");
+    for (const f of Object.values(spec.MANDALA_ELEMENT_FIELDS)) assert.equal(f in rawAfter, false, `${f} must not be written on read`);
+    // shown: Magnetix Violet's palette, not Default's (same legacy zodiac color)
+    assert.deepEqual(spec.resolveMandalaElementColors(got.set.designs.mandala), spec.MANDALA_ELEMENT_PALETTES.magnetixViolet);
+    let st = editorState.initChartDesignEditorState(got.set);
+    assert.equal(st.values.mandala.mandalaFireColor, spec.MANDALA_ELEMENT_PALETTES.magnetixViolet.fire);
+    assert.equal(editorState.isEditorDirty(st), false);
+    // first intentional Mandala save pins the four colors shown
+    st = editorState.setEditorField(st, "mandala", "backgroundColor", "#fdfdfd");
+    const res = await json(await setRoute.PATCH(req("admin3", "PATCH", editorState.buildEditorSavePayload(st)!), p(SA3, { setId })));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const saved = (await db.collection("chartDesigns").doc(ids.mandala).get()).data()!;
+    for (const [element, f] of Object.entries(spec.MANDALA_ELEMENT_FIELDS)) assert.equal(saved[f], spec.MANDALA_ELEMENT_PALETTES.magnetixViolet[element as "fire"], f);
+    assert.equal(saved.mandalaZodiacColor, "#8b5cf6", "legacy field preserved");
+    assert.equal(saved.backgroundColor, "#fdfdfd");
+    } finally {
+      // emulator-only cleanup, so later checks (ready-made seeding) see SA3 as before
+      for (const id of Object.values(ids)) await db.collection("chartDesigns").doc(id).delete();
+      await db.collection("chartDesignSets").doc(setId).delete();
+    }
+  });
   await check("editor sample endpoint answers members only; ?sample=full returns the richer sample", async () => {
     const full = await json(await previewRoute.GET(new Request("http://test.local/x?sample=full", { headers: { "x-user-uid": "member2" } }), p(SA1)));
     assert.equal(full.status, 200);
