@@ -83,6 +83,10 @@ export async function PATCH(
     if (typeof body.mandalaZodiacColor === "string") fields.mandalaZodiacColor = body.mandalaZodiacColor;
     if (typeof body.mandalaGateRingColor === "string") fields.mandalaGateRingColor = body.mandalaGateRingColor;
     if (typeof body.mandalaQuadrantColor === "string") fields.mandalaQuadrantColor = body.mandalaQuadrantColor;
+    if (typeof body.mandalaFireColor === "string") fields.mandalaFireColor = body.mandalaFireColor;
+    if (typeof body.mandalaEarthColor === "string") fields.mandalaEarthColor = body.mandalaEarthColor;
+    if (typeof body.mandalaAirColor === "string") fields.mandalaAirColor = body.mandalaAirColor;
+    if (typeof body.mandalaWaterColor === "string") fields.mandalaWaterColor = body.mandalaWaterColor;
 
     const design = await updateChartDesign(subAccountId, designId, fields);
     return NextResponse.json({ ok: true, design });

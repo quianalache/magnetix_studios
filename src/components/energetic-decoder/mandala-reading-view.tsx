@@ -21,6 +21,7 @@ import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { HD_BODY_LABELS } from "@/lib/energetics/human-design-data";
 import type { HumanDesignReadingContent } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
+import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { SkillLayerList } from "@/components/energetic-decoder/reading-summary";
 import { cn } from "@/lib/utils";
@@ -120,10 +121,18 @@ function HumanDesignCard({ profile }: { profile: HumanDesignProfile }) {
   );
 }
 
-function LegendSwatch({ color, label, description }: { color: string; label: string; description: string }) {
+function LegendSwatch({ color, colors, label, description }: { color?: string; colors?: string[]; label: string; description: string }) {
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      {colors ? (
+        <span className="mt-0.5 grid h-3 w-3 shrink-0 grid-cols-2 overflow-hidden rounded-full" aria-hidden="true">
+          {colors.map((c, i) => (
+            <span key={i} style={{ backgroundColor: c }} />
+          ))}
+        </span>
+      ) : (
+        <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      )}
       <div>
         <p className="text-xs font-semibold text-foreground">{label}</p>
         <p className="text-[11px] leading-snug text-muted-foreground">{description}</p>
@@ -145,11 +154,16 @@ function MandalaLegend({ mandalaDesign }: { mandalaDesign: ChartDesign }) {
     <div className="rounded-2xl border bg-card p-4">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
       <div className="space-y-3">
-        <LegendSwatch color={mandalaDesign.mandalaZodiacColor} label="Zodiac Ring" description="The outer ring places the 64 gates within the 12 zodiac signs, showing the relationship between Human Design and astrological positioning." />
-        <LegendSwatch color={mandalaDesign.mandalaGateRingColor} label="64 Gates & I Ching" description="The middle ring shows the 64 Human Design gates. Each gate corresponds to one of the 64 hexagrams of the I Ching." />
+        <LegendSwatch color={mandalaDesign.mandalaQuadrantColor} label="Quarters" description="The outer band shows the four Human Design Quarters: Initiation, Civilization, Duality and Mutation." />
+        <LegendSwatch
+          colors={(() => { const e = resolveMandalaElementColors(mandalaDesign); return [e.fire, e.earth, e.air, e.water]; })()}
+          label="Zodiac Ring"
+          description="Places the 64 gates within the 12 zodiac signs, colored by element (Fire, Earth, Air, Water)."
+        />
+        <LegendSwatch color={mandalaDesign.mandalaGateRingColor} label="64 Gates & I Ching" description="Each of the 64 gates shows its number and its I Ching hexagram." />
         <LegendSwatch color={mandalaDesign.personalityActivationColor} label="Personality (Conscious)" description="Planets calculated at birth. The conscious side of the design." />
         <LegendSwatch color={mandalaDesign.designActivationColor} label="Design (Unconscious)" description="Planets calculated ~88 days before birth. The unconscious side of the design." />
-        <LegendSwatch color={mandalaDesign.chartDefinedColor} label="Both Activated" description="A gate activated by both Personality and Design appears as a blend of the two colors in the Mandala." />
+        <LegendSwatch colors={[mandalaDesign.personalityActivationColor, mandalaDesign.designActivationColor, mandalaDesign.personalityActivationColor, mandalaDesign.designActivationColor]} label="Both Activated" description="A gate activated by both Personality and Design is split between the two colors." />
       </div>
     </div>
   );
@@ -345,11 +359,11 @@ function SkillsCard({ profile }: { profile: HumanDesignProfile & { content?: Hum
 const UNDERSTANDING_CARDS = [
   {
     title: "Zodiac Ring",
-    body: "The outer ring places the 64 Human Design gates within the 12 zodiac signs, showing the relationship between Human Design and astrological positioning.",
+    body: "The zodiac ring places the 64 Human Design gates within the 12 zodiac signs, colored by element (Fire, Earth, Air, Water). Outside it, the four Human Design Quarters: Initiation, Civilization, Duality and Mutation.",
   },
   {
     title: "64 Gates & I Ching Hexagrams",
-    body: "Each of the 64 Human Design gates corresponds to one of the 64 hexagrams of the I Ching. Every activated gate shows a 6-line stack marking which of that hexagram's lines is active for this reading.",
+    body: "Each of the 64 Human Design gates corresponds to one of the 64 hexagrams of the I Ching. Every gate shows its number and its hexagram, line 1 nearest the center.",
   },
   {
     title: "Planetary Activations",
@@ -361,7 +375,7 @@ const UNDERSTANDING_CARDS = [
   },
   {
     title: "Both Activated",
-    body: "When a gate is activated by both Personality and Design, its wedge in the Mandala appears as a blend of both colors — a real, distinct third state, not a coincidence of the other two.",
+    body: "When a gate is activated by both Personality and Design, its wedge in the Mandala is split between the two colors, so both activations stay visible.",
   },
 ];
 
@@ -425,6 +439,7 @@ export function MandalaReadingView({
             personalityColor={mandalaDesign.personalityActivationColor}
             designColor={mandalaDesign.designActivationColor}
             zodiacColor={mandalaDesign.mandalaZodiacColor}
+            elementColors={resolveMandalaElementColors(mandalaDesign)}
             gateRingColor={mandalaDesign.mandalaGateRingColor}
             quadrantColor={mandalaDesign.mandalaQuadrantColor}
             hdDesign={hdDesign}

@@ -1,3 +1,4 @@
+import { MANDALA_ELEMENT_PALETTES } from "@/lib/energetics/mandala-spec";
 import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
@@ -101,6 +102,14 @@ export function freshDesignFields() {
     mandalaZodiacColor: "#8b5cf6",
     mandalaGateRingColor: "#71717a", // zinc-500 — neutral structural ink, matches this app's other faint-ring conventions
     mandalaQuadrantColor: "#71717a",
+    // Zodiac element colors (2026-10 Mandala redesign) — written only on
+    // brand-new designs. Existing designs are deliberately NOT backfilled
+    // (chart-design-service's missingFieldsPatch doesn't list them): they
+    // resolve at read time via resolveMandalaElementColors().
+    mandalaFireColor: MANDALA_ELEMENT_PALETTES.default.fire,
+    mandalaEarthColor: MANDALA_ELEMENT_PALETTES.default.earth,
+    mandalaAirColor: MANDALA_ELEMENT_PALETTES.default.air,
+    mandalaWaterColor: MANDALA_ELEMENT_PALETTES.default.water,
   };
 }
 

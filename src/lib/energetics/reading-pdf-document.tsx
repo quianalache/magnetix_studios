@@ -13,12 +13,29 @@ import {
   Circle,
   Line,
   Path,
+  Defs,
+  RadialGradient,
+  Stop,
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { HumanDesignProfile, LocalSkillEntry } from "./human-design";
 import { CENTERS, CENTER_LABELS, HD_BODY_LABELS, type CenterKey } from "./human-design-data";
 import { CENTER_LAYOUT, GATE_POINT, GATE_SPINE, CHART_VIEWBOX, type CenterGeometry } from "./human-design-chart-layout";
-import { GATE_WHEEL_ORDER, WHEEL_START_LONGITUDE_DEG } from "./gate-data";
+import {
+  MANDALA_CX,
+  MANDALA_CY,
+  MANDALA_RINGS,
+  MANDALA_TYPE,
+  MANDALA_VIEW,
+  WEDGE_OPACITY,
+  bandPath,
+  buildMandalaModel,
+  mandalaBodygraphBox,
+  polar,
+  resolveMandalaElementColors,
+  tangentialTextRotation,
+  type MandalaElementColors,
+} from "./mandala-spec";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT } from "./human-design-content-data";
 import type { VariableArrowDirection, VariableArrowSource } from "./human-design-variables";
 import {
@@ -45,7 +62,6 @@ import {
   halfSplitDasharray,
 } from "./human-design-chart-constants";
 import type { AstrologyChart, ZodiacSign, AspectType } from "./astrology";
-import { SIGNS } from "./astrology";
 import { ASPECT_TYPE_CONTENT } from "./astrology-content-data";
 import {
   WHEEL_LINE,
@@ -239,6 +255,8 @@ function HumanDesignBodygraphPdf({
   gatesColor,
   backgroundColor,
   size,
+  personalityColor = PERSONALITY_FILL,
+  designColor = DESIGN_FILL,
 }: {
   profile: HumanDesignProfile;
   centersColor: string;
@@ -248,6 +266,9 @@ function HumanDesignBodygraphPdf({
   gatesColor: string;
   backgroundColor: string;
   size: number;
+  /** Activated-gate marker colors — only the Mandala passes these (its design's colors); every other caller keeps the defaults. */
+  personalityColor?: string;
+  designColor?: string;
 }) {
   const definedSet = new Set(profile.definedCenters);
   const personalityGates = new Set(profile.personality.map((a) => a.gate));
@@ -313,7 +334,7 @@ function HumanDesignBodygraphPdf({
       {activatedGates.map((gate) => {
         const point = labelPositions.get(gate)!;
         const inDesign = designGates.has(gate);
-        const fill = inDesign ? DESIGN_FILL : PERSONALITY_FILL;
+        const fill = inDesign ? designColor : personalityColor;
         return (
           <G key={gate}>
             <Circle cx={point.x} cy={point.y} r={GATE_MARKER_R} fill={fill} stroke={gatesColor} strokeWidth={GATE_MARKER_STROKE_WIDTH} />
@@ -514,227 +535,18 @@ export function HumanDesignFullChartPdf({ profile, hdDesign }: { profile: HumanD
   );
 }
 
-// ── Mandala (react-pdf Svg) — rebuilt 2026-08-15 (Phase 6). The prior
-// version (2026-08-10) only ever drew the gate ring + quadrants + dots;
-// this mirrors mandala-chart.tsx's completed rebuild exactly (zodiac ring,
-// gate ring, line-position glyph, planet glyphs, embedded center
-// BodyGraph) — same SPHERE_POSITION-style constants, same formulas, only
-// the shape primitives differ (react-pdf's G/Line/Circle/Text/Path/Rect
-// instead of DOM svg equivalents), for the same reason every other PDF
-// mirror in this file exists. `MANDALA_` prefix on locals avoids colliding
-// with the Astrology wheel's own CX/CY/toXY declared further down.
-//
-// This also fixes the real bug the Phase 4 parity-audit pass found — the
-// PDF printed the word "Mandala" with no chart beneath it. The prior
-// MandalaPdf component existed and was called correctly; concrete root
-// cause not conclusively isolated (this rebuild replaces the component
-// entirely rather than patching around an unconfirmed cause), but the
-// fix is verified the way the audit itself insisted on: a real PDF was
-// generated and inspected after this rebuild, not just previewed as
-// HTML — see the Build Log / parity-audit update for that evidence.
+// ── Mandala (react-pdf Svg) — 2026-10 redesign. The geometry, orientation,
+// labels, colors and activation model all come from mandala-spec.ts, the
+// same specification the browser MandalaChart draws (so the two can't
+// drift); this function only maps that model onto react-pdf primitives.
+// react-pdf's Svg has no textPath, so Quarter and zodiac labels are
+// straight text turned along the band (the browser curves them), and no
+// paint-order, so planet symbols get their halo from a stroked copy drawn
+// first. Planet symbols use PLANET_ABBR (ASCII) because the PDF's only
+// font is WinAnsi Helvetica, which can't draw the astrological glyphs.
 
-const MANDALA_CX = 100;
-const MANDALA_CY = 100;
+const MANDALA_SIZE = 300; // pt — 64 gate numbers + hexagrams need this much room to stay legible
 
-const MANDALA_QUADRANT_OUTER = 98;
-const MANDALA_QUADRANT_INNER = 89;
-const MANDALA_QUADRANT_LABEL_R = (MANDALA_QUADRANT_OUTER + MANDALA_QUADRANT_INNER) / 2;
-
-const MANDALA_ZODIAC_OUTER = 89;
-const MANDALA_ZODIAC_INNER = 73;
-
-const MANDALA_GATE_SECTOR_OUTER = 73;
-const MANDALA_GATE_SECTOR_INNER = 23;
-const MANDALA_GATE_LABEL_R = 68.5;
-const MANDALA_LINE_GLYPH_R = 52;
-const MANDALA_PLANET_GLYPH_R = 32;
-
-const MANDALA_GATE_ARC_DEG = 360 / 64;
-const MANDALA_SIZE = 300; // bigger than the 180pt BodyGraph/240pt Astrology wheel — 64 tightly-packed gate numbers need more room to stay legible than either of those.
-/**
- * Width (pt) the embedded BodyGraph occupies, as a fraction of
- * MANDALA_SIZE. Retuned 2026-08-17 for the Astrolo geometry port (see
- * human-design-chart-layout.ts's header) — real bounding-box math is
- * different now (a wider, tighter-cropped viewBox: CHART_VIEWBOX below
- * vs. the old "8 -25 84 142"), so this was re-derived from scratch by
- * real-rendering the Mandala PDF and inspecting it, not carried over
- * from the old value.
- */
-const MANDALA_CENTER_CHART_SIZE = MANDALA_SIZE * 0.3;
-/** Real height of the embedded chart at MANDALA_CENTER_CHART_SIZE width — CHART_VIEWBOX isn't square, so this must be computed, not assumed equal to the width (a real bug this rewrite fixed: the old code used one value for both the width AND the vertical centering offset, silently assuming a square embed). */
-const [, , CHART_VIEWBOX_W, CHART_VIEWBOX_H] = CHART_VIEWBOX.split(" ").map(Number);
-const MANDALA_CENTER_CHART_HEIGHT = MANDALA_CENTER_CHART_SIZE * (CHART_VIEWBOX_H / CHART_VIEWBOX_W);
-
-function mandalaAngleForGateIndex(i: number): number {
-  // 12 o'clock = -90°, clockwise = increasing angle — same convention mandala-chart.tsx documents.
-  return -90 + i * MANDALA_GATE_ARC_DEG;
-}
-/** Real raw ecliptic longitude -> this chart's SVG angle — same formula, same anchor (WHEEL_START_LONGITUDE_DEG) as mandala-chart.tsx's angleForLongitude. */
-function mandalaAngleForLongitude(rawLon: number): number {
-  const wheelPos = (((rawLon - WHEEL_START_LONGITUDE_DEG) % 360) + 360) % 360;
-  return -90 + wheelPos;
-}
-function mandalaToXY(angleDeg: number, r: number): { x: number; y: number } {
-  const rad = (angleDeg * Math.PI) / 180;
-  return { x: MANDALA_CX + r * Math.cos(rad), y: MANDALA_CY + r * Math.sin(rad) };
-}
-function mandalaSignAbbrev(sign: string): string {
-  return sign.slice(0, 3).toUpperCase();
-}
-/** One angular band as a filled ring wedge — mirrors bandPath() in mandala-chart.tsx, shared by the quadrant band, zodiac band, and every gate sector. */
-function mandalaBandPath(a0: number, a1: number, rOuter: number, rInner: number): string {
-  const o0 = mandalaToXY(a0, rOuter);
-  const o1 = mandalaToXY(a1, rOuter);
-  const i1 = mandalaToXY(a1, rInner);
-  const i0 = mandalaToXY(a0, rInner);
-  return [
-    `M ${o0.x.toFixed(2)} ${o0.y.toFixed(2)}`,
-    `A ${rOuter} ${rOuter} 0 0 1 ${o1.x.toFixed(2)} ${o1.y.toFixed(2)}`,
-    `L ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}`,
-    `A ${rInner} ${rInner} 0 0 0 ${i0.x.toFixed(2)} ${i0.y.toFixed(2)}`,
-    "Z",
-  ].join(" ");
-}
-
-// ── Color utilities — mirrors mandala-chart.tsx's deriveShade/isDarkFill
-// exactly (own copy, not a shared import, same reason every other PDF
-// primitive in this file is its own copy rather than shared with the DOM
-// version): derive a small, related palette from ONE configured hex
-// color per band type, so "use bold color" never means hardcoding a
-// second palette. ──
-function mandalaHexToRgb(hex: string): [number, number, number] {
-  const clean = hex.replace("#", "");
-  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
-  const n = parseInt(full, 16);
-  if (Number.isNaN(n)) return [113, 113, 122];
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function mandalaRgbToHex(r: number, g: number, b: number): string {
-  const c = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, "0");
-  return `#${c(r)}${c(g)}${c(b)}`;
-}
-function mandalaRgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  const rn = r / 255, gn = g / 255, bn = b / 255;
-  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = d / (1 - Math.abs(2 * l - 1));
-  let h: number;
-  if (max === rn) h = ((gn - bn) / d) % 6;
-  else if (max === gn) h = (bn - rn) / d + 2;
-  else h = (rn - gn) / d + 4;
-  h *= 60;
-  if (h < 0) h += 360;
-  return [h, s, l];
-}
-function mandalaHslToRgb(h: number, s: number, l: number): [number, number, number] {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - c / 2;
-  let rgb: [number, number, number];
-  if (h < 60) rgb = [c, x, 0];
-  else if (h < 120) rgb = [x, c, 0];
-  else if (h < 180) rgb = [0, c, x];
-  else if (h < 240) rgb = [0, x, c];
-  else if (h < 300) rgb = [x, 0, c];
-  else rgb = [c, 0, x];
-  return [(rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255];
-}
-function mandalaDeriveShade(hex: string, hueOffsetDeg: number, lightnessDelta = 0, saturationDelta = 0): string {
-  const [h, s, l] = mandalaRgbToHsl(...mandalaHexToRgb(hex));
-  const h2 = (h + hueOffsetDeg + 360) % 360;
-  const s2 = Math.min(1, Math.max(0.18, s + saturationDelta));
-  const l2 = Math.min(0.86, Math.max(0.14, l + lightnessDelta));
-  return mandalaRgbToHex(...mandalaHslToRgb(h2, s2, l2));
-}
-function mandalaIsDarkFill(hex: string): boolean {
-  const [r, g, b] = mandalaHexToRgb(hex);
-  return (r * 299 + g * 587 + b * 114) / 1000 < 150;
-}
-
-/** Mirrors QuadrantBand in mandala-chart.tsx — 4 related shades of one configured accent, not a hardcoded second palette. */
-function MandalaQuadrantBandPdf({ baseColor }: { baseColor: string }) {
-  const HUE_OFFSETS = [0, 28, -28, 52];
-  const LIGHT_DELTAS = [0, 0.04, -0.06, 0.08];
-  return (
-    <>
-      {[0, 1, 2, 3].map((q) => {
-        const a0 = mandalaAngleForGateIndex(q * 16);
-        const a1 = mandalaAngleForGateIndex(q * 16 + 16);
-        const fill = mandalaDeriveShade(baseColor, HUE_OFFSETS[q], LIGHT_DELTAS[q]);
-        const textColor = mandalaIsDarkFill(fill) ? "#ffffff" : "#1c1e24";
-        const labelPos = mandalaToXY(mandalaAngleForGateIndex(q * 16 + 8), MANDALA_QUADRANT_LABEL_R);
-        return (
-          <G key={q}>
-            <Path d={mandalaBandPath(a0, a1, MANDALA_QUADRANT_OUTER, MANDALA_QUADRANT_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
-            <Text x={labelPos.x} y={labelPos.y + 2} style={{ fontSize: 6.5, fontWeight: 800, textAnchor: "middle", fill: textColor }}>
-              {`${q + 1}`}
-            </Text>
-          </G>
-        );
-      })}
-    </>
-  );
-}
-
-/** Mirrors ZodiacRing in mandala-chart.tsx — 12 related shades of one configured accent, alternating lightness for adjacent-sign contrast; same real longitude anchor as the gate ring so the two always agree. */
-function MandalaZodiacRingPdf({ baseColor }: { baseColor: string }) {
-  return (
-    <>
-      {SIGNS.map((sign, i) => {
-        const startLon = i * 30;
-        const endLon = startLon + 30;
-        const a0 = mandalaAngleForLongitude(startLon);
-        const a1 = mandalaAngleForLongitude(endLon);
-        const midA = mandalaAngleForLongitude(startLon + 15);
-        const labelPos = mandalaToXY(midA, (MANDALA_ZODIAC_OUTER + MANDALA_ZODIAC_INNER) / 2);
-        const hueOffset = -55 + i * (110 / 11);
-        const fill = mandalaDeriveShade(baseColor, hueOffset, i % 2 === 0 ? 0.03 : -0.05);
-        const textColor = mandalaIsDarkFill(fill) ? "#ffffff" : "#1c1e24";
-        return (
-          <G key={sign}>
-            <Path d={mandalaBandPath(a0, a1, MANDALA_ZODIAC_OUTER, MANDALA_ZODIAC_INNER)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
-            <Text x={labelPos.x} y={labelPos.y} style={{ fontSize: 4.2, fontWeight: 700, textAnchor: "middle", fill: textColor }}>
-              {mandalaSignAbbrev(sign)}
-            </Text>
-          </G>
-        );
-      })}
-    </>
-  );
-}
-
-/** Mirrors LineGlyph in mandala-chart.tsx — the real activated line (1-6), not the traditional King Wen hexagram shape (see that file's header note on why), white against the gate wedge's own color fill. */
-function MandalaLineGlyphPdf({ cx, cy, personalityLine, designLine }: { cx: number; cy: number; personalityLine?: number; designLine?: number }) {
-  const tickH = 1.3;
-  const tickW = 6;
-  const gap = 1.9;
-  const totalH = 6 * tickH + 5 * (gap - tickH);
-  const startY = cy - totalH / 2;
-  return (
-    <G>
-      {[1, 2, 3, 4, 5, 6].map((line) => {
-        const y = startY + (6 - line) * gap;
-        const active = personalityLine === line || designLine === line;
-        return <Rect key={line} x={cx - tickW / 2} y={y} width={tickW} height={tickH} rx={0.4} fill="#ffffff" fillOpacity={active ? 1 : 0.3} />;
-      })}
-    </G>
-  );
-}
-
-/**
- * Mirrors MandalaChart in mandala-chart.tsx in full — quadrant band,
- * zodiac band, 64 real gate-sector wedges (activated ones filled and
- * split Personality/Design down their own angular center, matching the
- * 2026-08-16 visual-composition rebuild), and an embedded center
- * BodyGraph via the same HumanDesignBodygraphPdf this file's own HD
- * Traditional section uses, composited with react-pdf's
- * `position: "absolute"` rather than a second nested Svg coordinate
- * system. `gateColor` carries the same meaning the web caller gives it —
- * the accent stroke around each activated gate's wedge, not the
- * Personality/Design fill itself.
- */
 /** Exported 2026-08-12 — see HumanDesignFullChartPdf's export note above. */
 export function MandalaPdf({
   profile,
@@ -743,6 +555,7 @@ export function MandalaPdf({
   personalityColor = PERSONALITY_FILL,
   designColor = DESIGN_FILL,
   zodiacColor = "#8b5cf6",
+  elementColors,
   gateRingColor = "#71717a",
   quadrantColor = "#71717a",
   hdDesign,
@@ -752,123 +565,119 @@ export function MandalaPdf({
   backgroundColor: string;
   personalityColor?: string;
   designColor?: string;
+  /** Legacy single zodiac color — only used when `elementColors` isn't passed. */
   zodiacColor?: string;
+  elementColors?: MandalaElementColors;
   gateRingColor?: string;
   quadrantColor?: string;
   hdDesign?: ChartDesign | null;
 }) {
-  const personalityGates = new Set(profile.personality.map((a) => a.gate));
-  const designGates = new Set(profile.design.map((a) => a.gate));
-  const byGatePersonality = new Map(profile.personality.map((a) => [a.gate, a]));
-  const byGateDesign = new Map(profile.design.map((a) => [a.gate, a]));
-  // Real bug caught 2026-08-15 rendering an actual PDF and looking at it
-  // directly (same class of bug this file's own PLANET_ABBR comment
-  // above already documents for the full-chart planet boxes and the
-  // Astrology wheel): HD_BODY_LABELS' `symbol` field is a real Unicode
-  // astrological glyph (☉☽♃…), correct for the web SVG (real font
-  // fallback), but react-pdf's only font here is WinAnsi Helvetica —
-  // it doesn't fail safely, it silently prints a garbled substitute
-  // character. Reusing PLANET_ABBR (the same ASCII-safe 2-letter map
-  // already proven correct elsewhere in this file) instead of adding a
-  // second, PDF-unsafe lookup.
-  const bodySymbol = new Map(HD_BODY_LABELS.map((b) => [b.body, PLANET_ABBR[b.body] ?? b.label.slice(0, 2)]));
+  const elements = elementColors ?? resolveMandalaElementColors({ mandalaZodiacColor: zodiacColor });
+  const model = buildMandalaModel(
+    { personality: profile.personality, design: profile.design },
+    { backgroundColor, personalityColor, designColor, gateColor, gateRingColor, quadrantColor, elements },
+  );
+  const R = MANDALA_RINGS;
+  const k = MANDALA_SIZE / MANDALA_VIEW; // pt per Mandala unit
+  const box = mandalaBodygraphBox();
+  const glowId = `mandala-glow-${model.glow.color.replace("#", "")}`;
+  const abbr = (body: string) => PLANET_ABBR[body] ?? body.slice(0, 2);
 
   return (
-    <View style={{ backgroundColor, borderRadius: 12, padding: MANDALA_SIZE * 0.05, position: "relative" }}>
-      <Svg viewBox={`0 0 ${MANDALA_CX * 2} ${MANDALA_CY * 2}`} style={{ width: MANDALA_SIZE, height: MANDALA_SIZE }}>
-        <MandalaQuadrantBandPdf baseColor={quadrantColor} />
-        <MandalaZodiacRingPdf baseColor={zodiacColor} />
+    <View style={{ backgroundColor, borderRadius: 12, padding: MANDALA_SIZE * 0.04, position: "relative" }}>
+      <View style={{ position: "relative", width: MANDALA_SIZE, height: MANDALA_SIZE }}>
+        <Svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} style={{ width: MANDALA_SIZE, height: MANDALA_SIZE }}>
+          <Defs>
+            <RadialGradient id={glowId} cx={MANDALA_CX} cy={MANDALA_CY} r={R.glowOuter} fx={MANDALA_CX} fy={MANDALA_CY} gradientUnits="userSpaceOnUse">
+              <Stop offset={0} stopColor={model.glow.color} stopOpacity={1} />
+              <Stop offset={model.glow.solidStop} stopColor={model.glow.color} stopOpacity={1} />
+              <Stop offset={(model.glow.solidStop + 1) / 2} stopColor={model.glow.color} stopOpacity={0.55} />
+              <Stop offset={1} stopColor={model.glow.color} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
 
-        <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={MANDALA_GATE_SECTOR_OUTER} fill="none" stroke={gateRingColor} strokeOpacity={0.5} strokeWidth={0.4} />
-        <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={MANDALA_GATE_SECTOR_INNER} fill="none" stroke={gateRingColor} strokeOpacity={0.35} strokeWidth={0.35} />
+          {model.quarters.map(({ quarter, span, fill, ink, labelAngle }) => {
+            const p = polar(labelAngle, (R.quarterOuter + R.quarterInner) / 2);
+            return (
+              <G key={quarter.number}>
+                <Path d={bandPath(span.start, span.end, R.quarterOuter, R.quarterInner)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
+                <G transform={`rotate(${tangentialTextRotation(labelAngle).toFixed(2)} ${p.x.toFixed(3)} ${p.y.toFixed(3)})`}>
+                  <Text x={p.x} y={p.y + MANDALA_TYPE.quarterLabel * 0.35} style={{ fontSize: MANDALA_TYPE.quarterLabel, fontWeight: 700, fill: ink, textAnchor: "middle" }}>
+                    {quarter.label}
+                  </Text>
+                </G>
+              </G>
+            );
+          })}
 
-        {[0, 1, 2, 3].map((q) => {
-          const angle = mandalaAngleForGateIndex(q * 16);
-          const outer = mandalaToXY(angle, MANDALA_QUADRANT_OUTER + 1);
-          const inner = mandalaToXY(angle, MANDALA_GATE_SECTOR_INNER);
-          return <Line key={q} x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y} stroke={quadrantColor} strokeOpacity={0.6} strokeWidth={0.5} />;
-        })}
+          {model.signs.map(({ sign, span, fill, ink }) => {
+            const p = polar(span.mid, (R.zodiacOuter + R.zodiacInner) / 2);
+            return (
+              <G key={sign}>
+                <Path d={bandPath(span.start, span.end, R.zodiacOuter, R.zodiacInner)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
+                <G transform={`rotate(${tangentialTextRotation(span.mid).toFixed(2)} ${p.x.toFixed(3)} ${p.y.toFixed(3)})`}>
+                  <Text x={p.x} y={p.y + MANDALA_TYPE.zodiacLabel * 0.35} style={{ fontSize: MANDALA_TYPE.zodiacLabel, fontWeight: 700, fill: ink, textAnchor: "middle" }}>
+                    {sign}
+                  </Text>
+                </G>
+              </G>
+            );
+          })}
 
-        {GATE_WHEEL_ORDER.map((gate, i) => {
-          const angle = mandalaAngleForGateIndex(i);
-          const angleMid = angle + MANDALA_GATE_ARC_DEG / 2;
-          const angleEnd = angle + MANDALA_GATE_ARC_DEG;
-          const labelPos = mandalaToXY(angleMid, MANDALA_GATE_LABEL_R);
-          const glyphPos = mandalaToXY(angleMid, MANDALA_LINE_GLYPH_R);
-          const planetPos = mandalaToXY(angleMid, MANDALA_PLANET_GLYPH_R);
-          const inPersonality = personalityGates.has(gate);
-          const inDesign = designGates.has(gate);
-          const activated = inPersonality || inDesign;
-          const pAct = byGatePersonality.get(gate);
-          const dAct = byGateDesign.get(gate);
-          const textColor = activated ? "#ffffff" : INACTIVE_GATE_TEXT;
+          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={backgroundColor} />
 
-          return (
-            <G key={gate}>
-              {/* The gate's own wedge — real fix for "activation as a floating dot": an activated gate's ENTIRE sector fills, split down its own angular center when both Personality and Design are active. */}
-              {activated ? (
-                inPersonality && inDesign ? (
-                  <>
-                    <Path d={mandalaBandPath(angle, angleMid, MANDALA_GATE_SECTOR_OUTER, MANDALA_GATE_SECTOR_INNER)} fill={personalityColor} stroke={gateColor} strokeWidth={0.3} />
-                    <Path d={mandalaBandPath(angleMid, angleEnd, MANDALA_GATE_SECTOR_OUTER, MANDALA_GATE_SECTOR_INNER)} fill={designColor} stroke={gateColor} strokeWidth={0.3} />
-                  </>
-                ) : (
-                  <Path
-                    d={mandalaBandPath(angle, angleEnd, MANDALA_GATE_SECTOR_OUTER, MANDALA_GATE_SECTOR_INNER)}
-                    fill={inPersonality ? personalityColor : designColor}
-                    stroke={gateColor}
-                    strokeWidth={0.3}
-                  />
-                )
-              ) : (
-                <Path d={mandalaBandPath(angle, angleEnd, MANDALA_GATE_SECTOR_OUTER, MANDALA_GATE_SECTOR_INNER)} fill={gateRingColor} fillOpacity={0.06} stroke={gateRingColor} strokeOpacity={0.18} strokeWidth={0.2} />
-              )}
+          {model.gates.flatMap((g) =>
+            g.wedges.map((w, i) => <Path key={`${g.gate}-${i}`} d={bandPath(w.start, w.end, R.field, 0)} fill={w.fill} fillOpacity={WEDGE_OPACITY} />),
+          )}
 
-              <Text x={labelPos.x} y={labelPos.y + 0.9} style={{ fontSize: activated ? 4.4 : 3.2, fontWeight: activated ? 800 : 500, textAnchor: "middle", fill: textColor }}>
-                {`${gate}`}
-              </Text>
+          {model.spokes.map((s, i) => (
+            <Line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={gateRingColor} strokeOpacity={0.45} strokeWidth={0.18} />
+          ))}
+          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill="none" stroke={gateRingColor} strokeOpacity={0.6} strokeWidth={0.3} />
 
-              {activated && <MandalaLineGlyphPdf cx={glyphPos.x} cy={glyphPos.y} personalityLine={pAct?.line} designLine={dAct?.line} />}
+          <Circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.glowOuter} fill={`url(#${glowId})`} />
 
-              {pAct && (
-                <Text x={planetPos.x} y={planetPos.y - (dAct ? 2 : 0)} style={{ fontSize: 5.4, fontWeight: 700, textAnchor: "middle", fill: "#ffffff" }}>
-                  {bodySymbol.get(pAct.body) ?? ""}
+          {model.gates.map((g) => (
+            <G key={g.gate}>
+              {g.rim && <Path d={bandPath(g.rim.start, g.rim.end, R.field, R.field - 1.1)} fill={gateColor} />}
+              {g.hexagram.segments.map((s, i) => (
+                <Line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={g.hexagram.stroke} strokeWidth={R.hexagramLineThickness} />
+              ))}
+              <G transform={`rotate(${g.number.rotate.toFixed(2)} ${g.number.x.toFixed(3)} ${g.number.y.toFixed(3)})`}>
+                <Text x={g.number.x} y={g.number.y + MANDALA_TYPE.gateNumber * 0.35} style={{ fontSize: MANDALA_TYPE.gateNumber, fontWeight: 700, fill: g.number.fill, textAnchor: "middle" }}>
+                  {`${g.gate}`}
                 </Text>
-              )}
-              {dAct && (
-                <Text x={planetPos.x} y={planetPos.y + (pAct ? 5.2 : 2)} style={{ fontSize: 5.4, fontWeight: 700, textAnchor: "middle", fill: "#ffffff" }}>
-                  {bodySymbol.get(dAct.body) ?? ""}
-                </Text>
-              )}
+              </G>
+              {/* Two-letter abbreviations are turned along the band (like the gate numbers) so stacked ones never run into each other on the sides of the wheel. */}
+              {g.planets.map((p, i) => (
+                <G key={i} transform={`rotate(${g.number.rotate.toFixed(2)} ${p.x.toFixed(3)} ${p.y.toFixed(3)})`}>
+                  <Text x={p.x} y={p.y + p.fontSize * 0.35} style={{ fontSize: p.fontSize * 0.8, fontWeight: 700, fill: backgroundColor, stroke: backgroundColor, strokeWidth: 0.7, textAnchor: "middle" }}>
+                    {abbr(p.body)}
+                  </Text>
+                  <Text x={p.x} y={p.y + p.fontSize * 0.35} style={{ fontSize: p.fontSize * 0.8, fontWeight: 700, fill: p.fill, textAnchor: "middle" }}>
+                    {abbr(p.body)}
+                  </Text>
+                </G>
+              ))}
             </G>
-          );
-        })}
-      </Svg>
+          ))}
+        </Svg>
 
-      {/*
-       * Real bug caught 2026-08-15 generating an actual PDF (the sibling
-       * web MandalaChart had the identical mistake) and inspecting it
-       * directly: this used to require `hdDesign` to be non-null/defined
-       * before the embedded BodyGraph would render at all, which
-       * silently hid it for any sub-account that never separately
-       * created an HD Traditional chart design — a normal state, not an
-       * error, and unrelated to whether this chart should render.
-       * `centerColorsFromHdDesignPdf` and every field below already
-       * degrade to the same defaults `HumanDesignFullChartPdf` uses when
-       * hdDesign is absent, so there's nothing left that actually needs
-       * the gate.
-       */}
-      <View style={{ position: "absolute", top: (MANDALA_SIZE - MANDALA_CENTER_CHART_HEIGHT) / 2, left: (MANDALA_SIZE - MANDALA_CENTER_CHART_SIZE) / 2 }}>
-        <HumanDesignBodygraphPdf
-          profile={profile}
-          centersColor={hdDesign?.chartDefinedColor || DEFAULT_DEFINED_FILL}
-          centersMode={hdDesign?.centersMode || "uniform"}
-          centerColors={centerColorsFromHdDesignPdf(hdDesign)}
-          channelsColor={hdDesign?.channelsColor || DEFINED_STROKE}
-          gatesColor={hdDesign?.gatesColor || "#e4e4e7"}
-          backgroundColor="transparent"
-          size={MANDALA_CENTER_CHART_SIZE}
-        />
+        {/* Center BodyGraph — the same box the browser uses (mandalaBodygraphBox), in points. */}
+        <View style={{ position: "absolute", left: box.x * k, top: box.y * k }}>
+          <HumanDesignBodygraphPdf
+            profile={profile}
+            centersColor={hdDesign?.chartDefinedColor || DEFAULT_DEFINED_FILL}
+            centersMode={hdDesign?.centersMode || "uniform"}
+            centerColors={centerColorsFromHdDesignPdf(hdDesign)}
+            channelsColor={hdDesign?.channelsColor || DEFINED_STROKE}
+            gatesColor={hdDesign?.gatesColor || "#e4e4e7"}
+            backgroundColor="transparent"
+            size={box.w * k}
+            personalityColor={personalityColor}
+            designColor={designColor}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1230,6 +1039,7 @@ export function ReadingPdfDocument({
                   personalityColor={mandalaDesign.personalityActivationColor}
                   designColor={mandalaDesign.designActivationColor}
                   zodiacColor={mandalaDesign.mandalaZodiacColor}
+                  elementColors={resolveMandalaElementColors(mandalaDesign)}
                   gateRingColor={mandalaDesign.mandalaGateRingColor}
                   quadrantColor={mandalaDesign.mandalaQuadrantColor}
                   hdDesign={hdDesign}

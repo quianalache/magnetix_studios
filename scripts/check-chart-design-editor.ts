@@ -7,7 +7,8 @@
 import assert from "node:assert/strict";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { CENTER_CHART_HEIGHT_OF_WHEEL, ZODIAC_FULL_NAMES_MIN_WIDTH } from "../src/components/energetic-decoder/mandala-chart";
+import { ZODIAC_FULL_NAMES_MIN_WIDTH } from "../src/components/energetic-decoder/mandala-chart";
+import { MANDALA_ELEMENT_FIELDS, MANDALA_ELEMENT_PALETTES } from "../src/lib/energetics/mandala-spec";
 import type { ChartDesign, ChartDesignSystem } from "../src/types/chart-design";
 import type { ChartDesignSetWithMembers } from "../src/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "../src/lib/energetics/chart-design-fields";
@@ -85,6 +86,10 @@ const base = {
   mandalaZodiacColor: "#8b5cf6",
   mandalaGateRingColor: "#71717a",
   mandalaQuadrantColor: "#71717a",
+  mandalaFireColor: "#c97b7b",
+  mandalaEarthColor: "#a68a64",
+  mandalaAirColor: "#8f9a6a",
+  mandalaWaterColor: "#7f9bb0",
 } as const;
 
 function record(id: string, system: ChartDesignSystem, extra: Partial<ChartDesign> = {}): ChartDesign {
@@ -173,11 +178,32 @@ check("preview shows the saved record with unsaved values on top", () => {
   assert.equal(p.id, "md");
   assert.equal(previewDesign(null, s.values.mandala), null);
 });
+check("Mandala element colors: legacy designs show the fallback, aren't dirty, and the first Mandala save pins them", () => {
+  const set = makeSet(true);
+  const md = set.designs.mandala as unknown as Record<string, unknown>;
+  for (const f of Object.values(MANDALA_ELEMENT_FIELDS)) delete md[f];
+  let s = initChartDesignEditorState(set);
+  assert.equal(s.values.mandala.mandalaFireColor, MANDALA_ELEMENT_PALETTES.default.fire, "fallback shown");
+  assert.equal(buildEditorSavePayload(s), null, "nothing to save");
+  s = setEditorField(s, "mandala", "backgroundColor", "#fafafa");
+  const pay = buildEditorSavePayload(s)!;
+  assert.deepEqual(Object.keys(pay.mandala!).sort(), ["backgroundColor", ...Object.values(MANDALA_ELEMENT_FIELDS)].sort());
+  assert.equal(pay.mandala!.mandalaWaterColor, MANDALA_ELEMENT_PALETTES.default.water);
+  // a design that already has them sends only what changed
+  const withFields = makeSet(true);
+  Object.assign(withFields.designs.mandala!, { mandalaFireColor: "#111111", mandalaEarthColor: "#222222", mandalaAirColor: "#333333", mandalaWaterColor: "#444444" });
+  let t = initChartDesignEditorState(withFields);
+  assert.equal(t.values.mandala.mandalaAirColor, "#333333", "saved values win over the fallback");
+  t = setEditorField(t, "mandala", "mandalaFireColor", "#ff0000");
+  assert.deepEqual(Object.keys(buildEditorSavePayload(t)!.mandala!), ["mandalaFireColor"]);
+});
 check("every editable field appears in exactly one editor section", () => {
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     const inSections = CHART_DESIGN_SECTIONS[system].flatMap((sec) => sec.fields);
     assert.equal(new Set(inSections).size, inSections.length, `${system}: a field is listed twice`);
-    assert.deepEqual([...inSections].sort(), [...CHART_DESIGN_SYSTEM_FIELDS[system]].sort(), `${system}: sections don't match the allow-list`);
+    // mandalaZodiacColor stays stored and accepted (it seeds the element-color fallback of designs saved before the four element fields) but is no longer shown — the four element colors replace it in the editor.
+    const hidden = system === "mandala" ? ["mandalaZodiacColor"] : [];
+    assert.deepEqual([...inSections].sort(), CHART_DESIGN_SYSTEM_FIELDS[system].filter((f) => !hidden.includes(f)).sort(), `${system}: sections don't match the allow-list`);
   }
 });
 
@@ -188,13 +214,22 @@ check("the four looks keep exactly their established values (pre-unification sou
   for (const system of ["humanDesign", "mandala", "astrology"] as const) {
     assert.deepEqual(CHART_DESIGN_PRESETS[system].map((p) => p.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
     for (const preset of CHART_DESIGN_PRESETS[system]) {
+      const elementKeys = Object.values(MANDALA_ELEMENT_FIELDS) as string[];
       const literal = `{ name: "${preset.name}", swatch: ${JSON.stringify(preset.swatch).replace(/,/g, ", ")}, values: { ${Object.entries(preset.values)
+        .filter(([k]) => !elementKeys.includes(k))
         .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
         .join(", ")} } }`;
       assert.ok(block.includes(literal), `${system} / ${preset.name} differs from the established values`);
     }
   }
   assert.deepEqual(CHART_DESIGN_STARTERS.map((x) => x.name), ["Magnetix Violet", "Monochrome", "Warm Sunset", "Midnight"]);
+  // 2026-10 Mandala redesign: the only additions are the four zodiac element colors, equal to the spec's palettes.
+  const palette = { "Magnetix Violet": MANDALA_ELEMENT_PALETTES.magnetixViolet, Monochrome: MANDALA_ELEMENT_PALETTES.monochrome, "Warm Sunset": MANDALA_ELEMENT_PALETTES.warmSunset, Midnight: MANDALA_ELEMENT_PALETTES.midnight } as const;
+  for (const preset of CHART_DESIGN_PRESETS.mandala) {
+    const v = preset.values as Record<string, string>;
+    const pal = palette[preset.name as keyof typeof palette];
+    for (const [element, field] of Object.entries(MANDALA_ELEMENT_FIELDS)) assert.equal(v[field], pal[element as keyof typeof pal], `${preset.name}.${field}`);
+  }
 });
 check("each system gets only its own preset values; everything else comes from the Default", () => {
   const def = makeSet(true);
@@ -344,32 +379,14 @@ check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph 
   assert.equal(h(viewer.slice(va, viewer.indexOf('case "human-design-gates":', va))), "d90daa01645eced0", "ReportDesignViewer's human-design-full block changed");
   assert.ok(!viewer.includes("HumanDesignFullChart"), "the report viewer still draws the bare BodyGraph, not the full chart");
 });
-check("the approved Human Design browser layout (e2a7913) and the PDF Mandala are untouched by the Mandala work", () => {
+check("the approved Human Design browser layout (e2a7913) is untouched by the Mandala work", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
   // Pinned from production e2a7913 (owner approved). Update a pin only when that file is changed on purpose.
   assert.equal(h(readFileSync("src/components/energetic-decoder/human-design-full-chart.tsx", "utf8")), "f3e986bec535303d", "HumanDesignFullChart changed");
   assert.equal(h(readFileSync("src/components/energetic-decoder/chart-design-editor-workspace.tsx", "utf8")), "47f2ca0b77a93b7e", "editor preview fit changed");
   assert.equal(h(readFileSync("src/lib/energetics/chart-design-preview-fit.ts", "utf8")), "c5341cb88e0f58d1", "preview fit geometry changed");
-  const pdf = readFileSync("src/lib/energetics/reading-pdf-document.tsx", "utf8");
-  const ma = pdf.indexOf("export function MandalaPdf(");
-  assert.equal(h(pdf.slice(ma, pdf.indexOf("\n}\n", ma) + 3)), "00a0b5b3f8fac1ba", "MandalaPdf changed");
-});
-check("browser Mandala: no 1-4 labels, full zodiac names (abbreviations when tiny), center BodyGraph 47% of the wheel in the design's colors", () => {
-  const m = readFileSync("src/components/energetic-decoder/mandala-chart.tsx", "utf8");
-  // quadrant bands keep their geometry/shading/dividers, but no visible number
-  assert.ok(!m.includes("{q + 1}") && !m.includes("QUADRANT_LABEL_R"), "quadrant numbers are gone");
-  assert.ok(m.includes("bandPath(a0, a1, QUADRANT_OUTER, QUADRANT_INNER)") && m.includes("deriveShade(baseColor, HUE_OFFSETS[q], LIGHT_DELTAS[q])"));
-  // full names at the same size; the container-query breakpoint matches the documented constant
+  // The Mandala itself is covered by scripts/check-mandala-spec.ts.
   assert.equal(ZODIAC_FULL_NAMES_MIN_WIDTH, 300);
-  assert.ok(m.includes('"hidden @min-[300px]/mandala:inline"') && m.includes('"@min-[300px]/mandala:hidden"') && m.includes("@container/mandala"));
-  assert.ok(m.includes('{variant === "full" ? sign : signAbbrev(sign)}') && (m.match(/fontSize=\{4\.2\}/g)?.length ?? 0) === 1);
-  // the longest name (Sagittarius ≈ 25.1 units at 4.2) fits the segment's inner chord (2 × 73 × sin 15° ≈ 37.8)
-  assert.ok(25.1 < 2 * 73 * Math.sin(Math.PI / 12));
-  // center BodyGraph: sized against the wheel SVG, drawing = 47% of the wheel diameter, padding removed, design colors passed
-  assert.equal(CENTER_CHART_HEIGHT_OF_WHEEL, 0.47);
-  assert.ok(m.includes("data-mandala-wheel") && !m.includes("CENTER_CHART_PCT"));
-  assert.ok(m.includes('className="p-0!"') && m.includes("personalityColor={personalityColor}") && m.includes("designColor={designColor}"));
-  assert.ok(m.includes("definedColor={hdDesign?.chartDefinedColor}") && m.includes("centerColors={centerColors}"), "center/channel/gate inheritance kept");
 });
 check("the sticky preview's chart fits the visible page area (card included), with a floor for short windows", () => {
   // 1440×900: page area 836px tall, 24px padding top and bottom, 50px of card title/padding.

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer";
+import { resolveMandalaElementColors } from "./mandala-spec";
 import { HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf, GeneKeysChartPdf } from "./reading-pdf-document";
 import { DEFAULT_DEFINED_FILL } from "./human-design-chart-constants";
 import type { HumanDesignProfile } from "./human-design";
@@ -83,6 +84,7 @@ function ChartPiecePdf({
           personalityColor={mandalaDesign.personalityActivationColor}
           designColor={mandalaDesign.designActivationColor}
           zodiacColor={mandalaDesign.mandalaZodiacColor}
+          elementColors={resolveMandalaElementColors(mandalaDesign)}
           gateRingColor={mandalaDesign.mandalaGateRingColor}
           quadrantColor={mandalaDesign.mandalaQuadrantColor}
           hdDesign={hdDesign}

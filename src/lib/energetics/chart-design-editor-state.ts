@@ -2,6 +2,7 @@ import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import { CHART_DESIGN_SET_SYSTEMS } from "@/types/chart-design-set";
 import { CHART_DESIGN_SYSTEM_FIELDS } from "./chart-design-fields";
+import { MANDALA_ELEMENT_FIELDS, resolveMandalaElementColors } from "./mandala-spec";
 
 /**
  * The unified Chart Design editor's state, as pure functions (2026-10).
@@ -21,6 +22,14 @@ export interface ChartDesignEditorState {
   savedName: string;
   values: Record<ChartDesignSystem, SystemValues>;
   saved: Record<ChartDesignSystem, SystemValues>;
+  /** Mandala element colors shown from the read-time fallback (the saved record has no value yet) — written explicitly with the first Mandala save, so what was shown stays exactly what's stored. */
+  implicitMandalaFields?: string[];
+}
+
+function implicitMandalaFields(design: ChartDesign | null): string[] {
+  if (!design) return [];
+  const rec = design as unknown as Record<string, unknown>;
+  return Object.values(MANDALA_ELEMENT_FIELDS).filter((f) => typeof rec[f] !== "string" || !rec[f]);
 }
 
 function systemValues(design: ChartDesign | null, system: ChartDesignSystem): SystemValues {
@@ -29,6 +38,15 @@ function systemValues(design: ChartDesign | null, system: ChartDesignSystem): Sy
   for (const key of CHART_DESIGN_SYSTEM_FIELDS[system]) {
     const v = (design as unknown as Record<string, unknown>)[key];
     if (typeof v === "string" || typeof v === "number") out[key] = v;
+  }
+  // Designs saved before the zodiac element colors existed: show (and
+  // compare against) the colors they actually render with, so the pickers
+  // aren't blank and nothing reads as an unsaved change until edited.
+  if (system === "mandala") {
+    const resolved = resolveMandalaElementColors(design);
+    for (const [element, field] of Object.entries(MANDALA_ELEMENT_FIELDS)) {
+      if (out[field] === undefined) out[field] = resolved[element as keyof typeof resolved];
+    }
   }
   return out;
 }
@@ -43,6 +61,7 @@ export function initChartDesignEditorState(set: ChartDesignSetWithMembers): Char
     savedName: set.name,
     values,
     saved: structuredClone(values),
+    implicitMandalaFields: implicitMandalaFields(set.designs.mandala),
   };
 }
 
@@ -93,7 +112,11 @@ export function buildEditorSavePayload(state: ChartDesignEditorState): ChartDesi
   if (name !== state.savedName) payload.name = name;
   for (const system of CHART_DESIGN_SET_SYSTEMS) {
     const changed = changedFields(state.values[system], state.saved[system]);
-    if (Object.keys(changed).length > 0) payload[system] = changed;
+    if (Object.keys(changed).length > 0) {
+      // A Mandala save also pins element colors that were only shown from the fallback.
+      if (system === "mandala") for (const f of state.implicitMandalaFields ?? []) if (!(f in changed)) changed[f] = state.values.mandala[f];
+      payload[system] = changed;
+    }
   }
   return Object.keys(payload).length > 0 ? payload : null;
 }

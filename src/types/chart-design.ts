@@ -125,6 +125,18 @@ export interface ChartDesign {
   /** Mandala only — the 4 quadrant divider lines and their numbers. */
   mandalaQuadrantColor: string;
   /**
+   * Mandala only (2026-10 redesign) — the zodiac band's four element colors
+   * (Fire: Aries/Leo/Sagittarius, Earth: Taurus/Virgo/Capricorn, Air:
+   * Gemini/Libra/Aquarius, Water: Cancer/Scorpio/Pisces). Optional: designs
+   * saved before these existed fall back at read time (never written) via
+   * resolveMandalaElementColors() in mandala-spec.ts, which also keeps
+   * `mandalaZodiacColor` above meaningful for them.
+   */
+  mandalaFireColor?: string;
+  mandalaEarthColor?: string;
+  mandalaAirColor?: string;
+  mandalaWaterColor?: string;
+  /**
    * The unified Chart Design (`chartDesignSets/{id}`, see
    * chart-design-set.ts) this record belongs to. Every record belongs to
    * exactly one set once a sub-account is migrated, so editing one unified

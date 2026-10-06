@@ -11,6 +11,7 @@ import type { EditorValue, SystemValues } from "@/lib/energetics/chart-design-ed
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { resolveMandalaElementColors } from "@/lib/energetics/mandala-spec";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 
 /**
@@ -75,8 +76,12 @@ const FIELD_LABEL: Record<string, string> = {
   backgroundColor: "Background",
   wheelAccentColor: "Wheel / planets",
   mandalaZodiacColor: "Zodiac ring",
-  mandalaGateRingColor: "Gate ring",
-  mandalaQuadrantColor: "Quadrant dividers",
+  mandalaFireColor: "Fire signs",
+  mandalaEarthColor: "Earth signs",
+  mandalaAirColor: "Air signs",
+  mandalaWaterColor: "Water signs",
+  mandalaGateRingColor: "Gate lines",
+  mandalaQuadrantColor: "Quarter band",
 };
 
 export function chartFieldLabel(system: ChartDesignSystem, key: string): string {
@@ -120,7 +125,8 @@ export const CHART_DESIGN_SECTIONS: Record<ChartDesignSystem, { title: string; d
   mandala: [
     { title: "Gates", description: "Color of activated gates.", fields: ["chartDefinedColor"] },
     { title: "Activations", description: "Personality and Design colors.", fields: ["personalityActivationColor", "designActivationColor"] },
-    { title: "Rings and quadrants", description: "Zodiac ring, gate ring and quadrant dividers.", fields: ["mandalaZodiacColor", "mandalaGateRingColor", "mandalaQuadrantColor"] },
+    { title: "Zodiac", description: "One color per element: Fire (Aries, Leo, Sagittarius), Earth (Taurus, Virgo, Capricorn), Air (Gemini, Libra, Aquarius), Water (Cancer, Scorpio, Pisces).", fields: ["mandalaFireColor", "mandalaEarthColor", "mandalaAirColor", "mandalaWaterColor"] },
+    { title: "Rings and quarters", description: "Human Design Quarter band and the gate field's lines.", fields: ["mandalaQuadrantColor", "mandalaGateRingColor"] },
     { title: "Background", description: "Chart background color.", fields: ["backgroundColor"] },
   ],
   astrology: [
@@ -294,6 +300,7 @@ export function ChartDesignPreview({
         personalityColor={design.personalityActivationColor}
         designColor={design.designActivationColor}
         zodiacColor={design.mandalaZodiacColor}
+            elementColors={resolveMandalaElementColors(design)}
         gateRingColor={design.mandalaGateRingColor}
         quadrantColor={design.mandalaQuadrantColor}
         hdDesign={size === "large" ? (hdDesign ?? null) : null}
