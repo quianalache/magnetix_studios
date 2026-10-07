@@ -158,8 +158,9 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
 
       {/* 4. Planetary Placements */}
       <SectionCard id="placements" title="Planetary Placements">
-        <div role="table" aria-label="Planetary placements" className="text-sm">
-          <div role="row" className="hidden grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] gap-4 border-b pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
+        {/* The four-column table switches on at 600px of the TABLE's own width (container query), not the viewport's md — beside the sidebar on a tablet the card is only ~450px wide, and the four columns' minimums overflowed the page. */}
+        <div role="table" aria-label="Planetary placements" className="@container/placements text-sm">
+          <div role="row" className="hidden grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] gap-4 border-b pb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground @min-[600px]/placements:grid">
             <span role="columnheader">Planet</span>
             <span role="columnheader">Sign &amp; Degree</span>
             <span role="columnheader">House</span>
@@ -171,13 +172,13 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
                 key={p.body}
                 role="row"
                 data-placement={p.body}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-2.5 md:grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] md:items-baseline"
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-2.5 @min-[600px]/placements:grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)] @min-[600px]/placements:items-baseline"
               >
                 <span role="cell" className="flex items-center gap-2 font-semibold text-foreground">
                   <Glyph className="w-5 text-center text-base">{PLANET_GLYPH[p.body]}</Glyph>
                   {BODY_LABEL[p.body]}
                 </span>
-                <span role="cell" className="text-right text-foreground md:text-left">
+                <span role="cell" className="text-right text-foreground @min-[600px]/placements:text-left">
                   <Glyph className="mr-1">{ZODIAC_GLYPH[p.sign]}</Glyph>
                   {p.sign} {fmtDeg(p.degInSign)}
                   {p.retrograde && (
@@ -186,10 +187,10 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
                     </span>
                   )}
                 </span>
-                <span role="cell" className="text-muted-foreground md:text-foreground">
+                <span role="cell" className="text-muted-foreground @min-[600px]/placements:text-foreground">
                   House {p.house}
                 </span>
-                <span role="cell" className="col-span-2 text-xs leading-relaxed text-muted-foreground md:col-span-1 md:text-sm">
+                <span role="cell" className="col-span-2 text-xs leading-relaxed text-muted-foreground @min-[600px]/placements:col-span-1 @min-[600px]/placements:text-sm">
                   {content?.signs[p.sign] ?? ""}
                 </span>
               </div>

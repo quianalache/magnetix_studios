@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, Home, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { EnergeticDecoderHomeTab, type EnergeticDecoderHomeTarget } from "@/components/energetic-decoder/home-tab";
@@ -36,37 +36,26 @@ const VALID_TABS: Tab[] = ["home", "builder", "content", "readings", "chartDesig
  * intended effect until this pass.
  */
 export default function EnergeticDecoderPage() {
-  // `?tab=builder` (etc.) picks the initial tab — added 2026-08-12 so the
-  // Report Editor's Back button can return to Report Builder specifically
-  // instead of always landing on the default. Read once on mount; the tab
-  // strip itself stays plain client state after that, same as before.
-  //
-  // Decision Brief Decision 3 (approved 2026-08-15): default landing tab
-  // is Readings, not Home — the Readings experience (Contact → Profile →
-  // Reading history → chart/report actions) is the operational center of
-  // the tool. Home stays a real, fully-functional secondary tab; nothing
-  // about it was deprecated, only the default changed. An explicit
-  // `?tab=` always wins regardless of this default, unchanged from before.
+  // The module tab IS the URL's `?tab=` (2026-10-07). No `?tab=` — which
+  // is exactly what the sidebar's Energetic Decoder link opens — means
+  // Home, the owner's locked module entry point. (Decision 3's "Readings by
+  // default" is retired: it made a sidebar click land in Readings, and the
+  // old Readings tab then auto-opened the newest reading — "Staff QA Test".)
+  // Intentional deep links always name their tab (`?tab=readings&profileId=…`
+  // from Contact → View Chart, `?tab=builder` from the Report Editor, …), so
+  // they still land where they point. Deriving the tab from the URL instead
+  // of one-time state also means a sidebar click while already inside the
+  // module resets to Home, and Back/Forward move between tabs.
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const initialTab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "readings";
-  const [tab, setTab] = useState<Tab>(initialTab);
-  // `?profileId=` — the Contact page's "Energetic Decoding" quick links
-  // (Decision Brief Decision 9, 2026-08-15) deep-link straight into a
-  // specific Profile's row on the Readings tab. Previously always paired
-  // with an explicit `?tab=readings` by the link itself so it wouldn't
-  // silently decide the still-open default — now that Readings IS the
-  // default, that pairing is just belt-and-suspenders, not load-bearing.
-  // Read once on mount, same as `requestedTab` above.
-  // (2026-10-07: the Readings tab now reads `profileId`/`readingId` itself,
-  // reactively, so the workspace survives refresh and Back/Forward.)
+  const tab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";
   const router = useRouter();
   const pathname = usePathname();
 
-  /** Switching module tabs writes `?tab=` (replace) so a refresh stays put and Readings' own params don't leak into other tabs. */
+  /** Switching module tabs is a navigation (`?tab=…` only), so Readings' own params never leak into another tab and Back returns to the previous tab. */
   function selectTab(next: Tab) {
-    setTab(next);
-    router.replace(`${pathname}?tab=${next}`, { scroll: false });
+    if (next === tab && !searchParams.get("profileId") && !searchParams.get("readingId")) return;
+    router.push(`${pathname}?tab=${next}`, { scroll: false });
   }
 
   // Icon per tab, plain text-primary when active — same locked-in rule as

@@ -16,6 +16,7 @@ import {
   mandalaBodygraphBox,
   resolveMandalaColors,
   textArcPath,
+  isLowerHalf,
   type ResolvedMandalaColors,
   ZODIAC_GLYPH_FONT,
   ZODIAC_GLYPH_SCALE,
@@ -43,22 +44,37 @@ export const ZODIAC_FULL_NAMES_MIN_WIDTH = 300;
 const SIGN_ABBREV = (sign: string) => sign.slice(0, 3).toUpperCase();
 
 /**
- * Phone-width Reading Mandala (2026-10-07) — with `keepFullLabels`, the
- * full Quarter names and zodiac names stay down to this width (only a
- * truly tiny chart falls back to the compact labels)…
- */
-export const KEEP_FULL_LABELS_MIN_WIDTH = 200;
-/**
- * …and below this width the Quarter/zodiac label type is scaled up within
- * its band so it stays readable. CSS font-size overrides the SVG attribute,
- * so the geometry, the labels' positions and every larger Mandala are
- * unchanged. Scaled sizes (viewBox units): Quarter 3.9 → 5.2, zodiac name
- * 3.1 → 4.2, zodiac glyph 3.875 → 5.25 — the longest label (Sagittarius)
- * still uses only ~56% of its 30° arc and each fits its band's depth
- * (checked in scripts/test-readings-library-ui.tsx).
+ * Phone-width Reading Mandala (2026-10-07; corrected after owner review).
+ * With `keepFullLabels` (Reading → Mandala only), a chart narrower than
+ * LEGIBLE_LABELS_MAX_WIDTH swaps its Quarter + zodiac labels for a phone
+ * label layer:
+ *   - always the full labels: "1 – Initiation" … "4 – Mutation", and every
+ *     zodiac glyph + full name (never the compact numbers/abbreviations);
+ *   - larger type (LEGIBLE_LABEL_TYPE, viewBox units) that still fits each
+ *     band — Sagittarius uses ~56% of its 30° arc;
+ *   - centered in its band WITHOUT `dominant-baseline`. WebKit (every
+ *     iPhone browser) ignores `dominant-baseline="central"` on <textPath>
+ *     and draws the label from its alphabetic baseline on the arc, so on a
+ *     phone every label sat ~1.3 units off-center — outward in the upper
+ *     half, inward in the lower, i.e. visually "too high" all round. The
+ *     phone layer puts the alphabetic baseline on its own arc, offset from
+ *     the band's centerline by PHONE_LABEL_BASELINE_EM × font size (inward
+ *     for upright-outward text in the upper half, outward for the lower
+ *     half's upright-inward text), which renders the same in every engine.
+ * At LEGIBLE_LABELS_MAX_WIDTH and wider the original labels render exactly
+ * as before, so the desktop Mandala, the PDF and every other Mandala are
+ * untouched.
  */
 export const LEGIBLE_LABELS_MAX_WIDTH = 420;
 export const LEGIBLE_LABEL_TYPE = { quarterLabel: 5.2, zodiacLabel: 4.2, zodiacGlyph: 5.25 } as const;
+/** Visual middle of a mixed-case label above its alphabetic baseline, as a fraction of the font size (measured in Chrome + WebKit). */
+export const PHONE_LABEL_BASELINE_EM = 0.35;
+
+/** The arc a phone-layer label sits on: the band's centerline shifted so the label's visual middle lands on it. */
+export function phoneLabelBaselineRadius(span: { mid: number }, bandMid: number, fontSize: number): number {
+  const shift = PHONE_LABEL_BASELINE_EM * fontSize;
+  return isLowerHalf(span.mid) ? bandMid + shift : bandMid - shift;
+}
 
 export function MandalaChart({
   profile,
@@ -140,12 +156,14 @@ export function MandalaChart({
       }
     : undefined;
 
-  // Static class strings (Tailwind can't see computed ones).
-  const full = keepFullLabels ? "hidden @min-[200px]/mandala:inline" : "hidden @min-[300px]/mandala:inline";
-  const compact = keepFullLabels ? "@min-[200px]/mandala:hidden" : "@min-[300px]/mandala:hidden";
-  const quarterType = keepFullLabels ? "@max-[420px]/mandala:text-[5.2px]" : undefined;
-  const zodiacType = keepFullLabels ? "@max-[420px]/mandala:text-[4.2px]" : undefined;
-  const glyphType = keepFullLabels ? "@max-[420px]/mandala:text-[5.25px]" : undefined;
+  // Static class strings (Tailwind can't see computed ones). With
+  // keepFullLabels the original labels only render at ≥ 420px (always full
+  // there); narrower, the phone label layer below replaces them.
+  const full = keepFullLabels ? undefined : "hidden @min-[300px]/mandala:inline";
+  const compact = keepFullLabels ? "hidden" : "@min-[300px]/mandala:hidden";
+  const desktopLabels = keepFullLabels ? "@max-[420px]/mandala:hidden" : undefined;
+  const quarterMid = (R.quarterOuter + R.quarterInner) / 2;
+  const zodiacMid = (R.zodiacOuter + R.zodiacInner) / 2;
 
   return (
     // @container/mandala: labels shorten on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
@@ -167,13 +185,23 @@ export function MandalaChart({
             {model.signs.map(({ sign, span }) => (
               <path key={sign} id={`mandala-arc-${sign}`} d={textArcPath(span, (R.zodiacOuter + R.zodiacInner) / 2)} />
             ))}
+            {keepFullLabels && (
+              <>
+                {model.quarters.map(({ quarter, span }) => (
+                  <path key={`p${quarter.number}`} id={`mandala-phone-arc-q${quarter.number}`} d={textArcPath(span, phoneLabelBaselineRadius(span, quarterMid, LEGIBLE_LABEL_TYPE.quarterLabel))} />
+                ))}
+                {model.signs.map(({ sign, span }) => (
+                  <path key={`p${sign}`} id={`mandala-phone-arc-${sign}`} d={textArcPath(span, phoneLabelBaselineRadius(span, zodiacMid, LEGIBLE_LABEL_TYPE.zodiacLabel))} />
+                ))}
+              </>
+            )}
           </defs>
 
           {/* Human Design Quarters */}
           {model.quarters.map(({ quarter, span, fill, ink }) => (
             <g key={quarter.number} data-mandala-quarter={quarter.name}>
               <path d={bandPath(span.start, span.end, R.quarterOuter, R.quarterInner)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
-              <text className={quarterType} fontSize={MANDALA_TYPE.quarterLabel} fontWeight={700} letterSpacing={0.35} fill={ink} dominantBaseline="central">
+              <text className={desktopLabels} fontSize={MANDALA_TYPE.quarterLabel} fontWeight={700} letterSpacing={0.35} fill={ink} dominantBaseline="central">
                 <textPath href={`#mandala-arc-q${quarter.number}`} startOffset="50%" textAnchor="middle">
                   <tspan className={full}>{quarter.label}</tspan>
                   <tspan className={compact}>{quarter.number}</tspan>
@@ -186,10 +214,10 @@ export function MandalaChart({
           {model.signs.map(({ sign, element, span, fill, ink, glyph, glyphColor }) => (
             <g key={sign} data-mandala-sign={sign} data-element={element}>
               <path d={bandPath(span.start, span.end, R.zodiacOuter, R.zodiacInner)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
-              <text className={zodiacType} fontSize={MANDALA_TYPE.zodiacLabel} fontWeight={700} fill={ink} dominantBaseline="central">
+              <text className={desktopLabels} fontSize={MANDALA_TYPE.zodiacLabel} fontWeight={700} fill={ink} dominantBaseline="central">
                 <textPath href={`#mandala-arc-${sign}`} startOffset="50%" textAnchor="middle">
                   {/* Glyph (Zodiac symbols color) then the name (element text color); compact sizes keep the glyph with a 3-letter name. */}
-                  <tspan className={glyphType} data-zodiac-glyph={sign} fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={MANDALA_TYPE.zodiacLabel * ZODIAC_GLYPH_SCALE} fontWeight={400}>
+                  <tspan data-zodiac-glyph={sign} fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={MANDALA_TYPE.zodiacLabel * ZODIAC_GLYPH_SCALE} fontWeight={400}>
                     {glyph + TEXT_PRESENTATION}
                   </tspan>
                   <tspan>{"\u00a0"}</tspan>
@@ -199,6 +227,30 @@ export function MandalaChart({
               </text>
             </g>
           ))}
+
+          {/* Phone label layer (Reading → Mandala, chart < 420px) — see LEGIBLE_LABELS_MAX_WIDTH. */}
+          {keepFullLabels && (
+            <g className="hidden @max-[420px]/mandala:inline" data-mandala-phone-labels>
+              {model.quarters.map(({ quarter, ink }) => (
+                <text key={quarter.number} data-phone-quarter={quarter.name} fontSize={LEGIBLE_LABEL_TYPE.quarterLabel} fontWeight={700} letterSpacing={0.35} fill={ink}>
+                  <textPath href={`#mandala-phone-arc-q${quarter.number}`} startOffset="50%" textAnchor="middle">
+                    {quarter.label}
+                  </textPath>
+                </text>
+              ))}
+              {model.signs.map(({ sign, ink, glyph, glyphColor }) => (
+                <text key={sign} data-phone-sign={sign} fontSize={LEGIBLE_LABEL_TYPE.zodiacLabel} fontWeight={700} fill={ink}>
+                  <textPath href={`#mandala-phone-arc-${sign}`} startOffset="50%" textAnchor="middle">
+                    <tspan fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={LEGIBLE_LABEL_TYPE.zodiacGlyph} fontWeight={400}>
+                      {glyph + TEXT_PRESENTATION}
+                    </tspan>
+                    <tspan>{"\u00a0"}</tspan>
+                    <tspan>{sign}</tspan>
+                  </textPath>
+                </text>
+              ))}
+            </g>
+          )}
 
           {/* Gate field */}
           <circle cx={MANDALA_CX} cy={MANDALA_CY} r={R.field} fill={colors.background} />

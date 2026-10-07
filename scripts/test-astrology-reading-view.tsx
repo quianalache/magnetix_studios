@@ -150,7 +150,23 @@ check("everything below the top section is exactly as released (bc36ff6 = 2488aa
   // the one approved change below the top: the house system beside the Houses heading
   const housesTitle = 'title={<>Houses <span className="font-normal text-muted-foreground">({houseSystem})</span></>}';
   assert.ok(lower(now).includes(housesTitle));
-  assert.equal(lower(now).replace(housesTitle, 'title="Houses"'), lower(released));
+  // and (2026-10-07) Planetary Placements switches to its four columns on the table's own width (container
+  // query at 600px) instead of the viewport's md, fixing a page overflow on tablets beside the sidebar.
+  // Undo exactly that mapping and the rest must still be byte-identical to the release.
+  const placementsNote = "        {/* The four-column table switches on at 600px of the TABLE's own width (container query), not the viewport's md — beside the sidebar on a tablet the card is only ~450px wide, and the four columns' minimums overflowed the page. */}\n";
+  assert.ok(lower(now).includes(placementsNote));
+  const undone = lower(now)
+    .replace(placementsNote, "")
+    .replace('className="@container/placements text-sm"', 'className="text-sm"')
+    .replaceAll("@min-[600px]/placements:", "md:");
+  assert.equal(undone.replace(housesTitle, 'title="Houses"'), lower(released));
+});
+check("Planetary Placements: four columns from 600px of the table's own width; every column still rendered", () => {
+  const html = render({ ...chart, content });
+  assert.ok(html.includes("@container/placements") && html.includes("@min-[600px]/placements:grid-cols-[minmax(130px,170px)_minmax(150px,190px)_72px_minmax(0,1fr)]"));
+  assert.ok(!/placements[\s\S]{0,400}\bmd:grid\b/.test(html.slice(html.indexOf('aria-label="Planetary placements"'), html.indexOf('aria-label="Planetary placements"') + 600)));
+  for (const p of chart.placements) assert.ok(html.includes(`data-placement="${p.body}"`), p.body);
+  assert.ok(html.includes("Sagittarius interpretation") || html.includes("interpretation"), "interpretations still render");
 });
 
 console.log(`\n${passed} checks passed.`);

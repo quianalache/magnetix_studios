@@ -13,7 +13,7 @@ import type { GeneratedReport } from "@/types/generated-report";
  * Reading workspace → Reports tab (2026-10-07, owner-approved mockup B).
  * Lists the generated reports for the person on screen — every reading of
  * their Profile — newest first. Not Report Builder: nothing here edits a
- * template, and there is no regenerate. One action per report: View PDF,
+ * Report Design, and there is no regenerate. One action per report: View PDF,
  * which opens the existing generated-report PDF route (rendered from the
  * report's frozen snapshot when opened). Delete stays available in the
  * row menu because the workspace already offered it.
@@ -45,11 +45,28 @@ export function chartDesignLabel(report: GeneratedReport): string {
   return styles.setName || "Default";
 }
 
+/**
+ * Report naming (2026-10-07): a generated report has no name of its own —
+ * it stores the Report Design it was generated from (`reportDesignId`) and
+ * that Report Design's title at the moment of generation
+ * (`reportDesignTitleAtGeneration`). The row's title IS that Report Design
+ * title, so this line just names it as such, and notes when the Report
+ * Design has since been renamed or deleted in Report Builder.
+ */
+export function reportDesignNote(report: GeneratedReport, designs: { id: string; title: string }[]): string {
+  if (designs.length === 0) return "Report Design";
+  const current = designs.find((d) => d.id === report.reportDesignId);
+  if (!current) return "Report Design (since deleted)";
+  if (current.title !== report.reportDesignTitleAtGeneration) return `Report Design (now “${current.title}”)`;
+  return "Report Design";
+}
+
 export function GeneratedReportsPanel({
   subAccountId,
   reports,
   loading,
   readingDates,
+  reportDesigns = [],
   onGenerate,
   onDelete,
   deletingReportId,
@@ -59,6 +76,8 @@ export function GeneratedReportsPanel({
   loading: boolean;
   /** readingId → that reading's createdAt, to say which snapshot a report came from. */
   readingDates: Map<string, string | null>;
+  /** The sub-account's current Report Designs — only used to say when a report's design was renamed or deleted since. */
+  reportDesigns?: { id: string; title: string }[];
   onGenerate: () => void;
   onDelete: (report: GeneratedReport) => void;
   deletingReportId: string | null;
@@ -76,7 +95,7 @@ export function GeneratedReportsPanel({
             </span>
             <div className="min-w-0">
               <h3 className="text-lg font-semibold">Generated Reports</h3>
-              <p className="text-sm text-muted-foreground">PDFs created for this person from your report templates.</p>
+              <p className="text-sm text-muted-foreground">PDFs generated for this person from your Report Designs. Internal to your team.</p>
             </div>
           </div>
           <button
@@ -97,7 +116,7 @@ export function GeneratedReportsPanel({
           <div className="mt-4 rounded-xl border border-dashed px-4 py-10 text-center" data-reports-empty>
             <p className="text-sm font-semibold">No reports generated yet</p>
             <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-              Use Generate Report to create a PDF from one of your Report Builder templates.
+              Use Generate Report to create a PDF from one of your Report Designs.
             </p>
           </div>
         ) : (
@@ -116,13 +135,13 @@ export function GeneratedReportsPanel({
                       <FileText className="h-4 w-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold" data-report-title title="Report Builder template">
+                      <p className="truncate text-sm font-semibold" data-report-title>
                         {r.reportDesignTitleAtGeneration || "Untitled report"}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {multipleReadings && readingDate
-                          ? `From the ${formatDate(readingDate).date} reading`
-                          : "From this reading"}
+                      <p className="truncate text-xs text-muted-foreground" data-report-design>
+                        {reportDesignNote(r, reportDesigns)}
+                        {" · "}
+                        {multipleReadings && readingDate ? `From the ${formatDate(readingDate).date} reading` : "From this reading"}
                       </p>
                     </div>
                   </div>
@@ -138,7 +157,7 @@ export function GeneratedReportsPanel({
                   <div className="flex min-w-0 items-start gap-2" data-report-chart-design>
                     <Palette className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 text-xs">
-                      <p className="text-muted-foreground">Chart design</p>
+                      <p className="text-muted-foreground">Chart Design</p>
                       <p className="truncate font-medium">{chartDesignLabel(r)}</p>
                     </div>
                   </div>
@@ -189,7 +208,8 @@ export function GeneratedReportsPanel({
         <div className="min-w-0 text-sm">
           <p className="font-semibold">Generating a report doesn&apos;t share it with the client.</p>
           <p className="text-muted-foreground">
-            Generated reports stay internal to your team. Giving a client access to a report isn&apos;t available yet.
+            Generated reports stay internal to your team and don&apos;t appear in the client&apos;s MyMagnetix. Sharing a
+            report with a client isn&apos;t available yet.
           </p>
         </div>
       </div>

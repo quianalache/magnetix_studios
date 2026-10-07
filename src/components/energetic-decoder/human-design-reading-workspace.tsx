@@ -12,6 +12,7 @@ import {
   MoreVertical,
   Trash2,
   Download,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -76,6 +77,13 @@ function formatReadingDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+/** "Oct 5, 2026" — with the time added when two snapshots share a date, so every option is distinguishable. */
+function readingHistoryLabel(r: { createdAt: string | null }, all: { createdAt: string | null }[]): string {
+  const date = formatReadingDate(r.createdAt);
+  if (!r.createdAt || all.filter((x) => formatReadingDate(x.createdAt) === date).length < 2) return date;
+  return `${date}, ${new Date(r.createdAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+
 function InfoField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="min-w-0">
@@ -127,6 +135,8 @@ export function HumanDesignReadingWorkspace({
   showReports,
   onShowReports,
   reportsPanel,
+  readingHistory = [],
+  onSelectReading,
   onOpenGenerateDialog,
   deletingReadingId,
   onDeleteReading,
@@ -152,6 +162,13 @@ export function HumanDesignReadingWorkspace({
   showReports: boolean;
   onShowReports: () => void;
   reportsPanel: ReactNode;
+  /**
+   * Every reading snapshot of this person, newest first (2026-10-07). The
+   * "Reading from" selector only appears when there are two or more — a
+   * practitioner convenience, never shown to the client.
+   */
+  readingHistory?: { id: string; createdAt: string | null }[];
+  onSelectReading?: (readingId: string) => void;
   onOpenGenerateDialog: () => void;
   deletingReadingId: string | null;
   onDeleteReading: (r: EnergeticDecoderReading) => void;
@@ -239,6 +256,25 @@ export function HumanDesignReadingWorkspace({
         </div>
 
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+          {readingHistory.length > 1 && onSelectReading && (
+            <label className="flex min-w-0 basis-full items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:basis-auto" data-reading-history>
+              <History className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Reading from</span>
+              <select
+                value={reading.id}
+                onChange={(e) => onSelectReading(e.target.value)}
+                aria-label="Reading from"
+                className="min-w-0 flex-1 truncate bg-transparent text-xs font-medium sm:flex-none"
+              >
+                {readingHistory.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    {readingHistoryLabel(r, readingHistory)}
+                    {i === 0 ? " (latest)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {selectedProfile && (
             <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:flex-none" data-chart-design-control>
               <span

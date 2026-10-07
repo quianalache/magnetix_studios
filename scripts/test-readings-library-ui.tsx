@@ -10,6 +10,7 @@
  * Run: NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' pnpm exec tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/test-readings-library-ui.tsx
  */
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -17,9 +18,9 @@ import { calculateHumanDesignProfile } from "../src/lib/energetics/human-design"
 import { calculateAstrologyChart } from "../src/lib/energetics/astrology";
 import { assembleReadingsLibrary, sunSignOf, type ReadingsLibraryPage } from "../src/lib/energetic-decoder/readings-library";
 import { ReadingsLibraryTable } from "../src/components/energetic-decoder/readings-library-table";
-import { GeneratedReportsPanel, chartDesignLabel } from "../src/components/energetic-decoder/generated-reports-panel";
+import { GeneratedReportsPanel, chartDesignLabel, reportDesignNote } from "../src/components/energetic-decoder/generated-reports-panel";
 import { HumanDesignReadingWorkspace } from "../src/components/energetic-decoder/human-design-reading-workspace";
-import { MandalaChart, LEGIBLE_LABEL_TYPE } from "../src/components/energetic-decoder/mandala-chart";
+import { MandalaChart, LEGIBLE_LABEL_TYPE, PHONE_LABEL_BASELINE_EM, phoneLabelBaselineRadius } from "../src/components/energetic-decoder/mandala-chart";
 import { MANDALA_RINGS, MANDALA_TYPE, ZODIAC_GLYPH_SCALE, zodiacLabelLayout } from "../src/lib/energetics/mandala-spec";
 import { TAB_STRIP_CLASS } from "../src/components/energetic-decoder/tab-strip";
 import type { GeneratedReport } from "../src/types/generated-report";
@@ -220,30 +221,119 @@ check("tab strips scroll sideways only, inside themselves (touch pan-x, no verti
   assert.ok(page.includes("className={`${TAB_STRIP_CLASS}") && page.includes("data-module-tabs") && page.includes("useActiveTabVisible(tabStripRef, tab)"));
 });
 
+console.log("\nReading history (2+ snapshots only)");
+const wsWith = (history: { id: string; createdAt: string | null }[]) =>
+  renderToStaticMarkup(
+    createElement(HumanDesignReadingWorkspace, {
+      reading, selectedProfile: null, subAccountId: "sa", subAccount: null, chartDesigns: [], reportDesigns: [], hdDesign: null, mandalaDesign: null, astroDesign: null,
+      savingDesignFor: null, onSaveDesignOverride: () => {}, availableSystems: [{ key: "hd", label: "Human Design" }],
+      currentSystem: "hd", onSetSystem: () => {}, hdStyleView: "traditional", onSetHdStyleView: () => {}, onBack: () => {},
+      showReports: false, onShowReports: () => {}, reportsPanel: null, onOpenGenerateDialog: () => {}, deletingReadingId: null, onDeleteReading: () => {},
+      readingHistory: history, onSelectReading: () => {},
+    }),
+  );
+check("one reading → no history control", () => {
+  assert.ok(!wsWith([{ id: "rB", createdAt: "2026-06-01T00:00:00Z" }]).includes("data-reading-history"));
+  assert.ok(!wsWith([]).includes("data-reading-history"));
+});
+check("two+ readings → 'Reading from [date]', newest first and marked latest, the open snapshot selected", () => {
+  const html = wsWith([{ id: "rB", createdAt: "2026-06-01T12:00:00Z" }, { id: "rA", createdAt: "2026-01-01T12:00:00Z" }]);
+  assert.ok(html.includes("data-reading-history") && html.includes(">Reading from<"));
+  const opts = [...html.matchAll(/<option value="([^"]+)"[^>]*>([^<]+)<!-- -->([^<]*)<\/option>|<option value="([^"]+)"[^>]*>([^<]+)<\/option>/g)].map((m) => m[1] ?? m[4]);
+  assert.deepEqual(opts, ["rB", "rA"]);
+  assert.ok(html.includes("Jun 1, 2026") && html.includes("Jan 1, 2026") && html.includes("(latest)"));
+  assert.ok(/<option value="rB" selected=""/.test(html), "the snapshot on screen is selected");
+});
+check("selecting a snapshot is a navigation: pushes ?readingId= (none for the latest) and keeps the workspace tab; no history rows in the library", () => {
+  assert.ok(tab.includes("router.push(build({ profileId, readingId: isLatest ? null : id, view: searchParams.get(\"view\") }), { scroll: false });"));
+  assert.ok(tab.includes("readingHistory={profileId ? readingHistory : []}"));
+  assert.ok(!readFileSync("src/components/energetic-decoder/readings-library-table.tsx", "utf8").includes("readingHistory"));
+});
+
+console.log("\nReport Design naming");
+check("rows say 'Report Design' (Report Builder's own term) — renamed/deleted designs are called out; no 'template' anywhere", () => {
+  const r = reports[1];
+  assert.equal(reportDesignNote(r, []), "Report Design");
+  assert.equal(reportDesignNote(r, [{ id: "d", title: "Human Design Overview" }]), "Report Design");
+  assert.equal(reportDesignNote(r, [{ id: "d", title: "HD Overview v2" }]), "Report Design (now “HD Overview v2”)");
+  assert.equal(reportDesignNote(r, [{ id: "other", title: "x" }]), "Report Design (since deleted)");
+  assert.ok(panel(reports).includes("data-report-design"));
+  for (const f of ["generated-reports-panel.tsx", "readings-tab.tsx", "human-design-reading-workspace.tsx"]) {
+    assert.ok(!/template/i.test(readFileSync(`src/components/energetic-decoder/${f}`, "utf8")), `${f} says "template"`);
+  }
+});
+
+console.log("\nModule entry + routing");
+const page = readFileSync("src/app/(dashboard)/sa/[subAccountId]/energetic-decoder/page.tsx", "utf8");
+check("sidebar entry (no ?tab=) opens Home — the tab is derived from the URL every render, never one-time state", () => {
+  const sidebar = readFileSync("src/components/dashboard/sidebar.tsx", "utf8");
+  assert.ok(/href: "\/energetic-decoder",\s*label: "Energetic Decoder"/.test(sidebar), "sidebar links to the module root with no query");
+  assert.ok(page.includes('const tab: Tab = VALID_TABS.includes(requestedTab as Tab) ? (requestedTab as Tab) : "home";'));
+  assert.ok(!/useState<Tab>/.test(page), "no sticky tab state");
+  assert.ok(page.includes("router.push(`${pathname}?tab=${next}`"), "tab changes are navigations (Back works)");
+});
+check("deep links keep naming their tab, so they still land where they point", () => {
+  assert.ok(readFileSync("src/components/contacts/contact-energetic-decoding.tsx", "utf8").includes("/energetic-decoder?tab=readings&profileId="));
+  assert.ok(readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8").includes("energetic-decoder?tab=builder"));
+});
+check("the Readings tab never auto-opens a reading on its own (no profileId/readingId → library)", () => {
+  assert.ok(tab.includes("if (profileId || readingId) {") && tab.includes("return <ReadingsLibraryView />;"));
+  assert.ok(!tab.includes("list[0]?.id"), "no 'select the first reading' fallback");
+});
+check("workspace tab mirrors to ?view= synchronously (history.replaceState), so a reload right after a tab click keeps it", () => {
+  assert.ok(tab.includes('window.history.replaceState(window.history.state, "", `${pathname}?${sp.toString()}`);'));
+});
+
 console.log("\nMandala on phones");
 const mandala = (keepFullLabels: boolean) =>
   renderToStaticMarkup(createElement(MandalaChart, { profile: hd, gateColor: "#7c3aed", backgroundColor: "#ffffff", keepFullLabels }));
-check("Reading → Mandala keeps the four Quarter names and full zodiac names down to 200px (only that view opts in)", () => {
+const phoneLayer = (html: string) => html.slice(html.indexOf("data-mandala-phone-labels"), html.indexOf("</g>", html.lastIndexOf("data-phone-sign")));
+check("Reading → Mandala phone layer (< 420px): all four Quarters as number + name, all 12 zodiac glyphs + FULL names — no compact labels", () => {
   const html = mandala(true);
-  for (const q of ["Initiation", "Civilization", "Duality", "Mutation"]) assert.ok(html.includes(q), q);
-  assert.equal((html.match(/data-zodiac-label="full" class="hidden @min-\[200px\]\/mandala:inline"/g) ?? []).length, 12);
+  assert.ok(html.includes('class="hidden @max-[420px]/mandala:inline" data-mandala-phone-labels'));
+  const layer = phoneLayer(html);
+  for (const q of ["1 – Initiation", "2 – Civilization", "3 – Duality", "4 – Mutation"]) assert.ok(layer.includes(q), q);
+  for (const s of ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"]) {
+    assert.ok(layer.includes(`data-phone-sign="${s}"`) && layer.includes(`<tspan>${s}</tspan>`), s);
+  }
+  assert.equal((layer.match(/\uFE0E/g) ?? []).length, 12, "every zodiac glyph, text presentation");
+  assert.ok(!/>(ARI|TAU|GEM|CAN|LEO|VIR|LIB|SCO|SAG|CAP|AQU|PIS)</.test(layer) && !/>[1-4]</.test(layer), "no abbreviations / bare quarter numbers");
   assert.ok(readFileSync("src/components/energetic-decoder/mandala-reading-view.tsx", "utf8").includes("keepFullLabels"));
 });
-check("every other Mandala (thumbnails, reports, public pages) keeps the original 300px compact behavior", () => {
+check("phone labels are centered without dominant-baseline (WebKit ignores it on textPath): baseline arc offset by 0.35em toward the band center", () => {
+  const layer = phoneLayer(mandala(true));
+  assert.ok(!layer.includes("dominant-baseline"), "phone layer uses the alphabetic baseline only");
+  assert.equal(PHONE_LABEL_BASELINE_EM, 0.35);
+  const qMid = (MANDALA_RINGS.quarterOuter + MANDALA_RINGS.quarterInner) / 2;
+  // upper half (text tops outward) → baseline inside the centerline; lower half (tops inward) → outside
+  assert.equal(phoneLabelBaselineRadius({ mid: 270 }, qMid, 5.2), qMid - 0.35 * 5.2);
+  assert.equal(phoneLabelBaselineRadius({ mid: 90 }, qMid, 5.2), qMid + 0.35 * 5.2);
+  // the shifted baseline + the label's height stay inside each band
+  for (const [mid, fs, rIn, rOut] of [[(MANDALA_RINGS.zodiacOuter + MANDALA_RINGS.zodiacInner) / 2, LEGIBLE_LABEL_TYPE.zodiacLabel, MANDALA_RINGS.zodiacInner, MANDALA_RINGS.zodiacOuter], [qMid, LEGIBLE_LABEL_TYPE.quarterLabel, MANDALA_RINGS.quarterInner, MANDALA_RINGS.quarterOuter]] as const) {
+    assert.ok(mid - 0.35 * fs - 0.2 * fs > rIn && mid + 0.35 * fs + 0.2 * fs < rOut, "cap height + descender fit the band");
+  }
+});
+check("≥ 420px (desktop): the original labels, unchanged attributes; the phone layer is hidden there", () => {
+  const html = mandala(true);
+  assert.equal((html.match(/class="@max-\[420px\]\/mandala:hidden" font-size="3.1" font-weight="700" fill="[^"]+" dominant-baseline="central"/g) ?? []).length, 12);
+  assert.equal((html.match(/class="@max-\[420px\]\/mandala:hidden" font-size="3.9" font-weight="700" letter-spacing="0.35" fill="[^"]+" dominant-baseline="central"/g) ?? []).length, 4);
+  assert.ok(html.includes(`font-size="${MANDALA_TYPE.zodiacLabel * 1.25}"`), "desktop glyph size unchanged");
+});
+check("every other Mandala (thumbnails, reports, public pages) keeps the original markup and 300px compact behavior; no phone layer", () => {
   const html = mandala(false);
   assert.equal((html.match(/data-zodiac-label="full" class="hidden @min-\[300px\]\/mandala:inline"/g) ?? []).length, 12);
-  assert.ok(!html.includes("@max-[420px]/mandala"));
+  assert.ok(!html.includes("@max-[420px]/mandala") && !html.includes("data-mandala-phone-labels") && !html.includes("mandala-phone-arc"));
 });
-check("small charts scale label type up within its band (CSS only, < 420px); the longest name still fits its 30° arc", () => {
-  const html = mandala(true);
-  assert.ok(html.includes("@max-[420px]/mandala:text-[5.2px]") && html.includes("@max-[420px]/mandala:text-[4.2px]") && html.includes("@max-[420px]/mandala:text-[5.25px]"));
-  assert.ok(html.includes(`font-size="${MANDALA_TYPE.zodiacLabel}"`), "the SVG attribute (desktop size) is unchanged");
-  assert.equal(LEGIBLE_LABEL_TYPE.zodiacGlyph / LEGIBLE_LABEL_TYPE.zodiacLabel, ZODIAC_GLYPH_SCALE);
+check("phone type fits: Sagittarius uses < 60% of its 30° arc; each label fits its band's depth", () => {
   const arc = ((30 * Math.PI) / 180) * ((MANDALA_RINGS.zodiacOuter + MANDALA_RINGS.zodiacInner) / 2);
   const l = zodiacLabelLayout("Sagittarius", LEGIBLE_LABEL_TYPE.zodiacLabel);
   assert.ok(-2 * l.glyphX < arc * 0.6, `Sagittarius at ${LEGIBLE_LABEL_TYPE.zodiacLabel}: ${(-2 * l.glyphX).toFixed(1)} of ${arc.toFixed(1)}`);
-  assert.ok(LEGIBLE_LABEL_TYPE.zodiacLabel < MANDALA_RINGS.zodiacOuter - MANDALA_RINGS.zodiacInner, "zodiac name fits the band's depth");
-  assert.ok(LEGIBLE_LABEL_TYPE.quarterLabel < MANDALA_RINGS.quarterOuter - MANDALA_RINGS.quarterInner, "Quarter name fits the band's depth");
+  assert.equal(LEGIBLE_LABEL_TYPE.zodiacGlyph / LEGIBLE_LABEL_TYPE.zodiacLabel, ZODIAC_GLYPH_SCALE);
+  assert.ok(LEGIBLE_LABEL_TYPE.zodiacLabel < MANDALA_RINGS.zodiacOuter - MANDALA_RINGS.zodiacInner);
+  assert.ok(LEGIBLE_LABEL_TYPE.quarterLabel < MANDALA_RINGS.quarterOuter - MANDALA_RINGS.quarterInner);
+});
+check("Mandala PDF renderer untouched by this work", () => {
+  assert.equal(execSync("git diff 950c2b7 -- src/lib/energetics/reading-pdf-document.tsx src/lib/energetics/report-design-pdf-document.tsx src/lib/energetics/mandala-spec.ts", { encoding: "utf8" }), "");
 });
 
 console.log(`\n${passed} checks passed.`);

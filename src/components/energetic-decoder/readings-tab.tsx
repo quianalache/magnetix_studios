@@ -39,9 +39,15 @@ import {
  *   Workspace  ?tab=readings&profileId=…[&readingId=…][&view=…]
  *              The person's latest reading in HumanDesignReadingWorkspace
  *              (unchanged), plus the new Reports tab. `readingId` pins an
- *              older snapshot (or opens a legacy reading that has no
- *              Profile — those use `readingId` alone). `view` is the
- *              workspace tab: hd | mandala | frequency | astro | reports.
+ *              older snapshot — chosen in the header's "Reading from"
+ *              selector, which only appears when the person has 2+
+ *              readings — or opens a legacy reading that has no Profile
+ *              (`readingId` alone). `view` is the workspace tab:
+ *              hd | mandala | frequency | astro | reports.
+ *
+ * This whole workspace is the PRACTITIONER's backend view. The person a
+ * chart belongs to never sees it; what a client can see is decided
+ * separately (MyMagnetix / explicit report delivery).
  *
  * The Contact page's "View Chart" links (`?tab=readings&profileId=`) land
  * straight in the workspace.
@@ -61,7 +67,10 @@ export function EnergeticDecoderReadingsTab() {
   const readingId = searchParams.get("readingId");
 
   if (profileId || readingId) {
-    return <ReadingWorkspaceView key={`${profileId ?? ""}:${readingId ?? ""}`} profileId={profileId} readingId={readingId} />;
+    // Keyed by the person (or, for a legacy reading with no Profile, that
+    // reading) — switching between one person's snapshots via `readingId`
+    // keeps the workspace mounted; opening a different person resets it.
+    return <ReadingWorkspaceView key={profileId ? `p:${profileId}` : `r:${readingId}`} profileId={profileId} readingId={readingId} />;
   }
   return <ReadingsLibraryView />;
 }
@@ -290,7 +299,9 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
   const [openRequest, setOpenRequest] = useState<NewReadingDialogOpenRequest | null>(null);
   const [preparingGenerate, setPreparingGenerate] = useState(false);
 
-  // ── Load the person + their readings.
+  // ── Load the person + their readings. For a Profile the whole snapshot
+  // list loads once; `readingId` then only picks among it (no refetch).
+  const loadKey = profileId ? `p:${profileId}` : `r:${readingId}`;
   useEffect(() => {
     if (!subAccountId) return;
     let cancelled = false;
@@ -326,7 +337,9 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
     return () => {
       cancelled = true;
     };
-  }, [subAccountId, profileId, readingId, reloadKey]);
+    // loadKey already encodes profileId/readingId the way this load uses them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subAccountId, loadKey, reloadKey]);
 
   useEffect(() => {
     if (!subAccountId) return;
@@ -465,7 +478,7 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
   async function deleteGeneratedReport(report: GeneratedReport) {
     if (
       !window.confirm(
-        `Delete this generated "${report.reportDesignTitleAtGeneration}" report? This only removes the generated document — the reading, contact, and template are unaffected.`,
+        `Delete this generated "${report.reportDesignTitleAtGeneration}" report? This only removes the generated document — the reading, contact, and Report Design are unaffected.`,
       )
     ) {
       return;
@@ -527,6 +540,14 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
   }
 
   const readingDates = useMemo(() => new Map(readings.map((r) => [r.id, r.createdAt])), [readings]);
+  const readingHistory = useMemo(() => readings.map((r) => ({ id: r.id, createdAt: r.createdAt })), [readings]);
+
+  /** "Reading from" selector — a real navigation (push), so refresh keeps the snapshot and Back returns to the previous one. The newest needs no `readingId`. */
+  function selectReading(id: string) {
+    if (!profileId) return;
+    const isLatest = readings[0]?.id === id;
+    router.push(build({ profileId, readingId: isLatest ? null : id, view: searchParams.get("view") }), { scroll: false });
+  }
 
   const hiddenDialog = (
     <div className="hidden">
@@ -607,12 +628,15 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
         onBack={backToLibrary}
         showReports={showReports}
         onShowReports={() => setView("reports")}
+        readingHistory={profileId ? readingHistory : []}
+        onSelectReading={selectReading}
         reportsPanel={
           <GeneratedReportsPanel
             subAccountId={subAccountId}
             reports={generatedReports}
             loading={reportsLoading}
             readingDates={readingDates}
+            reportDesigns={reportDesigns}
             onGenerate={openGenerateDialog}
             onDelete={(r) => void deleteGeneratedReport(r)}
             deletingReportId={deletingReportId}
@@ -631,12 +655,13 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
           {!generatedResult ? (
             <div className="space-y-4 py-2">
               <p className="text-xs text-muted-foreground">
-                Choose a Report Template to generate for {selected.name}. This creates a real generated-report
-                record — a snapshot of this reading&apos;s resolved content, frozen at the moment you generate it.
+                Choose a Report Design to generate for {selected.name}. This creates a generated report — a
+                snapshot of this reading&apos;s content, frozen at the moment you generate it. It stays internal to
+                your team.
               </p>
               {reportDesigns.length === 0 ? (
                 <p className="rounded-lg border border-dashed px-3 py-3 text-xs text-muted-foreground">
-                  No Report Templates yet — build one in Report Builder first.
+                  No Report Designs yet — create one in Report Builder first.
                 </p>
               ) : (
                 <div className="max-h-56 space-y-1 overflow-y-auto">
