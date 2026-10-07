@@ -129,11 +129,28 @@ check("the selected Chart Design reaches the wheel, the grid and the aspect list
   assert.ok(m.includes(`fill="${ASTROLOGY_PALETTES.midnight.housesBackground}"`), "house ring");
   assert.ok(m.includes(`color:${ASTROLOGY_PALETTES.midnight.aspects.Trine}`) || m.includes(`color:${ASTROLOGY_PALETTES.midnight.aspects.Square}`), "aspect colors in grid/list");
 });
-check("everything below the top section is exactly as released (bc36ff6 = 2488aa7): Houses, Planetary Placements, Aspect Grid, Aspects", () => {
+check("Houses heading shows the reading's actual house system: (Placidus), (Equal), (Whole Sign), and the polar fallback's effective system", () => {
+  const heading = (h: string) => h.slice(h.indexOf('id="astro-houses"'), h.indexOf("</h2>", h.indexOf('id="astro-houses"'))).replace(/<[^>]+>/g, "").replace(/^[^>]*>/, "").trim();
+  assert.equal(heading(html), "Houses (Placidus)");
+  assert.equal(heading(render(calculateAstrologyChart({ ...birth, houseSystem: "equal" }))), "Houses (Equal)");
+  assert.equal(heading(render(calculateAstrologyChart({ ...birth, houseSystem: "whole" }))), "Houses (Whole Sign)");
+  // Placidus is undefined near the poles; the calculation falls back to Whole Sign, and the heading shows what was actually used
+  const polar = calculateAstrologyChart({ ...birth, lat: 78.2, lng: 15.6 });
+  assert.equal(polar.houses.requestedSystem, "placidus");
+  assert.equal(polar.houses.system, "whole");
+  assert.equal(heading(render(polar)), "Houses (Whole Sign)");
+  // not hard-coded: the label comes from the reading through the shared HOUSE_SYSTEM_LABEL
+  const view = readFileSync("src/components/energetic-decoder/astrology-reading-view.tsx", "utf8");
+  assert.ok(view.includes("HOUSE_SYSTEM_LABEL[chart.houses.system]") && !/Houses \(Placidus\)/.test(view));
+});
+check("everything below the top section is exactly as released (bc36ff6 = 2488aa7) apart from the house system in the Houses heading: Houses cards, Planetary Placements, Aspect Grid, Aspects", () => {
   const lower = (src: string) => src.slice(src.indexOf("{/* 3. Houses */}"));
   const now = readFileSync("src/components/energetic-decoder/astrology-reading-view.tsx", "utf8");
   const released = execSync("git show bc36ff6:src/components/energetic-decoder/astrology-reading-view.tsx", { encoding: "utf8" });
-  assert.equal(lower(now), lower(released));
+  // the one approved change below the top: the house system beside the Houses heading
+  const housesTitle = 'title={<>Houses <span className="font-normal text-muted-foreground">({houseSystem})</span></>}';
+  assert.ok(lower(now).includes(housesTitle));
+  assert.equal(lower(now).replace(housesTitle, 'title="Houses"'), lower(released));
 });
 
 console.log(`\n${passed} checks passed.`);

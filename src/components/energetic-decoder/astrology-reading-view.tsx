@@ -7,6 +7,7 @@ import {
   ASTRO_EDITOR_MARGIN,
   ASTRO_GLYPH_FONT,
   BODY_LABEL,
+  HOUSE_SYSTEM_LABEL,
   PLANET_GLYPH,
   ZODIAC_GLYPH,
   glyphText,
@@ -43,7 +44,7 @@ function Glyph({ children, className, style }: { children: string; className?: s
   );
 }
 
-function SectionCard({ id, title, children, aside }: { id: string; title: string; children: React.ReactNode; aside?: React.ReactNode }) {
+function SectionCard({ id, title, children, aside }: { id: string; title: React.ReactNode; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
     <section data-astro-section={id} aria-labelledby={`astro-${id}`} className="rounded-2xl border bg-card p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -78,6 +79,8 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
   const sun = chart.placements.find((p) => p.body === "sun");
   const moon = chart.placements.find((p) => p.body === "moon");
   const mcHouse = houseContaining(chart.houses.cusps, mc.longitude);
+  // The house system actually used for this chart (after the polar fallback, when Placidus was undefined), shown beside the Houses heading.
+  const houseSystem = HOUSE_SYSTEM_LABEL[chart.houses.system] ?? chart.houses.system;
 
   const key: { id: string; label: string; icon: string; isText?: boolean; sign: string; degree: number; house: number | null }[] = [
     ...(sun ? [{ id: "sun", label: "Sun", icon: PLANET_GLYPH.sun, sign: sun.sign, degree: sun.degInSign, house: sun.house }] : []),
@@ -139,7 +142,7 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
       </div>
 
       {/* 3. Houses */}
-      <SectionCard id="houses" title="Houses">
+      <SectionCard id="houses" title={<>Houses <span className="font-normal text-muted-foreground">({houseSystem})</span></>}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {chart.houses.cusps.map((c) => (
             <div key={c.house} data-house={c.house} className="rounded-xl border bg-background/60 px-3 py-2.5">
