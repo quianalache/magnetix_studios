@@ -136,14 +136,14 @@ function ReportBlockView({
   switch (block.type) {
     case "text":
       return (
-        <div
-          className={`text-sm leading-relaxed ${textAlignClass}`}
-          // Shortcodes resolved server-side already produce plain text/simple
-          // HTML from the editor's own textarea — same trust level as the
-          // rest of this app's rich-text fields (Broadcasts blocks use the
-          // same pattern).
-          dangerouslySetInnerHTML={{ __html: resolveShortcodes(block.html, readingInput) }}
-        />
+        // Security fix (2026-10-07): rendered as escaped TEXT, never as
+        // HTML. Shortcodes inject reading data — on the public decoder that
+        // includes a visitor-typed name and birth place — so raw HTML here
+        // was a stored-XSS path. The PDF already treats this field as plain
+        // text (report-design-pdf-document.tsx), so web and PDF now match.
+        <div className={`whitespace-pre-wrap break-words text-sm leading-relaxed ${textAlignClass}`}>
+          {resolveShortcodes(block.html, readingInput)}
+        </div>
       );
     case "image":
       // eslint-disable-next-line @next/next/no-img-element -- practitioner-supplied URL, not a local/optimizable asset

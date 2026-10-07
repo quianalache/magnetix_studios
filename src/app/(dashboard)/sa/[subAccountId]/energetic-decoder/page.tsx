@@ -54,7 +54,7 @@ export default function EnergeticDecoderPage() {
 
   /** Switching module tabs is a navigation (`?tab=…` only), so Readings' own params never leak into another tab and Back returns to the previous tab. */
   function selectTab(next: Tab) {
-    if (next === tab && !searchParams.get("profileId") && !searchParams.get("readingId")) return;
+    if (next === tab && !searchParams.get("profileId") && !searchParams.get("readingId") && !searchParams.get("set")) return;
     router.push(`${pathname}?tab=${next}`, { scroll: false });
   }
 

@@ -112,6 +112,13 @@ export interface ReportDesign {
   title: string;
   pages: ReportPage[];
   /**
+   * Content Sets (2026-10-07) — which Content Set this design draws its
+   * interpretation text from. Absent/null = the built-in Default (every
+   * design made before Content Sets). Picking a set in the Report Builder
+   * is a later release; the field exists so "Used in" counts are real.
+   */
+  contentSetId?: string | null;
+  /**
    * ISO string, not a raw Firestore Timestamp — resolved server-side
    * (report-design-service.ts's `toDesign`) before this ever reaches a
    * caller. Same reasoning as ChartDesign's createdAt/updatedAt

@@ -86,7 +86,7 @@ export function contentId(system: ChartContentSystem, category: string, key: str
   return `${system}:${category}:${key}`;
 }
 
-function buildDefaults(variableDefaults: Map<string, { value: string; category: VariableCategory; description: string }>): ChartContentDefault[] {
+export function buildDefaults(variableDefaults: Map<string, { value: string; category: VariableCategory; description: string }>): ChartContentDefault[] {
   const defaults: ChartContentDefault[] = [];
 
   for (const v of variableDefaults.values()) {
