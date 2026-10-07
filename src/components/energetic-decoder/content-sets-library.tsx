@@ -290,10 +290,9 @@ export function ContentSetsLibrary({ onOpenSet, onHome }: { onOpenSet: (id: stri
                     </div>
                     <div className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-4 gap-y-2 pl-[60px] @min-[760px]/cslib:contents">
                       <StatusPill status={set.status} className="@min-[760px]/cslib:px-4" />
-                      <div className="text-[15px] leading-tight">
-                        <p className="tabular-nums text-[var(--cs-ink)]">{formatSetDate(set.updatedAt)}</p>
-                        {set.updatedByEmail && <p className="mt-0.5 break-all text-[13px] text-[var(--cs-subtle)]">by {set.updatedByEmail}</p>}
-                      </div>
+                      <p className="text-[15px] leading-tight tabular-nums text-[var(--cs-ink)]" data-updated-date>
+                        {formatSetDate(set.updatedAt)}
+                      </p>
                     </div>
                     <div className="col-start-2 row-span-2 row-start-1 flex justify-end self-start @min-[760px]/cslib:col-start-auto @min-[760px]/cslib:row-span-1 @min-[760px]/cslib:row-start-auto @min-[760px]/cslib:self-center">
                       {busy?.endsWith(set.id) ? (

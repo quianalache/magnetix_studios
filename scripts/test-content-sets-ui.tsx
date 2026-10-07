@@ -73,6 +73,17 @@ check("editor: no-fallback banner, custom term only on custom sets, Default refe
   assert.ok(ed.includes("data-default-reference") && !/data-default-reference[^>]*onClick/.test(ed));
   assert.ok(/data-save-bar/.test(ed) && ed.includes("sticky bottom-0"));
 });
+check("Updated shows only the date — no byline (no email, name or initials)", () => {
+  assert.ok(!/updatedByEmail\s*&&|\bby \{set\./.test(lib), "no byline rendered");
+  assert.ok(lib.includes("data-updated-date"));
+});
+check("no per-set icon field: Default = sparkles, custom sets = the generic content-set icon", () => {
+  const vis = readFileSync("src/components/energetic-decoder/content-sets-visuals.tsx", "utf8");
+  assert.match(vis, /if \(set\.isDefault\) return \{ icon: Sparkles/);
+  assert.match(vis, /return \{ icon: Layers,/);
+  const model = readFileSync("src/lib/energetic-decoder/content-sets.ts", "utf8") + readFileSync("src/lib/server/content-set-service.ts", "utf8");
+  assert.ok(!/\bicon\b/i.test(model), "no icon in the data model or service");
+});
 check("visual tokens: Content Sets use their own white-card scope, never the page's lavender momentum cards", () => {
   const css = readFileSync("src/app/globals.css", "utf8");
   assert.ok(css.indexOf(".content-sets-scope {") > css.indexOf(".momentum-scope {"), "scope comes after momentum-scope");
