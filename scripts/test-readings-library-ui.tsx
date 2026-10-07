@@ -131,8 +131,8 @@ check("the workspace opens the latest snapshot unless ?readingId= pins one; olde
   assert.ok(tab.includes("(readingId ? readings.find((r) => r.id === readingId) : undefined) ?? readings[0] ?? null"));
   assert.ok(tab.includes("/readings?profileId="));
 });
-check("Generate Report in the Reports tab is the same dialog/POST as the header button", () => {
-  assert.ok(tab.includes("onGenerate={openGenerateDialog}") && tab.includes("onOpenGenerateDialog={openGenerateDialog}"));
+check("Generate Report in the Reports tab uses the existing dialog and the one generation POST", () => {
+  assert.ok(tab.includes("onGenerate={openGenerateDialog}"));
   assert.equal((tab.match(/energetic-decoder\/generated-reports`, \{\s*method: "POST"/g) ?? []).length, 1);
 });
 
@@ -192,7 +192,7 @@ const ws = (showReports: boolean) =>
       reading, selectedProfile: null, subAccountId: "sa", subAccount: null, chartDesigns: [], reportDesigns: [], hdDesign: null, mandalaDesign: null, astroDesign: null,
       savingDesignFor: null, onSaveDesignOverride: () => {}, availableSystems: [{ key: "hd", label: "Human Design" }, { key: "astro", label: "Astrology" }],
       currentSystem: "hd", onSetSystem: () => {}, hdStyleView: "traditional", onSetHdStyleView: () => {}, onBack: () => {},
-      showReports, onShowReports: () => {}, reportsPanel: createElement("div", { "data-test-reports": true }), onOpenGenerateDialog: () => {}, deletingReadingId: null, onDeleteReading: () => {},
+      showReports, onShowReports: () => {}, reportsPanel: createElement("div", { "data-test-reports": true }), deletingReadingId: null, onDeleteReading: () => {},
     }),
   );
 check("Reports is the last tab, after the reading-system tabs; selecting it replaces the chart content", () => {
@@ -209,10 +209,19 @@ check("Reports is the last tab, after the reading-system tabs; selecting it repl
 check("the old 'Generated Reports' card above the tabs is gone (it lives in the Reports tab now)", () => {
   assert.ok(!ws(false).includes("Generated Reports"));
 });
-check("phone header: controls wrap under the identity at full width; Generate Report full-width below sm; desktop unchanged at sm+", () => {
-  const html = ws(false);
-  assert.ok(html.includes("flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0"));
-  assert.ok(/data-generate-report[^>]*class="[^"]*w-full[^"]*sm:w-auto/.test(html));
+check("header: no Generate Report (reports are generated from the Reports tab); Chart Design + ⋮ remain and wrap under the identity on phones", () => {
+  for (const html of [ws(false), ws(true)]) {
+    const header = html.slice(html.indexOf("data-reading-header"), html.indexOf("data-workspace-tabs"));
+    assert.ok(!header.includes("Generate Report") && !header.includes("data-generate-report"), "no header-level Generate Report");
+    assert.ok(header.includes("More Actions"), "⋮ menu kept");
+    assert.ok(html.includes("flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:max-w-full"));
+  }
+  assert.ok(!readFileSync("src/components/energetic-decoder/human-design-reading-workspace.tsx", "utf8").includes("onOpenGenerateDialog"));
+});
+check("the Reports tab's Generate Report is the workspace's only report-generation entry, wired to the existing dialog", () => {
+  assert.ok(panel([]).includes("Generate Report") && panel(reports).includes("Generate Report"));
+  assert.ok(tab.includes("onGenerate={openGenerateDialog}"));
+  assert.ok(!tab.includes("onOpenGenerateDialog"));
 });
 check("tab strips re-reveal the selected tab when their contents/size change (late Mandala tab, font swap) but never fight the user's own swipe", () => {
   const hook = readFileSync("src/components/energetic-decoder/tab-strip.ts", "utf8");
@@ -235,7 +244,7 @@ const wsWith = (history: { id: string; createdAt: string | null }[]) =>
       reading, selectedProfile: null, subAccountId: "sa", subAccount: null, chartDesigns: [], reportDesigns: [], hdDesign: null, mandalaDesign: null, astroDesign: null,
       savingDesignFor: null, onSaveDesignOverride: () => {}, availableSystems: [{ key: "hd", label: "Human Design" }],
       currentSystem: "hd", onSetSystem: () => {}, hdStyleView: "traditional", onSetHdStyleView: () => {}, onBack: () => {},
-      showReports: false, onShowReports: () => {}, reportsPanel: null, onOpenGenerateDialog: () => {}, deletingReadingId: null, onDeleteReading: () => {},
+      showReports: false, onShowReports: () => {}, reportsPanel: null, deletingReadingId: null, onDeleteReading: () => {},
       readingHistory: history, onSelectReading: () => {},
     }),
   );

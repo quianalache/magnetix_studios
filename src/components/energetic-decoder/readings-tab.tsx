@@ -642,7 +642,6 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
             deletingReportId={deletingReportId}
           />
         }
-        onOpenGenerateDialog={openGenerateDialog}
         deletingReadingId={deletingReadingId}
         onDeleteReading={(r) => void deleteReading(r)}
       />

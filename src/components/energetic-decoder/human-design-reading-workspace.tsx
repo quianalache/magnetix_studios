@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   Copy,
   ExternalLink,
-  FileOutput,
   Loader2,
   MoreVertical,
   Trash2,
@@ -137,7 +136,6 @@ export function HumanDesignReadingWorkspace({
   reportsPanel,
   readingHistory = [],
   onSelectReading,
-  onOpenGenerateDialog,
   deletingReadingId,
   onDeleteReading,
 }: {
@@ -169,7 +167,6 @@ export function HumanDesignReadingWorkspace({
    */
   readingHistory?: { id: string; createdAt: string | null }[];
   onSelectReading?: (readingId: string) => void;
-  onOpenGenerateDialog: () => void;
   deletingReadingId: string | null;
   onDeleteReading: (r: EnergeticDecoderReading) => void;
 }) {
@@ -227,8 +224,11 @@ export function HumanDesignReadingWorkspace({
 
       {/* Person header */}
       {/* Phones: identity on top, then the controls wrap underneath at full
-          width (Chart Design + menu on one line, Generate Report on its
-          own), so nothing can sit outside the screen. sm+ is unchanged. */}
+          width, so nothing can sit outside the screen. sm+: the controls sit
+          beside the identity when they fit; when they don't (tablet width
+          with "Reading from" + Chart Design + ⋮), the group is capped at the
+          header's width and wraps inside it (max-w-full, not shrink-0 — a
+          non-shrinking group overflowed the page by ~230px at 768). */}
       <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-card p-4" data-reading-header>
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
@@ -255,7 +255,7 @@ export function HumanDesignReadingWorkspace({
           </div>
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:max-w-full">
           {readingHistory.length > 1 && onSelectReading && (
             <label className="flex min-w-0 basis-full items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:basis-auto" data-reading-history>
               <History className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -356,16 +356,7 @@ export function HumanDesignReadingWorkspace({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <button
-            type="button"
-            onClick={onOpenGenerateDialog}
-            data-generate-report
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 sm:w-auto"
-          >
-            <FileOutput className="h-4 w-4" />
-            Generate Report
-          </button>
+          {/* No Generate Report here (owner decision, 2026-10-07): reports are generated from the Reports tab. */}
         </div>
       </div>
 
