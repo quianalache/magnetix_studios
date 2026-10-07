@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { updateEnergeticProfile, deleteEnergeticProfile } from "@/lib/server/energetic-profile-service";
+import { updateEnergeticProfile, deleteEnergeticProfile, getEnergeticProfile } from "@/lib/server/energetic-profile-service";
 import { getChartDesign } from "@/lib/server/chart-design-service";
 import { getChartDesignSet } from "@/lib/server/chart-design-set-service";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
@@ -24,6 +24,20 @@ import type { ChartDesignSystem } from "@/types/chart-design";
  * the same `geocodeBirthPlace` helper rather than reimplementing that
  * resolution a second time.
  */
+
+/** Readings library (2026-10-07) — one Profile, for the Reading workspace (tenancy-checked; another sub-account's id reads as 404). */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string; profileId: string }> },
+) {
+  const { id: subAccountId, profileId } = await params;
+  const access = await requireSubAccountMember(request, subAccountId);
+  if (access instanceof NextResponse) return access;
+
+  const profile = await getEnergeticProfile(subAccountId, profileId);
+  if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  return NextResponse.json({ ok: true, profile });
+}
 
 function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;

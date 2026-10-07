@@ -35,6 +35,7 @@ import {
   defaultEnergeticDecoderReportConfig,
   type EnergeticDecoderReading,
   type EnergeticDecoderRequest,
+  type ReadingOrigin,
 } from "@/types/energetic-decoder";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 
@@ -45,6 +46,8 @@ export interface CreateReadingInput extends EnergeticDecoderRequest {
    *  internal tool today; the public embeddable tool (not built yet)
    *  will pass a fixed placeholder, matching the Forms submit pattern. */
   createdByUid: string;
+  /** Recorded on the reading (forward-only). Set by the route, never from the request body. */
+  origin: ReadingOrigin;
 }
 
 export interface CreateReadingResult {
@@ -387,6 +390,10 @@ export async function createEnergeticDecoderReading(
     spheres: filteredSpheres,
     humanDesign,
     astrology,
+    origin: input.origin,
+    // Staff readings record who made them; the public decoder passes a
+    // fixed placeholder, which is not a person and is not stored.
+    ...(input.origin === "staff" && input.createdByUid ? { createdByUid: input.createdByUid } : {}),
     createdAt: FieldValue.serverTimestamp(),
   };
   await readingRef.set(doc);
@@ -574,6 +581,31 @@ export async function listReadingsForSubAccount(
   return Promise.all(
     readings.map((r) => withDerivedVariableArrows(r).then(withCanonicalSphereOrder).then(withIsoCreatedAt)),
   );
+}
+
+/**
+ * Readings library (2026-10-07) — every reading of one Energetic Profile,
+ * newest first. Equality-only query (subAccountId + profileId), the same
+ * shape deleteEnergeticProfile's guard already runs, so no composite index.
+ * A Profile has a handful of readings, so sorting in memory is fine.
+ */
+export async function listReadingsForProfile(
+  subAccountId: string,
+  profileId: string,
+): Promise<EnergeticDecoderReading[]> {
+  const snap = await getAdminDb()
+    .collection("energeticDecoderReadings")
+    .where("subAccountId", "==", subAccountId)
+    .where("profileId", "==", profileId)
+    .get();
+  const readings = await Promise.all(
+    snap.docs.map((d) =>
+      withDerivedVariableArrows({ id: d.id, ...d.data() } as EnergeticDecoderReading)
+        .then(withCanonicalSphereOrder)
+        .then(withIsoCreatedAt),
+    ),
+  );
+  return readings.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }
 
 /**

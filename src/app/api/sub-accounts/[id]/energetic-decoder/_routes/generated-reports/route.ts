@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { listGeneratedReports, createGeneratedReport } from "@/lib/server/generated-report-service";
+import { listGeneratedReports, listGeneratedReportsForProfile, createGeneratedReport } from "@/lib/server/generated-report-service";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
@@ -13,7 +13,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const readingId = url.searchParams.get("readingId") ?? undefined;
   const reportDesignId = url.searchParams.get("reportDesignId") ?? undefined;
 
-  const reports = await listGeneratedReports(subAccountId, { readingId, reportDesignId });
+  // `?profileId=` — the Reading workspace's Reports tab (every reading of one Profile).
+  const profileId = url.searchParams.get("profileId");
+  const reports = profileId
+    ? await listGeneratedReportsForProfile(subAccountId, profileId)
+    : await listGeneratedReports(subAccountId, { readingId, reportDesignId });
   return NextResponse.json({ ok: true, reports });
 }
 

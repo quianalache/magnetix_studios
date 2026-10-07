@@ -53,6 +53,31 @@ export async function listGeneratedReports(
   return snap.docs.map((d) => toGeneratedReport(d.id, d.data()));
 }
 
+/**
+ * Reading workspace → Reports tab (2026-10-07) — every generated report for
+ * one Energetic Profile, across all of its readings (a report always hangs
+ * off one reading; older reports keep pointing at the reading they were
+ * generated from). Resolves the Profile's reading ids with the same
+ * equality-only query the Profile delete guard uses, then reuses
+ * listGeneratedReports per reading — no new index, and a report can only
+ * appear here if its reading belongs to this Profile in this sub-account.
+ */
+export async function listGeneratedReportsForProfile(
+  subAccountId: string,
+  profileId: string,
+): Promise<GeneratedReport[]> {
+  const readingsSnap = await getAdminDb()
+    .collection("energeticDecoderReadings")
+    .where("subAccountId", "==", subAccountId)
+    .where("profileId", "==", profileId)
+    .select()
+    .get();
+  const perReading = await Promise.all(
+    readingsSnap.docs.map((d) => listGeneratedReports(subAccountId, { readingId: d.id })),
+  );
+  return perReading.flat();
+}
+
 export async function getGeneratedReport(subAccountId: string, id: string): Promise<GeneratedReport | null> {
   const snap = await col().doc(id).get();
   if (!snap.exists || snap.data()?.subAccountId !== subAccountId) return null;

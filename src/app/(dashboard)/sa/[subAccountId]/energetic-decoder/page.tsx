@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Sparkles, Home, LayoutTemplate, BookOpen, ScrollText, Palette, Share2 } from "lucide-react";
 import { EnergeticDecoderHomeTab, type EnergeticDecoderHomeTarget } from "@/components/energetic-decoder/home-tab";
 import { EnergeticDecoderReportBuilderTab } from "@/components/energetic-decoder/report-builder-tab";
@@ -9,6 +9,7 @@ import { EnergeticDecoderContentTab } from "@/components/energetic-decoder/conte
 import { EnergeticDecoderReadingsTab } from "@/components/energetic-decoder/readings-tab";
 import { EnergeticDecoderChartDesignsTab } from "@/components/energetic-decoder/chart-designs-tab";
 import { EnergeticDecoderEmbedsTab } from "@/components/energetic-decoder/embeds-tab";
+import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-decoder/tab-strip";
 
 type Tab = "home" | "builder" | "content" | "readings" | "chartDesigns" | "embeds";
 
@@ -57,7 +58,16 @@ export default function EnergeticDecoderPage() {
   // silently decide the still-open default — now that Readings IS the
   // default, that pairing is just belt-and-suspenders, not load-bearing.
   // Read once on mount, same as `requestedTab` above.
-  const requestedProfileId = searchParams.get("profileId");
+  // (2026-10-07: the Readings tab now reads `profileId`/`readingId` itself,
+  // reactively, so the workspace survives refresh and Back/Forward.)
+  const router = useRouter();
+  const pathname = usePathname();
+
+  /** Switching module tabs writes `?tab=` (replace) so a refresh stays put and Readings' own params don't leak into other tabs. */
+  function selectTab(next: Tab) {
+    setTab(next);
+    router.replace(`${pathname}?tab=${next}`, { scroll: false });
+  }
 
   // Icon per tab, plain text-primary when active — same locked-in rule as
   // Growth/Projects (2026-08-08): icons don't carry per-tab hue, only
@@ -71,12 +81,16 @@ export default function EnergeticDecoderPage() {
     { key: "embeds", label: "Embeds", icon: Share2 },
   ];
 
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useActiveTabVisible(tabStripRef, tab);
+
   function goto(target: EnergeticDecoderHomeTarget) {
-    setTab(target);
+    selectTab(target);
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-6 rounded-2xl">
+    // Phones: a slimmer frame than momentum-scope's shared 1.5rem (this page only; `!` because that rule is unlayered CSS).
+    <div className="momentum-scope mx-auto w-full min-w-0 max-w-6xl space-y-6 rounded-2xl max-sm:!p-3">
       <div>
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
@@ -90,7 +104,15 @@ export default function EnergeticDecoderPage() {
         </p>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto border-b">
+      {/* Module tabs — on a phone they scroll sideways INSIDE this strip
+          only (touch-pan-x + overscroll-x-contain: no vertical drag, no
+          bounce into the page); the page itself never scrolls sideways. */}
+      <div
+        ref={tabStripRef}
+        className={`${TAB_STRIP_CLASS} shadow-[inset_0_-1px_0_var(--border)]`}
+        role="tablist"
+        data-module-tabs
+      >
         {tabs.map((t) => {
           const Icon = t.icon;
           const isActive = tab === t.key;
@@ -98,8 +120,10 @@ export default function EnergeticDecoderPage() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setTab(t.key)}
-              className={`relative top-px flex items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 mr-5 text-sm font-semibold transition-colors ${
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => selectTab(t.key)}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-1 pb-2.5 mr-5 text-sm font-semibold transition-colors ${
                 isActive
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -116,7 +140,7 @@ export default function EnergeticDecoderPage() {
       {tab === "builder" && <EnergeticDecoderReportBuilderTab />}
       {tab === "content" && <EnergeticDecoderContentTab />}
       {tab === "readings" && (
-        <EnergeticDecoderReadingsTab initialProfileId={requestedProfileId ?? undefined} />
+        <EnergeticDecoderReadingsTab />
       )}
       {tab === "chartDesigns" && <EnergeticDecoderChartDesignsTab />}
       {tab === "embeds" && <EnergeticDecoderEmbedsTab />}

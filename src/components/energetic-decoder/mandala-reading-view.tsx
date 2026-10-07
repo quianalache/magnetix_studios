@@ -337,9 +337,10 @@ export function MandalaReadingView({
       </div>
       <div className="@container/mandalaview">
         <div className="grid grid-cols-1 items-start gap-6 @min-[880px]/mandalaview:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]">
-          <div data-mandala-reading-card className="rounded-2xl border bg-card p-4">
+          <div data-mandala-reading-card className="rounded-2xl border bg-card p-1.5 sm:p-4">
             <MandalaChart
               profile={profile}
+              keepFullLabels
               className="mx-auto w-full max-w-[640px] @min-[880px]/mandalaview:max-w-none"
               gateColor={mandalaDesign.chartDefinedColor}
               backgroundColor={mandalaDesign.backgroundColor}

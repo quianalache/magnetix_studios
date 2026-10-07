@@ -47,6 +47,7 @@ export async function POST(
     subAccountId: saId,
     agencyId,
     createdByUid: "energetic-decoder-public",
+    origin: "public_decoder",
   });
 
   if ("error" in result) {

@@ -137,7 +137,33 @@ export interface EnergeticDecoderReading {
    * the doc has been re-read.
    */
   createdAt: string | null;
+  /**
+   * Readings library (2026-10-07) — how this reading was created. Forward-
+   * only: absent on every reading created before this shipped (no backfill;
+   * never derive it from the Contact's source/tags). Backend metadata for
+   * filtering/automation — deliberately NOT shown in the Readings list.
+   */
+  origin?: ReadingOrigin;
+  /** The staff member who created it (origin "staff" only). Absent on public/legacy readings. */
+  createdByUid?: string;
 }
+
+/**
+ * Every value `EnergeticDecoderReading.origin` may hold. Only "staff" and
+ * "public_decoder" are written today; the rest are reserved for creation
+ * paths that don't exist yet (a purchase/offer/lead-magnet delivery, an
+ * automation step) so they can be recorded without a type change.
+ */
+export const READING_ORIGINS = [
+  "staff",
+  "public_decoder",
+  "purchase",
+  "offer",
+  "lead_magnet",
+  "automation",
+  "other",
+] as const;
+export type ReadingOrigin = (typeof READING_ORIGINS)[number];
 
 /**
  * Chart/report design — accent color + logo, applied to the public

@@ -42,6 +42,24 @@ export const ZODIAC_FULL_NAMES_MIN_WIDTH = 300;
 
 const SIGN_ABBREV = (sign: string) => sign.slice(0, 3).toUpperCase();
 
+/**
+ * Phone-width Reading Mandala (2026-10-07) — with `keepFullLabels`, the
+ * full Quarter names and zodiac names stay down to this width (only a
+ * truly tiny chart falls back to the compact labels)…
+ */
+export const KEEP_FULL_LABELS_MIN_WIDTH = 200;
+/**
+ * …and below this width the Quarter/zodiac label type is scaled up within
+ * its band so it stays readable. CSS font-size overrides the SVG attribute,
+ * so the geometry, the labels' positions and every larger Mandala are
+ * unchanged. Scaled sizes (viewBox units): Quarter 3.9 → 5.2, zodiac name
+ * 3.1 → 4.2, zodiac glyph 3.875 → 5.25 — the longest label (Sagittarius)
+ * still uses only ~56% of its 30° arc and each fits its band's depth
+ * (checked in scripts/test-readings-library-ui.tsx).
+ */
+export const LEGIBLE_LABELS_MAX_WIDTH = 420;
+export const LEGIBLE_LABEL_TYPE = { quarterLabel: 5.2, zodiacLabel: 4.2, zodiacGlyph: 5.25 } as const;
+
 export function MandalaChart({
   profile,
   gateColor,
@@ -58,6 +76,7 @@ export function MandalaChart({
   showPersonality = true,
   showDesign = true,
   canvasPadding = "4%",
+  keepFullLabels = false,
 }: {
   profile: HumanDesignProfile;
   /** "Activated gate edge" — the rim arc on each activated gate. */
@@ -87,6 +106,8 @@ export function MandalaChart({
    * change — only how much of it the wheel uses.
    */
   canvasPadding?: string;
+  /** Reading → Mandala only: keep full Quarter + zodiac names on phone-width charts (see KEEP_FULL_LABELS_MIN_WIDTH). Every other consumer keeps the original compact behavior. */
+  keepFullLabels?: boolean;
 }) {
   const colors =
     mandalaColors ??
@@ -119,8 +140,12 @@ export function MandalaChart({
       }
     : undefined;
 
-  const full = "hidden @min-[300px]/mandala:inline";
-  const compact = "@min-[300px]/mandala:hidden";
+  // Static class strings (Tailwind can't see computed ones).
+  const full = keepFullLabels ? "hidden @min-[200px]/mandala:inline" : "hidden @min-[300px]/mandala:inline";
+  const compact = keepFullLabels ? "@min-[200px]/mandala:hidden" : "@min-[300px]/mandala:hidden";
+  const quarterType = keepFullLabels ? "@max-[420px]/mandala:text-[5.2px]" : undefined;
+  const zodiacType = keepFullLabels ? "@max-[420px]/mandala:text-[4.2px]" : undefined;
+  const glyphType = keepFullLabels ? "@max-[420px]/mandala:text-[5.25px]" : undefined;
 
   return (
     // @container/mandala: labels shorten on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
@@ -148,7 +173,7 @@ export function MandalaChart({
           {model.quarters.map(({ quarter, span, fill, ink }) => (
             <g key={quarter.number} data-mandala-quarter={quarter.name}>
               <path d={bandPath(span.start, span.end, R.quarterOuter, R.quarterInner)} fill={fill} stroke="#ffffff" strokeWidth={0.5} />
-              <text fontSize={MANDALA_TYPE.quarterLabel} fontWeight={700} letterSpacing={0.35} fill={ink} dominantBaseline="central">
+              <text className={quarterType} fontSize={MANDALA_TYPE.quarterLabel} fontWeight={700} letterSpacing={0.35} fill={ink} dominantBaseline="central">
                 <textPath href={`#mandala-arc-q${quarter.number}`} startOffset="50%" textAnchor="middle">
                   <tspan className={full}>{quarter.label}</tspan>
                   <tspan className={compact}>{quarter.number}</tspan>
@@ -161,10 +186,10 @@ export function MandalaChart({
           {model.signs.map(({ sign, element, span, fill, ink, glyph, glyphColor }) => (
             <g key={sign} data-mandala-sign={sign} data-element={element}>
               <path d={bandPath(span.start, span.end, R.zodiacOuter, R.zodiacInner)} fill={fill} stroke="#ffffff" strokeWidth={0.4} />
-              <text fontSize={MANDALA_TYPE.zodiacLabel} fontWeight={700} fill={ink} dominantBaseline="central">
+              <text className={zodiacType} fontSize={MANDALA_TYPE.zodiacLabel} fontWeight={700} fill={ink} dominantBaseline="central">
                 <textPath href={`#mandala-arc-${sign}`} startOffset="50%" textAnchor="middle">
                   {/* Glyph (Zodiac symbols color) then the name (element text color); compact sizes keep the glyph with a 3-letter name. */}
-                  <tspan data-zodiac-glyph={sign} fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={MANDALA_TYPE.zodiacLabel * ZODIAC_GLYPH_SCALE} fontWeight={400}>
+                  <tspan className={glyphType} data-zodiac-glyph={sign} fill={glyphColor} fontFamily={ZODIAC_GLYPH_FONT} fontSize={MANDALA_TYPE.zodiacLabel * ZODIAC_GLYPH_SCALE} fontWeight={400}>
                     {glyph + TEXT_PRESENTATION}
                   </tspan>
                   <tspan>{"\u00a0"}</tspan>

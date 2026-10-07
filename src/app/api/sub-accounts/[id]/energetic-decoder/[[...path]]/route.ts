@@ -22,17 +22,18 @@ import * as h15 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/gene
 import * as h16 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/generated-reports/route";
 import * as h17 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/geocode/route";
 import * as h18 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/home-stats/route";
-import * as h19 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/[profileId]/route";
-import * as h20 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/route";
-import * as h21 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/pdf/route";
-import * as h22 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/route";
-import * as h23 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/route";
-import * as h24 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-config/route";
-import * as h25 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/duplicate/route";
-import * as h26 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-data/route";
-import * as h27 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/route";
-import * as h28 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/route";
-import * as h29 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
+import * as h19 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/library/route";
+import * as h20 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/[profileId]/route";
+import * as h21 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/profiles/route";
+import * as h22 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/pdf/route";
+import * as h23 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/[readingId]/route";
+import * as h24 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/readings/route";
+import * as h25 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-config/route";
+import * as h26 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/duplicate/route";
+import * as h27 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-data/route";
+import * as h28 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/route";
+import * as h29 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/route";
+import * as h30 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -57,17 +58,18 @@ const d = createApiDispatcher([
   ["generated-reports", h16],
   ["geocode", h17],
   ["home-stats", h18],
-  ["profiles/[profileId]", h19],
-  ["profiles", h20],
-  ["readings/[readingId]/pdf", h21],
-  ["readings/[readingId]", h22],
-  ["readings", h23],
-  ["report-config", h24],
-  ["report-designs/[designId]/duplicate", h25],
-  ["report-designs/[designId]/preview-data", h26],
-  ["report-designs/[designId]", h27],
-  ["report-designs", h28],
-  ["theme", h29],
+  ["library", h19],
+  ["profiles/[profileId]", h20],
+  ["profiles", h21],
+  ["readings/[readingId]/pdf", h22],
+  ["readings/[readingId]", h23],
+  ["readings", h24],
+  ["report-config", h25],
+  ["report-designs/[designId]/duplicate", h26],
+  ["report-designs/[designId]/preview-data", h27],
+  ["report-designs/[designId]", h28],
+  ["report-designs", h29],
+  ["theme", h30],
 ]);
 
 export const GET = d.GET;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRef, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -11,7 +12,6 @@ import {
   MoreVertical,
   Trash2,
   Download,
-  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -25,13 +25,13 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { EnergeticProfile } from "@/types/energetic-profile";
 import type { ChartDesign, ChartDesignSystem } from "@/types/chart-design";
 import type { ReportDesign } from "@/types/report-blocks";
-import type { GeneratedReport } from "@/types/generated-report";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import { buildDecoderReportUrl, buildDecoderReportDesignUrl } from "@/lib/domains/public-url";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { HumanDesignSummary, SphereList } from "@/components/energetic-decoder/reading-summary";
 import { AstrologyReadingView } from "@/components/energetic-decoder/astrology-reading-view";
 import { MandalaReadingView } from "@/components/energetic-decoder/mandala-reading-view";
+import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-decoder/tab-strip";
 
 /**
  * The full-width Traditional Human Design reading workspace — approved
@@ -124,10 +124,9 @@ export function HumanDesignReadingWorkspace({
   hdStyleView,
   onSetHdStyleView,
   onBack,
-  generatedReports,
-  deletingReportId,
-  onPreviewGeneratedReport,
-  onDeleteGeneratedReport,
+  showReports,
+  onShowReports,
+  reportsPanel,
   onOpenGenerateDialog,
   deletingReadingId,
   onDeleteReading,
@@ -149,10 +148,10 @@ export function HumanDesignReadingWorkspace({
   hdStyleView: "traditional" | "mandala";
   onSetHdStyleView: (v: "traditional" | "mandala") => void;
   onBack: () => void;
-  generatedReports: GeneratedReport[];
-  deletingReportId: string | null;
-  onPreviewGeneratedReport: (r: GeneratedReport) => void;
-  onDeleteGeneratedReport: (r: GeneratedReport) => void;
+  /** Reports tab (2026-10-07) — when true the Reports panel replaces the chart content. */
+  showReports: boolean;
+  onShowReports: () => void;
+  reportsPanel: ReactNode;
   onOpenGenerateDialog: () => void;
   deletingReadingId: string | null;
   onDeleteReading: (r: EnergeticDecoderReading) => void;
@@ -164,13 +163,21 @@ export function HumanDesignReadingWorkspace({
   // Mandala stays functionally nested under Human Design (Decision 5,
   // preserved) — clicking it sets currentSystem="hd" AND hdStyleView=
   // "mandala" in one action, not a real 4th ReadingSystem.
+  //
+  // Reports (2026-10-07) is the last peer tab: the person's generated
+  // reports. While it's showing, no system tab is active.
+  const onSystem = !showReports;
   const navItems: { key: string; label: string; onClick: () => void; active: boolean }[] = [
-    ...(profile ? [{ key: "hd", label: "Human Design", onClick: () => { onSetSystem("hd"); onSetHdStyleView("traditional"); }, active: currentSystem === "hd" && hdStyleView === "traditional" }] : []),
-    ...(hasMandala ? [{ key: "mandala", label: "Mandala", onClick: () => { onSetSystem("hd"); onSetHdStyleView("mandala"); }, active: currentSystem === "hd" && hdStyleView === "mandala" }] : []),
+    ...(profile ? [{ key: "hd", label: "Human Design", onClick: () => { onSetSystem("hd"); onSetHdStyleView("traditional"); }, active: onSystem && currentSystem === "hd" && hdStyleView === "traditional" }] : []),
+    ...(hasMandala ? [{ key: "mandala", label: "Mandala", onClick: () => { onSetSystem("hd"); onSetHdStyleView("mandala"); }, active: onSystem && currentSystem === "hd" && hdStyleView === "mandala" }] : []),
     ...availableSystems
       .filter((s) => s.key !== "hd")
-      .map((s) => ({ key: s.key, label: s.label, onClick: () => onSetSystem(s.key), active: currentSystem === s.key })),
+      .map((s) => ({ key: s.key, label: s.label, onClick: () => onSetSystem(s.key), active: onSystem && currentSystem === s.key })),
+    { key: "reports", label: "Reports", onClick: onShowReports, active: showReports },
   ];
+
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useActiveTabVisible(tabStripRef, navItems.find((n) => n.active)?.key);
 
   const reportDesignLinkFor = (reportId: string) => {
     const url = buildDecoderReportDesignUrl({ subAccount, subAccountId, readingId: reading.id, reportId });
@@ -179,7 +186,7 @@ export function HumanDesignReadingWorkspace({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4" data-reading-workspace>
       {/* Breadcrumb / back */}
       <div className="flex items-center gap-2">
         <button
@@ -196,13 +203,16 @@ export function HumanDesignReadingWorkspace({
           </button>
           <span className="mx-1.5">/</span>
           <span className="font-medium text-foreground">
-            {currentSystem === "hd" && hdStyleView === "mandala" ? "Mandala" : navItems.find((n) => n.active)?.label ?? "Reading"}
+            {navItems.find((n) => n.active)?.label ?? "Reading"}
           </span>
         </p>
       </div>
 
       {/* Person header */}
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-card p-4">
+      {/* Phones: identity on top, then the controls wrap underneath at full
+          width (Chart Design + menu on one line, Generate Report on its
+          own), so nothing can sit outside the screen. sm+ is unchanged. */}
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border bg-card p-4" data-reading-header>
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground">
             {reading.name.slice(0, 1).toUpperCase()}
@@ -228,21 +238,21 @@ export function HumanDesignReadingWorkspace({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
           {selectedProfile && (
-            <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 sm:flex-none" data-chart-design-control>
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: (hdStyleView === "mandala" ? mandalaDesign : hdDesign)?.chartDefinedColor || "#a1a1aa" }}
               />
-              <span className="text-xs text-muted-foreground">Chart Design:</span>
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Chart Design:</span>
               <select
                 value={(hdStyleView === "mandala" ? selectedProfile.mandalaChartDesignId : selectedProfile.hdChartDesignId) ?? ""}
                 onChange={(e) =>
                   onSaveDesignOverride(selectedProfile, hdStyleView === "mandala" ? "mandala" : "humanDesign", e.target.value || null)
                 }
                 disabled={savingDesignFor === (hdStyleView === "mandala" ? "mandala" : "humanDesign")}
-                className="bg-transparent text-xs font-medium disabled:opacity-50"
+                className="min-w-0 flex-1 truncate bg-transparent text-xs font-medium disabled:opacity-50 sm:flex-none"
               >
                 <option value="">Default</option>
                 {chartDesigns
@@ -260,7 +270,7 @@ export function HumanDesignReadingWorkspace({
           )}
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
+            <DropdownMenuTrigger className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
               <MoreVertical className="h-4 w-4" />
               <span className="sr-only">More Actions</span>
             </DropdownMenuTrigger>
@@ -314,7 +324,8 @@ export function HumanDesignReadingWorkspace({
           <button
             type="button"
             onClick={onOpenGenerateDialog}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
+            data-generate-report
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 sm:w-auto"
           >
             <FileOutput className="h-4 w-4" />
             Generate Report
@@ -322,54 +333,18 @@ export function HumanDesignReadingWorkspace({
         </div>
       </div>
 
-      {generatedReports.length > 0 && (
-        <div className="rounded-2xl border bg-card p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Generated Reports</p>
-          <div className="space-y-1.5">
-            {generatedReports.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{r.reportDesignTitleAtGeneration}</p>
-                  <p className="text-muted-foreground">{r.generatedAt ? new Date(r.generatedAt).toLocaleString() : "—"}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <button type="button" title="Preview" onClick={() => onPreviewGeneratedReport(r)} className="text-muted-foreground hover:text-primary">
-                    <Eye className="h-3.5 w-3.5" />
-                  </button>
-                  <a
-                    href={`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports/${r.id}/pdf`}
-                    download
-                    title="Download PDF"
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </a>
-                  <button
-                    type="button"
-                    title="Delete"
-                    disabled={deletingReportId === r.id}
-                    onClick={() => onDeleteGeneratedReport(r)}
-                    className="text-muted-foreground hover:text-destructive disabled:opacity-50"
-                  >
-                    {deletingReportId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* System navigation */}
       {navItems.length > 1 && (
-        <div className="flex items-center gap-1 border-b">
+        <div ref={tabStripRef} className={cn(TAB_STRIP_CLASS, "gap-1 shadow-[inset_0_-1px_0_var(--border)]")} role="tablist" data-workspace-tabs>
           {navItems.map((n) => (
             <button
               key={n.key}
               type="button"
+              role="tab"
+              aria-selected={n.active}
               onClick={n.onClick}
               className={cn(
-                "border-b-2 px-3 py-2.5 text-sm font-semibold",
+                "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold",
                 n.active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
               )}
             >
@@ -379,8 +354,10 @@ export function HumanDesignReadingWorkspace({
         </div>
       )}
 
+      {showReports && reportsPanel}
+
       {/* Content */}
-      {currentSystem === "hd" && hdStyleView === "traditional" && profile && (
+      {onSystem && currentSystem === "hd" && hdStyleView === "traditional" && profile && (
         <>
           <HumanDesignFullChart profile={profile} design={hdDesign} />
           <ChartInformation profile={profile} />
@@ -389,13 +366,13 @@ export function HumanDesignReadingWorkspace({
         </>
       )}
 
-      {currentSystem === "hd" && hdStyleView === "mandala" && profile && mandalaDesign && (
+      {onSystem && currentSystem === "hd" && hdStyleView === "mandala" && profile && mandalaDesign && (
         <MandalaReadingView profile={profile} mandalaDesign={mandalaDesign} hdDesign={hdDesign} />
       )}
 
-      {currentSystem === "frequency" && <SphereList spheres={reading.spheres} />}
+      {onSystem && currentSystem === "frequency" && <SphereList spheres={reading.spheres} />}
 
-      {currentSystem === "astro" && reading.astrology && <AstrologyReadingView chart={reading.astrology} astroDesign={astroDesign} />}
+      {onSystem && currentSystem === "astro" && reading.astrology && <AstrologyReadingView chart={reading.astrology} astroDesign={astroDesign} />}
     </div>
   );
 }

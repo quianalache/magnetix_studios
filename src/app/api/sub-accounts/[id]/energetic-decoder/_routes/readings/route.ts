@@ -5,6 +5,7 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import {
   createEnergeticDecoderReading,
   listReadingsForSubAccount,
+  listReadingsForProfile,
 } from "@/lib/server/energetic-decoder-service";
 import type { EnergeticDecoderRequest } from "@/types/energetic-decoder";
 
@@ -36,6 +37,8 @@ export async function POST(
     subAccountId,
     agencyId: access.agencyId,
     createdByUid: access.uid,
+    // After the body spread, so a request can never set its own origin.
+    origin: "staff",
   });
 
   if ("error" in result) {
@@ -52,6 +55,11 @@ export async function GET(
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
-  const readings = await listReadingsForSubAccount(subAccountId);
+  // `?profileId=` — every reading of one Profile (the Reading workspace).
+  // Without it, the original newest-50 list, kept for existing callers.
+  const profileId = new URL(request.url).searchParams.get("profileId");
+  const readings = profileId
+    ? await listReadingsForProfile(subAccountId, profileId)
+    : await listReadingsForSubAccount(subAccountId);
   return NextResponse.json({ ok: true, readings });
 }
