@@ -1,12 +1,12 @@
-import type { AstrologyChart, ChartAngle, HouseCusp } from "@/lib/energetics/astrology";
+import type { AstrologyChart, HouseCusp } from "@/lib/energetics/astrology";
 import type { AstrologyReadingContent } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
 import { ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
 import {
   ASPECT_META,
+  ASTRO_EDITOR_MARGIN,
   ASTRO_GLYPH_FONT,
   BODY_LABEL,
-  HOUSE_SYSTEM_LABEL,
   PLANET_GLYPH,
   ZODIAC_GLYPH,
   glyphText,
@@ -17,8 +17,8 @@ import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
 
 /**
  * The practitioner Reading → Astrology page (2026-10 redesign). Same data
- * and interpretation content as before, recomposed: the natal chart with
- * its chart details beside a Key Placements rail, then Houses, Planetary
+ * and interpretation content as before, recomposed: the natal chart beside
+ * a Key Placements rail, then Houses, Planetary
  * Placements, then a full-width Aspect Grid and a full-width Aspects list
  * (stacked — never side by side, because the list's height varies with
  * the reading; it grows naturally, no internal scrolling, every aspect
@@ -74,10 +74,9 @@ function houseContaining(cusps: HouseCusp[], longitude: number): number | null {
 export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; astroDesign?: ChartDesign | null }) {
   const colors = resolveAstrologyColors(astroDesign);
   const content = chart.content;
-  const { ascendant, descendant, mc, ic } = chart.angles;
+  const { ascendant, mc } = chart.angles;
   const sun = chart.placements.find((p) => p.body === "sun");
   const moon = chart.placements.find((p) => p.body === "moon");
-  const houseSystem = HOUSE_SYSTEM_LABEL[chart.houses.system] ?? chart.houses.system;
   const mcHouse = houseContaining(chart.houses.cusps, mc.longitude);
 
   const key: { id: string; label: string; icon: string; isText?: boolean; sign: string; degree: number; house: number | null }[] = [
@@ -92,13 +91,6 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
     }),
   ];
 
-  const angles: [string, string, ChartAngle][] = [
-    ["AC", "Ascendant", ascendant],
-    ["DC", "Descendant", descendant],
-    ["MC", "Midheaven", mc],
-    ["IC", "Imum Coeli", ic],
-  ];
-
   return (
     <div data-astro-reading className="space-y-6">
       {/*
@@ -110,34 +102,16 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
       */}
       <div data-astro-top className="@container/astrotop">
         <div className="grid grid-cols-1 items-start gap-6 @min-[880px]/astrotop:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]">
-          {/* Natal Chart + its details */}
+          {/* Natal Chart (its AC/DC/MC/IC are the chart's own axes and labels) */}
           <SectionCard id="natal-chart" title="Natal Chart">
-            {/* At most 640px, and never taller than the screen leaves room for (app header + this card's title and details ≈ 248px), so the whole wheel fits on shorter laptops too; never below 420px. */}
-            <div data-astro-wheel-wrap className="mx-auto w-full max-w-[max(420px,min(640px,calc(100dvh_-_248px)))]">
-              <AstrologyWheelChart chart={chart} className="w-full" colors={colors} />
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div data-chart-detail="system" className="rounded-xl border bg-background/60 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground">Chart Details</p>
-                <p className="text-sm font-semibold text-foreground">Western · Tropical · {houseSystem} Houses</p>
-                <p data-chart-detail="design" className="mt-0.5 text-xs text-muted-foreground">
-                  Chart Design · <span className="font-semibold text-foreground">{astroDesign?.name || "Default"}</span>
-                </p>
-                {chart.houses.fallbackReason && <p className="mt-1 text-xs italic text-muted-foreground">{chart.houses.fallbackReason}</p>}
-              </div>
-              <div data-chart-detail="angles" className="rounded-xl border bg-background/60 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground">Angles</p>
-                <dl className="mt-0.5 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-2 gap-y-0.5 text-[13px]">
-                  {angles.map(([abbr, name, a]) => (
-                    <div key={abbr} data-angle={abbr} className="flex min-w-0 items-baseline gap-1.5" title={name}>
-                      <dt className="w-5 shrink-0 text-xs font-bold text-muted-foreground">{abbr}</dt>
-                      <dd className="truncate font-medium text-foreground">
-                        {a.sign} {fmtDeg(a.degInSign)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
+            {/*
+              The chart fills its card: as wide as the card allows, and never taller than the screen leaves room for (app
+              header 64px + this card's title and padding ≈ 78px + a 16px safety margin = 158px), never below 420px. Drawn
+              with no outer margin (the same setting the Chart Designs preview uses), so the wheel uses ~92% of the box
+              instead of ~88%; the AC/DC/MC/IC labels stay inside it.
+            */}
+            <div data-astro-wheel-wrap className="mx-auto w-full max-w-[max(420px,calc(100dvh_-_158px))]">
+              <AstrologyWheelChart chart={chart} className="w-full" colors={colors} margin={ASTRO_EDITOR_MARGIN} />
             </div>
           </SectionCard>
 

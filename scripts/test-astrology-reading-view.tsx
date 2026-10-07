@@ -80,14 +80,13 @@ check("Key Placements: Sun, Moon, Rising, Midheaven, North Node, South Node, Chi
   const wmc = wh.slice(wh.indexOf('data-key-placement="midheaven"'), wh.indexOf('data-key-placement="northNode"'));
   assert.ok(wmc.includes(`House ${whole.houses.cusps[cusp].house}<`), "Whole Sign MC house");
 });
-check("Descendant and IC stay on the page (Chart Details → Angles, under the chart), with the house system and Chart Design", () => {
-  const angles = html.slice(html.indexOf('data-chart-detail="angles"'), html.indexOf('data-astro-section="key-placements"'));
-  assert.ok(html.indexOf('data-chart-detail="angles"') < html.indexOf('data-astro-section="key-placements"'), "inside the chart card");
-  assert.ok(html.includes('data-chart-detail="design"'));
-  for (const [abbr, a] of [["AC", chart.angles.ascendant], ["DC", chart.angles.descendant], ["MC", chart.angles.mc], ["IC", chart.angles.ic]] as const) {
-    assert.ok(angles.includes(`data-angle="${abbr}"`) && angles.includes(`${a.sign} ${a.degInSign.toFixed(1)}°`), abbr);
-  }
-  assert.ok(html.includes("Western · Tropical · Placidus Houses"));
+check("no Chart Details or Angles boxes under the chart (removed 2026-10); AC/DC/MC/IC stay as the chart's own axes and labels; Rising + MC stay in Key Placements", () => {
+  const card = html.slice(html.indexOf('data-astro-section="natal-chart"'), html.indexOf('data-astro-section="key-placements"'));
+  assert.ok(!/data-chart-detail|Chart Details|>Angles</.test(html), "boxes removed");
+  assert.ok(!html.includes("Western · Tropical"), "no house-system line on this page");
+  for (const key of ["AC", "DC", "MC", "IC"]) assert.ok(card.includes(`data-astro-angle-label="${key}"`), `${key} label in the wheel`);
+  assert.ok(card.includes('aria-label="Astrology natal chart wheel"'), "natal chart present");
+  assert.ok(html.includes('data-key-placement="rising"') && html.includes('data-key-placement="midheaven"'));
 });
 check("all 12 houses, every placement (incl. nodes, Lilith, retrograde marks), every aspect — nothing truncated", () => {
   assert.equal(count(/data-house="/g), 12);
@@ -110,8 +109,12 @@ check("Aspect Grid and Aspects are separate full-width cards, grid first; the li
   assert.ok(!/grid-cols|flex-row|lg:flex/.test(between));
   assert.ok(html.includes('data-aspect-grid-size="large"'));
 });
-check("natal chart fits a laptop screen beside the rail (640px wrapper, down from 840px; no 520px cap); the public pages keep AstrologySummary", () => {
-  assert.ok(/data-astro-wheel-wrap="[^"]*" class="mx-auto w-full max-w-\[max\(420px,min\(640px,calc\(100dvh_-_248px\)\)\)\]"/.test(html), "wheel wrapper: ≤640px and capped by screen height (≥420px)");
+check("larger chart: fills its card, capped by screen height (100dvh − 158px ≥ 420px), drawn with no outer margin; still below the old 840px; the public pages keep AstrologySummary", () => {
+  assert.ok(/data-astro-wheel-wrap="[^"]*" class="mx-auto w-full max-w-\[max\(420px,calc\(100dvh_-_158px\)\)\]"/.test(html), "wrapper: card width, height-capped");
+  assert.ok(!html.includes("min(640px"), "no 640px cap any more");
+  const card = html.slice(html.indexOf('data-astro-section="natal-chart"'), html.indexOf('data-astro-section="key-placements"'));
+  assert.ok(card.includes('viewBox="0 0 200 200"'), "no outer margin: the wheel spans 92% of its box");
+  // (the actual fit — the whole card under the app header at 1280×800 / 1440×900 / 1536×864 — is measured in the browser QA; see the release record)
   assert.ok(!html.includes("max-w-[840px]"));
   assert.ok(!html.includes("max-w-[520px]"));
   const workspace = readFileSync("src/components/energetic-decoder/human-design-reading-workspace.tsx", "utf8");
@@ -125,16 +128,8 @@ check("the selected Chart Design reaches the wheel, the grid and the aspect list
   assert.ok(m.includes("background:#0f1115"), "wheel background");
   assert.ok(m.includes(`fill="${ASTROLOGY_PALETTES.midnight.housesBackground}"`), "house ring");
   assert.ok(m.includes(`color:${ASTROLOGY_PALETTES.midnight.aspects.Trine}`) || m.includes(`color:${ASTROLOGY_PALETTES.midnight.aspects.Square}`), "aspect colors in grid/list");
-  assert.ok(m.includes(">Midnight<"), "Chart Design detail");
 });
-check("Equal-house readings say Equal; the house-system fallback note is shown when present", () => {
-  const eq = render(calculateAstrologyChart({ ...birth, houseSystem: "equal" }));
-  assert.ok(eq.includes("Western · Tropical · Equal Houses") && !eq.includes("Whole Sign"));
-  const polar = render(calculateAstrologyChart({ ...birth, lat: 78.2, lng: 15.6 }));
-  assert.ok(polar.includes("Placidus is undefined"), "fallback reason shown");
-});
-
-check("everything below the top section is exactly as released in bc36ff6 (Houses, Planetary Placements, Aspect Grid, Aspects)", () => {
+check("everything below the top section is exactly as released (bc36ff6 = 2488aa7): Houses, Planetary Placements, Aspect Grid, Aspects", () => {
   const lower = (src: string) => src.slice(src.indexOf("{/* 3. Houses */}"));
   const now = readFileSync("src/components/energetic-decoder/astrology-reading-view.tsx", "utf8");
   const released = execSync("git show bc36ff6:src/components/energetic-decoder/astrology-reading-view.tsx", { encoding: "utf8" });
