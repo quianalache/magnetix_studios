@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ReportDesignViewer } from "../src/components/energetic-decoder/report-design-viewer";
-import { StatusPill } from "../src/components/energetic-decoder/content-sets-library";
+import { StatusPill } from "../src/components/energetic-decoder/content-sets-visuals";
 import type { ReportDesign } from "../src/types/report-blocks";
 
 let passed = 0;
@@ -53,12 +53,12 @@ check("status is Active or Draft only", () => {
 const lib = readFileSync("src/components/energetic-decoder/content-sets-library.tsx", "utf8");
 const ed = readFileSync("src/components/energetic-decoder/content-set-editor.tsx", "utf8");
 check("library columns are Name · Status · Updated · Actions — no Coverage / Language / Focus / Systems", () => {
-  assert.match(lib, /<span>Name<\/span>\s*<span>Status<\/span>\s*<span>Updated<\/span>/);
+  assert.match(lib, /label="Name"[\s\S]*label="Status"[\s\S]*label="Updated"[\s\S]*>Actions</);
   for (const gone of ["Coverage", "Language", "Focus", "Systems"]) assert.ok(!lib.includes(`>${gone}<`), gone);
 });
 check("create dialog: name, optional description (≤100, counter), Start from Default/Blank/Existing — no system checkboxes", () => {
   assert.ok(lib.includes("CONTENT_SET_DESCRIPTION_MAX"));
-  for (const o of ['title: "Default"', 'title: "Blank"', 'title: "Existing set"']) assert.ok(lib.includes(o), o);
+  for (const o of ['title: "Default"', 'title: "Blank"', 'title: "Existing Content Set"']) assert.ok(lib.includes(o), o);
   assert.ok(!/type="checkbox"/.test(lib));
 });
 check("'Used in' is a popover on desktop and a bottom sheet on phones, listing real report designs", () => {
@@ -68,10 +68,16 @@ check("Default can't be deleted, renamed or drafted from the menu", () => {
   assert.match(lib, /!set\.isDefault && \(\s*<>\s*<DropdownMenuSeparator \/>/);
 });
 check("editor: no-fallback banner, custom term only on custom sets, Default reference is read-only, sticky Save", () => {
-  assert.ok(ed.includes("Magnetix never fills gaps with Default text"));
-  assert.ok(ed.includes("{!detail.isDefault && (\n          <div className=\"space-y-1.5 rounded-xl border bg-muted/20 p-3\">"));
+  assert.ok(ed.includes("Missing content will remain blank in generated reports"));
+  assert.match(ed, /\{!detail\.isDefault && \(\s*<div className="space-y-1\.5">\s*<Label htmlFor="cs-term"/);
   assert.ok(ed.includes("data-default-reference") && !/data-default-reference[^>]*onClick/.test(ed));
   assert.ok(/data-save-bar/.test(ed) && ed.includes("sticky bottom-0"));
+});
+check("visual tokens: Content Sets use their own white-card scope, never the page's lavender momentum cards", () => {
+  const css = readFileSync("src/app/globals.css", "utf8");
+  assert.ok(css.indexOf(".content-sets-scope {") > css.indexOf(".momentum-scope {"), "scope comes after momentum-scope");
+  assert.match(css, /\.content-sets-scope \{[\s\S]*?--card: #ffffff;/);
+  for (const src of [lib, ed]) assert.ok(src.includes("CS_SCOPE"));
 });
 check("no AI controls ship in the Content editor (AI stays optional / gate-able later)", () => {
   assert.ok(!/\bAI\b|Gemini|OpenRouter/.test(ed + lib));

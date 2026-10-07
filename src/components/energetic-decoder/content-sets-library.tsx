@@ -3,20 +3,27 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  BookOpen,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  CircleDot,
   Copy,
   Download,
-  FileStack,
+  FilePen,
+  FileText,
   FileUp,
   Layers,
+  Link2,
   Loader2,
-  Lock,
-  MoreHorizontal,
+  MoreVertical,
   Pencil,
-  Plus,
+  PlusCircle,
   Search,
+  Sparkles,
   Trash2,
-  CircleDot,
+  Upload,
+  X,
 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
@@ -34,7 +41,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useIsMobile } from "@/hooks/use-media-query";
-import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   CONTENT_SET_DESCRIPTION_MAX,
@@ -42,12 +48,24 @@ import {
   DEFAULT_CONTENT_SET_ID,
   type ContentSetStatus,
 } from "@/lib/energetic-decoder/content-sets";
+import {
+  Breadcrumb,
+  CS_SCOPE,
+  IconTile,
+  PageHeader,
+  StatusPill,
+  displayTitle,
+  setTile,
+} from "@/components/energetic-decoder/content-sets-visuals";
+
+export { StatusPill } from "@/components/energetic-decoder/content-sets-visuals";
 
 /**
- * Content Sets library (2026-10-07) — Energetic Decoder → Content.
- * Columns are deliberately few (owner-locked): Name (+ optional
- * description + the real "Used in N report designs" count), Status,
- * Updated, Actions. Completeness lives inside the editor, never here.
+ * Content Sets library (2026-10-07). Visuals follow the owner-approved
+ * mockup (01/04): breadcrumb + serif title, a white card with search,
+ * status filter, Import / Create, then a table — Name (tile, name,
+ * "Used in" chip, description) · Status · Updated · Actions — and a
+ * "Showing x–y of n" footer. Completeness never appears here.
  */
 
 export interface ContentSetRow {
@@ -67,14 +85,23 @@ interface UsageResponse {
 }
 
 type StatusFilter = "all" | ContentSetStatus;
+type SortKey = "name" | "status" | "updated";
+const PAGE_SIZE = 25;
 
-export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => void }) {
+const DATE_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric" });
+export function formatSetDate(iso: string | null): string {
+  return iso ? DATE_FMT.format(new Date(iso)) : "—";
+}
+
+export function ContentSetsLibrary({ onOpenSet, onHome }: { onOpenSet: (id: string) => void; onHome?: () => void }) {
   const { subAccountId, isAdmin } = useSubAccount();
   const base = `/api/sub-accounts/${subAccountId}/energetic-decoder/content-sets`;
   const [sets, setSets] = useState<ContentSetRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 } | null>(null);
+  const [page, setPage] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -96,12 +123,22 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
   }
   useEffect(load, [subAccountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shown = useMemo(() => {
+  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return (sets ?? []).filter(
+    const list = (sets ?? []).filter(
       (s) => (statusFilter === "all" || s.status === statusFilter) && (!q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)),
     );
-  }, [sets, query, statusFilter]);
+    if (!sort) return list; // server order: Default first, then by name
+    const val = (s: ContentSetRow) => (sort.key === "name" ? s.name.toLowerCase() : sort.key === "status" ? s.status : s.updatedAt ?? "");
+    return [...list].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * sort.dir);
+  }, [sets, query, statusFilter, sort]);
+  useEffect(() => setPage(1), [query, statusFilter, sort]);
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  function toggleSort(key: SortKey) {
+    setSort((s) => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
+  }
 
   async function mutate<T>(key: string, fn: () => Promise<Response>, success: string): Promise<T | null> {
     setBusy(key);
@@ -149,158 +186,192 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
     }
   }
 
+  const header = (
+    <PageHeader
+      icon={Sparkles}
+      title="Content Sets"
+      description="Content sets hold reusable interpretation content for your reports. Create, edit, and manage content for different focuses, languages, and audiences — all in one place."
+      breadcrumb={<Breadcrumb items={[{ label: "Energetic Decoder", onClick: onHome }, { label: "Content Sets" }]} />}
+    />
+  );
+
   if (loadError) {
     return (
-      <div className="rounded-2xl border bg-card p-6 text-sm text-muted-foreground">
-        Couldn&apos;t load content sets.{" "}
-        <button type="button" className="font-medium text-primary underline" onClick={load}>
-          Try again
-        </button>
+      <div className={cn(CS_SCOPE, "min-w-0 space-y-6")}>
+        {header}
+        <div className="rounded-2xl border bg-card p-6 text-sm text-[var(--cs-body)]">
+          Couldn&apos;t load content sets.{" "}
+          <button type="button" className="font-medium text-[var(--cs-link)] underline" onClick={load}>
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
 
+  const statusLabel = statusFilter === "all" ? "All Statuses" : statusFilter === "active" ? "Active" : "Draft";
+
   return (
-    <div className="min-w-0 rounded-2xl border bg-card p-4 sm:p-6" data-content-sets-library>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 max-w-xl">
-          <h2 className="text-base font-semibold">Content Sets</h2>
-          <p className="text-sm text-muted-foreground">
-            The words your reports use to interpret a chart. Keep different sets for different audiences or styles — the chart
-            itself never changes.
-          </p>
+    <div className={cn(CS_SCOPE, "min-w-0 space-y-6")} data-content-sets-library>
+      {header}
+
+      <div className="@container/cslib min-w-0 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(26,18,56,0.04)] sm:p-5">
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-0 flex-1 basis-60 @min-[900px]/cslib:max-w-[330px]">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[var(--cs-subtle)]" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search content sets..." className="h-11 rounded-xl bg-card pl-11 text-[15px]" aria-label="Search content sets" />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Filter by status"
+              className="inline-flex h-11 items-center gap-2.5 rounded-xl border border-input bg-card px-4 text-[15px] font-medium text-[var(--cs-ink)] hover:bg-[var(--cs-tint)]"
+            >
+              <span className={cn("h-2.5 w-2.5 rounded-full", statusFilter === "draft" ? "bg-[var(--cs-draft-dot)]" : "bg-[var(--cs-active-dot)]")} />
+              {statusLabel}
+              <ChevronDown className="h-4 w-4 text-[var(--cs-subtle)]" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className={CS_SCOPE}>
+              {(["all", "active", "draft"] as const).map((f) => (
+                <DropdownMenuItem key={f} onClick={() => setStatusFilter(f)} aria-checked={statusFilter === f}>
+                  {f === "all" ? "All Statuses" : f === "active" ? "Active" : "Draft"}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {isAdmin && (
+            <div className="flex w-full flex-wrap gap-3 @min-[640px]/cslib:ml-auto @min-[640px]/cslib:w-auto">
+              <Button variant="outline" className="h-11 flex-1 rounded-xl border-input px-5 text-[15px] text-[var(--cs-link)] @min-[640px]/cslib:flex-none" onClick={() => setImportOpen(true)}>
+                <Upload className="mr-2 h-[18px] w-[18px]" />
+                Import
+              </Button>
+              <Button className="h-11 flex-1 rounded-xl px-5 text-[15px] @min-[640px]/cslib:flex-none" onClick={() => setCreateOpen(true)}>
+                <PlusCircle className="mr-2 h-[18px] w-[18px]" />
+                Create Content Set
+              </Button>
+            </div>
+          )}
         </div>
-        {isAdmin && (
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
-            <Button variant="outline" className="flex-1 sm:flex-none" onClick={() => setImportOpen(true)}>
-              <FileUp className="mr-1.5 h-4 w-4" />
-              Import
-            </Button>
-            <Button className="flex-1 sm:flex-none" onClick={() => setCreateOpen(true)}>
-              <Plus className="mr-1.5 h-4 w-4" />
-              Create Content Set
-            </Button>
+
+        {!sets ? (
+          <div className="h-48 animate-pulse rounded-xl bg-[var(--cs-head)]" />
+        ) : shown.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-10 text-center">
+            <Layers className="mx-auto mb-3 h-8 w-8 text-[var(--cs-subtle)] opacity-50" />
+            <p className="text-sm text-[var(--cs-body)]">No content sets match.</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border">
+            <div className="hidden grid-cols-[minmax(0,1fr)_170px_170px_72px] items-center gap-4 bg-[var(--cs-head)] px-5 py-3.5 text-[15px] font-semibold text-[var(--cs-ink)] @min-[760px]/cslib:grid">
+              <SortHead label="Name" k="name" sort={sort} onSort={toggleSort} />
+              <SortHead label="Status" k="status" sort={sort} onSort={toggleSort} />
+              <SortHead label="Updated" k="updated" sort={sort} onSort={toggleSort} />
+              <span className="text-right">Actions</span>
+            </div>
+            <ul className="divide-y">
+              {shown.map((set) => {
+                const tile = setTile(set);
+                return (
+                  <li
+                    key={set.id}
+                    data-set-row={set.id}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-3 bg-card px-4 py-4 @min-[760px]/cslib:grid-cols-[minmax(0,1fr)_170px_170px_72px] @min-[760px]/cslib:px-5"
+                  >
+                    <div className="flex min-w-0 items-start gap-4">
+                      <IconTile icon={tile.icon} tone={tile.tone} className="mt-0.5 max-sm:h-11 max-sm:w-11" />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                          <button type="button" onClick={() => onOpenSet(set.id)} className="min-w-0 break-words text-left text-[17px] font-semibold text-[var(--cs-link)] hover:underline">
+                            {set.name}
+                          </button>
+                          <UsedIn set={set} base={base} />
+                        </div>
+                        {set.description && <p className="mt-1 break-words text-[15px] text-[var(--cs-subtle)]">{set.description}</p>}
+                      </div>
+                    </div>
+                    <div className="col-start-1 row-start-2 flex flex-wrap items-center gap-x-4 gap-y-2 pl-[60px] @min-[760px]/cslib:contents">
+                      <StatusPill status={set.status} className="@min-[760px]/cslib:px-4" />
+                      <div className="text-[15px] leading-tight">
+                        <p className="tabular-nums text-[var(--cs-ink)]">{formatSetDate(set.updatedAt)}</p>
+                        {set.updatedByEmail && <p className="mt-0.5 break-all text-[13px] text-[var(--cs-subtle)]">by {set.updatedByEmail}</p>}
+                      </div>
+                    </div>
+                    <div className="col-start-2 row-span-2 row-start-1 flex justify-end self-start @min-[760px]/cslib:col-start-auto @min-[760px]/cslib:row-span-1 @min-[760px]/cslib:row-start-auto @min-[760px]/cslib:self-center">
+                      {busy?.endsWith(set.id) ? (
+                        <Loader2 className="m-2.5 h-5 w-5 animate-spin text-[var(--cs-subtle)]" />
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[var(--cs-link)] hover:bg-[var(--cs-tint)]">
+                            <MoreVertical className="h-5 w-5" />
+                            <span className="sr-only">Actions for {set.name}</span>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className={CS_SCOPE}>
+                            <DropdownMenuItem onClick={() => onOpenSet(set.id)}>
+                              <Pencil className="mr-2 h-3.5 w-3.5" />
+                              {isAdmin ? "Edit" : "Open"}
+                            </DropdownMenuItem>
+                            {isAdmin && (
+                              <>
+                                {!set.isDefault && (
+                                  <DropdownMenuItem onClick={() => setRenameTarget(set)}>
+                                    <FilePen className="mr-2 h-3.5 w-3.5" />
+                                    Rename &amp; describe
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => duplicate(set)}>
+                                  <Copy className="mr-2 h-3.5 w-3.5" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                {!set.isDefault && (
+                                  <DropdownMenuItem onClick={() => toggleStatus(set)}>
+                                    <CircleDot className="mr-2 h-3.5 w-3.5" />
+                                    {set.status === "active" ? "Mark as Draft" : "Mark as Active"}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => void exportSet(set)}>
+                                  <Download className="mr-2 h-3.5 w-3.5" />
+                                  Export
+                                </DropdownMenuItem>
+                                {!set.isDefault && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(set)}>
+                                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {sets && filtered.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[15px] text-[var(--cs-subtle)]" data-library-count>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} content set{filtered.length === 1 ? "" : "s"}
+            </p>
+            <div className="flex items-center gap-2" aria-label="Pages">
+              <button type="button" disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="flex h-10 w-11 items-center justify-center rounded-lg border bg-card text-[var(--cs-link)] disabled:opacity-40" aria-label="Previous page">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="flex h-10 min-w-11 items-center justify-center rounded-lg bg-primary px-3 text-[15px] font-semibold text-primary-foreground" aria-current="page">
+                {page}
+              </span>
+              <button type="button" disabled={page === pages} onClick={() => setPage((p) => p + 1)} className="flex h-10 w-11 items-center justify-center rounded-lg border bg-card text-[var(--cs-link)] disabled:opacity-40" aria-label="Next page">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-0 flex-1 basis-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search content sets…" className="pl-9" aria-label="Search content sets" />
-        </div>
-        <div className="flex rounded-lg border p-0.5 text-xs font-medium" role="group" aria-label="Filter by status">
-          {(["all", "active", "draft"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={statusFilter === f}
-              onClick={() => setStatusFilter(f)}
-              className={cn("rounded-md px-3 py-1.5", statusFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
-            >
-              {f === "all" ? "All" : f === "active" ? "Active" : "Draft"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {!sets ? (
-        <div className="h-40 animate-pulse rounded-xl bg-muted/20" />
-      ) : shown.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <BookOpen className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">No content sets match.</p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-xl border">
-          <div className="hidden grid-cols-[minmax(0,1fr)_110px_150px_56px] gap-3 border-b bg-muted/30 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-muted-foreground sm:grid">
-            <span>Name</span>
-            <span>Status</span>
-            <span>Updated</span>
-            <span className="sr-only">Actions</span>
-          </div>
-          <ul className="divide-y">
-            {shown.map((set) => (
-              <li
-                key={set.id}
-                data-set-row={set.id}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_110px_150px_56px]"
-              >
-                <div className="min-w-0">
-                  <button type="button" onClick={() => onOpenSet(set.id)} className="flex min-w-0 items-center gap-2 text-left">
-                    <span className="truncate text-sm font-semibold hover:underline">{set.name}</span>
-                    {set.isDefault && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                        <Lock className="h-2.5 w-2.5" />
-                        Built-in
-                      </span>
-                    )}
-                  </button>
-                  {set.description && <p className="mt-0.5 break-words text-xs text-muted-foreground">{set.description}</p>}
-                  <UsedIn set={set} base={base} />
-                </div>
-                <div className="col-start-1 row-start-2 flex items-center gap-3 sm:col-start-auto sm:row-start-auto sm:contents">
-                  <StatusPill status={set.status} />
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {set.updatedAt ? formatRelativeTime(new Date(set.updatedAt)) : "—"}
-                  </span>
-                </div>
-                <div className="col-start-2 row-span-2 row-start-1 flex justify-end self-start sm:col-start-auto sm:row-span-1 sm:row-start-auto sm:self-center">
-                  {busy?.endsWith(set.id) ? (
-                    <Loader2 className="m-2.5 h-4 w-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Actions for {set.name}</span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onOpenSet(set.id)}>
-                          <Pencil className="mr-2 h-3.5 w-3.5" />
-                          {isAdmin ? "Edit" : "Open"}
-                        </DropdownMenuItem>
-                        {isAdmin && (
-                          <>
-                            {!set.isDefault && (
-                              <DropdownMenuItem onClick={() => setRenameTarget(set)}>
-                                <FileStack className="mr-2 h-3.5 w-3.5" />
-                                Rename &amp; describe
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => duplicate(set)}>
-                              <Copy className="mr-2 h-3.5 w-3.5" />
-                              Duplicate
-                            </DropdownMenuItem>
-                            {!set.isDefault && (
-                              <DropdownMenuItem onClick={() => toggleStatus(set)}>
-                                <CircleDot className="mr-2 h-3.5 w-3.5" />
-                                {set.status === "active" ? "Mark as Draft" : "Mark as Active"}
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onClick={() => void exportSet(set)}>
-                              <Download className="mr-2 h-3.5 w-3.5" />
-                              Export
-                            </DropdownMenuItem>
-                            {!set.isDefault && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(set)}>
-                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <CreateContentSetDialog
         open={createOpen}
@@ -312,7 +383,15 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
           onOpenSet(id);
         }}
       />
-      <ImportContentSetDialog open={importOpen} onOpenChange={setImportOpen} base={base} onCreated={(id) => { load(); onOpenSet(id); }} />
+      <ImportContentSetDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        base={base}
+        onCreated={(id) => {
+          load();
+          onOpenSet(id);
+        }}
+      />
       <RenameDialog
         target={renameTarget}
         onClose={() => setRenameTarget(null)}
@@ -324,11 +403,11 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
         busy={!!busy?.startsWith("rename:")}
       />
       <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className={cn(CS_SCOPE, "rounded-2xl p-6 sm:max-w-md")}>
           <DialogHeader>
-            <DialogTitle>Delete &ldquo;{deleteTarget?.name}&rdquo;?</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-[var(--cs-ink)]">Delete &ldquo;{deleteTarget?.name}&rdquo;?</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2 text-sm text-muted-foreground">
+          <div className="space-y-5 text-[15px] text-[var(--cs-body)]">
             {deleteTarget && deleteTarget.usageCount > 0 ? (
               <p>
                 This set is used in {deleteTarget.usageCount} report design{deleteTarget.usageCount === 1 ? "" : "s"}, so it
@@ -337,12 +416,13 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
             ) : (
               <p>This permanently removes the set and everything written in it. Reports you&apos;ve already generated keep their saved text.</p>
             )}
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => setDeleteTarget(null)}>
                 Cancel
               </Button>
               <Button
                 variant="destructive"
+                className="h-11 rounded-xl px-5"
                 disabled={!!busy?.startsWith("delete:") || (deleteTarget?.usageCount ?? 0) > 0}
                 onClick={async () => {
                   if (!deleteTarget) return;
@@ -360,21 +440,19 @@ export function ContentSetsLibrary({ onOpenSet }: { onOpenSet: (id: string) => v
   );
 }
 
-export function StatusPill({ status }: { status: ContentSetStatus }) {
+function SortHead({ label, k, sort, onSort }: { label: string; k: SortKey; sort: { key: SortKey; dir: 1 | -1 } | null; onSort: (k: SortKey) => void }) {
+  const active = sort?.key === k;
   return (
-    <span
-      className={cn(
-        "inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-        status === "active" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", status === "active" ? "bg-emerald-500" : "bg-amber-500")} />
-      {status === "active" ? "Active" : "Draft"}
-    </span>
+    <div role="columnheader" aria-sort={active ? (sort!.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => onSort(k)} className="inline-flex w-fit items-center gap-1.5 text-left hover:text-[var(--cs-link)]">
+        {label}
+        <ChevronsUpDown className={cn("h-4 w-4", active ? "text-[var(--cs-link)]" : "text-[var(--cs-subtle)]")} />
+      </button>
+    </div>
   );
 }
 
-/** "Used in N report designs" — opens the real list (a popover on desktop, a bottom sheet on phones). */
+/** "Used in N report designs" chip — opens the real list (a popover on desktop, a bottom sheet on phones). */
 function UsedIn({ set, base }: { set: ContentSetRow; base: string }) {
   const isMobile = useIsMobile();
   const { saPath } = useSubAccount();
@@ -392,25 +470,28 @@ function UsedIn({ set, base }: { set: ContentSetRow; base: string }) {
   }, [open, base, set.id]);
 
   const label = `Used in ${set.usageCount} report design${set.usageCount === 1 ? "" : "s"}`;
-  if (set.usageCount === 0) return <p className="mt-1 text-xs text-muted-foreground/80">Not used in any report designs</p>;
+  const places = `Used in ${set.usageCount} place${set.usageCount === 1 ? "" : "s"}`;
+  if (set.usageCount === 0) {
+    return <span className="inline-flex items-center rounded-full bg-[var(--cs-idle-bg)] px-3 py-1 text-[13px] text-[var(--cs-subtle)]">Not used in any report designs</span>;
+  }
 
-  const body = (
-    <div className="space-y-2" data-used-in-list>
-      {set.isDefault && <p className="text-xs text-muted-foreground">Report designs that haven&apos;t picked a content set use Default.</p>}
+  const list = (
+    <div data-used-in-list>
+      {set.isDefault && <p className="mb-2 text-[13px] text-[var(--cs-subtle)]">Report designs that haven&apos;t picked a content set use Default.</p>}
       {error ? (
-        <p className="text-sm text-muted-foreground">Couldn&apos;t load where this set is used.</p>
+        <p className="py-2 text-sm text-[var(--cs-body)]">Couldn&apos;t load where this set is used.</p>
       ) : !usage ? (
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <Loader2 className="my-2 h-4 w-4 animate-spin text-[var(--cs-subtle)]" />
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y">
           {usage.reportDesigns.map((d) => (
             <li key={d.id}>
-              <a href={saPath(`/energetic-decoder/reports/${d.id}`)} className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-muted/50">
-                <span className="flex min-w-0 items-center gap-2">
-                  <Layers className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{d.title}</span>
+              <a href={saPath(`/energetic-decoder/reports/${d.id}`)} className="-mx-2 flex items-center gap-3.5 rounded-lg px-2 py-2.5 hover:bg-[var(--cs-tint)]">
+                <IconTile icon={FileText} size="sm" />
+                <span className="min-w-0">
+                  <span className="block truncate text-[15px] font-medium text-[var(--cs-ink)]">{d.title}</span>
+                  <span className="block text-[13px] text-[var(--cs-subtle)]">Report Design</span>
                 </span>
-                {d.updatedAt && <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(new Date(d.updatedAt))}</span>}
               </a>
             </li>
           ))}
@@ -419,9 +500,14 @@ function UsedIn({ set, base }: { set: ContentSetRow; base: string }) {
     </div>
   );
 
-  const trigger = (
-    <span className="mt-1 inline-flex items-start gap-1 text-left text-xs font-medium text-primary underline-offset-2 hover:underline">
-      <Layers className="mt-0.5 h-3 w-3 shrink-0" />
+  const chip = (
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-left text-[13px] font-medium text-[var(--cs-link)] transition",
+        open ? "border-[var(--cs-violet-fg)] bg-[var(--cs-tint)]" : "border-transparent bg-[var(--cs-tint)] hover:border-[var(--cs-violet-fg)]/40",
+      )}
+    >
+      <Link2 className="h-3.5 w-3.5 shrink-0 -rotate-45" />
       {label}
     </span>
   );
@@ -430,15 +516,18 @@ function UsedIn({ set, base }: { set: ContentSetRow; base: string }) {
     return (
       <>
         <button type="button" className="text-left" onClick={() => setOpen(true)} aria-haspopup="dialog">
-          {trigger}
+          {chip}
         </button>
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl">
+          <SheetContent side="bottom" className={cn(CS_SCOPE, "max-h-[80vh] overflow-y-auto rounded-t-2xl bg-card")}>
             <SheetHeader>
-              <SheetTitle>{set.name}</SheetTitle>
-              <SheetDescription>{label}</SheetDescription>
+              <SheetTitle className="flex items-center gap-2.5 text-lg font-semibold text-[var(--cs-link)]">
+                <Link2 className="h-5 w-5 -rotate-45" />
+                {places}
+              </SheetTitle>
+              <SheetDescription className="text-[var(--cs-subtle)]">{set.name}</SheetDescription>
             </SheetHeader>
-            <div className="px-4 pb-6">{body}</div>
+            <div className="px-4 pb-6">{list}</div>
           </SheetContent>
         </Sheet>
       </>
@@ -447,29 +536,27 @@ function UsedIn({ set, base }: { set: ContentSetRow; base: string }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger aria-label={label} className="text-left">
-        {trigger}
+        {chip}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80">
-        <p className="mb-2 text-sm font-semibold">{label}</p>
-        {body}
+      <PopoverContent align="start" className={cn(CS_SCOPE, "w-[380px] rounded-2xl border bg-card p-4 shadow-[0_12px_40px_rgba(46,16,101,0.14)]")}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2.5 text-[17px] font-semibold text-[var(--cs-link)]">
+            <Link2 className="h-5 w-5 -rotate-45" />
+            {places}
+          </p>
+          <button type="button" onClick={() => setOpen(false)} className="rounded-md p-1 text-[var(--cs-link)] hover:bg-[var(--cs-tint)]" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        {list}
       </PopoverContent>
     </Popover>
   );
 }
 
-function DescriptionField({ value, onChange, id }: { value: string; onChange: (v: string) => void; id: string }) {
-  const over = value.trim().length > CONTENT_SET_DESCRIPTION_MAX;
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>
-        Description <span className="font-normal text-muted-foreground">(optional)</span>
-      </Label>
-      <Textarea id={id} rows={2} value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={over} placeholder="e.g. Career-focused wording for business clients" />
-      <p className={cn("text-right text-xs tabular-nums", over ? "font-semibold text-destructive" : "text-muted-foreground")}>
-        {value.trim().length} / {CONTENT_SET_DESCRIPTION_MAX}
-      </p>
-    </div>
-  );
+function CharCount({ value, max }: { value: string; max: number }) {
+  const n = value.trim().length;
+  return <span className={cn("text-[13px] tabular-nums", n > max ? "font-semibold text-destructive" : "text-[var(--cs-subtle)]")}>{n} / {max}</span>;
 }
 
 function CreateContentSetDialog({
@@ -497,9 +584,9 @@ function CreateContentSetDialog({
       setName("");
       setDescription("");
       setStartFrom("default");
-      setSourceId(custom[0]?.id ?? "");
+      setSourceId("");
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const invalid = !name.trim() || name.trim().length > CONTENT_SET_NAME_MAX || description.trim().length > CONTENT_SET_DESCRIPTION_MAX || (startFrom === "existing" && !sourceId);
 
@@ -524,71 +611,109 @@ function CreateContentSetDialog({
     }
   }
 
-  const options: { key: typeof startFrom; title: string; body: string; disabled?: boolean }[] = [
-    { key: "default", title: "Default", body: "Start with a copy of the Magnetix Default text, then rewrite what you want." },
-    { key: "blank", title: "Blank", body: "Start empty and write everything yourself. Anything left blank stays blank in reports." },
-    { key: "existing", title: "Existing set", body: custom.length ? "Copy one of your own content sets." : "Create a set first to copy it.", disabled: custom.length === 0 },
+  const options: { key: typeof startFrom; title: string; body: string; icon: typeof Sparkles; disabled?: boolean }[] = [
+    { key: "default", title: "Default", body: "Core interpretations and foundations used in reports.", icon: Sparkles },
+    { key: "blank", title: "Blank", body: "Start with an empty content set.", icon: FileText },
+    { key: "existing", title: "Existing Content Set", body: custom.length ? "Copy content from an existing set." : "Create a set first to copy it.", icon: Layers, disabled: custom.length === 0 },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create Content Set</DialogTitle>
-          <DialogDescription>Covers Human Design, Astrology and Frequency. Copies are independent — later edits to the source don&apos;t change them.</DialogDescription>
+      <DialogContent className={cn(CS_SCOPE, "max-h-[92dvh] gap-0 overflow-y-auto rounded-3xl p-5 sm:max-w-[740px] sm:p-8")}>
+        <DialogHeader className="gap-3 pr-8 text-left">
+          <div className="flex items-center gap-4">
+            <IconTile icon={Sparkles} shape="circle" size="lg" className="max-sm:h-12 max-sm:w-12" />
+            <DialogTitle className={cn(displayTitle, "text-[30px] font-normal leading-tight sm:text-[42px]")}>Create Content Set</DialogTitle>
+          </div>
+          <DialogDescription className="text-[15px] leading-relaxed text-[var(--cs-body)] sm:text-base">
+            Content sets hold reusable interpretation content for your reports. Create a new content set to organize and manage content for a specific
+            focus or audience.
+          </DialogDescription>
         </DialogHeader>
         <form
-          className="space-y-4 py-1"
+          className="mt-6 space-y-6"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-name">Name</Label>
-            <Input id="cs-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} placeholder="e.g. Business & Career" autoFocus />
+          <div className="space-y-2">
+            <Label htmlFor="cs-name" className="text-base font-semibold text-[var(--cs-ink)]">
+              Content Set name <span className="text-destructive">*</span>
+            </Label>
+            <Input id="cs-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} placeholder="e.g. Business & Career (Spanish)" className="h-12 rounded-xl bg-card text-[15px]" autoFocus />
+            <p className="text-[14px] leading-relaxed text-[var(--cs-subtle)]">
+              Choose a clear, descriptive name for your content set. You can include a language in the name if needed, such as “Business &amp; Career
+              (Spanish)”.
+            </p>
           </div>
-          <DescriptionField id="cs-desc" value={description} onChange={setDescription} />
-          <fieldset className="space-y-2">
-            <legend className="mb-1.5 text-sm font-medium">Start from</legend>
-            {options.map((o) => (
-              <label
-                key={o.key}
-                className={cn(
-                  "flex cursor-pointer gap-3 rounded-xl border p-3 text-sm",
-                  startFrom === o.key && "border-primary bg-primary/5",
-                  o.disabled && "cursor-not-allowed opacity-50",
-                )}
-              >
-                <input type="radio" name="cs-start" className="mt-1 accent-[var(--primary)]" checked={startFrom === o.key} disabled={o.disabled} onChange={() => setStartFrom(o.key)} />
-                <span className="min-w-0">
-                  <span className="block font-medium">{o.title}</span>
-                  <span className="block text-xs text-muted-foreground">{o.body}</span>
-                  {o.key === "existing" && startFrom === "existing" && custom.length > 0 && (
-                    <select
-                      aria-label="Content set to copy"
-                      value={sourceId}
-                      onChange={(e) => setSourceId(e.target.value)}
-                      className="mt-2 h-9 w-full rounded-md border bg-background px-2 text-sm"
-                    >
-                      {custom.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </span>
-              </label>
-            ))}
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <Label htmlFor="cs-desc" className="text-base font-semibold text-[var(--cs-ink)]">
+                Description (optional)
+              </Label>
+              <CharCount value={description} max={CONTENT_SET_DESCRIPTION_MAX} />
+            </div>
+            <Textarea
+              id="cs-desc"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              aria-invalid={description.trim().length > CONTENT_SET_DESCRIPTION_MAX}
+              placeholder="e.g. Interpretations, guidance, and insights for career, money, and professional alignment."
+              className="rounded-xl bg-card px-4 py-3 text-[15px]"
+            />
+          </div>
+          <fieldset className="space-y-3">
+            <legend className="mb-3 text-lg font-semibold text-[var(--cs-ink)]">Start from</legend>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {options.map((o) => {
+                const selected = startFrom === o.key;
+                return (
+                  <label
+                    key={o.key}
+                    className={cn(
+                      "relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border bg-card px-4 pb-4 pt-5 text-center transition max-sm:flex-row max-sm:items-start max-sm:pl-12 max-sm:text-left",
+                      selected ? "border-[1.5px] border-[var(--cs-violet-fg)] bg-[var(--cs-tint)]" : "hover:border-[var(--cs-violet-fg)]/40",
+                      o.disabled && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <input type="radio" name="cs-start" className="absolute left-4 top-4 h-5 w-5 accent-[var(--primary)]" checked={selected} disabled={o.disabled} onChange={() => setStartFrom(o.key)} />
+                    <IconTile icon={o.icon} shape="circle" size="sm" className={cn(selected ? "bg-[var(--cs-tint-strong)]" : "")} />
+                    <span className="w-full min-w-0">
+                      <span className="block text-[17px] font-semibold text-[var(--cs-ink)]">{o.title}</span>
+                      <span className="mt-1 block text-[14px] leading-snug text-[var(--cs-subtle)]">{o.body}</span>
+                      {o.key === "existing" && custom.length > 0 && (
+                        <select
+                          aria-label="Content set to copy"
+                          value={sourceId}
+                          onChange={(e) => {
+                            setSourceId(e.target.value);
+                            setStartFrom("existing");
+                          }}
+                          className="mt-3 h-10 w-full rounded-lg border border-input bg-card px-2.5 text-[13px] text-[var(--cs-body)]"
+                        >
+                          <option value="">Choose a source content set</option>
+                          {custom.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </fieldset>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex flex-wrap justify-end gap-3 border-t pt-5">
+            <Button type="button" variant="outline" className="h-12 min-w-[130px] rounded-xl border-input px-6 text-base font-semibold text-[var(--cs-link)] max-sm:flex-1" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={invalid || saving}>
+            <Button type="submit" disabled={invalid || saving} className="h-12 rounded-xl px-6 text-base max-sm:flex-1">
               {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-              Create and open
+              Create Content Set
             </Button>
           </div>
         </form>
@@ -619,23 +744,33 @@ function RenameDialog({
   const invalid = !name.trim() || description.trim().length > CONTENT_SET_DESCRIPTION_MAX;
   return (
     <Dialog open={!!target} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className={cn(CS_SCOPE, "rounded-2xl p-6 sm:max-w-md")}>
         <DialogHeader>
-          <DialogTitle>Rename content set</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-[var(--cs-ink)]">Rename content set</DialogTitle>
         </DialogHeader>
         <form
-          className="space-y-4 py-1"
+          className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault();
             if (!invalid) onSave(name, description);
           }}
         >
-          <div className="space-y-1.5">
-            <Label htmlFor="cs-rename">Name</Label>
-            <Input id="cs-rename" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} autoFocus />
+          <div className="space-y-2">
+            <Label htmlFor="cs-rename" className="font-semibold text-[var(--cs-ink)]">
+              Content Set name
+            </Label>
+            <Input id="cs-rename" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} className="h-11 rounded-xl bg-card" autoFocus />
           </div>
-          <DescriptionField id="cs-rename-desc" value={description} onChange={setDescription} />
-          <Button type="submit" disabled={invalid || busy} className="w-full">
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-3">
+              <Label htmlFor="cs-rename-desc" className="font-semibold text-[var(--cs-ink)]">
+                Description (optional)
+              </Label>
+              <CharCount value={description} max={CONTENT_SET_DESCRIPTION_MAX} />
+            </div>
+            <Textarea id="cs-rename-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} aria-invalid={description.trim().length > CONTENT_SET_DESCRIPTION_MAX} className="rounded-xl bg-card" />
+          </div>
+          <Button type="submit" disabled={invalid || busy} className="h-11 w-full rounded-xl">
             Save
           </Button>
         </form>
@@ -711,28 +846,30 @@ function ImportContentSetDialog({ open, onOpenChange, base, onCreated }: { open:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+      <DialogContent className={cn(CS_SCOPE, "max-h-[90dvh] overflow-y-auto rounded-2xl p-6 sm:max-w-md")}>
         <DialogHeader>
-          <DialogTitle>Import a content set</DialogTitle>
-          <DialogDescription>Choose a file exported from Magnetix. It becomes a new Draft set — nothing existing is overwritten.</DialogDescription>
+          <DialogTitle className="text-lg font-semibold text-[var(--cs-ink)]">Import a content set</DialogTitle>
+          <DialogDescription className="text-[var(--cs-body)]">Choose a file exported from Magnetix. It becomes a new Draft set — nothing existing is overwritten.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-1">
+        <div className="space-y-4">
           <input ref={fileRef} type="file" accept="application/json,.json" className="sr-only" onChange={(e) => void pick(e.target.files?.[0])} aria-label="Content set file" />
-          <Button variant="outline" className="w-full" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <Button variant="outline" className="h-11 w-full rounded-xl text-[var(--cs-link)]" onClick={() => fileRef.current?.click()} disabled={busy}>
             {busy && !preview ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileUp className="mr-1.5 h-4 w-4" />}
             Choose file
           </Button>
           {preview && (
-            <div className="space-y-2 rounded-xl border p-3 text-sm">
+            <div className="space-y-3 rounded-xl border bg-card p-4 text-sm">
               {preview.ok ? (
                 <>
-                  <p>
-                    <span className="font-medium">{preview.recognized}</span> entries ready to import.
-                    {preview.skipped.length > 0 && <span className="text-muted-foreground"> {preview.skipped.length} skipped (not in this workspace).</span>}
+                  <p className="text-[var(--cs-body)]">
+                    <span className="font-semibold text-[var(--cs-ink)]">{preview.recognized}</span> entries ready to import.
+                    {preview.skipped.length > 0 && <span className="text-[var(--cs-subtle)]"> {preview.skipped.length} skipped (not in this workspace).</span>}
                   </p>
                   <div className="space-y-1.5">
-                    <Label htmlFor="cs-import-name">Name</Label>
-                    <Input id="cs-import-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} />
+                    <Label htmlFor="cs-import-name" className="font-semibold text-[var(--cs-ink)]">
+                      Content Set name
+                    </Label>
+                    <Input id="cs-import-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={CONTENT_SET_NAME_MAX} className="h-11 rounded-xl bg-card" />
                   </div>
                 </>
               ) : (
@@ -744,11 +881,11 @@ function ImportContentSetDialog({ open, onOpenChange, base, onCreated }: { open:
               )}
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void confirm()} disabled={!preview?.ok || !name.trim() || busy}>
+            <Button className="h-11 rounded-xl px-5" onClick={() => void confirm()} disabled={!preview?.ok || !name.trim() || busy}>
               Import as Draft
             </Button>
           </div>

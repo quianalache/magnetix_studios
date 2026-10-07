@@ -32,6 +32,7 @@ export function EnergeticDecoderContentTab() {
   if (!setId)
     return (
       <ContentSetsLibrary
+        onHome={() => router.push(`${pathname}?tab=home`, { scroll: false })}
         onOpenSet={(id) => {
           go({ set: id }, true);
           window.scrollTo({ top: 0 });
@@ -51,6 +52,7 @@ export function EnergeticDecoderContentTab() {
       setId={setId}
       selection={selection}
       onBack={() => go({}, true)}
+      onHome={() => router.push(`${pathname}?tab=home`, { scroll: false })}
       onSelect={(next) => {
         // Each phone step is its own history entry so the device Back button walks back a step.
         go({ set: setId, system: next.system, category: next.category, entry: next.entry }, true);

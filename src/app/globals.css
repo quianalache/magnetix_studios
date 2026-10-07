@@ -481,6 +481,103 @@ body {
   --ring: hsl(182 45% 74%);
 }
 
+/* Content Sets (2026-10-07) — the owner-approved mockups' palette for
+   Energetic Decoder → Content: white cards on a near-white page, soft
+   lavender borders/tints, deep-purple primary. Applied on the Content Sets
+   root AND on its portaled dialog/popover/sheet (they render outside the
+   page's .momentum-scope), so it must come after .momentum-scope. Colors
+   measured from the approved PNGs. */
+.content-sets-scope {
+  --background: #fdf8fb;
+  --foreground: #1a1238;
+  --card: #ffffff;
+  --card-foreground: #1a1238;
+  --popover: #ffffff;
+  --popover-foreground: #1a1238;
+  --primary: #5a1d88;
+  --primary-foreground: #ffffff;
+  --secondary: #f4ecfe;
+  --secondary-foreground: #4a1d96;
+  --muted: #f6f5fa;
+  --muted-foreground: #6b6496;
+  --accent: #f4ecfe;
+  --accent-foreground: #4a1d96;
+  --border: #ece5f3;
+  --input: #ddd0f0;
+  --ring: #a77bdc;
+  --radius: 0.75rem;
+  --cs-ink: #1a1238;
+  --cs-body: #3e3a6e;
+  --cs-subtle: #6b6496;
+  --cs-link: #4a1d96;
+  --cs-tint: #f4ecfe;
+  --cs-tint-strong: #ebd8fe;
+  --cs-head: #f9f4fa;
+  --cs-active-bg: #dcf7ec;
+  --cs-active-fg: #0b5d45;
+  --cs-active-dot: #10b464;
+  --cs-draft-bg: #f4ebfe;
+  --cs-draft-fg: #4a16b0;
+  --cs-draft-dot: #7e22ce;
+  --cs-needs-bg: #fef2d3;
+  --cs-needs-fg: #7a3d00;
+  --cs-needs-dot: #f59e0b;
+  --cs-idle-bg: #f2f2f8;
+  --cs-idle-fg: #55547f;
+  --cs-idle-dot: #8b8aa8;
+  --cs-pink-bg: #feeef5;
+  --cs-pink-fg: #c8105c;
+  --cs-teal-bg: #e0f6f5;
+  --cs-teal-fg: #0f8082;
+  --cs-violet-fg: #6d1fd6;
+  --cs-gold: #e7b552;
+  color: var(--foreground);
+}
+.dark .content-sets-scope {
+  --background: #140d22;
+  --foreground: #f1ecfa;
+  --card: #1c1430;
+  --card-foreground: #f1ecfa;
+  --popover: #1c1430;
+  --popover-foreground: #f1ecfa;
+  --primary: #b691ee;
+  --primary-foreground: #1a1238;
+  --secondary: #2a1f45;
+  --secondary-foreground: #e4d6fb;
+  --muted: #241b39;
+  --muted-foreground: #b3abd0;
+  --accent: #2a1f45;
+  --accent-foreground: #e4d6fb;
+  --border: #33284d;
+  --input: #3f3360;
+  --ring: #b691ee;
+  --cs-ink: #f4effc;
+  --cs-body: #d8d1ee;
+  --cs-subtle: #b3abd0;
+  --cs-link: #d3bcfa;
+  --cs-tint: #2a1f45;
+  --cs-tint-strong: #3a2b60;
+  --cs-head: #221a37;
+  --cs-active-bg: #10382c;
+  --cs-active-fg: #8ee6bf;
+  --cs-active-dot: #34d399;
+  --cs-draft-bg: #2f2150;
+  --cs-draft-fg: #d3bcfa;
+  --cs-draft-dot: #b691ee;
+  --cs-needs-bg: #3a2a0c;
+  --cs-needs-fg: #f8d48a;
+  --cs-needs-dot: #f59e0b;
+  --cs-idle-bg: #262038;
+  --cs-idle-fg: #bdb7d6;
+  --cs-idle-dot: #8b8aa8;
+  --cs-pink-bg: #3b1529;
+  --cs-pink-fg: #f78db8;
+  --cs-teal-bg: #0f3132;
+  --cs-teal-fg: #6fd6d2;
+  --cs-violet-fg: #c4a3f5;
+  --cs-gold: #e7b552;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

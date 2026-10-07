@@ -11,5 +11,7 @@ const Module = require("node:module");
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
   if (request === "server-only") return {};
+  // next/font only works under the Next compiler; scripts that render UI get a no-op font.
+  if (request === "next/font/google") return new Proxy({}, { get: () => () => ({ className: "", style: {} }) });
   return originalLoad.call(this, request, parent, isMain);
 };
