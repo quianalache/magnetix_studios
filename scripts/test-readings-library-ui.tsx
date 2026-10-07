@@ -214,6 +214,13 @@ check("phone header: controls wrap under the identity at full width; Generate Re
   assert.ok(html.includes("flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0"));
   assert.ok(/data-generate-report[^>]*class="[^"]*w-full[^"]*sm:w-auto/.test(html));
 });
+check("tab strips re-reveal the selected tab when their contents/size change (late Mandala tab, font swap) but never fight the user's own swipe", () => {
+  const hook = readFileSync("src/components/energetic-decoder/tab-strip.ts", "utf8");
+  assert.ok(hook.includes("new ResizeObserver(relayout)") && hook.includes("new MutationObserver(relayout)"));
+  assert.ok(hook.includes("mo?.observe(strip, { childList: true, subtree: true, characterData: true });"));
+  assert.ok(hook.includes('strip.addEventListener("scroll", update, { passive: true });'), "scrolling only updates the fade cue");
+  assert.ok(!/addEventListener\("scroll", relayout/.test(hook));
+});
 check("tab strips scroll sideways only, inside themselves (touch pan-x, no vertical movement, no page overscroll, hidden scrollbar)", () => {
   for (const c of ["touch-pan-x", "overflow-x-auto", "overflow-y-hidden", "overscroll-x-contain", "[scrollbar-width:none]", "min-w-0"]) assert.ok(TAB_STRIP_CLASS.includes(c), c);
   assert.ok(ws(false).includes("touch-pan-x") && ws(false).includes("data-workspace-tabs"));
