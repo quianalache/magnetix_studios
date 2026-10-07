@@ -2,7 +2,7 @@
  * Regression test for the practitioner Reading → Astrology page (2026-10
  * redesign). Renders the REAL AstrologyReadingView with real calculated
  * charts and checks the page structure the owner approved:
- *   Key Placements → Natal Chart → Houses → Planetary Placements →
+ *   [Natal Chart | Key Placements rail] → Houses → Planetary Placements →
  *   Aspect Grid → Aspects (grid and list stacked full-width, never side by
  *   side; the list shows every aspect and never scrolls inside its card).
  * Also: nothing is lost from the old layout (all houses / placements /
@@ -13,6 +13,7 @@
  * Run: NODE_OPTIONS='--require ./scripts/_server-only-shim.cjs' pnpm exec tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/test-astrology-reading-view.tsx
  */
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -41,28 +42,48 @@ const html = render({ ...chart, content });
 const count = (re: RegExp, s = html) => (s.match(re) ?? []).length;
 
 console.log("\nReading → Astrology page structure");
-check("sections in the approved order: Key Placements, Natal Chart, Houses, Planetary Placements, Aspect Grid, Aspects", () => {
+check("sections in the approved order: [Natal Chart | Key Placements], Houses, Planetary Placements, Aspect Grid, Aspects", () => {
   const order = [...html.matchAll(/data-astro-section="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(order, ["key-placements", "natal-chart", "houses", "placements", "aspect-grid", "aspects"]);
+  assert.deepEqual(order, ["natal-chart", "key-placements", "houses", "placements", "aspect-grid", "aspects"]);
 });
-check("Key Placements: Sun, Moon, Rising, Midheaven with sign, degree and house from the reading", () => {
-  assert.deepEqual([...html.matchAll(/data-key-placement="([^"]+)"/g)].map((m) => m[1]), ["sun", "moon", "rising", "midheaven"]);
+check("top section: chart and Key Placements side by side on wide content (container query), stacked chart-first when narrow", () => {
+  const top = html.slice(html.indexOf("data-astro-top"), html.indexOf('data-astro-section="houses"'));
+  assert.ok(top.includes("@container/astrotop"));
+  assert.ok(top.includes("grid grid-cols-1 items-start gap-6 @min-[880px]/astrotop:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]"), "two columns from 880px of content, one column below");
+  assert.ok(top.indexOf('data-astro-section="natal-chart"') < top.indexOf('data-astro-section="key-placements"'), "chart first (left / top when stacked)");
+  assert.ok(!top.includes("overflow-y-auto") && !top.includes("max-h-"), "no inner scrolling in the rail");
+});
+check("Key Placements: Sun, Moon, Rising, Midheaven, North Node, South Node, Chiron with sign, degree and house from the reading", () => {
+  const withChiron = render({ ...chart, placements: [...chart.placements, { body: "chiron", longitude: 95.5, sign: "Cancer", degInSign: 5.5, house: 9, retrograde: false }] });
+  assert.deepEqual([...withChiron.matchAll(/data-key-placement="([^"]+)"/g)].map((m) => m[1]), ["sun", "moon", "rising", "midheaven", "northNode", "southNode", "chiron"]);
+  const ch = withChiron.slice(withChiron.indexOf('data-key-placement="chiron"'));
+  assert.ok(ch.includes("Cancer 5.5°") && ch.includes("House 9"));
+  const nn = chart.placements.find((p) => p.body === "northNode")!, sn = chart.placements.find((p) => p.body === "southNode")!;
+  const nb = html.slice(html.indexOf('data-key-placement="northNode"'), html.indexOf('data-key-placement="southNode"'));
+  assert.ok(nb.includes(`${nn.sign} ${nn.degInSign.toFixed(1)}°`) && nb.includes(`House ${nn.house}`));
+  const sb = html.slice(html.indexOf('data-key-placement="southNode"'));
+  assert.ok(sb.includes(`${sn.sign} ${sn.degInSign.toFixed(1)}°`) && sb.includes(`House ${sn.house}`));
+  // without a Chiron placement the rail simply has six rows
+  assert.deepEqual([...html.matchAll(/data-key-placement="([^"]+)"/g)].map((m) => m[1]), ["sun", "moon", "rising", "midheaven", "northNode", "southNode"]);
+  assert.ok(!html.slice(html.indexOf('data-astro-section="key-placements"'), html.indexOf('data-astro-section="houses"')).includes("interpretation"), "no interpretation text in the rail");
   const sun = chart.placements.find((p) => p.body === "sun")!;
   const block = html.slice(html.indexOf('data-key-placement="sun"'), html.indexOf('data-key-placement="moon"'));
   assert.ok(block.includes(`${sun.sign} ${sun.degInSign.toFixed(1)}°`) && block.includes(`House ${sun.house}`));
   const rising = html.slice(html.indexOf('data-key-placement="rising"'), html.indexOf('data-key-placement="midheaven"'));
   assert.ok(rising.includes(`${chart.angles.ascendant.sign} ${chart.angles.ascendant.degInSign.toFixed(1)}°`) && rising.includes("House 1"));
-  const mc = html.slice(html.indexOf('data-key-placement="midheaven"'), html.indexOf('data-astro-section="natal-chart"'));
+  const mc = html.slice(html.indexOf('data-key-placement="midheaven"'), html.indexOf('data-key-placement="northNode"'));
   assert.ok(mc.includes(`${chart.angles.mc.sign} ${chart.angles.mc.degInSign.toFixed(1)}°`) && mc.includes("House 10"), "Placidus: MC on the 10th cusp");
   // Whole Sign: the MC's house is read off the cusps (it is often not the 10th)
   const whole = calculateAstrologyChart({ ...birth, houseSystem: "whole" });
   const wh = render(whole);
   const cusp = whole.houses.cusps.findIndex((c, i) => { const s = c.longitude, e = whole.houses.cusps[(i + 1) % 12].longitude, l = whole.angles.mc.longitude; return s <= e ? l >= s && l < e : l >= s || l < e; });
-  const wmc = wh.slice(wh.indexOf('data-key-placement="midheaven"'), wh.indexOf('data-astro-section="natal-chart"'));
+  const wmc = wh.slice(wh.indexOf('data-key-placement="midheaven"'), wh.indexOf('data-key-placement="northNode"'));
   assert.ok(wmc.includes(`House ${whole.houses.cusps[cusp].house}<`), "Whole Sign MC house");
 });
-check("Descendant and IC stay on the page (Chart Details → Angles), with the house system", () => {
-  const angles = html.slice(html.indexOf('data-chart-detail="angles"'), html.indexOf('data-chart-detail="design"'));
+check("Descendant and IC stay on the page (Chart Details → Angles, under the chart), with the house system and Chart Design", () => {
+  const angles = html.slice(html.indexOf('data-chart-detail="angles"'), html.indexOf('data-astro-section="key-placements"'));
+  assert.ok(html.indexOf('data-chart-detail="angles"') < html.indexOf('data-astro-section="key-placements"'), "inside the chart card");
+  assert.ok(html.includes('data-chart-detail="design"'));
   for (const [abbr, a] of [["AC", chart.angles.ascendant], ["DC", chart.angles.descendant], ["MC", chart.angles.mc], ["IC", chart.angles.ic]] as const) {
     assert.ok(angles.includes(`data-angle="${abbr}"`) && angles.includes(`${a.sign} ${a.degInSign.toFixed(1)}°`), abbr);
   }
@@ -89,8 +110,9 @@ check("Aspect Grid and Aspects are separate full-width cards, grid first; the li
   assert.ok(!/grid-cols|flex-row|lg:flex/.test(between));
   assert.ok(html.includes('data-aspect-grid-size="large"'));
 });
-check("large natal chart on this page (840px wrapper, no 520px cap); the public pages keep AstrologySummary", () => {
-  assert.ok(/data-astro-wheel-wrap="[^"]*" class="mx-auto w-full max-w-\[840px\]"/.test(html), "840px wheel wrapper");
+check("natal chart fits a laptop screen beside the rail (640px wrapper, down from 840px; no 520px cap); the public pages keep AstrologySummary", () => {
+  assert.ok(/data-astro-wheel-wrap="[^"]*" class="mx-auto w-full max-w-\[max\(420px,min\(640px,calc\(100dvh_-_248px\)\)\)\]"/.test(html), "wheel wrapper: ≤640px and capped by screen height (≥420px)");
+  assert.ok(!html.includes("max-w-[840px]"));
   assert.ok(!html.includes("max-w-[520px]"));
   const workspace = readFileSync("src/components/energetic-decoder/human-design-reading-workspace.tsx", "utf8");
   assert.ok(workspace.includes("<AstrologyReadingView chart={reading.astrology} astroDesign={astroDesign} />") && !workspace.includes("<AstrologySummary"));
@@ -110,6 +132,13 @@ check("Equal-house readings say Equal; the house-system fallback note is shown w
   assert.ok(eq.includes("Western · Tropical · Equal Houses") && !eq.includes("Whole Sign"));
   const polar = render(calculateAstrologyChart({ ...birth, lat: 78.2, lng: 15.6 }));
   assert.ok(polar.includes("Placidus is undefined"), "fallback reason shown");
+});
+
+check("everything below the top section is exactly as released in bc36ff6 (Houses, Planetary Placements, Aspect Grid, Aspects)", () => {
+  const lower = (src: string) => src.slice(src.indexOf("{/* 3. Houses */}"));
+  const now = readFileSync("src/components/energetic-decoder/astrology-reading-view.tsx", "utf8");
+  const released = execSync("git show bc36ff6:src/components/energetic-decoder/astrology-reading-view.tsx", { encoding: "utf8" });
+  assert.equal(lower(now), lower(released));
 });
 
 console.log(`\n${passed} checks passed.`);

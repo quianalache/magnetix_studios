@@ -17,8 +17,8 @@ import { AspectGrid } from "@/components/energetic-decoder/aspect-grid";
 
 /**
  * The practitioner Reading → Astrology page (2026-10 redesign). Same data
- * and interpretation content as before, recomposed: Key Placements at the
- * top, a large natal chart with its chart details, Houses, Planetary
+ * and interpretation content as before, recomposed: the natal chart with
+ * its chart details beside a Key Placements rail, then Houses, Planetary
  * Placements, then a full-width Aspect Grid and a full-width Aspects list
  * (stacked — never side by side, because the list's height varies with
  * the reading; it grows naturally, no internal scrolling, every aspect
@@ -85,6 +85,11 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
     ...(moon ? [{ id: "moon", label: "Moon", icon: PLANET_GLYPH.moon, sign: moon.sign, degree: moon.degInSign, house: moon.house }] : []),
     { id: "rising", label: "Rising (Ascendant)", icon: "AC", isText: true, sign: ascendant.sign, degree: ascendant.degInSign, house: 1 },
     { id: "midheaven", label: "Midheaven (MC)", icon: "MC", isText: true, sign: mc.sign, degree: mc.degInSign, house: mcHouse },
+    // the nodes and Chiron, from the reading's own placements (Chiron is absent on readings where it couldn't be calculated)
+    ...(["northNode", "southNode", "chiron"] as const).flatMap((body) => {
+      const p = chart.placements.find((x) => x.body === body);
+      return p ? [{ id: body, label: BODY_LABEL[body], icon: PLANET_GLYPH[body], sign: p.sign, degree: p.degInSign, house: p.house }] : [];
+    }),
   ];
 
   const angles: [string, string, ChartAngle][] = [
@@ -96,57 +101,68 @@ export function AstrologyReadingView({ chart, astroDesign }: { chart: Chart; ast
 
   return (
     <div data-astro-reading className="space-y-6">
-      {/* 1. Key Placements */}
-      <SectionCard id="key-placements" title="Key Placements">
-        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
-          {key.map((k) => (
-            <div key={k.id} data-key-placement={k.id} className="flex min-w-0 items-center gap-3 rounded-xl border bg-background/60 p-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                {k.isText ? <span className="text-sm font-bold">{k.icon}</span> : <Glyph className="text-xl leading-none">{k.icon}</Glyph>}
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">{k.label}</p>
-                <p className="truncate text-sm font-semibold text-foreground">
-                  <Glyph className="mr-1">{ZODIAC_GLYPH[k.sign as keyof typeof ZODIAC_GLYPH]}</Glyph>
-                  {k.sign} {fmtDeg(k.degree)}
+      {/*
+        Top section (2026-10 correction): Natal Chart on the left, Key
+        Placements as a right rail, so the whole wheel fits a laptop screen
+        (the stacked 840px chart didn't). Same container-query split as the
+        Mandala Reading page; below 880px of content width they stack, chart
+        first. Everything below this section is unchanged.
+      */}
+      <div data-astro-top className="@container/astrotop">
+        <div className="grid grid-cols-1 items-start gap-6 @min-[880px]/astrotop:grid-cols-[minmax(0,1fr)_clamp(300px,31%,360px)]">
+          {/* Natal Chart + its details */}
+          <SectionCard id="natal-chart" title="Natal Chart">
+            {/* At most 640px, and never taller than the screen leaves room for (app header + this card's title and details ≈ 248px), so the whole wheel fits on shorter laptops too; never below 420px. */}
+            <div data-astro-wheel-wrap className="mx-auto w-full max-w-[max(420px,min(640px,calc(100dvh_-_248px)))]">
+              <AstrologyWheelChart chart={chart} className="w-full" colors={colors} />
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div data-chart-detail="system" className="rounded-xl border bg-background/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">Chart Details</p>
+                <p className="text-sm font-semibold text-foreground">Western · Tropical · {houseSystem} Houses</p>
+                <p data-chart-detail="design" className="mt-0.5 text-xs text-muted-foreground">
+                  Chart Design · <span className="font-semibold text-foreground">{astroDesign?.name || "Default"}</span>
                 </p>
-                {k.house !== null && <p className="text-xs text-muted-foreground">House {k.house}</p>}
+                {chart.houses.fallbackReason && <p className="mt-1 text-xs italic text-muted-foreground">{chart.houses.fallbackReason}</p>}
+              </div>
+              <div data-chart-detail="angles" className="rounded-xl border bg-background/60 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">Angles</p>
+                <dl className="mt-0.5 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-2 gap-y-0.5 text-[13px]">
+                  {angles.map(([abbr, name, a]) => (
+                    <div key={abbr} data-angle={abbr} className="flex min-w-0 items-baseline gap-1.5" title={name}>
+                      <dt className="w-5 shrink-0 text-xs font-bold text-muted-foreground">{abbr}</dt>
+                      <dd className="truncate font-medium text-foreground">
+                        {a.sign} {fmtDeg(a.degInSign)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
               </div>
             </div>
-          ))}
-        </div>
-      </SectionCard>
+          </SectionCard>
 
-      {/* 2. Natal Chart + its details */}
-      <SectionCard id="natal-chart" title="Natal Chart">
-        <div data-astro-wheel-wrap className="mx-auto w-full max-w-[840px]">
-          <AstrologyWheelChart chart={chart} className="w-full" colors={colors} />
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div data-chart-detail="system" className="rounded-xl border bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Chart Details</p>
-            <p className="text-sm font-semibold text-foreground">Western · Tropical · {houseSystem} Houses</p>
-            {chart.houses.fallbackReason && <p className="mt-1 text-xs italic text-muted-foreground">{chart.houses.fallbackReason}</p>}
-          </div>
-          <div data-chart-detail="angles" className="rounded-xl border bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Angles</p>
-            <dl className="mt-0.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-sm">
-              {angles.map(([abbr, name, a]) => (
-                <div key={abbr} data-angle={abbr} className="flex min-w-0 items-baseline gap-1.5" title={name}>
-                  <dt className="w-6 shrink-0 text-xs font-bold text-muted-foreground">{abbr}</dt>
-                  <dd className="truncate font-medium text-foreground">
-                    {a.sign} {fmtDeg(a.degInSign)}
-                  </dd>
-                </div>
+          {/* Key Placements — the right rail: one compact row per point, no interpretation text */}
+          <SectionCard id="key-placements" title="Key Placements">
+            <ul className="space-y-1.5">
+              {key.map((k) => (
+                <li key={k.id} data-key-placement={k.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border bg-background/60 px-2.5 py-2">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    {k.isText ? <span className="text-xs font-bold">{k.icon}</span> : <Glyph className="text-lg leading-none">{k.icon}</Glyph>}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs text-muted-foreground">{k.label}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      <Glyph className="mr-1">{ZODIAC_GLYPH[k.sign as keyof typeof ZODIAC_GLYPH]}</Glyph>
+                      {k.sign} {fmtDeg(k.degree)}
+                    </p>
+                  </div>
+                  {k.house !== null && <span className="shrink-0 text-xs text-muted-foreground">House {k.house}</span>}
+                </li>
               ))}
-            </dl>
-          </div>
-          <div data-chart-detail="design" className="rounded-xl border bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Chart Design</p>
-            <p className="text-sm font-semibold text-foreground">{astroDesign?.name || "Default"}</p>
-          </div>
+            </ul>
+          </SectionCard>
         </div>
-      </SectionCard>
+      </div>
 
       {/* 3. Houses */}
       <SectionCard id="houses" title="Houses">
