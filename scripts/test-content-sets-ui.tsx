@@ -52,6 +52,7 @@ check("status is Active or Draft only", () => {
 });
 const lib = readFileSync("src/components/energetic-decoder/content-sets-library.tsx", "utf8");
 const ed = readFileSync("src/components/energetic-decoder/content-set-editor.tsx", "utf8");
+const entryRoute = readFileSync("src/app/api/sub-accounts/[id]/energetic-decoder/_routes/content-sets/[setId]/entries/[entryId]/route.ts", "utf8");
 check("library columns are Name · Status · Updated · Actions — no Coverage / Language / Focus / Systems", () => {
   assert.match(lib, /label="Name"[\s\S]*label="Status"[\s\S]*label="Updated"[\s\S]*>Actions</);
   for (const gone of ["Coverage", "Language", "Focus", "Systems"]) assert.ok(!lib.includes(`>${gone}<`), gone);
@@ -67,11 +68,18 @@ check("'Used in' is a popover on desktop and a bottom sheet on phones, listing r
 check("Default can't be deleted, renamed or drafted from the menu", () => {
   assert.match(lib, /!set\.isDefault && \(\s*<>\s*<DropdownMenuSeparator \/>/);
 });
-check("editor: no-fallback banner, custom term only on custom sets, Default reference is read-only, sticky Save", () => {
-  assert.ok(ed.includes("Missing content will remain blank in generated reports"));
+check("editor: optional blank content, lightweight helper, custom term only on custom sets, sticky Save", () => {
   assert.match(ed, /!detail\.isDefault && entrySchema\.allowCustomLabel !== false/);
   assert.ok(ed.includes("data-default-reference") && !/data-default-reference[^>]*onClick/.test(ed));
+  assert.ok(ed.includes("Content added here can be used to interpret chart results and populate generated reading reports wherever this property appears."));
+  assert.ok(!ed.includes("Every field is required") && !ed.includes("Required in the Default set."));
   assert.ok(/data-save-bar/.test(ed) && ed.includes("sticky bottom-0"));
+});
+check("editor has no reset control or reset action and desktop panes scroll independently", () => {
+  assert.ok(!ed.includes("Reset section") && !ed.includes("confirmReset") && !ed.includes("resetContentEntry"));
+  assert.ok(!entryRoute.includes("export async function DELETE") && !entryRoute.includes("resetContentEntry"));
+  assert.ok(ed.includes("lg:h-full lg:overflow-y-auto"));
+  assert.ok(ed.includes("lg:h-[clamp(32rem,calc(100dvh-18rem),52rem)]"));
 });
 check("large categories preserve canonical identity and provide placement filters", () => {
   assert.ok(ed.includes('id === "astro:planetSign"'));

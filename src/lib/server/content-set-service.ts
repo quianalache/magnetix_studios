@@ -434,7 +434,6 @@ export async function saveContentEntry(
   const { parsed, schema } = await knownEntry(subAccountId, entryId, db);
   const isDefault = setId === DEFAULT_CONTENT_SET_ID;
   const v = validateEntryInput(schema, input, {
-    requireAll: isDefault,
     allowLabel: !isDefault && schema.allowCustomLabel !== false,
     labelError: !isDefault && schema.allowCustomLabel === false ? "Custom terms aren’t available for this category." : undefined,
   });
@@ -458,19 +457,6 @@ export async function saveContentEntry(
   const empty = Object.values(v.fields).every((t) => !t) && !v.label;
   if (empty) await ref.collection("entries").doc(entryId).delete();
   else await ref.collection("entries").doc(entryId).set({ label: v.label, fields: v.fields, updatedAt: FieldValue.serverTimestamp() });
-  await ref.update({ updatedAt: FieldValue.serverTimestamp(), updatedByUid: caller.uid, updatedByEmail: caller.email || null });
-}
-
-/** Default: back to the shipped Magnetix text. Custom: clears the entry (blank stays blank — no fallback). */
-export async function resetContentEntry(subAccountId: string, caller: Caller, setId: string, entryId: string, db: Db = getAdminDb()): Promise<void> {
-  const { parsed } = await knownEntry(subAccountId, entryId, db);
-  if (setId === DEFAULT_CONTENT_SET_ID) {
-    if (parsed.system === "freq") await db.doc(`subAccounts/${subAccountId}/energeticDecoderGateContent/${Number(parsed.key)}`).delete();
-    else await db.doc(`subAccounts/${subAccountId}/energeticDecoderChartContent/${entryId}`).delete();
-    return;
-  }
-  const { ref } = await requireSet(subAccountId, setId, db);
-  await ref.collection("entries").doc(entryId).delete();
   await ref.update({ updatedAt: FieldValue.serverTimestamp(), updatedByUid: caller.uid, updatedByEmail: caller.email || null });
 }
 

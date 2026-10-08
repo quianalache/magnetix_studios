@@ -42,7 +42,6 @@ import {
   importContentSet,
   listContentSets,
   loadDefaultLibrary,
-  resetContentEntry,
   saveContentEntry,
   updateContentSetMeta,
 } from "../src/lib/server/content-set-service";
@@ -87,7 +86,7 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     for (const id of ["hd:channel", "hd:incarnationCross", "astro:planetSign", "astro:planetHouse"]) {
       assert.deepEqual(categorySchema(id)!.fields.map((f) => f.key), ["description"]);
       assert.equal(categorySchema(id)!.allowCustomLabel, false);
-      assert.equal(validateEntryInput(categorySchema(id)!, { label: "Replacement", fields: { description: "x" } }, { requireAll: false, allowLabel: categorySchema(id)!.allowCustomLabel !== false }).ok, false);
+      assert.equal(validateEntryInput(categorySchema(id)!, { label: "Replacement", fields: { description: "x" } }, { allowLabel: categorySchema(id)!.allowCustomLabel !== false }).ok, false);
     }
   });
   await check("entry ids parse back to their canonical keys", () => {
@@ -102,13 +101,14 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     assert.ok(validateContentSetMeta({ name: "Career", description: "x".repeat(100) }).ok);
     assert.equal(validateContentSetMeta({ name: "default" }).ok, false);
   });
-  await check("entry input: unknown fields and over-length text refused; Default requires every field; Default has no custom term", () => {
+  await check("entry input: unknown fields and over-length text refused; blank interpretation is valid; Default has no custom term", () => {
     const type = categorySchema("hd:type")!;
-    assert.equal(validateEntryInput(type, { fields: { salesStyle: "x" } }, { requireAll: false, allowLabel: true }).ok, false);
-    assert.equal(validateEntryInput(type, { fields: { strategy: "x".repeat(301) } }, { requireAll: false, allowLabel: true }).ok, false);
-    assert.equal(validateEntryInput(type, { fields: { strategy: "To respond" } }, { requireAll: true, allowLabel: false }).ok, false);
-    assert.equal(validateEntryInput(type, { label: "Doer", fields: { strategy: "a", description: "b" } }, { requireAll: true, allowLabel: false }).ok, false);
-    const ok = validateEntryInput(type, { label: " Doer ", fields: { strategy: " a " } }, { requireAll: false, allowLabel: true });
+    assert.equal(validateEntryInput(type, { fields: { salesStyle: "x" } }, { allowLabel: true }).ok, false);
+    assert.equal(validateEntryInput(type, { fields: { strategy: "x".repeat(301) } }, { allowLabel: true }).ok, false);
+    assert.equal(validateEntryInput(type, { fields: { strategy: "To respond" } }, { allowLabel: false }).ok, true);
+    assert.equal(validateEntryInput(type, { fields: {} }, { allowLabel: false }).ok, true);
+    assert.equal(validateEntryInput(type, { label: "Doer", fields: { strategy: "a", description: "b" } }, { allowLabel: false }).ok, false);
+    const ok = validateEntryInput(type, { label: " Doer ", fields: { strategy: " a " } }, { allowLabel: true });
     assert.ok(ok.ok && ok.label === "Doer" && ok.fields.strategy === "a" && ok.fields.description === "");
   });
   await check("entry states are distinct from Active/Draft and from each other", () => {
@@ -256,13 +256,13 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     assert.ok(Object.values(d.states).every((s) => s === "not_started"));
     assert.ok(d.defaults["hd:type:Generator"], "Default text available only as a reference");
   });
-  await check("custom set saves: partial fields allowed, custom term kept, canonical key unchanged; clearing deletes the entry", async () => {
+  await check("custom set saves: partial fields allowed, custom term kept, canonical key unchanged; blanking deletes the entry", async () => {
     await saveContentEntry("sa1", caller, blankId, "hd:type:Generator", { label: "Generador", fields: { strategy: "Responder" } }, db);
     let d = await getContentSet("sa1", blankId, db);
     assert.equal(d.values["hd:type:Generator"].label, "Generador");
     assert.equal(d.states["hd:type:Generator"], "needs_content");
     assert.ok(d.catalog.some((e) => e.id === "hd:type:Generator" && e.canonicalLabel === "Generator"));
-    await resetContentEntry("sa1", caller, blankId, "hd:type:Generator", db);
+    await saveContentEntry("sa1", caller, blankId, "hd:type:Generator", { fields: {} }, db);
     d = await getContentSet("sa1", blankId, db);
     assert.equal(d.values["hd:type:Generator"], undefined);
   });
@@ -275,13 +275,17 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     assert.equal(d.values["astro:planetHouse:sun:10"].fields.description, "Career expression.");
     assert.equal(d.values["astro:planetHouse:sun:10"].label, null);
   });
-  await check("Default saves write the legacy docs (same as the old editor); requires every field; reset deletes the override", async () => {
-    await rejects(saveContentEntry("sa1", caller, "default", "hd:type:Projector", { fields: { strategy: "Wait" } }, db), 400, /required/);
+  await check("Default saves write the legacy docs and allow blank interpretation", async () => {
+    await saveContentEntry("sa1", caller, "default", "hd:type:Projector", { fields: { strategy: "Wait" } }, db);
+    assert.deepEqual(
+      (({ strategy, description }: { strategy: string; description: string }) => ({ strategy, description }))(db.get("subAccounts/sa1/energeticDecoderChartContent/hd:type:Projector") as { strategy: string; description: string }),
+      { strategy: "Wait", description: "" },
+    );
+    const blankDefault = await getContentSet("sa1", "default", db);
+    assert.equal(blankDefault.states["hd:type:Projector"], "not_started");
     await rejects(saveContentEntry("sa1", caller, "default", "hd:type:Projector", { label: "Guide", fields: { strategy: "a", description: "b" } }, db), 400);
     await saveContentEntry("sa1", caller, "default", "freq:gate:5", { fields: { showsUp: "S5", giftText: "G5" } }, db);
     assert.equal(db.get("subAccounts/sa1/energeticDecoderGateContent/5")!.showsUp, "S5");
-    await resetContentEntry("sa1", caller, "default", "hd:type:Generator", db);
-    assert.equal(db.get("subAccounts/sa1/energeticDecoderChartContent/hd:type:Generator"), undefined);
   });
   await check("unknown entries and unknown fields are refused", async () => {
     await rejects(saveContentEntry("sa1", caller, careerId, "hd:type:Wizard", { fields: { strategy: "x" } }, db), 404);

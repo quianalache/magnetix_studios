@@ -320,14 +320,14 @@ export function validateContentSetMeta(input: { name?: unknown; description?: un
 
 /**
  * Validates one entry save against its category's fixed fields. Unknown
- * fields and over-length text are rejected (never truncated). `requireAll`
- * is the Default set's rule (it is the base library, so every field must be
- * written); custom sets may leave fields blank — blank stays blank.
+ * fields and over-length text are rejected (never truncated). Interpretation
+ * fields are optional; blank content stays blank and is represented by the
+ * entry state rather than a validation error.
  */
 export function validateEntryInput(
   schema: ContentCategorySchema,
   input: { label?: unknown; fields?: unknown },
-  opts: { requireAll: boolean; allowLabel: boolean; labelError?: string },
+  opts: { allowLabel: boolean; labelError?: string },
 ): { ok: true; label: string | null; fields: Record<string, string> } | { ok: false; error: string } {
   const raw = (input.fields && typeof input.fields === "object" ? input.fields : {}) as Record<string, unknown>;
   for (const k of Object.keys(raw)) if (!schema.fields.some((f) => f.key === k)) return { ok: false, error: `Unknown field “${k}”.` };
@@ -337,7 +337,6 @@ export function validateEntryInput(
     if (v !== undefined && typeof v !== "string") return { ok: false, error: `${f.label} must be text.` };
     const t = (v ?? "").trim();
     if (t.length > f.max) return { ok: false, error: `${f.label} can be up to ${f.max} characters (it has ${t.length}).` };
-    if (opts.requireAll && !t) return { ok: false, error: `${f.label} is required in the Default set.` };
     fields[f.key] = t;
   }
   let label: string | null = null;
@@ -406,7 +405,7 @@ export function parseContentSetImport(json: unknown, knownEntryIds: Set<string>)
     const parsed = parseContentEntryId(id);
     const schema = parsed ? categorySchema(parsed.categoryId) : undefined;
     if (!parsed || !schema || !knownEntryIds.has(id)) { skipped.push(id); continue; }
-    const v = validateEntryInput(schema, raw ?? {}, { requireAll: false, allowLabel: true });
+    const v = validateEntryInput(schema, raw ?? {}, { allowLabel: true });
     if (!v.ok) { errors.push(`${id}: ${v.error}`); continue; }
     entries.set(id, { label: v.label, fields: v.fields });
   }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, Info, Loader2, Lock, RotateCcw, Search, Undo2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Info, Loader2, Lock, Search, Undo2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,9 +44,9 @@ import {
  * Content Set editor (2026-10-07). Visuals follow the owner-approved
  * mockup (03): breadcrumb + serif title with per-system progress cards,
  * then three white panels — system tabs + search + categories → entries
- * with their state → the entry's fixed fields. Below `lg`: the same three
- * steps one at a time, each a normal page-flow screen (no nested
- * fixed-height scroll panes), with a sticky Save bar on the entry step.
+ * with their state → the entry's fixed fields. At `lg` and above the
+ * workspace is a contained-height editor with independently scrolling panes;
+ * below `lg` the same three steps appear one at a time in normal page flow.
  * Selection lives in the URL (`system` / `category` / `entry`) so Back works
  * and a link reopens the same entry.
  */
@@ -96,7 +96,6 @@ export function ContentSetEditor({
   const [saving, setSaving] = useState(false);
   const [showReference, setShowReference] = useState(false);
   const [pending, setPending] = useState<EditorSelection | "back" | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -150,7 +149,6 @@ export function ContentSetEditor({
     ? (draft.label ?? "").trim() !== (saved?.label ?? "").trim() || entrySchema.fields.some((f) => (draft.fields[f.key] ?? "").trim() !== (saved?.fields?.[f.key] ?? "").trim())
     : false;
   const overLimit = !!entrySchema && !!draft && (entrySchema.fields.some((f) => (draft.fields[f.key] ?? "").trim().length > f.max) || (draft.label ?? "").trim().length > CONTENT_TERM_MAX);
-  const missingRequired = !!detail?.isDefault && !!entrySchema && !!draft && entrySchema.fields.some((f) => !(draft.fields[f.key] ?? "").trim());
   const canEdit = isAdmin;
 
   function navigate(next: EditorSelection | "back") {
@@ -163,7 +161,7 @@ export function ContentSetEditor({
   }
 
   async function save() {
-    if (!entry || !draft || !dirty || overLimit || missingRequired) return;
+    if (!entry || !draft || !dirty || overLimit) return;
     setSaving(true);
     try {
       const res = await fetch(`${base}/entries/${encodeURIComponent(entry.id)}`, {
@@ -177,23 +175,6 @@ export function ContentSetEditor({
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn’t save.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function reset() {
-    if (!entry) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`${base}/entries/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(body.error ?? "Couldn’t reset.");
-      toast.success(detail?.isDefault ? `${entry.canonicalLabel} reset to the Magnetix default.` : `${entry.canonicalLabel} cleared.`);
-      setConfirmReset(false);
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn’t reset.");
     } finally {
       setSaving(false);
     }
@@ -248,7 +229,7 @@ export function ContentSetEditor({
   );
 
   const nav = (
-    <nav aria-label="Systems and categories" className={cn(PANEL, "space-y-4")} data-editor-step="nav">
+    <nav aria-label="Systems and categories" className={cn(PANEL, "space-y-4 lg:h-full lg:overflow-y-auto")} data-editor-step="nav">
       <div className="grid grid-cols-[1.35fr_1fr_1fr] gap-1 rounded-xl bg-[var(--cs-head)] p-1" role="tablist" aria-label="System">
         {CONTENT_SYSTEMS.map((s) => (
           <button
@@ -294,7 +275,7 @@ export function ContentSetEditor({
   );
 
   const entryList = category && (
-    <div className={cn(PANEL, "min-w-0 space-y-3")} data-editor-step="entries">
+    <div className={cn(PANEL, "min-w-0 space-y-3 lg:h-full lg:overflow-y-auto")} data-editor-step="entries">
       <div className="lg:hidden">
         <Button variant="ghost" size="sm" className="-ml-2 text-[var(--cs-link)]" onClick={() => navigate({ system, category: null, entry: null })}>
           <ArrowLeft className="mr-1 h-4 w-4" />
@@ -371,7 +352,7 @@ export function ContentSetEditor({
   const fieldClass = "rounded-xl bg-card text-[15px] text-[var(--cs-ink)]";
   const form =
     entry && entrySchema && draft ? (
-      <div className={cn(PANEL, "min-w-0 space-y-5 pb-0 sm:pb-0")} data-editor-step="entry" data-entry-form>
+      <div className={cn(PANEL, "min-w-0 space-y-5 pb-0 sm:pb-0 lg:h-full lg:overflow-y-auto")} data-editor-step="entry" data-entry-form>
         <div className="lg:hidden">
           <Button variant="ghost" size="sm" className="-ml-2 text-[var(--cs-link)]" onClick={() => navigate({ system: entry.system, category: entry.category, entry: null })}>
             <ArrowLeft className="mr-1 h-4 w-4" />
@@ -394,17 +375,6 @@ export function ContentSetEditor({
             </div>
           </div>
           <EntryStatePill state={detail.states[entry.id]} size="md" />
-        </div>
-
-        <div className="flex items-start gap-3 rounded-xl bg-[var(--cs-tint)] px-4 py-3.5 text-[14px] leading-relaxed text-[var(--cs-link)]" role="note">
-          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--cs-link)] text-[var(--card)]">
-            <Info className="h-3.5 w-3.5" strokeWidth={2.5} />
-          </span>
-          {detail.isDefault ? (
-            <p>You&apos;re editing the built-in Default, including your edits. Every field is required here, and Reset returns this entry to the Magnetix wording.</p>
-          ) : (
-            <p>You&apos;re customizing this content set. Missing content will remain blank in generated reports unless you add your own interpretation.</p>
-          )}
         </div>
 
         {!detail.isDefault && (
@@ -480,7 +450,6 @@ export function ContentSetEditor({
                 <span className="text-[13px]">
                   {f.hint && <span className="text-[var(--cs-subtle)]">{f.hint}</span>}
                   {blank && !detail.isDefault && <span className="text-[var(--cs-needs-fg)]">Blank — reports using this set will leave this empty.</span>}
-                  {blank && detail.isDefault && <span className="text-destructive">Required in the Default set.</span>}
                 </span>
                 <span className={cn("shrink-0 whitespace-nowrap text-[13px] tabular-nums", over ? "font-semibold text-destructive" : "text-[var(--cs-subtle)]")}>
                   {len}/{f.max}
@@ -496,17 +465,16 @@ export function ContentSetEditor({
           );
         })}
 
+        <p className="flex items-start gap-2 border-t pt-3 text-[13px] leading-relaxed text-[var(--cs-subtle)]" data-content-helper>
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--cs-violet-fg)]" aria-hidden="true" />
+          <span>Content added here can be used to interpret chart results and populate generated reading reports wherever this property appears.</span>
+        </p>
+
         {canEdit ? (
           <div
             className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t bg-card/95 px-4 py-4 backdrop-blur sm:-mx-5 sm:px-5 lg:rounded-b-2xl"
             data-save-bar
           >
-            {(detail.isDefault ? detail.states[entry.id] === "customized" : detail.states[entry.id] !== "not_started") ? (
-              <Button variant="outline" className="h-12 rounded-xl border-input px-4 text-[15px] font-semibold text-[var(--cs-link)]" disabled={saving} onClick={() => setConfirmReset(true)}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset section
-              </Button>
-            ) : null}
             <div className="ml-auto flex items-center gap-2">
               {dirty && (
                 <Button
@@ -521,7 +489,7 @@ export function ContentSetEditor({
                   <Undo2 className="h-5 w-5" />
                 </Button>
               )}
-              <Button className="h-12 rounded-xl px-5 text-[15px]" onClick={() => void save()} disabled={!dirty || overLimit || missingRequired || saving}>
+              <Button className="h-12 rounded-xl px-5 text-[15px]" onClick={() => void save()} disabled={!dirty || overLimit || saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                 Save changes
               </Button>
@@ -595,10 +563,10 @@ export function ContentSetEditor({
         )}
       </div>
 
-      <div data-editor-panes className="scroll-mt-3 max-lg:min-h-[calc(100dvh-1.5rem)] lg:grid lg:grid-cols-[250px_270px_minmax(0,1fr)] lg:items-start lg:gap-4 xl:grid-cols-[300px_300px_minmax(0,1fr)]">
-        <div className={cn(step === "nav" ? "block" : "hidden", "lg:block")}>{nav}</div>
-        <div className={cn(step === "entries" ? "block" : "hidden", "lg:block")}>{entryList}</div>
-        <div className={cn(step === "entry" ? "block" : "hidden", "lg:block lg:h-full")}>{form}</div>
+      <div data-editor-panes className="scroll-mt-3 max-lg:min-h-[calc(100dvh-1.5rem)] lg:grid lg:h-[clamp(32rem,calc(100dvh-18rem),52rem)] lg:min-h-0 lg:grid-cols-[250px_270px_minmax(0,1fr)] lg:items-stretch lg:gap-4 xl:grid-cols-[300px_300px_minmax(0,1fr)]">
+        <div className={cn(step === "nav" ? "block" : "hidden", "min-h-0 lg:block")}>{nav}</div>
+        <div className={cn(step === "entries" ? "block" : "hidden", "min-h-0 lg:block")}>{entryList}</div>
+        <div className={cn(step === "entry" ? "block" : "hidden", "min-h-0 lg:block")}>{form}</div>
       </div>
 
       <Dialog open={!!pending} onOpenChange={(o) => !o && setPending(null)}>
@@ -628,26 +596,6 @@ export function ContentSetEditor({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <DialogContent className={cn(CS_SCOPE, "rounded-2xl p-6 sm:max-w-md")}>
-          <DialogHeader>
-            <DialogTitle className="text-lg font-semibold text-[var(--cs-ink)]">{detail.isDefault ? "Reset to the Magnetix default?" : "Clear this entry?"}</DialogTitle>
-            <DialogDescription className="text-[var(--cs-body)]">
-              {detail.isDefault
-                ? `${entry?.canonicalLabel} goes back to the shipped Magnetix wording. Readings already created keep their saved text.`
-                : `Everything written for ${entry?.canonicalLabel} in this set is removed. Reports using this set will leave it blank.`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" className="h-11 rounded-xl px-5" onClick={() => setConfirmReset(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" className="h-11 rounded-xl px-5" disabled={saving} onClick={() => void reset()}>
-              {detail.isDefault ? "Reset" : "Clear"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
