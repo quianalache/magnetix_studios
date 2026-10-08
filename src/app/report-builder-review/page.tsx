@@ -1,6 +1,7 @@
 import { ReportEditor } from "@/components/energetic-decoder/report-editor";
 import type { ReportDesign } from "@/types/report-blocks";
 import { ReportBuilderReviewFlows } from "@/components/energetic-decoder/report-builder-review-flows";
+import { ReportDesignReviewIndex } from "@/components/energetic-decoder/report-design-review-index";
 
 const fixtureImage = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360' viewBox='0 0 640 360'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop stop-color='%235420a8'/%3E%3Cstop offset='1' stop-color='%23f0c7df'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='640' height='360' fill='url(%23g)'/%3E%3Ccircle cx='500' cy='100' r='70' fill='%23fff' fill-opacity='.45'/%3E%3Cpath d='M0 290 Q170 205 320 290 T640 250 V360 H0Z' fill='%23fff' fill-opacity='.28'/%3E%3Ctext x='42' y='78' fill='white' font-size='28' font-family='Georgia'%3EMagnetix Studios%3C/text%3E%3Ctext x='42' y='116' fill='white' font-size='16' font-family='Arial'%3EAligned for purpose, impact, and flow%3C/text%3E%3C/svg%3E";
 
@@ -33,5 +34,5 @@ const design: ReportDesign = {
 };
 
 export default function ReportBuilderReviewFixture() {
-  return <><ReportBuilderReviewFlows /><ReportEditor subAccountId="local-review" initial={design} /></>;
+  return <><ReportDesignReviewIndex /><ReportBuilderReviewFlows /><ReportEditor subAccountId="local-review" initial={design} /></>;
 }

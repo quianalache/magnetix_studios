@@ -4,6 +4,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Table, TableStyle
 from PIL import Image as PILImage
+import os
 
 OUT = "output/pdf/report-builder-rebuild-comprehensive-owner-review.pdf"
 ROOT = "review-evidence"
@@ -15,7 +16,13 @@ small = ParagraphStyle("S", parent=body, fontSize=8, leading=10, textColor=color
 
 def pic(path, width=6.7*inch, max_h=6.3*inch):
     with PILImage.open(path) as im:
-        ratio = im.height / im.width
+        if im.height > im.width * 1.4:
+            os.makedirs("review-evidence/pdf-crops", exist_ok=True)
+            crop_path = f"review-evidence/pdf-crops/{os.path.basename(path)}"
+            im.crop((0, 0, im.width, min(im.height, 980))).save(crop_path)
+            path = crop_path
+        with PILImage.open(path) as cropped:
+            ratio = cropped.height / cropped.width
     h = min(width * ratio, max_h)
     return Image(path, width=width if h == width * ratio else width * h / (width * ratio), height=h)
 
@@ -27,17 +34,19 @@ story = [Paragraph("Report Builder rebuild", title), Paragraph("Comprehensive lo
 def screenshot_page(h, text, path, width=6.7*inch):
     story.extend([Paragraph(h, title), Paragraph(text, body), Spacer(1,8), pic(path, width), PageBreak()])
 
-screenshot_page("1. Desktop builder shell", "Editable title, draft status, undo/redo, zoom, Save, Preview PDF, Add Elements, template categories, fixed-page canvas, and Layers/Element inspector regions.", f"{ROOT}/desktop-full-updated.png")
-screenshot_page("2. Text selected + inspector", "The selected text element exposes content, font, size, bold, italic, underline, alignment, color, letter spacing, line height, position/size, lock/hide, and delete controls.", f"{ROOT}/text-inspector-updated.png")
-screenshot_page("3. Image selected + real asset", "The canvas shows the actual Magnetix-created fixture image. The image inspector exposes Media Library selection, position/size, lock/hide, and delete.", f"{ROOT}/image-inspector-updated.png")
-screenshot_page("4. Real charts on canvas", "The canvas contains actual BodyGraph, Astrology wheel, and Frequency/Hologenetic renderer output. Chart element configuration remains the source of PDF output.", f"{ROOT}/desktop-full-updated.png")
+screenshot_page("1. Report Designs index", "Polished Content Sets-aligned index with celestial header treatment, search, status filtering, fixture rows, Content Set, page count, updated time, and actions.", f"{ROOT}/report-designs-index.png")
+screenshot_page("2. Create Report Design", "Create flow with design name, Default/custom Content Set, Blank/Template start choice, and US Letter/A4/Custom page size.", f"{ROOT}/create-report-design.png")
+screenshot_page("3. Desktop builder shell", "Editable title, draft status, undo/redo, zoom, Save, Preview PDF, Add Elements, template categories, fixed-page canvas, and Layers/Element inspector regions.", f"{ROOT}/desktop-parity.png")
+screenshot_page("4. Text selected + inspector", "The selected text element exposes content, font, size, bold, italic, underline, alignment, color, letter spacing, line height, position/size, lock/hide, and delete controls.", f"{ROOT}/text-inspector-updated.png")
+screenshot_page("5. Image selected + real asset", "The canvas shows the actual Magnetix-created fixture image. The image inspector exposes Media Library selection, position/size, lock/hide, and delete.", f"{ROOT}/image-inspector-updated.png")
+screenshot_page("6. Real charts on canvas", "The canvas contains actual BodyGraph, Astrology wheel, and Frequency/Hologenetic renderer output. Chart element configuration remains the source of PDF output.", f"{ROOT}/desktop-parity.png")
 screenshot_page("5. Layers and overlap", "The populated Layers panel shows real text, chart, image, and shape layers with selected state and z-order controls. Drag, resize, rotate handles are implemented on selected elements.", f"{ROOT}/desktop-layers.png")
-screenshot_page("6. Shortcodes + Content Set", "Shortcodes are searchable and categorized across birth details, Human Design, interpretation, Astrology, and Frequency. The harness exposes Default plus a blank custom fixture set and uses the same resolver path.", f"{ROOT}/shortcode-inspector-updated.png")
-screenshot_page("7. Pages, visibility, templates", "The local fixture includes page thumbnails/titles, a Generator-only visibility condition, and Magnetix structural template insertion from the template library.", f"{ROOT}/pages-panel-updated.png")
-screenshot_page("8. Missing-content warning", "Actual fixture warning state: the custom set intentionally lacks Frequency gate 1 giftText. Go back/review and Continue anyway are both available; the warning is non-blocking.", f"{ROOT}/missing-content-warning.png")
-screenshot_page("9. Continue anyway", "After continuing, the fixture preview reports that the missing value remains blank and no Default fallback is inserted.", f"{ROOT}/missing-content-continued.png")
-screenshot_page("10. Tablet shell", "820px responsive evidence: the editor shell, Add Elements, canvas, inspector flow, Save, and Preview PDF remain accessible without page-level horizontal overflow.", f"{ROOT}/tablet-shell-updated.png")
-screenshot_page("11. Phone shell", "390px responsive evidence: top controls, sequential canvas, Add Elements, Pages, Layers, and inspector controls are available without page-level horizontal overflow.", f"{ROOT}/phone-shell-updated.png")
+screenshot_page("7. Shortcodes + Content Set", "Shortcodes are searchable and categorized across birth details, Human Design, interpretation, Astrology, and Frequency. The harness exposes Default plus a blank custom fixture set and uses the same resolver path.", f"{ROOT}/shortcode-inspector-updated.png")
+screenshot_page("8. Pages, visibility, templates", "The local fixture includes page thumbnails/titles, a Generator-only visibility condition, and Magnetix structural template insertion from the template library.", f"{ROOT}/pages-panel-updated.png")
+screenshot_page("9. Missing-content warning", "Actual fixture warning state: the custom set intentionally lacks Frequency gate 1 giftText. Go back/review and Continue anyway are both available; the warning is non-blocking.", f"{ROOT}/missing-content-warning-final.png")
+screenshot_page("10. Preview flow", "After continuing, the fixture preview reports that the missing value remains blank and no Default fallback is inserted.", f"{ROOT}/preview-flow-final.png")
+screenshot_page("11. Tablet shell", "820px responsive evidence: the editor shell, Add Elements, canvas, inspector flow, Save, and Preview PDF remain accessible without page-level horizontal overflow.", f"{ROOT}/tablet-parity.png")
+screenshot_page("12. Phone shell", "390px responsive evidence: top controls, sequential canvas, Add Elements, Pages, Layers, and inspector controls are available without page-level horizontal overflow.", f"{ROOT}/phone-parity.png")
 
 story.extend([Paragraph("12. Actual rendered report PDF", title), Paragraph("The separate example PDF is generated through ReportDesignPdfDocument from the same canvas geometry model and contains three Letter pages with a real image, BodyGraph chart, Astrology wheel, Frequency chart, shape, and text.", body), Spacer(1,8), pic(f"{ROOT}/fixture-pdf-render/scaled-1.png", 5.1*inch, 5.8*inch), PageBreak()])
 

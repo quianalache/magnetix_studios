@@ -307,7 +307,9 @@ export function ReportEditor({
   return (
     <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
+        <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
+          <div className="pointer-events-none absolute -top-20 right-24 h-36 w-64 rounded-full bg-[radial-gradient(circle_at_70%_30%,#fff4cf,transparent_10%),radial-gradient(ellipse,#efe3ff,transparent_65%)] opacity-90" />
+          <div className="relative flex flex-wrap items-center gap-3">
           <button
             onClick={() =>
               router.push(`/sa/${subAccountId}/energetic-decoder?tab=builder`)
@@ -323,7 +325,7 @@ export function ReportEditor({
               setTitle(e.target.value);
               setDirty(true);
             }}
-            className="min-w-[180px] flex-1 rounded-lg border border-transparent px-2 py-1 text-lg font-semibold outline-none focus:border-violet-200"
+            className="min-w-[180px] flex-1 rounded-lg border border-transparent px-2 py-1 font-serif text-xl font-semibold outline-none focus:border-violet-200"
             aria-label="Report Design title"
           />
           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
@@ -371,6 +373,7 @@ export function ReportEditor({
           >
             <Eye className="h-4 w-4" /> Preview PDF
           </button>
+          </div>
         </div>
         <div className="mt-4 grid min-h-[calc(100vh-110px)] grid-cols-1 gap-4 overflow-x-hidden lg:grid-cols-[250px_minmax(0,1fr)_280px]">
           <aside className="order-2 max-h-72 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:max-h-none">
@@ -400,7 +403,7 @@ export function ReportEditor({
                     <button
                       key={t.type}
                       onClick={() => addElement(t.type)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left text-sm hover:border-violet-200 hover:bg-violet-50"
+                      className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-3 text-left text-sm transition hover:border-violet-200 hover:bg-[#fbf7ff]"
                     >
                       <t.icon className="h-5 w-5 text-violet-700" />
                       {t.label}
@@ -450,7 +453,7 @@ export function ReportEditor({
               )}
             </div>
           </aside>
-          <main className="order-1 min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#ede8f9] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none">
+          <main className="order-1 min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none">
             <div
               className="report-canvas-stage mx-auto flex w-fit flex-col gap-6"
               style={{
