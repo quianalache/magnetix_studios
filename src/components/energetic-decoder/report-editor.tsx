@@ -257,6 +257,9 @@ export function ReportEditor({
   const selected = elements.find((e) => e.id === selectedId) ?? null;
   const pageDimensions = PAGE[pageSize === "custom" ? "letter" : pageSize];
   const scale = typeof zoom === "number" ? zoom / 60 : fitScale;
+  const pageGap = 24;
+  const scaledStageWidth = pageDimensions.width * scale;
+  const scaledStageHeight = (pages.length * pageDimensions.height + Math.max(0, pages.length - 1) * pageGap) * scale;
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -642,41 +645,40 @@ export function ReportEditor({
             </div>
           </aside>
           <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
-            <div
-              className="report-canvas-stage mx-auto flex w-fit flex-col gap-6"
-              style={{
-                transform: `scale(${scale})`,
-                transformOrigin: "top center",
-              }}
-            >
-              {pages.map((p, i) => (
-                <CanvasPage
-                  key={p.id}
-                  page={p}
-                  index={i}
-                  dimensions={pageDimensions}
-                  elements={p.elements ?? []}
-                  selectedId={selectedId}
-                  onSelect={(elementId) => {
-                    setActivePageId(p.id);
-                    setSelectedId(elementId);
-                    setRightPanel("element");
-                    if (window.innerWidth < 1024) setMobileDrawer("element");
-                  }}
-                  onMove={(elementId, dx, dy) =>
-                    updateElement(elementId, (e) => ({
-                      ...e,
-                      geometry: {
-                        ...e.geometry,
-                        x: Math.max(0, e.geometry.x + dx),
-                        y: Math.max(0, e.geometry.y + dy),
-                      },
-                    }))
-                  }
-                  onResize={(elementId, dw, dh) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, width: Math.max(80, e.geometry.width + dw), height: Math.max(50, e.geometry.height + dh) } }))}
-                  onRotate={(elementId, degrees) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, rotation: (e.geometry.rotation ?? 0) + degrees } }))}
-                />
-              ))}
+            <div className="report-canvas-scale-box mx-auto shrink-0" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
+              <div
+                className="report-canvas-stage flex w-fit flex-col gap-6"
+                style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
+              >
+                {pages.map((p, i) => (
+                  <CanvasPage
+                    key={p.id}
+                    page={p}
+                    index={i}
+                    dimensions={pageDimensions}
+                    elements={p.elements ?? []}
+                    selectedId={selectedId}
+                    onSelect={(elementId) => {
+                      setActivePageId(p.id);
+                      setSelectedId(elementId);
+                      setRightPanel("element");
+                      if (window.innerWidth < 1024) setMobileDrawer("element");
+                    }}
+                    onMove={(elementId, dx, dy) =>
+                      updateElement(elementId, (e) => ({
+                        ...e,
+                        geometry: {
+                          ...e.geometry,
+                          x: Math.max(0, e.geometry.x + dx),
+                          y: Math.max(0, e.geometry.y + dy),
+                        },
+                      }))
+                    }
+                    onResize={(elementId, dw, dh) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, width: Math.max(80, e.geometry.width + dw), height: Math.max(50, e.geometry.height + dh) } }))}
+                    onRotate={(elementId, degrees) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, rotation: (e.geometry.rotation ?? 0) + degrees } }))}
+                  />
+                ))}
+              </div>
             </div>
           </main>
           <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
@@ -754,7 +756,6 @@ export function ReportEditor({
           updateElement(selectedId, (e) => ({ ...e, payload: { ...e.payload, assetId: item.id, url: item.publicUrl ?? item.thumbnailUrl ?? "", title: item.title, alt: item.title, fit: "cover" } }));
         }}
       />
-      <style jsx>{`@media (max-width: 640px) { .report-canvas-stage { transform: scale(.42) !important; transform-origin: top left !important; margin-left: 0 !important; } }`}</style>
     </div>
   );
 }
