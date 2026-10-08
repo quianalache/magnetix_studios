@@ -17,6 +17,7 @@ assert.match(editor, /width: scaledStageWidth, height: scaledStageHeight/);
 assert.match(editor, /pageDimensions\.width \* scale/);
 assert.match(editor, /pages\.length \* pageDimensions\.height/);
 assert.doesNotMatch(editor, /transform: scale\(\.42\)/, "mobile must not retain a stale hard-coded transform");
+assert.match(editor, /transform-origin: top left !important/);
 assert.match(previewRoute, /renderReportDesignPdfStream/);
 
 console.log("✓ Report Builder correction checks passed");
