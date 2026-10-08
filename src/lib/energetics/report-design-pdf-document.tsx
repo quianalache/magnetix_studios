@@ -1,4 +1,5 @@
 import "server-only";
+import React from "react";
 
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { resolveMandalaColors } from "./mandala-spec";
@@ -171,11 +172,11 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
   }
 }
 
-function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
-  const style = { ...styles.canvasText, left: element.geometry.x, top: element.geometry.y, width: element.geometry.width, height: element.geometry.height, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: element.style?.borderWidth || 0, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid" } as const;
+function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign, scaleX = 1, scaleY = 1 }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; scaleX?: number; scaleY?: number }) {
+  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: (element.style?.fontSize || 14) * scaleX, backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid" } as const;
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
-    return url ? <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
+    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
   }
   if (element.type === "chart") return <View style={style}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
   const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
@@ -213,6 +214,8 @@ export function ReportDesignPdfDocument({
   customPageSize?: { width: number; height: number } | null;
 }) {
   const pdfSize = pageSize === "letter" ? "LETTER" : pageSize === "custom" && customPageSize ? [customPageSize.width, customPageSize.height] as [number, number] : "A4";
+  const contentWidth = pageSize === "letter" ? 540 : pageSize === "custom" && customPageSize ? customPageSize.width - 72 : 523;
+  const contentHeight = pageSize === "letter" ? 720 : pageSize === "custom" && customPageSize ? customPageSize.height - 72 : 769;
   return (
     <Document>
       {pages.map((page) => (
@@ -230,7 +233,7 @@ export function ReportDesignPdfDocument({
 
           {page.title && <Text style={styles.pageTitle}>{page.title}</Text>}
 
-          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />)}</View> : <View style={styles.row}>
+          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scaleX={contentWidth / 816} scaleY={contentHeight / 1056} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (
               <View key={block.id} style={[styles.blockWrap, { width: `${block.widthPct}%` }]}>
                 {block.type === "chart" ? (

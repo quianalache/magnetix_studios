@@ -4,6 +4,7 @@ import type { CenterKey } from "./human-design-data";
 import { CENTER_LABELS, CENTERS } from "./human-design-data";
 import type { GeneKeysSphereName, GeneKeysSphereResult } from "./gene-keys";
 import type { ContentEntryValues } from "@/lib/energetic-decoder/content-sets";
+import { INCARNATION_CROSSES } from "./incarnation-cross-data";
 
 /**
  * Shortcodes — merge tags a report/page block's text can contain, resolved
@@ -86,6 +87,8 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "type_description", label: "Type — Interpretation", group: "Interpretation" },
   { token: "authority_description", label: "Authority — Interpretation", group: "Interpretation" },
   { token: "profile_description", label: "Profile — Interpretation", group: "Interpretation" },
+  { token: "channel_interpretation", label: "Channel — Interpretation", group: "Interpretation" },
+  { token: "incarnation_cross_description", label: "Incarnation Cross — Interpretation", group: "Interpretation" },
   ...CENTERS.map((key) => ({
     token: `${key}_center_text`,
     label: `${CENTER_LABELS[key]} Center — Interpretation`,
@@ -100,6 +103,8 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "sun_house_theme", label: "Sun's House — Theme", group: "Interpretation" },
   { token: "sun_house_description", label: "Sun's House — Interpretation", group: "Interpretation" },
   { token: "tightest_aspect_description", label: "Tightest Aspect — Interpretation", group: "Interpretation" },
+  { token: "planet_in_sign_description", label: "Planet in Sign — Interpretation", group: "Interpretation" },
+  { token: "planet_in_house_description", label: "Planet in House — Interpretation", group: "Interpretation" },
 
   // Frequency / Gene Keys — the 4 Activation Sequence gates (2026-08-12).
   // Content already manages this copy (energetic-decoder-gate-content-
@@ -117,6 +122,7 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "purpose_gate", label: "Purpose — Gate", group: "Frequency" },
   { token: "purpose_shows_up", label: "Purpose — Shows Up As", group: "Frequency" },
   { token: "purpose_gift_text", label: "Purpose — Gift", group: "Frequency" },
+  { token: "frequency_content", label: "Frequency — Content", group: "Frequency" },
 ];
 
 /** One resolved chart-content item as it's snapshotted onto a reading — same shape energetic-decoder-chart-content-service.ts's resolveReadingContent() returns. */
@@ -262,6 +268,12 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
         return names.length === 2 ? `${hd.profile} — ${names.join(" / ")}` : "";
       }
       return profileDescription(hd);
+    case "channel_interpretation":
+      return (hd?.definedChannels ?? []).map((channel) => reading.reportContent ? reportContentField(reading, `hd:channel:${channel.key}`, "description") : "").filter(Boolean).join("\n\n");
+    case "incarnation_cross_description": {
+      const cross = hd?.incarnationCross ? INCARNATION_CROSSES.find((entry) => entry.label === hd.incarnationCross) : null;
+      return cross && reading.reportContent ? reportContentField(reading, `hd:incarnationCross:${cross.key}`, "description") : "";
+    }
     case "head_center_text":
     case "ajna_center_text":
     case "throat_center_text":
@@ -311,6 +323,10 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
       const labelB = ASTRO_BODY_LABELS[aspect.bodyB] ?? aspect.bodyB;
       return `${labelA} ${aspect.type} ${labelB} — ${desc}`;
     }
+    case "planet_in_sign_description":
+      return (astro?.placements ?? []).map((placement) => reading.reportContent ? reportContentField(reading, `astro:planetSign:${placement.body}:${placement.sign}`, "description") : "").filter(Boolean).join("\n\n");
+    case "planet_in_house_description":
+      return (astro?.placements ?? []).map((placement) => reading.reportContent ? reportContentField(reading, `astro:planetHouse:${placement.body}:${placement.house}`, "description") : "").filter(Boolean).join("\n\n");
 
     // Frequency / Gene Keys — Activation Sequence.
     case "life_work_gate":
@@ -337,6 +353,8 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
       return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Purpose")?.gate ?? ""}`, "showsUp") : findSphere(reading.spheres, "Purpose")?.showsUp ?? "";
     case "purpose_gift_text":
       return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Purpose")?.gate ?? ""}`, "giftText") : findSphere(reading.spheres, "Purpose")?.giftText ?? "";
+    case "frequency_content":
+      return (reading.spheres ?? []).map((sphere) => reading.reportContent ? reportContentField(reading, `freq:gate:${sphere.gate}`, "giftText") : sphere.giftText ?? sphere.gift ?? "").filter(Boolean).join("\n\n");
 
     default:
       return "";

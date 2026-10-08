@@ -28,6 +28,13 @@ import {
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
 import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
 import type { MediaLibraryItem } from "@/types/media-library";
+import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
+import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
+import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
+import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
+import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
+import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
+import { REPORT_BUILDER_FIXTURE_READING } from "@/lib/energetics/report-builder-fixture";
 import {
   CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -140,6 +147,7 @@ export function ReportEditor({
   );
   const [sets, setSets] = useState<{ id: string; name: string }[]>([
     { id: "default", name: "Default" },
+    { id: "local-review-custom", name: "Owner Review — Blank Frequency" },
   ]);
   const [pageSize, setPageSize] = useState<ReportPageSize>(
     initial.pageSize ?? "letter"
@@ -163,12 +171,14 @@ export function ReportEditor({
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/content-sets`)
       .then((r) => r.json())
       .then((d) =>
-        setSets(
-          (d.sets ?? []).map((s: { id: string; name: string }) => ({
+        setSets([
+          { id: "default", name: "Default" },
+          { id: "local-review-custom", name: "Owner Review — Blank Frequency" },
+          ...(d.sets ?? []).map((s: { id: string; name: string }) => ({
             id: s.id,
             name: s.name,
-          }))
-        )
+          })),
+        ].filter((s, i, all) => all.findIndex((x) => x.id === s.id) === i))
       )
       .catch(() => undefined);
   }, [subAccountId]);
@@ -193,6 +203,10 @@ export function ReportEditor({
       ),
     }));
   }
+  function deleteElement(elementId: string) {
+    updatePage((p) => ({ ...p, elements: (p.elements ?? []).filter((e) => e.id !== elementId) }));
+    setSelectedId(null);
+  }
   function addElement(type: ReportElementType) {
     const e = newElement(type, elements.length);
     updatePage((p) => ({ ...p, elements: [...(p.elements ?? []), e] }));
@@ -210,6 +224,12 @@ export function ReportEditor({
     };
     commit([...pages, p]);
     setActivePageId(p.id);
+  }
+  function insertTemplate(name: string) {
+    const p: ReportPage = { id: id(), title: `${name} page`, visibleIf: null, blocks: [], elements: [newElement("text", 0), newElement(name === "Chart" ? "chart" : "shape", 1)] };
+    p.elements = (p.elements ?? []).map((e, i) => ({ ...e, geometry: { ...e.geometry, x: 72, y: 90 + i * 150 }, payload: e.type === "text" ? { text: `${name} — Magnetix structural template` } : e.payload }));
+    commit([...pages, p]);
+    toast.success(`${name} template inserted`);
   }
   function duplicatePage() {
     const copy = {
@@ -409,11 +429,7 @@ export function ReportEditor({
                   ].map((x) => (
                     <button
                       key={x}
-                      onClick={() =>
-                        toast.info(
-                          `${x} page template is ready for structural composition.`
-                        )
-                      }
+                      onClick={() => insertTemplate(x)}
                       className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-violet-50"
                     >
                       {x}
@@ -465,6 +481,8 @@ export function ReportEditor({
                       },
                     }))
                   }
+                  onResize={(elementId, dw, dh) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, width: Math.max(80, e.geometry.width + dw), height: Math.max(50, e.geometry.height + dh) } }))}
+                  onRotate={(elementId, degrees) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, rotation: (e.geometry.rotation ?? 0) + degrees } }))}
                 />
               ))}
             </div>
@@ -522,6 +540,7 @@ export function ReportEditor({
                 activePage={activePage}
                 updatePage={updatePage}
                 onChooseImage={() => setAssetPickerOpen(true)}
+                onDelete={() => selected && deleteElement(selected.id)}
               />
             )}
           </aside>
@@ -664,6 +683,7 @@ function ElementPanel({
   activePage,
   updatePage,
   onChooseImage,
+  onDelete,
 }: {
   selected: ReportCanvasElement | null;
   sets: { id: string; name: string }[];
@@ -677,8 +697,10 @@ function ElementPanel({
   activePage: ReportPage;
   updatePage: (u: (p: ReportPage) => ReportPage) => void;
   onChooseImage: () => void;
+  onDelete: () => void;
 }) {
   const [tab, setTab] = useState<"element" | "page">("element");
+  const [shortcodeSearch, setShortcodeSearch] = useState("");
   return (
     <div className="mt-3 space-y-4">
       <div className="flex gap-2 border-b pb-2 text-sm font-semibold">
@@ -833,9 +855,24 @@ function ElementPanel({
               />
             </label>
           )}
+          {selected.type === "text" && (
+            <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
+              <div className="grid grid-cols-[1fr_88px] gap-2">
+                <label className="text-xs">Font<input className="mt-1 h-8 w-full rounded border px-2" value={String(selected.style?.fontFamily ?? "Playfair Display")} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontFamily: e.target.value } }))} /></label>
+                <label className="text-xs">Size<input type="number" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.fontSize ?? 24} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontSize: Number(e.target.value) } }))} /></label>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {([["Bold", "fontWeight", selected.style?.fontWeight === 700], ["Italic", "italic", Boolean(selected.style?.italic)], ["Underline", "underline", Boolean(selected.style?.underline)]] as const).map(([label, key, active]) => <button type="button" key={key} onClick={() => update((x) => ({ ...x, style: { ...x.style, [key]: key === "fontWeight" ? (active ? 400 : 700) : !active } }))} className={`rounded-lg border px-2 py-1 text-xs ${active ? "bg-violet-200 text-violet-900" : "bg-white"}`}>{label}</button>)}
+              </div>
+              <div className="grid grid-cols-3 gap-1">{(["left", "center", "right"] as const).map((align) => <button type="button" key={align} onClick={() => update((x) => ({ ...x, style: { ...x.style, align } }))} className={`rounded border px-2 py-1 text-xs ${selected.style?.align === align ? "bg-violet-200" : "bg-white"}`}>{align}</button>)}</div>
+              <div className="grid grid-cols-2 gap-2"><label className="text-xs">Color<input type="color" className="mt-1 h-8 w-full rounded border" value={selected.style?.color ?? "#18204a"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, color: e.target.value } }))} /></label><label className="text-xs">Letter spacing<input type="number" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.letterSpacing ?? 0} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, letterSpacing: Number(e.target.value) } }))} /></label></div>
+              <label className="text-xs">Line height<input type="number" step=".1" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.lineHeight ?? 1.4} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, lineHeight: Number(e.target.value) } }))} /></label>
+            </div>
+          )}
           {selected.type === "shortcode" && (
-            <label className="block text-sm font-medium">
+            <div className="space-y-2 text-sm font-medium">
               Shortcode
+              <input value={shortcodeSearch} onChange={(e) => setShortcodeSearch(e.target.value)} placeholder="Search name, type, channel…" className="h-8 w-full rounded-lg border px-2 text-xs" />
               <select
                 value={String(selected.payload.token ?? "full_name")}
                 onChange={(e) =>
@@ -846,13 +883,13 @@ function ElementPanel({
                 }
                 className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
               >
-                {SHORTCODE_CATALOG.map((s) => (
+                {SHORTCODE_CATALOG.filter((s) => !shortcodeSearch || `${s.label} ${s.group} ${s.token}`.toLowerCase().includes(shortcodeSearch.toLowerCase())).map((s) => (
                   <option key={s.token} value={s.token}>
                     {s.label}
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
           )}
           {selected.type === "chart" && (
             <label className="block text-sm font-medium">
@@ -873,6 +910,9 @@ function ElementPanel({
               <button type="button" onClick={onChooseImage} className="rounded-lg border px-3 py-2 text-sm font-medium text-violet-800">Choose image</button>
             </div>
           )}
+          {(selected.type === "shape" || selected.type === "frame") && <label className="block text-sm font-medium">Background<input type="color" className="mt-1 h-9 w-full rounded border" value={selected.style?.backgroundColor ?? "#e8ddff"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, backgroundColor: e.target.value } }))} /></label>}
+          <details open className="rounded-xl border border-violet-100 p-3"><summary className="cursor-pointer text-sm font-semibold">Position & size</summary><p className="text-muted-foreground mt-2 text-xs">Drag the selected element on canvas. Use the lower-right handle to resize and the top handle to rotate.</p></details>
+          <button type="button" onClick={onDelete} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700"><Trash2 className="h-3.5 w-3.5" /> Delete element</button>
           <div className="flex gap-2">
             <button
               onClick={() => update((x) => ({ ...x, locked: !x.locked }))}
@@ -975,6 +1015,8 @@ function CanvasPage({
   selectedId,
   onSelect,
   onMove,
+  onResize,
+  onRotate,
 }: {
   page: ReportPage;
   index: number;
@@ -983,6 +1025,8 @@ function CanvasPage({
   selectedId: string | null;
   onSelect: (id: string) => void;
   onMove: (id: string, dx: number, dy: number) => void;
+  onResize: (id: string, dw: number, dh: number) => void;
+  onRotate: (id: string, degrees: number) => void;
 }) {
   return (
     <section
@@ -1004,6 +1048,8 @@ function CanvasPage({
           selected={e.id === selectedId}
           onSelect={() => onSelect(e.id)}
           onMove={(dx, dy) => onMove(e.id, dx, dy)}
+          onResize={(dw, dh) => onResize(e.id, dw, dh)}
+          onRotate={(degrees) => onRotate(e.id, degrees)}
         />
       ))}
     </section>
@@ -1015,11 +1061,15 @@ function CanvasElement({
   selected,
   onSelect,
   onMove,
+  onResize,
+  onRotate,
 }: {
   element: ReportCanvasElement;
   selected: boolean;
   onSelect: () => void;
   onMove: (dx: number, dy: number) => void;
+  onResize: (dw: number, dh: number) => void;
+  onRotate: (degrees: number) => void;
 }) {
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const label =
@@ -1063,6 +1113,9 @@ function CanvasElement({
         color: element.style?.color || "#18204a",
         fontSize: element.style?.fontSize || 14,
         fontWeight: element.style?.fontWeight || 400,
+        fontFamily: element.style?.fontFamily || "inherit",
+        lineHeight: element.style?.lineHeight || 1.4,
+        letterSpacing: element.style?.letterSpacing || 0,
         fontStyle: element.style?.italic ? "italic" : "normal",
         textDecoration: element.style?.underline ? "underline" : undefined,
         textAlign: element.style?.align || "left",
@@ -1078,16 +1131,24 @@ function CanvasElement({
       }}
     >
       {element.type === "chart" ? (
-        <div className="flex h-full items-center justify-center rounded bg-violet-50 text-center text-sm font-semibold text-violet-800">
-          {label}
+        <div className="h-full w-full overflow-hidden rounded bg-white">
+          <FixtureChart piece={String(element.payload.piece ?? "human-design-full")} />
         </div>
       ) : element.type === "image" || element.type === "upload" ? (
-        <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">
-          {label}
-        </div>
+        element.payload.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={String(element.payload.url)} alt={String(element.payload.alt ?? "Report image")} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">Choose an image asset</div>
       ) : (
         <span>{label}</span>
       )}
+      {selected && !element.locked && <span className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { e.stopPropagation(); const start = { x: e.clientX, y: e.clientY }; const move = (m: PointerEvent) => onResize(m.clientX - start.x, m.clientY - start.y); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); }} />}
+      {selected && !element.locked && <button type="button" aria-label="Rotate element" className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white bg-fuchsia-600" onPointerDown={(e) => { e.stopPropagation(); onRotate(15); }}> </button>}
     </button>
   );
+}
+
+function FixtureChart({ piece }: { piece: string }) {
+  const r = REPORT_BUILDER_FIXTURE_READING;
+  if (piece === "astrology-wheel") return <AstrologyWheelChart chart={r.astrology} colors={resolveAstrologyColors({})} className="h-full w-full" />;
+  if (piece === "human-design-mandala") return <MandalaChart profile={r.humanDesign} gateColor="#c8a7e8" backgroundColor="#fff" mandalaColors={resolveMandalaColors({})} className="h-full w-full" />;
+  if (piece === "frequency-hologenetic") return <GeneKeysChart spheres={r.spheres} className="h-full w-full" />;
+  return <HumanDesignChart profile={r.humanDesign} className="h-full w-full" />;
 }
