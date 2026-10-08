@@ -756,6 +756,7 @@ export function ReportEditor({
           updateElement(selectedId, (e) => ({ ...e, payload: { ...e.payload, assetId: item.id, url: item.publicUrl ?? item.thumbnailUrl ?? "", title: item.title, alt: item.title, fit: "cover" } }));
         }}
       />
+      <style jsx>{`@media (max-width: 640px) { .report-canvas-stage { transform-origin: top left !important; } }`}</style>
     </div>
   );
 }
