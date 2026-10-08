@@ -555,7 +555,7 @@ export function ReportEditor({
                 onClick={() => setMobileDrawer(null)}
                 className="fixed inset-0 z-30 bg-[#18204a]/25 lg:hidden"
               />
-              <section className="fixed inset-x-3 bottom-20 z-40 max-h-[min(72vh,760px)] overflow-y-auto rounded-3xl border border-violet-200 bg-white p-4 shadow-2xl dark:border-violet-900/50 dark:bg-slate-900 lg:hidden">
+              <section className={`fixed inset-x-3 bottom-20 z-40 max-h-[min(72vh,760px)] overflow-y-auto rounded-3xl border border-violet-200 bg-white p-4 shadow-2xl dark:border-violet-900/50 dark:bg-slate-900 md:inset-y-3 md:bottom-3 md:top-3 md:max-h-none md:w-[min(360px,calc(100vw-24px))] lg:hidden ${mobileDrawer === "layers" || mobileDrawer === "element" || mobileDrawer === "page" ? "md:left-auto md:right-3 md:rounded-l-3xl md:rounded-r-none" : "md:right-auto md:left-3 md:rounded-l-none md:rounded-r-3xl"}`}>
                 <div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3">
                   <h2 className="font-serif text-xl font-semibold text-[#18204a] dark:text-white">
                     {mobileDrawer === "elements" ? "Add Elements" : mobileDrawer === "pages" ? "Pages" : mobileDrawer === "layers" ? "Layers" : mobileDrawer === "page" ? "Page Settings" : "Element"}
@@ -572,7 +572,20 @@ export function ReportEditor({
               </section>
             </>
           )}
-          <nav aria-label="Responsive builder tools" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur lg:hidden">
+          <div className="pointer-events-none fixed inset-y-0 left-3 z-40 hidden items-center md:flex lg:hidden">
+            <div className="pointer-events-auto grid gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur">
+              <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
+              <button type="button" onClick={() => openMobileDrawer("pages")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "pages" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Pages</button>
+            </div>
+          </div>
+          <div className="pointer-events-none fixed inset-y-0 right-3 z-40 hidden items-center md:flex lg:hidden">
+            <div className="pointer-events-auto grid gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur">
+              <button type="button" onClick={() => openMobileDrawer("layers")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "layers" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Layers</button>
+              <button type="button" onClick={() => openMobileDrawer("element")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "element" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Element</button>
+              <button type="button" onClick={() => openMobileDrawer("page")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "page" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Page</button>
+            </div>
+          </div>
+          <nav aria-label="Responsive builder tools" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden lg:hidden">
             <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
             <button type="button" onClick={() => openMobileDrawer("pages")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "pages" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Pages</button>
             <button type="button" onClick={() => openMobileDrawer("layers")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "layers" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Layers</button>
