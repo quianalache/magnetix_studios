@@ -90,6 +90,8 @@ export function ContentSetEditor({
   const [detail, setDetail] = useState<SetDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [placementBody, setPlacementBody] = useState("all");
+  const [placementValue, setPlacementValue] = useState("all");
   const [draft, setDraft] = useState<ContentEntryValues | null>(null);
   const [saving, setSaving] = useState(false);
   const [showReference, setShowReference] = useState(false);
@@ -138,6 +140,11 @@ export function ContentSetEditor({
   useEffect(() => {
     setDraft(entry ? { label: saved?.label ?? "", fields: { ...(saved?.fields ?? {}) } } : null);
   }, [entry?.id, detail]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setPlacementBody("all");
+    setPlacementValue("all");
+  }, [category?.id]);
 
   const dirty = !!entry && !!draft && entrySchema
     ? (draft.label ?? "").trim() !== (saved?.label ?? "").trim() || entrySchema.fields.some((f) => (draft.fields[f.key] ?? "").trim() !== (saved?.fields?.[f.key] ?? "").trim())
@@ -206,10 +213,25 @@ export function ContentSetEditor({
   if (!detail) return <div className={cn(CS_SCOPE, "h-96 animate-pulse rounded-2xl bg-[var(--cs-head)]")} />;
 
   const q = query.trim().toLowerCase();
+  const isPlanetSign = category?.id === "astro:planetSign";
+  const isPlanetHouse = category?.id === "astro:planetHouse";
+  const isPlacement = isPlanetSign || isPlanetHouse;
+  const bodyOptions = isPlacement
+    ? [...new Set(entries.map((e) => e.key.split(":")[0]))]
+    : [];
+  const placementOptions = isPlacement
+    ? [...new Set(entries.map((e) => e.key.split(":")[1]))]
+    : [];
+  const bodyLabels: Record<string, string> = {
+    sun: "Sun", moon: "Moon", mercury: "Mercury", venus: "Venus", mars: "Mars",
+    jupiter: "Jupiter", saturn: "Saturn", uranus: "Uranus", neptune: "Neptune", pluto: "Pluto",
+    northNode: "North Node", southNode: "South Node", lilith: "Lilith", chiron: "Chiron",
+  };
   const shownEntries = entries.filter((e) => {
-    if (!q) return true;
     const v = detail.values[e.id];
-    return e.canonicalLabel.toLowerCase().includes(q) || (v?.label ?? "").toLowerCase().includes(q) || Object.values(v?.fields ?? {}).some((t) => t.toLowerCase().includes(q));
+    const matchesQuery = e.canonicalLabel.toLowerCase().includes(q) || (v?.label ?? "").toLowerCase().includes(q) || Object.values(v?.fields ?? {}).some((t) => t.toLowerCase().includes(q));
+    const [body, value] = e.key.split(":");
+    return (!q || matchesQuery) && (!isPlacement || (placementBody === "all" || body === placementBody) && (placementValue === "all" || value === placementValue));
   });
 
   // Step shown below `lg`: the deepest thing selected.
@@ -281,11 +303,40 @@ export function ContentSetEditor({
       </div>
       <div className="flex items-baseline justify-between gap-3 px-1">
         <p className="text-[18px] font-semibold text-[var(--cs-ink)]">{category.label}</p>
-        <p className="shrink-0 text-[14px] text-[var(--cs-subtle)]">
-          {entries.length} {entries.length === 1 ? "entry" : "entries"}
-        </p>
+        <div className="shrink-0 text-right text-[14px] text-[var(--cs-subtle)]">
+          <p>{shownEntries.length === entries.length ? entries.length : `${shownEntries.length} of ${entries.length}`} {entries.length === 1 ? "entry" : "entries"}</p>
+          <p className="text-[12px]">{systemProgress(entries.map((e) => detail.states[e.id])).done} complete/customized</p>
+        </div>
       </div>
       <div className="lg:hidden">{searchBox}</div>
+      {isPlacement && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="min-w-0">
+            <span className="sr-only">Body or point</span>
+            <select
+              value={placementBody}
+              onChange={(e) => setPlacementBody(e.target.value)}
+              aria-label="Filter by body or point"
+              className="h-11 w-full min-w-0 rounded-xl border bg-card px-3 text-[14px] text-[var(--cs-ink)]"
+            >
+              <option value="all">All bodies / points</option>
+              {bodyOptions.map((body) => <option key={body} value={body}>{bodyLabels[body] ?? body}</option>)}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className="sr-only">{isPlanetSign ? "Zodiac sign" : "House"}</span>
+            <select
+              value={placementValue}
+              onChange={(e) => setPlacementValue(e.target.value)}
+              aria-label={isPlanetSign ? "Filter by zodiac sign" : "Filter by house"}
+              className="h-11 w-full min-w-0 rounded-xl border bg-card px-3 text-[14px] text-[var(--cs-ink)]"
+            >
+              <option value="all">{isPlanetSign ? "All signs" : "All houses"}</option>
+              {placementOptions.map((value) => <option key={value} value={value}>{isPlanetSign ? value : `House ${value}`}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
       <ul className="divide-y divide-[var(--border)]">
         {shownEntries.map((e) => {
           const v = detail.values[e.id];
@@ -376,7 +427,7 @@ export function ContentSetEditor({
           </div>
         </div>
 
-        {!detail.isDefault && (
+        {!detail.isDefault && entrySchema.allowCustomLabel !== false && (
           <div className="space-y-1.5">
             <Label htmlFor="cs-term" className="flex items-center gap-1.5 text-[14px] font-medium text-[var(--cs-ink)]">
               Custom term (optional)

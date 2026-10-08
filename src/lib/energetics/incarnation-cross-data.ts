@@ -41,7 +41,7 @@ const ANGLE_BY_PROFILE: Record<string, IncarnationCrossAngle> = {
   "4/1": "juxtaposition",
 };
 
-interface CrossEntry {
+export interface IncarnationCrossDefinition {
   type: IncarnationCrossAngle;
   name: string;
   pSun: number;
@@ -50,7 +50,7 @@ interface CrossEntry {
   dEarth: number;
 }
 
-const CROSSES: CrossEntry[] = [
+const CROSSES: IncarnationCrossDefinition[] = [
   { type: "rightAngle", name: "Explanation", pSun: 49, pEarth: 4, dSun: 43, dEarth: 23 },
   { type: "rightAngle", name: "Explanation", pSun: 23, pEarth: 43, dSun: 49, dEarth: 4 },
   { type: "rightAngle", name: "Explanation", pSun: 4, pEarth: 49, dSun: 23, dEarth: 43 },
@@ -244,6 +244,22 @@ const CROSSES: CrossEntry[] = [
   { type: "juxtaposition", name: "Limitation", pSun: 60, pEarth: 56, dSun: 28, dEarth: 27 },
   { type: "juxtaposition", name: "Listening", pSun: 13, pEarth: 7, dSun: 43, dEarth: 23 },
 ];
+
+/**
+ * The complete named Cross catalog, exposed for additive Content Set
+ * coverage. The key is derived from the four defining gates and the Cross
+ * angle, so it is stable and resolves independently of the display name.
+ */
+export interface IncarnationCrossCatalogEntry extends IncarnationCrossDefinition {
+  key: string;
+  label: string;
+}
+
+export const INCARNATION_CROSSES: readonly IncarnationCrossCatalogEntry[] = CROSSES.map((cross) => ({
+  ...cross,
+  key: `${cross.type}-${cross.pSun}-${cross.pEarth}-${cross.dSun}-${cross.dEarth}`,
+  label: `${ANGLE_LABEL[cross.type]} of ${cross.name} (${cross.pSun}/${cross.pEarth} | ${cross.dSun}/${cross.dEarth})`,
+}));
 
 export interface IncarnationCrossResult {
   /** e.g. "Right Angle Cross of Rulership (47/22 | 45/26)" — same format as her real chart. */

@@ -69,9 +69,16 @@ check("Default can't be deleted, renamed or drafted from the menu", () => {
 });
 check("editor: no-fallback banner, custom term only on custom sets, Default reference is read-only, sticky Save", () => {
   assert.ok(ed.includes("Missing content will remain blank in generated reports"));
-  assert.match(ed, /\{!detail\.isDefault && \(\s*<div className="space-y-1\.5">\s*<Label htmlFor="cs-term"/);
+  assert.match(ed, /!detail\.isDefault && entrySchema\.allowCustomLabel !== false/);
   assert.ok(ed.includes("data-default-reference") && !/data-default-reference[^>]*onClick/.test(ed));
   assert.ok(/data-save-bar/.test(ed) && ed.includes("sticky bottom-0"));
+});
+check("large categories preserve canonical identity and provide placement filters", () => {
+  assert.ok(ed.includes('id === "astro:planetSign"'));
+  assert.ok(ed.includes('id === "astro:planetHouse"'));
+  assert.ok(ed.includes('aria-label="Filter by body or point"'));
+  assert.ok(ed.includes('aria-label={isPlanetSign ? "Filter by zodiac sign" : "Filter by house"}'));
+  assert.ok(ed.includes("canonicalLabel"));
 });
 check("Updated shows only the date — no byline (no email, name or initials)", () => {
   assert.ok(!/updatedByEmail\s*&&|\bby \{set\./.test(lib), "no byline rendered");

@@ -258,6 +258,12 @@ export type AstrologyBodyName =
   | "jupiter" | "saturn" | "uranus" | "neptune" | "pluto"
   | "northNode" | "southNode" | "lilith" | "chiron";
 
+/** All body/point identities supported by the Astrology content catalog. */
+export const ASTROLOGY_CONTENT_BODIES: readonly AstrologyBodyName[] = [
+  "sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn",
+  "uranus", "neptune", "pluto", "northNode", "southNode", "lilith", "chiron",
+];
+
 /**
  * `northNode`/`southNode`/`lilith` added 2026-08-09 — a real, verified gap
  * (her direct question: "did you do the Chiron, the North Nodes, the South

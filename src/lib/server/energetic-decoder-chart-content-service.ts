@@ -3,9 +3,10 @@ import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { TYPE_CONTENT, AUTHORITY_CONTENT, CENTER_CONTENT, LINE_CONTENT } from "@/lib/energetics/human-design-content-data";
-import { CENTER_LABELS } from "@/lib/energetics/human-design-data";
+import { CENTER_LABELS, CHANNELS } from "@/lib/energetics/human-design-data";
 import { SIGN_CONTENT, HOUSE_CONTENT, ASPECT_TYPE_CONTENT } from "@/lib/energetics/astrology-content-data";
-import { CROSS_ANGLE_CONTENT, type IncarnationCrossAngle } from "@/lib/energetics/incarnation-cross-data";
+import { CROSS_ANGLE_CONTENT, INCARNATION_CROSSES, type IncarnationCrossAngle } from "@/lib/energetics/incarnation-cross-data";
+import { ASTROLOGY_CONTENT_BODIES, SIGNS } from "@/lib/energetics/astrology";
 import type { HdType, HdAuthority } from "@/lib/energetics/human-design";
 import type { CenterKey } from "@/lib/energetics/human-design-data";
 import type { ZodiacSign, AspectType } from "@/lib/energetics/astrology";
@@ -138,6 +139,26 @@ export function buildDefaults(variableDefaults: Map<string, { value: string; cat
       fields: { framing: a.framing },
     });
   }
+  // These are intentionally cataloged with blank descriptions. They are
+  // structural coverage only; no dedicated approved prose exists yet.
+  for (const channel of CHANNELS) {
+    defaults.push({
+      system: "hd",
+      category: "channel",
+      key: channel.key,
+      label: channel.name ? `Channel ${channel.key} — ${channel.name}` : `Channel ${channel.key}`,
+      fields: { description: "" },
+    });
+  }
+  for (const cross of INCARNATION_CROSSES) {
+    defaults.push({
+      system: "hd",
+      category: "incarnationCross",
+      key: cross.key,
+      label: cross.label,
+      fields: { description: "" },
+    });
+  }
   for (const l of Object.values(LINE_CONTENT)) {
     defaults.push({
       system: "hd",
@@ -173,6 +194,31 @@ export function buildDefaults(variableDefaults: Map<string, { value: string; cat
       label: type,
       fields: { description },
     });
+  }
+  const bodyLabels: Record<string, string> = {
+    sun: "Sun", moon: "Moon", mercury: "Mercury", venus: "Venus", mars: "Mars",
+    jupiter: "Jupiter", saturn: "Saturn", uranus: "Uranus", neptune: "Neptune", pluto: "Pluto",
+    northNode: "North Node", southNode: "South Node", lilith: "Lilith", chiron: "Chiron",
+  };
+  for (const body of ASTROLOGY_CONTENT_BODIES) {
+    for (const sign of SIGNS) {
+      defaults.push({
+        system: "astro",
+        category: "planetSign",
+        key: `${body}:${sign}`,
+        label: `${bodyLabels[body]} in ${sign}`,
+        fields: { description: "" },
+      });
+    }
+    for (let house = 1; house <= 12; house++) {
+      defaults.push({
+        system: "astro",
+        category: "planetHouse",
+        key: `${body}:${house}`,
+        label: `${bodyLabels[body]} in House ${house}`,
+        fields: { description: "" },
+      });
+    }
   }
 
   return defaults;

@@ -113,6 +113,8 @@ export const CATEGORY_ICON: Record<string, LucideIcon> = {
   "hd:line": Users,
   "hd:center": Square,
   "hd:crossAngle": Star,
+  "hd:channel": Spline,
+  "hd:incarnationCross": Star,
   "hd:digestion": Utensils,
   "hd:sense": Ear,
   "hd:designSense": ScanEye,
@@ -122,6 +124,8 @@ export const CATEGORY_ICON: Record<string, LucideIcon> = {
   "astro:sign": Orbit,
   "astro:house": House,
   "astro:aspect": Hexagon,
+  "astro:planetSign": Orbit,
+  "astro:planetHouse": House,
   "freq:gate": KeyRound,
 };
 

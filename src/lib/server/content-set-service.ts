@@ -433,7 +433,11 @@ export async function saveContentEntry(
 ): Promise<void> {
   const { parsed, schema } = await knownEntry(subAccountId, entryId, db);
   const isDefault = setId === DEFAULT_CONTENT_SET_ID;
-  const v = validateEntryInput(schema, input, { requireAll: isDefault, allowLabel: !isDefault });
+  const v = validateEntryInput(schema, input, {
+    requireAll: isDefault,
+    allowLabel: !isDefault && schema.allowCustomLabel !== false,
+    labelError: !isDefault && schema.allowCustomLabel === false ? "Custom terms aren’t available for this category." : undefined,
+  });
   if (!v.ok) throw new ContentSetError(v.error, 400);
 
   if (isDefault) {

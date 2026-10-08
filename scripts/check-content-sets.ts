@@ -28,6 +28,9 @@ import {
   validateEntryInput,
   type ContentEntryValues,
 } from "../src/lib/energetic-decoder/content-sets";
+import { CHANNELS } from "../src/lib/energetics/human-design-data";
+import { INCARNATION_CROSSES } from "../src/lib/energetics/incarnation-cross-data";
+import { ASTROLOGY_CONTENT_BODIES, SIGNS } from "../src/lib/energetics/astrology";
 import {
   ContentSetError,
   createContentSet,
@@ -79,6 +82,13 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     assert.deepEqual(categorySchema("hd:center")!.fields.map((f) => f.key), ["definedText", "undefinedText", "strengthHeadline"]);
     assert.deepEqual(categorySchema("freq:gate")!.fields.map((f) => f.key), ["showsUp", "giftText"]);
     assert.deepEqual(categorySchema("hd:type")!.fields.map((f) => f.key), ["strategy", "description"]);
+  });
+  await check("new categories use only the approved description field and preserve canonical identities", () => {
+    for (const id of ["hd:channel", "hd:incarnationCross", "astro:planetSign", "astro:planetHouse"]) {
+      assert.deepEqual(categorySchema(id)!.fields.map((f) => f.key), ["description"]);
+      assert.equal(categorySchema(id)!.allowCustomLabel, false);
+      assert.equal(validateEntryInput(categorySchema(id)!, { label: "Replacement", fields: { description: "x" } }, { requireAll: false, allowLabel: categorySchema(id)!.allowCustomLabel !== false }).ok, false);
+    }
   });
   await check("entry ids parse back to their canonical keys", () => {
     assert.deepEqual(parseContentEntryId("hd:type:Manifesting Generator"), { system: "hd", category: "type", key: "Manifesting Generator", categoryId: "hd:type" });
@@ -186,6 +196,29 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     assert.equal(def.catalog.filter((e) => e.category === "gate").length, 64);
     assert.equal(def.updatedAt, "2026-09-02T00:00:00.000Z");
   });
+  await check("new catalog coverage is exact: 36 Channels, 192 Crosses, and 168 combinations per Astrology placement family", async () => {
+    const def = await loadDefaultLibrary("sa1", db);
+    assert.equal(CHANNELS.length, 36);
+    assert.equal(INCARNATION_CROSSES.length, 192);
+    assert.equal(ASTROLOGY_CONTENT_BODIES.length, 14);
+    assert.equal(SIGNS.length, 12);
+    assert.equal(def.catalog.filter((e) => e.category === "channel").length, 36);
+    assert.equal(def.catalog.filter((e) => e.category === "incarnationCross").length, 192);
+    assert.equal(def.catalog.filter((e) => e.category === "planetSign").length, 168);
+    assert.equal(def.catalog.filter((e) => e.category === "planetHouse").length, 168);
+    assert.ok(def.catalog.some((e) => e.id === "astro:planetSign:chiron:Pisces"));
+    assert.ok(!def.catalog.some((e) => e.key.includes("Ophiuchus")));
+    assert.ok(!def.catalog.some((e) => e.category === "planetSign" && e.key.startsWith("ascendant:")));
+    for (const category of ["channel", "incarnationCross", "planetSign", "planetHouse"]) {
+      const e = def.catalog.find((x) => x.category === category)!;
+      assert.equal(def.values.get(e.id)!.fields.description, "");
+    }
+  });
+  await check("blank Default expansion entries are Not started, not falsely Complete", async () => {
+    const def = await loadDefaultLibrary("sa1", db);
+    const e = def.catalog.find((x) => x.id === "hd:channel:10-34")!;
+    assert.equal(entryState(categorySchema("hd:channel")!, def.values.get(e.id), def.values.get(e.id), { isDefaultSet: true }), "not_started");
+  });
   await check("library: Default first (Active, built-in) with only Default seeded — no other sets created", async () => {
     const sets = await listContentSets("sa1", db);
     assert.deepEqual(sets.map((s) => s.name), ["Default"]);
@@ -233,6 +266,15 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     d = await getContentSet("sa1", blankId, db);
     assert.equal(d.values["hd:type:Generator"], undefined);
   });
+  await check("new placement entries stay blank until authored and cannot replace canonical identity", async () => {
+    await rejects(saveContentEntry("sa1", caller, blankId, "astro:planetSign:moon:Scorpio", { label: "Moon Magic", fields: { description: "x" } }, db), 400, /Custom terms/);
+    let d = await getContentSet("sa1", blankId, db);
+    assert.equal(d.values["astro:planetSign:moon:Scorpio"], undefined);
+    await saveContentEntry("sa1", caller, blankId, "astro:planetHouse:sun:10", { fields: { description: "Career expression." } }, db);
+    d = await getContentSet("sa1", blankId, db);
+    assert.equal(d.values["astro:planetHouse:sun:10"].fields.description, "Career expression.");
+    assert.equal(d.values["astro:planetHouse:sun:10"].label, null);
+  });
   await check("Default saves write the legacy docs (same as the old editor); requires every field; reset deletes the override", async () => {
     await rejects(saveContentEntry("sa1", caller, "default", "hd:type:Projector", { fields: { strategy: "Wait" } }, db), 400, /required/);
     await rejects(saveContentEntry("sa1", caller, "default", "hd:type:Projector", { label: "Guide", fields: { strategy: "a", description: "b" } }, db), 400);
@@ -250,7 +292,8 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     await updateContentSetMeta("sa1", caller, blankId, { status: "active" }, db);
     const d = await getContentSet("sa1", blankId, db);
     assert.equal(d.status, "active");
-    assert.ok(Object.values(d.states).every((s) => s === "not_started"));
+    assert.equal(d.states["hd:type:Generator"], "not_started");
+    assert.equal(d.states["astro:planetHouse:sun:10"], "customized");
     await rejects(updateContentSetMeta("sa1", caller, "default", { name: "Mine" }, db), 400);
     await rejects(deleteContentSet("sa1", "default", db), 400);
   });

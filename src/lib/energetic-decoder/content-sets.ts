@@ -63,6 +63,8 @@ export interface ContentCategorySchema {
   /** Singular noun for one entry ("Type", "Gate"). */
   noun: string;
   fields: ContentFieldSchema[];
+  /** Whether custom sets may provide a practitioner-facing replacement term. */
+  allowCustomLabel?: boolean;
 }
 
 const LONG = 2000;
@@ -106,6 +108,14 @@ export const CONTENT_CATEGORIES: ContentCategorySchema[] = [
     id: "hd:crossAngle", system: "hd", category: "crossAngle", label: "Incarnation Cross Angles", noun: "Cross Angle",
     fields: [{ key: "framing", label: "Framing line (Skills & Attributes)", max: 600, long: true }],
   },
+  {
+    id: "hd:channel", system: "hd", category: "channel", label: "Channels", noun: "Channel", allowCustomLabel: false,
+    fields: [{ key: "description", label: "Interpretation", max: LONG, long: true }],
+  },
+  {
+    id: "hd:incarnationCross", system: "hd", category: "incarnationCross", label: "Incarnation Crosses", noun: "Incarnation Cross", allowCustomLabel: false,
+    fields: [{ key: "description", label: "Interpretation", max: LONG, long: true }],
+  },
   ...(["digestion", "sense", "designSense", "motivation", "perspective", "environment"] as const).map((c) => ({
     id: `hd:${c}`,
     system: "hd" as const,
@@ -127,6 +137,14 @@ export const CONTENT_CATEGORIES: ContentCategorySchema[] = [
   },
   {
     id: "astro:aspect", system: "astro", category: "aspect", label: "Aspect Types", noun: "Aspect",
+    fields: [{ key: "description", label: "Interpretation", max: LONG, long: true }],
+  },
+  {
+    id: "astro:planetSign", system: "astro", category: "planetSign", label: "Planet in Sign", noun: "Planet in Sign", allowCustomLabel: false,
+    fields: [{ key: "description", label: "Interpretation", max: LONG, long: true }],
+  },
+  {
+    id: "astro:planetHouse", system: "astro", category: "planetHouse", label: "Planet in House", noun: "Planet in House", allowCustomLabel: false,
     fields: [{ key: "description", label: "Interpretation", max: LONG, long: true }],
   },
   {
@@ -196,7 +214,11 @@ export function entryState(
   defaults: ContentEntryValues | undefined,
   opts: { isDefaultSet: boolean; defaultCustomized?: boolean },
 ): ContentEntryState {
-  if (opts.isDefaultSet) return opts.defaultCustomized ? "customized" : "complete";
+  if (opts.isDefaultSet) {
+    const authored = schema.fields.every((f) => filled(values?.fields?.[f.key]));
+    if (!authored) return "not_started";
+    return opts.defaultCustomized ? "customized" : "complete";
+  }
   const vals = schema.fields.map((f) => values?.fields?.[f.key]);
   const n = vals.filter(filled).length;
   if (n === 0 && !filled(values?.label)) return "not_started";
@@ -305,7 +327,7 @@ export function validateContentSetMeta(input: { name?: unknown; description?: un
 export function validateEntryInput(
   schema: ContentCategorySchema,
   input: { label?: unknown; fields?: unknown },
-  opts: { requireAll: boolean; allowLabel: boolean },
+  opts: { requireAll: boolean; allowLabel: boolean; labelError?: string },
 ): { ok: true; label: string | null; fields: Record<string, string> } | { ok: false; error: string } {
   const raw = (input.fields && typeof input.fields === "object" ? input.fields : {}) as Record<string, unknown>;
   for (const k of Object.keys(raw)) if (!schema.fields.some((f) => f.key === k)) return { ok: false, error: `Unknown field “${k}”.` };
@@ -320,7 +342,7 @@ export function validateEntryInput(
   }
   let label: string | null = null;
   if (input.label !== undefined && input.label !== null && input.label !== "") {
-    if (!opts.allowLabel) return { ok: false, error: "Custom terms aren’t available on the Default set." };
+    if (!opts.allowLabel) return { ok: false, error: opts.labelError ?? "Custom terms aren’t available on the Default set." };
     if (typeof input.label !== "string") return { ok: false, error: "The custom term must be text." };
     const t = input.label.trim();
     if (t.length > CONTENT_TERM_MAX) return { ok: false, error: `Custom terms can be up to ${CONTENT_TERM_MAX} characters.` };
