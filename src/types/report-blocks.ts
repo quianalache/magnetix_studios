@@ -26,6 +26,48 @@ export type ReportBlockType =
   | "divider"
   | "spacer";
 
+export type ReportElementType = ReportBlockType | "shape" | "frame" | "graphic" | "shortcode" | "upload";
+
+export type ReportPageSize = "letter" | "a4" | "custom";
+
+export interface ReportGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+}
+
+export interface ReportElementStyle {
+  opacity?: number;
+  backgroundColor?: string | null;
+  borderColor?: string | null;
+  borderWidth?: number;
+  borderStyle?: "solid" | "dashed" | "none";
+  borderRadius?: number;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  italic?: boolean;
+  underline?: boolean;
+  color?: string;
+  align?: ReportBlockAlign;
+  lineHeight?: number;
+  letterSpacing?: number;
+}
+
+export interface ReportCanvasElement {
+  id: string;
+  type: ReportElementType;
+  geometry: ReportGeometry;
+  style?: ReportElementStyle;
+  locked?: boolean;
+  hidden?: boolean;
+  zIndex: number;
+  /** Element-specific payload. Kept JSON-safe for Firestore and PDF adapters. */
+  payload: Record<string, unknown>;
+}
+
 export type ReportBlockAlign = "left" | "center" | "right";
 
 interface ReportBlockBase {
@@ -97,6 +139,10 @@ export interface ReportPage {
   /** Mirrors Bodygraph's per-page "Visible for everyone" toggle — a page can be conditionally shown, same Chart Rule condition model as course-lesson gating (see chart-rules.ts). Null = always visible. */
   visibleIf: ChartRuleCondition | null;
   blocks: ReportBlock[];
+  /** New canvas representation. Legacy pages retain `blocks` for compatibility. */
+  elements?: ReportCanvasElement[];
+  locked?: boolean;
+  pageBackground?: string;
 }
 
 /**
@@ -110,6 +156,10 @@ export interface ReportDesign {
   subAccountId: string;
   agencyId: string;
   title: string;
+  status?: "draft" | "active";
+  layoutVersion?: 1 | 2;
+  pageSize?: ReportPageSize;
+  customPageSize?: { width: number; height: number } | null;
   pages: ReportPage[];
   /**
    * Content Sets (2026-10-07) — which Content Set this design draws its
@@ -118,6 +168,7 @@ export interface ReportDesign {
    * is a later release; the field exists so "Used in" counts are real.
    */
   contentSetId?: string | null;
+  brand?: { logoUrl?: string | null; accentColor?: string; backgroundColor?: string; fontFamily?: string } | null;
   /**
    * ISO string, not a raw Firestore Timestamp — resolved server-side
    * (report-design-service.ts's `toDesign`) before this ever reaches a
@@ -134,6 +185,6 @@ export interface ReportDesign {
 
 export function emptyReportDesign(): Pick<ReportDesign, "pages"> {
   return {
-    pages: [{ id: crypto.randomUUID(), title: "Page 1", visibleIf: null, blocks: [] }],
+    pages: [{ id: crypto.randomUUID(), title: "Page 1", visibleIf: null, blocks: [], elements: [] }],
   };
 }

@@ -25,11 +25,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     body = {};
   }
   const title = typeof body.title === "string" ? body.title : "Untitled Report";
+  const contentSetId = typeof body.contentSetId === "string" && body.contentSetId ? body.contentSetId : null;
+  const pageSize = body.pageSize === "a4" || body.pageSize === "custom" ? body.pageSize : "letter";
 
   const design = await createReportDesign({
     agencyId: access.agencyId ?? "",
     subAccountId,
     title,
+    contentSetId,
+    pageSize,
   });
   return NextResponse.json({ ok: true, design });
 }

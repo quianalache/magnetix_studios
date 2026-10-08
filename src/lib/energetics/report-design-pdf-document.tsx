@@ -9,7 +9,7 @@ import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
-import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind } from "@/types/report-blocks";
+import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement } from "@/types/report-blocks";
 
 /**
  * PDF export for a custom ReportDesign — Phase 2 Build Plan Task 6
@@ -46,6 +46,9 @@ const styles = StyleSheet.create({
   gateChip: { fontSize: 8, border: "1pt solid #d4d4d8", borderRadius: 999, paddingVertical: 2, paddingHorizontal: 6, marginRight: 3, marginBottom: 3 },
   missingPiece: { fontSize: 9, color: "#a1a1aa", fontStyle: "italic", border: "1pt dashed #d4d4d8", borderRadius: 8, padding: 10, textAlign: "center" },
   videoBox: { border: "1pt dashed #d4d4d8", borderRadius: 8, padding: 10, fontSize: 9, color: "#71717a" },
+  canvas: { position: "relative", flex: 1, overflow: "hidden" },
+  canvasText: { position: "absolute", padding: 6, overflow: "hidden" },
+  canvasPlaceholder: { position: "absolute", padding: 10, backgroundColor: "#efe7ff", border: "1pt solid #d8c5f5", color: "#5420a8", textAlign: "center" },
 });
 
 function textAlignStyle(align: ReportBlockAlign | undefined): "left" | "center" | "right" {
@@ -168,6 +171,14 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
   }
 }
 
+function ReportCanvasElementPdf({ element }: { element: ReportCanvasElement }) {
+  const style = { ...styles.canvasText, left: element.geometry.x, top: element.geometry.y, width: element.geometry.width, height: element.geometry.height, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: element.style?.borderWidth || 0, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid" } as const;
+  if (element.type === "image" || element.type === "upload") return <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset</Text></View>;
+  if (element.type === "chart") return <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Chart element</Text></View>;
+  const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
+  return <Text style={style}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>;
+}
+
 export function ReportDesignPdfDocument({
   title,
   readerName,
@@ -211,7 +222,7 @@ export function ReportDesignPdfDocument({
 
           {page.title && <Text style={styles.pageTitle}>{page.title}</Text>}
 
-          <View style={styles.row}>
+          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (
               <View key={block.id} style={[styles.blockWrap, { width: `${block.widthPct}%` }]}>
                 {block.type === "chart" ? (
@@ -229,7 +240,7 @@ export function ReportDesignPdfDocument({
                 )}
               </View>
             ))}
-          </View>
+          </View>}
         </Page>
       ))}
     </Document>

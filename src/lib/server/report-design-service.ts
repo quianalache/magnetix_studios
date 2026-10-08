@@ -56,11 +56,18 @@ export async function createReportDesign(opts: {
   agencyId: string;
   subAccountId: string;
   title: string;
+  contentSetId?: string | null;
+  pageSize?: "letter" | "a4" | "custom";
+  startFrom?: "blank" | "template";
 }): Promise<ReportDesign> {
   const doc = {
     subAccountId: opts.subAccountId,
     agencyId: opts.agencyId,
     title: opts.title.trim() || "Untitled Report",
+    status: "draft",
+    layoutVersion: 2,
+    pageSize: opts.pageSize ?? "letter",
+    contentSetId: opts.contentSetId ?? null,
     ...emptyReportDesign(),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -72,7 +79,7 @@ export async function createReportDesign(opts: {
 export async function updateReportDesign(
   subAccountId: string,
   designId: string,
-  fields: Partial<Pick<ReportDesign, "title" | "pages">>,
+  fields: Partial<Pick<ReportDesign, "title" | "pages" | "contentSetId" | "status" | "layoutVersion" | "pageSize" | "customPageSize" | "brand">>,
 ): Promise<ReportDesign> {
   const ref = col().doc(designId);
   const snap = await ref.get();
@@ -129,6 +136,12 @@ export async function duplicateReportDesign(subAccountId: string, designId: stri
     subAccountId: source.subAccountId,
     agencyId: source.agencyId,
     title: `Copy of ${source.title}`,
+    status: source.status ?? "draft",
+    layoutVersion: source.layoutVersion ?? 1,
+    pageSize: source.pageSize ?? "letter",
+    customPageSize: source.customPageSize ?? null,
+    contentSetId: source.contentSetId ?? null,
+    brand: source.brand ?? null,
     pages: clonePages(source.pages),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),

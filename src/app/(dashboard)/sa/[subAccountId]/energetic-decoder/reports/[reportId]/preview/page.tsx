@@ -64,7 +64,15 @@ export default function ReportDesignPreviewPage() {
         if (!r.ok) throw new Error(body.error || "Couldn't load preview.");
         return body as PreviewData;
       })
-      .then(setData)
+      .then((next) => {
+        if (searchParams.get("draft") === "1") {
+          try {
+            const draft = JSON.parse(sessionStorage.getItem(`report-design-draft:${params.reportId}`) || "null") as Partial<ReportDesign> | null;
+            if (draft?.pages) next.design = { ...next.design, ...draft, pages: draft.pages };
+          } catch { /* ignore malformed local draft and show the saved design */ }
+        }
+        setData(next);
+      })
       .catch((e: Error) => setError(e.message));
   }, [subAccountId, params.reportId, searchParams]);
 

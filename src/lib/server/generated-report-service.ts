@@ -109,6 +109,10 @@ function resolveSnapshotPages(pages: ReportPage[], ruleInput: ChartRuleReadingIn
   return visiblePages.map((p) => ({
     ...p,
     blocks: p.blocks.map((b) => (b.type === "text" ? { ...b, html: resolveShortcodes(b.html, shortcodeInput) } : b)),
+    elements: p.elements?.map((e) => ({
+      ...e,
+      payload: e.type === "text" ? { ...e.payload, text: resolveShortcodes(String(e.payload.text ?? ""), shortcodeInput) } : e.type === "shortcode" ? { ...e.payload, resolvedText: resolveShortcodes(`{{${String(e.payload.token ?? "full_name")}}}`, shortcodeInput) } : e.payload,
+    })),
   }));
 }
 
@@ -149,6 +153,8 @@ export async function createGeneratedReport(opts: {
     generatedBy: opts.generatedByUid,
     snapshot: {
       pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput),
+      layoutVersion: design.layoutVersion ?? 1,
+      contentSetId: design.contentSetId ?? null,
       // Unified Chart Designs (2026-10): the chart styling is frozen with
       // the report too, so a later edit to a Chart Design can't change a
       // report that was already generated.

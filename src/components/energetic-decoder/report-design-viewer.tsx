@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { ReportDesign, ReportPage, ReportBlock } from "@/types/report-blocks";
+import { useState, type CSSProperties } from "react";
+import type { ReportDesign, ReportPage, ReportBlock, ReportCanvasElement } from "@/types/report-blocks";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
@@ -74,7 +74,13 @@ export function ReportDesignViewer({
 
       <div className="rounded-2xl border bg-card p-6">
         {page.title && <h2 className="mb-4 text-lg font-semibold">{page.title}</h2>}
-        <div className="flex flex-wrap gap-4">
+        {page.elements && page.elements.length > 0 ? (
+          <div className="relative overflow-hidden bg-white" style={{ width: "100%", aspectRatio: "8.5 / 11", minHeight: 760 }}>
+            {[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => (
+              <CanvasElementView key={element.id} element={element} readingInput={readingInput} />
+            ))}
+          </div>
+        ) : <div className="flex flex-wrap gap-4">
           {page.blocks.map((block) => (
             <div key={block.id} style={{ width: `${block.widthPct}%` }} className="min-w-0">
               <ReportBlockView
@@ -88,7 +94,7 @@ export function ReportDesignViewer({
               />
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       {popupBlock && (
@@ -111,6 +117,17 @@ export function ReportDesignViewer({
       )}
     </div>
   );
+}
+
+function CanvasElementView({ element, readingInput }: { element: ReportCanvasElement; readingInput: ShortcodeReadingInput }) {
+  const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
+  const resolved = element.type === "shortcode" ? resolveShortcodes(text, readingInput) : text;
+  const style: CSSProperties = {
+    position: "absolute", left: `${(element.geometry.x / 816) * 100}%`, top: `${(element.geometry.y / 1056) * 100}%`, width: `${(element.geometry.width / 816) * 100}%`, height: `${(element.geometry.height / 1056) * 100}%`, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, fontWeight: element.style?.fontWeight || 400, textAlign: element.style?.align || "left", background: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, border: element.style?.borderWidth ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}` : undefined, borderRadius: element.style?.borderRadius || 0, padding: 10, overflow: "hidden",
+  };
+  if (element.type === "image" || element.type === "upload") return <div style={style} className="flex items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-xs text-violet-800">Image asset</div>;
+  if (element.type === "chart") return <div style={style} className="flex items-center justify-center rounded bg-violet-50 text-center text-sm font-semibold text-violet-800">Chart element</div>;
+  return <div style={style} className="whitespace-pre-wrap break-words">{resolved || (element.type === "graphic" ? "Energetic Decoder graphic" : element.type === "shape" || element.type === "frame" ? "" : "Add text")}</div>;
 }
 
 function ReportBlockView({

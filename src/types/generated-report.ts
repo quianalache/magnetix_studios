@@ -1,4 +1,4 @@
-import type { ReportPage } from "./report-blocks";
+import type { ReportPage, ReportCanvasElement } from "./report-blocks";
 import type { ChartDesign } from "./chart-design";
 
 /**
@@ -48,6 +48,9 @@ export interface GeneratedReport {
   generatedBy: string;
   snapshot: {
     pages: ReportPage[];
+    layoutVersion?: 1 | 2;
+    contentSetId?: string | null;
+    resolvedElements?: Record<string, ReportCanvasElement[]>;
     /**
      * The chart styling frozen with this report (unified Chart Designs,
      * 2026-10). Absent on reports generated before styling was frozen —
