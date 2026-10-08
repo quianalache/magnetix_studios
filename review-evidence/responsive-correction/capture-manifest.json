@@ -1,0 +1,210 @@
+{
+  "commit": "c8f6397",
+  "viewportHeight": 1200,
+  "results": [
+    {
+      "name": "tablet-01-builder-canvas",
+      "path": "review-evidence/responsive-correction/tablet-01-builder-canvas.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-02-add-elements",
+      "path": "review-evidence/responsive-correction/tablet-02-add-elements.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-03-pages",
+      "path": "review-evidence/responsive-correction/tablet-03-pages.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-04-selected-text",
+      "path": "review-evidence/responsive-correction/tablet-04-selected-text.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-05-layers",
+      "path": "review-evidence/responsive-correction/tablet-05-layers.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-06-page-settings",
+      "path": "review-evidence/responsive-correction/tablet-06-page-settings.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "tablet-07-preview-flow",
+      "path": "review-evidence/responsive-correction/tablet-07-preview-flow.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "scrollWidth": 820,
+      "clientWidth": 820,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-01-builder-canvas",
+      "path": "review-evidence/responsive-correction/phone-01-builder-canvas.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-02-add-elements",
+      "path": "review-evidence/responsive-correction/phone-02-add-elements.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-03-pages",
+      "path": "review-evidence/responsive-correction/phone-03-pages.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-04-selected-text",
+      "path": "review-evidence/responsive-correction/phone-04-selected-text.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-05-layers",
+      "path": "review-evidence/responsive-correction/phone-05-layers.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-06-page-settings",
+      "path": "review-evidence/responsive-correction/phone-06-page-settings.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "phone-07-preview-flow",
+      "path": "review-evidence/responsive-correction/phone-07-preview-flow.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "scrollWidth": 390,
+      "clientWidth": 390,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainClientHeight": 1013
+    },
+    {
+      "name": "state-preservation-after-close",
+      "viewport": [
+        390,
+        1200
+      ],
+      "before": {
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainClientHeight": 1013
+      },
+      "after": {
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainClientHeight": 1013
+      },
+      "selectedTextStillAvailable": true
+    }
+  ]
+}

@@ -139,6 +139,9 @@ export function ReportEditor({
   const [panel, setPanel] = useState<"elements" | "pages" | "layers" | null>(
     "elements"
   );
+  const [mobileDrawer, setMobileDrawer] = useState<
+    "elements" | "pages" | "layers" | "element" | "page" | null
+  >(null);
   const [zoom, setZoom] = useState(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 28 : 60));
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -304,6 +307,97 @@ export function ReportEditor({
     window.open(`/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?${query}`, "_blank");
   }
 
+  function openMobileDrawer(drawer: NonNullable<typeof mobileDrawer>) {
+    setPanel(drawer === "layers" ? "layers" : "elements");
+    setMobileDrawer(drawer);
+  }
+
+  const renderElementsPanel = () => (
+    <>
+      <input
+        placeholder="Search elements…"
+        className="h-9 w-full rounded-lg border px-3 text-sm"
+      />
+      {tools.map((t) => (
+        <button
+          key={t.type}
+          onClick={() => addElement(t.type)}
+          className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-3 text-left text-sm transition hover:border-violet-200 hover:bg-[#fbf7ff]"
+        >
+          <t.icon className="h-5 w-5 text-violet-700" />
+          {t.label}
+          <Plus className="text-muted-foreground ml-auto h-4 w-4" />
+        </button>
+      ))}
+      <div className="text-muted-foreground border-t pt-3 text-xs font-semibold tracking-wide uppercase">
+        Template library
+      </div>
+      {["Cover", "About", "Chart", "Summary", "Type", "Strategy", "Authority", "Profile", "Centers", "Channels", "Gates", "Astrology", "Frequency", "Closing", "Blank"].map((x) => (
+        <button
+          key={x}
+          onClick={() => insertTemplate(x)}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-violet-50"
+        >
+          {x}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </>
+  );
+
+  const renderPagesPanel = () => (
+    <PagePanel
+      pages={pages}
+      activePageId={activePageId}
+      setActivePageId={setActivePageId}
+      addPage={addPage}
+      duplicatePage={duplicatePage}
+      deletePage={deletePage}
+    />
+  );
+
+  const renderElementPanel = (defaultTab: "element" | "page" = "element") => (
+    <ElementPanel
+      selected={selected}
+      sets={sets}
+      contentSetId={contentSetId}
+      setContentSetId={(v) => {
+        setContentSetId(v);
+        setDirty(true);
+      }}
+      pageSize={pageSize}
+      setPageSize={(v) => {
+        setPageSize(v);
+        setDirty(true);
+      }}
+      update={(updater) => selected && updateElement(selected.id, updater)}
+      visibilityOpen={visibilityOpen}
+      setVisibilityOpen={setVisibilityOpen}
+      activePage={activePage}
+      updatePage={updatePage}
+      onChooseImage={() => setAssetPickerOpen(true)}
+      onDelete={() => selected && deleteElement(selected.id)}
+      defaultTab={defaultTab}
+    />
+  );
+
+  const renderLayerPanel = () => (
+    <LayerPanel
+      elements={elements}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+      onMove={(from, to) => {
+        const sorted = [...elements];
+        const [item] = sorted.splice(from, 1);
+        sorted.splice(to, 0, item);
+        updatePage((p) => ({
+          ...p,
+          elements: sorted.map((e, i) => ({ ...e, zIndex: i })),
+        }));
+      }}
+    />
+  );
+
   return (
     <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
@@ -375,8 +469,8 @@ export function ReportEditor({
           </button>
           </div>
         </div>
-        <div className="mt-4 grid min-h-[calc(100vh-110px)] grid-cols-1 gap-4 overflow-x-hidden lg:grid-cols-[250px_minmax(0,1fr)_280px]">
-          <aside className="order-2 max-h-72 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:max-h-none">
+        <div className="relative mt-4 grid min-h-[calc(100vh-110px)] grid-cols-1 gap-4 overflow-x-hidden lg:grid-cols-[250px_minmax(0,1fr)_280px]">
+          <aside className="order-2 hidden max-h-72 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:max-h-none">
             <div className="flex gap-1 border-b pb-2">
               <button
                 onClick={() => setPanel("elements")}
@@ -393,67 +487,11 @@ export function ReportEditor({
               </button>
             </div>
             <div className="mt-3 space-y-2">
-              {panel === "elements" && (
-                <>
-                  <input
-                    placeholder="Search elements…"
-                    className="h-9 w-full rounded-lg border px-3 text-sm"
-                  />
-                  {tools.map((t) => (
-                    <button
-                      key={t.type}
-                      onClick={() => addElement(t.type)}
-                      className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-3 text-left text-sm transition hover:border-violet-200 hover:bg-[#fbf7ff]"
-                    >
-                      <t.icon className="h-5 w-5 text-violet-700" />
-                      {t.label}
-                      <Plus className="text-muted-foreground ml-auto h-4 w-4" />
-                    </button>
-                  ))}
-                  <div className="text-muted-foreground border-t pt-3 text-xs font-semibold tracking-wide uppercase">
-                    Template library
-                  </div>
-                  {[
-                    "Cover",
-                    "About",
-                    "Chart",
-                    "Summary",
-                    "Type",
-                    "Strategy",
-                    "Authority",
-                    "Profile",
-                    "Centers",
-                    "Channels",
-                    "Gates",
-                    "Astrology",
-                    "Frequency",
-                    "Closing",
-                    "Blank",
-                  ].map((x) => (
-                    <button
-                      key={x}
-                      onClick={() => insertTemplate(x)}
-                      className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-violet-50"
-                    >
-                      {x}
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
-                  ))}
-                </>
-              )}
-              {panel === "pages" && (
-                <PagePanel
-                  pages={pages}
-                  activePageId={activePageId}
-                  setActivePageId={setActivePageId}
-                  addPage={addPage}
-                  duplicatePage={duplicatePage}
-                  deletePage={deletePage}
-                />
-              )}
+              {panel === "elements" && renderElementsPanel()}
+              {panel === "pages" && renderPagesPanel()}
             </div>
           </aside>
-          <main className="order-1 min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none">
+          <main className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-auto lg:min-h-[calc(100vh-110px)]">
             <div
               className="report-canvas-stage mx-auto flex w-fit flex-col gap-6"
               style={{
@@ -473,6 +511,7 @@ export function ReportEditor({
                     setActivePageId(p.id);
                     setSelectedId(elementId);
                     setPanel("layers");
+                    if (window.innerWidth < 1024) setMobileDrawer("layers");
                   }}
                   onMove={(elementId, dx, dy) =>
                     updateElement(elementId, (e) => ({
@@ -490,7 +529,7 @@ export function ReportEditor({
               ))}
             </div>
           </main>
-          <aside className="order-3 max-h-96 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:max-h-none">
+          <aside className="order-3 hidden max-h-96 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:max-h-none">
             <div className="flex gap-1 border-b pb-2">
               <button
                 onClick={() => setPanel("layers")}
@@ -506,47 +545,40 @@ export function ReportEditor({
                 Element
               </button>
             </div>
-            {panel === "layers" ? (
-              <LayerPanel
-                elements={elements}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                onMove={(from, to) => {
-                  const sorted = [...elements];
-                  const [item] = sorted.splice(from, 1);
-                  sorted.splice(to, 0, item);
-                  updatePage((p) => ({
-                    ...p,
-                    elements: sorted.map((e, i) => ({ ...e, zIndex: i })),
-                  }));
-                }}
-              />
-            ) : (
-              <ElementPanel
-                selected={selected}
-                sets={sets}
-                contentSetId={contentSetId}
-                setContentSetId={(v) => {
-                  setContentSetId(v);
-                  setDirty(true);
-                }}
-                pageSize={pageSize}
-                setPageSize={(v) => {
-                  setPageSize(v);
-                  setDirty(true);
-                }}
-                update={(updater) =>
-                  selected && updateElement(selected.id, updater)
-                }
-                visibilityOpen={visibilityOpen}
-                setVisibilityOpen={setVisibilityOpen}
-                activePage={activePage}
-                updatePage={updatePage}
-                onChooseImage={() => setAssetPickerOpen(true)}
-                onDelete={() => selected && deleteElement(selected.id)}
-              />
-            )}
+            {panel === "layers" ? renderLayerPanel() : renderElementPanel()}
           </aside>
+          {mobileDrawer && (
+            <>
+              <button
+                type="button"
+                aria-label="Close tool drawer"
+                onClick={() => setMobileDrawer(null)}
+                className="fixed inset-0 z-30 bg-[#18204a]/25 lg:hidden"
+              />
+              <section className="fixed inset-x-3 bottom-20 z-40 max-h-[min(72vh,760px)] overflow-y-auto rounded-3xl border border-violet-200 bg-white p-4 shadow-2xl dark:border-violet-900/50 dark:bg-slate-900 lg:hidden">
+                <div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3">
+                  <h2 className="font-serif text-xl font-semibold text-[#18204a] dark:text-white">
+                    {mobileDrawer === "elements" ? "Add Elements" : mobileDrawer === "pages" ? "Pages" : mobileDrawer === "layers" ? "Layers" : mobileDrawer === "page" ? "Page Settings" : "Element"}
+                  </h2>
+                  <button type="button" onClick={() => setMobileDrawer(null)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-violet-800 hover:bg-violet-50">Close</button>
+                </div>
+                <div className="space-y-2">
+                  {mobileDrawer === "elements" && renderElementsPanel()}
+                  {mobileDrawer === "pages" && renderPagesPanel()}
+                  {mobileDrawer === "layers" && renderLayerPanel()}
+                  {mobileDrawer === "element" && renderElementPanel("element")}
+                  {mobileDrawer === "page" && renderElementPanel("page")}
+                </div>
+              </section>
+            </>
+          )}
+          <nav aria-label="Responsive builder tools" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur lg:hidden">
+            <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
+            <button type="button" onClick={() => openMobileDrawer("pages")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "pages" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Pages</button>
+            <button type="button" onClick={() => openMobileDrawer("layers")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "layers" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Layers</button>
+            <button type="button" onClick={() => openMobileDrawer("element")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "element" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Element</button>
+            <button type="button" onClick={() => openMobileDrawer("page")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "page" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Page</button>
+          </nav>
         </div>
       </div>
       <MediaPickerDialog
@@ -687,6 +719,7 @@ function ElementPanel({
   updatePage,
   onChooseImage,
   onDelete,
+  defaultTab = "element",
 }: {
   selected: ReportCanvasElement | null;
   sets: { id: string; name: string }[];
@@ -701,8 +734,9 @@ function ElementPanel({
   updatePage: (u: (p: ReportPage) => ReportPage) => void;
   onChooseImage: () => void;
   onDelete: () => void;
+  defaultTab?: "element" | "page";
 }) {
-  const [tab, setTab] = useState<"element" | "page">("element");
+  const [tab, setTab] = useState<"element" | "page">(defaultTab);
   const [shortcodeSearch, setShortcodeSearch] = useState("");
   return (
     <div className="mt-3 space-y-4">
