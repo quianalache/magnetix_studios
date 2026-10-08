@@ -645,7 +645,7 @@ export function ReportEditor({
             </div>
           </aside>
           <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
-            <div className="report-canvas-scale-box mx-auto shrink-0" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
+            <div className="report-canvas-scale-box mx-auto shrink-0 overflow-hidden" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
               <div
                 className="report-canvas-stage flex w-fit flex-col gap-6"
                 style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
