@@ -1,0 +1,227 @@
+{
+  "commit": "9c8c0fc",
+  "captureSource": "actual ReportEditor used by product route and isolated review harness",
+  "viewportHeight": 1200,
+  "results": [
+    {
+      "name": "tablet-01-canvas",
+      "path": "review-evidence/responsive-overlay-final/tablet-01-canvas.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-02-add-elements",
+      "path": "review-evidence/responsive-overlay-final/tablet-02-add-elements.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-03-pages",
+      "path": "review-evidence/responsive-overlay-final/tablet-03-pages.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-04-text-inspector",
+      "path": "review-evidence/responsive-overlay-final/tablet-04-text-inspector.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-05-layers",
+      "path": "review-evidence/responsive-overlay-final/tablet-05-layers.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-06-page-settings",
+      "path": "review-evidence/responsive-overlay-final/tablet-06-page-settings.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-07-preview-flow",
+      "path": "review-evidence/responsive-overlay-final/tablet-07-preview-flow.png",
+      "viewport": [
+        820,
+        1200
+      ],
+      "documentScrollHeight": 1242,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-01-canvas",
+      "path": "review-evidence/responsive-overlay-final/phone-01-canvas.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-02-add-elements",
+      "path": "review-evidence/responsive-overlay-final/phone-02-add-elements.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-03-pages",
+      "path": "review-evidence/responsive-overlay-final/phone-03-pages.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-04-text-inspector",
+      "path": "review-evidence/responsive-overlay-final/phone-04-text-inspector.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-05-layers",
+      "path": "review-evidence/responsive-overlay-final/phone-05-layers.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-06-page-settings",
+      "path": "review-evidence/responsive-overlay-final/phone-06-page-settings.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "phone-07-preview-flow",
+      "path": "review-evidence/responsive-overlay-final/phone-07-preview-flow.png",
+      "viewport": [
+        390,
+        1200
+      ],
+      "documentScrollHeight": 1244,
+      "documentScrollY": 0,
+      "mainScrollTop": 0,
+      "mainScrollHeight": 4328
+    },
+    {
+      "name": "tablet-state-preservation",
+      "viewport": [
+        820,
+        1200
+      ],
+      "before": {
+        "documentScrollHeight": 1242,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "open": {
+        "documentScrollHeight": 1242,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "after": {
+        "documentScrollHeight": 1242,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "selectedElementButtonCount": 1
+    },
+    {
+      "name": "phone-state-preservation",
+      "viewport": [
+        390,
+        1200
+      ],
+      "before": {
+        "documentScrollHeight": 1244,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "open": {
+        "documentScrollHeight": 1244,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "after": {
+        "documentScrollHeight": 1244,
+        "documentScrollY": 0,
+        "mainScrollTop": 360,
+        "mainScrollHeight": 4328
+      },
+      "selectedElementButtonCount": 1
+    }
+  ]
+}

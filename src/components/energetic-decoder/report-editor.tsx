@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -124,6 +124,91 @@ function newElement(
   };
 }
 
+type LeftPanel = "elements" | "pages";
+type RightPanel = "layers" | "element";
+type ZoomMode = number | "fit-page" | "fit-width";
+
+type TemplateDefinition = {
+  id: string;
+  category: string;
+  name: string;
+  description: string;
+  accent: string;
+  create: () => ReportPage;
+};
+
+function templatePage(name: string, elements: ReportCanvasElement[]): ReportPage {
+  return { id: id(), title: name, visibleIf: null, blocks: [], elements };
+}
+
+function templateText(text: string, index: number, style: ReportCanvasElement["style"] = {}): ReportCanvasElement {
+  const element = newElement("text", index);
+  return { ...element, geometry: { ...element.geometry, x: 72, y: 96 + index * 120, width: 672, height: index === 0 ? 120 : 84 }, style: { ...element.style, ...style }, payload: { text } };
+}
+
+function templateShape(index: number, backgroundColor: string): ReportCanvasElement {
+  const element = newElement("shape", index);
+  return { ...element, geometry: { x: 72, y: 620, width: 672, height: 220, rotation: 0 }, style: { ...element.style, backgroundColor, borderRadius: 24 }, payload: { shape: "rectangle" } };
+}
+
+const TEMPLATE_DEFINITIONS: TemplateDefinition[] = [
+  {
+    id: "cover-luminous",
+    category: "Cover",
+    name: "Luminous cover",
+    description: "A calm title page with a soft visual anchor.",
+    accent: "#eadcff",
+    create: () => templatePage("Luminous Cover", [templateText("Your Energetic Blueprint", 0, { fontSize: 42, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("Magnetix Studios", 1, { fontSize: 18, color: "#5420a8" }), templateShape(2, "#eadcff")]),
+  },
+  {
+    id: "cover-dawn",
+    category: "Cover",
+    name: "Dawn cover",
+    description: "A warm introduction for a personal reading.",
+    accent: "#f8e4cf",
+    create: () => templatePage("Dawn Cover", [templateText("A map for alignment, purpose, and flow", 0, { fontSize: 32, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("Prepared for {{full_name}}", 1, { fontSize: 18, color: "#8b5e34" }), templateShape(2, "#f8e4cf")]),
+  },
+  {
+    id: "chart-overview",
+    category: "Chart",
+    name: "Chart overview",
+    description: "A focused page for one chart and its headline.",
+    accent: "#e3efff",
+    create: () => {
+      const chart = newElement("chart", 1);
+      chart.geometry = { x: 72, y: 250, width: 672, height: 650 };
+      return templatePage("Chart Overview", [templateText("Your chart", 0, { fontSize: 34, fontFamily: "Playfair Display", fontWeight: 700 }), chart]);
+    },
+  },
+  {
+    id: "summary-focus",
+    category: "Summary",
+    name: "Summary focus",
+    description: "A concise page for a headline and personalized takeaway.",
+    accent: "#e9f5ec",
+    create: () => {
+      const shortcode = newElement("shortcode", 2);
+      shortcode.geometry = { x: 72, y: 430, width: 672, height: 90 };
+      shortcode.payload = { token: "type_description" };
+      return templatePage("Summary", [templateText("Your energetic signature", 0, { fontSize: 32, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("A simple starting point for this reading.", 1, { fontSize: 18 }), shortcode]);
+    },
+  },
+  {
+    id: "blank-page",
+    category: "Blank",
+    name: "Blank page",
+    description: "A clean page ready for your own composition.",
+    accent: "#f4f1fa",
+    create: () => templatePage("Blank page", []),
+  },
+];
+
+function pageLabel(page: ReportPage, index: number): string {
+  const ordinal = `Page ${index + 1}`;
+  const title = page.title.trim();
+  return !title || title.toLowerCase() === ordinal.toLowerCase() ? ordinal : `${ordinal} · ${title}`;
+}
+
 export function ReportEditor({
   subAccountId,
   initial,
@@ -136,13 +221,14 @@ export function ReportEditor({
   const [pages, setPages] = useState(initialPages(initial));
   const [activePageId, setActivePageId] = useState(initial.pages[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"elements" | "pages" | "layers" | null>(
-    "elements"
-  );
+  const [leftPanel, setLeftPanel] = useState<LeftPanel>("elements");
+  const [rightPanel, setRightPanel] = useState<RightPanel>("element");
   const [mobileDrawer, setMobileDrawer] = useState<
     "elements" | "pages" | "layers" | "element" | "page" | null
   >(null);
-  const [zoom, setZoom] = useState(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 28 : 60));
+  const [zoom, setZoom] = useState<ZoomMode>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 28 : "fit-page"));
+  const [fitScale, setFitScale] = useState(0.6);
+  const [templateCategory, setTemplateCategory] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [contentSetId, setContentSetId] = useState(
@@ -159,6 +245,7 @@ export function ReportEditor({
   const [future, setFuture] = useState<ReportPage[][]>([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const canvasViewportRef = useRef<HTMLElement | null>(null);
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
   const elements = useMemo(
     () =>
@@ -169,6 +256,40 @@ export function ReportEditor({
   );
   const selected = elements.find((e) => e.id === selectedId) ?? null;
   const pageDimensions = PAGE[pageSize === "custom" ? "letter" : pageSize];
+  const scale = typeof zoom === "number" ? zoom / 60 : fitScale;
+
+  useEffect(() => {
+    const viewport = canvasViewportRef.current;
+    if (!viewport) return;
+    const measure = () => {
+      const width = Math.max(240, viewport.clientWidth - 32);
+      const height = Math.max(240, viewport.clientHeight - 32);
+      const widthScale = width / pageDimensions.width;
+      const pageScale = Math.min(widthScale, height / pageDimensions.height);
+      setFitScale(zoom === "fit-width" ? widthScale : pageScale);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [pageDimensions.height, pageDimensions.width, zoom]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!selectedId) return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable || target?.closest("[contenteditable='true']")) return;
+      if (event.key !== "Backspace" && event.key !== "Delete") return;
+      event.preventDefault();
+      deleteElement(selectedId);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // deleteElement intentionally uses the current editor snapshot; the
+    // listener is refreshed whenever selection or the active page changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, pages, activePageId]);
 
   useEffect(() => {
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/content-sets`)
@@ -214,7 +335,8 @@ export function ReportEditor({
     const e = newElement(type, elements.length);
     updatePage((p) => ({ ...p, elements: [...(p.elements ?? []), e] }));
     setSelectedId(e.id);
-    setPanel("layers");
+    setRightPanel("element");
+    if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileDrawer("element");
     if (type === "image" || type === "upload") setAssetPickerOpen(true);
   }
   function addPage() {
@@ -228,11 +350,12 @@ export function ReportEditor({
     commit([...pages, p]);
     setActivePageId(p.id);
   }
-  function insertTemplate(name: string) {
-    const p: ReportPage = { id: id(), title: `${name} page`, visibleIf: null, blocks: [], elements: [newElement("text", 0), newElement(name === "Chart" ? "chart" : "shape", 1)] };
-    p.elements = (p.elements ?? []).map((e, i) => ({ ...e, geometry: { ...e.geometry, x: 72, y: 90 + i * 150 }, payload: e.type === "text" ? { text: `${name} — Magnetix structural template` } : e.payload }));
+  function insertTemplate(template: TemplateDefinition) {
+    const p = template.create();
     commit([...pages, p]);
-    toast.success(`${name} template inserted`);
+    setActivePageId(p.id);
+    setTemplateCategory(null);
+    toast.success(`${template.name} inserted`);
   }
   function duplicatePage() {
     const copy = {
@@ -308,7 +431,6 @@ export function ReportEditor({
   }
 
   function openMobileDrawer(drawer: NonNullable<typeof mobileDrawer>) {
-    setPanel(drawer === "layers" ? "layers" : "elements");
     setMobileDrawer(drawer);
   }
 
@@ -332,16 +454,39 @@ export function ReportEditor({
       <div className="text-muted-foreground border-t pt-3 text-xs font-semibold tracking-wide uppercase">
         Template library
       </div>
-      {["Cover", "About", "Chart", "Summary", "Type", "Strategy", "Authority", "Profile", "Centers", "Channels", "Gates", "Astrology", "Frequency", "Closing", "Blank"].map((x) => (
-        <button
-          key={x}
-          onClick={() => insertTemplate(x)}
-          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-violet-50"
-        >
-          {x}
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      ))}
+      <div className="space-y-1">
+        {["Cover", "Chart", "Summary", "Blank", "About", "Type", "Strategy", "Authority", "Profile", "Centers", "Channels", "Gates", "Astrology", "Frequency", "Closing"].map((x) => {
+          const available = TEMPLATE_DEFINITIONS.some((template) => template.category === x);
+          return (
+            <button
+              key={x}
+              onClick={() => available && setTemplateCategory(templateCategory === x ? null : x)}
+              disabled={!available}
+              className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm ${available ? "hover:bg-violet-50" : "cursor-not-allowed text-muted-foreground/60"}`}
+            >
+              <span>{x}</span>
+              {available ? <ChevronRight className={`h-3.5 w-3.5 transition ${templateCategory === x ? "rotate-90" : ""}`} /> : <span className="text-[10px] font-normal normal-case">Coming soon</span>}
+            </button>
+          );
+        })}
+      </div>
+      {templateCategory && (
+        <div className="mt-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/40 p-2">
+          <p className="px-1 text-xs font-semibold text-violet-900">Choose a {templateCategory} template</p>
+          {TEMPLATE_DEFINITIONS.filter((template) => template.category === templateCategory).map((template) => (
+            <div key={template.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="h-16 p-2" style={{ background: `linear-gradient(135deg, ${template.accent}, #ffffff)` }}>
+                <div className="h-full rounded border border-white/80 bg-white/40 p-2 text-[9px] font-semibold text-[#18204a]">{template.name}</div>
+              </div>
+              <div className="space-y-1 p-2">
+                <p className="text-xs font-semibold">{template.name}</p>
+                <p className="text-[11px] leading-snug text-muted-foreground">{template.description}</p>
+                <button type="button" onClick={() => insertTemplate(template)} className="mt-1 w-full rounded-lg bg-violet-700 px-2 py-1.5 text-xs font-semibold text-white">Use template</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 
@@ -443,16 +588,21 @@ export function ReportEditor({
           <label className="hidden items-center gap-1 text-sm sm:flex">
             Zoom
             <select
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
+              value={String(zoom)}
+              onChange={(e) => setZoom(e.target.value === "fit-page" || e.target.value === "fit-width" ? e.target.value : Number(e.target.value))}
               className="rounded-lg border px-2 py-1"
             >
+              <option value="fit-page">Fit Page</option>
+              <option value="fit-width">Fit Width</option>
               <option value={40}>40%</option>
               <option value={60}>60%</option>
               <option value={75}>75%</option>
               <option value={100}>100%</option>
             </select>
           </label>
+          <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 sm:inline-flex" title="Charts in this design preview use deterministic fixture data">
+            Design preview uses sample chart data
+          </span>
           <button
             onClick={save}
             disabled={saving}
@@ -469,33 +619,33 @@ export function ReportEditor({
           </button>
           </div>
         </div>
-        <div className="relative mt-4 grid min-h-[calc(100vh-110px)] grid-cols-1 gap-4 overflow-x-hidden lg:grid-cols-[250px_minmax(0,1fr)_280px]">
-          <aside className="order-2 hidden max-h-72 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:max-h-none">
+        <div className="relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] lg:grid-cols-[250px_minmax(0,1fr)_280px]">
+          <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
             <div className="flex gap-1 border-b pb-2">
               <button
-                onClick={() => setPanel("elements")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${panel === "elements" ? "bg-violet-100 text-violet-800" : ""}`}
+                onClick={() => setLeftPanel("elements")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${leftPanel === "elements" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 <PanelLeft className="mr-1 inline h-4 w-4" />
                 Elements
               </button>
               <button
-                onClick={() => setPanel("pages")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${panel === "pages" ? "bg-violet-100 text-violet-800" : ""}`}
+                onClick={() => setLeftPanel("pages")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${leftPanel === "pages" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 Pages
               </button>
             </div>
             <div className="mt-3 space-y-2">
-              {panel === "elements" && renderElementsPanel()}
-              {panel === "pages" && renderPagesPanel()}
+              {leftPanel === "elements" && renderElementsPanel()}
+              {leftPanel === "pages" && renderPagesPanel()}
             </div>
           </aside>
-          <main className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-auto lg:min-h-[calc(100vh-110px)]">
+          <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
             <div
               className="report-canvas-stage mx-auto flex w-fit flex-col gap-6"
               style={{
-                transform: `scale(${zoom / 60})`,
+                transform: `scale(${scale})`,
                 transformOrigin: "top center",
               }}
             >
@@ -510,8 +660,8 @@ export function ReportEditor({
                   onSelect={(elementId) => {
                     setActivePageId(p.id);
                     setSelectedId(elementId);
-                    setPanel("layers");
-                    if (window.innerWidth < 1024) setMobileDrawer("layers");
+                    setRightPanel("element");
+                    if (window.innerWidth < 1024) setMobileDrawer("element");
                   }}
                   onMove={(elementId, dx, dy) =>
                     updateElement(elementId, (e) => ({
@@ -529,23 +679,23 @@ export function ReportEditor({
               ))}
             </div>
           </main>
-          <aside className="order-3 hidden max-h-96 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:max-h-none">
+          <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
             <div className="flex gap-1 border-b pb-2">
               <button
-                onClick={() => setPanel("layers")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${panel === "layers" ? "bg-violet-100 text-violet-800" : ""}`}
+                onClick={() => setRightPanel("layers")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "layers" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 <Layers3 className="mr-1 inline h-4 w-4" />
                 Layers
               </button>
               <button
-                onClick={() => setPanel("elements")}
-                className="rounded-lg px-2 py-2 text-sm font-semibold"
+                onClick={() => setRightPanel("element")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "element" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 Element
               </button>
             </div>
-            {panel === "layers" ? renderLayerPanel() : renderElementPanel()}
+            {rightPanel === "layers" ? renderLayerPanel() : renderElementPanel()}
           </aside>
           {mobileDrawer && (
             <>
@@ -644,7 +794,7 @@ function PagePanel({
             <span className="flex h-8 w-8 items-center justify-center rounded bg-white text-xs font-bold">
               {i + 1}
             </span>
-            <span className="min-w-0 flex-1 truncate">{p.title}</span>
+            <span className="min-w-0 flex-1 truncate">{pageLabel(p, i)}</span>
           </button>
           <div className="mt-2 flex justify-end gap-1">
             <button
@@ -1088,8 +1238,7 @@ function CanvasPage({
       }}
     >
       <div className="text-muted-foreground absolute -top-6 left-0 flex items-center gap-2 text-xs">
-        <span>Page {index + 1}</span>
-        <span>{page.title}</span>
+        <span>{pageLabel(page, index)}</span>
       </div>
       {elements.map((e) => (
         <CanvasElement
@@ -1121,7 +1270,8 @@ function CanvasElement({
   onResize: (dw: number, dh: number) => void;
   onRotate: (degrees: number) => void;
 }) {
-  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
+  const [resize, setResize] = useState<{ x: number; y: number; dw: number; dh: number } | null>(null);
   const label =
     element.type === "text"
       ? String(element.payload.text ?? "Add text")
@@ -1142,21 +1292,23 @@ function CanvasElement({
       onClick={onSelect}
       onPointerDown={(e) => {
         if (element.locked) return;
-        setDrag({ x: e.clientX, y: e.clientY });
+        setDrag({ x: e.clientX, y: e.clientY, dx: 0, dy: 0 });
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         if (!drag) return;
-        onMove((e.clientX - drag.x) / 1, (e.clientY - drag.y) / 1);
-        setDrag({ x: e.clientX, y: e.clientY });
+        setDrag({ ...drag, dx: e.clientX - drag.x, dy: e.clientY - drag.y });
       }}
-      onPointerUp={() => setDrag(null)}
+      onPointerUp={() => {
+        if (drag && (drag.dx !== 0 || drag.dy !== 0)) onMove(drag.dx, drag.dy);
+        setDrag(null);
+      }}
       className={`absolute overflow-hidden text-left ${selected ? "ring-2 ring-violet-600 ring-offset-2" : "hover:ring-1 hover:ring-violet-300"}`}
       style={{
-        left: element.geometry.x,
-        top: element.geometry.y,
-        width: element.geometry.width,
-        height: element.geometry.height,
+        left: element.geometry.x + (drag?.dx ?? 0),
+        top: element.geometry.y + (drag?.dy ?? 0),
+        width: element.geometry.width + (resize?.dw ?? 0),
+        height: element.geometry.height + (resize?.dh ?? 0),
         zIndex: element.zIndex,
         transform: `rotate(${element.geometry.rotation ?? 0}deg)`,
         opacity: element.hidden ? 0.25 : (element.style?.opacity ?? 1),
@@ -1189,7 +1341,7 @@ function CanvasElement({
       ) : (
         <span>{label}</span>
       )}
-      {selected && !element.locked && <span className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { e.stopPropagation(); const start = { x: e.clientX, y: e.clientY }; const move = (m: PointerEvent) => onResize(m.clientX - start.x, m.clientY - start.y); const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); }} />}
+      {selected && !element.locked && <span className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { e.stopPropagation(); setResize({ x: e.clientX, y: e.clientY, dw: 0, dh: 0 }); const move = (m: PointerEvent) => setResize((current) => current ? { ...current, dw: m.clientX - current.x, dh: m.clientY - current.y } : current); const up = () => { setResize((current) => { if (current && (current.dw !== 0 || current.dh !== 0)) onResize(current.dw, current.dh); return null; }); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); }} />}
       {selected && !element.locked && <button type="button" aria-label="Rotate element" className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white bg-fuchsia-600" onPointerDown={(e) => { e.stopPropagation(); onRotate(15); }}> </button>}
     </button>
   );

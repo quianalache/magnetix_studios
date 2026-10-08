@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
-import { ReportDesignViewer } from "@/components/energetic-decoder/report-design-viewer";
+import { contentRequirementLabel } from "@/lib/energetic-decoder/content-sets";
 import type { ReportDesign } from "@/types/report-blocks";
 import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
@@ -51,6 +51,25 @@ export default function ReportDesignPreviewPage() {
   const [data, setData] = useState<PreviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function openPdfPreview() {
+    if (!data || pdfLoading) return;
+    setPdfLoading(true);
+    try {
+      const response = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${params.reportId}/preview-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ design: data.design }),
+      });
+      if (!response.ok) throw new Error("Couldn’t render the PDF preview.");
+      const blob = await response.blob();
+      window.location.href = URL.createObjectURL(blob);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn’t render the PDF preview.");
+      setPdfLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!subAccountId) return;
@@ -107,25 +126,22 @@ export default function ReportDesignPreviewPage() {
 
         {data && (
           <>
-            <div className="mb-6">
+            <div className="mb-6 rounded-2xl border bg-card p-6">
               <h1 className="text-2xl font-semibold tracking-tight">{data.design.title}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">For {data.reading.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">Actual PDF preview · {data.reading.name}</p>
+              {data.missingContent.length === 0 && (
+                <button type="button" onClick={openPdfPreview} disabled={pdfLoading} className="mt-5 rounded-lg bg-[#5420a8] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+                  {pdfLoading ? "Rendering PDF…" : "Open actual PDF preview"}
+                </button>
+              )}
             </div>
-            <ReportDesignViewer
-              design={data.design}
-              readingInput={{ ...data.reading, reportContent: data.contentSet }}
-              ruleInput={{ humanDesign: data.reading.humanDesign, astrology: data.reading.astrology }}
-              hdDesign={data.hdDesign}
-              mandalaDesign={data.mandalaDesign}
-              astroDesign={data.astroDesign}
-            />
             {data.missingContent.length > 0 && !warningDismissed && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
                 <div className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-xl">
                   <h2 className="text-lg font-semibold text-amber-950">Some Content Set text is missing</h2>
                   <p className="mt-2 text-sm text-amber-900">This preview will leave {data.missingContent.length} interpretation value{data.missingContent.length === 1 ? "" : "s"} blank. You can continue without filling them.</p>
-                  <div className="mt-4 max-h-32 overflow-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-950">{data.missingContent.slice(0, 12).map((m) => <div key={`${m.entryId}.${m.field}`}>{m.entryId} · {m.field}</div>)}</div>
-                  <div className="mt-5 flex justify-end gap-2"><button onClick={() => window.close()} className="rounded-lg border px-3 py-2 text-sm">Go back / review Content</button><button onClick={() => setWarningDismissed(true)} className="rounded-lg bg-[#5420a8] px-3 py-2 text-sm font-semibold text-white">Continue anyway</button></div>
+                  <div className="mt-4 max-h-32 overflow-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-950">{data.missingContent.slice(0, 12).map((m) => <div key={`${m.entryId}.${m.field}`}>{contentRequirementLabel(m.entryId, m.field)}</div>)}</div>
+                  <div className="mt-5 flex justify-end gap-2"><button onClick={() => window.close()} className="rounded-lg border px-3 py-2 text-sm">Go back / review Content</button><button onClick={() => { setWarningDismissed(true); void openPdfPreview(); }} disabled={pdfLoading} className="rounded-lg bg-[#5420a8] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">{pdfLoading ? "Rendering PDF…" : "Continue to PDF"}</button></div>
                 </div>
               </div>
             )}

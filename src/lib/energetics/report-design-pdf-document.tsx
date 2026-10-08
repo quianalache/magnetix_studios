@@ -52,6 +52,12 @@ const styles = StyleSheet.create({
   canvasPlaceholder: { position: "absolute", padding: 10, backgroundColor: "#efe7ff", border: "1pt solid #d8c5f5", color: "#5420a8", textAlign: "center" },
 });
 
+function pageLabel(page: ReportPage, index: number): string {
+  const ordinal = `Page ${index + 1}`;
+  const title = page.title.trim();
+  return !title || title.toLowerCase() === ordinal.toLowerCase() ? ordinal : `${ordinal} · ${title}`;
+}
+
 function textAlignStyle(align: ReportBlockAlign | undefined): "left" | "center" | "right" {
   return align === "center" ? "center" : align === "right" ? "right" : "left";
 }
@@ -218,7 +224,7 @@ export function ReportDesignPdfDocument({
   const contentHeight = pageSize === "letter" ? 720 : pageSize === "custom" && customPageSize ? customPageSize.height - 72 : 769;
   return (
     <Document>
-      {pages.map((page) => (
+      {pages.map((page, index) => (
         <Page key={page.id} size={pdfSize} style={styles.page}>
           <View style={styles.header}>
             {businessLogoUrl ? (
@@ -231,7 +237,7 @@ export function ReportDesignPdfDocument({
             <Text style={styles.forLine}>For {readerName}</Text>
           </View>
 
-          {page.title && <Text style={styles.pageTitle}>{page.title}</Text>}
+          <Text style={styles.pageTitle}>{pageLabel(page, index)}</Text>
 
           {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scaleX={contentWidth / 816} scaleY={contentHeight / 1056} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (

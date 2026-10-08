@@ -313,6 +313,31 @@ export function missingContentForReading(
   return contentNeededForReading(reading).filter((n) => !filled(values(n.entryId)?.fields?.[n.field]));
 }
 
+/** Practitioner-facing label for a missing content requirement. Internal ids
+ * remain useful in logs, but should not be the primary warning copy. */
+export function contentRequirementLabel(entryId: string, field: string): string {
+  const parsed = parseContentEntryId(entryId);
+  if (!parsed) return `${entryId} — ${field}`;
+  const fieldLabel = categorySchema(parsed.categoryId)?.fields.find((f) => f.key === field)?.label ?? field;
+  if (parsed.categoryId === "hd:channel") return `Channel ${parsed.key.replace(/-/g, "–")} — ${fieldLabel}`;
+  if (parsed.categoryId === "hd:incarnationCross") {
+    const cross = INCARNATION_CROSSES.find((entry) => entry.key === parsed.key);
+    return `${cross?.label ?? `Incarnation Cross ${parsed.key}`} — ${fieldLabel}`;
+  }
+  if (parsed.categoryId === "astro:planetSign") {
+    const [body, sign] = parsed.key.split(":");
+    return `${body ? `${body[0].toUpperCase()}${body.slice(1)}` : "Planet"} in ${sign ?? "sign"} — ${fieldLabel}`;
+  }
+  if (parsed.categoryId === "astro:planetHouse") {
+    const [body, house] = parsed.key.split(":");
+    const houseNumber = Number(house);
+    const suffix = houseNumber % 100 >= 11 && houseNumber % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[houseNumber % 10] ?? "th";
+    return `${body ? `${body[0].toUpperCase()}${body.slice(1)}` : "Planet"} in ${Number.isFinite(houseNumber) ? `${houseNumber}${suffix}` : house ?? "house"} House — ${fieldLabel}`;
+  }
+  if (parsed.categoryId === "freq:gate") return `Frequency Gate ${parsed.key} — ${fieldLabel}`;
+  return `${categorySchema(parsed.categoryId)?.noun ?? parsed.category} ${parsed.key} — ${fieldLabel}`;
+}
+
 // ── Validation ──────────────────────────────────────────────────────────
 
 export function validateContentSetMeta(input: { name?: unknown; description?: unknown }): { ok: true; name: string; description: string } | { ok: false; error: string } {
