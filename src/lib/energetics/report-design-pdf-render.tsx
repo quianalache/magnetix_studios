@@ -6,7 +6,7 @@ import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
-import type { ReportPage } from "@/types/report-blocks";
+import type { ReportPage, ReportPageSize } from "@/types/report-blocks";
 
 /** Same pattern as reading-pdf-render.tsx — renderToStream returns a Node Readable, wrapped via Readable.toWeb so NextResponse is happy under any runtime. */
 export async function renderReportDesignPdfStream(opts: {
@@ -22,6 +22,8 @@ export async function renderReportDesignPdfStream(opts: {
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
+  pageSize?: ReportPageSize;
+  customPageSize?: { width: number; height: number } | null;
 }): Promise<ReadableStream<Uint8Array>> {
   const nodeStream = await renderToStream(<ReportDesignPdfDocument {...opts} />);
   const { Readable } = await import("node:stream");

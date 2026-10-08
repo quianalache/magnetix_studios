@@ -55,6 +55,8 @@ export async function GET(
     hdDesign,
     mandalaDesign,
     astroDesign,
+    pageSize: generatedReport.snapshot.pageSize,
+    customPageSize: generatedReport.snapshot.customPageSize,
   });
 
   return new NextResponse(stream, {

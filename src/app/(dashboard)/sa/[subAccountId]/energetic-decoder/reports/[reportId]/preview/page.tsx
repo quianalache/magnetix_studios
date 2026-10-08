@@ -25,6 +25,8 @@ interface PreviewData {
   hdDesign: ChartDesign | null;
   mandalaDesign: ChartDesign | null;
   astroDesign: ChartDesign | null;
+  contentSet: { id: string; name: string; values: Record<string, { fields: Record<string, string> }>; strict: boolean };
+  missingContent: { entryId: string; field: string }[];
 }
 
 /**
@@ -48,6 +50,7 @@ export default function ReportDesignPreviewPage() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<PreviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
 
   useEffect(() => {
     if (!subAccountId) return;
@@ -58,6 +61,7 @@ export default function ReportDesignPreviewPage() {
 
     setData(null);
     setError(null);
+    setWarningDismissed(false);
     fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/report-designs/${params.reportId}/preview-data?${qs}`)
       .then(async (r) => {
         const body = await r.json();
@@ -109,12 +113,22 @@ export default function ReportDesignPreviewPage() {
             </div>
             <ReportDesignViewer
               design={data.design}
-              readingInput={data.reading}
+              readingInput={{ ...data.reading, reportContent: data.contentSet }}
               ruleInput={{ humanDesign: data.reading.humanDesign, astrology: data.reading.astrology }}
               hdDesign={data.hdDesign}
               mandalaDesign={data.mandalaDesign}
               astroDesign={data.astroDesign}
             />
+            {data.missingContent.length > 0 && !warningDismissed && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+                <div className="w-full max-w-lg rounded-2xl border border-amber-200 bg-white p-6 shadow-xl">
+                  <h2 className="text-lg font-semibold text-amber-950">Some Content Set text is missing</h2>
+                  <p className="mt-2 text-sm text-amber-900">This preview will leave {data.missingContent.length} interpretation value{data.missingContent.length === 1 ? "" : "s"} blank. You can continue without filling them.</p>
+                  <div className="mt-4 max-h-32 overflow-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-950">{data.missingContent.slice(0, 12).map((m) => <div key={`${m.entryId}.${m.field}`}>{m.entryId} · {m.field}</div>)}</div>
+                  <div className="mt-5 flex justify-end gap-2"><button onClick={() => window.close()} className="rounded-lg border px-3 py-2 text-sm">Go back / review Content</button><button onClick={() => setWarningDismissed(true)} className="rounded-lg bg-[#5420a8] px-3 py-2 text-sm font-semibold text-white">Continue anyway</button></div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

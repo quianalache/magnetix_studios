@@ -1,5 +1,6 @@
-import type { ReportPage, ReportCanvasElement } from "./report-blocks";
+import type { ReportPage, ReportCanvasElement, ReportPageSize } from "./report-blocks";
 import type { ChartDesign } from "./chart-design";
+import type { ContentEntryValues } from "@/lib/energetic-decoder/content-sets";
 
 /**
  * A generated report record — Phase 2 Build Plan §7/§9 (approved
@@ -50,7 +51,10 @@ export interface GeneratedReport {
     pages: ReportPage[];
     layoutVersion?: 1 | 2;
     contentSetId?: string | null;
+    contentSet?: { id: string; name: string; values: Record<string, ContentEntryValues> };
     resolvedElements?: Record<string, ReportCanvasElement[]>;
+    pageSize?: ReportPageSize;
+    customPageSize?: { width: number; height: number } | null;
     /**
      * The chart styling frozen with this report (unified Chart Designs,
      * 2026-10). Absent on reports generated before styling was frozen —

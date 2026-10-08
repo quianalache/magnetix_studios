@@ -257,6 +257,8 @@ export interface ContentReadingInput {
     definedCenters?: string[];
     openCenters?: string[];
     variables?: Partial<Record<"digestion" | "sense" | "designSense" | "motivation" | "perspective" | "environment", { value: string }>>;
+    definedChannels?: { key: string }[];
+    incarnationCross?: string | null;
   } | null;
   astrology?: {
     placements?: { body: string; sign: string; house: number }[];
@@ -285,6 +287,11 @@ export function contentNeededForReading(reading: ContentReadingInput): { entryId
   for (const c of hd?.definedCenters ?? []) add(contentEntryId("hd", "center", c), "definedText");
   for (const c of hd?.openCenters ?? []) add(contentEntryId("hd", "center", c), "undefinedText");
   for (const [cat, v] of Object.entries(hd?.variables ?? {})) if (v?.value) add(contentEntryId("hd", cat, v.value), "description");
+  for (const channel of hd?.definedChannels ?? []) add(contentEntryId("hd", "channel", channel.key), "description");
+  if (hd?.incarnationCross) {
+    const cross = INCARNATION_CROSSES.find((entry) => entry.label === hd.incarnationCross || entry.name === hd.incarnationCross);
+    if (cross) add(contentEntryId("hd", "incarnationCross", cross.key), "description");
+  }
   const astro = reading.astrology;
   for (const body of ["sun", "moon", "chiron"]) {
     const p = astro?.placements?.find((x) => x.body === body);
@@ -411,3 +418,4 @@ export function parseContentSetImport(json: unknown, knownEntryIds: Set<string>)
   }
   return { ok: errors.length === 0, name: meta.ok ? meta.name : "", description: meta.ok ? meta.description : "", entries, recognized: entries.size, errors, skipped };
 }
+import { INCARNATION_CROSSES } from "@/lib/energetics/incarnation-cross-data";

@@ -9,7 +9,7 @@ import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
-import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement } from "@/types/report-blocks";
+import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement, ReportPageSize } from "@/types/report-blocks";
 
 /**
  * PDF export for a custom ReportDesign — Phase 2 Build Plan Task 6
@@ -171,10 +171,13 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
   }
 }
 
-function ReportCanvasElementPdf({ element }: { element: ReportCanvasElement }) {
+function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
   const style = { ...styles.canvasText, left: element.geometry.x, top: element.geometry.y, width: element.geometry.width, height: element.geometry.height, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: element.style?.borderWidth || 0, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid" } as const;
-  if (element.type === "image" || element.type === "upload") return <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset</Text></View>;
-  if (element.type === "chart") return <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Chart element</Text></View>;
+  if (element.type === "image" || element.type === "upload") {
+    const url = typeof element.payload.url === "string" ? element.payload.url : "";
+    return url ? <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
+  }
+  if (element.type === "chart") return <View style={style}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
   const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
   return <Text style={style}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>;
 }
@@ -191,6 +194,8 @@ export function ReportDesignPdfDocument({
   hdDesign,
   mandalaDesign,
   astroDesign,
+  pageSize = "a4",
+  customPageSize,
 }: {
   title: string;
   readerName: string;
@@ -204,11 +209,14 @@ export function ReportDesignPdfDocument({
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
+  pageSize?: ReportPageSize;
+  customPageSize?: { width: number; height: number } | null;
 }) {
+  const pdfSize = pageSize === "letter" ? "LETTER" : pageSize === "custom" && customPageSize ? [customPageSize.width, customPageSize.height] as [number, number] : "A4";
   return (
     <Document>
       {pages.map((page) => (
-        <Page key={page.id} size="A4" style={styles.page}>
+        <Page key={page.id} size={pdfSize} style={styles.page}>
           <View style={styles.header}>
             {businessLogoUrl ? (
               // eslint-disable-next-line jsx-a11y/alt-text
@@ -222,7 +230,7 @@ export function ReportDesignPdfDocument({
 
           {page.title && <Text style={styles.pageTitle}>{page.title}</Text>}
 
-          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} />)}</View> : <View style={styles.row}>
+          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (
               <View key={block.id} style={[styles.blockWrap, { width: `${block.widthPct}%` }]}>
                 {block.type === "chart" ? (

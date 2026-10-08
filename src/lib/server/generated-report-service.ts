@@ -11,6 +11,8 @@ import type { GeneratedReport, GeneratedReportChartStyles } from "@/types/genera
 import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
+import { getContentSet } from "@/lib/server/content-set-service";
+import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 
 /**
  * Generated Reports — Phase 2 Build Plan Task 2 (2026-08-12), data layer
@@ -130,6 +132,8 @@ export async function createGeneratedReport(opts: {
   if (!design) return { error: "Report design not found" };
   if (!reading) return { error: "Reading not found" };
 
+  const contentSet = await getContentSet(opts.subAccountId, design.contentSetId || DEFAULT_CONTENT_SET_ID);
+
   const ruleInput: ChartRuleReadingInput = { humanDesign: reading.humanDesign, astrology: reading.astrology };
   const shortcodeInput: ShortcodeReadingInput = {
     name: reading.name,
@@ -138,6 +142,7 @@ export async function createGeneratedReport(opts: {
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
     spheres: reading.spheres,
+    reportContent: { values: contentSet.values, strict: (design.layoutVersion ?? 1) >= 2 },
   };
 
   const doc = {
@@ -155,6 +160,9 @@ export async function createGeneratedReport(opts: {
       pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput),
       layoutVersion: design.layoutVersion ?? 1,
       contentSetId: design.contentSetId ?? null,
+      contentSet: { id: contentSet.id, name: contentSet.name, values: contentSet.values },
+      pageSize: design.pageSize ?? "a4",
+      customPageSize: design.customPageSize ?? null,
       // Unified Chart Designs (2026-10): the chart styling is frozen with
       // the report too, so a later edit to a Chart Design can't change a
       // report that was already generated.

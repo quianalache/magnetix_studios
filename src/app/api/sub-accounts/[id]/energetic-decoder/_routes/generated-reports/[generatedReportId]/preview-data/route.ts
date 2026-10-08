@@ -36,6 +36,9 @@ export async function GET(
     agencyId: generatedReport.agencyId,
     title: generatedReport.reportDesignTitleAtGeneration,
     pages: generatedReport.snapshot.pages,
+    layoutVersion: generatedReport.snapshot.layoutVersion,
+    pageSize: generatedReport.snapshot.pageSize,
+    contentSetId: generatedReport.snapshot.contentSetId,
     createdAt: generatedReport.generatedAt,
     updatedAt: generatedReport.generatedAt,
   };
@@ -50,6 +53,7 @@ export async function GET(
     // though the sibling report-designs preview-data route (and the PDF
     // route) already carry it.
     spheres: real.spheres,
+    reportContent: generatedReport.snapshot.contentSet ? { values: generatedReport.snapshot.contentSet.values, strict: true } : undefined,
   };
 
   // Same frozen-styling rule as the PDF route, so the practitioner's

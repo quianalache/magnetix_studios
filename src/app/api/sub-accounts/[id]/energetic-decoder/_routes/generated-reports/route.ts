@@ -3,6 +3,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { listGeneratedReports, listGeneratedReportsForProfile, createGeneratedReport } from "@/lib/server/generated-report-service";
+import { getReportDesign } from "@/lib/server/report-design-service";
+import { getReadingById } from "@/lib/server/energetic-decoder-service";
+import { getContentSet } from "@/lib/server/content-set-service";
+import { DEFAULT_CONTENT_SET_ID, missingContentForReading, type ContentReadingInput } from "@/lib/energetic-decoder/content-sets";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
@@ -37,8 +41,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
   const reportDesignId = typeof body.reportDesignId === "string" ? body.reportDesignId : "";
   const readingId = typeof body.readingId === "string" ? body.readingId : "";
+  const confirmMissing = body.confirmMissing === true;
   if (!reportDesignId || !readingId) {
     return NextResponse.json({ error: "reportDesignId and readingId are both required" }, { status: 400 });
+  }
+
+  const [design, reading] = await Promise.all([getReportDesign(subAccountId, reportDesignId), getReadingById(subAccountId, readingId)]);
+  if (!design || !reading) return NextResponse.json({ error: "Report design or reading not found" }, { status: 422 });
+  const contentSet = await getContentSet(subAccountId, design.contentSetId || DEFAULT_CONTENT_SET_ID);
+  const missingContent = missingContentForReading(reading as ContentReadingInput, (entryId) => contentSet.values[entryId]);
+  if (missingContent.length > 0 && !confirmMissing) {
+    return NextResponse.json({ error: "missing_content", missingContent, contentSetName: contentSet.name }, { status: 409 });
   }
 
   const result = await createGeneratedReport({

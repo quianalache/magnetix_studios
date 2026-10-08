@@ -26,6 +26,8 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
+import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
+import type { MediaLibraryItem } from "@/types/media-library";
 import {
   CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -145,6 +147,7 @@ export function ReportEditor({
   const [history, setHistory] = useState<ReportPage[][]>([]);
   const [future, setFuture] = useState<ReportPage[][]>([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
   const elements = useMemo(
     () =>
@@ -195,6 +198,7 @@ export function ReportEditor({
     updatePage((p) => ({ ...p, elements: [...(p.elements ?? []), e] }));
     setSelectedId(e.id);
     setPanel("layers");
+    if (type === "image" || type === "upload") setAssetPickerOpen(true);
   }
   function addPage() {
     const p: ReportPage = {
@@ -276,10 +280,8 @@ export function ReportEditor({
       `report-design-draft:${initial.id}`,
       JSON.stringify({ title, pages, contentSetId, layoutVersion: 2, pageSize })
     );
-    window.open(
-      `/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?source=sample&draft=1`,
-      "_blank"
-    );
+    const query = new URLSearchParams({ source: "sample", draft: "1", contentSetId });
+    window.open(`/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?${query}`, "_blank");
   }
 
   return (
@@ -519,11 +521,22 @@ export function ReportEditor({
                 setVisibilityOpen={setVisibilityOpen}
                 activePage={activePage}
                 updatePage={updatePage}
+                onChooseImage={() => setAssetPickerOpen(true)}
               />
             )}
           </aside>
         </div>
       </div>
+      <MediaPickerDialog
+        subAccountId={subAccountId}
+        open={assetPickerOpen}
+        onOpenChange={setAssetPickerOpen}
+        kind="image"
+        onSelect={(item: MediaLibraryItem) => {
+          if (!selectedId) return;
+          updateElement(selectedId, (e) => ({ ...e, payload: { ...e.payload, assetId: item.id, url: item.publicUrl ?? item.thumbnailUrl ?? "", title: item.title, alt: item.title, fit: "cover" } }));
+        }}
+      />
       <style jsx>{`@media (max-width: 640px) { .report-canvas-stage { transform: scale(.42) !important; transform-origin: top left !important; margin-left: 0 !important; } }`}</style>
     </div>
   );
@@ -650,6 +663,7 @@ function ElementPanel({
   setVisibilityOpen,
   activePage,
   updatePage,
+  onChooseImage,
 }: {
   selected: ReportCanvasElement | null;
   sets: { id: string; name: string }[];
@@ -662,6 +676,7 @@ function ElementPanel({
   setVisibilityOpen: (v: boolean) => void;
   activePage: ReportPage;
   updatePage: (u: (p: ReportPage) => ReportPage) => void;
+  onChooseImage: () => void;
 }) {
   const [tab, setTab] = useState<"element" | "page">("element");
   return (
@@ -838,6 +853,25 @@ function ElementPanel({
                 ))}
               </select>
             </label>
+          )}
+          {selected.type === "chart" && (
+            <label className="block text-sm font-medium">
+              Chart piece
+              <select value={String(selected.payload.piece ?? "human-design-full")} onChange={(e) => update((x) => ({ ...x, payload: { ...x.payload, piece: e.target.value } }))} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm">
+                <option value="human-design-full">Human Design bodygraph</option>
+                <option value="human-design-mandala">Human Design mandala</option>
+                <option value="human-design-gates">Activated gates</option>
+                <option value="astrology-wheel">Astrology wheel</option>
+                <option value="frequency-hologenetic">Frequency / Hologenetic Profile</option>
+              </select>
+            </label>
+          )}
+          {(selected.type === "image" || selected.type === "upload") && (
+            <div className="space-y-2 rounded-xl border p-3 text-sm">
+              <p className="font-medium">Media Library image</p>
+              <p className="text-muted-foreground text-xs">Choose an existing approved image asset for this report.</p>
+              <button type="button" onClick={onChooseImage} className="rounded-lg border px-3 py-2 text-sm font-medium text-violet-800">Choose image</button>
+            </div>
           )}
           <div className="flex gap-2">
             <button

@@ -10,6 +10,7 @@ import type { HumanDesignProfile } from "@/lib/energetics/human-design";
 import type { AstrologyChart } from "@/lib/energetics/astrology";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
+import type { ContentEntryValues } from "@/lib/energetic-decoder/content-sets";
 
 interface PreviewData {
   design: ReportDesign;
@@ -20,6 +21,7 @@ interface PreviewData {
     humanDesign: HumanDesignProfile | null;
     astrology: AstrologyChart | null;
     spheres?: GeneKeysSphereResult[];
+    reportContent?: { values: Record<string, ContentEntryValues>; strict: boolean };
   };
   sourceLabel: string;
   hdDesign: ChartDesign | null;

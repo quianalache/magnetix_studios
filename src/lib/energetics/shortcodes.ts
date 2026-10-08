@@ -3,6 +3,7 @@ import type { AstrologyChart } from "./astrology";
 import type { CenterKey } from "./human-design-data";
 import { CENTER_LABELS, CENTERS } from "./human-design-data";
 import type { GeneKeysSphereName, GeneKeysSphereResult } from "./gene-keys";
+import type { ContentEntryValues } from "@/lib/energetic-decoder/content-sets";
 
 /**
  * Shortcodes — merge tags a report/page block's text can contain, resolved
@@ -142,6 +143,8 @@ export interface ShortcodeReadingInput {
   astrology?: (AstrologyChart & { content?: AstrologyReadingContentShape }) | null;
   /** Gene Keys / Frequency spheres, each already resolved with showsUp/giftText at reading-generation time (energetic-decoder-service.ts). Optional — omitted by sources that don't compute Gene Keys (e.g. the Report Builder Preview's Sample Data). */
   spheres?: GeneKeysSphereResult[];
+  /** Values from the Report Design's selected Content Set. Strict custom sets never fall back to legacy Reading text. */
+  reportContent?: { values: Record<string, ContentEntryValues>; strict: boolean };
 }
 
 const ASTRO_BODY_LABELS: Record<string, string> = {
@@ -182,7 +185,18 @@ function findSphere(spheres: GeneKeysSphereResult[] | undefined, name: GeneKeysS
   return spheres?.find((s) => s.sphere === name);
 }
 
+function reportContentField(reading: ShortcodeReadingInput, entryId: string, field: string): string {
+  return reading.reportContent?.values[entryId]?.fields?.[field] ?? "";
+}
+
+function structuredContentToken(token: string, reading: ShortcodeReadingInput): string | null {
+  const match = /^content:(hd|astro|freq):([^:]+):(.+)\.(\w+)$/.exec(token);
+  return match ? reportContentField(reading, `${match[1]}:${match[2]}:${match[3]}`, match[4]) : null;
+}
+
 function resolveToken(token: string, reading: ShortcodeReadingInput): string {
+  const structured = structuredContentToken(token, reading);
+  if (structured !== null) return structured;
   const hd = reading.humanDesign;
   const astro = reading.astrology;
   const [first, ...rest] = (reading.name ?? "").trim().split(/\s+/);
@@ -239,10 +253,14 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
 
     // Interpretation-text — Human Design.
     case "type_description":
-      return hd?.content?.typeDescription ?? "";
+      return reading.reportContent ? reportContentField(reading, `hd:type:${hd?.type ?? ""}`, "description") : hd?.content?.typeDescription ?? "";
     case "authority_description":
-      return hd?.content?.authorityDescription ?? "";
+      return reading.reportContent ? reportContentField(reading, `hd:authority:${hd?.authority ?? ""}`, "description") : hd?.content?.authorityDescription ?? "";
     case "profile_description":
+      if (reading.reportContent && hd?.profile) {
+        const names = hd.profile.split("/").map((line) => reportContentField(reading, `hd:line:${line.trim()}`, "name")).filter(Boolean);
+        return names.length === 2 ? `${hd.profile} — ${names.join(" / ")}` : "";
+      }
       return profileDescription(hd);
     case "head_center_text":
     case "ajna_center_text":
@@ -253,37 +271,41 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
     case "solarplexus_center_text":
     case "spleen_center_text":
     case "root_center_text":
-      return centerText(hd, token.replace(/_center_text$/, "") as CenterKey);
+      const center = token.replace(/_center_text$/, "") as CenterKey;
+      if (reading.reportContent) {
+        return reportContentField(reading, `hd:center:${center}`, hd?.definedCenters?.includes(center) ? "definedText" : "undefinedText");
+      }
+      return centerText(hd, center);
 
     // Interpretation-text — Astrology.
     case "sun_sign_description": {
       const sign = astro?.placements.find((p) => p.body === "sun")?.sign;
-      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+      return sign ? (reading.reportContent ? reportContentField(reading, `astro:sign:${sign}`, "description") : astro?.content?.signs?.[sign] ?? "") : "";
     }
     case "moon_sign_description": {
       const sign = astro?.placements.find((p) => p.body === "moon")?.sign;
-      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+      return sign ? (reading.reportContent ? reportContentField(reading, `astro:sign:${sign}`, "description") : astro?.content?.signs?.[sign] ?? "") : "";
     }
     case "rising_sign_description": {
       const sign = astro?.angles.ascendant.sign;
-      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+      return sign ? (reading.reportContent ? reportContentField(reading, `astro:sign:${sign}`, "description") : astro?.content?.signs?.[sign] ?? "") : "";
     }
     case "chiron_sign_description": {
       const sign = astro?.placements.find((p) => p.body === "chiron")?.sign;
-      return sign ? (astro?.content?.signs?.[sign] ?? "") : "";
+      return sign ? (reading.reportContent ? reportContentField(reading, `astro:sign:${sign}`, "description") : astro?.content?.signs?.[sign] ?? "") : "";
     }
     case "sun_house_theme": {
       const house = astro?.placements.find((p) => p.body === "sun")?.house;
-      return house ? (astro?.content?.houses?.[String(house)]?.theme ?? "") : "";
+      return house ? (reading.reportContent ? reportContentField(reading, `astro:house:${house}`, "theme") : astro?.content?.houses?.[String(house)]?.theme ?? "") : "";
     }
     case "sun_house_description": {
       const house = astro?.placements.find((p) => p.body === "sun")?.house;
-      return house ? (astro?.content?.houses?.[String(house)]?.description ?? "") : "";
+      return house ? (reading.reportContent ? reportContentField(reading, `astro:house:${house}`, "description") : astro?.content?.houses?.[String(house)]?.description ?? "") : "";
     }
     case "tightest_aspect_description": {
       const aspect = astro?.aspects?.[0];
       if (!aspect) return "";
-      const desc = astro?.content?.aspectTypes?.[aspect.type];
+      const desc = reading.reportContent ? reportContentField(reading, `astro:aspect:${aspect.type}`, "description") : astro?.content?.aspectTypes?.[aspect.type];
       if (!desc) return "";
       const labelA = ASTRO_BODY_LABELS[aspect.bodyA] ?? aspect.bodyA;
       const labelB = ASTRO_BODY_LABELS[aspect.bodyB] ?? aspect.bodyB;
@@ -294,34 +316,34 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
     case "life_work_gate":
       return findSphere(reading.spheres, "Life's Work")?.gate?.toString() ?? "";
     case "life_work_shows_up":
-      return findSphere(reading.spheres, "Life's Work")?.showsUp ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Life's Work")?.gate ?? ""}`, "showsUp") : findSphere(reading.spheres, "Life's Work")?.showsUp ?? "";
     case "life_work_gift_text":
-      return findSphere(reading.spheres, "Life's Work")?.giftText ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Life's Work")?.gate ?? ""}`, "giftText") : findSphere(reading.spheres, "Life's Work")?.giftText ?? "";
     case "evolution_gate":
       return findSphere(reading.spheres, "Evolution")?.gate?.toString() ?? "";
     case "evolution_shows_up":
-      return findSphere(reading.spheres, "Evolution")?.showsUp ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Evolution")?.gate ?? ""}`, "showsUp") : findSphere(reading.spheres, "Evolution")?.showsUp ?? "";
     case "evolution_gift_text":
-      return findSphere(reading.spheres, "Evolution")?.giftText ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Evolution")?.gate ?? ""}`, "giftText") : findSphere(reading.spheres, "Evolution")?.giftText ?? "";
     case "radiance_gate":
       return findSphere(reading.spheres, "Radiance")?.gate?.toString() ?? "";
     case "radiance_shows_up":
-      return findSphere(reading.spheres, "Radiance")?.showsUp ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Radiance")?.gate ?? ""}`, "showsUp") : findSphere(reading.spheres, "Radiance")?.showsUp ?? "";
     case "radiance_gift_text":
-      return findSphere(reading.spheres, "Radiance")?.giftText ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Radiance")?.gate ?? ""}`, "giftText") : findSphere(reading.spheres, "Radiance")?.giftText ?? "";
     case "purpose_gate":
       return findSphere(reading.spheres, "Purpose")?.gate?.toString() ?? "";
     case "purpose_shows_up":
-      return findSphere(reading.spheres, "Purpose")?.showsUp ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Purpose")?.gate ?? ""}`, "showsUp") : findSphere(reading.spheres, "Purpose")?.showsUp ?? "";
     case "purpose_gift_text":
-      return findSphere(reading.spheres, "Purpose")?.giftText ?? "";
+      return reading.reportContent ? reportContentField(reading, `freq:gate:${findSphere(reading.spheres, "Purpose")?.gate ?? ""}`, "giftText") : findSphere(reading.spheres, "Purpose")?.giftText ?? "";
 
     default:
       return "";
   }
 }
 
-const TOKEN_PATTERN = /\{\{\s*([a-z_]+)\s*\}\}/g;
+const TOKEN_PATTERN = /\{\{\s*([a-z_][a-z0-9_:.-]*)\s*\}\}/g;
 
 /** Replaces every `{{token}}` in `html` with its real resolved value for this reading. Unknown tokens resolve to an empty string rather than being left in place, so a stray/typo'd token never leaks raw `{{...}}` syntax into a delivered report. */
 export function resolveShortcodes(html: string, reading: ShortcodeReadingInput): string {

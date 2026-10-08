@@ -295,6 +295,7 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
   const [generateDesignId, setGenerateDesignId] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<GeneratedReport | null>(null);
+  const [missingGenerateContent, setMissingGenerateContent] = useState<{ entryId: string; field: string }[] | null>(null);
 
   const [openRequest, setOpenRequest] = useState<NewReadingDialogOpenRequest | null>(null);
   const [preparingGenerate, setPreparingGenerate] = useState(false);
@@ -499,6 +500,7 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
   function openGenerateDialog() {
     setGenerateDesignId("");
     setGeneratedResult(null);
+    setMissingGenerateContent(null);
     setGenerateOpen(true);
   }
 
@@ -510,9 +512,13 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
       const res = await fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/generated-reports`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportDesignId: generateDesignId, readingId: selected.id }),
+        body: JSON.stringify({ reportDesignId: generateDesignId, readingId: selected.id, confirmMissing: Boolean(missingGenerateContent) }),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; generatedReport?: GeneratedReport; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; generatedReport?: GeneratedReport; error?: string; missingContent?: { entryId: string; field: string }[] };
+      if (res.status === 409 && data.error === "missing_content") {
+        setMissingGenerateContent(data.missingContent ?? []);
+        return;
+      }
       if (!res.ok || !data.ok || !data.generatedReport) throw new Error(data.error ?? "Couldn't generate that report.");
       setGeneratedResult(data.generatedReport);
       toast.success("Report generated.");
@@ -686,6 +692,14 @@ function ReadingWorkspaceView({ profileId, readingId }: { profileId: string | nu
                 {generating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
                 {generating ? "Generating…" : "Generate"}
               </Button>
+              {missingGenerateContent && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                  <p className="font-semibold">Some selected Content Set text is missing.</p>
+                  <p className="mt-1">Generation will continue with {missingGenerateContent.length} blank interpretation value{missingGenerateContent.length === 1 ? "" : "s"}. No Default fallback will be used.</p>
+                  <div className="mt-2 max-h-24 overflow-auto">{missingGenerateContent.slice(0, 10).map((m) => <div key={`${m.entryId}.${m.field}`}>{m.entryId} · {m.field}</div>)}</div>
+                  <div className="mt-3 flex gap-2"><button type="button" onClick={() => setMissingGenerateContent(null)} className="rounded-lg border border-amber-300 px-2 py-1">Go back / review</button><button type="button" onClick={() => void generateReport()} className="rounded-lg bg-[#5420a8] px-2 py-1 font-semibold text-white">Continue anyway</button></div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4 py-2">

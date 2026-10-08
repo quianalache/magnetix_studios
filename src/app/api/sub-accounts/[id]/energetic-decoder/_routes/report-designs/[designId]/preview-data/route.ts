@@ -6,6 +6,8 @@ import { getReportDesign } from "@/lib/server/report-design-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { getPreviewSampleReading } from "@/lib/energetics/preview-sample-reading";
+import { getContentSet } from "@/lib/server/content-set-service";
+import { contentNeededForReading, missingContentForReading, DEFAULT_CONTENT_SET_ID, type ContentReadingInput } from "@/lib/energetic-decoder/content-sets";
 
 /**
  * Report Builder Preview (2026-08-12) — everything the internal Preview
@@ -69,5 +71,10 @@ export async function GET(
     getDefaultChartDesign(subAccountId, "astrology"),
   ]);
 
-  return NextResponse.json({ ok: true, design, reading, sourceLabel, hdDesign, mandalaDesign, astroDesign });
+  const selectedSetId = url.searchParams.get("contentSetId") || design.contentSetId || DEFAULT_CONTENT_SET_ID;
+  const contentSet = await getContentSet(subAccountId, selectedSetId);
+  const contentReading = reading as ContentReadingInput;
+  const missingContent = missingContentForReading(contentReading, (entryId) => contentSet.values[entryId]);
+
+  return NextResponse.json({ ok: true, design, reading, sourceLabel, hdDesign, mandalaDesign, astroDesign, contentSet: { id: contentSet.id, name: contentSet.name, values: contentSet.values, strict: (design.layoutVersion ?? 1) >= 2 }, missingContent, neededContent: contentNeededForReading(contentReading) });
 }
