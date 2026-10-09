@@ -21,7 +21,6 @@ import {
   PanelLeft,
   Palette,
   Pencil,
-  Plus,
   Redo2,
   Search,
   Save,
@@ -61,11 +60,11 @@ const PAGE = {
 };
 const tools: { type: ReportElementType; label: string; icon: typeof Type }[] = [
   { type: "text", label: "Text", icon: Type },
-  { type: "image", label: "Images", icon: ImageIcon },
   { type: "chart", label: "Charts", icon: Grid2X2 },
   { type: "shortcode", label: "Shortcodes", icon: WandSparkles },
   { type: "shape", label: "Shapes", icon: Shapes },
   { type: "frame", label: "Frames", icon: PanelLeft },
+  { type: "image", label: "Images", icon: ImageIcon },
   { type: "graphic", label: "Graphics", icon: WandSparkles },
   { type: "upload", label: "Uploads", icon: UploadCloud },
 ];
@@ -461,60 +460,21 @@ export function ReportEditor({
     setMobileDrawer(drawer);
   }
 
-  const renderElementsPanel = () => (
-    <>
-      {templateCategory === "Templates" ? (
-        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/35 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-[#18204a]">Template Library</p>
-              <p className="text-[11px] text-muted-foreground">Real starter pages available in this release.</p>
-            </div>
-            <button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-white">Back</button>
-          </div>
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates…" className="h-9 w-full rounded-lg border bg-white pl-9 pr-3 text-sm" />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {TEMPLATE_DEFINITIONS.filter((template) => !templateSearch.trim() || `${template.name} ${template.category} ${template.description}`.toLowerCase().includes(templateSearch.trim().toLowerCase())).map((template) => (
-              <div key={template.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white">
-                <div className="h-16 p-2" style={{ background: `linear-gradient(135deg, ${template.accent}, #ffffff)` }}><div className="h-full rounded border border-white/80 bg-white/45 p-2 text-[10px] font-semibold text-[#18204a]">{template.name}</div></div>
-                <div className="space-y-1 p-2"><p className="text-xs font-semibold">{template.name}</p><p className="text-[11px] leading-snug text-muted-foreground">{template.description}</p><button type="button" onClick={() => insertTemplate(template)} className="w-full rounded-lg bg-violet-700 px-2 py-1.5 text-xs font-semibold text-white">Use template</button></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <input placeholder="Search elements…" className="h-9 w-full rounded-lg border px-3 text-sm" />
-      )}
-      <div className="grid grid-cols-2 gap-2">
-      <button type="button" onClick={() => setTemplateCategory(templateCategory === "Templates" ? null : "Templates")} className={`group rounded-2xl border p-3 text-left transition ${templateCategory === "Templates" ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:border-violet-300 hover:bg-[#fbf7ff]"}`}>
-        <LayoutTemplate className="h-5 w-5 text-violet-700" /><span className="mt-2 block text-sm font-semibold">Templates</span><span className="mt-1 block text-[11px] text-muted-foreground">Start with a page</span>
-      </button>
-      <button type="button" onClick={() => setTemplateCategory(templateCategory === "Branding" ? null : "Branding")} className={`group rounded-2xl border p-3 text-left transition ${templateCategory === "Branding" ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:border-violet-300 hover:bg-[#fbf7ff]"}`}>
-        <Palette className="h-5 w-5 text-violet-700" /><span className="mt-2 block text-sm font-semibold">Branding</span><span className="mt-1 block text-[11px] text-muted-foreground">Workspace report styling</span>
-      </button>
-      {tools.map((t) => (
-        <button
-          key={t.type}
-          onClick={() => addElement(t.type)}
-          className="relative flex min-h-[76px] flex-col items-start gap-1 rounded-2xl border border-violet-100 bg-white p-3 text-left text-sm transition hover:border-violet-300 hover:bg-[#fbf7ff]"
-        >
-          <t.icon className="h-5 w-5 text-violet-700" /><span className="font-semibold">{t.label}</span><Plus className="absolute ml-[calc(100%-1.25rem)] mt-[-1px] h-4 w-4 text-muted-foreground" />
-        </button>
-      ))}
-      </div>
-      {templateCategory === "Branding" && (
-        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-3">
-          <p className="text-xs text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p>
-          <label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
-          <label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
-          <label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label>
-        </div>
-      )}
-    </>
+  const openTool = (tool: string) => setTemplateCategory((current) => current === tool ? null : tool);
+  const renderToolRail = () => (
+    <div className="flex flex-col items-center gap-1.5">
+      <button type="button" onClick={() => openTool("Templates")} className={`flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold ${templateCategory === "Templates" ? "bg-violet-100 text-violet-800" : "text-[#18204a] hover:bg-violet-50"}`}><LayoutTemplate className="h-5 w-5 text-violet-700" />Templates</button>
+      <button type="button" onClick={() => openTool("Branding")} className={`flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold ${templateCategory === "Branding" ? "bg-violet-100 text-violet-800" : "text-[#18204a] hover:bg-violet-50"}`}><Palette className="h-5 w-5 text-violet-700" />Branding</button>
+      {tools.map((t) => <button key={t.type} type="button" onClick={() => openTool(t.type)} className={`flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold ${templateCategory === t.type ? "bg-violet-100 text-violet-800" : "text-[#18204a] hover:bg-violet-50"}`}><t.icon className="h-5 w-5 text-violet-700" />{t.label}</button>)}
+    </div>
   );
+  const renderActiveToolPanel = () => {
+    if (templateCategory === "Templates") return <div className="space-y-4"><div><p className="text-sm font-semibold text-[#18204a]">Template Library</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Existing starter templates for this release. Batch 2 will refine their authored content.</p></div><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates…" className="h-9 w-full rounded-lg border bg-white pl-9 pr-3 text-sm" /></label><div className="space-y-3">{TEMPLATE_DEFINITIONS.filter((template) => !templateSearch.trim() || `${template.name} ${template.category} ${template.description}`.toLowerCase().includes(templateSearch.trim().toLowerCase())).map((template) => <article key={template.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm"><div className="flex h-28 items-center gap-3 p-3" style={{ background: `linear-gradient(135deg, ${template.accent} 0%, #ffffff 85%)` }}><div className="flex h-full w-20 shrink-0 flex-col justify-between rounded-md border border-white bg-white/90 p-2 shadow-sm"><span className="h-1.5 w-2/3 rounded bg-violet-200" /><span className="h-1.5 w-full rounded bg-slate-100" /><span className="h-10 rounded bg-gradient-to-br from-violet-100 via-white to-amber-100" /><span className="h-1.5 w-4/5 rounded bg-slate-100" /></div><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700">{template.category}</p><p className="mt-1 text-sm font-semibold text-[#18204a]">{template.name}</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">{template.description}</p></div></div><div className="flex items-center justify-between gap-2 border-t border-violet-100 p-2.5"><span className="text-[11px] text-muted-foreground">Existing starter</span><button type="button" onClick={() => insertTemplate(template)} className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white">Use template</button></div></article>)}</div></div>;
+    if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
+    const tool = tools.find((item) => item.type === templateCategory);
+    if (!tool) return <p className="text-xs text-muted-foreground">Select a tool to open its panel.</p>;
+    return <div className="space-y-4"><div><p className="text-sm font-semibold">{tool.label}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Choose a {tool.label.toLowerCase()} element to place on the active page.</p></div><button type="button" onClick={() => addElement(tool.type)} className="w-full rounded-xl bg-violet-700 px-3 py-2.5 text-sm font-semibold text-white">Add {tool.label.replace(/s$/, "")}</button></div>;
+  };
 
   const renderPagesPanel = () => (
     <PagePanel
@@ -643,11 +603,12 @@ export function ReportEditor({
           </button>
           </div>
         </div>
-        <div className={`relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] ${inspectorOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_280px]" : "lg:grid-cols-[280px_minmax(0,1fr)]"}`}>
-          <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[280px]">
-            <div className="flex items-center justify-between border-b pb-2"><p className="text-sm font-semibold"><PanelLeft className="mr-1 inline h-4 w-4" />Add Elements</p><button type="button" onClick={() => setTemplateCategory("Templates")} className="text-xs font-semibold text-violet-700">Template Library</button></div>
-            <div className="mt-3 space-y-2">{renderElementsPanel()}</div>
+        <div className={`relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] ${templateCategory ? (inspectorOpen ? "lg:grid-cols-[92px_260px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_260px_minmax(0,1fr)]") : (inspectorOpen ? "lg:grid-cols-[92px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_minmax(0,1fr)]")}`}>
+          <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-2 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[92px]">
+            <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>
+            {renderToolRail()}
           </aside>
+          {templateCategory && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[260px]"><div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3"><p className="text-sm font-semibold">{templateCategory === "Templates" ? "Template Library" : templateCategory === "Branding" ? "Branding" : tools.find((t) => t.type === templateCategory)?.label}</p><button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-50">Close</button></div>{renderActiveToolPanel()}</aside>}
           <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
             <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white/80 px-3 py-2 text-xs shadow-sm">
               <button type="button" onClick={() => setPageOverviewOpen(true)} className="inline-flex items-center gap-2 rounded-lg px-2 py-1 font-semibold text-[#18204a] hover:bg-violet-50"><Grid2X2 className="h-4 w-4 text-violet-700" /> Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</button>
@@ -738,7 +699,7 @@ export function ReportEditor({
                   <button type="button" onClick={() => setMobileDrawer(null)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-violet-800 hover:bg-violet-50">Close</button>
                 </div>
                 <div className="space-y-2">
-                  {mobileDrawer === "elements" && renderElementsPanel()}
+                  {mobileDrawer === "elements" && <><p className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>{renderToolRail()}{templateCategory && <div className="mt-4 border-t border-violet-100 pt-4">{renderActiveToolPanel()}</div>}</>}
                   {mobileDrawer === "pages" && renderPagesPanel()}
                   {mobileDrawer === "layers" && renderLayerPanel()}
                   {mobileDrawer === "element" && renderElementPanel("element")}
