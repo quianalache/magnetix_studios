@@ -648,7 +648,7 @@ export function ReportEditor({
             <div className="report-canvas-scale-box mx-auto shrink-0 overflow-hidden" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
               <div
                 className="report-canvas-stage flex w-fit flex-col gap-6"
-                style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}
+                style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}
               >
                 {pages.map((p, i) => (
                   <CanvasPage
