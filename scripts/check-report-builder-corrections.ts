@@ -10,10 +10,16 @@ assert.match(contentRequirementLabel("hd:incarnationCross:rightAngle-12-11-36-6"
 assert.equal(contentRequirementLabel("astro:planetHouse:sun:10", "description"), "Sun in 10th House — Interpretation");
 assert.equal(contentRequirementLabel("freq:gate:1", "giftText"), "Frequency Gate 1 — How the gift shows up");
 
-for (const required of ["leftPanel", "rightPanel", "Fit Page", "Fit Width", "TEMPLATE_DEFINITIONS", "Backspace", "Delete", "report-canvas-scale-box", "scaledStageWidth", "scaledStageHeight"]) {
+for (const required of ["rightPanel", "inspectorOpen", "Fit Page", "Fit Width", "type=\"range\"", "TEMPLATE_DEFINITIONS", "Backspace", "Delete", "report-canvas-scale-box", "scaledStageWidth", "scaledStageHeight", "Report Builder", "Energetic Decoder", "pageOverviewOpen", "Template Library"]) {
   assert.match(editor, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `editor regression guard: ${required}`);
 }
 assert.match(editor, /const PAGE_CONTEXT_HEIGHT = 44/);
+assert.match(editor, /rightPanel: RightPanel =|type RightPanel = "layers" \| "element" \| "page"/);
+assert.match(editor, /rightPanel === "layers" \? renderLayerPanel\(\) : renderElementPanel/);
+assert.match(editor, /setInspectorOpen\(true\)/);
+assert.match(editor, /Page \{Math\.max\(1, pages\.findIndex/);
+assert.match(editor, /Use template/);
+assert.doesNotMatch(editor, /remain Coming soon/);
 assert.match(editor, /width: scaledStageWidth, height: scaledStageHeight/);
 assert.match(editor, /pageDimensions\.width \* scale/);
 assert.match(editor, /pages\.length \* \(pageDimensions\.height \+ PAGE_CONTEXT_HEIGHT\)/);

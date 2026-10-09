@@ -23,6 +23,7 @@ import {
   Pencil,
   Plus,
   Redo2,
+  Search,
   Save,
   Shapes,
   Trash2,
@@ -131,8 +132,7 @@ function newElement(
   };
 }
 
-type LeftPanel = "elements" | "pages";
-type RightPanel = "layers" | "element";
+type RightPanel = "layers" | "element" | "page";
 type ZoomMode = number | "fit-page" | "fit-width";
 
 type TemplateDefinition = {
@@ -228,14 +228,18 @@ export function ReportEditor({
   const [pages, setPages] = useState(initialPages(initial));
   const [activePageId, setActivePageId] = useState(initial.pages[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [leftPanel, setLeftPanel] = useState<LeftPanel>("elements");
   const [rightPanel, setRightPanel] = useState<RightPanel>("element");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [pageOverviewOpen, setPageOverviewOpen] = useState(false);
+  const [pageSearch, setPageSearch] = useState("");
   const [mobileDrawer, setMobileDrawer] = useState<
     "elements" | "pages" | "layers" | "element" | "page" | null
   >(null);
   const [zoom, setZoom] = useState<ZoomMode>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 28 : "fit-page"));
   const [fitScale, setFitScale] = useState(0.6);
   const [templateCategory, setTemplateCategory] = useState<string | null>(null);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [zoomOpen, setZoomOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [contentSetId, setContentSetId] = useState(
@@ -348,6 +352,7 @@ export function ReportEditor({
     updatePage((p) => ({ ...p, elements: [...(p.elements ?? []), e] }));
     setSelectedId(e.id);
     setRightPanel("element");
+    setInspectorOpen(true);
     if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileDrawer("element");
     if (type === "image" || type === "upload") setAssetPickerOpen(true);
   }
@@ -458,10 +463,31 @@ export function ReportEditor({
 
   const renderElementsPanel = () => (
     <>
-      <input
-        placeholder="Search elements…"
-        className="h-9 w-full rounded-lg border px-3 text-sm"
-      />
+      {templateCategory === "Templates" ? (
+        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/35 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-[#18204a]">Template Library</p>
+              <p className="text-[11px] text-muted-foreground">Real starter pages available in this release.</p>
+            </div>
+            <button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-white">Back</button>
+          </div>
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates…" className="h-9 w-full rounded-lg border bg-white pl-9 pr-3 text-sm" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {TEMPLATE_DEFINITIONS.filter((template) => !templateSearch.trim() || `${template.name} ${template.category} ${template.description}`.toLowerCase().includes(templateSearch.trim().toLowerCase())).map((template) => (
+              <div key={template.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white">
+                <div className="h-16 p-2" style={{ background: `linear-gradient(135deg, ${template.accent}, #ffffff)` }}><div className="h-full rounded border border-white/80 bg-white/45 p-2 text-[10px] font-semibold text-[#18204a]">{template.name}</div></div>
+                <div className="space-y-1 p-2"><p className="text-xs font-semibold">{template.name}</p><p className="text-[11px] leading-snug text-muted-foreground">{template.description}</p><button type="button" onClick={() => insertTemplate(template)} className="w-full rounded-lg bg-violet-700 px-2 py-1.5 text-xs font-semibold text-white">Use template</button></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <input placeholder="Search elements…" className="h-9 w-full rounded-lg border px-3 text-sm" />
+      )}
       <div className="grid grid-cols-2 gap-2">
       <button type="button" onClick={() => setTemplateCategory(templateCategory === "Templates" ? null : "Templates")} className={`group rounded-2xl border p-3 text-left transition ${templateCategory === "Templates" ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:border-violet-300 hover:bg-[#fbf7ff]"}`}>
         <LayoutTemplate className="h-5 w-5 text-violet-700" /><span className="mt-2 block text-sm font-semibold">Templates</span><span className="mt-1 block text-[11px] text-muted-foreground">Start with a page</span>
@@ -479,55 +505,12 @@ export function ReportEditor({
         </button>
       ))}
       </div>
-      <div className="text-muted-foreground border-t pt-3 text-xs font-semibold tracking-wide uppercase">
-        Template library
-      </div>
-      <div className="space-y-1">
-        {["Cover", "Chart", "Summary", "Blank", "About", "Type", "Strategy", "Authority", "Profile", "Centers", "Channels", "Gates", "Astrology", "Frequency", "Closing"].map((x) => {
-          const available = TEMPLATE_DEFINITIONS.some((template) => template.category === x);
-          return (
-            <button
-              key={x}
-              onClick={() => available && setTemplateCategory(templateCategory === x ? null : x)}
-              disabled={!available}
-              className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm ${available ? "hover:bg-violet-50" : "cursor-not-allowed text-muted-foreground/60"}`}
-            >
-              <span>{x}</span>
-              {available ? <ChevronRight className={`h-3.5 w-3.5 transition ${templateCategory === x ? "rotate-90" : ""}`} /> : <span className="text-[10px] font-normal normal-case">Coming soon</span>}
-            </button>
-          );
-        })}
-      </div>
       {templateCategory === "Branding" && (
         <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-3">
           <p className="text-xs text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p>
           <label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
           <label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
           <label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label>
-        </div>
-      )}
-      {templateCategory === "Templates" && (
-        <div className="mt-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/40 p-2">
-          <p className="px-1 text-xs font-semibold text-violet-900">Template library</p>
-          <div className="grid grid-cols-2 gap-1">{["Cover", "Chart", "Summary", "Blank"].map((x) => <button key={x} type="button" onClick={() => setTemplateCategory(x)} className="rounded-lg border bg-white px-2 py-2 text-left text-xs font-semibold hover:bg-violet-50">{x}</button>)}</div>
-          <p className="px-1 text-[11px] text-muted-foreground">About, Type, Strategy, Authority, Profile, Centers, Channels, Gates, Astrology, Frequency, Closing remain Coming soon.</p>
-        </div>
-      )}
-      {templateCategory && templateCategory !== "Templates" && templateCategory !== "Branding" && (
-        <div className="mt-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/40 p-2">
-          <p className="px-1 text-xs font-semibold text-violet-900">Choose a {templateCategory} template</p>
-          {TEMPLATE_DEFINITIONS.filter((template) => template.category === templateCategory).map((template) => (
-            <div key={template.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div className="h-16 p-2" style={{ background: `linear-gradient(135deg, ${template.accent}, #ffffff)` }}>
-                <div className="h-full rounded border border-white/80 bg-white/40 p-2 text-[9px] font-semibold text-[#18204a]">{template.name}</div>
-              </div>
-              <div className="space-y-1 p-2">
-                <p className="text-xs font-semibold">{template.name}</p>
-                <p className="text-[11px] leading-snug text-muted-foreground">{template.description}</p>
-                <button type="button" onClick={() => insertTemplate(template)} className="mt-1 w-full rounded-lg bg-violet-700 px-2 py-1.5 text-xs font-semibold text-white">Use template</button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </>
@@ -574,7 +557,7 @@ export function ReportEditor({
     <LayerPanel
       elements={elements}
       selectedId={selectedId}
-      onSelect={setSelectedId}
+      onSelect={(id) => { setSelectedId(id); setRightPanel("element"); setInspectorOpen(true); }}
       onMove={(from, to) => {
         const sorted = [...elements];
         const [item] = sorted.splice(from, 1);
@@ -590,6 +573,14 @@ export function ReportEditor({
   return (
     <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
+        <section className="relative mb-4 overflow-hidden rounded-3xl border border-violet-100 bg-white px-5 py-4 shadow-sm sm:px-7 sm:py-5">
+          <div className="pointer-events-none absolute -right-8 -top-16 h-48 w-[38%] min-w-[280px] rounded-full bg-[radial-gradient(circle_at_68%_35%,#fff4cf,transparent_10%),radial-gradient(ellipse,#eadbff,transparent_65%)] opacity-90" />
+          <div className="relative max-w-3xl">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#5264a6]"><span>Energetic Decoder</span><ChevronRight className="h-4 w-4" /><span>Report Builder</span></div>
+            <div className="mt-2 flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f4e8ff] text-2xl text-violet-700">✦</span><h1 className="font-serif text-4xl font-semibold tracking-tight text-[#18204a] sm:text-5xl">Report Builder</h1></div>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5264a6] sm:text-base">Create beautiful, custom reports with a free-form editor. Design, personalize, and structure multi-page reports using templates, content blocks, and your brand elements.</p>
+          </div>
+        </section>
         <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
           <div className="pointer-events-none absolute -top-20 right-24 h-36 w-64 rounded-full bg-[radial-gradient(circle_at_70%_30%,#fff4cf,transparent_10%),radial-gradient(ellipse,#efe3ff,transparent_65%)] opacity-90" />
           <div className="relative flex flex-wrap items-center gap-2 overflow-x-hidden lg:flex-nowrap">
@@ -624,21 +615,15 @@ export function ReportEditor({
           >
             <Redo2 className="h-4 w-4" />
           </button>
-          <label className="hidden items-center gap-1 text-sm sm:flex">
-            Zoom
-            <select
-              value={String(zoom)}
-              onChange={(e) => setZoom(e.target.value === "fit-page" || e.target.value === "fit-width" ? e.target.value : Number(e.target.value))}
-              className="rounded-lg border px-2 py-1"
-            >
-              <option value="fit-page">Fit Page</option>
-              <option value="fit-width">Fit Width</option>
-              <option value={40}>40%</option>
-              <option value={60}>60%</option>
-              <option value={75}>75%</option>
-              <option value={100}>100%</option>
-            </select>
-          </label>
+          <div className="relative hidden sm:block">
+            <button type="button" onClick={() => setZoomOpen((v) => !v)} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium" aria-expanded={zoomOpen}>Zoom <span className="font-semibold">{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span><ChevronDown className="h-4 w-4" /></button>
+            {zoomOpen && <div className="absolute left-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-white p-3 shadow-xl">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[#18204a]"><span>Zoom</span><span>{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span></div>
+              <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setZoom("fit-page"); setZoomOpen(false); }} className={`rounded-lg border px-2 py-2 text-xs font-semibold ${zoom === "fit-page" ? "border-violet-500 bg-violet-50 text-violet-800" : ""}`}>Fit Page</button><button type="button" onClick={() => { setZoom("fit-width"); setZoomOpen(false); }} className={`rounded-lg border px-2 py-2 text-xs font-semibold ${zoom === "fit-width" ? "border-violet-500 bg-violet-50 text-violet-800" : ""}`}>Fit Width</button></div>
+              <label className="mt-3 block text-xs font-medium">Manual zoom<input type="range" min="20" max="120" step="1" value={typeof zoom === "number" ? zoom : Math.round(scale * 60)} onChange={(e) => setZoom(Number(e.target.value))} className="mt-2 w-full accent-violet-700" /></label>
+              <div className="mt-1 flex justify-between text-[10px] text-muted-foreground"><span>20%</span><span>120%</span></div>
+            </div>}
+          </div>
           <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 xl:inline-flex" title="Charts in this design preview use deterministic fixture data">
             Design preview uses sample chart data
           </span>
@@ -658,43 +643,32 @@ export function ReportEditor({
           </button>
           </div>
         </div>
-        <div className="relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] lg:grid-cols-[250px_minmax(0,1fr)_280px]">
-          <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
-            <div className="flex gap-1 border-b pb-2">
-              <button
-                onClick={() => setLeftPanel("elements")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${leftPanel === "elements" ? "bg-violet-100 text-violet-800" : ""}`}
-              >
-                <PanelLeft className="mr-1 inline h-4 w-4" />
-                Elements
-              </button>
-              <button
-                onClick={() => setLeftPanel("pages")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${leftPanel === "pages" ? "bg-violet-100 text-violet-800" : ""}`}
-              >
-                Pages
-              </button>
-            </div>
-            <div className="mt-3 space-y-2">
-              {leftPanel === "elements" && renderElementsPanel()}
-              {leftPanel === "pages" && renderPagesPanel()}
-            </div>
+        <div className={`relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] ${inspectorOpen ? "lg:grid-cols-[280px_minmax(0,1fr)_280px]" : "lg:grid-cols-[280px_minmax(0,1fr)]"}`}>
+          <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[280px]">
+            <div className="flex items-center justify-between border-b pb-2"><p className="text-sm font-semibold"><PanelLeft className="mr-1 inline h-4 w-4" />Add Elements</p><button type="button" onClick={() => setTemplateCategory("Templates")} className="text-xs font-semibold text-violet-700">Template Library</button></div>
+            <div className="mt-3 space-y-2">{renderElementsPanel()}</div>
           </aside>
           <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white/80 px-3 py-2 text-xs shadow-sm">
+              <button type="button" onClick={() => setPageOverviewOpen(true)} className="inline-flex items-center gap-2 rounded-lg px-2 py-1 font-semibold text-[#18204a] hover:bg-violet-50"><Grid2X2 className="h-4 w-4 text-violet-700" /> Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</button>
+              <button type="button" onClick={() => { setRightPanel("page"); setInspectorOpen(true); }} className="rounded-lg px-2 py-1 font-semibold text-violet-800 hover:bg-violet-50">Page settings</button>
+            </div>
             <div className="report-canvas-scale-box mx-auto shrink-0 overflow-hidden" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
               <div
                 className="report-canvas-stage flex w-fit flex-col gap-6"
-                style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}
+                style={{ transform: `scale(${scale})`, transformOrigin: "top left", color: brand.accentColor ?? "#18204a" }}
               >
                 {pages.map((p, i) => (
                   <CanvasPage
                     key={p.id}
                     page={p}
+                    brandBackground={brand.backgroundColor}
+                    brandAccent={brand.accentColor}
                     index={i}
                     dimensions={pageDimensions}
                     elements={p.elements ?? []}
                     visibilityOpen={openVisibilityPageId === p.id}
-                    onToggleVisibility={() => setOpenVisibilityPageId(openVisibilityPageId === p.id ? null : p.id)}
+                    onToggleVisibility={() => { setRightPanel("page"); setInspectorOpen(true); setOpenVisibilityPageId(openVisibilityPageId === p.id ? null : p.id); }}
                     onUpdatePage={(updater) => commit(pages.map((page) => page.id === p.id ? updater(page) : page))}
                     onMovePage={movePage}
                     onDuplicatePage={() => duplicatePage(p.id)}
@@ -704,6 +678,7 @@ export function ReportEditor({
                       setActivePageId(p.id);
                       setSelectedId(elementId);
                       setRightPanel("element");
+                      setInspectorOpen(true);
                       if (window.innerWidth < 1024) setMobileDrawer("element");
                     }}
                     onMove={(elementId, dx, dy) =>
@@ -723,24 +698,30 @@ export function ReportEditor({
               </div>
             </div>
           </main>
-          <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
+          {inspectorOpen && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
             <div className="flex gap-1 border-b pb-2">
-              <button
-                onClick={() => setRightPanel("layers")}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "layers" ? "bg-violet-100 text-violet-800" : ""}`}
-              >
-                <Layers3 className="mr-1 inline h-4 w-4" />
-                Layers
-              </button>
               <button
                 onClick={() => setRightPanel("element")}
                 className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "element" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 Element
               </button>
+              <button
+                onClick={() => setRightPanel("page")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "page" ? "bg-violet-100 text-violet-800" : ""}`}
+              >
+                Page
+              </button>
+              <button
+                onClick={() => setRightPanel("layers")}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "layers" ? "bg-violet-100 text-violet-800" : ""}`}
+              >
+                <Layers3 className="mr-1 inline h-4 w-4" />Layers
+              </button>
             </div>
-            {rightPanel === "layers" ? renderLayerPanel() : renderElementPanel()}
-          </aside>
+            {rightPanel === "layers" ? renderLayerPanel() : renderElementPanel(rightPanel === "page" ? "page" : "element")}
+            <button type="button" onClick={() => setInspectorOpen(false)} className="mt-4 w-full rounded-lg border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-violet-50">Collapse inspector</button>
+          </aside>}
           {mobileDrawer && (
             <>
               <button
@@ -769,7 +750,7 @@ export function ReportEditor({
           <div className="pointer-events-none fixed inset-y-0 left-3 z-40 hidden items-center md:flex lg:hidden">
             <div className="pointer-events-auto grid gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur">
               <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
-              <button type="button" onClick={() => openMobileDrawer("pages")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "pages" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Pages</button>
+              <button type="button" onClick={() => { setPageOverviewOpen(true); setMobileDrawer(null); }} className="rounded-xl px-3 py-2 text-xs font-semibold text-[#18204a]">Pages</button>
             </div>
           </div>
           <div className="pointer-events-none fixed inset-y-0 right-3 z-40 hidden items-center md:flex lg:hidden">
@@ -781,11 +762,22 @@ export function ReportEditor({
           </div>
           <nav aria-label="Responsive builder tools" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden lg:hidden">
             <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
-            <button type="button" onClick={() => openMobileDrawer("pages")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "pages" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Pages</button>
+            <button type="button" onClick={() => { setPageOverviewOpen(true); setMobileDrawer(null); }} className="rounded-xl px-1 py-2 text-xs font-semibold text-[#18204a]">Pages</button>
             <button type="button" onClick={() => openMobileDrawer("layers")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "layers" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Layers</button>
             <button type="button" onClick={() => openMobileDrawer("element")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "element" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Element</button>
             <button type="button" onClick={() => openMobileDrawer("page")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "page" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Page</button>
           </nav>
+          {pageOverviewOpen && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f8f6fc]/95 p-4 backdrop-blur-sm sm:p-8">
+            <div className="mx-auto max-w-7xl rounded-3xl border border-violet-100 bg-white p-5 shadow-2xl sm:p-7">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-violet-100 pb-5"><div><p className="text-sm font-semibold text-violet-700">Report Builder</p><h2 className="mt-1 font-serif text-3xl font-semibold text-[#18204a]">Pages</h2><p className="mt-1 text-sm text-muted-foreground">Select a page to return to the canvas.</p></div><button type="button" onClick={() => setPageOverviewOpen(false)} className="rounded-xl border px-4 py-2 text-sm font-semibold text-violet-800">Close</button></div>
+              <label className="relative mt-5 block max-w-md"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={pageSearch} onChange={(e) => setPageSearch(e.target.value)} placeholder="Search pages…" className="h-10 w-full rounded-xl border pl-9 pr-3 text-sm" /></label>
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{pages.map((p, i) => ({ p, i })).filter(({ p, i }) => !pageSearch.trim() || pageLabel(p, i).toLowerCase().includes(pageSearch.trim().toLowerCase())).map(({ p, i }) => <div key={p.id} className={`rounded-2xl border p-3 ${p.id === activePageId ? "border-violet-500 bg-violet-50/60" : "border-violet-100"}`}>
+                <button type="button" onClick={() => { setActivePageId(p.id); setPageOverviewOpen(false); }} className="block w-full text-left"><div className="mb-3 flex h-52 items-center justify-center rounded-xl border border-violet-100 bg-[#f3f0f9] p-4"><div className="flex h-full w-3/5 flex-col gap-2 rounded bg-white p-3 shadow-sm"><span className="h-2 w-1/2 rounded bg-violet-200" /><span className="h-2 w-4/5 rounded bg-violet-100" /><span className="mt-3 h-20 rounded bg-gradient-to-br from-violet-100 via-white to-amber-100" /><span className="h-2 w-full rounded bg-slate-100" /><span className="h-2 w-4/5 rounded bg-slate-100" /></div></div><p className="truncate text-sm font-semibold text-[#18204a]">{pageLabel(p, i)}</p><p className="mt-1 text-xs text-muted-foreground">{p.visibleIf ? "Conditional visibility" : "Visible for everyone"}</p><p className="mt-1 text-xs text-muted-foreground">Page {i + 1}</p></button>
+                <div className="mt-3 flex justify-end gap-1 border-t border-violet-100 pt-2"><button type="button" title="Move page up" disabled={i === 0} onClick={() => movePage(p.id, -1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" title="Move page down" disabled={i === pages.length - 1} onClick={() => movePage(p.id, 1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" title="Duplicate page" onClick={() => duplicatePage(p.id)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50"><Copy className="h-3.5 w-3.5" /></button><button type="button" title="Delete page" onClick={() => deletePage(p.id)} className="rounded-lg px-2 py-1 text-xs text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button></div>
+              </div>)}</div>
+              <button type="button" onClick={addPage} className="mt-6 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white"><FilePlus2 className="mr-1 inline h-4 w-4" /> Add page</button>
+            </div>
+          </div>}
         </div>
       </div>
       <MediaPickerDialog
@@ -949,6 +941,7 @@ function ElementPanel({
 }) {
   const [tab, setTab] = useState<"element" | "page">(defaultTab);
   const [shortcodeSearch, setShortcodeSearch] = useState("");
+  useEffect(() => setTab(defaultTab), [defaultTab]);
   return (
     <div className="mt-3 space-y-4">
       <div className="flex gap-2 border-b pb-2 text-sm font-semibold">
@@ -1254,6 +1247,8 @@ function VisibilityEditor({
 
 function CanvasPage({
   page,
+  brandBackground,
+  brandAccent,
   index,
   dimensions,
   elements,
@@ -1270,6 +1265,8 @@ function CanvasPage({
   onDeletePage,
 }: {
   page: ReportPage;
+  brandBackground?: string;
+  brandAccent?: string;
   index: number;
   dimensions: { width: number; height: number };
   elements: ReportCanvasElement[];
@@ -1297,7 +1294,7 @@ function CanvasPage({
         <button type="button" onClick={onDeletePage} title="Delete page" className="rounded p-1 hover:bg-violet-100"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
       {visibilityOpen && <div className="absolute left-0 top-10 z-20 w-[280px] rounded-xl border border-violet-200 bg-white p-3 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-semibold"><span>Page visibility</span><button type="button" onClick={onToggleVisibility}>Close</button></div><VisibilityEditor value={page.visibleIf} onChange={(visibleIf) => onUpdatePage((p) => ({ ...p, visibleIf }))} /></div>}
-      <section className="relative bg-white shadow-xl" style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || "#fff" }}>
+      <section className="relative bg-white shadow-xl" style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || brandBackground || "#fff", borderTop: `4px solid ${brandAccent || "transparent"}` }}>
       {elements.map((e) => (
         <CanvasElement
           key={e.id}
