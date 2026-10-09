@@ -56,7 +56,7 @@ export async function POST(
     title: design.title || "Report preview",
     readerName: reading.name,
     businessName: typeof sub.name === "string" ? sub.name : "Magnetix Studios",
-    businessLogoUrl: typeof sub.logoUrl === "string" ? sub.logoUrl : null,
+    businessLogoUrl: typeof design.brand?.logoUrl === "string" && design.brand.logoUrl ? design.brand.logoUrl : (typeof sub.logoUrl === "string" ? sub.logoUrl : null),
     pages,
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
@@ -66,6 +66,7 @@ export async function POST(
     astroDesign,
     pageSize: design.pageSize,
     customPageSize: design.customPageSize,
+    brand: design.brand,
   });
   return new NextResponse(stream, { headers: { "Content-Type": "application/pdf", "Content-Disposition": "inline; filename=report-preview.pdf", "Cache-Control": "no-store" } });
 }

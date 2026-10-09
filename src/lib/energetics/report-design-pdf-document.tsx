@@ -10,7 +10,8 @@ import type { HumanDesignProfile } from "./human-design";
 import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
-import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement, ReportPageSize } from "@/types/report-blocks";
+import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement, ReportPageSize, ReportDesign } from "@/types/report-blocks";
+type ReportDesignBrand = ReportDesign["brand"];
 
 /**
  * PDF export for a custom ReportDesign — Phase 2 Build Plan Task 6
@@ -179,7 +180,7 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
 }
 
 function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign, scaleX = 1, scaleY = 1 }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; scaleX?: number; scaleY?: number }) {
-  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: (element.style?.fontSize || 14) * scaleX, backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid" } as const;
+  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: (element.style?.fontSize || 14) * scaleX, fontWeight: element.style?.fontWeight || 400, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: textAlignStyle(element.style?.align), backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid", borderRadius: element.style?.borderRadius || 0 } as const;
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
     return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
@@ -203,6 +204,7 @@ export function ReportDesignPdfDocument({
   astroDesign,
   pageSize = "a4",
   customPageSize,
+  brand,
 }: {
   title: string;
   readerName: string;
@@ -218,6 +220,7 @@ export function ReportDesignPdfDocument({
   astroDesign?: ChartDesign | null;
   pageSize?: ReportPageSize;
   customPageSize?: { width: number; height: number } | null;
+  brand?: ReportDesignBrand | null;
 }) {
   const pdfSize = pageSize === "letter" ? "LETTER" : pageSize === "custom" && customPageSize ? [customPageSize.width, customPageSize.height] as [number, number] : "A4";
   const contentWidth = pageSize === "letter" ? 540 : pageSize === "custom" && customPageSize ? customPageSize.width - 72 : 523;
@@ -225,7 +228,7 @@ export function ReportDesignPdfDocument({
   return (
     <Document>
       {pages.map((page, index) => (
-        <Page key={page.id} size={pdfSize} style={styles.page}>
+        <Page key={page.id} size={pdfSize} style={[styles.page, { backgroundColor: brand?.backgroundColor || "#ffffff" }]}>
           <View style={styles.header}>
             {businessLogoUrl ? (
               // eslint-disable-next-line jsx-a11y/alt-text
@@ -233,7 +236,7 @@ export function ReportDesignPdfDocument({
             ) : (
               <Text style={styles.businessName}>{businessName}</Text>
             )}
-            <Text style={styles.title}>{title}</Text>
+            <Text style={[styles.title, { color: brand?.accentColor || "#23262b" }]}>{title}</Text>
             <Text style={styles.forLine}>For {readerName}</Text>
           </View>
 

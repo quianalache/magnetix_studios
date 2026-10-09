@@ -54,7 +54,7 @@ export function ReportDesignViewer({
   const popupBlock = popupBlockId ? page.blocks.find((b) => b.id === popupBlockId) : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ backgroundColor: design.brand?.backgroundColor || undefined, fontFamily: design.brand?.fontFamily || undefined }}>
       {visiblePages.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {visiblePages.map((p, i) => (
@@ -72,8 +72,8 @@ export function ReportDesignViewer({
         </div>
       )}
 
-      <div className="rounded-2xl border bg-card p-6">
-        {page.title && <h2 className="mb-4 text-lg font-semibold">{page.title}</h2>}
+      <div className="rounded-2xl border bg-card p-6" style={{ borderColor: design.brand?.accentColor || undefined }}>
+        {page.title && <h2 className="mb-4 text-lg font-semibold" style={{ color: design.brand?.accentColor || undefined }}>{page.title}</h2>}
         {page.elements && page.elements.length > 0 ? (
           <div className="relative overflow-hidden bg-white" style={{ width: "100%", aspectRatio: "8.5 / 11", minHeight: 760 }}>
             {[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => (
@@ -123,7 +123,7 @@ function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, ast
   const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
   const resolved = element.type === "shortcode" ? resolveShortcodes(text, readingInput) : text;
   const style: CSSProperties = {
-    position: "absolute", left: `${(element.geometry.x / 816) * 100}%`, top: `${(element.geometry.y / 1056) * 100}%`, width: `${(element.geometry.width / 816) * 100}%`, height: `${(element.geometry.height / 1056) * 100}%`, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, fontWeight: element.style?.fontWeight || 400, textAlign: element.style?.align || "left", background: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, border: element.style?.borderWidth ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}` : undefined, borderRadius: element.style?.borderRadius || 0, padding: 10, overflow: "hidden",
+    position: "absolute", left: `${(element.geometry.x / 816) * 100}%`, top: `${(element.geometry.y / 1056) * 100}%`, width: `${(element.geometry.width / 816) * 100}%`, height: `${(element.geometry.height / 1056) * 100}%`, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, fontWeight: element.style?.fontWeight || 400, fontFamily: element.style?.fontFamily || undefined, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: element.style?.align || "left", background: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, border: element.style?.borderWidth ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}` : undefined, borderRadius: element.style?.borderRadius || 0, padding: 10, overflow: "hidden",
   };
   if (element.type === "image" || element.type === "upload") {
     const url = String(element.payload.url ?? "");

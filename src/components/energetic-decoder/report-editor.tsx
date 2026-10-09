@@ -5,16 +5,22 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   ChevronDown,
   ChevronRight,
   Copy,
   Eye,
+  EyeOff,
   FilePlus2,
   Grid2X2,
   Image as ImageIcon,
+  LayoutTemplate,
   Layers3,
   Lock,
   PanelLeft,
+  Palette,
+  Pencil,
   Plus,
   Redo2,
   Save,
@@ -62,6 +68,7 @@ const tools: { type: ReportElementType; label: string; icon: typeof Type }[] = [
   { type: "graphic", label: "Graphics", icon: WandSparkles },
   { type: "upload", label: "Uploads", icon: UploadCloud },
 ];
+const PAGE_CONTEXT_HEIGHT = 44;
 
 function id() {
   return crypto.randomUUID();
@@ -245,6 +252,8 @@ export function ReportEditor({
   const [future, setFuture] = useState<ReportPage[][]>([]);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [brand, setBrand] = useState(initial.brand ?? {});
+  const [openVisibilityPageId, setOpenVisibilityPageId] = useState<string | null>(null);
   const canvasViewportRef = useRef<HTMLElement | null>(null);
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
   const elements = useMemo(
@@ -259,7 +268,7 @@ export function ReportEditor({
   const scale = typeof zoom === "number" ? zoom / 60 : fitScale;
   const pageGap = 24;
   const scaledStageWidth = pageDimensions.width * scale;
-  const scaledStageHeight = (pages.length * pageDimensions.height + Math.max(0, pages.length - 1) * pageGap) * scale;
+  const scaledStageHeight = (pages.length * (pageDimensions.height + PAGE_CONTEXT_HEIGHT) + Math.max(0, pages.length - 1) * pageGap) * scale;
 
   useEffect(() => {
     const viewport = canvasViewportRef.current;
@@ -268,7 +277,7 @@ export function ReportEditor({
       const width = Math.max(240, viewport.clientWidth - 32);
       const height = Math.max(240, viewport.clientHeight - 32);
       const widthScale = width / pageDimensions.width;
-      const pageScale = Math.min(widthScale, height / pageDimensions.height);
+      const pageScale = Math.min(widthScale, height / (pageDimensions.height + PAGE_CONTEXT_HEIGHT));
       setFitScale(zoom === "fit-width" ? widthScale : pageScale);
     };
     measure();
@@ -360,12 +369,13 @@ export function ReportEditor({
     setTemplateCategory(null);
     toast.success(`${template.name} inserted`);
   }
-  function duplicatePage() {
+  function duplicatePage(pageId = activePageId) {
+    const source = pages.find((p) => p.id === pageId) ?? activePage;
     const copy = {
-      ...activePage,
+      ...source,
       id: id(),
-      title: `${activePage.title} copy`,
-      elements: elements.map((e, i) => ({
+      title: `${source.title} copy`,
+      elements: (source.elements ?? []).map((e, i) => ({
         ...e,
         id: id(),
         zIndex: i,
@@ -374,6 +384,14 @@ export function ReportEditor({
     };
     commit([...pages, copy]);
     setActivePageId(copy.id);
+  }
+  function movePage(pageId: string, direction: -1 | 1) {
+    const index = pages.findIndex((p) => p.id === pageId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= pages.length) return;
+    const next = [...pages];
+    [next[index], next[target]] = [next[target], next[index]];
+    commit(next);
   }
   function deletePage(pageId: string) {
     if (pages.length === 1)
@@ -412,6 +430,7 @@ export function ReportEditor({
             contentSetId,
             layoutVersion: 2,
             pageSize,
+            brand,
           }),
         }
       );
@@ -427,7 +446,7 @@ export function ReportEditor({
   function preview() {
     sessionStorage.setItem(
       `report-design-draft:${initial.id}`,
-      JSON.stringify({ title, pages, contentSetId, layoutVersion: 2, pageSize })
+      JSON.stringify({ title, pages, contentSetId, layoutVersion: 2, pageSize, brand })
     );
     const query = new URLSearchParams({ source: "sample", draft: "1", contentSetId });
     window.open(`/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?${query}`, "_blank");
@@ -443,17 +462,23 @@ export function ReportEditor({
         placeholder="Search elements…"
         className="h-9 w-full rounded-lg border px-3 text-sm"
       />
+      <div className="grid grid-cols-2 gap-2">
+      <button type="button" onClick={() => setTemplateCategory(templateCategory === "Templates" ? null : "Templates")} className={`group rounded-2xl border p-3 text-left transition ${templateCategory === "Templates" ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:border-violet-300 hover:bg-[#fbf7ff]"}`}>
+        <LayoutTemplate className="h-5 w-5 text-violet-700" /><span className="mt-2 block text-sm font-semibold">Templates</span><span className="mt-1 block text-[11px] text-muted-foreground">Start with a page</span>
+      </button>
+      <button type="button" onClick={() => setTemplateCategory(templateCategory === "Branding" ? null : "Branding")} className={`group rounded-2xl border p-3 text-left transition ${templateCategory === "Branding" ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:border-violet-300 hover:bg-[#fbf7ff]"}`}>
+        <Palette className="h-5 w-5 text-violet-700" /><span className="mt-2 block text-sm font-semibold">Branding</span><span className="mt-1 block text-[11px] text-muted-foreground">Workspace report styling</span>
+      </button>
       {tools.map((t) => (
         <button
           key={t.type}
           onClick={() => addElement(t.type)}
-          className="flex w-full items-center gap-3 rounded-xl border border-transparent bg-white px-3 py-3 text-left text-sm transition hover:border-violet-200 hover:bg-[#fbf7ff]"
+          className="relative flex min-h-[76px] flex-col items-start gap-1 rounded-2xl border border-violet-100 bg-white p-3 text-left text-sm transition hover:border-violet-300 hover:bg-[#fbf7ff]"
         >
-          <t.icon className="h-5 w-5 text-violet-700" />
-          {t.label}
-          <Plus className="text-muted-foreground ml-auto h-4 w-4" />
+          <t.icon className="h-5 w-5 text-violet-700" /><span className="font-semibold">{t.label}</span><Plus className="absolute ml-[calc(100%-1.25rem)] mt-[-1px] h-4 w-4 text-muted-foreground" />
         </button>
       ))}
+      </div>
       <div className="text-muted-foreground border-t pt-3 text-xs font-semibold tracking-wide uppercase">
         Template library
       </div>
@@ -473,7 +498,22 @@ export function ReportEditor({
           );
         })}
       </div>
-      {templateCategory && (
+      {templateCategory === "Branding" && (
+        <div className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/40 p-3">
+          <p className="text-xs text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p>
+          <label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
+          <label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label>
+          <label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label>
+        </div>
+      )}
+      {templateCategory === "Templates" && (
+        <div className="mt-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/40 p-2">
+          <p className="px-1 text-xs font-semibold text-violet-900">Template library</p>
+          <div className="grid grid-cols-2 gap-1">{["Cover", "Chart", "Summary", "Blank"].map((x) => <button key={x} type="button" onClick={() => setTemplateCategory(x)} className="rounded-lg border bg-white px-2 py-2 text-left text-xs font-semibold hover:bg-violet-50">{x}</button>)}</div>
+          <p className="px-1 text-[11px] text-muted-foreground">About, Type, Strategy, Authority, Profile, Centers, Channels, Gates, Astrology, Frequency, Closing remain Coming soon.</p>
+        </div>
+      )}
+      {templateCategory && templateCategory !== "Templates" && templateCategory !== "Branding" && (
         <div className="mt-2 space-y-2 rounded-2xl border border-violet-100 bg-violet-50/40 p-2">
           <p className="px-1 text-xs font-semibold text-violet-900">Choose a {templateCategory} template</p>
           {TEMPLATE_DEFINITIONS.filter((template) => template.category === templateCategory).map((template) => (
@@ -501,6 +541,7 @@ export function ReportEditor({
       addPage={addPage}
       duplicatePage={duplicatePage}
       deletePage={deletePage}
+      movePage={movePage}
     />
   );
 
@@ -551,7 +592,7 @@ export function ReportEditor({
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
         <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
           <div className="pointer-events-none absolute -top-20 right-24 h-36 w-64 rounded-full bg-[radial-gradient(circle_at_70%_30%,#fff4cf,transparent_10%),radial-gradient(ellipse,#efe3ff,transparent_65%)] opacity-90" />
-          <div className="relative flex flex-wrap items-center gap-3">
+          <div className="relative flex flex-wrap items-center gap-2 overflow-x-hidden lg:flex-nowrap">
           <button
             onClick={() =>
               router.push(`/sa/${subAccountId}/energetic-decoder?tab=builder`)
@@ -561,15 +602,10 @@ export function ReportEditor({
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
           <div className="bg-border hidden h-6 w-px sm:block" />
-          <input
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              setDirty(true);
-            }}
-            className="min-w-[180px] flex-1 rounded-lg border border-transparent px-2 py-1 font-serif text-xl font-semibold outline-none focus:border-violet-200"
-            aria-label="Report Design title"
-          />
+          <div className="flex min-w-[150px] flex-[1_1_190px] items-center gap-1 lg:min-w-[190px]">
+            <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} className="min-w-0 flex-1 rounded-lg border border-transparent px-2 py-1 font-serif text-xl font-semibold outline-none focus:border-violet-200" aria-label="Report Design title" />
+            <Pencil className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" />
+          </div>
           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
             {initial.status ?? "Draft"}
             {dirty ? " · Unsaved" : ""}
@@ -603,7 +639,7 @@ export function ReportEditor({
               <option value={100}>100%</option>
             </select>
           </label>
-          <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 sm:inline-flex" title="Charts in this design preview use deterministic fixture data">
+          <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 xl:inline-flex" title="Charts in this design preview use deterministic fixture data">
             Design preview uses sample chart data
           </span>
           <button
@@ -657,6 +693,12 @@ export function ReportEditor({
                     index={i}
                     dimensions={pageDimensions}
                     elements={p.elements ?? []}
+                    visibilityOpen={openVisibilityPageId === p.id}
+                    onToggleVisibility={() => setOpenVisibilityPageId(openVisibilityPageId === p.id ? null : p.id)}
+                    onUpdatePage={(updater) => commit(pages.map((page) => page.id === p.id ? updater(page) : page))}
+                    onMovePage={movePage}
+                    onDuplicatePage={() => duplicatePage(p.id)}
+                    onDeletePage={() => deletePage(p.id)}
                     selectedId={selectedId}
                     onSelect={(elementId) => {
                       setActivePageId(p.id);
@@ -768,6 +810,7 @@ function PagePanel({
   addPage,
   duplicatePage,
   deletePage,
+  movePage,
 }: {
   pages: ReportPage[];
   activePageId: string;
@@ -775,6 +818,7 @@ function PagePanel({
   addPage: () => void;
   duplicatePage: () => void;
   deletePage: (id: string) => void;
+  movePage: (id: string, direction: -1 | 1) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -799,6 +843,8 @@ function PagePanel({
             <span className="min-w-0 flex-1 truncate">{pageLabel(p, i)}</span>
           </button>
           <div className="mt-2 flex justify-end gap-1">
+            <button title="Move page up" disabled={i === 0} onClick={() => movePage(p.id, -1)} className="rounded p-1 hover:bg-white disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+            <button title="Move page down" disabled={i === pages.length - 1} onClick={() => movePage(p.id, 1)} className="rounded p-1 hover:bg-white disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
             <button
               title="Duplicate page"
               onClick={duplicatePage}
@@ -1112,8 +1158,9 @@ function ElementPanel({
               <button type="button" onClick={onChooseImage} className="rounded-lg border px-3 py-2 text-sm font-medium text-violet-800">Choose image</button>
             </div>
           )}
-          {(selected.type === "shape" || selected.type === "frame") && <label className="block text-sm font-medium">Background<input type="color" className="mt-1 h-9 w-full rounded border" value={selected.style?.backgroundColor ?? "#e8ddff"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, backgroundColor: e.target.value } }))} /></label>}
+          <details open className="rounded-xl border border-violet-100 bg-violet-50/30 p-3"><summary className="cursor-pointer text-sm font-semibold">Appearance</summary><div className="mt-3 grid grid-cols-2 gap-2"><label className="text-xs">Opacity<input type="number" min="0" max="1" step=".05" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.opacity ?? 1} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, opacity: Math.max(0, Math.min(1, Number(e.target.value))) } }))} /></label><label className="text-xs">Radius<input type="number" min="0" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.borderRadius ?? 0} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, borderRadius: Number(e.target.value) } }))} /></label></div><div className="mt-2 grid grid-cols-2 gap-2">{(selected.type === "shape" || selected.type === "frame") && <label className="text-xs">Background<input type="color" className="mt-1 h-8 w-full rounded border" value={selected.style?.backgroundColor ?? "#ffffff"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, backgroundColor: e.target.value } }))} /></label>}<label className="text-xs">Border<input type="color" className="mt-1 h-8 w-full rounded border" value={selected.style?.borderColor ?? "#d8c5f5"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, borderColor: e.target.value } }))} /></label></div><div className="mt-2 grid grid-cols-2 gap-2"><label className="text-xs">Border width<input type="number" min="0" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.borderWidth ?? 0} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, borderWidth: Number(e.target.value) } }))} /></label><label className="text-xs">Border style<select className="mt-1 h-8 w-full rounded border px-1" value={selected.style?.borderStyle ?? "solid"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, borderStyle: e.target.value as "solid" | "dashed" | "none" } }))}><option value="solid">solid</option><option value="dashed">dashed</option><option value="none">none</option></select></label></div><p className="mt-2 text-[11px] text-muted-foreground">Stored in the report schema and rendered in the canvas and PDF.</p></details>
           <details open className="rounded-xl border border-violet-100 p-3"><summary className="cursor-pointer text-sm font-semibold">Position & size</summary><p className="text-muted-foreground mt-2 text-xs">Drag the selected element on canvas. Use the lower-right handle to resize and the top handle to rotate.</p></details>
+          <details className="rounded-xl border border-violet-100 p-3"><summary className="cursor-pointer text-sm font-semibold">Arrange</summary><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" className="rounded-lg border px-2 py-1 text-xs" onClick={() => update((x) => ({ ...x, zIndex: x.zIndex + 1 }))}>Bring forward</button><button type="button" className="rounded-lg border px-2 py-1 text-xs" onClick={() => update((x) => ({ ...x, zIndex: Math.max(0, x.zIndex - 1) }))}>Send backward</button><button type="button" className="rounded-lg border px-2 py-1 text-xs" onClick={() => update((x) => ({ ...x, zIndex: 999 }))}>Bring to front</button><button type="button" className="rounded-lg border px-2 py-1 text-xs" onClick={() => update((x) => ({ ...x, zIndex: 0 }))}>Send to back</button></div></details>
           <button type="button" onClick={onDelete} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700"><Trash2 className="h-3.5 w-3.5" /> Delete element</button>
           <div className="flex gap-2">
             <button
@@ -1176,11 +1223,7 @@ function VisibilityEditor({
             }
             className="h-8 w-full rounded border px-2"
           >
-            {CHART_RULE_ATTRIBUTES.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
+            {["Human Design", "Astrology"].map((group) => <optgroup key={group} label={group}>{CHART_RULE_ATTRIBUTES.filter((a) => a.group === group).map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</optgroup>)}
           </select>
           <select
             value={value.operator}
@@ -1219,6 +1262,12 @@ function CanvasPage({
   onMove,
   onResize,
   onRotate,
+  visibilityOpen,
+  onToggleVisibility,
+  onUpdatePage,
+  onMovePage,
+  onDuplicatePage,
+  onDeletePage,
 }: {
   page: ReportPage;
   index: number;
@@ -1229,19 +1278,26 @@ function CanvasPage({
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, dw: number, dh: number) => void;
   onRotate: (id: string, degrees: number) => void;
+  visibilityOpen: boolean;
+  onToggleVisibility: () => void;
+  onUpdatePage: (updater: (p: ReportPage) => ReportPage) => void;
+  onMovePage: (id: string, direction: -1 | 1) => void;
+  onDuplicatePage: () => void;
+  onDeletePage: () => void;
 }) {
   return (
-    <section
-      className="relative bg-white shadow-xl"
-      style={{
-        width: dimensions.width,
-        height: dimensions.height,
-        background: page.pageBackground || "#fff",
-      }}
-    >
-      <div className="text-muted-foreground absolute -top-6 left-0 flex items-center gap-2 text-xs">
-        <span>{pageLabel(page, index)}</span>
+    <div className="relative" style={{ width: dimensions.width, height: dimensions.height + PAGE_CONTEXT_HEIGHT }}>
+      <div className="mb-2 flex h-9 items-center gap-2 text-xs text-[#18204a]">
+        <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 font-semibold text-violet-900">{index + 1}</span>
+        <input aria-label={`Page ${index + 1} title`} value={page.title} onChange={(e) => onUpdatePage((p) => ({ ...p, title: e.target.value }))} placeholder="Add page title" className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 font-semibold outline-none focus:border-violet-300 focus:bg-white" />
+        <button type="button" onClick={onToggleVisibility} className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 ${page.visibleIf ? "border-violet-300 bg-violet-50 text-violet-800" : "border-violet-100 bg-white text-muted-foreground"}`} title="Edit page visibility">{page.visibleIf ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />} {page.visibleIf ? "Conditional" : "Everyone"}</button>
+        <button type="button" onClick={() => onMovePage(page.id, -1)} disabled={index === 0} title="Move page up" className="rounded p-1 hover:bg-violet-100 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={() => onMovePage(page.id, 1)} title="Move page down" className="rounded p-1 hover:bg-violet-100 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={onDuplicatePage} title="Duplicate page" className="rounded p-1 hover:bg-violet-100"><Copy className="h-3.5 w-3.5" /></button>
+        <button type="button" onClick={onDeletePage} title="Delete page" className="rounded p-1 hover:bg-violet-100"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
+      {visibilityOpen && <div className="absolute left-0 top-10 z-20 w-[280px] rounded-xl border border-violet-200 bg-white p-3 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-semibold"><span>Page visibility</span><button type="button" onClick={onToggleVisibility}>Close</button></div><VisibilityEditor value={page.visibleIf} onChange={(visibleIf) => onUpdatePage((p) => ({ ...p, visibleIf }))} /></div>}
+      <section className="relative bg-white shadow-xl" style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || "#fff" }}>
       {elements.map((e) => (
         <CanvasElement
           key={e.id}
@@ -1253,7 +1309,8 @@ function CanvasPage({
           onRotate={(degrees) => onRotate(e.id, degrees)}
         />
       ))}
-    </section>
+      </section>
+    </div>
   );
 }
 
