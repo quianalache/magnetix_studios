@@ -13,9 +13,12 @@ assert.equal(contentRequirementLabel("freq:gate:1", "giftText"), "Frequency Gate
 for (const required of ["leftPanel", "rightPanel", "Fit Page", "Fit Width", "TEMPLATE_DEFINITIONS", "Backspace", "Delete", "report-canvas-scale-box", "scaledStageWidth", "scaledStageHeight"]) {
   assert.match(editor, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `editor regression guard: ${required}`);
 }
+assert.match(editor, /const PAGE_CONTEXT_HEIGHT = 44/);
 assert.match(editor, /width: scaledStageWidth, height: scaledStageHeight/);
 assert.match(editor, /pageDimensions\.width \* scale/);
-assert.match(editor, /pages\.length \* pageDimensions\.height/);
+assert.match(editor, /pages\.length \* \(pageDimensions\.height \+ PAGE_CONTEXT_HEIGHT\)/);
+assert.match(editor, /Math\.max\(0, pages\.length - 1\) \* pageGap/);
+assert.match(editor, /height \/ \(pageDimensions\.height \+ PAGE_CONTEXT_HEIGHT\)/);
 assert.doesNotMatch(editor, /transform: scale\(\.42\)/, "mobile must not retain a stale hard-coded transform");
 assert.match(editor, /transform-origin: top left !important/);
 assert.match(previewRoute, /renderReportDesignPdfStream/);
