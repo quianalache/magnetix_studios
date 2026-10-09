@@ -25,6 +25,7 @@ assert.match(editor, /absolute inset-x-4 bottom-4/);
 assert.doesNotMatch(editor, /hidden sm:block.*Zoom/);
 assert.doesNotMatch(editor, /relative flex min-h-\[76px\]/, "legacy permanent tool-card grid must stay removed");
 assert.doesNotMatch(editor, /<Plus className=/, "tool rail must not show plus affordances");
+assert.doesNotMatch(editor, /setTab\("page"\)/, "inspector must not retain a nested Element/Page selector");
 assert.doesNotMatch(editor, /remain Coming soon/);
 assert.match(editor, /width: scaledStageWidth, height: scaledStageHeight/);
 assert.match(editor, /pageDimensions\.width \* scale/);

@@ -925,29 +925,10 @@ function ElementPanel({
   onDelete: () => void;
   defaultTab?: "element" | "page";
 }) {
-  const [tab, setTab] = useState<"element" | "page">(defaultTab);
   const [shortcodeSearch, setShortcodeSearch] = useState("");
-  useEffect(() => setTab(defaultTab), [defaultTab]);
+  const tab = defaultTab;
   return (
     <div className="mt-3 space-y-4">
-      <div className="flex gap-2 border-b pb-2 text-sm font-semibold">
-        <button
-          onClick={() => setTab("element")}
-          className={
-            tab === "element" ? "text-violet-700" : "text-muted-foreground"
-          }
-        >
-          Element
-        </button>
-        <button
-          onClick={() => setTab("page")}
-          className={
-            tab === "page" ? "text-violet-700" : "text-muted-foreground"
-          }
-        >
-          Page
-        </button>
-      </div>
       {tab === "page" ? (
         <>
           <label className="block text-sm font-medium">
