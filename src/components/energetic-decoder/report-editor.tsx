@@ -1106,7 +1106,7 @@ function ElementPanel({
           {selected.type === "text" && (
             <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
               <div className="grid grid-cols-[1fr_88px] gap-2">
-                <label className="text-xs">Font<input className="mt-1 h-8 w-full rounded border px-2" value={String(selected.style?.fontFamily ?? "Playfair Display")} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontFamily: e.target.value } }))} /></label>
+                <label className="text-xs">Font<select className="mt-1 h-8 w-full rounded border px-2" value={(["Helvetica", "Times-Roman", "Courier"] as string[]).includes(String(selected.style?.fontFamily)) ? String(selected.style?.fontFamily) : "Times-Roman"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontFamily: e.target.value } }))}><option value="Helvetica">Helvetica</option><option value="Times-Roman">Times Roman</option><option value="Courier">Courier</option></select></label>
                 <label className="text-xs">Size<input type="number" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.fontSize ?? 24} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontSize: Number(e.target.value) } }))} /></label>
               </div>
               <div className="flex flex-wrap gap-1">

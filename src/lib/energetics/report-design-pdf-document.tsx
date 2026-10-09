@@ -63,6 +63,10 @@ function textAlignStyle(align: ReportBlockAlign | undefined): "left" | "center" 
   return align === "center" ? "center" : align === "right" ? "right" : "left";
 }
 
+function pdfFontFamily(fontFamily?: string): "Helvetica" | "Times-Roman" | "Courier" {
+  return fontFamily === "Helvetica" || fontFamily === "Courier" || fontFamily === "Times-Roman" ? fontFamily : "Helvetica";
+}
+
 function ChartPiecePdf({
   piece,
   humanDesign,
@@ -180,7 +184,7 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
 }
 
 function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign, scaleX = 1, scaleY = 1 }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; scaleX?: number; scaleY?: number }) {
-  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: (element.style?.fontSize || 14) * scaleX, fontWeight: element.style?.fontWeight || 400, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: textAlignStyle(element.style?.align), backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid", borderRadius: element.style?.borderRadius || 0 } as const;
+  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontFamily: pdfFontFamily(element.style?.fontFamily), fontSize: (element.style?.fontSize || 14) * scaleX, fontWeight: element.style?.fontWeight || 400, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: textAlignStyle(element.style?.align), backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid", borderRadius: element.style?.borderRadius || 0 } as const;
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
     return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
