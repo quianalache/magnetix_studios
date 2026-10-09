@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   FilePlus2,
+  FileText,
   Grid2X2,
   Image as ImageIcon,
   LayoutTemplate,
@@ -460,6 +461,15 @@ export function ReportEditor({
     setMobileDrawer(drawer);
   }
 
+  function toggleInspector(panel: RightPanel) {
+    if (inspectorOpen && rightPanel === panel) {
+      setInspectorOpen(false);
+      return;
+    }
+    setRightPanel(panel);
+    setInspectorOpen(true);
+  }
+
   const openTool = (tool: string) => setTemplateCategory((current) => current === tool ? null : tool);
   const renderToolRail = () => (
     <div className="flex flex-col items-center gap-1.5">
@@ -575,8 +585,8 @@ export function ReportEditor({
           >
             <Redo2 className="h-4 w-4" />
           </button>
-          <div className="relative hidden sm:block">
-            <button type="button" onClick={() => setZoomOpen((v) => !v)} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium" aria-expanded={zoomOpen}>Zoom <span className="font-semibold">{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span><ChevronDown className="h-4 w-4" /></button>
+          <div className="relative block">
+            <button type="button" onClick={() => setZoomOpen((v) => !v)} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-medium sm:gap-2 sm:px-3 sm:py-2 sm:text-sm" aria-expanded={zoomOpen}>Zoom <span className="font-semibold">{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span><ChevronDown className="h-4 w-4" /></button>
             {zoomOpen && <div className="absolute left-0 top-11 z-30 w-64 rounded-2xl border border-violet-100 bg-white p-3 shadow-xl">
               <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[#18204a]"><span>Zoom</span><span>{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span></div>
               <div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => { setZoom("fit-page"); setZoomOpen(false); }} className={`rounded-lg border px-2 py-2 text-xs font-semibold ${zoom === "fit-page" ? "border-violet-500 bg-violet-50 text-violet-800" : ""}`}>Fit Page</button><button type="button" onClick={() => { setZoom("fit-width"); setZoomOpen(false); }} className={`rounded-lg border px-2 py-2 text-xs font-semibold ${zoom === "fit-width" ? "border-violet-500 bg-violet-50 text-violet-800" : ""}`}>Fit Width</button></div>
@@ -609,10 +619,10 @@ export function ReportEditor({
             {renderToolRail()}
           </aside>
           {templateCategory && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[260px]"><div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3"><p className="text-sm font-semibold">{templateCategory === "Templates" ? "Template Library" : templateCategory === "Branding" ? "Branding" : tools.find((t) => t.type === templateCategory)?.label}</p><button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-50">Close</button></div>{renderActiveToolPanel()}</aside>}
-          <main ref={canvasViewportRef} className="order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
+          <main ref={canvasViewportRef} className="relative order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 pb-24 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
             <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white/80 px-3 py-2 text-xs shadow-sm">
               <button type="button" onClick={() => setPageOverviewOpen(true)} className="inline-flex items-center gap-2 rounded-lg px-2 py-1 font-semibold text-[#18204a] hover:bg-violet-50"><Grid2X2 className="h-4 w-4 text-violet-700" /> Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</button>
-              <button type="button" onClick={() => { setRightPanel("page"); setInspectorOpen(true); }} className="rounded-lg px-2 py-1 font-semibold text-violet-800 hover:bg-violet-50">Page settings</button>
+              <button type="button" onClick={() => toggleInspector("page")} className="rounded-lg px-2 py-1 font-semibold text-violet-800 hover:bg-violet-50">Page settings</button>
             </div>
             <div className="report-canvas-scale-box mx-auto shrink-0 overflow-hidden" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
               <div
@@ -658,23 +668,38 @@ export function ReportEditor({
                 ))}
               </div>
             </div>
+            <div className="absolute inset-x-4 bottom-4 z-10 hidden items-center gap-2 rounded-xl border border-violet-100 bg-white/95 p-2 shadow-lg backdrop-blur lg:flex">
+              <button type="button" onClick={() => setPageOverviewOpen(true)} className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[#18204a] hover:bg-violet-50" aria-label="Open page overview">
+                <Grid2X2 className="h-4 w-4 text-violet-700" />
+                <span>Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</span>
+              </button>
+              <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" aria-label="Page thumbnails">
+                {pages.map((p, i) => (
+                  <button key={p.id} type="button" onClick={() => setActivePageId(p.id)} className={`flex w-16 shrink-0 flex-col gap-1 rounded-lg border p-1.5 text-left text-[10px] ${p.id === activePageId ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:bg-violet-50"}`} aria-label={`Go to ${pageLabel(p, i)}`}>
+                    <span className="flex h-12 items-center justify-center rounded border border-violet-100 bg-[#f3f0f9] p-1"><span className="h-full w-2/3 rounded-sm bg-white shadow-sm"><span className="mt-1 block h-1 w-2/3 rounded bg-violet-200" /><span className="mt-1 block h-5 rounded-sm bg-gradient-to-br from-violet-100 via-white to-amber-100" /></span></span>
+                    <span className="truncate font-semibold text-[#18204a]">{i + 1}. {p.title || "Untitled"}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={addPage} className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-violet-300 text-[10px] font-semibold text-violet-800 hover:bg-violet-50"><FilePlus2 className="mb-1 h-4 w-4" />Add Page</button>
+            </div>
           </main>
           {inspectorOpen && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
             <div className="flex gap-1 border-b pb-2">
               <button
-                onClick={() => setRightPanel("element")}
+                onClick={() => toggleInspector("element")}
                 className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "element" ? "bg-violet-100 text-violet-800" : ""}`}
               >
-                Element
+                <Type className="mr-1 inline h-4 w-4" />Element
               </button>
               <button
-                onClick={() => setRightPanel("page")}
+                onClick={() => toggleInspector("page")}
                 className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "page" ? "bg-violet-100 text-violet-800" : ""}`}
               >
-                Page
+                <FileText className="mr-1 inline h-4 w-4" />Page
               </button>
               <button
-                onClick={() => setRightPanel("layers")}
+                onClick={() => toggleInspector("layers")}
                 className={`flex-1 rounded-lg px-2 py-2 text-sm font-semibold ${rightPanel === "layers" ? "bg-violet-100 text-violet-800" : ""}`}
               >
                 <Layers3 className="mr-1 inline h-4 w-4" />Layers

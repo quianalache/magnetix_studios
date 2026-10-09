@@ -10,7 +10,7 @@ assert.match(contentRequirementLabel("hd:incarnationCross:rightAngle-12-11-36-6"
 assert.equal(contentRequirementLabel("astro:planetHouse:sun:10", "description"), "Sun in 10th House — Interpretation");
 assert.equal(contentRequirementLabel("freq:gate:1", "giftText"), "Frequency Gate 1 — How the gift shows up");
 
-for (const required of ["rightPanel", "inspectorOpen", "Fit Page", "Fit Width", "type=\"range\"", "TEMPLATE_DEFINITIONS", "Backspace", "Delete", "report-canvas-scale-box", "scaledStageWidth", "scaledStageHeight", "Report Builder", "Energetic Decoder", "pageOverviewOpen", "Template Library", "renderToolRail", "renderActiveToolPanel", "openTool", "Tools", "lg:grid-cols-[92px_minmax(0,1fr)]"]) {
+for (const required of ["rightPanel", "inspectorOpen", "toggleInspector", "Fit Page", "Fit Width", "type=\"range\"", "TEMPLATE_DEFINITIONS", "Backspace", "Delete", "report-canvas-scale-box", "scaledStageWidth", "scaledStageHeight", "Report Builder", "Energetic Decoder", "pageOverviewOpen", "Page thumbnails", "Template Library", "renderToolRail", "renderActiveToolPanel", "openTool", "Tools", "lg:grid-cols-[92px_minmax(0,1fr)]"]) {
   assert.match(editor, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `editor regression guard: ${required}`);
 }
 assert.match(editor, /const PAGE_CONTEXT_HEIGHT = 44/);
@@ -19,6 +19,10 @@ assert.match(editor, /rightPanel === "layers" \? renderLayerPanel\(\) : renderEl
 assert.match(editor, /setInspectorOpen\(true\)/);
 assert.match(editor, /Page \{Math\.max\(1, pages\.findIndex/);
 assert.match(editor, /Use template/);
+assert.match(editor, /FileText/);
+assert.match(editor, /Add Page/);
+assert.match(editor, /absolute inset-x-4 bottom-4/);
+assert.doesNotMatch(editor, /hidden sm:block.*Zoom/);
 assert.doesNotMatch(editor, /relative flex min-h-\[76px\]/, "legacy permanent tool-card grid must stay removed");
 assert.doesNotMatch(editor, /<Plus className=/, "tool rail must not show plus affordances");
 assert.doesNotMatch(editor, /remain Coming soon/);
