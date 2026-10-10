@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -41,6 +41,14 @@ import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import { CelestialDecoration } from "@/components/energetic-decoder/content-sets-visuals";
 import { ZoomControl, clampZoom, type ZoomMode } from "@/components/energetic-decoder/report-zoom-control";
+import {
+  clampMoveToPage,
+  clampResizeToPage,
+  finishGesture,
+  moveGesture,
+  startGesture,
+  type Gesture,
+} from "@/components/energetic-decoder/report-drag-gesture";
 import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { REPORT_BUILDER_FIXTURE_READING } from "@/lib/energetics/report-builder-fixture";
@@ -349,6 +357,10 @@ export function ReportEditor({
       ),
     }));
   }
+  /** Updates one element on a specific page — one history step. */
+  function updateElementOnPage(pageId: string, elementId: string, updater: (e: ReportCanvasElement) => ReportCanvasElement) {
+    commit(pages.map((p) => (p.id === pageId ? { ...p, elements: (p.elements ?? []).map((e) => (e.id === elementId ? updater(e) : e)) } : p)));
+  }
   function deleteElement(elementId: string) {
     updatePage((p) => ({ ...p, elements: (p.elements ?? []).filter((e) => e.id !== elementId) }));
     setSelectedId(null);
@@ -635,25 +647,28 @@ export function ReportEditor({
                     onDuplicatePage={() => duplicatePage(p.id)}
                     onDeletePage={() => deletePage(p.id)}
                     selectedId={selectedId}
-                    onSelect={(elementId) => {
+                    active={p.id === activePage?.id}
+                    scale={scale}
+                    onActivate={() => setActivePageId(p.id)}
+                    onClearSelection={() => setSelectedId(null)}
+                    onSelect={(elementId, opts) => {
                       setActivePageId(p.id);
                       setSelectedId(elementId);
+                      if (!opts?.openInspector) return;
                       setRightPanel("element");
                       setInspectorOpen(true);
-                      if (window.innerWidth < 1024) setMobileDrawer("element");
+                      // Phones/tablets: open the Element drawer on a click, not after a drag.
+                      if (opts.openDrawer && window.innerWidth < 1024) setMobileDrawer("element");
                     }}
+                    // Gestures write to THIS page (not whichever page is active); deltas arrive in page units, already clamped to the page.
                     onMove={(elementId, dx, dy) =>
-                      updateElement(elementId, (e) => ({
+                      updateElementOnPage(p.id, elementId, (e) => ({
                         ...e,
-                        geometry: {
-                          ...e.geometry,
-                          x: Math.max(0, e.geometry.x + dx),
-                          y: Math.max(0, e.geometry.y + dy),
-                        },
+                        geometry: { ...e.geometry, x: Math.max(0, e.geometry.x + dx), y: Math.max(0, e.geometry.y + dy) },
                       }))
                     }
-                    onResize={(elementId, dw, dh) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, width: Math.max(80, e.geometry.width + dw), height: Math.max(50, e.geometry.height + dh) } }))}
-                    onRotate={(elementId, degrees) => updateElement(elementId, (e) => ({ ...e, geometry: { ...e.geometry, rotation: (e.geometry.rotation ?? 0) + degrees } }))}
+                    onResize={(elementId, dw, dh) => updateElementOnPage(p.id, elementId, (e) => ({ ...e, geometry: { ...e.geometry, width: Math.max(80, e.geometry.width + dw), height: Math.max(50, e.geometry.height + dh) } }))}
+                    onRotate={(elementId, degrees) => updateElementOnPage(p.id, elementId, (e) => ({ ...e, geometry: { ...e.geometry, rotation: (e.geometry.rotation ?? 0) + degrees } }))}
                   />
                 ))}
               </div>
@@ -1215,6 +1230,10 @@ function CanvasPage({
   dimensions,
   elements,
   selectedId,
+  active,
+  scale,
+  onActivate,
+  onClearSelection,
   onSelect,
   onMove,
   onResize,
@@ -1233,7 +1252,12 @@ function CanvasPage({
   dimensions: { width: number; height: number };
   elements: ReportCanvasElement[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  /** This is the active page (where Add Text etc. insert). */
+  active: boolean;
+  scale: number;
+  onActivate: () => void;
+  onClearSelection: () => void;
+  onSelect: (id: string, opts?: { openInspector?: boolean; openDrawer?: boolean }) => void;
   onMove: (id: string, dx: number, dy: number) => void;
   onResize: (id: string, dw: number, dh: number) => void;
   onRotate: (id: string, degrees: number) => void;
@@ -1245,9 +1269,11 @@ function CanvasPage({
   onDeletePage: () => void;
 }) {
   return (
-    <div className="relative" style={{ width: dimensions.width, height: dimensions.height + PAGE_CONTEXT_HEIGHT }}>
+    // Any press on the page (its chrome, blank area or an element) makes it
+    // the active page — capture phase, so handles that stop propagation still count.
+    <div className="relative" style={{ width: dimensions.width, height: dimensions.height + PAGE_CONTEXT_HEIGHT }} data-canvas-page={page.id} data-active-page={active || undefined} onPointerDownCapture={(e) => { if (e.button === 0 && !active) onActivate(); }}>
       <div className="mb-2 flex h-9 items-center gap-2 text-xs text-[#18204a]">
-        <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 font-semibold text-violet-900">{index + 1}</span>
+        <span className={`shrink-0 rounded-full px-2 py-1 font-semibold ${active ? "bg-violet-700 text-white" : "bg-violet-100 text-violet-900"}`} aria-current={active ? "page" : undefined}>{index + 1}</span>
         <input aria-label={`Page ${index + 1} title`} value={page.title} onChange={(e) => onUpdatePage((p) => ({ ...p, title: e.target.value }))} placeholder="Add page title" className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 font-semibold outline-none focus:border-violet-300 focus:bg-white" />
         <button type="button" onClick={onToggleVisibility} className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 ${page.visibleIf ? "border-violet-300 bg-violet-50 text-violet-800" : "border-violet-100 bg-white text-muted-foreground"}`} title="Edit page visibility">{page.visibleIf ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />} {page.visibleIf ? "Conditional" : "Everyone"}</button>
         <button type="button" onClick={() => onMovePage(page.id, -1)} disabled={index === 0} title="Move page up" className="rounded p-1 hover:bg-violet-100 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
@@ -1256,13 +1282,15 @@ function CanvasPage({
         <button type="button" onClick={onDeletePage} title="Delete page" className="rounded p-1 hover:bg-violet-100"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
       {visibilityOpen && <div className="absolute left-0 top-10 z-20 w-[280px] rounded-xl border border-violet-200 bg-white p-3 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-semibold"><span>Page visibility</span><button type="button" onClick={onToggleVisibility}>Close</button></div><VisibilityEditor value={page.visibleIf} onChange={(visibleIf) => onUpdatePage((p) => ({ ...p, visibleIf }))} /></div>}
-      <section className="relative bg-white shadow-xl" style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || brandBackground || "#fff", borderTop: `4px solid ${brandAccent || "transparent"}` }}>
+      <section className="relative bg-white shadow-xl" onClick={(e) => { if (e.target === e.currentTarget) onClearSelection(); }} style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || brandBackground || "#fff", borderTop: `4px solid ${brandAccent || "transparent"}` }}>
       {elements.map((e) => (
         <CanvasElement
           key={e.id}
           element={e}
           selected={e.id === selectedId}
-          onSelect={() => onSelect(e.id)}
+          scale={scale}
+          pageSize={dimensions}
+          onSelect={(opts) => onSelect(e.id, opts)}
           onMove={(dx, dy) => onMove(e.id, dx, dy)}
           onResize={(dw, dh) => onResize(e.id, dw, dh)}
           onRotate={(degrees) => onRotate(e.id, degrees)}
@@ -1273,9 +1301,103 @@ function CanvasPage({
   );
 }
 
+/**
+ * One pointer gesture (drag or resize) with a complete lifecycle: started
+ * by a primary press, previewed while the primary button is down, and
+ * ended by pointerup / pointercancel / window blur / unmount — wherever the
+ * pointer is when that happens. Move/up/cancel are window listeners, so a
+ * release over another page, outside the canvas or after the browser drops
+ * pointer capture still ends it. Commits once (one Undo step).
+ */
+function usePointerGesture({
+  scale,
+  clamp,
+  onCommit,
+}: {
+  scale: number;
+  clamp: () => (dx: number, dy: number) => { dx: number; dy: number };
+  onCommit: (dx: number, dy: number) => void;
+}) {
+  const [preview, setPreview] = useState<{ dx: number; dy: number } | null>(null);
+  const gestureRef = useRef<Gesture | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  const draggedRef = useRef(false);
+  const commitRef = useRef(onCommit);
+  useEffect(() => {
+    commitRef.current = onCommit;
+  }, [onCommit]);
+
+  function end(commit: boolean) {
+    const g = gestureRef.current;
+    gestureRef.current = null;
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    setPreview(null);
+    draggedRef.current = !!g?.active;
+    const result = commit ? finishGesture(g) : null;
+    if (result) commitRef.current(result.dx, result.dy);
+  }
+
+  useEffect(() => () => cleanupRef.current?.(), []);
+
+  function begin(e: ReactPointerEvent<HTMLElement>) {
+    const g = startGesture(e);
+    if (!g) return;
+    if (gestureRef.current) end(false);
+    gestureRef.current = g;
+    draggedRef.current = false;
+    const clampFn = clamp();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // capture is best-effort; window listeners below still see every event
+    }
+    const onMove = (ev: PointerEvent) => {
+      const current = gestureRef.current;
+      if (!current) return;
+      const r = moveGesture(current, ev, scale, clampFn);
+      if (r.kind === "released") return end(true);
+      if (r.kind === "move") {
+        gestureRef.current = r.gesture;
+        if (r.gesture.active) setPreview({ dx: r.gesture.dx, dy: r.gesture.dy });
+      }
+    };
+    const onUp = (ev: PointerEvent) => {
+      if (gestureRef.current && ev.pointerId === gestureRef.current.pointerId) end(true);
+    };
+    const onCancel = (ev: PointerEvent) => {
+      if (gestureRef.current && ev.pointerId === gestureRef.current.pointerId) end(false);
+    };
+    const onBlur = () => end(false);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("blur", onBlur);
+    cleanupRef.current = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("blur", onBlur);
+    };
+  }
+
+  return {
+    preview,
+    begin,
+    /** True once, right after a gesture that actually moved — lets the trailing click be ignored. */
+    consumeDragged: () => {
+      const d = draggedRef.current;
+      draggedRef.current = false;
+      return d;
+    },
+  };
+}
+
 function CanvasElement({
   element,
   selected,
+  scale,
+  pageSize,
   onSelect,
   onMove,
   onResize,
@@ -1283,13 +1405,18 @@ function CanvasElement({
 }: {
   element: ReportCanvasElement;
   selected: boolean;
-  onSelect: () => void;
+  /** Canvas zoom — pointer deltas are screen px, geometry is page units. */
+  scale: number;
+  pageSize: { width: number; height: number };
+  onSelect: (opts?: { openInspector?: boolean; openDrawer?: boolean }) => void;
   onMove: (dx: number, dy: number) => void;
   onResize: (dw: number, dh: number) => void;
   onRotate: (degrees: number) => void;
 }) {
-  const [drag, setDrag] = useState<{ x: number; y: number; dx: number; dy: number } | null>(null);
-  const [resize, setResize] = useState<{ x: number; y: number; dw: number; dh: number } | null>(null);
+  const box = element.geometry;
+  const drag = usePointerGesture({ scale, clamp: () => clampMoveToPage(box, pageSize), onCommit: onMove });
+  const resizeGesture = usePointerGesture({ scale, clamp: () => clampResizeToPage(box, pageSize), onCommit: onResize });
+  const resize = resizeGesture.preview ? { dw: resizeGesture.preview.dx, dh: resizeGesture.preview.dy } : null;
   const label =
     element.type === "text"
       ? String(element.payload.text ?? "Add text")
@@ -1307,24 +1434,27 @@ function CanvasElement({
   return (
     <button
       type="button"
-      onClick={onSelect}
+      data-canvas-element={element.id}
+      onClick={() => {
+        // Opens the inspector (and, on phones, the Element drawer — but not after a drag).
+        const dragged = drag.consumeDragged();
+        onSelect({ openInspector: true, openDrawer: !dragged });
+      }}
       onPointerDown={(e) => {
-        if (element.locked) return;
-        setDrag({ x: e.clientX, y: e.clientY, dx: 0, dy: 0 });
-        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        if (e.button !== 0) return;
+        // Select only; opening panels now would resize/rescale the canvas mid-drag.
+        onSelect();
+        if (!element.locked) drag.begin(e);
       }}
-      onPointerMove={(e) => {
-        if (!drag) return;
-        setDrag({ ...drag, dx: e.clientX - drag.x, dy: e.clientY - drag.y });
-      }}
-      onPointerUp={() => {
-        if (drag && (drag.dx !== 0 || drag.dy !== 0)) onMove(drag.dx, drag.dy);
-        setDrag(null);
-      }}
+      onDragStart={(e) => e.preventDefault()}
       className={`absolute overflow-hidden text-left ${selected ? "ring-2 ring-violet-600 ring-offset-2" : "hover:ring-1 hover:ring-violet-300"}`}
       style={{
-        left: element.geometry.x + (drag?.dx ?? 0),
-        top: element.geometry.y + (drag?.dy ?? 0),
+        left: element.geometry.x + (drag.preview?.dx ?? 0),
+        top: element.geometry.y + (drag.preview?.dy ?? 0),
+        // The page handles touch scrolling; on the element a touch is a drag (no pointercancel mid-gesture).
+        touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
         width: element.geometry.width + (resize?.dw ?? 0),
         height: element.geometry.height + (resize?.dh ?? 0),
         zIndex: element.zIndex,
@@ -1355,12 +1485,13 @@ function CanvasElement({
           <FixtureChart piece={String(element.payload.piece ?? "human-design-full")} />
         </div>
       ) : element.type === "image" || element.type === "upload" ? (
-        element.payload.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={String(element.payload.url)} alt={String(element.payload.alt ?? "Report image")} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">Choose an image asset</div>
+        element.payload.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={String(element.payload.url)} alt={String(element.payload.alt ?? "Report image")} draggable={false} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">Choose an image asset</div>
       ) : (
         <span>{label}</span>
       )}
-      {selected && !element.locked && <span className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { e.stopPropagation(); setResize({ x: e.clientX, y: e.clientY, dw: 0, dh: 0 }); const move = (m: PointerEvent) => setResize((current) => current ? { ...current, dw: m.clientX - current.x, dh: m.clientY - current.y } : current); const up = () => { setResize((current) => { if (current && (current.dw !== 0 || current.dh !== 0)) onResize(current.dw, current.dh); return null; }); window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); }; window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); }} />}
-      {selected && !element.locked && <button type="button" aria-label="Rotate element" className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white bg-fuchsia-600" onPointerDown={(e) => { e.stopPropagation(); onRotate(15); }}> </button>}
+      {selected && !element.locked && <span data-resize-handle className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize touch-none rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); resizeGesture.begin(e); }} />}
+      {/* Not a <button>: the element itself is a <button>, and nested buttons are invalid HTML. */}
+      {selected && !element.locked && <span role="button" tabIndex={0} aria-label="Rotate element" className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 cursor-pointer touch-none rounded-full border-2 border-white bg-fuchsia-600" onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); onRotate(15); }} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onRotate(15); } }} />}
     </button>
   );
 }
