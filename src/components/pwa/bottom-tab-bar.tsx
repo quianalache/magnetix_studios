@@ -44,7 +44,7 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
     >
-      <div className="flex h-14 items-stretch">
+      <div className="flex h-[var(--crm-mobile-tab-bar-h)] items-stretch">
         {TABS.map((tab) => {
           const href = `${subRoot}${tab.path}`;
           const active =

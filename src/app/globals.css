@@ -578,6 +578,22 @@ body {
   --cs-gold: #e7b552;
 }
 
+/* Phone CRM bottom tab bar (src/components/pwa/bottom-tab-bar.tsx) — its
+   row height, shared so pages with their own phone toolbars (Report
+   Builder) can stack above it instead of guessing. The bar adds a 1px top
+   border and env(safe-area-inset-bottom) on top of this. */
+:root {
+  --crm-mobile-tab-bar-h: 3.5rem;
+}
+
+/* Report Builder phone stack (< md): CRM tab bar at the very bottom, the
+   builder's contextual toolbar directly above it, sheets above both. */
+.report-builder-shell {
+  --rb-toolbar-h: 4rem;
+  --rb-toolbar-bottom: calc(var(--crm-mobile-tab-bar-h) + 1px + env(safe-area-inset-bottom, 0px) + 0.5rem);
+  --rb-sheet-bottom: calc(var(--rb-toolbar-bottom) + var(--rb-toolbar-h) + 0.5rem);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

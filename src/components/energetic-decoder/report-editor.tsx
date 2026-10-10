@@ -16,21 +16,25 @@ import {
   Info,
   Grid2X2,
   Image as ImageIcon,
+  LayoutGrid,
   LayoutTemplate,
   Layers3,
   Lock,
+  MousePointer2,
   PanelLeft,
   Palette,
   Pencil,
   Redo2,
   Search,
   Save,
+  Settings,
   Shapes,
   Trash2,
   Type,
   Undo2,
   UploadCloud,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
 import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
@@ -504,6 +508,17 @@ export function ReportEditor({
       {tools.map((t) => <button key={t.type} type="button" onClick={() => openTool(t.type)} className={`flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2 text-[11px] font-semibold ${templateCategory === t.type ? "bg-violet-100 text-violet-800" : "text-[#18204a] hover:bg-violet-50"}`}><t.icon className="h-5 w-5 text-violet-700" />{t.label}</button>)}
     </div>
   );
+  /** Phone Elements sheet (owner mockup): the SAME tools and handlers as the desktop rail, laid out as a grid. */
+  const renderToolGrid = () => (
+    <div className="grid grid-cols-4 gap-1.5 min-[375px]:grid-cols-5" data-tool-grid>
+      {([{ key: "Templates", label: "Templates", icon: LayoutTemplate }, { key: "Branding", label: "Branding", icon: Palette }, ...tools.map((t) => ({ key: t.type as string, label: t.label, icon: t.icon }))]).map(({ key, label, icon: Icon }) => (
+        <button key={key} type="button" onClick={() => openTool(key)} aria-pressed={templateCategory === key} className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl border px-0.5 py-3 text-[10.5px] font-medium tracking-tight ${templateCategory === key ? "border-violet-300 bg-violet-50 text-violet-800" : "border-violet-100 bg-white text-[#18204a]"}`}>
+          <Icon className="h-6 w-6 text-violet-700" strokeWidth={1.75} />
+          <span className="w-full truncate text-center">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
   const renderActiveToolPanel = () => {
     if (templateCategory === "Templates") return <div className="space-y-4"><div><p className="text-sm font-semibold text-[#18204a]">Template Library</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Existing starter templates for this release. Batch 2 will refine their authored content.</p></div><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates…" className="h-9 w-full rounded-lg border bg-white pl-9 pr-3 text-sm" /></label><div className="space-y-3">{TEMPLATE_DEFINITIONS.filter((template) => !templateSearch.trim() || `${template.name} ${template.category} ${template.description}`.toLowerCase().includes(templateSearch.trim().toLowerCase())).map((template) => <article key={template.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm"><div className="flex h-28 items-center gap-3 p-3" style={{ background: `linear-gradient(135deg, ${template.accent} 0%, #ffffff 85%)` }}><div className="flex h-full w-20 shrink-0 flex-col justify-between rounded-md border border-white bg-white/90 p-2 shadow-sm"><span className="h-1.5 w-2/3 rounded bg-violet-200" /><span className="h-1.5 w-full rounded bg-slate-100" /><span className="h-10 rounded bg-gradient-to-br from-violet-100 via-white to-amber-100" /><span className="h-1.5 w-4/5 rounded bg-slate-100" /></div><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700">{template.category}</p><p className="mt-1 text-sm font-semibold text-[#18204a]">{template.name}</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">{template.description}</p></div></div><div className="flex items-center justify-between gap-2 border-t border-violet-100 p-2.5"><span className="text-[11px] text-muted-foreground">Existing starter</span><button type="button" onClick={() => insertTemplate(template)} className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white">Use template</button></div></article>)}</div></div>;
     if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
@@ -567,7 +582,7 @@ export function ReportEditor({
   );
 
   return (
-    <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100 lg:min-h-0">
+    <div className="report-builder-shell min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100 max-md:pb-[calc(var(--rb-toolbar-h)+1rem)] lg:min-h-0">
       {/* Desktop: the editor fills exactly the dashboard content area (100dvh − 64px top bar − 48px padding), so header,
           toolbar, canvas and the page strip are all on screen, as in the approved mockup. */}
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:flex lg:h-[calc(100dvh-112px)] lg:min-h-[680px] lg:flex-col lg:px-2 lg:py-0">
@@ -674,7 +689,7 @@ export function ReportEditor({
               </div>
             </div>
           </main>
-            <nav aria-label="Pages" className="hidden h-[64px] shrink-0 items-center gap-2 rounded-2xl border border-violet-100 bg-white px-2 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:flex" data-page-navigator>
+            <nav aria-label="Pages" className="flex h-[64px] shrink-0 items-center gap-2 rounded-2xl border border-violet-100 bg-white px-2 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 md:hidden lg:flex" data-page-navigator>
               <button type="button" onClick={() => setPageOverviewOpen(true)} className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[#18204a] hover:bg-violet-50" aria-label="Open page overview">
                 <Grid2X2 className="h-4 w-4 text-violet-700" />
                 <span>Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</span>
@@ -687,7 +702,7 @@ export function ReportEditor({
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={() => toggleInspector("page")} aria-pressed={inspectorOpen && rightPanel === "page"} className={`shrink-0 rounded-lg px-2.5 py-2 text-xs font-semibold ${inspectorOpen && rightPanel === "page" ? "bg-violet-100 text-violet-800" : "text-violet-800 hover:bg-violet-50"}`}>Page settings</button>
+              <button type="button" onClick={() => toggleInspector("page")} aria-pressed={inspectorOpen && rightPanel === "page"} className={`hidden shrink-0 rounded-lg px-2.5 py-2 text-xs font-semibold lg:inline-flex ${inspectorOpen && rightPanel === "page" ? "bg-violet-100 text-violet-800" : "text-violet-800 hover:bg-violet-50"}`}>Page settings</button>
               <button type="button" onClick={addPage} className="flex h-[52px] w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-violet-300 text-[9px] font-semibold text-violet-800 hover:bg-violet-50"><FilePlus2 className="mb-0.5 h-3.5 w-3.5" />Add Page</button>
             </nav>
           </div>
@@ -723,15 +738,21 @@ export function ReportEditor({
                 onClick={() => setMobileDrawer(null)}
                 className="fixed inset-0 z-30 bg-[#18204a]/25 lg:hidden"
               />
-              <section className={`fixed inset-x-3 bottom-20 z-40 max-h-[min(72vh,760px)] overflow-y-auto rounded-3xl border border-violet-200 bg-white p-4 shadow-2xl dark:border-violet-900/50 dark:bg-slate-900 md:inset-y-3 md:bottom-3 md:top-3 md:max-h-none md:w-[min(360px,calc(100vw-24px))] lg:hidden ${mobileDrawer === "layers" || mobileDrawer === "element" || mobileDrawer === "page" ? "md:left-auto md:right-3 md:rounded-l-3xl md:rounded-r-none" : "md:right-auto md:left-3 md:rounded-l-none md:rounded-r-3xl"}`}>
-                <div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3">
-                  <h2 className="font-serif text-xl font-semibold text-[#18204a] dark:text-white">
-                    {mobileDrawer === "elements" ? "Add Elements" : mobileDrawer === "pages" ? "Pages" : mobileDrawer === "layers" ? "Layers" : mobileDrawer === "page" ? "Page Settings" : "Element"}
-                  </h2>
-                  <button type="button" onClick={() => setMobileDrawer(null)} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-violet-800 hover:bg-violet-50">Close</button>
+              <section data-mobile-sheet={mobileDrawer} className={`fixed inset-x-0 bottom-[var(--rb-sheet-bottom)] z-40 max-h-[calc(100dvh-var(--rb-sheet-bottom)-4.5rem)] overflow-y-auto rounded-t-3xl border border-violet-200 bg-white px-4 pb-4 pt-2 shadow-[0_-12px_40px_rgba(24,32,74,0.16)] md:rounded-3xl md:p-4 dark:border-violet-900/50 dark:bg-slate-900 md:inset-y-3 md:bottom-3 md:top-3 md:max-h-none md:w-[min(360px,calc(100vw-24px))] lg:hidden ${mobileDrawer === "layers" || mobileDrawer === "element" || mobileDrawer === "page" ? "md:left-auto md:right-3 md:rounded-l-3xl md:rounded-r-none" : "md:right-auto md:left-3 md:rounded-l-none md:rounded-r-3xl"}`}>
+                <span aria-hidden className="mx-auto mb-3 block h-1.5 w-12 rounded-full bg-violet-100 md:hidden" />
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="font-serif text-2xl font-semibold leading-tight text-[#18204a] dark:text-white">
+                      {mobileDrawer === "elements" ? "Elements" : mobileDrawer === "pages" ? "Pages" : mobileDrawer === "layers" ? "Layers" : mobileDrawer === "page" ? "Page Settings" : "Element"}
+                    </h2>
+                    <p className="mt-0.5 text-sm text-[#5264a6]">
+                      {mobileDrawer === "elements" ? "Add content to your report" : mobileDrawer === "pages" ? "Select, add and arrange pages" : mobileDrawer === "layers" ? "Everything on the active page" : mobileDrawer === "page" ? "Settings for the active page" : "Edit the selected element"}
+                    </p>
+                  </div>
+                  <button type="button" aria-label="Close" onClick={() => setMobileDrawer(null)} className="shrink-0 rounded-full p-2 text-[#18204a] hover:bg-violet-50"><X className="h-5 w-5" /></button>
                 </div>
                 <div className="space-y-2">
-                  {mobileDrawer === "elements" && <><p className="text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>{renderToolRail()}{templateCategory && <div className="mt-4 border-t border-violet-100 pt-4">{renderActiveToolPanel()}</div>}</>}
+                  {mobileDrawer === "elements" && <>{renderToolGrid()}{templateCategory && <div className="mt-4 border-t border-violet-100 pt-4">{renderActiveToolPanel()}</div>}</>}
                   {mobileDrawer === "pages" && renderPagesPanel()}
                   {mobileDrawer === "layers" && renderLayerPanel()}
                   {mobileDrawer === "element" && renderElementPanel("element")}
@@ -753,12 +774,27 @@ export function ReportEditor({
               <button type="button" onClick={() => openMobileDrawer("page")} className={`rounded-xl px-3 py-2 text-xs font-semibold ${mobileDrawer === "page" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Page</button>
             </div>
           </div>
-          <nav aria-label="Responsive builder tools" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-violet-200 bg-white/95 p-2 shadow-xl backdrop-blur md:hidden lg:hidden">
-            <button type="button" onClick={() => openMobileDrawer("elements")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "elements" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Elements</button>
-            <button type="button" onClick={() => { setPageOverviewOpen(true); setMobileDrawer(null); }} className="rounded-xl px-1 py-2 text-xs font-semibold text-[#18204a]">Pages</button>
-            <button type="button" onClick={() => openMobileDrawer("layers")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "layers" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Layers</button>
-            <button type="button" onClick={() => openMobileDrawer("element")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "element" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Element</button>
-            <button type="button" onClick={() => openMobileDrawer("page")} className={`rounded-xl px-1 py-2 text-xs font-semibold ${mobileDrawer === "page" ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}>Page</button>
+          {/* Phone contextual toolbar — directly ABOVE the CRM bottom tab bar (bottom = tab-bar height + 1px border +
+              safe area + gap, see .report-builder-shell in globals.css), never in the same band. */}
+          <nav aria-label="Responsive builder tools" data-rb-mobile-toolbar className="fixed inset-x-3 bottom-[var(--rb-toolbar-bottom)] z-40 grid h-[var(--rb-toolbar-h)] grid-cols-5 items-stretch gap-1 rounded-2xl border border-violet-100 bg-white/95 p-1.5 shadow-[0_6px_24px_rgba(24,32,74,0.12)] backdrop-blur md:hidden">
+            {([
+              { key: "elements", label: "Elements", icon: LayoutGrid },
+              { key: "pages", label: "Pages", icon: FileText },
+              { key: "layers", label: "Layers", icon: Layers3 },
+              { key: "element", label: "Element", icon: MousePointer2 },
+              { key: "page", label: "Page", icon: Settings },
+            ] as const).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={mobileDrawer === key}
+                onClick={() => (mobileDrawer === key ? setMobileDrawer(null) : openMobileDrawer(key))}
+                className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-semibold ${mobileDrawer === key ? "bg-violet-100 text-violet-800" : "text-[#18204a]"}`}
+              >
+                <Icon className={`h-5 w-5 ${mobileDrawer === key ? "text-violet-700" : "text-[#18204a]"}`} strokeWidth={1.75} />
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
           </nav>
           {pageOverviewOpen && <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f8f6fc]/95 p-4 backdrop-blur-sm sm:p-8">
             <div className="mx-auto max-w-7xl rounded-3xl border border-violet-100 bg-white p-5 shadow-2xl sm:p-7">
