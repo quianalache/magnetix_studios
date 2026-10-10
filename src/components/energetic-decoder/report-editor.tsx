@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -14,6 +13,7 @@ import {
   EyeOff,
   FilePlus2,
   FileText,
+  Info,
   Grid2X2,
   Image as ImageIcon,
   LayoutTemplate,
@@ -40,6 +40,7 @@ import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wh
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
 import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import { CelestialDecoration } from "@/components/energetic-decoder/content-sets-visuals";
+import { ZoomControl, clampZoom, type ZoomMode } from "@/components/energetic-decoder/report-zoom-control";
 import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
 import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
 import { REPORT_BUILDER_FIXTURE_READING } from "@/lib/energetics/report-builder-fixture";
@@ -134,7 +135,6 @@ function newElement(
 }
 
 type RightPanel = "layers" | "element" | "page";
-type ZoomMode = number | "fit-page" | "fit-width";
 
 type TemplateDefinition = {
   id: string;
@@ -236,7 +236,11 @@ export function ReportEditor({
   const [mobileDrawer, setMobileDrawer] = useState<
     "elements" | "pages" | "layers" | "element" | "page" | null
   >(null);
-  const [zoom, setZoom] = useState<ZoomMode>(() => (typeof window !== "undefined" && window.innerWidth < 640 ? 28 : "fit-page"));
+  const [zoom, setZoom] = useState<ZoomMode>("fit-page");
+  // Phones open at Fit Width. Decided after mount so server and client render the same first frame (no hydration mismatch).
+  useEffect(() => {
+    if (window.innerWidth < 640) setZoom("fit-width");
+  }, []);
   const [fitScale, setFitScale] = useState(0.6);
   const [templateCategory, setTemplateCategory] = useState<string | null>(null);
   const [templateSearch, setTemplateSearch] = useState("");
@@ -269,7 +273,9 @@ export function ReportEditor({
   );
   const selected = elements.find((e) => e.id === selectedId) ?? null;
   const pageDimensions = PAGE[pageSize === "custom" ? "letter" : pageSize];
-  const scale = typeof zoom === "number" ? zoom / 60 : fitScale;
+  // The zoom percentage is the true scale: 100% = the page at its real size.
+  const scale = typeof zoom === "number" ? clampZoom(zoom) / 100 : fitScale;
+  const zoomPercent = Math.round(scale * 100);
   const pageGap = 24;
   const scaledStageWidth = pageDimensions.width * scale;
   const scaledStageHeight = (pages.length * (pageDimensions.height + PAGE_CONTEXT_HEIGHT) + Math.max(0, pages.length - 1) * pageGap) * scale;
@@ -457,6 +463,14 @@ export function ReportEditor({
     window.open(`/sa/${subAccountId}/energetic-decoder/reports/${initial.id}/preview?${query}`, "_blank");
   }
 
+  /** Breadcrumb navigation: a real link, client-side routed, that asks before dropping unsaved edits. */
+  function leaveEditor(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    if (dirty && !window.confirm("You have unsaved changes to this report design. Leave without saving?")) return;
+    router.push(href);
+  }
+
   function openMobileDrawer(drawer: NonNullable<typeof mobileDrawer>) {
     setMobileDrawer(drawer);
   }
@@ -483,7 +497,7 @@ export function ReportEditor({
     if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
     const tool = tools.find((item) => item.type === templateCategory);
     if (!tool) return <p className="text-xs text-muted-foreground">Select a tool to open its panel.</p>;
-    return <div className="space-y-4"><div><p className="text-sm font-semibold">{tool.label}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Choose a {tool.label.toLowerCase()} element to place on the active page.</p></div><button type="button" onClick={() => addElement(tool.type)} className="w-full rounded-xl bg-violet-700 px-3 py-2.5 text-sm font-semibold text-white">Add {tool.label.replace(/s$/, "")}</button></div>;
+    return <div className="space-y-4"><div><p className="text-sm font-semibold">{tool.label}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Choose a {tool.label.toLowerCase()} element to place on the active page.</p>{tool.type === "chart" && <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-amber-900" data-sample-chart-note><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />Charts in this editor and in Preview PDF use sample chart data. Generated reports use each person&apos;s own reading.</p>}</div><button type="button" onClick={() => addElement(tool.type)} className="w-full rounded-xl bg-violet-700 px-3 py-2.5 text-sm font-semibold text-white">Add {tool.label.replace(/s$/, "")}</button></div>;
   };
 
   const renderPagesPanel = () => (
@@ -545,70 +559,44 @@ export function ReportEditor({
       <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
         <section className="relative mb-4 overflow-hidden rounded-3xl border border-violet-100 bg-white px-5 py-4 shadow-sm sm:px-7 sm:py-5">
           <CelestialDecoration className="pointer-events-none absolute -right-2 -top-8 hidden h-[220px] w-[320px] md:block" />
-          <div className="relative max-w-3xl">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#5264a6]"><span>Energetic Decoder</span><ChevronRight className="h-4 w-4" /><span>Report Builder</span></div>
+          <div className="relative max-w-3xl md:pr-64 xl:pr-0">
+            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm font-medium text-[#5264a6]"><a href={`/sa/${subAccountId}/energetic-decoder`} onClick={(e) => leaveEditor(e, `/sa/${subAccountId}/energetic-decoder`)} className="rounded hover:text-[#5420a8] hover:underline" data-breadcrumb="energetic-decoder">Energetic Decoder</a><ChevronRight className="h-4 w-4" /><a href={`/sa/${subAccountId}/energetic-decoder?tab=builder`} onClick={(e) => leaveEditor(e, `/sa/${subAccountId}/energetic-decoder?tab=builder`)} className="rounded hover:text-[#5420a8] hover:underline" data-breadcrumb="report-builder">Report Builder</a></nav>
             <div className="mt-2 flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f4e8ff] text-2xl text-violet-700">✦</span><h1 className="font-serif text-4xl font-semibold tracking-tight text-[#18204a] sm:text-5xl">Report Builder</h1></div>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5264a6] sm:text-base">Create beautiful, custom reports with a free-form editor. Design, personalize, and structure multi-page reports using templates, content blocks, and your brand elements.</p>
           </div>
         </section>
-        <div className="relative overflow-hidden rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm dark:border-violet-900/40 dark:bg-slate-900">
-          <div className="pointer-events-none absolute -top-20 right-24 h-36 w-64 rounded-full bg-[radial-gradient(circle_at_70%_30%,#fff4cf,transparent_10%),radial-gradient(ellipse,#efe3ff,transparent_65%)] opacity-90" />
-          <div className="relative flex flex-wrap items-center gap-2 overflow-x-hidden lg:flex-nowrap">
-          <button
-            onClick={() =>
-              router.push(`/sa/${subAccountId}/energetic-decoder?tab=builder`)
-            }
-            className="text-muted-foreground flex items-center gap-1 text-sm"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
-          <div className="bg-border hidden h-6 w-px sm:block" />
-          <div className="flex min-w-[150px] flex-[1_1_190px] items-center gap-1 lg:min-w-[190px]">
-            <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} className="min-w-0 flex-1 rounded-lg border border-transparent px-2 py-1 font-serif text-xl font-semibold outline-none focus:border-violet-200" aria-label="Report Design title" />
-            <Pencil className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" />
-          </div>
-          <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-800">
-            {initial.status ?? "Draft"}
-            {dirty ? " · Unsaved" : ""}
-          </span>
-          <button
-            title="Undo"
-            onClick={undo}
-            className="rounded-lg p-2 hover:bg-violet-50"
-          >
-            <Undo2 className="h-4 w-4" />
-          </button>
-          <button
-            title="Redo"
-            onClick={redo}
-            className="rounded-lg p-2 hover:bg-violet-50"
-          >
-            <Redo2 className="h-4 w-4" />
-          </button>
-          <div className="flex min-w-0 flex-[1_1_250px] items-center gap-2 rounded-lg border border-violet-100 px-2 py-1.5 text-xs sm:flex-[0_1_360px] sm:px-3 sm:py-2 sm:text-sm">
-            <span className="shrink-0 font-medium">Zoom</span>
-            <button type="button" onClick={() => setZoom("fit-page")} className={`hidden rounded-md px-1.5 py-1 text-[11px] font-semibold sm:inline ${zoom === "fit-page" ? "bg-violet-100 text-violet-800" : "text-muted-foreground hover:bg-violet-50"}`}>Fit Page</button>
-            <button type="button" onClick={() => setZoom("fit-width")} className={`hidden rounded-md px-1.5 py-1 text-[11px] font-semibold sm:inline ${zoom === "fit-width" ? "bg-violet-100 text-violet-800" : "text-muted-foreground hover:bg-violet-50"}`}>Fit Width</button>
-            <input aria-label="Manual zoom" type="range" min="20" max="120" step="1" value={typeof zoom === "number" ? zoom : Math.round(scale * 60)} onChange={(e) => setZoom(Number(e.target.value))} className="min-w-0 flex-1 accent-violet-700" />
-            <span className="w-10 shrink-0 text-right font-semibold">{typeof zoom === "number" ? `${zoom}%` : `${Math.round(scale * 60)}%`}</span>
-          </div>
-          <span className="hidden rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 xl:inline-flex" title="Charts in this design preview use deterministic fixture data">
-            Design preview uses sample chart data
-          </span>
-          <button
-            onClick={save}
-            disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl border border-violet-300 px-4 py-2 text-sm font-semibold text-violet-800"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? "Saving…" : "Save"}
-          </button>
-          <button
-            onClick={preview}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#5420a8] px-4 py-2 text-sm font-semibold text-white"
-          >
-            <Eye className="h-4 w-4" /> Preview PDF
-          </button>
+        {/* Editor toolbar (owner-approved mockup): title · status · undo/redo │ the one zoom system │ Save · Preview PDF. */}
+        <div className="rounded-2xl border border-violet-100 bg-white px-3 py-2.5 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 sm:px-4" data-report-toolbar>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
+            <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2 lg:max-w-[300px]">
+              <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-violet-100 px-3 focus-within:border-violet-300">
+                <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#18204a] outline-none dark:text-white" aria-label="Report Design title" />
+                <Pencil className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" />
+              </label>
+            </div>
+            <span className="shrink-0 rounded-lg bg-violet-100 px-3 py-1.5 text-[13px] font-semibold text-violet-800" data-report-status>
+              {initial.status ?? "Draft"}
+              {dirty ? " · Unsaved" : ""}
+            </span>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button title="Undo" aria-label="Undo" onClick={undo} disabled={history.length === 0} className="rounded-lg p-2 text-[#18204a] hover:bg-violet-50 disabled:opacity-35">
+                <Undo2 className="h-[18px] w-[18px]" />
+              </button>
+              <button title="Redo" aria-label="Redo" onClick={redo} disabled={future.length === 0} className="rounded-lg p-2 text-[#18204a] hover:bg-violet-50 disabled:opacity-35">
+                <Redo2 className="h-[18px] w-[18px]" />
+              </button>
+            </div>
+            <div className="hidden h-7 w-px shrink-0 bg-violet-100 lg:block" />
+            <ZoomControl mode={zoom} percent={zoomPercent} onChange={setZoom} />
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <button onClick={save} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-xl border border-violet-300 bg-white px-4 text-sm font-semibold text-violet-800 hover:bg-violet-50">
+                <Save className="h-4 w-4" />
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button onClick={preview} title="Opens a PDF preview of this design" className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#5420a8] px-4 text-sm font-semibold text-white hover:bg-[#4a1c94]">
+                <Eye className="h-4 w-4" /> Preview PDF
+              </button>
+            </div>
           </div>
         </div>
         <div className={`relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] ${templateCategory ? (inspectorOpen ? "lg:grid-cols-[92px_260px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_260px_minmax(0,1fr)]") : (inspectorOpen ? "lg:grid-cols-[92px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_minmax(0,1fr)]")}`}>
@@ -617,11 +605,13 @@ export function ReportEditor({
             {renderToolRail()}
           </aside>
           {templateCategory && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[260px]"><div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3"><p className="text-sm font-semibold">{templateCategory === "Templates" ? "Template Library" : templateCategory === "Branding" ? "Branding" : tools.find((t) => t.type === templateCategory)?.label}</p><button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-50">Close</button></div>{renderActiveToolPanel()}</aside>}
-          <main ref={canvasViewportRef} className="relative order-1 h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 pb-24 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:order-none lg:h-full">
-            <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-white/80 px-3 py-2 text-xs shadow-sm">
-              <button type="button" onClick={() => setPageOverviewOpen(true)} className="inline-flex items-center gap-2 rounded-lg px-2 py-1 font-semibold text-[#18204a] hover:bg-violet-50"><Grid2X2 className="h-4 w-4 text-violet-700" /> Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</button>
-              <button type="button" onClick={() => toggleInspector("page")} className="rounded-lg px-2 py-1 font-semibold text-violet-800 hover:bg-violet-50">Page settings</button>
-            </div>
+          {/* Canvas column: the scroll viewport and the page navigator are SIBLINGS.
+              The navigator used to be absolutely positioned inside the
+              overflow-auto viewport, so it scrolled with the page stack and
+              landed mid-canvas in Fit Width. Zoom now only changes what is
+              inside the viewport. */}
+          <div className="order-1 flex min-h-0 min-w-0 flex-col gap-3 lg:order-none lg:h-full" data-canvas-column>
+          <main ref={canvasViewportRef} className="relative h-[calc(100vh-185px)] min-h-[520px] min-w-0 overflow-auto rounded-2xl border border-violet-100 bg-[#f0edf7] p-4 shadow-inner dark:border-violet-900/40 dark:bg-slate-800 lg:h-auto lg:min-h-0 lg:flex-1" data-canvas-viewport>
             <div className="report-canvas-scale-box mx-auto shrink-0 overflow-hidden" style={{ width: scaledStageWidth, height: scaledStageHeight }}>
               <div
                 className="report-canvas-stage flex w-fit flex-col gap-6"
@@ -666,7 +656,8 @@ export function ReportEditor({
                 ))}
               </div>
             </div>
-            <div className="absolute inset-x-4 bottom-3 z-10 hidden h-[72px] items-center gap-2 rounded-xl border border-violet-100 bg-white/95 px-2 py-1.5 shadow-lg backdrop-blur lg:flex">
+          </main>
+            <nav aria-label="Pages" className="hidden h-[64px] shrink-0 items-center gap-2 rounded-2xl border border-violet-100 bg-white px-2 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:flex" data-page-navigator>
               <button type="button" onClick={() => setPageOverviewOpen(true)} className="flex shrink-0 items-center gap-2 rounded-lg px-2 py-2 text-xs font-semibold text-[#18204a] hover:bg-violet-50" aria-label="Open page overview">
                 <Grid2X2 className="h-4 w-4 text-violet-700" />
                 <span>Page {Math.max(1, pages.findIndex((p) => p.id === activePageId) + 1)} / {pages.length}</span>
@@ -674,14 +665,15 @@ export function ReportEditor({
               <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" aria-label="Page thumbnails">
                 {pages.map((p, i) => (
                   <button key={p.id} type="button" onClick={() => setActivePageId(p.id)} className={`flex w-14 shrink-0 flex-col gap-0.5 rounded-lg border p-1 text-left text-[9px] ${p.id === activePageId ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:bg-violet-50"}`} aria-label={`Go to ${pageLabel(p, i)}`}>
-                    <span className="flex h-10 items-center justify-center rounded border border-violet-100 bg-[#f3f0f9] p-0.5"><span className="h-full w-2/3 rounded-sm bg-white shadow-sm"><span className="mt-0.5 block h-0.5 w-2/3 rounded bg-violet-200" /><span className="mt-0.5 block h-4 rounded-sm bg-gradient-to-br from-violet-100 via-white to-amber-100" /></span></span>
+                    <span className="flex h-8 items-center justify-center rounded border border-violet-100 bg-[#f3f0f9] p-0.5"><span className="h-full w-2/3 rounded-sm bg-white shadow-sm"><span className="mt-0.5 block h-0.5 w-2/3 rounded bg-violet-200" /><span className="mt-0.5 block h-4 rounded-sm bg-gradient-to-br from-violet-100 via-white to-amber-100" /></span></span>
                     <span className="truncate font-semibold text-[#18204a]">{i + 1}. {p.title || "Untitled"}</span>
                   </button>
                 ))}
               </div>
-              <button type="button" onClick={addPage} className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-violet-300 text-[9px] font-semibold text-violet-800 hover:bg-violet-50"><FilePlus2 className="mb-0.5 h-3.5 w-3.5" />Add Page</button>
-            </div>
-          </main>
+              <button type="button" onClick={() => toggleInspector("page")} aria-pressed={inspectorOpen && rightPanel === "page"} className={`shrink-0 rounded-lg px-2.5 py-2 text-xs font-semibold ${inspectorOpen && rightPanel === "page" ? "bg-violet-100 text-violet-800" : "text-violet-800 hover:bg-violet-50"}`}>Page settings</button>
+              <button type="button" onClick={addPage} className="flex h-[52px] w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-violet-300 text-[9px] font-semibold text-violet-800 hover:bg-violet-50"><FilePlus2 className="mb-0.5 h-3.5 w-3.5" />Add Page</button>
+            </nav>
+          </div>
           {inspectorOpen && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block">
             <div className="flex gap-1 border-b pb-2">
               <button
@@ -1098,6 +1090,7 @@ function ElementPanel({
             </div>
           )}
           {selected.type === "chart" && (
+            <>
             <label className="block text-sm font-medium">
               Chart piece
               <select value={String(selected.payload.piece ?? "human-design-full")} onChange={(e) => update((x) => ({ ...x, payload: { ...x.payload, piece: e.target.value } }))} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm">
@@ -1108,6 +1101,8 @@ function ElementPanel({
                 <option value="frequency-hologenetic">Frequency / Hologenetic Profile</option>
               </select>
             </label>
+            <p className="text-[11px] leading-5 text-muted-foreground" data-sample-chart-note>Shown here with sample chart data. Generated reports use each person&apos;s own reading.</p>
+            </>
           )}
           {(selected.type === "image" || selected.type === "upload") && (
             <div className="space-y-2 rounded-xl border p-3 text-sm">
