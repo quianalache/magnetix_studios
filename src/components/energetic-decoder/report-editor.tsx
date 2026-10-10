@@ -555,18 +555,20 @@ export function ReportEditor({
   );
 
   return (
-    <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:px-8">
-        <section className="relative mb-4 overflow-hidden rounded-3xl border border-violet-100 bg-white px-5 py-4 shadow-sm sm:px-7 sm:py-5">
-          <CelestialDecoration className="pointer-events-none absolute -right-2 -top-8 hidden h-[220px] w-[320px] md:block" />
+    <div className="min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100 lg:min-h-0">
+      {/* Desktop: the editor fills exactly the dashboard content area (100dvh − 64px top bar − 48px padding), so header,
+          toolbar, canvas and the page strip are all on screen, as in the approved mockup. */}
+      <div className="mx-auto max-w-[1600px] px-3 py-3 sm:px-5 lg:flex lg:h-[calc(100dvh-112px)] lg:min-h-[680px] lg:flex-col lg:px-2 lg:py-0">
+        <section className="relative mb-3 shrink-0 overflow-hidden px-1 pb-1 pt-0 sm:px-2" data-report-header>
+          <CelestialDecoration className="pointer-events-none absolute -right-2 -top-10 hidden h-[200px] w-[300px] md:block" />
           <div className="relative max-w-3xl md:pr-64 xl:pr-0">
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm font-medium text-[#5264a6]"><a href={`/sa/${subAccountId}/energetic-decoder`} onClick={(e) => leaveEditor(e, `/sa/${subAccountId}/energetic-decoder`)} className="rounded hover:text-[#5420a8] hover:underline" data-breadcrumb="energetic-decoder">Energetic Decoder</a><ChevronRight className="h-4 w-4" /><a href={`/sa/${subAccountId}/energetic-decoder?tab=builder`} onClick={(e) => leaveEditor(e, `/sa/${subAccountId}/energetic-decoder?tab=builder`)} className="rounded hover:text-[#5420a8] hover:underline" data-breadcrumb="report-builder">Report Builder</a></nav>
-            <div className="mt-2 flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f4e8ff] text-2xl text-violet-700">✦</span><h1 className="font-serif text-4xl font-semibold tracking-tight text-[#18204a] sm:text-5xl">Report Builder</h1></div>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5264a6] sm:text-base">Create beautiful, custom reports with a free-form editor. Design, personalize, and structure multi-page reports using templates, content blocks, and your brand elements.</p>
+            <div className="mt-2 flex items-center gap-3"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f4e8ff] text-2xl text-violet-700">✦</span><h1 className="font-serif text-4xl font-semibold tracking-tight text-[#18204a] sm:text-[44px] sm:leading-[1.1]">Report Builder</h1></div>
+            <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#5264a6]">Create beautiful, custom reports with a free-form editor. Design, personalize, and structure multi-page reports using templates, content blocks, and your brand elements.</p>
           </div>
         </section>
         {/* Editor toolbar (owner-approved mockup): title · status · undo/redo │ the one zoom system │ Save · Preview PDF. */}
-        <div className="rounded-2xl border border-violet-100 bg-white px-3 py-2.5 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 sm:px-4" data-report-toolbar>
+        <div className="shrink-0 rounded-2xl border border-violet-100 bg-white px-3 py-2.5 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 sm:px-4" data-report-toolbar>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
             <div className="flex min-w-0 flex-[1_1_130px] items-center gap-2 sm:flex-[1_1_220px] lg:max-w-[300px]">
               <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-violet-100 px-3 focus-within:border-violet-300">
@@ -599,7 +601,7 @@ export function ReportEditor({
             </div>
           </div>
         </div>
-        <div className={`relative mt-4 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:h-[calc(100vh-150px)] ${templateCategory ? (inspectorOpen ? "lg:grid-cols-[92px_260px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_260px_minmax(0,1fr)]") : (inspectorOpen ? "lg:grid-cols-[92px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_minmax(0,1fr)]")}`}>
+        <div className={`relative mt-3 grid min-h-0 grid-cols-1 gap-4 overflow-x-hidden lg:mb-0 lg:min-h-0 lg:flex-1 ${templateCategory ? (inspectorOpen ? "lg:grid-cols-[92px_260px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_260px_minmax(0,1fr)]") : (inspectorOpen ? "lg:grid-cols-[92px_minmax(0,1fr)_280px]" : "lg:grid-cols-[92px_minmax(0,1fr)]")}`}>
           <aside className="order-2 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-2 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[92px]">
             <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>
             {renderToolRail()}
