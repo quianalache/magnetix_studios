@@ -568,7 +568,7 @@ export function ReportEditor({
         {/* Editor toolbar (owner-approved mockup): title · status · undo/redo │ the one zoom system │ Save · Preview PDF. */}
         <div className="rounded-2xl border border-violet-100 bg-white px-3 py-2.5 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 sm:px-4" data-report-toolbar>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 lg:flex-nowrap">
-            <div className="flex min-w-0 flex-[1_1_220px] items-center gap-2 lg:max-w-[300px]">
+            <div className="flex min-w-0 flex-[1_1_130px] items-center gap-2 sm:flex-[1_1_220px] lg:max-w-[300px]">
               <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-violet-100 px-3 focus-within:border-violet-300">
                 <input value={title} onChange={(e) => { setTitle(e.target.value); setDirty(true); }} className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold text-[#18204a] outline-none dark:text-white" aria-label="Report Design title" />
                 <Pencil className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" />

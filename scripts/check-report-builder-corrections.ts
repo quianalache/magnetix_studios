@@ -53,7 +53,7 @@ assert.equal((editor.match(/data-sample-chart-note/g) ?? []).length, 2);
 assert.match(editor, /<ZoomControl mode=\{zoom\} percent=\{zoomPercent\} onChange=\{setZoom\} \/>/);
 assert.equal((editor.match(/<ZoomControl /g) ?? []).length, 1, "exactly one zoom control");
 assert.doesNotMatch(editor, /type="range"/, "no second (native) zoom slider");
-for (const piece of ['"Fit Page"', '"Fit Width"', 'role="slider"', 'aria-label="Zoom out"', 'aria-label="Zoom in"', "data-zoom-knob", "data-zoom-percent", "setPointerCapture"]) {
+for (const piece of ['"Fit Page"', '"Fit Width"', "ZOOM_PRESETS.map", "<DropdownMenu>", 'role="slider"', 'aria-label="Zoom out"', 'aria-label="Zoom in"', "data-zoom-knob", "data-zoom-percent", "setPointerCapture"]) {
   assert.ok(zoomSrc.includes(piece), `zoom control: ${piece}`);
 }
 // The percentage is the true scale.
@@ -82,5 +82,10 @@ assert.equal(zoom.stepZoom(10, -1), zoom.ZOOM_MIN);
 assert.equal(zoom.stepZoom(200, 1), zoom.ZOOM_MAX);
 assert.equal(zoom.clampZoom(3), 10);
 assert.equal(zoom.clampZoom(999), 200);
+assert.deepEqual([...zoom.ZOOM_PRESETS], [33, 50, 80, 100, 150]);
+assert.equal(zoom.zoomModeLabel("fit-page"), "Fit Page");
+assert.equal(zoom.zoomModeLabel("fit-width"), "Fit Width");
+assert.equal(zoom.zoomModeLabel(80), "Zoom");
+assert.doesNotMatch(zoomSrc, /hidden items-center gap-2 sm:flex/, "zoom modes are reachable on phones too");
 
 console.log("✓ Report Builder correction checks passed");

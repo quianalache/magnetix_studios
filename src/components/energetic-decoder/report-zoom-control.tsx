@@ -1,12 +1,22 @@
 "use client";
 
 import { useRef } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Check, ChevronDown, Minus, Plus } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 /**
  * Report Builder zoom (2026-10-10) — the ONE zoom system, laid out like
  * the owner-approved mockup: Fit Page · Fit Width · percentage · − · a long
  * visible slider track with a draggable knob · +.
+ *
+ * Fit Page / Fit Width and preset sizes share ONE dropdown (owner,
+ * 2026-10-10) so the slider fits on every width, phones included.
  *
  * The percentage is the TRUE canvas scale (100% = the page at its real
  * size). Fit Page / Fit Width are modes the editor measures; the slider,
@@ -18,6 +28,13 @@ export type ZoomMode = number | "fit-page" | "fit-width";
 export const ZOOM_MIN = 10;
 export const ZOOM_MAX = 200;
 export const ZOOM_STEP = 10;
+
+/** Preset sizes offered in the zoom dropdown, below Fit Page / Fit Width. */
+export const ZOOM_PRESETS = [33, 50, 80, 100, 150] as const;
+
+export function zoomModeLabel(mode: ZoomMode): string {
+  return mode === "fit-page" ? "Fit Page" : mode === "fit-width" ? "Fit Width" : "Zoom";
+}
 
 export function clampZoom(pct: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(pct)));
@@ -49,26 +66,34 @@ export function ZoomControl({
     return clampZoom(ZOOM_MIN + r * (ZOOM_MAX - ZOOM_MIN));
   }
 
-  const fitButton = (value: "fit-page" | "fit-width", label: string) => (
-    <button
-      type="button"
-      onClick={() => onChange(value)}
-      aria-pressed={mode === value}
-      className={`h-9 shrink-0 rounded-lg border px-3 text-[13px] font-medium transition ${
-        mode === value ? "border-violet-300 bg-violet-50 text-violet-800" : "border-violet-100 bg-white text-[#18204a] hover:bg-violet-50"
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
-    <div className="flex min-w-0 items-center gap-2" data-zoom-control>
-      <div className="hidden items-center gap-2 sm:flex">
-        {fitButton("fit-page", "Fit Page")}
-        {fitButton("fit-width", "Fit Width")}
-      </div>
-      <span className="w-11 shrink-0 text-right text-[13px] font-semibold tabular-nums text-[#18204a]" data-zoom-percent aria-live="polite">
+    <div className="flex min-w-0 flex-auto items-center gap-1.5 sm:flex-none sm:gap-2" data-zoom-control>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={`Zoom options (${zoomModeLabel(mode)})`}
+          data-zoom-mode
+          className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-violet-100 bg-white px-2 text-[12.5px] sm:gap-1.5 sm:px-3 sm:text-[13px] font-medium text-[#18204a] hover:bg-violet-50 data-[popup-open]:border-violet-300 data-[popup-open]:bg-violet-50"
+        >
+          {zoomModeLabel(mode)}
+          <ChevronDown className="h-3.5 w-3.5 text-violet-700" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="min-w-[150px]">
+          {(["fit-page", "fit-width"] as const).map((m) => (
+            <DropdownMenuItem key={m} onClick={() => onChange(m)} className="justify-between">
+              {zoomModeLabel(m)}
+              {mode === m && <Check className="h-3.5 w-3.5 text-violet-700" />}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          {ZOOM_PRESETS.map((p) => (
+            <DropdownMenuItem key={p} onClick={() => onChange(p)} className="justify-between tabular-nums">
+              {p}%
+              {mode === p && <Check className="h-3.5 w-3.5 text-violet-700" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <span className="w-10 shrink-0 text-right text-[13px] sm:w-11 font-semibold tabular-nums text-[#18204a]" data-zoom-percent aria-live="polite">
         {pct}%
       </span>
       <button
@@ -90,7 +115,7 @@ export function ZoomControl({
         aria-valuenow={pct}
         aria-valuetext={`${pct}%`}
         data-zoom-slider
-        className="group relative flex h-7 w-24 shrink-0 cursor-pointer touch-none items-center outline-none sm:w-32 xl:w-36"
+        className="group relative flex h-7 min-w-10 flex-1 cursor-pointer touch-none items-center outline-none sm:w-28 sm:flex-none xl:w-32"
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           onChange(pctAt(e.clientX));
