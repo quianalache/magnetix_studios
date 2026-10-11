@@ -88,8 +88,8 @@ export default function EnergeticDecoderPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Energetic Decoder</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Frequency, Human Design, and Astrology chart readings — pick
-          whichever system(s) you offer, all live.
+          Human Design and Astrology chart readings — pick whichever
+          system(s) you offer. Frequency is coming soon.
         </p>
       </div>
 

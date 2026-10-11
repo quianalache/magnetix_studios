@@ -5,6 +5,7 @@ import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { geocodeBirthPlace } from "@/lib/energetics/geocode";
 import { calculateGeneKeysProfile } from "@/lib/energetics/gene-keys";
 import type { EnergeticDecoderRequest, EnergeticDecoderResult } from "@/types/energetic-decoder";
+import { FREQUENCY_COMING_SOON } from "@/lib/energetics/frequency-availability";
 
 /**
  * Internal calculator endpoint — Phase 1 of the Energetic Decoder build.
@@ -19,6 +20,10 @@ export async function POST(
   const { id: subAccountId } = await params;
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
+  // Frequency-only calculator — no UI calls it; closed while Frequency is Coming soon.
+  if (FREQUENCY_COMING_SOON) {
+    return NextResponse.json({ error: "Frequency is coming soon." }, { status: 403 });
+  }
 
   let body: EnergeticDecoderRequest;
   try {

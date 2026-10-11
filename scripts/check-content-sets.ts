@@ -33,6 +33,7 @@ import { INCARNATION_CROSSES } from "../src/lib/energetics/incarnation-cross-dat
 import { ASTROLOGY_CONTENT_BODIES, SIGNS } from "../src/lib/energetics/astrology";
 import {
   ContentSetError,
+  assertContentSetSelectable,
   createContentSet,
   deleteContentSet,
   duplicateContentSet,
@@ -317,6 +318,18 @@ const caller = { uid: "u1", email: "owner@example.com", agencyId: "ag1" };
     db.seed("reportDesigns/rd2", { ...db.get("reportDesigns/rd2"), contentSetId: null });
     await deleteContentSet("sa1", careerId, db);
     assert.equal(db.paths().filter((p) => p.startsWith(`energeticDecoderContentSets/${careerId}`)).length, 0);
+  });
+  await check("saving a Report Design accepts only Default or an existing set in this workspace (2026-10-11)", async () => {
+    const before = db.paths().length;
+    await assertContentSetSelectable("sa1", null, db);
+    await assertContentSetSelectable("sa1", "", db);
+    await assertContentSetSelectable("sa1", "default", db);
+    await assertContentSetSelectable("sa1", blankId, db);
+    await rejects(assertContentSetSelectable("sa1", "local-review-custom", db), 400, /doesn’t exist/);
+    await rejects(assertContentSetSelectable("sa1", careerId, db), 400, /doesn’t exist/); // deleted above
+    await rejects(assertContentSetSelectable("sa2", blankId, db), 400, /doesn’t exist/); // another workspace's set
+    await rejects(assertContentSetSelectable("sa1", "../x", db), 400);
+    assert.equal(db.paths().length, before, "validation writes nothing");
   });
   await check("tenancy: another workspace's set reads as 404 everywhere", async () => {
     await rejects(getContentSet("sa2", blankId, db), 404);

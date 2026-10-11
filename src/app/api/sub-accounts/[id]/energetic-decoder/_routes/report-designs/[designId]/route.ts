@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountAdmin, requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getReportDesign, updateReportDesign, deleteReportDesign } from "@/lib/server/report-design-service";
+import { assertContentSetSelectable, ContentSetError } from "@/lib/server/content-set-service";
 
 export async function GET(
   request: Request,
@@ -41,6 +42,15 @@ export async function PATCH(
   if (body.pageSize === "letter" || body.pageSize === "a4" || body.pageSize === "custom") fields.pageSize = body.pageSize;
   if (body.customPageSize && typeof body.customPageSize === "object") fields.customPageSize = body.customPageSize;
   if (body.brand && typeof body.brand === "object") fields.brand = body.brand;
+
+  if (typeof fields.contentSetId === "string") {
+    try {
+      await assertContentSetSelectable(subAccountId, fields.contentSetId);
+    } catch (err) {
+      if (err instanceof ContentSetError) return NextResponse.json({ error: err.message }, { status: err.status });
+      throw err;
+    }
+  }
 
   try {
     const design = await updateReportDesign(subAccountId, designId, fields);

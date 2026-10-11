@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { FREQUENCY_COMING_SOON, FREQUENCY_COMING_SOON_LABEL } from "@/lib/energetics/frequency-availability";
 import {
   CONTENT_CATEGORIES,
   CONTENT_SYSTEMS,
@@ -124,7 +125,8 @@ export function ContentSetEditor({
   }, [stepKey, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Resolve the selection against the catalog (desktop always shows the first category).
-  const system: ContentSystem = selection.system ?? "hd";
+  // Frequency is Coming soon: its entries stay stored but aren't opened for editing.
+  const system: ContentSystem = selection.system && !(FREQUENCY_COMING_SOON && selection.system === "freq") ? selection.system : "hd";
   const categories = CONTENT_CATEGORIES.filter((c) => c.system === system && (detail?.catalog.some((e) => e.category === c.category && e.system === c.system) ?? true));
   const category: ContentCategorySchema | undefined =
     categorySchema(`${system}:${selection.category ?? ""}`) ?? (selection.category ? undefined : categories[0]);
@@ -231,21 +233,38 @@ export function ContentSetEditor({
   const nav = (
     <nav aria-label="Systems and categories" className={cn(PANEL, "space-y-4 lg:h-full lg:overflow-y-auto")} data-editor-step="nav">
       <div className="grid grid-cols-[1.35fr_1fr_1fr] gap-1 rounded-xl bg-[var(--cs-head)] p-1" role="tablist" aria-label="System">
-        {CONTENT_SYSTEMS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            role="tab"
-            aria-selected={system === s.key}
-            onClick={() => navigate({ system: s.key, category: null, entry: null })}
-            className={cn(
-              "min-w-0 rounded-lg px-0.5 py-2.5 text-[12.5px] font-semibold leading-tight transition xl:whitespace-nowrap",
-              system === s.key ? "bg-primary text-primary-foreground shadow-sm" : "text-[var(--cs-link)] hover:bg-card",
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
+        {CONTENT_SYSTEMS.map((s) =>
+          FREQUENCY_COMING_SOON && s.key === "freq" ? (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              aria-selected={false}
+              aria-disabled="true"
+              disabled
+              title="Frequency is coming soon"
+              data-frequency-coming-soon
+              className="flex min-w-0 cursor-not-allowed flex-col items-center justify-center rounded-lg px-0.5 py-1.5 text-[12.5px] font-semibold leading-tight text-[var(--cs-subtle)]"
+            >
+              {s.label}
+              <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide">{FREQUENCY_COMING_SOON_LABEL}</span>
+            </button>
+          ) : (
+            <button
+              key={s.key}
+              type="button"
+              role="tab"
+              aria-selected={system === s.key}
+              onClick={() => navigate({ system: s.key, category: null, entry: null })}
+              className={cn(
+                "min-w-0 rounded-lg px-0.5 py-2.5 text-[12.5px] font-semibold leading-tight transition xl:whitespace-nowrap",
+                system === s.key ? "bg-primary text-primary-foreground shadow-sm" : "text-[var(--cs-link)] hover:bg-card",
+              )}
+            >
+              {s.label}
+            </button>
+          ),
+        )}
       </div>
       <div className="hidden lg:block">{searchBox}</div>
       <ul className="space-y-1">
@@ -510,6 +529,17 @@ export function ContentSetEditor({
     <div className="relative grid grid-cols-3 gap-2 sm:gap-3 xl:w-[600px] xl:shrink-0" data-system-progress>
       {CONTENT_SYSTEMS.map((s) => {
         const p = systemProgress(statesFor(s.key));
+        if (FREQUENCY_COMING_SOON && s.key === "freq") {
+          return (
+            <div key={s.key} className="flex min-w-0 items-start gap-3 rounded-2xl border border-dashed bg-card p-3 max-sm:flex-col max-sm:gap-2 sm:p-4" data-frequency-coming-soon>
+              <IconTile icon={SYSTEM_ICON[s.key]} tone={SYSTEM_TONE[s.key]} shape="circle" size="sm" className="opacity-50 max-sm:hidden xl:h-9 xl:w-9" />
+              <div className="min-w-0">
+                <p className="text-[14px] font-semibold leading-tight text-[var(--cs-subtle)] sm:text-[15px]">{s.label}</p>
+                <p className="mt-1.5 text-[12px] font-medium uppercase tracking-wide text-[var(--cs-subtle)]">{FREQUENCY_COMING_SOON_LABEL}</p>
+              </div>
+            </div>
+          );
+        }
         return (
           <div key={s.key} className="flex min-w-0 items-start gap-3 rounded-2xl border bg-card p-3 shadow-[0_1px_2px_rgba(26,18,56,0.04)] max-sm:flex-col max-sm:gap-2 sm:p-4">
             <IconTile icon={SYSTEM_ICON[s.key]} tone={SYSTEM_TONE[s.key]} shape="circle" size="sm" className="max-sm:hidden xl:h-9 xl:w-9" />

@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { listReportDesigns, createReportDesign } from "@/lib/server/report-design-service";
+import { assertContentSetSelectable, ContentSetError } from "@/lib/server/content-set-service";
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: subAccountId } = await ctx.params;
@@ -27,6 +28,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const title = typeof body.title === "string" ? body.title : "Untitled Report";
   const contentSetId = typeof body.contentSetId === "string" && body.contentSetId ? body.contentSetId : null;
   const pageSize = body.pageSize === "a4" || body.pageSize === "custom" ? body.pageSize : "letter";
+  try {
+    await assertContentSetSelectable(subAccountId, contentSetId);
+  } catch (err) {
+    if (err instanceof ContentSetError) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   const design = await createReportDesign({
     agencyId: access.agencyId ?? "",

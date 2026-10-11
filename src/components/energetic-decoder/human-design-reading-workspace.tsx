@@ -32,6 +32,7 @@ import { HumanDesignSummary, SphereList } from "@/components/energetic-decoder/r
 import { AstrologyReadingView } from "@/components/energetic-decoder/astrology-reading-view";
 import { MandalaReadingView } from "@/components/energetic-decoder/mandala-reading-view";
 import { TAB_STRIP_CLASS, useActiveTabVisible } from "@/components/energetic-decoder/tab-strip";
+import { FREQUENCY_COMING_SOON, FREQUENCY_COMING_SOON_LABEL } from "@/lib/energetics/frequency-availability";
 
 /**
  * The full-width Traditional Human Design reading workspace — approved
@@ -181,9 +182,14 @@ export function HumanDesignReadingWorkspace({
   // Reports (2026-10-07) is the last peer tab: the person's generated
   // reports. While it's showing, no system tab is active.
   const onSystem = !showReports;
-  const navItems: { key: string; label: string; onClick: () => void; active: boolean }[] = [
+  // Frequency is Coming soon (frequency-availability.ts): a reading without
+  // Frequency shows a greyed tab in its usual place; a reading that already
+  // has Frequency keeps its real, read-only tab.
+  const frequencyComingSoon = FREQUENCY_COMING_SOON && !availableSystems.some((s) => s.key === "frequency");
+  const navItems: { key: string; label: string; onClick: () => void; active: boolean; comingSoon?: boolean }[] = [
     ...(profile ? [{ key: "hd", label: "Human Design", onClick: () => { onSetSystem("hd"); onSetHdStyleView("traditional"); }, active: onSystem && currentSystem === "hd" && hdStyleView === "traditional" }] : []),
     ...(hasMandala ? [{ key: "mandala", label: "Mandala", onClick: () => { onSetSystem("hd"); onSetHdStyleView("mandala"); }, active: onSystem && currentSystem === "hd" && hdStyleView === "mandala" }] : []),
+    ...(frequencyComingSoon ? [{ key: "frequency", label: "Frequency", onClick: () => undefined, active: false, comingSoon: true }] : []),
     ...availableSystems
       .filter((s) => s.key !== "hd")
       .map((s) => ({ key: s.key, label: s.label, onClick: () => onSetSystem(s.key), active: onSystem && currentSystem === s.key })),
@@ -363,21 +369,40 @@ export function HumanDesignReadingWorkspace({
       {/* System navigation */}
       {navItems.length > 1 && (
         <div ref={tabStripRef} className={cn(TAB_STRIP_CLASS, "gap-1 shadow-[inset_0_-1px_0_var(--border)]")} role="tablist" data-workspace-tabs>
-          {navItems.map((n) => (
-            <button
-              key={n.key}
-              type="button"
-              role="tab"
-              aria-selected={n.active}
-              onClick={n.onClick}
-              className={cn(
-                "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold",
-                n.active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {n.label}
-            </button>
-          ))}
+          {navItems.map((n) =>
+            n.comingSoon ? (
+              <button
+                key={n.key}
+                type="button"
+                role="tab"
+                aria-selected={false}
+                aria-disabled="true"
+                disabled
+                title="Frequency is coming soon"
+                data-frequency-coming-soon
+                className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm font-semibold text-muted-foreground/70"
+              >
+                {n.label}
+                <span className="rounded-full border border-dashed px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {FREQUENCY_COMING_SOON_LABEL}
+                </span>
+              </button>
+            ) : (
+              <button
+                key={n.key}
+                type="button"
+                role="tab"
+                aria-selected={n.active}
+                onClick={n.onClick}
+                className={cn(
+                  "shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-semibold",
+                  n.active ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {n.label}
+              </button>
+            ),
+          )}
         </div>
       )}
 
@@ -397,7 +422,16 @@ export function HumanDesignReadingWorkspace({
         <MandalaReadingView profile={profile} mandalaDesign={mandalaDesign} hdDesign={hdDesign} />
       )}
 
-      {onSystem && currentSystem === "frequency" && <SphereList spheres={reading.spheres} />}
+      {onSystem && currentSystem === "frequency" && (
+        <>
+          {FREQUENCY_COMING_SOON && (
+            <p className="rounded-xl border border-dashed bg-card px-4 py-3 text-sm text-muted-foreground" data-frequency-saved-note>
+              Saved Frequency result, shown read-only. Frequency is coming soon, so new readings don’t include it yet.
+            </p>
+          )}
+          <SphereList spheres={reading.spheres} />
+        </>
+      )}
 
       {onSystem && currentSystem === "astro" && reading.astrology && <AstrologyReadingView chart={reading.astrology} astroDesign={astroDesign} />}
     </div>

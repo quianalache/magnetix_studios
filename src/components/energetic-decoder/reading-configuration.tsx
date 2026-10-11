@@ -8,6 +8,7 @@ import {
   type EnergeticDecoderReportConfig,
 } from "@/types/energetic-decoder";
 import type { AstrologyHouseSystem } from "@/lib/energetics/reading-calculation-settings";
+import { FREQUENCY_COMING_SOON, FREQUENCY_COMING_SOON_LABEL } from "@/lib/energetics/frequency-availability";
 
 const HOUSE_SYSTEM_OPTIONS: { value: AstrologyHouseSystem; label: string }[] = [
   { value: "placidus", label: "Placidus" },
@@ -130,29 +131,40 @@ export function EnergeticDecoderReadingConfiguration() {
         for that, see Report Builder.
       </p>
 
-      <div className="rounded-2xl border bg-card p-6">
+      <div className="rounded-2xl border bg-card p-6" data-frequency-config={FREQUENCY_COMING_SOON ? "coming-soon" : "live"}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold">Frequency Reading</h3>
-          <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-            Live
-          </span>
+          <h3 className={FREQUENCY_COMING_SOON ? "text-base font-semibold text-muted-foreground" : "text-base font-semibold"}>Frequency Reading</h3>
+          {FREQUENCY_COMING_SOON ? (
+            <span className="rounded-full border border-dashed px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground" data-coming-soon>
+              {FREQUENCY_COMING_SOON_LABEL}
+            </span>
+          ) : (
+            <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+              Live
+            </span>
+          )}
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
-          Which sequences a reading includes when you sell it. Gate-by-gate wording lives under the
-          Content tab — editing it there updates every sequence automatically.
+          {FREQUENCY_COMING_SOON
+            ? "Frequency is coming soon. New readings don’t include it yet. Readings that already have Frequency keep it."
+            : "Which sequences a reading includes when you sell it. Gate-by-gate wording lives under the Content tab — editing it there updates every sequence automatically."}
         </p>
 
         <div className="mb-1 space-y-2">
           {SEQUENCES.map((seq) => (
             <label
               key={seq.key}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm"
+              className={
+                FREQUENCY_COMING_SOON
+                  ? "flex cursor-not-allowed items-center gap-3 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground"
+                  : "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm"
+              }
             >
               <input
                 type="checkbox"
-                checked={config[seq.key]}
-                onChange={() => isAdmin && toggleSequence(seq.key)}
-                disabled={!isAdmin || savingConfig}
+                checked={FREQUENCY_COMING_SOON ? false : config[seq.key]}
+                onChange={() => !FREQUENCY_COMING_SOON && isAdmin && toggleSequence(seq.key)}
+                disabled={FREQUENCY_COMING_SOON || !isAdmin || savingConfig}
                 className="h-4 w-4 shrink-0"
               />
               <span className="flex-1 font-medium">{seq.name}</span>
@@ -171,7 +183,7 @@ export function EnergeticDecoderReadingConfiguration() {
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
           Type, Strategy, Authority, Profile, Definition, and every defined Center and Channel — a
-          full bodygraph computed from the same birth data as the Frequency reading.
+          full bodygraph computed from the reading&apos;s birth data.
         </p>
         <label className="flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm">
           <input

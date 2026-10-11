@@ -223,6 +223,22 @@ function summarize(id: string, data: SetDoc, usageCount: number): ContentSetSumm
   };
 }
 
+/**
+ * Report Designs may only point at Default (null / "" / "default") or a set
+ * that exists in this sub-account. Checked on save so an unknown id can't
+ * be stored and later break Preview PDF / report generation with
+ * "Content set not found." (2026-10-11).
+ */
+export async function assertContentSetSelectable(subAccountId: string, setId: string | null | undefined, db: Db = getAdminDb()): Promise<void> {
+  if (!setId || setId === DEFAULT_CONTENT_SET_ID) return;
+  try {
+    await requireSet(subAccountId, setId, db);
+  } catch (err) {
+    if (err instanceof ContentSetError) throw new ContentSetError("That content set doesn’t exist. Choose another content set.", 400);
+    throw err;
+  }
+}
+
 export async function listContentSets(subAccountId: string, db: Db = getAdminDb()): Promise<ContentSetSummary[]> {
   const [snap, usage, def] = await Promise.all([
     db.collection(CONTENT_SETS_COLLECTION).where("subAccountId", "==", subAccountId).get(),

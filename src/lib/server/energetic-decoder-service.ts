@@ -38,6 +38,7 @@ import {
   type ReadingOrigin,
 } from "@/types/energetic-decoder";
 import type { GeneKeysSphereResult } from "@/lib/energetics/gene-keys";
+import { FREQUENCY_COMING_SOON } from "@/lib/energetics/frequency-availability";
 
 export interface CreateReadingInput extends EnergeticDecoderRequest {
   subAccountId: string;
@@ -69,6 +70,26 @@ export async function createEnergeticDecoderReading(
   input: CreateReadingInput,
 ): Promise<CreateReadingResult | { error: string }> {
   const db = getAdminDb();
+
+  // Which systems this sub-account includes in new readings (Reading
+  // Configuration checkboxes) — merged over the defaults (not just a
+  // whole-object fallback) so a sub-account whose config was saved BEFORE
+  // includeHumanDesign existed still gets it on, matching every other
+  // toggle's "on by default" behavior, instead of a missing field reading
+  // as silently off. Read before any Contact/Profile write so a reading
+  // that would include nothing is refused without side effects.
+  const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
+  const reportConfig = {
+    ...defaultEnergeticDecoderReportConfig(),
+    ...(subSnap.data()?.energeticDecoderReportConfig ?? {}),
+  };
+  // Frequency is Coming soon (frequency-availability.ts): new readings
+  // never include it, whatever the stored sequence checkboxes say.
+  const includeFrequency =
+    !FREQUENCY_COMING_SOON && (reportConfig.includeActivation || reportConfig.includeVenus || reportConfig.includePearl);
+  if (!includeFrequency && !reportConfig.includeHumanDesign && !reportConfig.includeAstrology) {
+    return { error: "New readings need Human Design or Astrology turned on in Reading Configuration. Frequency is coming soon." };
+  }
 
   // -------------------------------------------------------------------
   // Phase 3 Task 4 (2026-08-13) — resolve WHO this reading is for before
@@ -205,11 +226,14 @@ export async function createEnergeticDecoderReading(
         ).id;
   }
 
-  const profile = calculateGeneKeysProfile({
-    date: birthDate,
-    time: birthTime,
-    timeZone: place.timeZone,
-  });
+  // Skipped entirely while Frequency is Coming soon — the engine itself is unchanged.
+  const profile = includeFrequency
+    ? calculateGeneKeysProfile({
+        date: birthDate,
+        time: birthTime,
+        timeZone: place.timeZone,
+      })
+    : { spheres: [] as GeneKeysSphereResult[] };
 
   // Merge in the sub-account's own interpretive text per gate (their
   // rewrite, or the shipped default when they haven't customized that
@@ -223,16 +247,7 @@ export async function createEnergeticDecoderReading(
   );
 
   // Filter to only the sequences this sub-account has chosen to include
-  // (Reports tab checkboxes) — merged over the defaults (not just a
-  // whole-object fallback) so a sub-account whose config was saved BEFORE
-  // includeHumanDesign existed still gets it on, matching every other
-  // toggle's "on by default" behavior, instead of a missing field reading
-  // as silently off.
-  const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
-  const reportConfig = {
-    ...defaultEnergeticDecoderReportConfig(),
-    ...(subSnap.data()?.energeticDecoderReportConfig ?? {}),
-  };
+  // (reportConfig is read at the top of this function).
   const includedSpheres = new Set<string>([
     ...(reportConfig.includeActivation ? ACTIVATION_SEQUENCE_SPHERES : []),
     ...(reportConfig.includeVenus ? VENUS_SEQUENCE_SPHERES : []),

@@ -37,6 +37,12 @@ import {
   X,
 } from "lucide-react";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
+import {
+  FREQUENCY_CHART_PIECE,
+  FREQUENCY_COMING_SOON,
+  FREQUENCY_COMING_SOON_LABEL,
+  FREQUENCY_SHORTCODE_GROUP,
+} from "@/lib/energetics/frequency-availability";
 import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
 import type { MediaLibraryItem } from "@/types/media-library";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
@@ -263,7 +269,6 @@ export function ReportEditor({
   );
   const [sets, setSets] = useState<{ id: string; name: string }[]>([
     { id: "default", name: "Default" },
-    { id: "local-review-custom", name: "Owner Review — Blank Frequency" },
   ]);
   const [pageSize, setPageSize] = useState<ReportPageSize>(
     initial.pageSize ?? "letter"
@@ -331,7 +336,6 @@ export function ReportEditor({
       .then((d) =>
         setSets([
           { id: "default", name: "Default" },
-          { id: "local-review-custom", name: "Owner Review — Blank Frequency" },
           ...(d.sets ?? []).map((s: { id: string; name: string }) => ({
             id: s.id,
             name: s.name,
@@ -461,11 +465,14 @@ export function ReportEditor({
           }),
         }
       );
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error);
+      }
       setDirty(false);
       toast.success("Report design saved.");
-    } catch {
-      toast.error("Couldn’t save report design.");
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : "Couldn’t save report design.");
     } finally {
       setSaving(false);
     }
@@ -981,6 +988,11 @@ function ElementPanel({
               onChange={(e) => setContentSetId(e.target.value)}
               className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
             >
+              {!sets.some((s) => s.id === contentSetId) && (
+                <option value={contentSetId} disabled>
+                  Unavailable content set — choose another
+                </option>
+              )}
               {sets.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -1135,8 +1147,8 @@ function ElementPanel({
                 className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
               >
                 {SHORTCODE_CATALOG.filter((s) => !shortcodeSearch || `${s.label} ${s.group} ${s.token}`.toLowerCase().includes(shortcodeSearch.toLowerCase())).map((s) => (
-                  <option key={s.token} value={s.token}>
-                    {s.label}
+                  <option key={s.token} value={s.token} disabled={FREQUENCY_COMING_SOON && s.group === FREQUENCY_SHORTCODE_GROUP}>
+                    {FREQUENCY_COMING_SOON && s.group === FREQUENCY_SHORTCODE_GROUP ? `${s.label} — ${FREQUENCY_COMING_SOON_LABEL}` : s.label}
                   </option>
                 ))}
               </select>
@@ -1151,7 +1163,10 @@ function ElementPanel({
                 <option value="human-design-mandala">Human Design mandala</option>
                 <option value="human-design-gates">Activated gates</option>
                 <option value="astrology-wheel">Astrology wheel</option>
-                <option value="frequency-hologenetic">Frequency / Hologenetic Profile</option>
+                {/* Frequency is Coming soon: not selectable for new pieces; a design that already uses it still shows it. */}
+                <option value={FREQUENCY_CHART_PIECE} disabled={FREQUENCY_COMING_SOON}>
+                  {FREQUENCY_COMING_SOON ? `Frequency — ${FREQUENCY_COMING_SOON_LABEL}` : "Frequency / Hologenetic Profile"}
+                </option>
               </select>
             </label>
             <p className="text-[11px] leading-5 text-muted-foreground" data-sample-chart-note>Shown here with sample chart data. Generated reports use each person&apos;s own reading.</p>

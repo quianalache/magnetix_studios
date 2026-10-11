@@ -198,11 +198,13 @@ const ws = (showReports: boolean) =>
 check("Reports is the last tab, after the reading-system tabs; selecting it replaces the chart content", () => {
   const off = ws(false);
   const tabs = [...off.matchAll(/role="tab" aria-selected="(true|false)"[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]);
-  assert.deepEqual(tabs, [["Human Design", "true"], ["Astrology", "false"], ["Reports", "false"]]);
+  // Frequency is Coming soon (2026-10-11): a reading without spheres shows a greyed, disabled Frequency tab in its usual place.
+  assert.deepEqual(tabs, [["Human Design", "true"], ["Frequency", "false"], ["Astrology", "false"], ["Reports", "false"]]);
+  assert.match(off, /aria-disabled="true" disabled="" title="Frequency is coming soon" data-frequency-coming-soon="true"/);
   assert.ok(!off.includes("data-test-reports"));
   const on = ws(true);
   const onTabs = [...on.matchAll(/role="tab" aria-selected="(true|false)"[^>]*>([^<]+)</g)].map((m) => [m[2], m[1]]);
-  assert.deepEqual(onTabs, [["Human Design", "false"], ["Astrology", "false"], ["Reports", "true"]]);
+  assert.deepEqual(onTabs, [["Human Design", "false"], ["Frequency", "false"], ["Astrology", "false"], ["Reports", "true"]]);
   assert.ok(on.includes("data-test-reports"));
   assert.ok(!on.includes("Chart Information"), "no chart under the Reports tab");
 });
