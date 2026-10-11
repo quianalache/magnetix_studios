@@ -37,6 +37,8 @@ import {
   X,
 } from "lucide-react";
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
+import { BLANK_PAGE_TITLE, createBlankReportPage, instantiateReportTemplate, type ReportTemplate } from "@/lib/energetics/report-templates";
+import { ReportTemplateLibrary } from "@/components/energetic-decoder/report-template-library";
 import {
   FREQUENCY_CHART_PIECE,
   FREQUENCY_COMING_SOON,
@@ -154,81 +156,6 @@ function newElement(
 
 type RightPanel = "layers" | "element" | "page";
 
-type TemplateDefinition = {
-  id: string;
-  category: string;
-  name: string;
-  description: string;
-  accent: string;
-  create: () => ReportPage;
-};
-
-function templatePage(name: string, elements: ReportCanvasElement[]): ReportPage {
-  return { id: id(), title: name, visibleIf: null, blocks: [], elements };
-}
-
-function templateText(text: string, index: number, style: ReportCanvasElement["style"] = {}): ReportCanvasElement {
-  const element = newElement("text", index);
-  return { ...element, geometry: { ...element.geometry, x: 72, y: 96 + index * 120, width: 672, height: index === 0 ? 120 : 84 }, style: { ...element.style, ...style }, payload: { text } };
-}
-
-function templateShape(index: number, backgroundColor: string): ReportCanvasElement {
-  const element = newElement("shape", index);
-  return { ...element, geometry: { x: 72, y: 620, width: 672, height: 220, rotation: 0 }, style: { ...element.style, backgroundColor, borderRadius: 24 }, payload: { shape: "rectangle" } };
-}
-
-const TEMPLATE_DEFINITIONS: TemplateDefinition[] = [
-  {
-    id: "cover-luminous",
-    category: "Cover",
-    name: "Luminous cover",
-    description: "A calm title page with a soft visual anchor.",
-    accent: "#eadcff",
-    create: () => templatePage("Luminous Cover", [templateText("Your Energetic Blueprint", 0, { fontSize: 42, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("Magnetix Studios", 1, { fontSize: 18, color: "#5420a8" }), templateShape(2, "#eadcff")]),
-  },
-  {
-    id: "cover-dawn",
-    category: "Cover",
-    name: "Dawn cover",
-    description: "A warm introduction for a personal reading.",
-    accent: "#f8e4cf",
-    create: () => templatePage("Dawn Cover", [templateText("A map for alignment, purpose, and flow", 0, { fontSize: 32, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("Prepared for {{full_name}}", 1, { fontSize: 18, color: "#8b5e34" }), templateShape(2, "#f8e4cf")]),
-  },
-  {
-    id: "chart-overview",
-    category: "Chart",
-    name: "Chart overview",
-    description: "A focused page for one chart and its headline.",
-    accent: "#e3efff",
-    create: () => {
-      const chart = newElement("chart", 1);
-      chart.geometry = { x: 72, y: 250, width: 672, height: 650 };
-      return templatePage("Chart Overview", [templateText("Your chart", 0, { fontSize: 34, fontFamily: "Playfair Display", fontWeight: 700 }), chart]);
-    },
-  },
-  {
-    id: "summary-focus",
-    category: "Summary",
-    name: "Summary focus",
-    description: "A concise page for a headline and personalized takeaway.",
-    accent: "#e9f5ec",
-    create: () => {
-      const shortcode = newElement("shortcode", 2);
-      shortcode.geometry = { x: 72, y: 430, width: 672, height: 90 };
-      shortcode.payload = { token: "type_description" };
-      return templatePage("Summary", [templateText("Your energetic signature", 0, { fontSize: 32, fontFamily: "Playfair Display", fontWeight: 700 }), templateText("A simple starting point for this reading.", 1, { fontSize: 18 }), shortcode]);
-    },
-  },
-  {
-    id: "blank-page",
-    category: "Blank",
-    name: "Blank page",
-    description: "A clean page ready for your own composition.",
-    accent: "#f4f1fa",
-    create: () => templatePage("Blank page", []),
-  },
-];
-
 function pageLabel(page: ReportPage, index: number): string {
   const ordinal = `Page ${index + 1}`;
   const title = page.title.trim();
@@ -261,7 +188,6 @@ export function ReportEditor({
   }, []);
   const [fitScale, setFitScale] = useState(0.6);
   const [templateCategory, setTemplateCategory] = useState<string | null>(null);
-  const [templateSearch, setTemplateSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [contentSetId, setContentSetId] = useState(
@@ -280,6 +206,16 @@ export function ReportEditor({
   const [brand, setBrand] = useState(initial.brand ?? {});
   const [openVisibilityPageId, setOpenVisibilityPageId] = useState<string | null>(null);
   const canvasViewportRef = useRef<HTMLElement | null>(null);
+  /** After a Template Library insert, bring the new page into view (it is appended below the others). */
+  const [scrollToPageId, setScrollToPageId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!scrollToPageId) return;
+    const frame = requestAnimationFrame(() => {
+      canvasViewportRef.current?.querySelector(`[data-canvas-page="${scrollToPageId}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      setScrollToPageId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [scrollToPageId]);
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
   const elements = useMemo(
     () =>
@@ -393,12 +329,21 @@ export function ReportEditor({
     commit([...pages, p]);
     setActivePageId(p.id);
   }
-  function insertTemplate(template: TemplateDefinition) {
-    const p = template.create();
+  /** Template Library insert: a fresh copy (new page + element ids) appended as one history step. */
+  function insertTemplate(template: ReportTemplate) {
+    insertLibraryPage(instantiateReportTemplate(template, id), template.name);
+  }
+  function insertBlankPage() {
+    insertLibraryPage(createBlankReportPage(id), BLANK_PAGE_TITLE);
+  }
+  function insertLibraryPage(p: ReportPage, name: string) {
     commit([...pages, p]);
     setActivePageId(p.id);
+    setScrollToPageId(p.id);
+    setSelectedId(null);
     setTemplateCategory(null);
-    toast.success(`${template.name} inserted`);
+    setMobileDrawer(null);
+    toast.success(`${name} inserted`);
   }
   function duplicatePage(pageId = activePageId) {
     const source = pages.find((p) => p.id === pageId) ?? activePage;
@@ -526,8 +471,8 @@ export function ReportEditor({
       ))}
     </div>
   );
-  const renderActiveToolPanel = () => {
-    if (templateCategory === "Templates") return <div className="space-y-4"><div><p className="text-sm font-semibold text-[#18204a]">Template Library</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Existing starter templates for this release. Batch 2 will refine their authored content.</p></div><label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={templateSearch} onChange={(e) => setTemplateSearch(e.target.value)} placeholder="Search templates…" className="h-9 w-full rounded-lg border bg-white pl-9 pr-3 text-sm" /></label><div className="space-y-3">{TEMPLATE_DEFINITIONS.filter((template) => !templateSearch.trim() || `${template.name} ${template.category} ${template.description}`.toLowerCase().includes(templateSearch.trim().toLowerCase())).map((template) => <article key={template.id} className="overflow-hidden rounded-xl border border-violet-100 bg-white shadow-sm"><div className="flex h-28 items-center gap-3 p-3" style={{ background: `linear-gradient(135deg, ${template.accent} 0%, #ffffff 85%)` }}><div className="flex h-full w-20 shrink-0 flex-col justify-between rounded-md border border-white bg-white/90 p-2 shadow-sm"><span className="h-1.5 w-2/3 rounded bg-violet-200" /><span className="h-1.5 w-full rounded bg-slate-100" /><span className="h-10 rounded bg-gradient-to-br from-violet-100 via-white to-amber-100" /><span className="h-1.5 w-4/5 rounded bg-slate-100" /></div><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700">{template.category}</p><p className="mt-1 text-sm font-semibold text-[#18204a]">{template.name}</p><p className="mt-1 text-[11px] leading-4 text-muted-foreground">{template.description}</p></div></div><div className="flex items-center justify-between gap-2 border-t border-violet-100 p-2.5"><span className="text-[11px] text-muted-foreground">Existing starter</span><button type="button" onClick={() => insertTemplate(template)} className="rounded-lg bg-violet-700 px-3 py-1.5 text-xs font-semibold text-white">Use template</button></div></article>)}</div></div>;
+  const renderActiveToolPanel = (opts?: { inSheet?: boolean }) => {
+    if (templateCategory === "Templates") return <ReportTemplateLibrary onInsert={insertTemplate} onInsertBlank={insertBlankPage} showHeading={opts?.inSheet} />;
     if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
     const tool = tools.find((item) => item.type === templateCategory);
     if (!tool) return <p className="text-xs text-muted-foreground">Select a tool to open its panel.</p>;
@@ -640,7 +585,7 @@ export function ReportEditor({
             <p className="mb-2 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Tools</p>
             {renderToolRail()}
           </aside>
-          {templateCategory && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[260px]"><div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3"><p className="text-sm font-semibold">{templateCategory === "Templates" ? "Template Library" : templateCategory === "Branding" ? "Branding" : tools.find((t) => t.type === templateCategory)?.label}</p><button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-50">Close</button></div>{renderActiveToolPanel()}</aside>}
+          {templateCategory && <aside className="order-3 hidden min-h-0 overflow-y-auto rounded-2xl border border-violet-100 bg-white p-4 shadow-sm dark:border-violet-900/40 dark:bg-slate-900 lg:order-none lg:block lg:w-[260px]"><div className="mb-3 flex items-center justify-between border-b border-violet-100 pb-3"><p className="text-sm font-semibold">{templateCategory === "Templates" ? "Templates" : templateCategory === "Branding" ? "Branding" : tools.find((t) => t.type === templateCategory)?.label}</p><button type="button" onClick={() => setTemplateCategory(null)} className="rounded-lg px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-50">Close</button></div>{renderActiveToolPanel()}</aside>}
           {/* Canvas column: the scroll viewport and the page navigator are SIBLINGS.
               The navigator used to be absolutely positioned inside the
               overflow-auto viewport, so it scrolled with the page stack and
@@ -759,7 +704,7 @@ export function ReportEditor({
                   <button type="button" aria-label="Close" onClick={() => setMobileDrawer(null)} className="shrink-0 rounded-full p-2 text-[#18204a] hover:bg-violet-50"><X className="h-5 w-5" /></button>
                 </div>
                 <div className="space-y-2">
-                  {mobileDrawer === "elements" && <>{renderToolGrid()}{templateCategory && <div className="mt-4 border-t border-violet-100 pt-4">{renderActiveToolPanel()}</div>}</>}
+                  {mobileDrawer === "elements" && <>{renderToolGrid()}{templateCategory && <div className="mt-4 border-t border-violet-100 pt-4">{renderActiveToolPanel({ inSheet: true })}</div>}</>}
                   {mobileDrawer === "pages" && renderPagesPanel()}
                   {mobileDrawer === "layers" && renderLayerPanel()}
                   {mobileDrawer === "element" && renderElementPanel("element")}
@@ -1118,8 +1063,9 @@ function ElementPanel({
               />
             </label>
           )}
-          {selected.type === "text" && (
-            <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
+          {/* Typography for Text AND Shortcode elements (both render with these same style fields). */}
+          {(selected.type === "text" || selected.type === "shortcode") && (
+            <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3" data-typography-controls>
               <div className="grid grid-cols-[1fr_88px] gap-2">
                 <label className="text-xs">Font<select className="mt-1 h-8 w-full rounded border px-2" value={(["Helvetica", "Times-Roman", "Courier"] as string[]).includes(String(selected.style?.fontFamily)) ? String(selected.style?.fontFamily) : "Times-Roman"} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontFamily: e.target.value } }))}><option value="Helvetica">Helvetica</option><option value="Times-Roman">Times Roman</option><option value="Courier">Courier</option></select></label>
                 <label className="text-xs">Size<input type="number" className="mt-1 h-8 w-full rounded border px-2" value={selected.style?.fontSize ?? 24} onChange={(e) => update((x) => ({ ...x, style: { ...x.style, fontSize: Number(e.target.value) } }))} /></label>
@@ -1475,17 +1421,19 @@ function CanvasElement({
         ? `{{${element.payload.token ?? "full_name"}}}`
         : element.type === "chart"
           ? "Human Design chart"
-          : element.type === "shape"
-            ? "Shape"
-            : element.type === "frame"
-              ? "Frame"
-              : element.type === "image" || element.type === "upload"
+          : // Shapes and Frames are real design objects: draw only the shape itself
+            // (no "Shape"/"Frame" placeholder word inside it). Their name stays in
+            // the button's aria-label, the Layers panel and the inspector.
+            element.type === "shape" || element.type === "frame"
+            ? ""
+            : element.type === "image" || element.type === "upload"
                 ? "Image asset"
                 : "Graphic";
   return (
     <button
       type="button"
       data-canvas-element={element.id}
+      aria-label={element.type === "shape" ? "Shape" : element.type === "frame" ? "Frame" : undefined}
       onClick={() => {
         // Opens the inspector (and, on phones, the Element drawer — but not after a drag).
         const dragged = drag.consumeDragged();

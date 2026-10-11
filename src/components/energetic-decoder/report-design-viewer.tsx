@@ -120,6 +120,33 @@ export function ReportDesignViewer({
   );
 }
 
+/**
+ * One canvas page at its real size (Letter, 816 × 1056) — exactly how the
+ * published report draws its elements. Used for Template Library
+ * thumbnails (scaled down by the caller), so a card shows the real page.
+ */
+export function ReportCanvasPage({
+  page,
+  readingInput,
+  hdDesign,
+  mandalaDesign,
+  astroDesign,
+}: {
+  page: ReportPage;
+  readingInput: ShortcodeReadingInput;
+  hdDesign?: ChartDesign | null;
+  mandalaDesign?: ChartDesign | null;
+  astroDesign?: ChartDesign | null;
+}) {
+  return (
+    <div className="relative overflow-hidden" style={{ width: 816, height: 1056, background: page.pageBackground || "#ffffff" }}>
+      {[...(page.elements ?? [])].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => (
+        <CanvasElementView key={element.id} element={element} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />
+      ))}
+    </div>
+  );
+}
+
 function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, astroDesign }: { element: ReportCanvasElement; readingInput: ShortcodeReadingInput; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
   // Same resolver as Preview PDF and the generated PDF (report-shortcode-render.ts):
   // frozen Shortcode values first, inline {{tokens}} in Text resolved, never raw syntax.

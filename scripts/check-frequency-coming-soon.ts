@@ -89,8 +89,8 @@ async function main() {
     }
     assert.ok(SHORTCODE_CATALOG.some((s) => s.group === "Human Design") && SHORTCODE_CATALOG.some((s) => s.group === "Astrology"));
   });
-  await check("no Frequency starter template; existing starters untouched", () => {
-    const templates = editor.slice(editor.indexOf("const TEMPLATE_DEFINITIONS"), editor.indexOf("const TEMPLATE_DEFINITIONS") + 4000);
+  await check("no Frequency starter template (Template Library templates use no Frequency piece or token)", () => {
+    const templates = read("src/lib/energetics/report-templates.batch1.json");
     assert.doesNotMatch(templates, /frequency|life_work|Frequency/);
   });
   await check("Content Set editor: Frequency system tab disabled + Coming soon; ?system=freq falls back to Human Design", () => {

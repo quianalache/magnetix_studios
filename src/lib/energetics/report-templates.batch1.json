@@ -1,0 +1,2177 @@
+{
+  "source": "magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json (specVersion 1) — Batch 1 subset, copied unmodified. Do not edit by hand.",
+  "templates": [
+    {
+      "id": "cover-luminous",
+      "name": "Luminous Arc",
+      "system": "humanDesign",
+      "pageType": "Cover",
+      "styleTag": "Magnetix Violet",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-cover-luminous",
+        "title": "Luminous Arc",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-cover-luminous-01",
+            "type": "text",
+            "zIndex": 0,
+            "geometry": {
+              "x": 62,
+              "y": 78,
+              "width": 540,
+              "height": 44,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "HUMAN DESIGN READING"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-02",
+            "type": "text",
+            "zIndex": 1,
+            "geometry": {
+              "x": 62,
+              "y": 118,
+              "width": 580,
+              "height": 170,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 58,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.05,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Your Energetic Blueprint"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-03",
+            "type": "shape",
+            "zIndex": 2,
+            "geometry": {
+              "x": 280,
+              "y": 300,
+              "width": 500,
+              "height": 500,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#ffffff",
+              "borderColor": "#c4b5fd",
+              "borderWidth": 1.5,
+              "borderStyle": "solid",
+              "borderRadius": 250,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-04",
+            "type": "shape",
+            "zIndex": 3,
+            "geometry": {
+              "x": 310,
+              "y": 330,
+              "width": 440,
+              "height": 440,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#ede4ff",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 220,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-05",
+            "type": "chart",
+            "zIndex": 4,
+            "geometry": {
+              "x": 400,
+              "y": 360,
+              "width": 260,
+              "height": 380,
+              "rotation": 0
+            },
+            "style": {
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "opacity": 1
+            },
+            "payload": {
+              "piece": "human-design-full"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-06",
+            "type": "text",
+            "zIndex": 5,
+            "geometry": {
+              "x": 62,
+              "y": 850,
+              "width": 320,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6b6f8a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "PREPARED FOR"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-07",
+            "type": "shortcode",
+            "zIndex": 6,
+            "geometry": {
+              "x": 62,
+              "y": 876,
+              "width": 540,
+              "height": 64,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 32,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "full_name"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-08",
+            "type": "shortcode",
+            "zIndex": 7,
+            "geometry": {
+              "x": 62,
+              "y": 926,
+              "width": 420,
+              "height": 44,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#6b6f8a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "birth_date"
+            }
+          },
+          {
+            "id": "tpl-cover-luminous-09",
+            "type": "text",
+            "zIndex": 8,
+            "geometry": {
+              "x": 470,
+              "y": 926,
+              "width": 284,
+              "height": 44,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "right",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chart-spotlight",
+      "name": "Bodygraph Spotlight",
+      "system": "humanDesign",
+      "pageType": "Chart",
+      "styleTag": "Monochrome",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-chart-spotlight",
+        "title": "Bodygraph Spotlight",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-chart-spotlight-01",
+            "type": "text",
+            "zIndex": 0,
+            "geometry": {
+              "x": 62,
+              "y": 66,
+              "width": 692,
+              "height": 76,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 44,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18181b",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Your Bodygraph"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-02",
+            "type": "shortcode",
+            "zIndex": 1,
+            "geometry": {
+              "x": 62,
+              "y": 128,
+              "width": 692,
+              "height": 44,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "full_name"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-03",
+            "type": "shape",
+            "zIndex": 2,
+            "geometry": {
+              "x": 72,
+              "y": 184,
+              "width": 672,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#d4d4d8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-04",
+            "type": "chart",
+            "zIndex": 3,
+            "geometry": {
+              "x": 64,
+              "y": 214,
+              "width": 410,
+              "height": 615,
+              "rotation": 0
+            },
+            "style": {
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "opacity": 1
+            },
+            "payload": {
+              "piece": "human-design-full"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-05",
+            "type": "text",
+            "zIndex": 4,
+            "geometry": {
+              "x": 502,
+              "y": 218,
+              "width": 252,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "TYPE"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-06",
+            "type": "shortcode",
+            "zIndex": 5,
+            "geometry": {
+              "x": 502,
+              "y": 238,
+              "width": 252,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "type"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-07",
+            "type": "shape",
+            "zIndex": 6,
+            "geometry": {
+              "x": 512,
+              "y": 308,
+              "width": 232,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#e4e4e7",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-08",
+            "type": "text",
+            "zIndex": 7,
+            "geometry": {
+              "x": 502,
+              "y": 322,
+              "width": 252,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "STRATEGY"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-09",
+            "type": "shortcode",
+            "zIndex": 8,
+            "geometry": {
+              "x": 502,
+              "y": 342,
+              "width": 252,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "strategy"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-10",
+            "type": "shape",
+            "zIndex": 9,
+            "geometry": {
+              "x": 512,
+              "y": 412,
+              "width": 232,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#e4e4e7",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-11",
+            "type": "text",
+            "zIndex": 10,
+            "geometry": {
+              "x": 502,
+              "y": 426,
+              "width": 252,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "AUTHORITY"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-12",
+            "type": "shortcode",
+            "zIndex": 11,
+            "geometry": {
+              "x": 502,
+              "y": 446,
+              "width": 252,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "authority"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-13",
+            "type": "shape",
+            "zIndex": 12,
+            "geometry": {
+              "x": 512,
+              "y": 516,
+              "width": 232,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#e4e4e7",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-14",
+            "type": "text",
+            "zIndex": 13,
+            "geometry": {
+              "x": 502,
+              "y": 530,
+              "width": 252,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "PROFILE"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-15",
+            "type": "shortcode",
+            "zIndex": 14,
+            "geometry": {
+              "x": 502,
+              "y": 550,
+              "width": 252,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "profile"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-16",
+            "type": "shape",
+            "zIndex": 15,
+            "geometry": {
+              "x": 512,
+              "y": 620,
+              "width": 232,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#e4e4e7",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-17",
+            "type": "text",
+            "zIndex": 16,
+            "geometry": {
+              "x": 502,
+              "y": 634,
+              "width": 252,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "DEFINITION"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-18",
+            "type": "shortcode",
+            "zIndex": 17,
+            "geometry": {
+              "x": 502,
+              "y": 654,
+              "width": 252,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "definition"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-19",
+            "type": "shape",
+            "zIndex": 18,
+            "geometry": {
+              "x": 72,
+              "y": 860,
+              "width": 672,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#d4d4d8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-20",
+            "type": "text",
+            "zIndex": 19,
+            "geometry": {
+              "x": 62,
+              "y": 874,
+              "width": 692,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "INCARNATION CROSS"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-21",
+            "type": "shortcode",
+            "zIndex": 20,
+            "geometry": {
+              "x": 62,
+              "y": 896,
+              "width": 692,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 21,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "incarnation_cross"
+            }
+          },
+          {
+            "id": "tpl-chart-spotlight-22",
+            "type": "text",
+            "zIndex": 21,
+            "geometry": {
+              "x": 62,
+              "y": 986,
+              "width": 692,
+              "height": 38,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#71717a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chart-mandala",
+      "name": "Mandala Circle",
+      "system": "humanDesign",
+      "pageType": "Chart",
+      "styleTag": null,
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-chart-mandala",
+        "title": "Mandala Circle",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-chart-mandala-01",
+            "type": "text",
+            "zIndex": 0,
+            "geometry": {
+              "x": 62,
+              "y": 62,
+              "width": 692,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "THE WHEEL OF YOUR DESIGN"
+            }
+          },
+          {
+            "id": "tpl-chart-mandala-02",
+            "type": "text",
+            "zIndex": 1,
+            "geometry": {
+              "x": 62,
+              "y": 88,
+              "width": 692,
+              "height": 74,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 42,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Your Mandala"
+            }
+          },
+          {
+            "id": "tpl-chart-mandala-03",
+            "type": "shape",
+            "zIndex": 2,
+            "geometry": {
+              "x": 108,
+              "y": 190,
+              "width": 600,
+              "height": 600,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#f5f3ff",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 300,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-chart-mandala-04",
+            "type": "chart",
+            "zIndex": 3,
+            "geometry": {
+              "x": 138,
+              "y": 220,
+              "width": 540,
+              "height": 540,
+              "rotation": 0
+            },
+            "style": {
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "opacity": 1
+            },
+            "payload": {
+              "piece": "human-design-mandala"
+            }
+          },
+          {
+            "id": "tpl-chart-mandala-05",
+            "type": "text",
+            "zIndex": 4,
+            "geometry": {
+              "x": 138,
+              "y": 816,
+              "width": 540,
+              "height": 110,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#4b4f6b",
+              "align": "center",
+              "lineHeight": 1.6,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Every activated gate, placed on the wheel at the moment of your birth and of your design."
+            }
+          },
+          {
+            "id": "tpl-chart-mandala-06",
+            "type": "shortcode",
+            "zIndex": 5,
+            "geometry": {
+              "x": 62,
+              "y": 934,
+              "width": 692,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "birth_date"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "summary-glance",
+      "name": "At a Glance",
+      "system": "humanDesign",
+      "pageType": "Summary",
+      "styleTag": "Magnetix Violet",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-summary-glance",
+        "title": "At a Glance",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-summary-glance-01",
+            "type": "text",
+            "zIndex": 0,
+            "geometry": {
+              "x": 62,
+              "y": 66,
+              "width": 692,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "AT A GLANCE"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-02",
+            "type": "text",
+            "zIndex": 1,
+            "geometry": {
+              "x": 62,
+              "y": 90,
+              "width": 692,
+              "height": 76,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 40,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Your Design, Summarized"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-03",
+            "type": "frame",
+            "zIndex": 2,
+            "geometry": {
+              "x": 72,
+              "y": 196,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-04",
+            "type": "frame",
+            "zIndex": 3,
+            "geometry": {
+              "x": 420,
+              "y": 196,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-05",
+            "type": "frame",
+            "zIndex": 4,
+            "geometry": {
+              "x": 72,
+              "y": 360,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-06",
+            "type": "frame",
+            "zIndex": 5,
+            "geometry": {
+              "x": 420,
+              "y": 360,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-07",
+            "type": "frame",
+            "zIndex": 6,
+            "geometry": {
+              "x": 72,
+              "y": 524,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-08",
+            "type": "frame",
+            "zIndex": 7,
+            "geometry": {
+              "x": 420,
+              "y": 524,
+              "width": 324,
+              "height": 146,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#faf7ff",
+              "borderColor": "#ddd6fe",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-summary-glance-09",
+            "type": "text",
+            "zIndex": 8,
+            "geometry": {
+              "x": 86,
+              "y": 214,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "TYPE"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-10",
+            "type": "shortcode",
+            "zIndex": 9,
+            "geometry": {
+              "x": 86,
+              "y": 240,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "type"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-11",
+            "type": "text",
+            "zIndex": 10,
+            "geometry": {
+              "x": 434,
+              "y": 214,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "STRATEGY"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-12",
+            "type": "shortcode",
+            "zIndex": 11,
+            "geometry": {
+              "x": 434,
+              "y": 240,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "strategy"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-13",
+            "type": "text",
+            "zIndex": 12,
+            "geometry": {
+              "x": 86,
+              "y": 378,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "AUTHORITY"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-14",
+            "type": "shortcode",
+            "zIndex": 13,
+            "geometry": {
+              "x": 86,
+              "y": 404,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "authority"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-15",
+            "type": "text",
+            "zIndex": 14,
+            "geometry": {
+              "x": 434,
+              "y": 378,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "PROFILE"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-16",
+            "type": "shortcode",
+            "zIndex": 15,
+            "geometry": {
+              "x": 434,
+              "y": 404,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "profile"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-17",
+            "type": "text",
+            "zIndex": 16,
+            "geometry": {
+              "x": 86,
+              "y": 542,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "SIGNATURE"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-18",
+            "type": "shortcode",
+            "zIndex": 17,
+            "geometry": {
+              "x": 86,
+              "y": 568,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "signature"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-19",
+            "type": "text",
+            "zIndex": 18,
+            "geometry": {
+              "x": 434,
+              "y": 542,
+              "width": 296,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#6d28d9",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "NOT-SELF THEME"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-20",
+            "type": "shortcode",
+            "zIndex": 19,
+            "geometry": {
+              "x": 434,
+              "y": 568,
+              "width": 296,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#18204a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "not_self_theme"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-21",
+            "type": "shape",
+            "zIndex": 20,
+            "geometry": {
+              "x": 72,
+              "y": 712,
+              "width": 672,
+              "height": 228,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#4c1d95",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 20,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-22",
+            "type": "text",
+            "zIndex": 21,
+            "geometry": {
+              "x": 94,
+              "y": 734,
+              "width": 628,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#ddd6fe",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "INCARNATION CROSS"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-23",
+            "type": "shortcode",
+            "zIndex": 22,
+            "geometry": {
+              "x": 94,
+              "y": 760,
+              "width": 628,
+              "height": 90,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#ffffff",
+              "align": "left",
+              "lineHeight": 1.25,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "incarnation_cross"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-24",
+            "type": "text",
+            "zIndex": 23,
+            "geometry": {
+              "x": 94,
+              "y": 856,
+              "width": 160,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#ddd6fe",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "DEFINITION"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-25",
+            "type": "shortcode",
+            "zIndex": 24,
+            "geometry": {
+              "x": 240,
+              "y": 852,
+              "width": 482,
+              "height": 46,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 16,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#ffffff",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "definition"
+            }
+          },
+          {
+            "id": "tpl-summary-glance-26",
+            "type": "text",
+            "zIndex": 25,
+            "geometry": {
+              "x": 62,
+              "y": 986,
+              "width": 692,
+              "height": 38,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#6b6f8a",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "type-story",
+      "name": "Type Story",
+      "system": "humanDesign",
+      "pageType": "Type",
+      "styleTag": "Warm Sunset",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-type-story",
+        "title": "Type Story",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-type-story-01",
+            "type": "shape",
+            "zIndex": 0,
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 816,
+              "height": 360,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#fff7ed",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-type-story-02",
+            "type": "shape",
+            "zIndex": 1,
+            "geometry": {
+              "x": 664,
+              "y": 72,
+              "width": 80,
+              "height": 80,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#c2410c",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 40,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-type-story-03",
+            "type": "shape",
+            "zIndex": 2,
+            "geometry": {
+              "x": 684,
+              "y": 92,
+              "width": 40,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#f59e0b",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 20,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-type-story-04",
+            "type": "text",
+            "zIndex": 3,
+            "geometry": {
+              "x": 62,
+              "y": 86,
+              "width": 420,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#c2410c",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "YOUR TYPE"
+            }
+          },
+          {
+            "id": "tpl-type-story-05",
+            "type": "shortcode",
+            "zIndex": 4,
+            "geometry": {
+              "x": 62,
+              "y": 112,
+              "width": 580,
+              "height": 104,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 70,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#7c2d12",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "type"
+            }
+          },
+          {
+            "id": "tpl-type-story-06",
+            "type": "text",
+            "zIndex": 5,
+            "geometry": {
+              "x": 62,
+              "y": 230,
+              "width": 300,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#9a3412",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "STRATEGY"
+            }
+          },
+          {
+            "id": "tpl-type-story-07",
+            "type": "shortcode",
+            "zIndex": 6,
+            "geometry": {
+              "x": 62,
+              "y": 252,
+              "width": 300,
+              "height": 50,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#3f2a1d",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "strategy"
+            }
+          },
+          {
+            "id": "tpl-type-story-08",
+            "type": "text",
+            "zIndex": 7,
+            "geometry": {
+              "x": 370,
+              "y": 230,
+              "width": 300,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#9a3412",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "SIGNATURE"
+            }
+          },
+          {
+            "id": "tpl-type-story-09",
+            "type": "shortcode",
+            "zIndex": 8,
+            "geometry": {
+              "x": 370,
+              "y": 252,
+              "width": 300,
+              "height": 50,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#3f2a1d",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "signature"
+            }
+          },
+          {
+            "id": "tpl-type-story-10",
+            "type": "shortcode",
+            "zIndex": 9,
+            "geometry": {
+              "x": 62,
+              "y": 402,
+              "width": 620,
+              "height": 420,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 15.5,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#27272a",
+              "align": "left",
+              "lineHeight": 1.7,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "type_description"
+            }
+          },
+          {
+            "id": "tpl-type-story-11",
+            "type": "shape",
+            "zIndex": 10,
+            "geometry": {
+              "x": 72,
+              "y": 860,
+              "width": 48,
+              "height": 3,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#f59e0b",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-type-story-12",
+            "type": "text",
+            "zIndex": 11,
+            "geometry": {
+              "x": 62,
+              "y": 872,
+              "width": 420,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#9a3412",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "WHEN YOU ARE OFF TRACK"
+            }
+          },
+          {
+            "id": "tpl-type-story-13",
+            "type": "shortcode",
+            "zIndex": 12,
+            "geometry": {
+              "x": 62,
+              "y": 894,
+              "width": 420,
+              "height": 54,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 26,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#c2410c",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "not_self_theme"
+            }
+          },
+          {
+            "id": "tpl-type-story-14",
+            "type": "text",
+            "zIndex": 13,
+            "geometry": {
+              "x": 462,
+              "y": 986,
+              "width": 292,
+              "height": 38,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#9a3412",
+              "align": "right",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
