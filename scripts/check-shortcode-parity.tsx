@@ -179,6 +179,12 @@ async function main() {
     assert.equal(shortcodeElementValue({ payload: { token: "not_a_token" } }, genInput), "");
     assert.equal(shortcodeElementValue({ payload: { token: "type", resolvedText: "Frozen" } }, genInput), "Frozen");
   });
+  await check("a value that resolves blank stays blank on the web report — never the editor's \"Add text\" placeholder", () => {
+    const pages: ReportPage[] = [{ id: "m", title: "Missing", visibleIf: null, blocks: [], elements: [el("shortcode", { token: "incarnation_cross_description" }, 20), el("text", { text: "{{not_a_real_token}}" }, 80)] }];
+    const web = webText(pages, genInput);
+    assert.ok(!web.includes("Add text"), "placeholder leaked to readers");
+    assert.doesNotMatch(web, /\{\{|\}\}/);
+  });
   await check("the PDF renderer never prints a Shortcode element's raw syntax even when handed unresolved pages (safety net)", async () => {
     const raw = await pdfText(designPages);
     for (const token of ["full_name", "birth_date", "strategy", "incarnation_cross", "type_description"]) assert.ok(!raw.includes(`{{${token}}}`), token);

@@ -137,7 +137,8 @@ function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, ast
     return url ? <img src={url} alt={String(element.payload.alt ?? element.payload.title ?? "Report image")} style={{ ...style, objectFit: String(element.payload.fit ?? "cover") as CSSProperties["objectFit"] }} /> : <div style={style} className="flex items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-xs text-violet-800">Choose an image asset</div>;
   }
   if (element.type === "chart") return <div style={style}><ChartPieceView piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></div>;
-  return <div style={style} className="whitespace-pre-wrap break-words">{resolved || (element.type === "graphic" ? "Energetic Decoder graphic" : element.type === "shape" || element.type === "frame" ? "" : "Add text")}</div>;
+  // Same empty fallback as the PDF: a blank value stays blank for readers (never the editor's "Add text" placeholder).
+  return <div style={style} className="whitespace-pre-wrap break-words">{resolved || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</div>;
 }
 
 function ReportBlockView({
