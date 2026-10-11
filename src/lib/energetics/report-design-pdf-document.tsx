@@ -184,17 +184,71 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
   }
 }
 
-function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign, scaleX = 1, scaleY = 1 }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; scaleX?: number; scaleY?: number }) {
-  const style = { ...styles.canvasText, left: element.geometry.x * scaleX, top: element.geometry.y * scaleY, width: element.geometry.width * scaleX, height: element.geometry.height * scaleY, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontFamily: pdfFontFamily(element.style?.fontFamily), fontSize: (element.style?.fontSize || 14) * scaleX, fontWeight: element.style?.fontWeight || 400, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: textAlignStyle(element.style?.align), backgroundColor: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, borderWidth: (element.style?.borderWidth || 0) * scaleX, borderColor: element.style?.borderColor || "#d8c5f5", borderStyle: element.style?.borderStyle === "dashed" ? "dashed" : "solid", borderRadius: element.style?.borderRadius || 0 } as const;
+/** The PDF's standard fonts carry weight/style in the font name (Times-Bold, Helvetica-Oblique, …). */
+function pdfStandardFont(fontFamily: string | undefined, fontWeight: number | undefined, italic: boolean | undefined): string {
+  const family = pdfFontFamily(fontFamily);
+  const bold = (fontWeight ?? 400) >= 600;
+  if (family === "Times-Roman") return bold && italic ? "Times-BoldItalic" : bold ? "Times-Bold" : italic ? "Times-Italic" : "Times-Roman";
+  return bold && italic ? `${family}-BoldOblique` : bold ? `${family}-Bold` : italic ? `${family}-Oblique` : family;
+}
+
+/** Canvas pages are 816 × 1056 page units (Letter at 96 dpi). */
+const CANVAS_W = 816;
+const CANVAS_H = 1056;
+/** Room the header + page title take above the canvas (generous, so the canvas never spills onto a new page). */
+const CANVAS_HEADER_ALLOWANCE = 140;
+
+/**
+ * One canvas element at a single uniform scale (2026-10-11): positions,
+ * sizes, fonts, padding, radii and letter spacing all scale together, so a
+ * page keeps its proportions and nothing below the header is cut off. Text
+ * sits in a clipped box (like the web report, padding 10 page units) and
+ * is never dropped when a line is a little taller than its box.
+ */
+function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDesign, mandalaDesign, astroDesign, scale = 1 }: { element: ReportCanvasElement; humanDesign?: HumanDesignProfile | null; astrology?: AstrologyChart | null; spheres?: GeneKeysSphereResult[]; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; scale?: number }) {
+  const st = element.style ?? {};
+  const g = element.geometry;
+  const box = {
+    position: "absolute" as const,
+    left: g.x * scale,
+    top: g.y * scale,
+    width: g.width * scale,
+    height: g.height * scale,
+    padding: element.type === "shape" || element.type === "frame" ? 0 : 10 * scale,
+    overflow: "hidden" as const,
+    ...(g.rotation ? { transform: `rotate(${g.rotation}deg)` } : {}),
+    opacity: st.opacity ?? 1,
+    backgroundColor: element.type === "shape" || element.type === "frame" ? st.backgroundColor || "#efe7ff" : undefined,
+    borderWidth: (st.borderWidth || 0) * scale,
+    borderColor: st.borderColor || "#d8c5f5",
+    borderStyle: st.borderStyle === "dashed" ? ("dashed" as const) : ("solid" as const),
+    borderRadius: (st.borderRadius || 0) * scale,
+  };
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
-    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
+    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : <View style={{ ...box, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
   }
-  if (element.type === "chart") return <View style={style}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
+  if (element.type === "chart") return <View style={box}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
   // Callers pass pages through resolvePagesForRender (Shortcodes already Text). Safety net:
   // a Shortcode that reaches here prints its frozen value or nothing, never raw {{token}}.
   const text = element.type === "shortcode" ? shortcodeElementValue(element) : String(element.payload.text ?? "");
-  return <Text style={style}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>;
+  const textStyle = {
+    color: st.color || "#18204a",
+    fontFamily: pdfStandardFont(st.fontFamily, st.fontWeight, st.italic),
+    fontSize: (st.fontSize || 14) * scale,
+    lineHeight: st.lineHeight || 1.4,
+    letterSpacing: (st.letterSpacing || 0) * scale,
+    textAlign: textAlignStyle(st.align),
+    textDecoration: st.underline ? ("underline" as const) : undefined,
+  };
+  // The text is laid out free of the box height (absolute inside it) and clipped by the box,
+  // so a line slightly taller than its box shows like it does on the web instead of being dropped.
+  const pad = 10 * scale;
+  return (
+    <View style={{ ...box, padding: 0 }}>
+      <Text style={{ ...textStyle, position: "absolute", top: pad, left: pad, width: Math.max(0, box.width - 2 * pad) }}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>
+    </View>
+  );
 }
 
 export function ReportDesignPdfDocument({
@@ -232,6 +286,9 @@ export function ReportDesignPdfDocument({
   const pdfSize = pageSize === "letter" ? "LETTER" : pageSize === "custom" && customPageSize ? [customPageSize.width, customPageSize.height] as [number, number] : "A4";
   const contentWidth = pageSize === "letter" ? 540 : pageSize === "custom" && customPageSize ? customPageSize.width - 72 : 523;
   const contentHeight = pageSize === "letter" ? 720 : pageSize === "custom" && customPageSize ? customPageSize.height - 72 : 769;
+  // One uniform scale that fits the canvas under the header (was width-only fonts + a
+  // full-height Y scale, which cut off the bottom of every canvas page).
+  const canvasScale = Math.min(contentWidth / CANVAS_W, (contentHeight - CANVAS_HEADER_ALLOWANCE) / CANVAS_H);
   return (
     <Document>
       {pages.map((page, index) => (
@@ -249,7 +306,7 @@ export function ReportDesignPdfDocument({
 
           <Text style={styles.pageTitle}>{pageLabel(page, index)}</Text>
 
-          {page.elements && page.elements.length > 0 ? <View style={styles.canvas}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scaleX={contentWidth / 816} scaleY={contentHeight / 1056} />)}</View> : <View style={styles.row}>
+          {page.elements && page.elements.length > 0 ? <View style={{ position: "relative", overflow: "hidden", width: CANVAS_W * canvasScale, height: CANVAS_H * canvasScale, marginLeft: (contentWidth - CANVAS_W * canvasScale) / 2 }}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scale={canvasScale} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (
               <View key={block.id} style={[styles.blockWrap, { width: `${block.widthPct}%` }]}>
                 {block.type === "chart" ? (

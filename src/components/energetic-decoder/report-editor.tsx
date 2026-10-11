@@ -1476,7 +1476,8 @@ function CanvasElement({
           ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}`
           : undefined,
         borderRadius: element.style?.borderRadius || 0,
-        padding: element.type === "text" ? 12 : 8,
+        // Shapes/Frames draw edge to edge (padding made a 1-unit rule render ~16px tall).
+        padding: element.type === "text" ? 12 : element.type === "shape" || element.type === "frame" ? 0 : 8,
       }}
     >
       {element.type === "chart" ? (
