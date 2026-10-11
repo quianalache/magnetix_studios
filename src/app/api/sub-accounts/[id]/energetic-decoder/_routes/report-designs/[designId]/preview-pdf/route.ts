@@ -6,27 +6,16 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { getContentSet } from "@/lib/server/content-set-service";
 import { getPreviewSampleReading } from "@/lib/energetics/preview-sample-reading";
-import { resolveShortcodes } from "@/lib/energetics/shortcodes";
+import { resolvePagesForRender } from "@/lib/energetics/report-shortcode-render";
 import { evaluateChartRule } from "@/lib/energetics/chart-rules";
 import { renderReportDesignPdfStream } from "@/lib/energetics/report-design-pdf-render";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
-import type { ReportCanvasElement, ReportDesign, ReportPage } from "@/types/report-blocks";
+import type { ReportDesign, ReportPage } from "@/types/report-blocks";
 
 function resolvePages(design: ReportDesign, reading: Awaited<ReturnType<typeof getPreviewSampleReading>>, contentSet: Awaited<ReturnType<typeof getContentSet>>, ruleInput: Parameters<typeof evaluateChartRule>[1]): ReportPage[] {
   const readingInput = { ...reading, reportContent: { values: contentSet.values, strict: true } };
-  return design.pages
-    .filter((page) => !page.visibleIf || evaluateChartRule(page.visibleIf, ruleInput))
-    .map((page) => ({
-      ...page,
-      blocks: page.blocks.map((block) => block.type === "text" ? { ...block, html: resolveShortcodes(block.html, readingInput) } : block),
-      elements: page.elements?.map((element): ReportCanvasElement => {
-        if (element.type === "shortcode") {
-          return { ...element, type: "text", payload: { ...element.payload, text: resolveShortcodes(`{{${String(element.payload.token ?? "full_name")}}}`, readingInput) } };
-        }
-        if (element.type === "text") return { ...element, payload: { ...element.payload, text: resolveShortcodes(String(element.payload.text ?? ""), readingInput) } };
-        return element;
-      }),
-    }));
+  const visible = design.pages.filter((page) => !page.visibleIf || evaluateChartRule(page.visibleIf, ruleInput));
+  return resolvePagesForRender(visible, readingInput);
 }
 
 export async function POST(

@@ -5,6 +5,9 @@ import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { getReportDesign } from "@/lib/server/report-design-service";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { ReportDesignViewer } from "@/components/energetic-decoder/report-design-viewer";
+import { ContentSetError, getContentSet } from "@/lib/server/content-set-service";
+import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
+import type { ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 
 export const dynamic = "force-dynamic";
 
@@ -39,13 +42,23 @@ export default async function EnergeticDecoderReportDesignPage({
   const businessName = (sub.name as string) || "Your reading";
   const theme = { ...defaultEnergeticDecoderTheme(), ...(sub.energeticDecoderTheme ?? {}) };
 
-  const readingInput = {
+  // Interpretation shortcodes resolve against the design's Content Set,
+  // exactly like Preview PDF and generated reports (2026-10-11). A set that
+  // no longer exists resolves blank — never a silent fallback to other text.
+  let contentValues: NonNullable<ShortcodeReadingInput["reportContent"]>["values"] = {};
+  try {
+    contentValues = (await getContentSet(saId, design.contentSetId || DEFAULT_CONTENT_SET_ID)).values;
+  } catch (err) {
+    if (!(err instanceof ContentSetError)) throw err;
+  }
+  const readingInput: ShortcodeReadingInput = {
     name: reading.name,
     birthDate: reading.birthDate,
     birthPlace: reading.birthPlace,
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
     spheres: reading.spheres,
+    reportContent: { values: contentValues, strict: true },
   };
 
   // Honors this reading's Profile's saved-design override when it has one

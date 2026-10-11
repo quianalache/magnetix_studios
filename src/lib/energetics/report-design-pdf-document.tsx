@@ -11,6 +11,7 @@ import type { AstrologyChart } from "./astrology";
 import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
 import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement, ReportPageSize, ReportDesign } from "@/types/report-blocks";
+import { shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
 type ReportDesignBrand = ReportDesign["brand"];
 
 /**
@@ -190,7 +191,9 @@ function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDe
     return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={style} /> : <View style={{ ...style, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
   }
   if (element.type === "chart") return <View style={style}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
-  const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
+  // Callers pass pages through resolvePagesForRender (Shortcodes already Text). Safety net:
+  // a Shortcode that reaches here prints its frozen value or nothing, never raw {{token}}.
+  const text = element.type === "shortcode" ? shortcodeElementValue(element) : String(element.payload.text ?? "");
   return <Text style={style}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>;
 }
 

@@ -2,7 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
-import { chartDesignsForGeneratedReport, getGeneratedReport } from "@/lib/server/generated-report-service";
+import { chartDesignsForGeneratedReport, generatedReportShortcodeInput, getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 
 /**
@@ -42,19 +42,8 @@ export async function GET(
     createdAt: generatedReport.generatedAt,
     updatedAt: generatedReport.generatedAt,
   };
-  const reading = {
-    name: real.name,
-    birthDate: real.birthDate,
-    birthPlace: real.birthPlace,
-    humanDesign: real.humanDesign,
-    astrology: real.astrology,
-    // Added 2026-08-15 (Phase 5) — was missing here, which would have
-    // silently blanked the Frequency block on this preview surface even
-    // though the sibling report-designs preview-data route (and the PDF
-    // route) already carry it.
-    spheres: real.spheres,
-    reportContent: generatedReport.snapshot.contentSet ? { values: generatedReport.snapshot.contentSet.values, strict: true } : undefined,
-  };
+  // Same input the generated PDF uses, so the web preview and the PDF agree.
+  const reading = generatedReportShortcodeInput(generatedReport, real);
 
   // Same frozen-styling rule as the PDF route, so the practitioner's
   // Preview shows exactly what the report's PDF shows.

@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from "react";
 import type { ReportDesign, ReportPage, ReportBlock, ReportCanvasElement, ChartPieceKind } from "@/types/report-blocks";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
+import { resolveInlineText, shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
@@ -120,8 +121,14 @@ export function ReportDesignViewer({
 }
 
 function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, astroDesign }: { element: ReportCanvasElement; readingInput: ShortcodeReadingInput; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
-  const text = element.type === "shortcode" ? `{{${String(element.payload.token ?? "full_name")}}}` : String(element.payload.text ?? "");
-  const resolved = element.type === "shortcode" ? resolveShortcodes(text, readingInput) : text;
+  // Same resolver as Preview PDF and the generated PDF (report-shortcode-render.ts):
+  // frozen Shortcode values first, inline {{tokens}} in Text resolved, never raw syntax.
+  const resolved =
+    element.type === "shortcode"
+      ? shortcodeElementValue(element, readingInput)
+      : element.type === "text"
+        ? resolveInlineText(String(element.payload.text ?? ""), readingInput)
+        : String(element.payload.text ?? "");
   const style: CSSProperties = {
     position: "absolute", left: `${(element.geometry.x / 816) * 100}%`, top: `${(element.geometry.y / 1056) * 100}%`, width: `${(element.geometry.width / 816) * 100}%`, height: `${(element.geometry.height / 1056) * 100}%`, transform: `rotate(${element.geometry.rotation ?? 0}deg)`, opacity: element.style?.opacity ?? 1, color: element.style?.color || "#18204a", fontSize: element.style?.fontSize || 14, fontWeight: element.style?.fontWeight || 400, fontFamily: element.style?.fontFamily || undefined, fontStyle: element.style?.italic ? "italic" : undefined, textDecoration: element.style?.underline ? "underline" : undefined, lineHeight: element.style?.lineHeight || 1.4, letterSpacing: element.style?.letterSpacing || 0, textAlign: element.style?.align || "left", background: element.type === "shape" || element.type === "frame" ? element.style?.backgroundColor || "#efe7ff" : undefined, border: element.style?.borderWidth ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}` : undefined, borderRadius: element.style?.borderRadius || 0, padding: 10, overflow: "hidden",
   };

@@ -3,9 +3,10 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
-import { chartDesignsForGeneratedReport, getGeneratedReport } from "@/lib/server/generated-report-service";
+import { chartDesignsForGeneratedReport, generatedReportShortcodeInput, getGeneratedReport } from "@/lib/server/generated-report-service";
 import { getReadingById } from "@/lib/server/energetic-decoder-service";
 import { renderReportDesignPdfStream, reportDesignPdfFilename } from "@/lib/energetics/report-design-pdf-render";
+import { resolvePagesForRender } from "@/lib/energetics/report-shortcode-render";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,9 @@ export async function GET(
     readerName: reading.name,
     businessName,
     businessLogoUrl,
-    pages: generatedReport.snapshot.pages,
+    // Shortcode elements print their frozen value (or resolve against the
+    // snapshot's Content Set) — never the raw {{token}} (2026-10-11 fix).
+    pages: resolvePagesForRender(generatedReport.snapshot.pages, generatedReportShortcodeInput(generatedReport, reading)),
     humanDesign: reading.humanDesign,
     astrology: reading.astrology,
     spheres: reading.spheres,

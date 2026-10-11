@@ -102,11 +102,32 @@ export async function deleteGeneratedReport(subAccountId: string, id: string): P
 }
 
 /**
+ * The reading input every generated-report surface resolves Shortcodes
+ * with (web preview and PDF): the source reading plus the Content Set
+ * frozen into the report's snapshot. Frozen Shortcode values
+ * (`payload.resolvedText`) win over this; it only fills gaps.
+ */
+export function generatedReportShortcodeInput(
+  report: Pick<GeneratedReport, "snapshot">,
+  reading: Pick<EnergeticDecoderReading, "name" | "birthDate" | "birthPlace" | "humanDesign" | "astrology" | "spheres">,
+): ShortcodeReadingInput {
+  return {
+    name: reading.name,
+    birthDate: reading.birthDate,
+    birthPlace: reading.birthPlace,
+    humanDesign: reading.humanDesign,
+    astrology: reading.astrology,
+    spheres: reading.spheres,
+    reportContent: report.snapshot.contentSet ? { values: report.snapshot.contentSet.values, strict: true } : undefined,
+  };
+}
+
+/**
  * The actual snapshot logic — filters pages by `visibleIf` and resolves
  * shortcodes exactly the way `ReportDesignViewer` renders them live,
  * against one specific reading, once, at generation time.
  */
-function resolveSnapshotPages(pages: ReportPage[], ruleInput: ChartRuleReadingInput, shortcodeInput: ShortcodeReadingInput): ReportPage[] {
+export function resolveSnapshotPages(pages: ReportPage[], ruleInput: ChartRuleReadingInput, shortcodeInput: ShortcodeReadingInput): ReportPage[] {
   const visiblePages = pages.filter((p) => !p.visibleIf || evaluateChartRule(p.visibleIf, ruleInput));
   return visiblePages.map((p) => ({
     ...p,
