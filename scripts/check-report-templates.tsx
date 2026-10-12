@@ -5,7 +5,7 @@
  * (unmodified); metadata, page-type filtering and search; insertion makes a
  * fresh, independent page (new page + element ids, everything else exact);
  * shortcode / Content Set / chart payloads preserved; style tags never touch
- * chart payloads; Blank page; one insertion = one undo step; Shape/Frame
+ * chart payloads; no Blank page card (Add Page makes blank pages); one insertion = one undo step; Shape/Frame
  * placeholder labels gone from the editor canvas; thumbnails render the real
  * page through the published-report renderer.
  *
@@ -18,10 +18,8 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  BLANK_PAGE_TITLE,
   REPORT_TEMPLATES,
   REPORT_TEMPLATE_PAGE_TYPES,
-  createBlankReportPage,
   filterReportTemplates,
   instantiateReportTemplate,
 } from "../src/lib/energetics/report-templates";
@@ -127,9 +125,13 @@ await check("two insertions of the same template share no ids, and the template 
   assert.equal(JSON.stringify(REPORT_TEMPLATES), before);
   assert.notEqual(b.elements![0].geometry.x, 999);
 });
-await check("Blank page: a normal empty page with a fresh id", () => {
-  const p = createBlankReportPage(() => "blank-1");
-  assert.deepEqual(p, { id: "blank-1", title: BLANK_PAGE_TITLE, visibleIf: null, blocks: [], elements: [] });
+await check("no Blank page card in the Template Library (2026-10-12): Add Page in the page strip still makes a blank page", () => {
+  const lib = fs.readFileSync("src/components/energetic-decoder/report-template-library.tsx", "utf8");
+  const ed = fs.readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8");
+  assert.doesNotMatch(lib, /data-template-blank|Start from an empty page|onInsertBlank/);
+  assert.doesNotMatch(ed, /insertBlankPage|createBlankReportPage/);
+  assert.match(ed, /function addPage\(\) \{\s*const p: ReportPage = \{\s*id: id\(\),\s*title: `Page \$\{pages\.length \+ 1\}`,\s*visibleIf: null,\s*blocks: \[\],\s*elements: \[\],/);
+  assert.match(ed, /<button type="button" onClick=\{addPage\}[^>]*>.*Add Page<\/button>/);
 });
 
 console.log("\nPayloads");
@@ -177,7 +179,6 @@ await check("insertion = one commit (one undo step), new page activated + scroll
   assert.match(fn, /commit\(\[\.\.\.pages, p\]\)/, "appends — never replaces");
   for (const s of ["setActivePageId(p.id)", "setScrollToPageId(p.id)", "setTemplateCategory(null)", "setMobileDrawer(null)", "toast.success(`${name} inserted`)"]) assert.ok(fn.includes(s), s);
   assert.match(editor, /instantiateReportTemplate\(template, id, opts\)/);
-  assert.match(editor, /createBlankReportPage\(id\)/);
 });
 await check("old starter templates and their wireframe thumbnails are gone", () => {
   for (const gone of ["TEMPLATE_DEFINITIONS", "Luminous cover", "Dawn cover", "Existing starter", "Batch 2 will refine"]) assert.ok(!editor.includes(gone), gone);
@@ -195,10 +196,9 @@ await check("Shape and Frame elements draw no placeholder word on the editor can
 await check("Shortcode elements get the same typography controls as Text (templates style their shortcodes)", () => {
   assert.match(editor, /\(selected\.type === "text" \|\| selected\.type === "shortcode"\) && \(\s*<div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50\/40 p-3" data-typography-controls>/);
 });
-await check("library: Human Design default, chips reset per system, Blank pinned before the grid, empty + no-results states", () => {
-  assert.match(library, /useState<ReportTemplateSystem>\("humanDesign"\)/);
+await check("library: Human Design default, chips reset per system, empty + no-results states", () => {
+  assert.match(library, /useState<ReportTemplateSystem>\(focus\?\.system \?\? "humanDesign"\)/, "Human Design unless just saved elsewhere");
   assert.match(library, /setSystem\(s\.key\);\s*setPageType\("All"\);/);
-  assert.ok(library.indexOf("data-template-blank") < library.indexOf("data-template-grid"));
   assert.match(library, /Astrology templates are coming soon\./);
   assert.match(library, /No templates match/);
 });

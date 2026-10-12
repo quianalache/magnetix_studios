@@ -28,7 +28,8 @@ import batch2 from "./report-templates.batch2.json";
  */
 
 export type ReportTemplateSystem = "humanDesign" | "astrology";
-export type ReportTemplatePageType = "Cover" | "About Me" | "Chart" | "Summary" | "Type" | "Center" | "Channel" | "Gate" | "Table";
+/** "Other" exists only on templates users save (no chip of its own; listed under Mine). */
+export type ReportTemplatePageType = "Cover" | "About Me" | "Chart" | "Summary" | "Type" | "Center" | "Channel" | "Gate" | "Table" | "Other";
 
 export interface ReportTemplate {
   id: string;
@@ -40,6 +41,8 @@ export interface ReportTemplate {
   page: ReportPage;
   /** A Center page: inserting it needs a Center (the page's centerKey). */
   centerPage?: boolean;
+  /** Set on templates the user saved (report-page-templates.ts); absent on built-in Magnetix templates. */
+  saved?: { id: string; createdAt: string | null };
 }
 
 export const REPORT_TEMPLATE_SYSTEMS: { key: ReportTemplateSystem; label: string }[] = [
@@ -77,25 +80,40 @@ export function reportTemplateSystemLabel(system: ReportTemplateSystem): string 
   return REPORT_TEMPLATE_SYSTEMS.find((s) => s.key === system)?.label ?? system;
 }
 
+/** The page-type chips of a system, plus the pinned "Mine" chip at the end. */
+export type ReportTemplateFilter = ReportTemplatePageType | "All" | "Mine";
+
 /**
- * Templates for one system, optionally one page type ("All" = every type),
- * matching every word of the search across name, system, page type and
- * style tag (case-insensitive).
+ * Templates for one system, optionally one page type ("All" = every type;
+ * "Mine" = every template the user saved for this system, newest first),
+ * matching every word of the search across name, system, page type, style
+ * tag and — for saved templates — "mine" (case-insensitive).
+ *
+ * Order: page type (the chip order; "Other" last), then within a type the
+ * user's saved templates (newest first) before the built-in ones (library
+ * order).
  */
 export function filterReportTemplates(
   templates: readonly ReportTemplate[],
-  opts: { system: ReportTemplateSystem; pageType: ReportTemplatePageType | "All"; query?: string },
+  opts: { system: ReportTemplateSystem; pageType: ReportTemplateFilter; query?: string },
 ): ReportTemplate[] {
   const words = (opts.query ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-  const order = REPORT_TEMPLATE_PAGE_TYPES[opts.system];
+  const order: string[] = REPORT_TEMPLATE_PAGE_TYPES[opts.system];
+  const typeRank = (t: ReportTemplate) => (order.includes(t.pageType) ? order.indexOf(t.pageType) : order.length);
+  const newest = (a: ReportTemplate, b: ReportTemplate) => (b.saved?.createdAt ?? "").localeCompare(a.saved?.createdAt ?? "");
+  const index = new Map(templates.map((t, i) => [t, i]));
   return templates
-    .filter((t) => t.system === opts.system && (opts.pageType === "All" || t.pageType === opts.pageType))
+    .filter((t) => t.system === opts.system)
+    .filter((t) => (opts.pageType === "All" ? true : opts.pageType === "Mine" ? !!t.saved : t.pageType === opts.pageType))
     .filter((t) => {
       if (words.length === 0) return true;
-      const hay = [t.name, reportTemplateSystemLabel(t.system), t.pageType, t.styleTag ?? ""].join(" ").toLowerCase();
+      const hay = [t.name, reportTemplateSystemLabel(t.system), t.pageType, t.styleTag ?? "", t.saved ? "mine" : ""].join(" ").toLowerCase();
       return words.every((w) => hay.includes(w));
     })
-    .sort((a, b) => order.indexOf(a.pageType) - order.indexOf(b.pageType));
+    .sort((a, b) => {
+      if (opts.pageType === "Mine") return newest(a, b);
+      return typeRank(a) - typeRank(b) || Number(!a.saved) - Number(!b.saved) || (a.saved && b.saved ? newest(a, b) : index.get(a)! - index.get(b)!);
+    });
 }
 
 const newId = () => crypto.randomUUID();
@@ -115,11 +133,4 @@ export function instantiateReportTemplate(template: ReportTemplate, makeId: () =
     ...(template.centerPage && opts?.centerKey ? { centerKey: opts.centerKey } : {}),
     elements: (page.elements ?? []).map((element): ReportCanvasElement => ({ ...element, id: makeId() })),
   };
-}
-
-export const BLANK_PAGE_TITLE = "Blank page";
-
-/** The pinned Blank page: a normal empty page (same shape the old Blank starter inserted). */
-export function createBlankReportPage(makeId: () => string = newId): ReportPage {
-  return { id: makeId(), title: BLANK_PAGE_TITLE, visibleIf: null, blocks: [], elements: [] };
 }

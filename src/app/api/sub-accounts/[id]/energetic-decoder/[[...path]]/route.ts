@@ -41,7 +41,9 @@ import * as h34 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/repo
 import * as h35 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/preview-pdf/route";
 import * as h36 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/[designId]/route";
 import * as h37 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-designs/route";
-import * as h38 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
+import * as h38 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/[templateId]/route";
+import * as h39 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/report-page-templates/route";
+import * as h40 from "@/app/api/sub-accounts/[id]/energetic-decoder/_routes/theme/route";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -85,7 +87,9 @@ const d = createApiDispatcher([
   ["report-designs/[designId]/preview-pdf", h35],
   ["report-designs/[designId]", h36],
   ["report-designs", h37],
-  ["theme", h38],
+  ["report-page-templates/[templateId]", h38],
+  ["report-page-templates", h39],
+  ["theme", h40],
 ]);
 
 export const GET = d.GET;

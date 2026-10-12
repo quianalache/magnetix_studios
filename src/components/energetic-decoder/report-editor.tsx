@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   LayoutTemplate,
   Layers3,
+  MoreHorizontal,
   Lock,
   MousePointer2,
   PanelLeft,
@@ -37,7 +38,10 @@ import {
 } from "lucide-react";
 import { CENTER_TITLES, SHORTCODE_CATALOG, asCenterKey } from "@/lib/energetics/shortcodes";
 import { CENTERS, type CenterKey } from "@/lib/energetics/human-design-data";
-import { BLANK_PAGE_TITLE, createBlankReportPage, instantiateReportTemplate, type ReportTemplate } from "@/lib/energetics/report-templates";
+import { REPORT_TEMPLATE_SYSTEMS, instantiateReportTemplate, type ReportTemplate, type ReportTemplatePageType, type ReportTemplateSystem } from "@/lib/energetics/report-templates";
+import { savedTemplateToLibrary, type ReportPageTemplateRecord } from "@/lib/energetics/report-page-templates";
+import { DeleteTemplateDialog, RenameTemplateDialog, SaveTemplateDialog } from "@/components/energetic-decoder/report-page-template-dialogs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ReportTemplateLibrary } from "@/components/energetic-decoder/report-template-library";
 import { ReportChartLibrary } from "@/components/energetic-decoder/report-chart-library";
 import { ReportChartDesignSetsContext, ReportChartPreview, designsOfSet, useReportChartDesignSets } from "@/components/energetic-decoder/report-chart-preview";
@@ -294,6 +298,82 @@ export function ReportEditor({
   }, [subAccountId]);
   const chartSetMap = useMemo(() => new Map(chartSets.map((set) => [set.id, set])), [chartSets]);
 
+  // Saved page templates (2026-10-12): the caller's own, for the Template Library.
+  const templatesApi = `/api/sub-accounts/${subAccountId}/energetic-decoder/report-page-templates`;
+  const [savedRecords, setSavedRecords] = useState<ReportPageTemplateRecord[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(templatesApi)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { templates?: ReportPageTemplateRecord[] }) => { if (!cancelled) setSavedRecords(d.templates ?? []); })
+      .catch(() => { /* the built-in templates still show; saving reports its own errors */ });
+    return () => { cancelled = true; };
+  }, [templatesApi]);
+  const savedTemplates = useMemo(() => savedRecords.map(savedTemplateToLibrary), [savedRecords]);
+  const [libraryFocus, setLibraryFocus] = useState<{ system: ReportTemplateSystem; highlightId: string; nonce: number } | null>(null);
+  const [saveTemplatePageId, setSaveTemplatePageId] = useState<string | null>(null);
+  const [renamingTemplate, setRenamingTemplate] = useState<ReportTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] = useState<ReportTemplate | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const saveTemplatePage = pages.find((p) => p.id === saveTemplatePageId) ?? null;
+
+  /** Save one page as a template (a snapshot — the page itself is unchanged), then show it under Mine. */
+  async function savePageAsTemplate(v: { name: string; system: ReportTemplateSystem; pageType: ReportTemplatePageType }) {
+    if (!saveTemplatePage) return;
+    setTemplateBusy(true);
+    try {
+      const r = await fetch(templatesApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...v, page: saveTemplatePage }) });
+      const d = (await r.json().catch(() => ({}))) as { template?: ReportPageTemplateRecord; imagesCleared?: number; error?: string };
+      if (!r.ok || !d.template) throw new Error(d.error ?? "Couldn’t save the template.");
+      const t = d.template;
+      setSavedRecords((prev) => [t, ...prev.filter((x) => x.id !== t.id)]);
+      setSaveTemplatePageId(null);
+      setTemplateCategory("Templates");
+      if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileDrawer("elements");
+      setLibraryFocus({ system: t.system, highlightId: t.id, nonce: Date.now() });
+      const systemLabel = REPORT_TEMPLATE_SYSTEMS.find((s) => s.key === t.system)?.label ?? "";
+      toast.success(`Saved “${t.name}” to your templates · ${systemLabel} › Mine`);
+      if (d.imagesCleared) toast.warning(`${d.imagesCleared === 1 ? "1 image was" : `${d.imagesCleared} images were`} left empty in the template — it used a temporary link. Choose the image again on a page made from it.`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+  async function renameSavedTemplate(name: string) {
+    const t = renamingTemplate?.saved;
+    if (!t) return;
+    setTemplateBusy(true);
+    try {
+      const r = await fetch(`${templatesApi}/${t.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+      const d = (await r.json().catch(() => ({}))) as { template?: ReportPageTemplateRecord; error?: string };
+      if (!r.ok || !d.template) throw new Error(d.error ?? "Couldn’t rename the template.");
+      setSavedRecords((prev) => prev.map((x) => (x.id === t.id ? d.template! : x)));
+      setRenamingTemplate(null);
+      toast.success(`Renamed to “${d.template.name}”`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+  async function deleteSavedTemplate() {
+    const t = deletingTemplate;
+    if (!t?.saved) return;
+    setTemplateBusy(true);
+    try {
+      const r = await fetch(`${templatesApi}/${t.saved.id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? "Couldn’t delete the template.");
+      setSavedRecords((prev) => prev.filter((x) => x.id !== t.saved!.id));
+      setDeletingTemplate(null);
+      toast.success(`Deleted “${t.name}” from your templates`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
   function commit(next: ReportPage[]) {
     setHistory((h) => [...h.slice(-29), pages]);
     setFuture([]);
@@ -356,9 +436,6 @@ export function ReportEditor({
   function insertTemplate(template: ReportTemplate, opts?: { centerKey: CenterKey }) {
     const p = instantiateReportTemplate(template, id, opts);
     insertLibraryPage(p, template.centerPage ? `${template.name} (${p.title})` : template.name);
-  }
-  function insertBlankPage() {
-    insertLibraryPage(createBlankReportPage(id), BLANK_PAGE_TITLE);
   }
   function insertLibraryPage(p: ReportPage, name: string) {
     commit([...pages, p]);
@@ -496,7 +573,7 @@ export function ReportEditor({
     </div>
   );
   const renderActiveToolPanel = (opts?: { inSheet?: boolean }) => {
-    if (templateCategory === "Templates") return <ReportTemplateLibrary onInsert={insertTemplate} onInsertBlank={insertBlankPage} showHeading={opts?.inSheet} />;
+    if (templateCategory === "Templates") return <ReportTemplateLibrary onInsert={insertTemplate} savedTemplates={savedTemplates} focus={libraryFocus} onRename={setRenamingTemplate} onDelete={setDeletingTemplate} showHeading={opts?.inSheet} />;
     if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
     if (templateCategory === "chart") return <ReportChartLibrary sets={chartSets} loading={chartSetsLoading} error={chartSetsError} onInsert={addChartElement} />;
     const tool = tools.find((item) => item.type === templateCategory);
@@ -513,6 +590,7 @@ export function ReportEditor({
       duplicatePage={duplicatePage}
       deletePage={deletePage}
       movePage={movePage}
+      saveAsTemplate={setSaveTemplatePageId}
     />
   );
 
@@ -674,10 +752,37 @@ export function ReportEditor({
               </button>
               <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto" aria-label="Page thumbnails">
                 {pages.map((p, i) => (
-                  <button key={p.id} type="button" onClick={() => setActivePageId(p.id)} className={`flex w-14 shrink-0 flex-col gap-0.5 rounded-lg border p-1 text-left text-[9px] ${p.id === activePageId ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:bg-violet-50"}`} aria-label={`Go to ${pageLabel(p, i)}`}>
+                  <div key={p.id} className="relative shrink-0 pt-1.5 pr-1.5">
+                  <button type="button" onClick={() => setActivePageId(p.id)} className={`flex w-14 shrink-0 flex-col gap-0.5 rounded-lg border p-1 text-left text-[9px] ${p.id === activePageId ? "border-violet-500 bg-violet-50" : "border-violet-100 bg-white hover:bg-violet-50"}`} aria-label={`Go to ${pageLabel(p, i)}`}>
                     <span className="flex h-8 items-center justify-center rounded border border-violet-100 bg-[#f3f0f9] p-0.5"><span className="h-full w-2/3 rounded-sm bg-white shadow-sm"><span className="mt-0.5 block h-0.5 w-2/3 rounded bg-violet-200" /><span className="mt-0.5 block h-4 rounded-sm bg-gradient-to-br from-violet-100 via-white to-amber-100" /></span></span>
                     <span className="truncate font-semibold text-[#18204a]">{i + 1}. {p.title || "Untitled"}</span>
                   </button>
+                  {p.id === activePageId && (
+                    /* Page actions for the selected page: Duplicate · Save as template… · Delete. */
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`Page actions for ${pageLabel(p, i)}`}
+                        className="absolute right-0 top-0 flex h-5 w-5 items-center justify-center rounded-full border border-violet-400 bg-[#5420a8] text-white shadow-sm hover:bg-[#4c1d95]"
+                        data-page-actions={p.id}
+                      >
+                        <MoreHorizontal className="h-3 w-3" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent side="top" align="start" className="min-w-[200px]">
+                        <div className="px-2 pb-1.5 pt-1 text-[11px] text-muted-foreground">Page {i + 1} · <span className="font-semibold text-[#18204a]">{p.title || "Untitled"}</span></div>
+                        <DropdownMenuItem onClick={() => duplicatePage(p.id)}>
+                          <Copy className="h-3.5 w-3.5" /> Duplicate page
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setSaveTemplatePageId(p.id)} data-save-as-template>
+                          <LayoutTemplate className="h-3.5 w-3.5" /> Save as template…
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" onClick={() => deletePage(p.id)}>
+                          <Trash2 className="h-3.5 w-3.5" /> Delete page
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  </div>
                 ))}
               </div>
               <button type="button" onClick={() => toggleInspector("page")} aria-pressed={inspectorOpen && rightPanel === "page"} className={`hidden shrink-0 rounded-lg px-2.5 py-2 text-xs font-semibold lg:inline-flex ${inspectorOpen && rightPanel === "page" ? "bg-violet-100 text-violet-800" : "text-violet-800 hover:bg-violet-50"}`}>Page settings</button>
@@ -780,7 +885,7 @@ export function ReportEditor({
               <label className="relative mt-5 block max-w-md"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input value={pageSearch} onChange={(e) => setPageSearch(e.target.value)} placeholder="Search pages…" className="h-10 w-full rounded-xl border pl-9 pr-3 text-sm" /></label>
               <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{pages.map((p, i) => ({ p, i })).filter(({ p, i }) => !pageSearch.trim() || pageLabel(p, i).toLowerCase().includes(pageSearch.trim().toLowerCase())).map(({ p, i }) => <div key={p.id} className={`rounded-2xl border p-3 ${p.id === activePageId ? "border-violet-500 bg-violet-50/60" : "border-violet-100"}`}>
                 <button type="button" onClick={() => { setActivePageId(p.id); setPageOverviewOpen(false); }} className="block w-full text-left"><div className="mb-3 flex h-52 items-center justify-center rounded-xl border border-violet-100 bg-[#f3f0f9] p-4"><div className="flex h-full w-3/5 flex-col gap-2 rounded bg-white p-3 shadow-sm"><span className="h-2 w-1/2 rounded bg-violet-200" /><span className="h-2 w-4/5 rounded bg-violet-100" /><span className="mt-3 h-20 rounded bg-gradient-to-br from-violet-100 via-white to-amber-100" /><span className="h-2 w-full rounded bg-slate-100" /><span className="h-2 w-4/5 rounded bg-slate-100" /></div></div><p className="truncate text-sm font-semibold text-[#18204a]">{pageLabel(p, i)}</p><p className="mt-1 text-xs text-muted-foreground">{p.visibleIf ? "Conditional visibility" : "Visible for everyone"}</p><p className="mt-1 text-xs text-muted-foreground">Page {i + 1}</p></button>
-                <div className="mt-3 flex justify-end gap-1 border-t border-violet-100 pt-2"><button type="button" title="Move page up" disabled={i === 0} onClick={() => movePage(p.id, -1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" title="Move page down" disabled={i === pages.length - 1} onClick={() => movePage(p.id, 1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" title="Duplicate page" onClick={() => duplicatePage(p.id)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50"><Copy className="h-3.5 w-3.5" /></button><button type="button" title="Delete page" onClick={() => deletePage(p.id)} className="rounded-lg px-2 py-1 text-xs text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button></div>
+                <div className="mt-3 flex justify-end gap-1 border-t border-violet-100 pt-2"><button type="button" title="Move page up" disabled={i === 0} onClick={() => movePage(p.id, -1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button><button type="button" title="Move page down" disabled={i === pages.length - 1} onClick={() => movePage(p.id, 1)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button><button type="button" title="Duplicate page" onClick={() => duplicatePage(p.id)} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50"><Copy className="h-3.5 w-3.5" /></button><button type="button" title="Save as template…" aria-label={`Save ${pageLabel(p, i)} as template`} onClick={() => { setPageOverviewOpen(false); setSaveTemplatePageId(p.id); }} className="rounded-lg px-2 py-1 text-xs hover:bg-violet-50" data-save-as-template><LayoutTemplate className="h-3.5 w-3.5" /></button><button type="button" title="Delete page" onClick={() => deletePage(p.id)} className="rounded-lg px-2 py-1 text-xs text-red-700 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button></div>
               </div>)}</div>
               <button type="button" onClick={addPage} className="mt-6 rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white"><FilePlus2 className="mr-1 inline h-4 w-4" /> Add page</button>
             </div>
@@ -789,6 +894,16 @@ export function ReportEditor({
       </div>
       {/* Reports are read publicly and printed server-side, so an image must have a lasting public URL:
           a private library image is used only through its confirmed public copy (never a short-lived signed thumbnail). */}
+      <SaveTemplateDialog
+        open={!!saveTemplatePage}
+        pageTitle={saveTemplatePage?.title ?? ""}
+        defaultPageType={saveTemplatePage?.centerKey ? "Center" : "Other"}
+        busy={templateBusy}
+        onCancel={() => setSaveTemplatePageId(null)}
+        onSave={savePageAsTemplate}
+      />
+      <RenameTemplateDialog open={!!renamingTemplate} currentName={renamingTemplate?.name ?? ""} busy={templateBusy} onCancel={() => setRenamingTemplate(null)} onRename={renameSavedTemplate} />
+      <DeleteTemplateDialog open={!!deletingTemplate} name={deletingTemplate?.name ?? ""} busy={templateBusy} onCancel={() => setDeletingTemplate(null)} onDelete={deleteSavedTemplate} />
       <MediaLibraryPublicImagePicker
         subAccountId={subAccountId}
         open={assetPickerOpen}
@@ -812,14 +927,16 @@ function PagePanel({
   duplicatePage,
   deletePage,
   movePage,
+  saveAsTemplate,
 }: {
   pages: ReportPage[];
   activePageId: string;
   setActivePageId: (id: string) => void;
   addPage: () => void;
-  duplicatePage: () => void;
+  duplicatePage: (id: string) => void;
   deletePage: (id: string) => void;
   movePage: (id: string, direction: -1 | 1) => void;
+  saveAsTemplate: (id: string) => void;
 }) {
   return (
     <div className="space-y-2">
@@ -848,10 +965,19 @@ function PagePanel({
             <button title="Move page down" disabled={i === pages.length - 1} onClick={() => movePage(p.id, 1)} className="rounded p-1 hover:bg-white disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
             <button
               title="Duplicate page"
-              onClick={duplicatePage}
+              onClick={() => duplicatePage(p.id)}
               className="rounded p-1 hover:bg-white"
             >
               <Copy className="h-3.5 w-3.5" />
+            </button>
+            <button
+              title="Save as template…"
+              aria-label={`Save ${pageLabel(p, i)} as template`}
+              onClick={() => saveAsTemplate(p.id)}
+              className="rounded p-1 hover:bg-white"
+              data-save-as-template
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
             </button>
             <button
               title="Delete page"
