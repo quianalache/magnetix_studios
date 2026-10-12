@@ -1,5 +1,5 @@
 import type { ReportCanvasElement, ReportPage } from "@/types/report-blocks";
-import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
+import { asCenterKey, resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 
 /**
  * Shortcode parity (2026-10-11) — the ONE place every report surface turns
@@ -18,6 +18,11 @@ import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/
  *   - Text elements (and legacy text blocks) resolve inline `{{tokens}}`
  *     with the same resolver. Text with no tokens is unchanged.
  */
+
+/** The reading input for one page: adds the page's Center (for center_name / center_state / center_text). */
+export function pageShortcodeInput<T extends ShortcodeReadingInput | null | undefined>(input: T, page: Pick<ReportPage, "centerKey">): T {
+  return (input ? { ...input, pageCenter: asCenterKey(page.centerKey) } : input) as T;
+}
 
 export function shortcodeToken(element: Pick<ReportCanvasElement, "payload">): string {
   return String(element.payload?.token ?? "full_name");
@@ -38,8 +43,10 @@ export function resolveInlineText(text: string, input?: ShortcodeReadingInput | 
  * Shortcode element becomes a Text element holding its resolved value, and
  * Text elements / text blocks have their inline tokens resolved.
  */
-export function resolvePagesForRender(pages: ReportPage[], input?: ShortcodeReadingInput | null): ReportPage[] {
-  return pages.map((page) => ({
+export function resolvePagesForRender(pages: ReportPage[], baseInput?: ShortcodeReadingInput | null): ReportPage[] {
+  return pages.map((page) => {
+    const input = pageShortcodeInput(baseInput, page);
+    return {
     ...page,
     blocks: page.blocks.map((block) => (block.type === "text" ? { ...block, html: resolveInlineText(block.html, input) } : block)),
     elements: page.elements?.map((element): ReportCanvasElement => {
@@ -51,5 +58,6 @@ export function resolvePagesForRender(pages: ReportPage[], input?: ShortcodeRead
       }
       return element;
     }),
-  }));
+    };
+  });
 }

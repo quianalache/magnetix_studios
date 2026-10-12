@@ -39,17 +39,20 @@ async function check(name: string, fn: () => void | Promise<void>) {
   console.log(`  ✓ ${name}`);
 }
 const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+// Batch 1 = the first five library templates (Batch 2 is appended; covered by check-report-templates-batch2.tsx).
+const BATCH1 = REPORT_TEMPLATES.slice(0, 5);
+const ALL = ["cover-luminous", "chart-spotlight", "chart-mandala", "summary-glance", "type-story", "cover-midnight", "about-note", "center-focus"];
 
 async function main() {
 console.log("\nSource of truth");
-await check("Batch 1 = exactly the five approved templates, in library order", () => {
-  assert.deepEqual(ids(REPORT_TEMPLATES), ["cover-luminous", "chart-spotlight", "chart-mandala", "summary-glance", "type-story"]);
-  assert.deepEqual(REPORT_TEMPLATES.map((t) => t.name), ["Luminous Arc", "Bodygraph Spotlight", "Mandala Circle", "At a Glance", "Type Story"]);
-  assert.deepEqual(REPORT_TEMPLATES.map((t) => [t.pageType, t.styleTag]), [["Cover", "Magnetix Violet"], ["Chart", "Monochrome"], ["Chart", null], ["Summary", "Magnetix Violet"], ["Type", "Warm Sunset"]]);
+await check("Batch 1 = exactly the five approved templates, in library order (Batch 2 appended after, Batch 1 not reordered)", () => {
+  assert.deepEqual(ids(REPORT_TEMPLATES), ALL);
+  assert.deepEqual(BATCH1.map((t) => t.name), ["Luminous Arc", "Bodygraph Spotlight", "Mandala Circle", "At a Glance", "Type Story"]);
+  assert.deepEqual(BATCH1.map((t) => [t.pageType, t.styleTag]), [["Cover", "Magnetix Violet"], ["Chart", "Monochrome"], ["Chart", null], ["Summary", "Magnetix Violet"], ["Type", "Warm Sunset"]]);
   assert.ok(REPORT_TEMPLATES.every((t) => t.system === "humanDesign"));
 });
 await check("element counts match the reconstruction spec (9 · 22 · 6 · 26 · 14)", () => {
-  assert.deepEqual(REPORT_TEMPLATES.map((t) => t.page.elements?.length), [9, 22, 6, 26, 14]);
+  assert.deepEqual(BATCH1.map((t) => t.page.elements?.length), [9, 22, 6, 26, 14]);
 });
 const handoff = path.join(os.homedir(), "Documents/magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json");
 await check("each shipped page matches template-specs.json except the documented chart-part correction (when the handoff file is available)", () => {
@@ -61,7 +64,7 @@ await check("each shipped page matches template-specs.json except the documented
   // Documented owner correction (2026-10-12): Luminous Arc + Bodygraph Spotlight draw the
   // bodygraph-only part, not the Full Chart. Every other byte matches the handoff.
   const overrides: Record<string, string> = { "tpl-cover-luminous-05": "human-design-bodygraph", "tpl-chart-spotlight-04": "human-design-bodygraph" };
-  for (const t of REPORT_TEMPLATES) {
+  for (const t of BATCH1) {
     const specPage = structuredClone(spec.templates.find((s) => s.id === t.id)!.reportPage) as typeof t.page;
     for (const e of specPage.elements ?? []) if (overrides[e.id]) { assert.equal(e.payload.piece, "human-design-full", e.id); e.payload = { ...e.payload, piece: overrides[e.id] }; }
     assert.deepEqual(t.page, specPage, t.id);
@@ -74,17 +77,21 @@ await check("page-type chips per system", () => {
   assert.deepEqual(REPORT_TEMPLATE_PAGE_TYPES.astrology, ["Cover", "About Me", "Table"]);
 });
 await check("system + page type filters; empty categories return nothing (no fake templates)", () => {
-  assert.equal(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "All" }).length, 5);
+  assert.equal(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "All" }).length, 8);
   assert.deepEqual(ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "Chart" })), ["chart-spotlight", "chart-mandala"]);
-  for (const empty of ["About Me", "Center", "Channel", "Gate"] as const) assert.equal(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: empty }).length, 0, empty);
+  assert.deepEqual(ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "Cover" })), ["cover-luminous", "cover-midnight"]);
+  assert.deepEqual(ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "About Me" })), ["about-note"]);
+  assert.deepEqual(ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "Center" })), ["center-focus"]);
+  for (const empty of ["Channel", "Gate"] as const) assert.equal(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: empty }).length, 0, empty);
   assert.equal(filterReportTemplates(REPORT_TEMPLATES, { system: "astrology", pageType: "All" }).length, 0);
 });
 await check("search matches name, system, page type and style tag; every word must match", () => {
   const q = (query: string) => ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "All", query }));
   assert.deepEqual(q("luminous"), ["cover-luminous"]);
   assert.deepEqual(q("MONOCHROME"), ["chart-spotlight"]);
+  assert.deepEqual(q("midnight"), ["cover-midnight", "center-focus"]);
   assert.deepEqual(q("summary violet"), ["summary-glance"]);
-  assert.equal(q("human design").length, 5);
+  assert.equal(q("human design").length, 8);
   assert.deepEqual(q("warm sunset type"), ["type-story"]);
   assert.deepEqual(q("zzz"), []);
   assert.deepEqual(ids(filterReportTemplates(REPORT_TEMPLATES, { system: "humanDesign", pageType: "Chart", query: "violet" })), []);
@@ -94,9 +101,9 @@ console.log("\nInsertion");
 for (const t of REPORT_TEMPLATES) {
   await check(`${t.name}: fresh page + element ids; everything else exactly as specified`, () => {
     let n = 0;
-    const page = instantiateReportTemplate(t, () => `fresh-${++n}`);
+    const page = instantiateReportTemplate(t, () => `fresh-${++n}`, t.centerPage ? { centerKey: "throat" } : undefined);
     assert.equal(page.id, "fresh-1");
-    assert.equal(page.title, t.name);
+    assert.equal(page.title, t.centerPage ? "Throat Center" : t.name);
     assert.equal(page.elements!.length, t.page.elements!.length);
     page.elements!.forEach((e, i) => {
       const src = t.page.elements![i];
@@ -127,11 +134,13 @@ await check("Blank page: a normal empty page with a fresh id", () => {
 
 console.log("\nPayloads");
 const all = REPORT_TEMPLATES.flatMap((t) => t.page.elements!.map((e) => ({ t, e })));
-await check("every shortcode token is a real catalog token (Batch 1 uses the eleven approved keys)", () => {
+await check("every shortcode token is a real catalog token (Batch 1 uses the eleven approved keys; Batch 2 adds the page-Center ones)", () => {
   const catalog = new Set(SHORTCODE_CATALOG.map((s) => s.token));
   const used = new Set(all.filter(({ e }) => e.type === "shortcode").map(({ e }) => String(e.payload.token)));
   for (const token of used) assert.ok(catalog.has(token), token);
-  assert.deepEqual([...used].sort(), ["authority", "birth_date", "definition", "full_name", "incarnation_cross", "not_self_theme", "profile", "signature", "strategy", "type", "type_description"]);
+  const batch1Used = new Set(BATCH1.flatMap((t) => t.page.elements!).filter((e) => e.type === "shortcode").map((e) => String(e.payload.token)));
+  assert.deepEqual([...batch1Used].sort(), ["authority", "birth_date", "definition", "full_name", "incarnation_cross", "not_self_theme", "profile", "signature", "strategy", "type", "type_description"]);
+  assert.deepEqual([...used].filter((x) => !batch1Used.has(x)).sort(), ["center_name", "center_state", "center_text"]);
 });
 await check("Type Story keeps its Content Set-backed type_description Shortcode element", () => {
   const ts = REPORT_TEMPLATES.find((t) => t.id === "type-story")!;
@@ -167,7 +176,7 @@ await check("insertion = one commit (one undo step), new page activated + scroll
   assert.equal(fn.match(/commit\(/g)?.length, 1);
   assert.match(fn, /commit\(\[\.\.\.pages, p\]\)/, "appends — never replaces");
   for (const s of ["setActivePageId(p.id)", "setScrollToPageId(p.id)", "setTemplateCategory(null)", "setMobileDrawer(null)", "toast.success(`${name} inserted`)"]) assert.ok(fn.includes(s), s);
-  assert.match(editor, /instantiateReportTemplate\(template, id\)/);
+  assert.match(editor, /instantiateReportTemplate\(template, id, opts\)/);
   assert.match(editor, /createBlankReportPage\(id\)/);
 });
 await check("old starter templates and their wireframe thumbnails are gone", () => {
@@ -197,7 +206,7 @@ await check("library: Human Design default, chips reset per system, Blank pinned
 console.log("\nPDF (production renderer)");
 await check("all five templates print complete on one page each: no dropped lines, no clipped bottoms, no raw tokens", async () => {
   const input = { ...REPORT_BUILDER_FIXTURE_READING, reportContent: { strict: true, values: { "hd:type:Generator": { fields: { description: "CS-TYPE-PASSAGE sample." } } } } };
-  const pages = resolvePagesForRender(REPORT_TEMPLATES.map((t) => instantiateReportTemplate(t)), input);
+  const pages = resolvePagesForRender(BATCH1.map((t) => instantiateReportTemplate(t)), input);
   const stream = await renderReportDesignPdfStream({ title: "Templates", readerName: "Preview Sample", businessName: "Magnetix", pages, humanDesign: REPORT_BUILDER_FIXTURE_READING.humanDesign, astrology: REPORT_BUILDER_FIXTURE_READING.astrology, pageSize: "letter" });
   const chunks: Uint8Array[] = [];
   const reader = stream.getReader();
@@ -213,6 +222,8 @@ await check("all five templates print complete on one page each: no dropped line
     for (const must of ["Your Bodygraph", "Your Mandala", "Your Design, Summarized", "Generator", "To Respond", "Satisfaction", "Frustration", "CS-TYPE-PASSAGE", "1990-06-15", "Right Angle Cross of Explanation"]) assert.ok(text.includes(must), `PDF missing "${must}"`);
     const pageTexts = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf8" }).split("\f");
     assert.ok(pageTexts[0].includes("Preview Sample") && pageTexts[0].includes("1990-06-15") && pageTexts[0].includes("Magnetix Studios"), "Luminous Arc bottom text present");
+    // Canvas pages print full-bleed (2026-10-12): no report header / page-title strip on them.
+    assert.ok(pageTexts.every((t) => !t.includes("Templates") && !/Page \d+ ·/.test(t)), "no header strip on canvas pages");
     assert.ok(pageTexts[4].includes("Frustration") && pageTexts[4].includes("Magnetix Studios"), "Type Story bottom text present");
   } finally {
     fs.unlinkSync(file);
@@ -223,7 +234,7 @@ await check("shapes and frames have no padding in the editor, the web report or 
   assert.match(fs.readFileSync("src/components/energetic-decoder/report-design-viewer.tsx", "utf8"), /padding: element\.type === "shape" \|\| element\.type === "frame" \? 0 : 10/);
   const pdfDoc = fs.readFileSync("src/lib/energetics/report-design-pdf-document.tsx", "utf8");
   assert.match(pdfDoc, /padding: element\.type === "shape" \|\| element\.type === "frame" \? 0 : 10 \* scale/);
-  assert.match(pdfDoc, /const canvasScale = Math\.min\(contentWidth \/ CANVAS_W, \(contentHeight - CANVAS_HEADER_ALLOWANCE\) \/ CANVAS_H\)/);
+  assert.match(pdfDoc, /const fullScale = Math\.min\(paperW \/ CANVAS_W, paperH \/ CANVAS_H\)/);
 });
 
 console.log(`\n${passed} checks passed.`);

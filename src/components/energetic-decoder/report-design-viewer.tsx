@@ -1,10 +1,10 @@
 "use client";
 
 import { FULL_CHART_NATURAL, FittedHtmlChart } from "@/components/energetic-decoder/report-chart-preview";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ReportDesign, ReportPage, ReportBlock, ReportCanvasElement, ChartPieceKind } from "@/types/report-blocks";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
-import { resolveInlineText, shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
+import { pageShortcodeInput, resolveInlineText, shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
 import { elementChartDesigns, normalizeCanvasChartPiece } from "@/lib/energetics/report-charts";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
@@ -56,6 +56,8 @@ export function ReportDesignViewer({
   }
   const page: ReportPage = visiblePages[Math.min(pageIndex, visiblePages.length - 1)];
   const popupBlock = popupBlockId ? page.blocks.find((b) => b.id === popupBlockId) : null;
+  const isCanvas = !!page.elements && page.elements.length > 0;
+  const pageInput = pageShortcodeInput(readingInput, page);
 
   return (
     <div className="space-y-4" style={{ backgroundColor: design.brand?.backgroundColor || undefined, fontFamily: design.brand?.fontFamily || undefined }}>
@@ -77,19 +79,16 @@ export function ReportDesignViewer({
       )}
 
       <div className="rounded-2xl border bg-card p-6" style={{ borderColor: design.brand?.accentColor || undefined }}>
-        {page.title && <h2 className="mb-4 text-lg font-semibold" style={{ color: design.brand?.accentColor || undefined }}>{page.title}</h2>}
-        {page.elements && page.elements.length > 0 ? (
-          <div className="relative overflow-hidden bg-white" style={{ width: "100%", aspectRatio: "8.5 / 11", minHeight: 760 }}>
-            {[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => (
-              <CanvasElementView key={element.id} element={element} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />
-            ))}
-          </div>
+        {/* Canvas pages are complete designs: no title strip above them (the page tabs name them). */}
+        {page.title && !isCanvas && <h2 className="mb-4 text-lg font-semibold" style={{ color: design.brand?.accentColor || undefined }}>{page.title}</h2>}
+        {isCanvas ? (
+          <ScaledCanvasPage page={page} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />
         ) : <div className="flex flex-wrap gap-4">
           {page.blocks.map((block) => (
             <div key={block.id} style={{ width: `${block.widthPct}%` }} className="min-w-0">
               <ReportBlockView
                 block={block}
-                readingInput={readingInput}
+                readingInput={pageInput}
                 hdDesign={hdDesign}
                 mandalaDesign={mandalaDesign}
                 astroDesign={astroDesign}
@@ -134,23 +133,56 @@ export function ReportCanvasPage({
   hdDesign,
   mandalaDesign,
   astroDesign,
+  imagePlaceholders = false,
 }: {
   page: ReportPage;
   readingInput: ShortcodeReadingInput;
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
+  /** Template thumbnails only: show a quiet tinted shape where an image hasn't been chosen yet. Readers never see a placeholder. */
+  imagePlaceholders?: boolean;
 }) {
+  const input = pageShortcodeInput(readingInput, page);
   return (
     <div className="relative overflow-hidden" style={{ width: 816, height: 1056, background: page.pageBackground || "#ffffff" }}>
       {[...(page.elements ?? [])].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => (
-        <CanvasElementView key={element.id} element={element} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} />
+        <CanvasElementView key={element.id} element={element} readingInput={input} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} imagePlaceholders={imagePlaceholders} />
       ))}
     </div>
   );
 }
 
-function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, astroDesign }: { element: ReportCanvasElement; readingInput: ShortcodeReadingInput; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
+/**
+ * A canvas page in a reader-facing report (generated preview, public
+ * report): the real 816 × 1056 page scaled as a whole to the available
+ * width, so text, shapes and charts keep the proportions they have in the
+ * editor and the PDF (laying elements out by percentage while font sizes
+ * stayed in px made text overflow on narrower screens).
+ */
+function ScaledCanvasPage(props: { page: ReportPage; readingInput: ShortcodeReadingInput; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(816);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth || 816);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const scale = width / 816;
+  return (
+    <div ref={ref} className="relative w-full overflow-hidden" style={{ height: 1056 * scale }} data-report-canvas-page={props.page.id}>
+      <div style={{ position: "absolute", left: 0, top: 0, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
+        <ReportCanvasPage {...props} />
+      </div>
+    </div>
+  );
+}
+
+function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, astroDesign, imagePlaceholders = false }: { element: ReportCanvasElement; readingInput: ShortcodeReadingInput; hdDesign?: ChartDesign | null; mandalaDesign?: ChartDesign | null; astroDesign?: ChartDesign | null; imagePlaceholders?: boolean }) {
   // Same resolver as Preview PDF and the generated PDF (report-shortcode-render.ts):
   // frozen Shortcode values first, inline {{tokens}} in Text resolved, never raw syntax.
   const resolved =
@@ -164,7 +196,17 @@ function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, ast
   };
   if (element.type === "image" || element.type === "upload") {
     const url = String(element.payload.url ?? "");
-    return url ? <img src={url} alt={String(element.payload.alt ?? element.payload.title ?? "Report image")} style={{ ...style, objectFit: String(element.payload.fit ?? "cover") as CSSProperties["objectFit"] }} /> : <div style={style} className="flex items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-xs text-violet-800">Choose an image asset</div>;
+    if (url) return <img src={url} alt={String(element.payload.alt ?? element.payload.title ?? "Report image")} style={{ ...style, objectFit: String(element.payload.fit ?? "cover") as CSSProperties["objectFit"] }} />;
+    // No image chosen yet: readers see nothing (never a "choose an image" prompt); thumbnails show a quiet tinted shape.
+    return imagePlaceholders ? (
+      <div style={{ ...style, background: "rgba(24, 32, 74, 0.08)", display: "flex", alignItems: "center", justifyContent: "center" }} data-empty-image>
+        {/* A neutral "photo goes here" silhouette — thumbnails only. */}
+        <svg viewBox="0 0 100 100" style={{ width: "62%", height: "62%" }} aria-hidden>
+          <circle cx="50" cy="36" r="18" fill="rgba(24, 32, 74, 0.14)" />
+          <path d="M14 96c4-20 19-32 36-32s32 12 36 32z" fill="rgba(24, 32, 74, 0.14)" />
+        </svg>
+      </div>
+    ) : null;
   }
   if (element.type === "chart") {
     // A chart element drawn with its own saved Chart Design (attached server-side), else the reading's design.

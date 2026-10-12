@@ -20,7 +20,7 @@ assert.match(editor, /rightPanel === "layers" \? renderLayerPanel\(\) : renderEl
 assert.match(editor, /setInspectorOpen\(true\)/);
 assert.match(editor, /Page \{Math\.max\(1, pages\.findIndex/);
 // Template Library Batch 1 (2026-10-11): templates come from report-templates.ts and insert as fresh copies.
-assert.match(editor, /instantiateReportTemplate\(template, id\)/);
+assert.match(editor, /instantiateReportTemplate\(template, id, opts\)/);
 assert.match(editor, /FileText/);
 assert.match(editor, /Add Page/);
 assert.match(editor, /CelestialDecoration/);

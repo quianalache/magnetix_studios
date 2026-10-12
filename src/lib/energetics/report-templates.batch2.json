@@ -1,0 +1,1035 @@
+{
+  "source": "magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json (specVersion 1) — Batch 2 subset. Midnight Horizon (cover-midnight) and Practitioner Note (about-note) are copied unmodified. Center Focus (center-focus) is adapted to work for all nine Centers (owner direction 2026-10-12); every change is listed in centerFocusAdaptations. Do not edit by hand.",
+  "centerFocusAdaptations": [
+    "tpl-center-focus-03 Title: static \"Sacral Center\" text -> Shortcode {{center_name}} (same style); height 90 -> 160 so two-line names never clip.",
+    "tpl-center-focus-04 / -05 Center symbol: rounded squares (radius 14 / 8, the Sacral's shape) -> concentric circles (radius 82 / 40): a neutral motif that does not imply any one Center's geometry.",
+    "tpl-center-focus-07 Passage: {{sacral_center_text}} -> {{center_text}} (the page Center's defined or undefined text from the selected Content Set).",
+    "tpl-center-focus-09 Card label: \"KEYWORDS\" -> \"IN YOUR CHART\" (there is no per-Center keyword content for both states).",
+    "tpl-center-focus-10 Card text: static Sacral keywords -> Shortcode {{center_state}} (\"Defined\" / \"Undefined\").",
+    "Template flag centerPage: inserting asks which Center the page is about (ReportPage.centerKey)."
+  ],
+  "templates": [
+    {
+      "id": "cover-midnight",
+      "name": "Midnight Horizon",
+      "system": "humanDesign",
+      "pageType": "Cover",
+      "styleTag": "Midnight",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-cover-midnight",
+        "title": "Midnight Horizon",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-cover-midnight-01",
+            "type": "shape",
+            "zIndex": 0,
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 816,
+              "height": 1056,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#0f1115",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-02",
+            "type": "shape",
+            "zIndex": 1,
+            "geometry": {
+              "x": 168,
+              "y": 230,
+              "width": 480,
+              "height": 480,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#0f1115",
+              "borderColor": "#374151",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 240,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-03",
+            "type": "shape",
+            "zIndex": 2,
+            "geometry": {
+              "x": 248,
+              "y": 310,
+              "width": 320,
+              "height": 320,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#171a21",
+              "borderColor": "#4b5563",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 160,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-04",
+            "type": "shape",
+            "zIndex": 3,
+            "geometry": {
+              "x": 636,
+              "y": 246,
+              "width": 14,
+              "height": 14,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#818cf8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 7,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-05",
+            "type": "shape",
+            "zIndex": 4,
+            "geometry": {
+              "x": 190,
+              "y": 598,
+              "width": 9,
+              "height": 9,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#38bdf8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 5,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-06",
+            "type": "shape",
+            "zIndex": 5,
+            "geometry": {
+              "x": 560,
+              "y": 690,
+              "width": 7,
+              "height": 7,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#c4b5fd",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 4,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-07",
+            "type": "text",
+            "zIndex": 6,
+            "geometry": {
+              "x": 238,
+              "y": 408,
+              "width": 340,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#818cf8",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 5,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "HUMAN DESIGN"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-08",
+            "type": "shortcode",
+            "zIndex": 7,
+            "geometry": {
+              "x": 238,
+              "y": 434,
+              "width": 340,
+              "height": 72,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 40,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#e0e7ff",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "type"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-09",
+            "type": "shortcode",
+            "zIndex": 8,
+            "geometry": {
+              "x": 238,
+              "y": 494,
+              "width": 340,
+              "height": 44,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#cbd5e1",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "profile"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-10",
+            "type": "text",
+            "zIndex": 9,
+            "geometry": {
+              "x": 62,
+              "y": 790,
+              "width": 692,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#818cf8",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "PREPARED FOR"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-11",
+            "type": "shortcode",
+            "zIndex": 10,
+            "geometry": {
+              "x": 62,
+              "y": 820,
+              "width": 692,
+              "height": 78,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 46,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#e0e7ff",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "full_name"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-12",
+            "type": "shape",
+            "zIndex": 11,
+            "geometry": {
+              "x": 348,
+              "y": 912,
+              "width": 120,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#374151",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-cover-midnight-13",
+            "type": "text",
+            "zIndex": 12,
+            "geometry": {
+              "x": 62,
+              "y": 924,
+              "width": 692,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#cbd5e1",
+              "align": "center",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "about-note",
+      "name": "Practitioner Note",
+      "system": "humanDesign",
+      "pageType": "About Me",
+      "styleTag": "Warm Sunset",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-about-note",
+        "title": "Practitioner Note",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-about-note-01",
+            "type": "shape",
+            "zIndex": 0,
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 816,
+              "height": 1056,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#fff7ed",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-about-note-02",
+            "type": "image",
+            "zIndex": 1,
+            "geometry": {
+              "x": 72,
+              "y": 96,
+              "width": 200,
+              "height": 200,
+              "rotation": 0
+            },
+            "style": {
+              "borderRadius": 100,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "opacity": 1
+            },
+            "payload": {
+              "url": "",
+              "alt": "Practitioner portrait",
+              "fit": "cover"
+            }
+          },
+          {
+            "id": "tpl-about-note-03",
+            "type": "text",
+            "zIndex": 2,
+            "geometry": {
+              "x": 302,
+              "y": 110,
+              "width": 452,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#c2410c",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "ABOUT ME"
+            }
+          },
+          {
+            "id": "tpl-about-note-04",
+            "type": "text",
+            "zIndex": 3,
+            "geometry": {
+              "x": 302,
+              "y": 140,
+              "width": 452,
+              "height": 130,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 40,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#7c2d12",
+              "align": "left",
+              "lineHeight": 1.15,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Hello, I'm [Your Name]"
+            }
+          },
+          {
+            "id": "tpl-about-note-05",
+            "type": "shape",
+            "zIndex": 4,
+            "geometry": {
+              "x": 72,
+              "y": 340,
+              "width": 672,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#f1d5b8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-about-note-06",
+            "type": "text",
+            "zIndex": 5,
+            "geometry": {
+              "x": 62,
+              "y": 366,
+              "width": 440,
+              "height": 350,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#3f2a1d",
+              "align": "left",
+              "lineHeight": 1.65,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "[Your story] How you came to Human Design, the way you work with clients, and what you hope this reading opens up for them.\n\n[A second paragraph about your approach, your training, or what a session with you feels like.]"
+            }
+          },
+          {
+            "id": "tpl-about-note-07",
+            "type": "frame",
+            "zIndex": 6,
+            "geometry": {
+              "x": 528,
+              "y": 376,
+              "width": 216,
+              "height": 280,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#ffffff",
+              "borderColor": "#f1d5b8",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-about-note-08",
+            "type": "text",
+            "zIndex": 7,
+            "geometry": {
+              "x": 542,
+              "y": 390,
+              "width": 188,
+              "height": 38,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#c2410c",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "WORK WITH ME"
+            }
+          },
+          {
+            "id": "tpl-about-note-09",
+            "type": "text",
+            "zIndex": 8,
+            "geometry": {
+              "x": 542,
+              "y": 418,
+              "width": 188,
+              "height": 170,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13.5,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#3f2a1d",
+              "align": "left",
+              "lineHeight": 1.55,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "[Your offer, session length, or next step for this client]"
+            }
+          },
+          {
+            "id": "tpl-about-note-10",
+            "type": "text",
+            "zIndex": 9,
+            "geometry": {
+              "x": 542,
+              "y": 594,
+              "width": 188,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": true,
+              "color": "#c2410c",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "[yourwebsite.com]"
+            }
+          },
+          {
+            "id": "tpl-about-note-11",
+            "type": "text",
+            "zIndex": 10,
+            "geometry": {
+              "x": 62,
+              "y": 750,
+              "width": 440,
+              "height": 64,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 28,
+              "fontWeight": 400,
+              "italic": true,
+              "underline": false,
+              "color": "#7c2d12",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "With warmth, [Your Name]"
+            }
+          },
+          {
+            "id": "tpl-about-note-12",
+            "type": "shape",
+            "zIndex": 11,
+            "geometry": {
+              "x": 72,
+              "y": 962,
+              "width": 22,
+              "height": 22,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#c2410c",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 4,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-about-note-13",
+            "type": "text",
+            "zIndex": 12,
+            "geometry": {
+              "x": 96,
+              "y": 953,
+              "width": 420,
+              "height": 42,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12.5,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#9a3412",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "center-focus",
+      "name": "Center Focus",
+      "system": "humanDesign",
+      "pageType": "Center",
+      "styleTag": "Midnight",
+      "pageSize": "letter",
+      "reportPage": {
+        "id": "tpl-center-focus",
+        "title": "Center Focus",
+        "visibleIf": null,
+        "blocks": [],
+        "elements": [
+          {
+            "id": "tpl-center-focus-01",
+            "type": "shape",
+            "zIndex": 0,
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 816,
+              "height": 1056,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#0f1115",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-center-focus-02",
+            "type": "text",
+            "zIndex": 1,
+            "geometry": {
+              "x": 62,
+              "y": 86,
+              "width": 500,
+              "height": 40,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 12,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#818cf8",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 4,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "CENTER"
+            }
+          },
+          {
+            "id": "tpl-center-focus-03",
+            "type": "shortcode",
+            "zIndex": 2,
+            "geometry": {
+              "x": 62,
+              "y": 114,
+              "width": 500,
+              "height": 160,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 54,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#e0e7ff",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "center_name"
+            }
+          },
+          {
+            "id": "tpl-center-focus-04",
+            "type": "shape",
+            "zIndex": 3,
+            "geometry": {
+              "x": 580,
+              "y": 92,
+              "width": 164,
+              "height": 164,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#171a21",
+              "borderColor": "#818cf8",
+              "borderWidth": 2,
+              "borderStyle": "solid",
+              "borderRadius": 82,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-center-focus-05",
+            "type": "shape",
+            "zIndex": 4,
+            "geometry": {
+              "x": 622,
+              "y": 134,
+              "width": 80,
+              "height": 80,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#818cf8",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 40,
+              "opacity": 0.9
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-center-focus-06",
+            "type": "shape",
+            "zIndex": 5,
+            "geometry": {
+              "x": 72,
+              "y": 300,
+              "width": 672,
+              "height": 1,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#374151",
+              "borderColor": null,
+              "borderWidth": 0,
+              "borderStyle": "none",
+              "borderRadius": 0,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle"
+            }
+          },
+          {
+            "id": "tpl-center-focus-07",
+            "type": "shortcode",
+            "zIndex": 6,
+            "geometry": {
+              "x": 62,
+              "y": 326,
+              "width": 580,
+              "height": 450,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 16,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#cbd5e1",
+              "align": "left",
+              "lineHeight": 1.75,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "center_text"
+            }
+          },
+          {
+            "id": "tpl-center-focus-08",
+            "type": "frame",
+            "zIndex": 7,
+            "geometry": {
+              "x": 72,
+              "y": 820,
+              "width": 672,
+              "height": 124,
+              "rotation": 0
+            },
+            "style": {
+              "backgroundColor": "#171a21",
+              "borderColor": "#374151",
+              "borderWidth": 1,
+              "borderStyle": "solid",
+              "borderRadius": 16,
+              "opacity": 1
+            },
+            "payload": {
+              "shape": "rectangle",
+              "frame": true
+            }
+          },
+          {
+            "id": "tpl-center-focus-09",
+            "type": "text",
+            "zIndex": 8,
+            "geometry": {
+              "x": 90,
+              "y": 836,
+              "width": 620,
+              "height": 36,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 700,
+              "italic": false,
+              "underline": false,
+              "color": "#38bdf8",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 3,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "IN YOUR CHART"
+            }
+          },
+          {
+            "id": "tpl-center-focus-10",
+            "type": "shortcode",
+            "zIndex": 9,
+            "geometry": {
+              "x": 90,
+              "y": 862,
+              "width": 620,
+              "height": 60,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Times-Roman",
+              "fontSize": 24,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#e0e7ff",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "token": "center_state"
+            }
+          },
+          {
+            "id": "tpl-center-focus-11",
+            "type": "text",
+            "zIndex": 10,
+            "geometry": {
+              "x": 62,
+              "y": 986,
+              "width": 692,
+              "height": 38,
+              "rotation": 0
+            },
+            "style": {
+              "fontFamily": "Helvetica",
+              "fontSize": 11,
+              "fontWeight": 400,
+              "italic": false,
+              "underline": false,
+              "color": "#cbd5e1",
+              "align": "left",
+              "lineHeight": 1.3,
+              "letterSpacing": 0,
+              "opacity": 1,
+              "borderWidth": 0,
+              "borderStyle": "none"
+            },
+            "payload": {
+              "text": "Magnetix Studios"
+            }
+          }
+        ]
+      },
+      "centerPage": true
+    }
+  ]
+}

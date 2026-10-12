@@ -53,7 +53,6 @@ const styles = StyleSheet.create({
   videoBox: { border: "1pt dashed #d4d4d8", borderRadius: 8, padding: 10, fontSize: 9, color: "#71717a" },
   canvas: { position: "relative", flex: 1, overflow: "hidden" },
   canvasText: { position: "absolute", padding: 6, overflow: "hidden" },
-  canvasPlaceholder: { position: "absolute", padding: 10, backgroundColor: "#efe7ff", border: "1pt solid #d8c5f5", color: "#5420a8", textAlign: "center" },
 });
 
 function pageLabel(page: ReportPage, index: number): string {
@@ -262,8 +261,6 @@ function pdfStandardFont(fontFamily: string | undefined, fontWeight: number | un
 /** Canvas pages are 816 × 1056 page units (Letter at 96 dpi). */
 const CANVAS_W = 816;
 const CANVAS_H = 1056;
-/** Room the header + page title take above the canvas (generous, so the canvas never spills onto a new page). */
-const CANVAS_HEADER_ALLOWANCE = 140;
 
 /**
  * One canvas element at a single uniform scale (2026-10-11): positions,
@@ -293,7 +290,8 @@ function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDe
   };
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
-    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : <View style={{ ...box, ...styles.canvasPlaceholder }}><Text hyphenationCallback={noAutoHyphenation}>Image asset unavailable</Text></View>;
+    // No image chosen yet: print nothing (never an "unavailable" placeholder in a reader's PDF).
+    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : null;
   }
   if (element.type === "chart") {
     // Own saved Chart Design (attached before render) or the reading's; fitted to the box, never cropped.
@@ -371,12 +369,23 @@ export function ReportDesignPdfDocument({
   const pdfSize = pageSize === "letter" ? "LETTER" : pageSize === "custom" && customPageSize ? [customPageSize.width, customPageSize.height] as [number, number] : "A4";
   const contentWidth = pageSize === "letter" ? 540 : pageSize === "custom" && customPageSize ? customPageSize.width - 72 : 523;
   const contentHeight = pageSize === "letter" ? 720 : pageSize === "custom" && customPageSize ? customPageSize.height - 72 : 769;
-  // One uniform scale that fits the canvas under the header (was width-only fonts + a
-  // full-height Y scale, which cut off the bottom of every canvas page).
-  const canvasScale = Math.min(contentWidth / CANVAS_W, (contentHeight - CANVAS_HEADER_ALLOWANCE) / CANVAS_H);
+  // Canvas pages are complete page designs and print full-bleed (2026-10-12): no
+  // report header, page-title strip or margins — the 816 × 1056 canvas fills the
+  // page with one uniform scale (exactly 0.75 on Letter), centered when the
+  // paper's proportions differ (A4/custom), over the page's own background.
+  const paperW = contentWidth + 72;
+  const paperH = contentHeight + 72;
+  const fullScale = Math.min(paperW / CANVAS_W, paperH / CANVAS_H);
   return (
     <Document>
-      {pages.map((page, index) => (
+      {pages.map((page, index) =>
+        page.elements && page.elements.length > 0 ? (
+          <Page key={page.id} size={pdfSize} style={{ padding: 0, backgroundColor: page.pageBackground || brand?.backgroundColor || "#ffffff" }}>
+            <View style={{ position: "absolute", overflow: "hidden", left: (paperW - CANVAS_W * fullScale) / 2, top: (paperH - CANVAS_H * fullScale) / 2, width: CANVAS_W * fullScale, height: CANVAS_H * fullScale, backgroundColor: page.pageBackground || "#ffffff" }}>
+              {[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scale={fullScale} />)}
+            </View>
+          </Page>
+        ) : (
         <Page key={page.id} size={pdfSize} style={[styles.page, { backgroundColor: brand?.backgroundColor || "#ffffff" }]}>
           <View style={styles.header}>
             {businessLogoUrl ? (
@@ -391,7 +400,7 @@ export function ReportDesignPdfDocument({
 
           <Text hyphenationCallback={noAutoHyphenation} style={styles.pageTitle}>{pageLabel(page, index)}</Text>
 
-          {page.elements && page.elements.length > 0 ? <View style={{ position: "relative", overflow: "hidden", width: CANVAS_W * canvasScale, height: CANVAS_H * canvasScale, marginLeft: (contentWidth - CANVAS_W * canvasScale) / 2 }}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scale={canvasScale} />)}</View> : <View style={styles.row}>
+          <View style={styles.row}>
             {page.blocks.map((block) => (
               <View key={block.id} style={[styles.blockWrap, { width: `${block.widthPct}%` }]}>
                 {block.type === "chart" ? (
@@ -409,9 +418,10 @@ export function ReportDesignPdfDocument({
                 )}
               </View>
             ))}
-          </View>}
+          </View>
         </Page>
-      ))}
+        ),
+      )}
     </Document>
   );
 }

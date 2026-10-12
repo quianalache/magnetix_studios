@@ -1,5 +1,8 @@
 import type { ReportCanvasElement, ReportPage } from "@/types/report-blocks";
+import type { CenterKey } from "./human-design-data";
+import { CENTER_TITLES } from "./shortcodes";
 import batch1 from "./report-templates.batch1.json";
+import batch2 from "./report-templates.batch2.json";
 
 /**
  * Report Builder Template Library (Batch 1, 2026-10-11).
@@ -15,6 +18,13 @@ import batch1 from "./report-templates.batch1.json";
  * only: it is shown on the card and matched by search, and is never
  * applied to chart colors — Chart elements keep following the reading's
  * chart design (their payload is only `{ piece }`).
+ *
+ * Batch 2 (2026-10-12) adds Midnight Horizon and Practitioner Note
+ * (unmodified spec pages) and Center Focus — a Center page that works for
+ * all nine Centers: inserting it asks which Center the page is about
+ * (ReportPage.centerKey), and its title, state and passage are the
+ * center_name / center_state / center_text shortcodes. The adaptations
+ * from the Sacral-based spec are listed in report-templates.batch2.json.
  */
 
 export type ReportTemplateSystem = "humanDesign" | "astrology";
@@ -28,6 +38,8 @@ export interface ReportTemplate {
   styleTag: string | null;
   /** The page as specified (placeholder ids — never inserted directly; see instantiateReportTemplate). */
   page: ReportPage;
+  /** A Center page: inserting it needs a Center (the page's centerKey). */
+  centerPage?: boolean;
 }
 
 export const REPORT_TEMPLATE_SYSTEMS: { key: ReportTemplateSystem; label: string }[] = [
@@ -48,15 +60,17 @@ export const REPORT_TEMPLATE_STYLE_DOTS: Record<string, string> = {
   Midnight: "#818cf8",
 };
 
-type SpecTemplate = { id: string; name: string; system: ReportTemplateSystem; pageType: ReportTemplatePageType; styleTag: string | null; reportPage: ReportPage };
+type SpecTemplate = { id: string; name: string; system: ReportTemplateSystem; pageType: ReportTemplatePageType; styleTag: string | null; reportPage: ReportPage; centerPage?: boolean };
 
-export const REPORT_TEMPLATES: ReportTemplate[] = (batch1.templates as unknown as SpecTemplate[]).map((t) => ({
+/** Library order = Batch 1 as shipped, then Batch 2 (filtering groups them by page type). */
+export const REPORT_TEMPLATES: ReportTemplate[] = [...(batch1.templates as unknown as SpecTemplate[]), ...(batch2.templates as unknown as SpecTemplate[])].map((t) => ({
   id: t.id,
   name: t.name,
   system: t.system,
   pageType: t.pageType,
   styleTag: t.styleTag,
   page: t.reportPage,
+  ...(t.centerPage ? { centerPage: true } : {}),
 }));
 
 export function reportTemplateSystemLabel(system: ReportTemplateSystem): string {
@@ -86,13 +100,19 @@ export function filterReportTemplates(
 
 const newId = () => crypto.randomUUID();
 
-/** A fresh, independent copy of the template's page: new page id, new element ids, everything else exactly as specified. */
-export function instantiateReportTemplate(template: ReportTemplate, makeId: () => string = newId): ReportPage {
+/**
+ * A fresh, independent copy of the template's page: new page id, new
+ * element ids, everything else exactly as specified. A Center page also
+ * gets its Center (required) and is titled after it.
+ */
+export function instantiateReportTemplate(template: ReportTemplate, makeId: () => string = newId, opts?: { centerKey?: CenterKey | null }): ReportPage {
+  if (template.centerPage && !opts?.centerKey) throw new Error(`${template.name} needs a Center`);
   const page = structuredClone(template.page);
   return {
     ...page,
     id: makeId(),
-    title: template.name,
+    title: template.centerPage && opts?.centerKey ? CENTER_TITLES[opts.centerKey] : template.name,
+    ...(template.centerPage && opts?.centerKey ? { centerKey: opts.centerKey } : {}),
     elements: (page.elements ?? []).map((element): ReportCanvasElement => ({ ...element, id: makeId() })),
   };
 }

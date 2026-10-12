@@ -1,4 +1,5 @@
 import type { ChartRuleCondition } from "@/lib/energetics/chart-rules";
+import type { CenterKey } from "@/lib/energetics/human-design-data";
 
 /**
  * Report Blocks — the shared page/canvas format underneath both the new
@@ -150,6 +151,13 @@ export interface ReportPage {
   elements?: ReportCanvasElement[];
   locked?: boolean;
   pageBackground?: string;
+  /**
+   * The Human Design Center this page is about (2026-10-12) — set when a
+   * Center page template is inserted, changeable in Page settings. Drives
+   * the center_name / center_state / center_text shortcodes so one Center
+   * page design works for all nine Centers. Absent on every other page.
+   */
+  centerKey?: CenterKey | null;
 }
 
 /**

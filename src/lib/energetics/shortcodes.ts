@@ -83,6 +83,14 @@ export const SHORTCODE_CATALOG: ShortcodeDef[] = [
   { token: "rising_sign", label: "Rising Sign", group: "Astrology" },
   { token: "chiron_sign", label: "Chiron Sign", group: "Astrology" },
 
+  // This page's Center (2026-10-12) — resolved from the page's own Center
+  // (ReportPage.centerKey, chosen when a Center page is inserted and changed
+  // in Page settings), so one Center page design works for all nine Centers.
+  // Blank on a page with no Center.
+  { token: "center_name", label: "This Page's Center — Name", group: "Human Design" },
+  { token: "center_state", label: "This Page's Center — Defined / Undefined", group: "Human Design" },
+  { token: "center_text", label: "This Page's Center — Interpretation", group: "Interpretation" },
+
   // Interpretation-text — Human Design (2026-08-12).
   { token: "type_description", label: "Type — Interpretation", group: "Interpretation" },
   { token: "authority_description", label: "Authority — Interpretation", group: "Interpretation" },
@@ -151,6 +159,26 @@ export interface ShortcodeReadingInput {
   spheres?: GeneKeysSphereResult[];
   /** Values from the Report Design's selected Content Set. Strict custom sets never fall back to legacy Reading text. */
   reportContent?: { values: Record<string, ContentEntryValues>; strict: boolean };
+  /** The Center of the page being rendered (ReportPage.centerKey) — drives the center_name / center_state / center_text tokens. */
+  pageCenter?: CenterKey | null;
+}
+
+/** Reader-facing Center titles for the page-Center tokens (short names, as Center pages are titled). */
+export const CENTER_TITLES: Record<CenterKey, string> = {
+  head: "Head Center",
+  ajna: "Ajna Center",
+  throat: "Throat Center",
+  g: "G Center",
+  heart: "Heart Center",
+  sacral: "Sacral Center",
+  solarplexus: "Solar Plexus Center",
+  spleen: "Spleen Center",
+  root: "Root Center",
+};
+
+/** A valid Center key or null (page data is user-saved, so it's checked before use). */
+export function asCenterKey(value: unknown): CenterKey | null {
+  return typeof value === "string" && (CENTERS as readonly string[]).includes(value) ? (value as CenterKey) : null;
 }
 
 const ASTRO_BODY_LABELS: Record<string, string> = {
@@ -175,6 +203,15 @@ function centerText(hd: ShortcodeReadingInput["humanDesign"], key: CenterKey): s
   if (!content) return "";
   const isDefined = hd?.definedCenters?.includes(key) ?? false;
   return isDefined ? content.definedText : content.undefinedText;
+}
+
+/** A Center's interpretation for this reading's state — the selected Content Set when there is one, else the reading's own content. */
+function centerInterpretation(reading: ShortcodeReadingInput, center: CenterKey): string {
+  const hd = reading.humanDesign;
+  if (reading.reportContent) {
+    return reportContentField(reading, `hd:center:${center}`, hd?.definedCenters?.includes(center) ? "definedText" : "undefinedText");
+  }
+  return centerText(hd, center);
 }
 
 function profileDescription(hd: ShortcodeReadingInput["humanDesign"]): string {
@@ -283,11 +320,22 @@ function resolveToken(token: string, reading: ShortcodeReadingInput): string {
     case "solarplexus_center_text":
     case "spleen_center_text":
     case "root_center_text":
-      const center = token.replace(/_center_text$/, "") as CenterKey;
-      if (reading.reportContent) {
-        return reportContentField(reading, `hd:center:${center}`, hd?.definedCenters?.includes(center) ? "definedText" : "undefinedText");
-      }
-      return centerText(hd, center);
+      return centerInterpretation(reading, token.replace(/_center_text$/, "") as CenterKey);
+
+    // This page's Center — blank without a page Center or Human Design data.
+    case "center_name": {
+      const center = asCenterKey(reading.pageCenter);
+      return center ? CENTER_TITLES[center] : "";
+    }
+    case "center_state": {
+      const center = asCenterKey(reading.pageCenter);
+      if (!center || !hd?.definedCenters) return "";
+      return hd.definedCenters.includes(center) ? "Defined" : "Undefined";
+    }
+    case "center_text": {
+      const center = asCenterKey(reading.pageCenter);
+      return center ? centerInterpretation(reading, center) : "";
+    }
 
     // Interpretation-text — Astrology.
     case "sun_sign_description": {

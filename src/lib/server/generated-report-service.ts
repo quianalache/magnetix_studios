@@ -13,6 +13,7 @@ import type { ChartDesign } from "@/types/chart-design";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { getContentSet } from "@/lib/server/content-set-service";
 import { attachReportChartDesigns } from "@/lib/server/report-chart-designs";
+import { pageShortcodeInput } from "@/lib/energetics/report-shortcode-render";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 
 /**
@@ -130,14 +131,17 @@ export function generatedReportShortcodeInput(
  */
 export function resolveSnapshotPages(pages: ReportPage[], ruleInput: ChartRuleReadingInput, shortcodeInput: ShortcodeReadingInput): ReportPage[] {
   const visiblePages = pages.filter((p) => !p.visibleIf || evaluateChartRule(p.visibleIf, ruleInput));
-  return visiblePages.map((p) => ({
-    ...p,
-    blocks: p.blocks.map((b) => (b.type === "text" ? { ...b, html: resolveShortcodes(b.html, shortcodeInput) } : b)),
-    elements: p.elements?.map((e) => ({
-      ...e,
-      payload: e.type === "text" ? { ...e.payload, text: resolveShortcodes(String(e.payload.text ?? ""), shortcodeInput) } : e.type === "shortcode" ? { ...e.payload, resolvedText: resolveShortcodes(`{{${String(e.payload.token ?? "full_name")}}}`, shortcodeInput) } : e.payload,
-    })),
-  }));
+  return visiblePages.map((p) => {
+    const input = pageShortcodeInput(shortcodeInput, p);
+    return {
+      ...p,
+      blocks: p.blocks.map((b) => (b.type === "text" ? { ...b, html: resolveShortcodes(b.html, input) } : b)),
+      elements: p.elements?.map((e) => ({
+        ...e,
+        payload: e.type === "text" ? { ...e.payload, text: resolveShortcodes(String(e.payload.text ?? ""), input) } : e.type === "shortcode" ? { ...e.payload, resolvedText: resolveShortcodes(`{{${String(e.payload.token ?? "full_name")}}}`, input) } : e.payload,
+      })),
+    };
+  });
 }
 
 export async function createGeneratedReport(opts: {

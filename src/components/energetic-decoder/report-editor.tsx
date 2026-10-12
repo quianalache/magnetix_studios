@@ -35,7 +35,8 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
+import { CENTER_TITLES, SHORTCODE_CATALOG, asCenterKey } from "@/lib/energetics/shortcodes";
+import { CENTERS, type CenterKey } from "@/lib/energetics/human-design-data";
 import { BLANK_PAGE_TITLE, createBlankReportPage, instantiateReportTemplate, type ReportTemplate } from "@/lib/energetics/report-templates";
 import { ReportTemplateLibrary } from "@/components/energetic-decoder/report-template-library";
 import { ReportChartLibrary } from "@/components/energetic-decoder/report-chart-library";
@@ -48,7 +49,7 @@ import {
   FREQUENCY_COMING_SOON_LABEL,
   FREQUENCY_SHORTCODE_GROUP,
 } from "@/lib/energetics/frequency-availability";
-import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
+import { MediaLibraryPublicImagePicker } from "@/components/assets/media-library-image-button";
 import type { MediaLibraryItem } from "@/types/media-library";
 import { CelestialDecoration } from "@/components/energetic-decoder/content-sets-visuals";
 import { ZoomControl, clampZoom, type ZoomMode } from "@/components/energetic-decoder/report-zoom-control";
@@ -352,8 +353,9 @@ export function ReportEditor({
     setActivePageId(p.id);
   }
   /** Template Library insert: a fresh copy (new page + element ids) appended as one history step. */
-  function insertTemplate(template: ReportTemplate) {
-    insertLibraryPage(instantiateReportTemplate(template, id), template.name);
+  function insertTemplate(template: ReportTemplate, opts?: { centerKey: CenterKey }) {
+    const p = instantiateReportTemplate(template, id, opts);
+    insertLibraryPage(p, template.centerPage ? `${template.name} (${p.title})` : template.name);
   }
   function insertBlankPage() {
     insertLibraryPage(createBlankReportPage(id), BLANK_PAGE_TITLE);
@@ -785,14 +787,15 @@ export function ReportEditor({
           </div>}
         </div>
       </div>
-      <MediaPickerDialog
+      {/* Reports are read publicly and printed server-side, so an image must have a lasting public URL:
+          a private library image is used only through its confirmed public copy (never a short-lived signed thumbnail). */}
+      <MediaLibraryPublicImagePicker
         subAccountId={subAccountId}
         open={assetPickerOpen}
         onOpenChange={setAssetPickerOpen}
-        kind="image"
-        onSelect={(item: MediaLibraryItem) => {
+        onPick={(url: string, item: MediaLibraryItem) => {
           if (!selectedId) return;
-          updateElement(selectedId, (e) => ({ ...e, payload: { ...e.payload, assetId: item.id, url: item.publicUrl ?? item.thumbnailUrl ?? "", title: item.title, alt: item.title, fit: "cover" } }));
+          updateElement(selectedId, (e) => ({ ...e, payload: { ...e.payload, assetId: item.id, url, title: item.title, alt: item.title, fit: "cover" } }));
         }}
       />
       <style jsx>{`@media (max-width: 640px) { .report-canvas-stage { transform-origin: top left !important; } }`}</style>
@@ -991,6 +994,20 @@ function ElementPanel({
               }
               className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
             />
+          </label>
+          <label className="block text-sm font-medium" data-page-center>
+            Page Center
+            <select
+              value={asCenterKey(activePage.centerKey) ?? ""}
+              onChange={(e) => updatePage((p) => ({ ...p, centerKey: asCenterKey(e.target.value) }))}
+              className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
+            >
+              <option value="">None</option>
+              {CENTERS.map((c) => (
+                <option key={c} value={c}>{CENTER_TITLES[c]}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">Used by the “This Page&apos;s Center” shortcodes (name, defined/undefined, interpretation).</span>
           </label>
           <button
             onClick={() => setVisibilityOpen(!visibilityOpen)}
@@ -1306,7 +1323,7 @@ function CanvasPage({
         <button type="button" onClick={onDeletePage} title="Delete page" className="rounded p-1 hover:bg-violet-100"><Trash2 className="h-3.5 w-3.5" /></button>
       </div>
       {visibilityOpen && <div className="absolute left-0 top-10 z-20 w-[280px] rounded-xl border border-violet-200 bg-white p-3 shadow-xl"><div className="mb-2 flex items-center justify-between text-xs font-semibold"><span>Page visibility</span><button type="button" onClick={onToggleVisibility}>Close</button></div><VisibilityEditor value={page.visibleIf} onChange={(visibleIf) => onUpdatePage((p) => ({ ...p, visibleIf }))} /></div>}
-      <section className="relative bg-white shadow-xl" onClick={(e) => { if (e.target === e.currentTarget) onClearSelection(); }} style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || brandBackground || "#fff", borderTop: `4px solid ${brandAccent || "transparent"}` }}>
+      <section className="relative bg-white shadow-xl" onClick={(e) => { if (e.target === e.currentTarget) onClearSelection(); }} style={{ width: dimensions.width, height: dimensions.height, background: page.pageBackground || brandBackground || "#fff", ...(brandAccent ? { boxShadow: `0 -4px 0 ${brandAccent}, 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)` } : {}) }}>
       {elements.map((e) => (
         <CanvasElement
           key={e.id}
@@ -1473,7 +1490,7 @@ function CanvasElement({
         if (!element.locked) drag.begin(e);
       }}
       onDragStart={(e) => e.preventDefault()}
-      className={`absolute overflow-hidden text-left ${selected ? "ring-2 ring-violet-600 ring-offset-2" : "hover:ring-1 hover:ring-violet-300"}`}
+      className={`absolute text-left ${selected ? "ring-2 ring-violet-600 ring-offset-2" : "hover:ring-1 hover:ring-violet-300"}`}
       style={{
         left: element.geometry.x + (drag.preview?.dx ?? 0),
         top: element.geometry.y + (drag.preview?.dy ?? 0),
@@ -1503,10 +1520,19 @@ function CanvasElement({
           ? `${element.style.borderWidth}px ${element.style.borderStyle || "solid"} ${element.style.borderColor || "#d8c5f5"}`
           : undefined,
         borderRadius: element.style?.borderRadius || 0,
-        // Shapes/Frames draw edge to edge (padding made a 1-unit rule render ~16px tall).
-        padding: element.type === "text" ? 12 : element.type === "shape" || element.type === "frame" ? 0 : 8,
       }}
     >
+      {/* Content is clipped by this inner layer (same box, same corner radius), not by the element
+          itself, so the resize/rotate handles stay visible and grabbable on circles and rounded cards. */}
+      <span
+        className="absolute inset-0 block overflow-hidden"
+        style={{
+          borderRadius: "inherit",
+          // Shapes/Frames draw edge to edge (padding made a 1-unit rule render ~16px tall).
+          padding: element.type === "text" ? 12 : element.type === "shape" || element.type === "frame" ? 0 : 8,
+        }}
+        data-element-content
+      >
       {element.type === "chart" ? (
         <div className="h-full w-full overflow-hidden rounded">
           <CanvasChart element={element} />
@@ -1514,8 +1540,10 @@ function CanvasElement({
       ) : element.type === "image" || element.type === "upload" ? (
         element.payload.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={String(element.payload.url)} alt={String(element.payload.alt ?? "Report image")} draggable={false} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">Choose an image asset</div>
       ) : (
-        <span>{label}</span>
+        // Same wrapping as the web report: keeps line breaks, wraps whole words.
+        <span className="whitespace-pre-wrap break-words">{label}</span>
       )}
+      </span>
       {selected && !element.locked && <span data-resize-handle className="absolute -right-2 -bottom-2 h-4 w-4 cursor-se-resize touch-none rounded-full border-2 border-white bg-violet-700" onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); resizeGesture.begin(e); }} />}
       {/* Not a <button>: the element itself is a <button>, and nested buttons are invalid HTML. */}
       {selected && !element.locked && <span role="button" tabIndex={0} aria-label="Rotate element" className="absolute -top-3 left-1/2 h-4 w-4 -translate-x-1/2 cursor-pointer touch-none rounded-full border-2 border-white bg-fuchsia-600" onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); onRotate(15); }} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onRotate(15); } }} />}
