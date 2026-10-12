@@ -20,6 +20,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import zlib from "node:zlib";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import batch2 from "../src/lib/energetics/report-templates.batch2.json";
@@ -237,6 +238,27 @@ async function main() {
       for (const must of ["Generator", "3/5", "Preview Sample", "Hello, I'm [Your Name]", "WORK WITH ME", "[yourwebsite.com]", "With warmth, [Your Name]", "Sacral Center", "DEF-sacral", "Head Center", "Heart Center", "UND-heart", "Solar Plexus Center", "Defined", "Undefined"]) assert.ok(text.replace(/\s+/g, "").includes(must.replace(/\s+/g, "")), `PDF missing "${must}"`); // letter-spaced labels extract as spaced letters
       const pageTexts = text.split("\f");
       assert.ok(pageTexts[4].includes("Heart Center") && !/sacral|Sacral/.test(pageTexts[4]), "Heart page has no Sacral text");
+    } finally {
+      fs.unlinkSync(file);
+    }
+  });
+
+  await check("PDF: a chosen portrait prints as a true circle (inner radius on the padded image, like the web) — not a flat-sided disc", async () => {
+    // A solid red 16×16 PNG as the "photo".
+    const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+    const crc = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+    const chunk = (type: string, data: Buffer) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+    const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(16, 0); ihdr.writeUInt32BE(16, 4); ihdr[8] = 8; ihdr[9] = 2;
+    const raw = Buffer.concat(Array.from({ length: 16 }, () => Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: 16 }, () => [255, 0, 0]).flat())])));
+    const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+    const p = instantiateReportTemplate(note);
+    p.elements = p.elements!.map((e) => (e.type === "image" ? { ...e, payload: { ...e.payload, url: `data:image/png;base64,${png.toString("base64")}` } } : e));
+    const file = await pdf(resolvePagesForRender([p], INPUT));
+    try {
+      // Portrait box 72,96 200×200 → centre (172,196); visible circle radius 90 (100 − 10 padding).
+      assert.ok(near(pixel(file, 1, 172 / 816, 196 / 1056), "#ff0000", 20), "centre is the photo");
+      const d = 95 / Math.SQRT2;
+      assert.ok(near(pixel(file, 1, (172 + d) / 816, (196 + d) / 1056), "#fff7ed", 20), `45° just outside the circle is the page, got ${pixel(file, 1, (172 + d) / 816, (196 + d) / 1056)}`);
     } finally {
       fs.unlinkSync(file);
     }

@@ -291,7 +291,12 @@ function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDe
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
     // No image chosen yet: print nothing (never an "unavailable" placeholder in a reader's PDF).
-    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : null;
+    if (!url) return null;
+    // Draw the picture in the padded inner box with the inner corner radius (radius − padding), exactly
+    // like the browser clips a padded <img> — so a circle crop stays a circle instead of a flat-sided disc.
+    const pad = 10 * scale;
+    const imgBox = { ...box, left: box.left + pad, top: box.top + pad, width: Math.max(0, box.width - 2 * pad), height: Math.max(0, box.height - 2 * pad), padding: 0, borderWidth: 0, borderRadius: Math.max(0, box.borderRadius - pad), objectFit: (element.payload.fit === "contain" ? "contain" : "cover") as "contain" | "cover" };
+    return /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={imgBox} />;
   }
   if (element.type === "chart") {
     // Own saved Chart Design (attached before render) or the reading's; fitted to the box, never cropped.
