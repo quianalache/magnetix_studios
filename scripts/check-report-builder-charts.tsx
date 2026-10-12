@@ -154,6 +154,17 @@ async function main() {
     assert.doesNotMatch(body, /data-hd-variables|data-hd-rail/);
     assert.match(body, /<svg/);
   });
+  await check("Full Chart keeps its three-column layout inside a report element: drawn at 840×800 and scaled into the element box (editor, web, thumbnail)", () => {
+    const el = { ...chart("human-design-full-chart"), geometry: { x: 68, y: 228, width: 680, height: 600, rotation: 0 } };
+    const html = render(attachChartDesignsFromSets([pageWith([el])], SETS)[0]);
+    const scale = Math.min((680 - 20) / 840, (600 - 20) / 800);
+    assert.match(html, /data-fitted-chart/);
+    assert.ok(html.includes(`width:840px;height:800px;transform:scale(${scale})`), "viewer: natural size scaled to the box");
+    const editorHtml = renderToStaticMarkup(createElement(ReportChartPreview, { piece: "human-design-full-chart", designs: designsOfSet(SET), box: { width: 664, height: 584 } }));
+    assert.ok(editorHtml.includes(`transform:scale(${Math.min(664 / 840, 584 / 800)})`), "editor canvas: fitted to the element box");
+    assert.match(fs.readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8"), /box=\{\{ width: Math\.max\(1, element\.geometry\.width - 16\), height: Math\.max\(1, element\.geometry\.height - 16\) \}\}/);
+    assert.match(fs.readFileSync("src/components/energetic-decoder/report-chart-library.tsx", "utf8"), /"human-design-full-chart": \{ natW: 840, natH: 800/);
+  });
   await check("both Human Design parts use the saved design's colors", () => {
     for (const html of [full, body]) assert.match(html, /#a1b2c3/i);
   });

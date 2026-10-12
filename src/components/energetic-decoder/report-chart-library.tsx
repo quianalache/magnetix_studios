@@ -19,7 +19,7 @@ const PREVIEW_COUNT = 3;
 
 /** Natural render size per part (px) and its card thumbnail size. */
 const THUMB: Record<string, { natW: number; natH: number; h: number }> = {
-  "human-design-full-chart": { natW: 640, natH: 560, h: 62 },
+  "human-design-full-chart": { natW: 840, natH: 800, h: 70 },
   "human-design-bodygraph": { natW: 200, natH: 320, h: 112 },
   "human-design-mandala": { natW: 320, natH: 320, h: 70 },
   "astrology-wheel": { natW: 320, natH: 320, h: 70 },

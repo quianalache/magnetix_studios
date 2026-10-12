@@ -1,5 +1,6 @@
 "use client";
 
+import { FULL_CHART_NATURAL, FittedHtmlChart } from "@/components/energetic-decoder/report-chart-preview";
 import { useState, type CSSProperties } from "react";
 import type { ReportDesign, ReportPage, ReportBlock, ReportCanvasElement, ChartPieceKind } from "@/types/report-blocks";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
@@ -177,6 +178,7 @@ function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, ast
           mandalaDesign={own?.mandala ?? mandalaDesign}
           astroDesign={own?.astrology ?? astroDesign}
           transparent
+          box={{ width: Math.max(1, element.geometry.width - 20), height: Math.max(1, element.geometry.height - 20) }}
         />
       </div>
     );
@@ -302,6 +304,7 @@ function ChartPieceView({
   mandalaDesign,
   astroDesign,
   transparent = false,
+  box,
 }: {
   piece: ChartPieceKind;
   readingInput: ShortcodeReadingInput;
@@ -310,6 +313,8 @@ function ChartPieceView({
   astroDesign?: ChartDesign | null;
   /** Report Builder canvas: no outer background panel, so the chart sits on the page/template shapes. Internal chart fills keep their colors. */
   transparent?: boolean;
+  /** Report Builder canvas: the element's inner box (page units) — the Full Chart is fitted into it. */
+  box?: { width: number; height: number };
 }) {
   const hd = readingInput.humanDesign as HumanDesignProfile | null | undefined;
   const astro = readingInput.astrology as AstrologyChart | null | undefined;
@@ -335,7 +340,9 @@ function ChartPieceView({
       );
     case "human-design-full-chart":
       return hd ? (
-        <HumanDesignFullChart profile={hd} design={transparent ? ({ ...(hdDesign ?? {}), backgroundColor: "transparent" } as ChartDesign) : hdDesign} />
+        <FittedHtmlChart box={box ?? FULL_CHART_NATURAL} naturalW={FULL_CHART_NATURAL.width} naturalH={FULL_CHART_NATURAL.height}>
+          <HumanDesignFullChart profile={hd} design={transparent ? ({ ...(hdDesign ?? {}), backgroundColor: "transparent" } as ChartDesign) : hdDesign} />
+        </FittedHtmlChart>
       ) : (
         <MissingPiece label="Human Design chart" />
       );

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
@@ -23,6 +23,23 @@ import type { CenterKey } from "@/lib/energetics/human-design-data";
  * background panel here, matching the report.
  */
 
+/**
+ * The web Full Chart only lays out as [Design | BodyGraph | Personality]
+ * at ≥ 804px of container width, so in a report element it is drawn at its
+ * natural size and scaled into the element's box (the PDF does the same).
+ */
+export const FULL_CHART_NATURAL = { width: 840, height: 800 };
+
+/** Draws `children` at a natural size, scaled uniformly to fit `box` (page units) and centered. */
+export function FittedHtmlChart({ box, naturalW, naturalH, children }: { box: { width: number; height: number }; naturalW: number; naturalH: number; children: ReactNode }) {
+  const scale = Math.max(0.01, Math.min(box.width / naturalW, box.height / naturalH));
+  return (
+    <div className="relative h-full w-full" data-fitted-chart>
+      <div style={{ position: "absolute", left: (box.width - naturalW * scale) / 2, top: (box.height - naturalH * scale) / 2, width: naturalW, height: naturalH, transform: `scale(${scale})`, transformOrigin: "0 0" }}>{children}</div>
+    </div>
+  );
+}
+
 /** The workspace's saved Chart Designs, by set id (loaded once by the editor). */
 export const ReportChartDesignSetsContext = createContext<Map<string, ChartDesignSetWithMembers>>(new Map());
 
@@ -39,7 +56,7 @@ function centerColors(d: ChartDesign | null | undefined): Partial<Record<CenterK
   return { head: d.headCenterColor, ajna: d.ajnaCenterColor, throat: d.throatCenterColor, g: d.gCenterColor, heart: d.heartCenterColor, spleen: d.spleenCenterColor, sacral: d.sacralCenterColor, solarplexus: d.solarPlexusCenterColor, root: d.rootCenterColor };
 }
 
-export function ReportChartPreview({ piece, designs }: { piece: string; designs: ElementChartDesigns | null }) {
+export function ReportChartPreview({ piece, designs, box }: { piece: string; designs: ElementChartDesigns | null; box?: { width: number; height: number } }) {
   const r = REPORT_BUILDER_FIXTURE_READING;
   const hd = designs?.humanDesign ?? null;
   const p = normalizeCanvasChartPiece(piece);
@@ -66,7 +83,10 @@ export function ReportChartPreview({ piece, designs }: { piece: string; designs:
     );
   }
   if (p === "frequency-hologenetic") return <GeneKeysChart spheres={r.spheres} className="h-full w-full" />;
-  if (p === "human-design-full-chart") return <HumanDesignFullChart profile={r.humanDesign} design={{ ...(hd ?? {}), backgroundColor: "transparent" } as ChartDesign} />;
+  if (p === "human-design-full-chart") {
+    const chart = <HumanDesignFullChart profile={r.humanDesign} design={{ ...(hd ?? {}), backgroundColor: "transparent" } as ChartDesign} />;
+    return <FittedHtmlChart box={box ?? FULL_CHART_NATURAL} naturalW={FULL_CHART_NATURAL.width} naturalH={FULL_CHART_NATURAL.height}>{chart}</FittedHtmlChart>;
+  }
   if (p === "human-design-gates") return <HumanDesignChart profile={r.humanDesign} className="h-full w-full" />;
   return (
     <HumanDesignChart

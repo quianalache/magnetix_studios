@@ -1556,5 +1556,6 @@ function ChartDesignPicker({ selected, update }: { selected: ReportCanvasElement
 function CanvasChart({ element }: { element: ReportCanvasElement }) {
   const sets = useReportChartDesignSets();
   const setId = elementChartDesignSetId(element);
-  return <ReportChartPreview piece={String(element.payload.piece ?? "human-design-full")} designs={setId ? designsOfSet(sets.get(setId)) : null} />;
+  // Box = the element minus its 8-unit canvas padding (page units).
+  return <ReportChartPreview piece={String(element.payload.piece ?? "human-design-full")} designs={setId ? designsOfSet(sets.get(setId)) : null} box={{ width: Math.max(1, element.geometry.width - 16), height: Math.max(1, element.geometry.height - 16) }} />;
 }
