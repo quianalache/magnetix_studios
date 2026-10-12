@@ -1,9 +1,9 @@
 import "server-only";
-import React from "react";
+import React, { type ReactNode } from "react";
 
 import { Document, Page, Text, View, Image, Link, StyleSheet } from "@react-pdf/renderer";
 import { resolveMandalaColors } from "./mandala-spec";
-import { HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf, GeneKeysChartPdf } from "./reading-pdf-document";
+import { HumanDesignBodygraphPdf, HumanDesignFullChartPdf, MandalaPdf, AstrologyWheelPdf, GeneKeysChartPdf } from "./reading-pdf-document";
 import { resolveAstrologyColors } from "./astrology-spec";
 import { DEFAULT_DEFINED_FILL } from "./human-design-chart-constants";
 import type { HumanDesignProfile } from "./human-design";
@@ -12,6 +12,8 @@ import type { GeneKeysSphereResult } from "./gene-keys";
 import type { ChartDesign } from "@/types/chart-design";
 import type { ReportPage, ReportBlock, ReportBlockAlign, ChartPieceKind, ReportCanvasElement, ReportPageSize, ReportDesign } from "@/types/report-blocks";
 import { shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
+import { elementChartDesigns, normalizeCanvasChartPiece } from "@/lib/energetics/report-charts";
+import type { CenterKey } from "./human-design-data";
 type ReportDesignBrand = ReportDesign["brand"];
 
 /**
@@ -68,6 +70,39 @@ function pdfFontFamily(fontFamily?: string): "Helvetica" | "Times-Roman" | "Cour
   return fontFamily === "Helvetica" || fontFamily === "Courier" || fontFamily === "Times-Roman" ? fontFamily : "Helvetica";
 }
 
+/**
+ * Designed report text never breaks a word with an automatic hyphen
+ * (2026-10-12): each word is one unbreakable unit, so a word that doesn't
+ * fit moves whole to the next line. Hyphens the user typed stay as typed.
+ * Scoped to this document's Text nodes (react-pdf's per-Text callback) —
+ * the reading PDF and every other PDF keep the library default.
+ */
+export const noAutoHyphenation = (word: string): string[] => [word];
+
+/** Natural (unscaled) PDF sizes of the shared chart renderers, in pt — see reading-pdf-document.tsx. */
+const FULL_CHART_NATURAL = { width: 460, height: 360 };
+const MANDALA_NATURAL = 324; // MANDALA_SIZE 300 + 4% padding each side
+const ASTRO_NATURAL = 300;
+const BODYGRAPH_VIEW_W = 200; // CHART_VIEWBOX "18 -4 200 320"
+const BODYGRAPH_VIEW_H = 320;
+
+function hdCenterColors(d: ChartDesign | null | undefined): Partial<Record<CenterKey, string>> | undefined {
+  if (!d) return undefined;
+  return { head: d.headCenterColor, ajna: d.ajnaCenterColor, throat: d.throatCenterColor, g: d.gCenterColor, heart: d.heartCenterColor, spleen: d.spleenCenterColor, sacral: d.sacralCenterColor, solarplexus: d.solarPlexusCenterColor, root: d.rootCenterColor };
+}
+
+/** Scales a fixed-size chart renderer uniformly to fit a box and centers it (never crops). */
+function FittedChartPdf({ naturalW, naturalH, box, children }: { naturalW: number; naturalH: number; box: { width: number; height: number }; children: ReactNode }) {
+  const scale = Math.max(0.01, Math.min(box.width / naturalW, box.height / naturalH));
+  return (
+    <View style={{ width: box.width, height: box.height, position: "relative" }}>
+      <View style={{ position: "absolute", width: naturalW, height: naturalH, left: (box.width - naturalW * scale) / 2, top: (box.height - naturalH * scale) / 2, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 function ChartPiecePdf({
   piece,
   humanDesign,
@@ -76,6 +111,7 @@ function ChartPiecePdf({
   hdDesign,
   mandalaDesign,
   astroDesign,
+  box,
 }: {
   piece: ChartPieceKind;
   humanDesign?: HumanDesignProfile | null;
@@ -84,17 +120,47 @@ function ChartPiecePdf({
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
+  /** Report Builder canvas element: the chart fits this inner box (pt) and the Human Design parts drop their outer background panel. Absent = legacy v1 block (natural size, unchanged). */
+  box?: { width: number; height: number };
 }) {
+  const fit = (naturalW: number, naturalH: number, node: ReactNode) => (box ? <FittedChartPdf naturalW={naturalW} naturalH={naturalH} box={box}>{node}</FittedChartPdf> : node);
+  const transparentHd = box ? ({ ...(hdDesign ?? {}), backgroundColor: "transparent" } as ChartDesign) : hdDesign;
   switch (piece) {
+    case "human-design-bodygraph": {
+      if (!humanDesign) return <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Human Design chart isn&apos;t part of this reading.</Text>;
+      const ratio = BODYGRAPH_VIEW_H / BODYGRAPH_VIEW_W;
+      const size = box ? Math.max(1, Math.min(box.width, box.height / ratio)) : 220;
+      const d = transparentHd;
+      return (
+        <View style={box ? { width: box.width, height: box.height, alignItems: "center", justifyContent: "center" } : { alignItems: "center" }}>
+          <HumanDesignBodygraphPdf
+            profile={humanDesign}
+            centersColor={d?.chartDefinedColor || DEFAULT_DEFINED_FILL}
+            centersMode={d?.centersMode || "uniform"}
+            centerColors={hdCenterColors(d)}
+            channelsColor={d?.channelsColor || "#52525b"}
+            gatesColor={d?.gatesColor || "#e4e4e7"}
+            backgroundColor={d?.backgroundColor || "#ffffff"}
+            size={size}
+          />
+        </View>
+      );
+    }
+    case "human-design-full-chart":
+      return humanDesign ? (
+        fit(FULL_CHART_NATURAL.width, FULL_CHART_NATURAL.height, <HumanDesignFullChartPdf profile={humanDesign} hdDesign={transparentHd} />)
+      ) : (
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Human Design chart isn&apos;t part of this reading.</Text>
+      );
     case "human-design-full":
       return humanDesign ? (
         <HumanDesignFullChartPdf profile={humanDesign} hdDesign={hdDesign} />
       ) : (
-        <Text style={styles.missingPiece}>Human Design chart isn&apos;t part of this reading.</Text>
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Human Design chart isn&apos;t part of this reading.</Text>
       );
     case "human-design-mandala":
       return humanDesign && mandalaDesign ? (
-        <MandalaPdf
+        fit(MANDALA_NATURAL, MANDALA_NATURAL, <MandalaPdf
           profile={humanDesign}
           gateColor={mandalaDesign.chartDefinedColor || DEFAULT_DEFINED_FILL}
           backgroundColor={mandalaDesign.backgroundColor || "#ffffff"}
@@ -105,25 +171,26 @@ function ChartPiecePdf({
           gateRingColor={mandalaDesign.mandalaGateRingColor}
           quadrantColor={mandalaDesign.mandalaQuadrantColor}
           hdDesign={hdDesign}
-        />
+          discPanel={!!box}
+        />)
       ) : (
-        <Text style={styles.missingPiece}>Mandala chart isn&apos;t part of this reading.</Text>
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Mandala chart isn&apos;t part of this reading.</Text>
       );
     case "human-design-gates":
       return humanDesign ? (
         <View style={styles.row}>
           {humanDesign.activatedGates.map((g) => (
-            <Text key={g} style={styles.gateChip}>{g}</Text>
+            <Text hyphenationCallback={noAutoHyphenation} key={g} style={styles.gateChip}>{g}</Text>
           ))}
         </View>
       ) : (
-        <Text style={styles.missingPiece}>Activated gates aren&apos;t part of this reading.</Text>
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Activated gates aren&apos;t part of this reading.</Text>
       );
     case "astrology-wheel":
       return astrology ? (
-        <AstrologyWheelPdf chart={astrology} colors={resolveAstrologyColors(astroDesign)} />
+        fit(ASTRO_NATURAL, ASTRO_NATURAL, <AstrologyWheelPdf chart={astrology} colors={resolveAstrologyColors(astroDesign)} />)
       ) : (
-        <Text style={styles.missingPiece}>Astrology wheel isn&apos;t part of this reading.</Text>
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Astrology wheel isn&apos;t part of this reading.</Text>
       );
     case "frequency-hologenetic":
       // Added 2026-08-15 (Phase 5) alongside the same chart-block option
@@ -134,7 +201,7 @@ function ChartPiecePdf({
       return spheres && spheres.length > 0 ? (
         <GeneKeysChartPdf spheres={spheres} />
       ) : (
-        <Text style={styles.missingPiece}>Frequency profile isn&apos;t part of this reading.</Text>
+        <Text hyphenationCallback={noAutoHyphenation} style={styles.missingPiece}>Frequency profile isn&apos;t part of this reading.</Text>
       );
     default:
       return null;
@@ -156,14 +223,14 @@ function ChartPiecePdf({
 function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart" }> }) {
   switch (block.type) {
     case "text":
-      return <Text style={[styles.text, { textAlign: textAlignStyle(block.align) }]}>{block.html}</Text>;
+      return <Text hyphenationCallback={noAutoHyphenation} style={[styles.text, { textAlign: textAlignStyle(block.align) }]}>{block.html}</Text>;
     case "image":
       // eslint-disable-next-line jsx-a11y/alt-text
       return <Image src={block.url} style={{ width: "100%" }} />;
     case "video":
       return (
         <View style={styles.videoBox}>
-          <Text>Video: {block.url}</Text>
+          <Text hyphenationCallback={noAutoHyphenation}>Video: {block.url}</Text>
         </View>
       );
     case "button":
@@ -174,7 +241,7 @@ function ReportBlockPdf({ block }: { block: Exclude<ReportBlock, { type: "chart"
           </Link>
         );
       }
-      return <Text style={styles.buttonBoxInert}>{block.label}</Text>;
+      return <Text hyphenationCallback={noAutoHyphenation} style={styles.buttonBoxInert}>{block.label}</Text>;
     case "divider":
       return <View style={styles.divider} />;
     case "spacer":
@@ -226,9 +293,27 @@ function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDe
   };
   if (element.type === "image" || element.type === "upload") {
     const url = typeof element.payload.url === "string" ? element.payload.url : "";
-    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : <View style={{ ...box, ...styles.canvasPlaceholder }}><Text>Image asset unavailable</Text></View>;
+    return url ? /* eslint-disable-next-line jsx-a11y/alt-text */ <Image src={url} style={box} /> : <View style={{ ...box, ...styles.canvasPlaceholder }}><Text hyphenationCallback={noAutoHyphenation}>Image asset unavailable</Text></View>;
   }
-  if (element.type === "chart") return <View style={box}><ChartPiecePdf piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></View>;
+  if (element.type === "chart") {
+    // Own saved Chart Design (attached before render) or the reading's; fitted to the box, never cropped.
+    const own = elementChartDesigns(element);
+    const inner = { width: Math.max(1, box.width - 2 * box.padding), height: Math.max(1, box.height - 2 * box.padding) };
+    return (
+      <View style={box}>
+        <ChartPiecePdf
+          piece={normalizeCanvasChartPiece(String(element.payload.piece ?? "human-design-full")) as ChartPieceKind}
+          humanDesign={humanDesign}
+          astrology={astrology}
+          spheres={spheres}
+          hdDesign={own?.humanDesign ?? hdDesign}
+          mandalaDesign={own?.mandala ?? mandalaDesign}
+          astroDesign={own?.astrology ?? astroDesign}
+          box={inner}
+        />
+      </View>
+    );
+  }
   // Callers pass pages through resolvePagesForRender (Shortcodes already Text). Safety net:
   // a Shortcode that reaches here prints its frozen value or nothing, never raw {{token}}.
   const text = element.type === "shortcode" ? shortcodeElementValue(element) : String(element.payload.text ?? "");
@@ -246,7 +331,7 @@ function ReportCanvasElementPdf({ element, humanDesign, astrology, spheres, hdDe
   const pad = 10 * scale;
   return (
     <View style={{ ...box, padding: 0 }}>
-      <Text style={{ ...textStyle, position: "absolute", top: pad, left: pad, width: Math.max(0, box.width - 2 * pad) }}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>
+      <Text hyphenationCallback={noAutoHyphenation} style={{ ...textStyle, position: "absolute", top: pad, left: pad, width: Math.max(0, box.width - 2 * pad) }}>{text || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</Text>
     </View>
   );
 }
@@ -298,13 +383,13 @@ export function ReportDesignPdfDocument({
               // eslint-disable-next-line jsx-a11y/alt-text
               <Image src={businessLogoUrl} style={{ height: 24, marginBottom: 4 }} />
             ) : (
-              <Text style={styles.businessName}>{businessName}</Text>
+              <Text hyphenationCallback={noAutoHyphenation} style={styles.businessName}>{businessName}</Text>
             )}
-            <Text style={[styles.title, { color: brand?.accentColor || "#23262b" }]}>{title}</Text>
-            <Text style={styles.forLine}>For {readerName}</Text>
+            <Text hyphenationCallback={noAutoHyphenation} style={[styles.title, { color: brand?.accentColor || "#23262b" }]}>{title}</Text>
+            <Text hyphenationCallback={noAutoHyphenation} style={styles.forLine}>For {readerName}</Text>
           </View>
 
-          <Text style={styles.pageTitle}>{pageLabel(page, index)}</Text>
+          <Text hyphenationCallback={noAutoHyphenation} style={styles.pageTitle}>{pageLabel(page, index)}</Text>
 
           {page.elements && page.elements.length > 0 ? <View style={{ position: "relative", overflow: "hidden", width: CANVAS_W * canvasScale, height: CANVAS_H * canvasScale, marginLeft: (contentWidth - CANVAS_W * canvasScale) / 2 }}>{[...page.elements].sort((a, b) => a.zIndex - b.zIndex).filter((e) => !e.hidden).map((element) => <ReportCanvasElementPdf key={element.id} element={element} humanDesign={humanDesign} astrology={astrology} spheres={spheres} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} scale={canvasScale} />)}</View> : <View style={styles.row}>
             {page.blocks.map((block) => (

@@ -387,7 +387,10 @@ check("the bare BodyGraph, the PDF full chart and the report viewer's BodyGraph 
   const viewer = readFileSync("src/components/energetic-decoder/report-design-viewer.tsx", "utf8");
   const va = viewer.indexOf('case "human-design-full":');
   assert.equal(h(viewer.slice(va, viewer.indexOf('case "human-design-gates":', va))), "d90daa01645eced0", "ReportDesignViewer's human-design-full block changed");
-  assert.ok(!viewer.includes("HumanDesignFullChart"), "the report viewer still draws the bare BodyGraph, not the full chart");
+  assert.ok(!viewer.slice(va, viewer.indexOf('case "human-design-gates":', va)).includes("HumanDesignFullChart"), "the legacy human-design-full block still draws the bare BodyGraph, not the full chart");
+  // 2026-10-12: the Full Chart is drawn only for the explicit Report Builder part "human-design-full-chart".
+  assert.equal((viewer.match(/<HumanDesignFullChart /g) ?? []).length, 1);
+  assert.match(viewer, /case "human-design-full-chart":[\s\S]{0,200}<HumanDesignFullChart /);
 });
 check("the approved Human Design browser layout (e2a7913) is untouched by the Mandala work", () => {
   const h = (s: string) => createHash("sha256").update(s).digest("hex").slice(0, 16);
@@ -425,7 +428,7 @@ check("only the Chart Design editor runs wider (1500px), and its loading/missing
   assert.equal(page.match(/max-w-\[1500px\]/g)?.length, 2, "loading + missing states use the editor's width");
   assert.ok(!page.includes("max-w-[1400px]"));
   // the wider shell is this editor only — the Report Builder editor keeps the usual width
-  assert.ok(readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8").includes("max-w-[1400px]"));
+  assert.ok(!readFileSync("src/components/energetic-decoder/report-editor.tsx", "utf8").includes("max-w-[1500px]"));
   // at 1500px (minus 0.75rem padding each side, 360px controls, 16px gap, 8px card padding + borders) Human Design reaches its natural size
   assert.ok(1500 - 24 - 360 - 16 - 18 >= CHART_PREVIEW_NATURAL_WIDTH.humanDesign);
 });

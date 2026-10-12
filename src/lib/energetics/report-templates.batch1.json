@@ -1,5 +1,5 @@
 {
-  "source": "magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json (specVersion 1) — Batch 1 subset, copied unmodified. Do not edit by hand.",
+  "source": "magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json (specVersion 1) \u2014 Batch 1 subset, copied unmodified. Do not edit by hand. Owner correction 2026-10-12: Luminous Arc + Bodygraph Spotlight charts use the bodygraph-only part (human-design-bodygraph), not the Full Chart; nothing else changed.",
   "templates": [
     {
       "id": "cover-luminous",
@@ -135,7 +135,7 @@
               "opacity": 1
             },
             "payload": {
-              "piece": "human-design-full"
+              "piece": "human-design-bodygraph"
             }
           },
           {
@@ -368,7 +368,7 @@
               "opacity": 1
             },
             "payload": {
-              "piece": "human-design-full"
+              "piece": "human-design-bodygraph"
             }
           },
           {

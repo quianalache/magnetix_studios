@@ -901,6 +901,48 @@ async function main() {
     assert.deepEqual(replan.plans[0].creates.map((c) => c.setId), manifest[0].sets);
   });
 
+  console.log("\nReport Builder Charts tool — saved design lookup (2026-10-12)");
+  await check("getChartDesignSetsByIds: own sets only (foreign / unknown / malformed ids resolve to nothing), read-only", async () => {
+    const own = (await load(SA1)).sets;
+    let foreign: ChartDesignSet[] = [];
+    for (const sa of [SA2, SA3, SA_NEW, SA_NEW2]) if (!foreign.length) foreign = (await load(sa)).sets;
+    assert.ok(own.length >= 2 && foreign.length >= 1);
+    const before = JSON.stringify(await load(SA1));
+    const got = await setService.getChartDesignSetsByIds(SA1, [own[0].id, own[1].id, foreign[0].id, "nope", "../x", ""]);
+    assert.deepEqual([...got.keys()].sort(), [own[0].id, own[1].id].sort());
+    for (const set of got.values()) {
+      assert.equal(set.subAccountId, SA1);
+      for (const sys of ["humanDesign", "mandala", "astrology"] as const) assert.equal(set.designs[sys]?.subAccountId, SA1, sys);
+    }
+    assert.equal((await setService.getChartDesignSetsByIds(SA1, [])).size, 0);
+    assert.equal(JSON.stringify(await load(SA1)), before, "lookup never writes");
+  });
+  await check("attach: chart elements get their saved set's records; stale/forged chartDesigns are dropped", async () => {
+    const charts = await import("../src/lib/energetics/report-charts");
+    const own = (await load(SA1)).sets[0];
+    let foreign: ChartDesignSet | undefined;
+    for (const sa of [SA2, SA3, SA_NEW, SA_NEW2]) foreign ??= (await load(sa)).sets[0];
+    assert.ok(foreign);
+    const forged = { humanDesign: { backgroundColor: "#ff0000" } };
+    const pages = [{ id: "p", title: "P", visibleIf: null, blocks: [], elements: [
+      charts.newChartElement({ id: "a", piece: "human-design-bodygraph", chartDesignSetId: own.id, zIndex: 1 }),
+      { ...charts.newChartElement({ id: "b", piece: "human-design-mandala", chartDesignSetId: foreign.id, zIndex: 2 }), payload: { piece: "human-design-mandala", chartDesignSetId: foreign.id, chartDesigns: forged } },
+      { ...charts.newChartElement({ id: "c", piece: "human-design-full-chart", chartDesignSetId: null, zIndex: 3 }), payload: { piece: "human-design-full-chart", chartDesigns: forged } },
+    ] }];
+    const sets = await setService.getChartDesignSetsByIds(SA1, charts.chartDesignSetIdsOf(pages as never));
+    const out = charts.attachChartDesignsFromSets(pages as never, sets);
+    const [a, b, c] = out[0].elements!;
+    const d = charts.elementChartDesigns(a)!;
+    const full = sets.get(own.id)!;
+    assert.equal(d.humanDesign?.id, full.designs.humanDesign?.id);
+    assert.equal(d.mandala?.id, full.designs.mandala?.id);
+    assert.equal(d.astrology?.id, full.designs.astrology?.id);
+    assert.equal(a.payload.chartDesignSetId, own.id, "reference kept");
+    assert.equal(charts.elementChartDesigns(b), null, "another workspace's design is never attached");
+    assert.equal(charts.elementChartDesigns(c), null, "forged designs dropped; falls back to the reading's design");
+    assert.equal(pages[0].elements[1].payload.chartDesigns, forged, "input not mutated");
+  });
+
   console.log(`\n${passed} checks passed.`);
 }
 

@@ -244,7 +244,8 @@ function GateSpinePdf({
 }
 
 /** Mirrors HumanDesignChart in human-design-chart.tsx — the BodyGraph itself, react-pdf primitives instead of DOM/SVG. Full geometry replacement 2026-08-17, see that file's header for the Astrolo source/license story. */
-function HumanDesignBodygraphPdf({
+/** Exported 2026-10-12 for the Report Builder's bodygraph-only chart part (report-design-pdf-document.tsx). */
+export function HumanDesignBodygraphPdf({
   profile,
   centersColor,
   centersMode,
@@ -557,10 +558,13 @@ export function MandalaPdf({
   gateRingColor = "#71717a",
   quadrantColor = "#71717a",
   hdDesign,
+  discPanel = false,
 }: {
   profile: HumanDesignProfile;
   gateColor: string;
   backgroundColor: string;
+  /** Report Builder canvas: the design background as a disc behind the wheel, not a rounded square (see MandalaChart). */
+  discPanel?: boolean;
   personalityColor?: string;
   designColor?: string;
   /** Legacy single zodiac color — only used when `elementColors` isn't passed. */
@@ -590,7 +594,7 @@ export function MandalaPdf({
   const abbr = (body: string) => PLANET_ABBR[body] ?? body.slice(0, 2);
 
   return (
-    <View style={{ backgroundColor: colors.background, borderRadius: 12, padding: MANDALA_SIZE * 0.04, position: "relative" }}>
+    <View style={{ backgroundColor: colors.background, borderRadius: discPanel ? (MANDALA_SIZE * 1.08) / 2 : 12, padding: MANDALA_SIZE * 0.04, position: "relative" }}>
       <View style={{ position: "relative", width: MANDALA_SIZE, height: MANDALA_SIZE }}>
         <Svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} style={{ width: MANDALA_SIZE, height: MANDALA_SIZE }}>
           <Defs>

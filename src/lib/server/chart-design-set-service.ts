@@ -217,6 +217,16 @@ export async function getChartDesignSet(subAccountId: string, setId: string): Pr
   return withMembers(toSet(snap.id, snap.data()!), designs);
 }
 
+/** Several sets at once (one read of the workspace's design data); unknown or foreign ids are simply absent. Never writes. */
+export async function getChartDesignSetsByIds(subAccountId: string, ids: readonly string[]): Promise<Map<string, ChartDesignSetWithMembers>> {
+  const wanted = new Set(ids.filter((id) => typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id)));
+  const out = new Map<string, ChartDesignSetWithMembers>();
+  if (wanted.size === 0) return out;
+  const { designs, sets } = await loadChartDesignData(subAccountId);
+  for (const set of sets) if (wanted.has(set.id) && set.subAccountId === subAccountId) out.set(set.id, withMembers(set, designs));
+  return out;
+}
+
 /**
  * Creates a new unified design as an independent deep copy of another one
  * (the sub-account default when no source is given) — never shared member

@@ -49,7 +49,8 @@ assert.doesNotMatch(editor, /<ArrowLeft className="h-4 w-4" \/> Back/);
 assert.doesNotMatch(editor, /ArrowLeft/);
 // The permanent sample-data toolbar pill is gone; the disclosure is contextual (chart tool + chart inspector).
 assert.doesNotMatch(editor, /Design preview uses sample chart data/);
-assert.equal((editor.match(/data-sample-chart-note/g) ?? []).length, 2);
+assert.equal((editor.match(/data-sample-chart-note/g) ?? []).length, 1, "chart inspector");
+assert.equal((fs.readFileSync("src/components/energetic-decoder/report-chart-library.tsx", "utf8").match(/data-sample-chart-note/g) ?? []).length, 1, "Charts tool");
 // ONE zoom system, in the toolbar: Fit Page, Fit Width, %, −, slider, +.
 assert.match(editor, /<ZoomControl mode=\{zoom\} percent=\{zoomPercent\} onChange=\{setZoom\} \/>/);
 assert.equal((editor.match(/<ZoomControl /g) ?? []).length, 1, "exactly one zoom control");

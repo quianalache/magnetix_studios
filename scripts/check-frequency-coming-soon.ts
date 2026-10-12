@@ -84,7 +84,8 @@ async function main() {
     assert.equal(FREQUENCY_CHART_PIECE, "frequency-hologenetic");
     const freq = SHORTCODE_CATALOG.filter((s) => s.group === FREQUENCY_SHORTCODE_GROUP);
     assert.equal(freq.length, 13, "catalog itself is unchanged");
-    for (const piece of ["human-design-full", "human-design-mandala", "human-design-gates", "astrology-wheel"]) {
+    // 2026-10-12 Charts tool: "human-design-full" became the explicit Full Chart + Bodygraph parts (legacy elements show as Bodygraph).
+    for (const piece of ["human-design-full-chart", "human-design-bodygraph", "human-design-mandala", "human-design-gates", "astrology-wheel"]) {
       assert.ok(editor.includes(`<option value="${piece}">`), `${piece} still selectable`);
     }
     assert.ok(SHORTCODE_CATALOG.some((s) => s.group === "Human Design") && SHORTCODE_CATALOG.some((s) => s.group === "Astrology"));
@@ -112,7 +113,9 @@ async function main() {
   await check("renderers + bindings untouched: chart piece, PDF, shortcodes still resolve stored spheres", () => {
     assert.match(read("src/components/energetic-decoder/report-design-viewer.tsx"), /case "frequency-hologenetic":/);
     assert.match(read("src/lib/energetics/report-design-pdf-document.tsx"), /case "frequency-hologenetic":/);
-    assert.match(editor, /if \(piece === "frequency-hologenetic"\) return <GeneKeysChart/);
+    // 2026-10-12: the editor canvas draws charts through the shared Charts-tool preview.
+    assert.match(read("src/components/energetic-decoder/report-chart-preview.tsx"), /if \(p === "frequency-hologenetic"\) return <GeneKeysChart/);
+    assert.match(editor, /<ReportChartPreview /);
     assert.match(read("src/lib/energetics/shortcodes.ts"), /case "frequency_content":/);
   });
 

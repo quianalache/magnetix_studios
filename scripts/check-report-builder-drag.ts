@@ -118,6 +118,17 @@ check("clicking a page activates it; activation is not report-content history", 
   const activate = editor.match(/onActivate=\{\(\) => ([^}]*)\}/)![1];
   assert.doesNotMatch(activate, /commit/);
 });
+check("page activation (2026-10-12 audit): page chrome, blank canvas and elements all sit inside the capture-phase activator; it never stops the press, so selection + drag continue", () => {
+  const wrap = editor.slice(editor.indexOf("data-canvas-page={page.id}"));
+  const end = wrap.indexOf("{elements.map((e) => (");
+  assert.ok(end > 0, "elements render inside the activating wrapper");
+  assert.ok(wrap.slice(0, end).includes("<section"), "the blank page canvas is inside it too");
+  const handler = editor.match(/onPointerDownCapture=\{\(e\) => \{([^}]*)\}\}/)![1];
+  assert.doesNotMatch(handler, /stopPropagation|preventDefault/, "the element still receives the press (select + drag)");
+  assert.match(handler, /!active/, "pressing the already-active page changes nothing");
+  // Blank-canvas click clears selection only when the press hits the canvas itself.
+  assert.match(editor, /onClick=\{\(e\) => \{ if \(e\.target === e\.currentTarget\) onClearSelection\(\); \}\}/);
+});
 check("pointerdown only selects; panels open on click (no canvas rescale mid-drag)", () => {
   assert.match(editor, /onSelect\(\);\s*if \(!element\.locked\) drag\.begin\(e\);/);
   assert.match(editor, /if \(!opts\?\.openInspector\) return;/);

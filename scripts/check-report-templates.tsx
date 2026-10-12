@@ -52,13 +52,20 @@ await check("element counts match the reconstruction spec (9 · 22 · 6 · 26 ·
   assert.deepEqual(REPORT_TEMPLATES.map((t) => t.page.elements?.length), [9, 22, 6, 26, 14]);
 });
 const handoff = path.join(os.homedir(), "Documents/magnetix-release-records/2026-10-11-template-library-mockup/template-specs.json");
-await check("each shipped page is byte-identical to template-specs.json (when the handoff file is available)", () => {
+await check("each shipped page matches template-specs.json except the documented chart-part correction (when the handoff file is available)", () => {
   if (!fs.existsSync(handoff)) {
     console.log("    (handoff file not on this machine — skipped)");
     return;
   }
   const spec = JSON.parse(fs.readFileSync(handoff, "utf8")) as { templates: { id: string; reportPage: unknown }[] };
-  for (const t of REPORT_TEMPLATES) assert.deepEqual(t.page, spec.templates.find((s) => s.id === t.id)!.reportPage, t.id);
+  // Documented owner correction (2026-10-12): Luminous Arc + Bodygraph Spotlight draw the
+  // bodygraph-only part, not the Full Chart. Every other byte matches the handoff.
+  const overrides: Record<string, string> = { "tpl-cover-luminous-05": "human-design-bodygraph", "tpl-chart-spotlight-04": "human-design-bodygraph" };
+  for (const t of REPORT_TEMPLATES) {
+    const specPage = structuredClone(spec.templates.find((s) => s.id === t.id)!.reportPage) as typeof t.page;
+    for (const e of specPage.elements ?? []) if (overrides[e.id]) { assert.equal(e.payload.piece, "human-design-full", e.id); e.payload = { ...e.payload, piece: overrides[e.id] }; }
+    assert.deepEqual(t.page, specPage, t.id);
+  }
 });
 
 console.log("\nMetadata, filtering, search");
@@ -132,9 +139,9 @@ await check("Type Story keeps its Content Set-backed type_description Shortcode 
   assert.equal(passage.type, "shortcode");
   assert.deepEqual(instantiateReportTemplate(ts).elements!.find((e) => e.payload.token === "type_description")!.payload, { token: "type_description" });
 });
-await check("chart elements carry only { piece } — no colors; style tags never reach a chart", () => {
+await check("chart elements carry only { piece } — Luminous + Spotlight = bodygraph only, Mandala Circle = Mandala; no colors; style tags never reach a chart", () => {
   const charts = all.filter(({ e }) => e.type === "chart");
-  assert.deepEqual(charts.map(({ t, e }) => [t.id, e.payload]), [["cover-luminous", { piece: "human-design-full" }], ["chart-spotlight", { piece: "human-design-full" }], ["chart-mandala", { piece: "human-design-mandala" }]]);
+  assert.deepEqual(charts.map(({ t, e }) => [t.id, e.payload]), [["cover-luminous", { piece: "human-design-bodygraph" }], ["chart-spotlight", { piece: "human-design-bodygraph" }], ["chart-mandala", { piece: "human-design-mandala" }]]);
   for (const { e } of charts) assert.deepEqual(Object.keys(e.style ?? {}).sort(), ["borderStyle", "borderWidth", "opacity"]);
 });
 await check("no Frequency piece or token anywhere in the library", () => {

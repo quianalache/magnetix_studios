@@ -93,6 +93,7 @@ export function MandalaChart({
   showDesign = true,
   canvasPadding = "4%",
   keepFullLabels = false,
+  discPanel = false,
 }: {
   profile: HumanDesignProfile;
   /** "Activated gate edge" — the rim arc on each activated gate. */
@@ -124,6 +125,8 @@ export function MandalaChart({
   canvasPadding?: string;
   /** Reading → Mandala only: keep full Quarter + zodiac names on phone-width charts (see KEEP_FULL_LABELS_MIN_WIDTH). Every other consumer keeps the original compact behavior. */
   keepFullLabels?: boolean;
+  /** Report Builder canvas (2026-10-12): paint the design background as a disc behind the wheel instead of a rounded square — keeps the ground the wheel's ink is designed against, drops the outer rectangle. */
+  discPanel?: boolean;
 }) {
   const colors =
     mandalaColors ??
@@ -167,7 +170,7 @@ export function MandalaChart({
 
   return (
     // @container/mandala: labels shorten on tiny Mandalas (ZODIAC_FULL_NAMES_MIN_WIDTH).
-    <div className={`@container/mandala ${className ?? ""}`} style={{ background: colors.background, borderRadius: 12, padding: canvasPadding, position: "relative" }}>
+    <div className={`@container/mandala ${className ?? ""}`} style={{ background: colors.background, borderRadius: discPanel ? "50%" : 12, padding: canvasPadding, position: "relative" }}>
       {/* The wheel and the center BodyGraph share this box, so the BodyGraph is sized against the wheel itself. */}
       <div data-mandala-wheel style={{ position: "relative" }} className="[&>svg]:block">
         <svg viewBox={`0 0 ${MANDALA_VIEW} ${MANDALA_VIEW}`} role="img" aria-label="Mandala chart">

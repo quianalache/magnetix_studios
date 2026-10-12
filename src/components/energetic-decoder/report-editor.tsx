@@ -13,7 +13,6 @@ import {
   EyeOff,
   FilePlus2,
   FileText,
-  Info,
   Grid2X2,
   Image as ImageIcon,
   LayoutGrid,
@@ -39,6 +38,10 @@ import {
 import { SHORTCODE_CATALOG } from "@/lib/energetics/shortcodes";
 import { BLANK_PAGE_TITLE, createBlankReportPage, instantiateReportTemplate, type ReportTemplate } from "@/lib/energetics/report-templates";
 import { ReportTemplateLibrary } from "@/components/energetic-decoder/report-template-library";
+import { ReportChartLibrary } from "@/components/energetic-decoder/report-chart-library";
+import { ReportChartDesignSetsContext, ReportChartPreview, designsOfSet, useReportChartDesignSets } from "@/components/energetic-decoder/report-chart-preview";
+import { CHART_PIECE_LABELS, elementChartDesignSetId, newChartElement, normalizeCanvasChartPiece } from "@/lib/energetics/report-charts";
+import type { ChartDesignSetWithMembers } from "@/types/chart-design-set";
 import {
   FREQUENCY_CHART_PIECE,
   FREQUENCY_COMING_SOON,
@@ -47,10 +50,6 @@ import {
 } from "@/lib/energetics/frequency-availability";
 import { MediaPickerDialog } from "@/components/assets/media-picker-dialog";
 import type { MediaLibraryItem } from "@/types/media-library";
-import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
-import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
-import { MandalaChart } from "@/components/energetic-decoder/mandala-chart";
-import { GeneKeysChart } from "@/components/energetic-decoder/gene-keys-chart";
 import { CelestialDecoration } from "@/components/energetic-decoder/content-sets-visuals";
 import { ZoomControl, clampZoom, type ZoomMode } from "@/components/energetic-decoder/report-zoom-control";
 import {
@@ -61,9 +60,6 @@ import {
   startGesture,
   type Gesture,
 } from "@/components/energetic-decoder/report-drag-gesture";
-import { resolveAstrologyColors } from "@/lib/energetics/astrology-spec";
-import { resolveMandalaColors } from "@/lib/energetics/mandala-spec";
-import { REPORT_BUILDER_FIXTURE_READING } from "@/lib/energetics/report-builder-fixture";
 import {
   CHART_RULE_ATTRIBUTES,
   CHART_RULE_OPERATORS,
@@ -76,6 +72,7 @@ import type {
   ReportPage,
   ReportPageSize,
 } from "@/types/report-blocks";
+import type { ChartPieceKind } from "@/types/report-blocks";
 
 const PAGE = {
   letter: { width: 816, height: 1056 },
@@ -122,7 +119,7 @@ function initialPages(initial: ReportDesign): ReportPage[] {
 function payloadFor(type: ReportElementType): Record<string, unknown> {
   if (type === "text") return { text: "Add text" };
   if (type === "image" || type === "upload") return { url: "", alt: "" };
-  if (type === "chart") return { piece: "human-design-full" };
+  if (type === "chart") return { piece: "human-design-bodygraph" };
   if (type === "shortcode") return { token: "full_name" };
   if (type === "shape") return { shape: "rectangle" };
   if (type === "frame") return { shape: "rectangle", frame: true };
@@ -281,6 +278,21 @@ export function ReportEditor({
       .catch(() => undefined);
   }, [subAccountId]);
 
+  // Saved Chart Designs (the existing Chart Designs system) for the Charts tool + canvas.
+  const [chartSets, setChartSets] = useState<ChartDesignSetWithMembers[]>([]);
+  const [chartSetsLoading, setChartSetsLoading] = useState(true);
+  const [chartSetsError, setChartSetsError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/sub-accounts/${subAccountId}/energetic-decoder/chart-design-sets`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { sets?: ChartDesignSetWithMembers[] }) => { if (!cancelled) setChartSets(d.sets ?? []); })
+      .catch(() => { if (!cancelled) setChartSetsError("Couldn’t load your Chart Designs."); })
+      .finally(() => { if (!cancelled) setChartSetsLoading(false); });
+    return () => { cancelled = true; };
+  }, [subAccountId]);
+  const chartSetMap = useMemo(() => new Map(chartSets.map((set) => [set.id, set])), [chartSets]);
+
   function commit(next: ReportPage[]) {
     setHistory((h) => [...h.slice(-29), pages]);
     setFuture([]);
@@ -317,6 +329,16 @@ export function ReportEditor({
     setInspectorOpen(true);
     if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileDrawer("element");
     if (type === "image" || type === "upload") setAssetPickerOpen(true);
+  }
+  /** Charts tool: a normal Chart element for this part + saved design, on the active page (one undo step). */
+  function addChartElement(piece: ChartPieceKind, set: ChartDesignSetWithMembers, sectionLabel: string) {
+    const e = newChartElement({ id: id(), piece, chartDesignSetId: set.id, zIndex: elements.length });
+    updatePage((p) => ({ ...p, elements: [...(p.elements ?? []), e] }));
+    setSelectedId(e.id);
+    setRightPanel("element");
+    setInspectorOpen(true);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) setMobileDrawer("element");
+    toast.success(`${sectionLabel}: ${set.name} added`);
   }
   function addPage() {
     const p: ReportPage = {
@@ -474,9 +496,10 @@ export function ReportEditor({
   const renderActiveToolPanel = (opts?: { inSheet?: boolean }) => {
     if (templateCategory === "Templates") return <ReportTemplateLibrary onInsert={insertTemplate} onInsertBlank={insertBlankPage} showHeading={opts?.inSheet} />;
     if (templateCategory === "Branding") return <div className="space-y-3"><div><p className="text-sm font-semibold">Branding</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Uses the existing ReportDesign.brand fields. Changes are saved with this report.</p></div><label className="block text-xs font-semibold">Accent color<input type="color" value={brand.accentColor ?? "#5420a8"} onChange={(e) => { setBrand((b) => ({ ...b, accentColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Background color<input type="color" value={brand.backgroundColor ?? "#ffffff"} onChange={(e) => { setBrand((b) => ({ ...b, backgroundColor: e.target.value })); setDirty(true); }} className="mt-1 h-9 w-full rounded border" /></label><label className="block text-xs font-semibold">Logo URL<input value={brand.logoUrl ?? ""} onChange={(e) => { setBrand((b) => ({ ...b, logoUrl: e.target.value || null })); setDirty(true); }} placeholder="Optional approved logo URL" className="mt-1 h-9 w-full rounded border px-2" /></label></div>;
+    if (templateCategory === "chart") return <ReportChartLibrary sets={chartSets} loading={chartSetsLoading} error={chartSetsError} onInsert={addChartElement} />;
     const tool = tools.find((item) => item.type === templateCategory);
     if (!tool) return <p className="text-xs text-muted-foreground">Select a tool to open its panel.</p>;
-    return <div className="space-y-4"><div><p className="text-sm font-semibold">{tool.label}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Choose a {tool.label.toLowerCase()} element to place on the active page.</p>{tool.type === "chart" && <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] leading-5 text-amber-900" data-sample-chart-note><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />Charts in this editor and in Preview PDF use sample chart data. Generated reports use each person&apos;s own reading.</p>}</div><button type="button" onClick={() => addElement(tool.type)} className="w-full rounded-xl bg-violet-700 px-3 py-2.5 text-sm font-semibold text-white">Add {tool.label.replace(/s$/, "")}</button></div>;
+    return <div className="space-y-4"><div><p className="text-sm font-semibold">{tool.label}</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Choose a {tool.label.toLowerCase()} element to place on the active page.</p></div><button type="button" onClick={() => addElement(tool.type)} className="w-full rounded-xl bg-violet-700 px-3 py-2.5 text-sm font-semibold text-white">Add {tool.label.replace(/s$/, "")}</button></div>;
   };
 
   const renderPagesPanel = () => (
@@ -534,6 +557,7 @@ export function ReportEditor({
   );
 
   return (
+    <ReportChartDesignSetsContext.Provider value={chartSetMap}>
     <div className="report-builder-shell min-h-screen bg-[#fbfaff] text-[#18204a] dark:bg-slate-950 dark:text-slate-100 max-md:pb-[calc(var(--rb-toolbar-h)+1rem)] lg:min-h-0">
       {/* Desktop: the editor fills exactly the dashboard content area (100dvh − 64px top bar − 48px padding), so header,
           toolbar, canvas and the page strip are all on screen, as in the approved mockup. */}
@@ -773,6 +797,7 @@ export function ReportEditor({
       />
       <style jsx>{`@media (max-width: 640px) { .report-canvas-stage { transform-origin: top left !important; } }`}</style>
     </div>
+    </ReportChartDesignSetsContext.Provider>
   );
 }
 
@@ -1104,17 +1129,19 @@ function ElementPanel({
             <>
             <label className="block text-sm font-medium">
               Chart piece
-              <select value={String(selected.payload.piece ?? "human-design-full")} onChange={(e) => update((x) => ({ ...x, payload: { ...x.payload, piece: e.target.value } }))} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm">
-                <option value="human-design-full">Human Design bodygraph</option>
-                <option value="human-design-mandala">Human Design mandala</option>
-                <option value="human-design-gates">Activated gates</option>
-                <option value="astrology-wheel">Astrology wheel</option>
+              <select value={normalizeCanvasChartPiece(String(selected.payload.piece ?? "human-design-full"))} onChange={(e) => update((x) => ({ ...x, payload: { ...x.payload, piece: e.target.value } }))} className="mt-1 h-9 w-full rounded-lg border px-2 text-sm">
+                <option value="human-design-full-chart">{CHART_PIECE_LABELS["human-design-full-chart"]}</option>
+                <option value="human-design-bodygraph">{CHART_PIECE_LABELS["human-design-bodygraph"]}</option>
+                <option value="human-design-mandala">{CHART_PIECE_LABELS["human-design-mandala"]}</option>
+                <option value="human-design-gates">{CHART_PIECE_LABELS["human-design-gates"]}</option>
+                <option value="astrology-wheel">{CHART_PIECE_LABELS["astrology-wheel"]}</option>
                 {/* Frequency is Coming soon: not selectable for new pieces; a design that already uses it still shows it. */}
                 <option value={FREQUENCY_CHART_PIECE} disabled={FREQUENCY_COMING_SOON}>
                   {FREQUENCY_COMING_SOON ? `Frequency — ${FREQUENCY_COMING_SOON_LABEL}` : "Frequency / Hologenetic Profile"}
                 </option>
               </select>
             </label>
+            <ChartDesignPicker selected={selected} update={update} />
             <p className="text-[11px] leading-5 text-muted-foreground" data-sample-chart-note>Shown here with sample chart data. Generated reports use each person&apos;s own reading.</p>
             </>
           )}
@@ -1481,8 +1508,8 @@ function CanvasElement({
       }}
     >
       {element.type === "chart" ? (
-        <div className="h-full w-full overflow-hidden rounded bg-white">
-          <FixtureChart piece={String(element.payload.piece ?? "human-design-full")} />
+        <div className="h-full w-full overflow-hidden rounded">
+          <CanvasChart element={element} />
         </div>
       ) : element.type === "image" || element.type === "upload" ? (
         element.payload.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={String(element.payload.url)} alt={String(element.payload.alt ?? "Report image")} draggable={false} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-sm text-violet-800">Choose an image asset</div>
@@ -1496,10 +1523,38 @@ function CanvasElement({
   );
 }
 
-function FixtureChart({ piece }: { piece: string }) {
-  const r = REPORT_BUILDER_FIXTURE_READING;
-  if (piece === "astrology-wheel") return <AstrologyWheelChart chart={r.astrology} colors={resolveAstrologyColors({})} className="h-full w-full" />;
-  if (piece === "human-design-mandala") return <MandalaChart profile={r.humanDesign} gateColor="#c8a7e8" backgroundColor="#fff" mandalaColors={resolveMandalaColors({})} className="h-full w-full" />;
-  if (piece === "frequency-hologenetic") return <GeneKeysChart spheres={r.spheres} className="h-full w-full" />;
-  return <HumanDesignChart profile={r.humanDesign} className="h-full w-full" />;
+/** Inspector: which saved Chart Design this chart is drawn with (or the reading's own design). */
+function ChartDesignPicker({ selected, update }: { selected: ReportCanvasElement; update: (fn: (x: ReportCanvasElement) => ReportCanvasElement) => void }) {
+  const sets = useReportChartDesignSets();
+  const current = elementChartDesignSetId(selected);
+  const missing = !!current && !sets.has(current) && sets.size > 0;
+  return (
+    <label className="block text-sm font-medium" data-chart-design-picker>
+      Chart design
+      <select
+        value={current ?? ""}
+        onChange={(e) =>
+          update((x) => {
+            const { chartDesignSetId: _old, ...rest } = x.payload;
+            void _old;
+            return { ...x, payload: e.target.value ? { ...rest, chartDesignSetId: e.target.value } : rest };
+          })
+        }
+        className="mt-1 h-9 w-full rounded-lg border px-2 text-sm"
+      >
+        <option value="">The reading&apos;s own chart design</option>
+        {missing && <option value={current!} disabled>Deleted design — choose another</option>}
+        {[...sets.values()].map((set) => (
+          <option key={set.id} value={set.id}>{set.name}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Canvas chart: the element's part drawn with its saved Chart Design (sample reading), else the default look. */
+function CanvasChart({ element }: { element: ReportCanvasElement }) {
+  const sets = useReportChartDesignSets();
+  const setId = elementChartDesignSetId(element);
+  return <ReportChartPreview piece={String(element.payload.piece ?? "human-design-full")} designs={setId ? designsOfSet(sets.get(setId)) : null} />;
 }

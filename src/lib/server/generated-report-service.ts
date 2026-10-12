@@ -12,6 +12,7 @@ import type { EnergeticDecoderReading } from "@/types/energetic-decoder";
 import type { ChartDesign } from "@/types/chart-design";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { getContentSet } from "@/lib/server/content-set-service";
+import { attachReportChartDesigns } from "@/lib/server/report-chart-designs";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 
 /**
@@ -178,7 +179,8 @@ export async function createGeneratedReport(opts: {
     profileId: reading.profileId ?? null,
     generatedBy: opts.generatedByUid,
     snapshot: {
-      pages: resolveSnapshotPages(design.pages, ruleInput, shortcodeInput),
+      // Chart elements freeze their saved Chart Design into the snapshot (a later design edit can't change this report).
+      pages: resolveSnapshotPages(await attachReportChartDesigns(opts.subAccountId, design.pages), ruleInput, shortcodeInput),
       layoutVersion: design.layoutVersion ?? 1,
       contentSetId: design.contentSetId ?? null,
       contentSet: { id: contentSet.id, name: contentSet.name, values: contentSet.values },

@@ -7,6 +7,7 @@ import { getDefaultChartDesign } from "@/lib/server/chart-design-service";
 import { getContentSet } from "@/lib/server/content-set-service";
 import { getPreviewSampleReading } from "@/lib/energetics/preview-sample-reading";
 import { resolvePagesForRender } from "@/lib/energetics/report-shortcode-render";
+import { attachReportChartDesigns } from "@/lib/server/report-chart-designs";
 import { evaluateChartRule } from "@/lib/energetics/chart-rules";
 import { renderReportDesignPdfStream } from "@/lib/energetics/report-design-pdf-render";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
@@ -40,7 +41,8 @@ export async function POST(
     getAdminDb().doc(`subAccounts/${subAccountId}`).get(),
   ]);
   const sub = subSnap.exists ? subSnap.data() ?? {} : {};
-  const pages = resolvePages(design, reading, contentSet, { humanDesign: reading.humanDesign, astrology: reading.astrology });
+  // Each chart element drawn with its own saved Chart Design (resolved here, never trusted from the draft).
+  const pages = await attachReportChartDesigns(subAccountId, resolvePages(design, reading, contentSet, { humanDesign: reading.humanDesign, astrology: reading.astrology }));
   const stream = await renderReportDesignPdfStream({
     title: design.title || "Report preview",
     readerName: reading.name,

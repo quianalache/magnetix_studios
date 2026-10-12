@@ -6,6 +6,7 @@ import { getReportDesign } from "@/lib/server/report-design-service";
 import { resolveChartDesignsForReading } from "@/lib/server/chart-design-service";
 import { ReportDesignViewer } from "@/components/energetic-decoder/report-design-viewer";
 import { ContentSetError, getContentSet } from "@/lib/server/content-set-service";
+import { attachReportChartDesigns } from "@/lib/server/report-chart-designs";
 import { DEFAULT_CONTENT_SET_ID } from "@/lib/energetic-decoder/content-sets";
 import type { ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 
@@ -87,7 +88,7 @@ export default async function EnergeticDecoderReportDesignPage({
         </div>
 
         <ReportDesignViewer
-          design={design}
+          design={{ ...design, pages: await attachReportChartDesigns(saId, design.pages) }}
           readingInput={readingInput}
           ruleInput={{ humanDesign: reading.humanDesign, astrology: reading.astrology }}
           hdDesign={hdDesign}

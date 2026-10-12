@@ -351,7 +351,8 @@ check("phone type fits: Sagittarius uses < 60% of its 30° arc; each label fits 
   assert.ok(LEGIBLE_LABEL_TYPE.quarterLabel < MANDALA_RINGS.quarterOuter - MANDALA_RINGS.quarterInner);
 });
 check("Mandala PDF renderer untouched by this work", () => {
-  assert.equal(execSync("git diff 950c2b7 -- src/lib/energetics/reading-pdf-document.tsx src/lib/energetics/report-design-pdf-document.tsx src/lib/energetics/mandala-spec.ts", { encoding: "utf8" }), "");
+  // Pinned to this release's own range (950c2b7 → 2f7869f); later releases change these files on purpose.
+  assert.equal(execSync("git diff 950c2b7 2f7869f -- src/lib/energetics/reading-pdf-document.tsx src/lib/energetics/report-design-pdf-document.tsx src/lib/energetics/mandala-spec.ts", { encoding: "utf8" }), "");
 });
 
 console.log(`\n${passed} checks passed.`);

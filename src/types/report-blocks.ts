@@ -108,7 +108,14 @@ export interface ButtonBlock extends ReportBlockBase {
 }
 
 /** Which real chart piece to drop in — mirrors Bodygraph's "Chart Parts" panel (full chart / mandala overlay / gates legend), confirmed 2026-08-09 against her real account. "frequency-hologenetic" added 2026-08-15 (Phase 5) — real gap found in that pass: Frequency had no Report Builder chart-block option at all, only Human Design and Astrology did. */
-export type ChartPieceKind = "human-design-full" | "human-design-mandala" | "human-design-gates" | "astrology-wheel" | "frequency-hologenetic";
+/**
+ * Chart parts. "human-design-bodygraph" = the bodygraph alone;
+ * "human-design-full-chart" = bodygraph + planet columns + Variable arrows
+ * (2026-10-12). "human-design-full" is the legacy id: on canvas elements it
+ * renders as the bodygraph (what the editor and web always showed); legacy
+ * v1 chart blocks keep their original behavior.
+ */
+export type ChartPieceKind = "human-design-full" | "human-design-bodygraph" | "human-design-full-chart" | "human-design-mandala" | "human-design-gates" | "astrology-wheel" | "frequency-hologenetic";
 
 export interface ChartBlock extends ReportBlockBase {
   type: "chart";

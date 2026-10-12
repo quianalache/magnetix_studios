@@ -4,6 +4,8 @@ import { useState, type CSSProperties } from "react";
 import type { ReportDesign, ReportPage, ReportBlock, ReportCanvasElement, ChartPieceKind } from "@/types/report-blocks";
 import { resolveShortcodes, type ShortcodeReadingInput } from "@/lib/energetics/shortcodes";
 import { resolveInlineText, shortcodeElementValue } from "@/lib/energetics/report-shortcode-render";
+import { elementChartDesigns, normalizeCanvasChartPiece } from "@/lib/energetics/report-charts";
+import { HumanDesignFullChart } from "@/components/energetic-decoder/human-design-full-chart";
 import { evaluateChartRule, type ChartRuleReadingInput } from "@/lib/energetics/chart-rules";
 import { HumanDesignChart } from "@/components/energetic-decoder/human-design-chart";
 import { AstrologyWheelChart } from "@/components/energetic-decoder/astrology-wheel-chart";
@@ -163,7 +165,22 @@ function CanvasElementView({ element, readingInput, hdDesign, mandalaDesign, ast
     const url = String(element.payload.url ?? "");
     return url ? <img src={url} alt={String(element.payload.alt ?? element.payload.title ?? "Report image")} style={{ ...style, objectFit: String(element.payload.fit ?? "cover") as CSSProperties["objectFit"] }} /> : <div style={style} className="flex items-center justify-center bg-gradient-to-br from-violet-100 via-fuchsia-50 to-amber-50 text-xs text-violet-800">Choose an image asset</div>;
   }
-  if (element.type === "chart") return <div style={style}><ChartPieceView piece={String(element.payload.piece ?? "human-design-full") as ChartPieceKind} readingInput={readingInput} hdDesign={hdDesign} mandalaDesign={mandalaDesign} astroDesign={astroDesign} /></div>;
+  if (element.type === "chart") {
+    // A chart element drawn with its own saved Chart Design (attached server-side), else the reading's design.
+    const own = elementChartDesigns(element);
+    return (
+      <div style={style}>
+        <ChartPieceView
+          piece={normalizeCanvasChartPiece(String(element.payload.piece ?? "human-design-full")) as ChartPieceKind}
+          readingInput={readingInput}
+          hdDesign={own?.humanDesign ?? hdDesign}
+          mandalaDesign={own?.mandala ?? mandalaDesign}
+          astroDesign={own?.astrology ?? astroDesign}
+          transparent
+        />
+      </div>
+    );
+  }
   // Same empty fallback as the PDF: a blank value stays blank for readers (never the editor's "Add text" placeholder).
   return <div style={style} className="whitespace-pre-wrap break-words">{resolved || (element.type === "graphic" ? "Energetic Decoder graphic" : "")}</div>;
 }
@@ -284,18 +301,44 @@ function ChartPieceView({
   hdDesign,
   mandalaDesign,
   astroDesign,
+  transparent = false,
 }: {
-  piece: "human-design-full" | "human-design-mandala" | "human-design-gates" | "astrology-wheel" | "frequency-hologenetic";
+  piece: ChartPieceKind;
   readingInput: ShortcodeReadingInput;
   hdDesign?: ChartDesign | null;
   mandalaDesign?: ChartDesign | null;
   astroDesign?: ChartDesign | null;
+  /** Report Builder canvas: no outer background panel, so the chart sits on the page/template shapes. Internal chart fills keep their colors. */
+  transparent?: boolean;
 }) {
   const hd = readingInput.humanDesign as HumanDesignProfile | null | undefined;
   const astro = readingInput.astrology as AstrologyChart | null | undefined;
   const spheres = readingInput.spheres;
 
   switch (piece) {
+    case "human-design-bodygraph":
+      return hd ? (
+        <HumanDesignChart
+          profile={hd}
+          definedColor={hdDesign?.chartDefinedColor}
+          channelsColor={hdDesign?.channelsColor}
+          gatesColor={hdDesign?.gatesColor}
+          personalityColor={hdDesign?.personalityActivationColor}
+          designColor={hdDesign?.designActivationColor}
+          backgroundColor={transparent ? "transparent" : hdDesign?.backgroundColor}
+          centersMode={hdDesign?.centersMode}
+          centerColors={centerColorsFromDesign(hdDesign)}
+          className="h-full w-full [&>svg]:h-full [&>svg]:w-full"
+        />
+      ) : (
+        <MissingPiece label="Human Design chart" />
+      );
+    case "human-design-full-chart":
+      return hd ? (
+        <HumanDesignFullChart profile={hd} design={transparent ? ({ ...(hdDesign ?? {}), backgroundColor: "transparent" } as ChartDesign) : hdDesign} />
+      ) : (
+        <MissingPiece label="Human Design chart" />
+      );
     case "human-design-full":
       return hd ? (
         <HumanDesignChart
@@ -349,6 +392,7 @@ function ChartPieceView({
           gateRingColor={mandalaDesign.mandalaGateRingColor}
           quadrantColor={mandalaDesign.mandalaQuadrantColor}
           hdDesign={hdDesign}
+          discPanel={transparent}
         />
       ) : (
         <MissingPiece label="Mandala chart" />
