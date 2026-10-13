@@ -1,0 +1,10 @@
+{
+  "_comment": "The ONE Vercel project that builds and serves Magnetix Studios. Non-secret identifiers used by scripts/vercel-guard.mjs to refuse deploys from a worktree linked anywhere else. Adding another Magnetix Vercel project requires owner approval — see CLAUDE.md › Magnetix Vercel deployment.",
+  "projectName": "magnetix-studios",
+  "projectId": "prj_QWUGVEwsccNCiYJh7XdRy2Y8VN19",
+  "orgId": "team_HQQoW0xAZkQeL4WlBk4Xaszw",
+  "teamSlug": "magnetix-studios",
+  "githubRepo": "quianalache/magnetix_studios",
+  "githubRepoId": 1299329681,
+  "vercelCliVersion": "63.1.2"
+}

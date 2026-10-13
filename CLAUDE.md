@@ -952,9 +952,30 @@ Vercel rejects a deployment with more than **2,048 routes**, and `next build` ne
 
 - Groups listed in `GROUPS` in [scripts/gen-api-dispatch.mjs](scripts/gen-api-dispatch.mjs) (Community member API `[groupId]`, Energetic Decoder, YouTube Studio, Client Portal, Growth, sub-account + agency Standalone Courses, Projects, Media Library, Routines) are each served by ONE generated optional catch-all, `<group>/[[...path]]/route.ts`, which dispatches through [api-dispatch.ts](src/lib/server/api-dispatch.ts) to the original, unchanged handler files in `<group>/_routes/<same sub-path>/route.ts` (private folder, never routed). URLs, methods, params, auth and responses are unchanged; precedence follows Next (static > dynamic > catch-all); unknown path → 404, unexported method → 405, HEAD/OPTIONS as Next.
 - **Adding an endpoint to a consolidated group:** put it at `<group>/_routes/<sub-path>/route.ts` and run `node scripts/gen-api-dispatch.mjs --write`. A handler that needs its own `maxDuration`/`runtime`/etc. stays a real route file outside `_routes/` (first segment below the group must be static). `pnpm lint` runs `--check` and fails when a group is out of sync.
-- **Before adding a new dynamic route area, measure:** `npx vercel build --prod` (with an env-free `.vercel/project.json`) → `.vercel/output/config.json` `routes.length`; keep it well under 2,048 — prefer adding a new group to `GROUPS` over many new dynamic route files.
+- **Before adding a new dynamic route area, measure:** `pnpm vercel:link` then `npx vercel build --prod` (a local build; never `vercel deploy` — see "Magnetix Vercel deployment") → `.vercel/output/config.json` `routes.length`; keep it well under 2,048 — prefer adding a new group to `GROUPS` over many new dynamic route files.
 - The Agency Community API (`api/agency/community/[...path]`, handlers in `src/lib/agency-community-api/`) uses the same dispatcher.
 - Checks: `scripts/check-api-dispatch.ts` (every endpoint at `origin/main` still served, per-method/params dispatch, precedence, 404/405/HEAD/OPTIONS); emulator suites call consolidated endpoints through the dispatcher via `scripts/_via-dispatcher.ts`.
+
+## Magnetix Vercel deployment (cost control — 2026-10-13)
+
+Magnetix Studios has **ONE** Vercel application project: **`magnetix-studios`** (`prj_QWUGVEwsccNCiYJh7XdRy2Y8VN19`, team `team_HQQoW0xAZkQeL4WlBk4Xaszw`, Git `quianalache/magnetix_studios`, production branch `main`, domains crm./www./magnetixstudios.com + quianalache.com). The ids live in [vercel.canonical.json](vercel.canonical.json) (non-secret). Vercel bills builds per CPU-minute, and every project Git-connected to this repo rebuilds the whole app on every push — in Sept–Oct 2026 five stray projects roughly doubled the build bill. The guard is [scripts/vercel-guard.mjs](scripts/vercel-guard.mjs); Codex reads the same rules from [AGENTS.md](AGENTS.md).
+
+**How strays were created (don't repeat it):** `.vercel/` is gitignored, so every new worktree starts unlinked. Raw `vercel --prod --yes` / `npx vercel …` / `pnpm dlx vercel …` in an unlinked folder silently creates a NEW project named after the folder (`magnetix_studios-pipelines`, `magnetix-report-builder-parity`, …) and connects it to the repo.
+
+Rules (Claude, Codex and humans):
+1. One canonical Vercel project. Creating another Magnetix Vercel project requires **owner approval**.
+2. A CRM module (Pipelines, Contacts, Community, Energetic Decoder, Billing, Forms, Content Studio, …) is part of the main app — it never gets its own Vercel project.
+3. A Git worktree is NOT a Vercel project. Many worktrees, one project. Never assume a worktree is linked.
+4. **Never run the raw Vercel CLI to deploy or link** (`vercel`, `vercel deploy`, `vercel --prod`, `vercel link`, especially with `--yes`). Read-only CLI use (`inspect`, `ls`, `logs`) is fine.
+5. Production = merge to `main` and push; the canonical project's Git integration deploys it. If a CLI deploy is genuinely needed: `pnpm deploy:production` (requires a clean tree at exactly `origin/main`) or `pnpm deploy:preview`.
+6. Before any deployment-related work in a worktree: `pnpm vercel:link` (writes the canonical `.vercel/project.json` directly — never calls `vercel link`, can't create a project), then `pnpm vercel:check`.
+7. `pnpm vercel:sanity` — read-only account check: exactly one project may be Git-connected to the repo. Run it at the start of any deploy/release task; the guarded deploy runs it automatically and refuses if an extra project builds this repo. If it flags one, stop and tell the owner — don't delete or disconnect projects without approval.
+8. Local QA first (dev server + emulators + local screenshots). Batch related corrections into one push.
+9. When remote authenticated QA is needed, use **one** intentional preview of the canonical project (`pnpm deploy:preview`, or one pushed branch) — only the canonical project may build previews; previews never justify a new project.
+10. Production only when the candidate is materially ready. One production deployment at a time.
+11. The canonical project builds on the fixed **Standard** machine (changed from elastic/Enhanced 2026-10-13: ~1 min slower, ~35–60% cheaper per build). Don't change it back without owner approval.
+
+Checks: `pnpm check:vercel-guard` (offline; missing/wrong-project/wrong-team links fail, deploy never spawns the CLI when linkage is wrong, sanity is fail-closed).
 
 ## Commands
 - `pnpm dev` — dev server (Turbopack)

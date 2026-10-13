@@ -15,6 +15,12 @@
     "lint": "node scripts/check-capability-tenancy.mjs && node scripts/gen-api-dispatch.mjs --check && eslint",
     "check:api-dispatch": "node scripts/gen-api-dispatch.mjs --check",
     "check:tenancy": "node scripts/check-capability-tenancy.mjs",
+    "vercel:check": "node scripts/vercel-guard.mjs check",
+    "vercel:link": "node scripts/vercel-guard.mjs link",
+    "vercel:sanity": "node scripts/vercel-guard.mjs sanity",
+    "deploy:preview": "node scripts/vercel-guard.mjs deploy",
+    "deploy:production": "node scripts/vercel-guard.mjs deploy --prod",
+    "check:vercel-guard": "node scripts/check-vercel-guard.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\""
   },
   "dependencies": {
