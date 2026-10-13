@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useTheme } from "next-themes";
+import { useIsDarkTheme } from "@/lib/theme/crm-theme";
 import { Globe2 } from "lucide-react";
 import {
   Map as MapboxMap,
@@ -62,7 +62,7 @@ export function GetLeadsMap({
   onToggle: (placeId: string) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  const { resolvedTheme } = useTheme();
+  const isDark = useIsDarkTheme();
   const mapRef = useRef<MapRef | null>(null);
   const [popup, setPopup] = useState<PopupState | null>(null);
 
@@ -162,7 +162,7 @@ export function GetLeadsMap({
   }
 
   const styleUrl =
-    resolvedTheme === "dark"
+    isDark
       ? "mapbox://styles/mapbox/dark-v11"
       : "mapbox://styles/mapbox/light-v11";
 

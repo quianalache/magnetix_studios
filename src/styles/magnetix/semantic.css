@@ -1,0 +1,236 @@
+/*
+ * Magnetix design system — L2 SEMANTIC / COMPONENT TOKENS (Phase 0, 2026-10-13).
+ *
+ * Two parts:
+ *
+ * 1. The app-wide shadcn defaults (:root / .dark), MOVED here verbatim from
+ *    globals.css so the legacy theme blocks in legacy.css still come after
+ *    them in source order (a class on <html> and :root tie on specificity —
+ *    the later block must be the theme; see the 2026-07-30 fix). Values are
+ *    unchanged in Phase 0. Phase 1 points them at the Magnetix tokens and
+ *    retires the theme-magnetix class. `.dark` is kept (dark mode is a future
+ *    design task, not abandoned) but is never applied in the CRM today —
+ *    next-themes forces light there (components/providers.tsx).
+ *
+ * 2. The NEW semantic tokens (`--ds-*`), defined from tokens.css and exposed
+ *    as Tailwind utilities (`bg-status-success-bg`, `text-ink-secondary`, …).
+ *    Unused in Phase 0, so nothing changes visually. New shared components
+ *    (components/system/*) consume THESE, never raw hex.
+ */
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* ── New semantic tokens (unused until Phase 1) ─────────────────────────── */
+:root {
+  /* Surfaces: white-first. Tints are restrained supporting treatments —
+     never a page background, never nested inside another tint. */
+  --ds-surface-canvas: var(--color-canvas);
+  --ds-surface-raised: var(--color-surface);
+  --ds-surface-sunken: #f7f5fa;
+  --ds-surface-tint-violet: #faf7ff;
+  --ds-surface-tint-blush: #fff9fb;
+  --ds-surface-tint-aqua: #f7fcfc;
+  --ds-surface-tint-gold: #fffcf5;
+
+  --ds-text-primary: var(--color-ink);
+  --ds-text-secondary: var(--color-ink-2);
+  --ds-text-tertiary: var(--color-ink-3);
+  --ds-text-inverse: #ffffff;
+  --ds-text-link: var(--color-violet-ds-700);
+
+  --ds-border-subtle: #f2eef7;
+  --ds-border-default: var(--color-line);
+  --ds-border-strong: var(--color-line-strong);
+
+  /* Primary action = deep plum (owner decision). Violet is focus/selection. */
+  --ds-action-primary: var(--color-plum-900);
+  --ds-action-primary-hover: var(--color-plum-800);
+  --ds-action-on-primary: #ffffff;
+  --ds-focus-ring: var(--color-violet-ds-600);
+  --ds-selected-bg: var(--color-violet-ds-50);
+  --ds-selected-fg: var(--color-violet-ds-700);
+
+  /* Sidebar: the live deep-plum gradient. */
+  --ds-sidebar-from: var(--color-plum-900);
+  --ds-sidebar-to: var(--color-plum-950);
+
+  /* Status pills (state). Promoted from the Content Sets --cs-* palette. */
+  --ds-status-success-bg: #dcf7ec;
+  --ds-status-success-fg: #0b5d45;
+  --ds-status-success-dot: #10b464;
+  --ds-status-warning-bg: #fef2d3;
+  --ds-status-warning-fg: #7a3d00;
+  --ds-status-warning-dot: #f59e0b;
+  --ds-status-danger-bg: var(--color-danger-50);
+  --ds-status-danger-fg: var(--color-danger-700);
+  --ds-status-danger-dot: #e5484d;
+  --ds-status-info-bg: var(--color-periwinkle-50);
+  --ds-status-info-fg: var(--color-periwinkle-600);
+  --ds-status-info-dot: #5b6cf0;
+  --ds-status-scheduled-bg: #f4ebfe;
+  --ds-status-scheduled-fg: #4a16b0;
+  --ds-status-scheduled-dot: #7e22ce;
+  --ds-status-neutral-bg: #f2f2f8;
+  --ds-status-neutral-fg: #55547f;
+  --ds-status-neutral-dot: #8b8aa8;
+
+  /* Category tags (no dot). Colors rotate so lists never read all-purple. */
+  --ds-tag-violet-bg: var(--color-violet-ds-50);
+  --ds-tag-violet-fg: var(--color-violet-ds-700);
+  --ds-tag-pink-bg: var(--color-pink-ds-50);
+  --ds-tag-pink-fg: var(--color-pink-ds-600);
+  --ds-tag-aqua-bg: var(--color-aqua-50);
+  --ds-tag-aqua-fg: var(--color-aqua-600);
+  --ds-tag-gold-bg: var(--color-gold-50);
+  --ds-tag-gold-fg: var(--color-gold-600);
+  --ds-tag-blue-bg: var(--color-periwinkle-50);
+  --ds-tag-blue-fg: var(--color-periwinkle-600);
+  --ds-tag-green-bg: var(--color-success-50);
+  --ds-tag-green-fg: var(--color-success-700);
+  --ds-tag-gray-bg: #f3f1f7;
+  --ds-tag-gray-fg: var(--color-ink-2);
+
+  /* Categorical chart palette (CRM analytics; chart RENDERERS for readings keep their own). */
+  --ds-chart-1: #6d28d9;
+  --ds-chart-2: #14a7b4;
+  --ds-chart-3: #db4a93;
+  --ds-chart-4: #5563e0;
+  --ds-chart-5: #e3a63b;
+  --ds-chart-6: #16a34a;
+  --ds-chart-7: #c79bd8;
+  --ds-chart-8: #8e88a8;
+
+  /* Messaging. Outgoing = plum (owner decision); internal note = warm tint. */
+  --ds-bubble-out-bg: var(--color-plum-900);
+  --ds-bubble-out-fg: #ffffff;
+  --ds-bubble-in-bg: #ffffff;
+  --ds-bubble-in-fg: var(--color-ink);
+  --ds-bubble-in-border: var(--color-line);
+  --ds-note-bg: var(--color-gold-50);
+  --ds-note-border: #ebcf92;
+  --ds-note-fg: #6b4a08;
+}
+
+@theme inline {
+  --color-surface-canvas: var(--ds-surface-canvas);
+  --color-surface-raised: var(--ds-surface-raised);
+  --color-surface-sunken: var(--ds-surface-sunken);
+  --color-tint-violet: var(--ds-surface-tint-violet);
+  --color-tint-blush: var(--ds-surface-tint-blush);
+  --color-tint-aqua: var(--ds-surface-tint-aqua);
+  --color-tint-gold: var(--ds-surface-tint-gold);
+  --color-ink-primary: var(--ds-text-primary);
+  --color-ink-secondary: var(--ds-text-secondary);
+  --color-ink-tertiary: var(--ds-text-tertiary);
+  --color-link: var(--ds-text-link);
+  --color-border-subtle: var(--ds-border-subtle);
+  --color-border-strong: var(--ds-border-strong);
+  --color-action-primary: var(--ds-action-primary);
+  --color-action-primary-hover: var(--ds-action-primary-hover);
+  --color-focus: var(--ds-focus-ring);
+  --color-selected: var(--ds-selected-bg);
+  --color-selected-foreground: var(--ds-selected-fg);
+  --color-status-success-bg: var(--ds-status-success-bg);
+  --color-status-success-fg: var(--ds-status-success-fg);
+  --color-status-success-dot: var(--ds-status-success-dot);
+  --color-status-warning-bg: var(--ds-status-warning-bg);
+  --color-status-warning-fg: var(--ds-status-warning-fg);
+  --color-status-warning-dot: var(--ds-status-warning-dot);
+  --color-status-danger-bg: var(--ds-status-danger-bg);
+  --color-status-danger-fg: var(--ds-status-danger-fg);
+  --color-status-danger-dot: var(--ds-status-danger-dot);
+  --color-status-info-bg: var(--ds-status-info-bg);
+  --color-status-info-fg: var(--ds-status-info-fg);
+  --color-status-info-dot: var(--ds-status-info-dot);
+  --color-status-scheduled-bg: var(--ds-status-scheduled-bg);
+  --color-status-scheduled-fg: var(--ds-status-scheduled-fg);
+  --color-status-scheduled-dot: var(--ds-status-scheduled-dot);
+  --color-status-neutral-bg: var(--ds-status-neutral-bg);
+  --color-status-neutral-fg: var(--ds-status-neutral-fg);
+  --color-status-neutral-dot: var(--ds-status-neutral-dot);
+  --color-tag-violet-bg: var(--ds-tag-violet-bg);
+  --color-tag-violet-fg: var(--ds-tag-violet-fg);
+  --color-tag-pink-bg: var(--ds-tag-pink-bg);
+  --color-tag-pink-fg: var(--ds-tag-pink-fg);
+  --color-tag-aqua-bg: var(--ds-tag-aqua-bg);
+  --color-tag-aqua-fg: var(--ds-tag-aqua-fg);
+  --color-tag-gold-bg: var(--ds-tag-gold-bg);
+  --color-tag-gold-fg: var(--ds-tag-gold-fg);
+  --color-tag-blue-bg: var(--ds-tag-blue-bg);
+  --color-tag-blue-fg: var(--ds-tag-blue-fg);
+  --color-tag-green-bg: var(--ds-tag-green-bg);
+  --color-tag-green-fg: var(--ds-tag-green-fg);
+  --color-tag-gray-bg: var(--ds-tag-gray-bg);
+  --color-tag-gray-fg: var(--ds-tag-gray-fg);
+  --color-bubble-out: var(--ds-bubble-out-bg);
+  --color-bubble-out-foreground: var(--ds-bubble-out-fg);
+  --color-bubble-in: var(--ds-bubble-in-bg);
+  --color-note: var(--ds-note-bg);
+}

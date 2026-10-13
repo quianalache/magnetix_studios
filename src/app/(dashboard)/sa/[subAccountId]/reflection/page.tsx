@@ -103,7 +103,7 @@ export default function ReflectionPage() {
   }
 
   return (
-    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-8 rounded-2xl pb-20">
+    <div className="momentum-scope mx-auto w-full max-w-6xl space-y-8 rounded-2xl">
       <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
         <div>
           <div className="mb-2 flex items-center gap-3">

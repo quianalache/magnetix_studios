@@ -1,43 +1,36 @@
 "use client";
 
-import { useEffect } from "react";
-import { useAgency } from "@/hooks/use-agency";
-import { LANDING_VARIANT } from "@/config/landing";
-import type { AppTheme } from "@/types";
+import { useLayoutEffect } from "react";
 
 /**
- * Applies the agency's accent theme (Agency → Settings → App theme) by
- * toggling a class on <html> — element-level so portalled UI (dialogs,
- * sheets, toasts render at <body>) inherits the CSS-variable overrides
- * too. Renders nothing.
+ * Applies the internal CRM's ONE visual system — Magnetix — by putting
+ * `theme-magnetix` on <html> (element-level so portalled dialogs, sheets and
+ * toasts inherit it). Renders nothing. Mounted in the CRM layouts; the class is
+ * removed on unmount so public/tenant pages never carry it.
  *
- * Unset theme = deployment-mode default: buyers ("custom") get the green
- * "my CRM" palette; the LeadStack demo stays neutral so its branding never
- * changes unprompted. "neutral" simply removes both classes (stock zinc).
- *
- * Mounted in the (dashboard) layout — the class is cleaned up on unmount
- * so client-navigating out to public pages doesn't carry the accent.
+ * 2026-10-13 (design-system Phase 0): the Agency → Settings → App theme picker
+ * (green / LeadStack / neutral / magnetix) is RETIRED by owner decision — the
+ * CRM shell no longer has competing full-app themes. The theme used to come
+ * from the agency doc via a client Firestore listener, so every page first
+ * painted the fallback palette (green) and only switched once the listener
+ * resolved — and stayed on the fallback whenever it didn't. The class is now
+ * applied immediately. `agencies/{id}.appTheme` is left in place, inert, for
+ * backward compatibility (no data migration). Phase 1 folds the Magnetix
+ * values into the :root system tokens and removes this class altogether.
+ * Tenant branding on public surfaces is separate (styles/magnetix/tenant.css).
  */
-
-const THEME_CLASSES: Record<Exclude<AppTheme, "neutral">, string> = {
-  green: "theme-green",
-  leadstack: "theme-leadstack",
-  magnetix: "theme-magnetix",
-};
+const CRM_THEME_CLASS = "theme-magnetix";
+const RETIRED_THEME_CLASSES = ["theme-green", "theme-leadstack"];
 
 export function AppAccent() {
-  const { appTheme } = useAgency();
-
-  useEffect(() => {
-    const resolved: AppTheme =
-      appTheme ?? (LANDING_VARIANT === "custom" ? "green" : "neutral");
+  useLayoutEffect(() => {
     const el = document.documentElement;
-    el.classList.remove("theme-green", "theme-leadstack", "theme-magnetix");
-    if (resolved !== "neutral") el.classList.add(THEME_CLASSES[resolved]);
+    el.classList.remove(...RETIRED_THEME_CLASSES);
+    el.classList.add(CRM_THEME_CLASS);
     return () => {
-      el.classList.remove("theme-green", "theme-leadstack", "theme-magnetix");
+      el.classList.remove(CRM_THEME_CLASS);
     };
-  }, [appTheme]);
+  }, []);
 
   return null;
 }

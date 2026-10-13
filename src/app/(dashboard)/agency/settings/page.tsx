@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { BrandingSection } from "@/components/agency/branding-section";
 import { SalesPageSection } from "@/components/agency/sales-page-section";
 import { AppIconSection } from "@/components/agency/app-icon-section";
-import { AppThemeSection } from "@/components/agency/app-theme-section";
 import { MessagingSection } from "@/components/agency/messaging-section";
 import { AiModelSection } from "@/components/agency/ai-model-section";
 import { AgencyAssistantSection } from "@/components/agency/agency-assistant-section";
@@ -83,8 +82,8 @@ export default function AgencySettingsPage() {
           Branding card: logo URL brands the pages, this brands the phone. */}
       <AppIconSection />
 
-      {/* Dashboard accent theme — green / indigo / neutral. */}
-      <AppThemeSection />
+      {/* App theme picker retired 2026-10-13 — the internal CRM uses the one
+          fixed Magnetix visual system (see components/theme/app-accent.tsx). */}
 
       {/* Read-only view of the shared (env-var) Twilio + Resend senders, so the
           owner can see exactly what "agency-level" SMS/email resolves to. */}

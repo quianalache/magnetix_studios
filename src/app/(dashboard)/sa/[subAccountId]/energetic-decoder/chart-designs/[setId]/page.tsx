@@ -32,7 +32,7 @@ export default function ChartDesignEditorPage() {
 
   if (missing) {
     return (
-      <div className="momentum-scope mx-auto w-full max-w-[1500px] rounded-2xl p-10 text-center">
+      <div className="momentum-scope mx-auto w-full max-w-[1500px] rounded-2xl text-center">
         <p className="text-sm text-muted-foreground">That chart design doesn&apos;t exist in this workspace.</p>
         <Link href={saPath("/energetic-decoder?tab=chartDesigns")} className="mt-3 inline-block text-sm font-medium text-primary underline">
           Back to Chart Designs

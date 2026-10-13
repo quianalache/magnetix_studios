@@ -19,10 +19,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Building2,
   Workflow,
   Globe,
-  Compass,
   Lock,
   Mail,
   Send,
@@ -36,7 +34,6 @@ import {
   GraduationCap,
   BookOpen,
   Sparkles,
-  CreditCard,
   FlaskConical,
   ChevronsLeft,
   ChevronsRight,
@@ -64,6 +61,7 @@ import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { cn } from "@/lib/utils";
+import { AGENCY_NAV_ITEMS } from "@/components/dashboard/agency-nav";
 import { WorkspaceSwitcher } from "@/components/dashboard/workspace-switcher";
 import {
   Sheet,
@@ -815,178 +813,34 @@ function SidebarContent({
                 Agency
               </p>
             )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/get-started"
-                title={collapsed ? "Get started" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/get-started")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Compass className="h-4 w-4 shrink-0" />
-                {!collapsed && "Get started"}
-              </Link>
-            )}
-            <Link
-              href="/agency"
-              title={collapsed ? "Agency home" : undefined}
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                collapsed && "justify-center",
-                pathname === "/agency"
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                  : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              )}
-            >
-              <Building2 className="h-4 w-4 shrink-0" />
-              {!collapsed && "Agency home"}
-            </Link>
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/sub-accounts"
-                title={collapsed ? "Sub-accounts" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/sub-accounts")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Users className="h-4 w-4 shrink-0" />
-                {!collapsed && "Sub-accounts"}
-              </Link>
-            )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/billing"
-                title={collapsed ? "Billing" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/billing")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <CreditCard className="h-4 w-4 shrink-0" />
-                {!collapsed && "Billing"}
-              </Link>
-            )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/acquisition"
-                title={collapsed ? "Traffic & Signups" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/acquisition")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <TrendingUp className="h-4 w-4 shrink-0" />
-                {!collapsed && "Traffic & Signups"}
-              </Link>
-            )}
-            {/* Agency Community (2026-09-16) — Agency-owned communities,
-                distinct from any sub-account's own Community. */}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/community"
-                title={collapsed ? "Community" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/community")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <MessagesSquare className="h-4 w-4 shrink-0" />
-                {!collapsed && "Community"}
-              </Link>
-            )}
-            {/* Agency Courses — Agency-owned Standalone Courses + Course
-                Offers (shipped 2026-09-16/19, owner-only like the pages and
-                /api/agency/standalone-courses). The entry was left out when
-                Community was added and never restored once these pages
-                existed, so they were only reachable via in-page links. */}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/standalone-courses"
-                title={collapsed ? "Courses" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/standalone-courses") ||
-                    pathname.startsWith("/agency/course-offers")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <BookOpen className="h-4 w-4 shrink-0" />
-                {!collapsed && "Courses"}
-              </Link>
-            )}
-            {/* Agency Communications (2026-09-18) — Magnetix Studios' own
-                Broadcasts + Email Templates, reusing the tenant Broadcast
-                system's block editor/renderer/QStash fan-out. Belongs to
-                Magnetix Studios, never a sub-account. */}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/communications"
-                title={collapsed ? "Communications" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/communications")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Mail className="h-4 w-4 shrink-0" />
-                {!collapsed && "Communications"}
-              </Link>
-            )}
-            {/* Hidden until the owner enables it under Agency → Settings —
-                the Agency Assistant ships OFF by default. */}
-            {agencyRole === "owner" && agency.agencyAssistantEnabled && (
-              <Link
-                href="/agency/ai-suite"
-                title={collapsed ? "Agency Assistant" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/ai-suite")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Sparkles className="h-4 w-4 shrink-0" />
-                {!collapsed && "Agency Assistant"}
-              </Link>
-            )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/settings"
-                title={collapsed ? "Agency Settings" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
-                  collapsed && "justify-center",
-                  pathname.startsWith("/agency/settings")
-                    ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                    : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                )}
-              >
-                <Settings className="h-4 w-4 shrink-0" />
-                {!collapsed && "Agency Settings"}
-              </Link>
-            )}
+            {/* One data source (agency-nav.ts) for the sidebar, the collapsed
+                rail and the mobile drawer. This whole section already renders
+                only for the agency owner outside a sub-account. */}
+            {AGENCY_NAV_ITEMS.filter(
+              (item) =>
+                item.visible?.({
+                  agencyAssistantEnabled: agency.agencyAssistantEnabled,
+                }) ?? true
+            ).map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  title={collapsed ? item.title : undefined}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors",
+                    collapsed && "justify-center",
+                    item.isActive(pathname)
+                      ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {!collapsed && item.label}
+                </Link>
+              );
+            })}
           </div>
         )}
 

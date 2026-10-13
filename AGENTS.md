@@ -16,3 +16,7 @@ The full project guide is [CLAUDE.md](CLAUDE.md). These deployment rules are rep
   - `pnpm vercel:sanity` — read-only: exactly one project may be Git-connected to the repo; run it at the start of any deploy/release task and report any extra project to the owner
   - `pnpm deploy:preview` / `pnpm deploy:production` — guarded CLI deploys (production requires a clean tree at `origin/main`)
 - Local QA first, batch related corrections, one intentional preview for remote authenticated QA, production only when materially ready, one production deployment at a time.
+
+## Design system — Magnetix Visual Direction 2
+
+Full rules: CLAUDE.md → "Magnetix design system". In short: one fixed Magnetix visual system for the internal CRM (agency + sub-account; no app-theme picker); tokens in `src/styles/magnetix/` (no new inline hex); white-first surfaces, deep plum primary, color in chips/tags/statuses, no lavender-on-lavender blocks; system sans for operational UI, DM Serif Display only on approved moment pages; shared components before new ones; never add `.momentum-scope` to new pages; tenant branding only inside `.tenant-surface`; specialized surfaces need a justified drift-script exception; light mode only for now; mobile bottom nav = Home / Inbox / Calendar / Projects / More. `pnpm lint` enforces the design-drift ratchet; run `scripts/qa/visual-pass.mjs` before design-touching releases.

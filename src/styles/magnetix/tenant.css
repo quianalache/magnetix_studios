@@ -1,0 +1,37 @@
+/*
+ * Magnetix design system — L3 TENANT-BRAND BOUNDARY (Phase 0, 2026-10-13).
+ *
+ * Tenant branding lives ONLY inside `.tenant-surface` (booking, hosted forms,
+ * quotes/invoices, pay, unsubscribe, Community/course public pages, client
+ * portal, public Decoder readings, replay, web chat). The internal CRM shell
+ * never carries this class and never reads `--brand-*`; the design-drift
+ * ratchet (scripts/check-design-drift.mjs → brandTokenInCrm) keeps it that way.
+ *
+ * Set the brand with tenantBrandStyle() (src/lib/brand/tenant-brand.ts) as the
+ * surface root's inline style — it computes a readable on-primary color so a
+ * light tenant accent can't produce unreadable buttons. Magnetix keeps control
+ * of layout, spacing, type scale, focus rings, error/success colors and
+ * "Powered by Magnetix".
+ *
+ * Defaults equal today's public pages (stock neutral palette), so adopting the
+ * class on a surface with no brand set changes nothing. No surface adopts it in
+ * Phase 0.
+ */
+.tenant-surface {
+  --brand-primary: oklch(0.205 0 0);
+  --brand-on-primary: oklch(0.985 0 0);
+  --brand-primary-text: oklch(0.205 0 0);
+  --brand-secondary: oklch(0.97 0 0);
+  --brand-on-secondary: oklch(0.205 0 0);
+  --brand-wash: transparent;
+  --brand-display-font: var(--font-sans);
+  --brand-radius: 0.625rem;
+
+  /* Inside the surface, shadcn components follow the brand. */
+  --primary: var(--brand-primary);
+  --primary-foreground: var(--brand-on-primary);
+  --ring: var(--brand-primary);
+  --secondary: var(--brand-secondary);
+  --secondary-foreground: var(--brand-on-secondary);
+  /* --brand-radius is for tenant BUTTONS only (cards keep the system radius). */
+}

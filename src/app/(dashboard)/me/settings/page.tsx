@@ -6,7 +6,6 @@ import { updateProfile } from "firebase/auth";
 import {
   Mail,
   Shield,
-  Sparkles,
   User as UserIcon,
 } from "lucide-react";
 
@@ -16,7 +15,6 @@ import { getFirebaseAuth } from "@/lib/firebase/client";
 import { signOutUser } from "@/lib/firebase/auth";
 import { getUserDoc, updateUserDoc } from "@/lib/firestore/users";
 import { maskEmail } from "@/lib/format";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationsSection } from "@/components/settings/notifications-section";
 import { PasswordSection } from "@/components/settings/password-section";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -159,23 +157,8 @@ export default function MySettingsPage() {
       {/* Push notifications (PWA) */}
       <NotificationsSection />
 
-      {/* Appearance */}
-      <section className="rounded-2xl border bg-card p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div>
-              <h2 className="text-sm font-semibold">Appearance</h2>
-              <p className="text-xs text-muted-foreground">
-                Light, dark, or system.
-              </p>
-            </div>
-          </div>
-          <ThemeToggle />
-        </div>
-      </section>
+      {/* Appearance (light / dark / system) hidden 2026-10-13 — the CRM is
+          light-only for now; dark mode is a future design task (lib/theme/crm-theme.ts). */}
 
       {/* Security / sign out */}
       <section className="rounded-2xl border bg-card p-5">

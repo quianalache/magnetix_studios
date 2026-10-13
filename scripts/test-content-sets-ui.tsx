@@ -100,8 +100,11 @@ check("no per-set icon field: Default = sparkles, custom sets = the generic cont
   assert.ok(!/\bicon\b/i.test(model), "no icon in the data model or service");
 });
 check("visual tokens: Content Sets use their own white-card scope, never the page's lavender momentum cards", () => {
-  const css = readFileSync("src/app/globals.css", "utf8");
-  assert.ok(css.indexOf(".content-sets-scope {") > css.indexOf(".momentum-scope {"), "scope comes after momentum-scope");
+  // Legacy scopes moved into src/styles/magnetix/legacy.css (design-system Phase 0) —
+  // both inside the same `@layer legacy`, so source order still decides between them.
+  const css = readFileSync("src/styles/magnetix/legacy.css", "utf8");
+  const layer = css.slice(css.indexOf("@layer legacy {"));
+  assert.ok(layer.indexOf(".momentum-scope {") > 0 && layer.indexOf(".content-sets-scope {") > layer.indexOf(".momentum-scope {"), "scope comes after momentum-scope, in the same legacy layer");
   assert.match(css, /\.content-sets-scope \{[\s\S]*?--card: #ffffff;/);
   for (const src of [lib, ed]) assert.ok(src.includes("CS_SCOPE"));
 });

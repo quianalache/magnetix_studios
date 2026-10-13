@@ -1,0 +1,30 @@
+{
+  "_comment": "Representative design-system QA routes. {placeholders} are filled from --vars (keep tenant ids out of the repo). mode: shell = inside the CRM h-dvh shell (document must not scroll); public = tenant/public page (document may scroll); specialized = own chrome (overflow/console checks only). tabBar: the phone bottom tab bar must show < 768px.",
+  "expectHtmlClass": "theme-magnetix",
+  "forbidThemeToggle": true,
+  "settleMs": 4000,
+  "allowPost": ["/api/sub-accounts/[^/]+/contacts/search$", "/api/broadcasts/audience-preview$"],
+  "routes": [
+    { "key": "sa-dashboard", "path": "/sa/{sa}/dashboard", "mode": "shell", "tabBar": true },
+    { "key": "sa-assets", "path": "/sa/{sa}/assets", "mode": "shell", "tabBar": true },
+    { "key": "sa-contacts", "path": "/sa/{sa}/contacts", "mode": "shell", "tabBar": true },
+    { "key": "sa-conversations", "path": "/sa/{sa}/conversations", "mode": "shell", "tabBar": true },
+    { "key": "sa-settings", "path": "/sa/{sa}/dashboard/settings", "mode": "shell", "tabBar": true },
+    { "key": "sa-forms", "path": "/sa/{sa}/forms", "mode": "shell", "tabBar": true },
+    { "key": "sa-products", "path": "/sa/{sa}/products", "mode": "shell", "tabBar": true },
+    { "key": "ed-content-sets", "path": "/sa/{sa}/energetic-decoder?tab=content", "mode": "shell", "tabBar": true },
+    { "key": "ed-chart-designs", "path": "/sa/{sa}/energetic-decoder?tab=chartDesigns", "mode": "shell", "tabBar": true },
+    { "key": "sa-pipeline", "path": "/sa/{sa}/pipeline", "mode": "shell", "tabBar": true },
+    { "key": "sa-community", "path": "/sa/{sa}/community", "mode": "shell", "tabBar": true },
+    { "key": "agency-home", "path": "/agency", "mode": "shell" },
+    { "key": "agency-settings", "path": "/agency/settings", "mode": "shell" },
+    { "key": "agency-sub-accounts", "path": "/agency/sub-accounts", "mode": "shell" },
+    { "key": "agency-billing", "path": "/agency/billing", "mode": "shell" },
+    { "key": "report-builder", "path": "/sa/{sa}/energetic-decoder/reports/{reportId}", "mode": "specialized" },
+    { "key": "pages-funnels-builder", "path": "/sa/{sa}/pages-funnels/{pageId}", "mode": "specialized" },
+    { "key": "community-group", "path": "/sa/{sa}/community/{groupId}", "mode": "specialized" },
+    { "key": "public-booking", "path": "/b/{sa}/{bookingSlug}", "mode": "public" },
+    { "key": "public-form", "path": "/f/{formId}", "mode": "public" },
+    { "key": "public-community", "path": "/c/{sa}/{groupSlug}", "mode": "public" }
+  ]
+}

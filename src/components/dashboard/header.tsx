@@ -15,7 +15,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { CUSTOM_BRAND } from "@/config/landing";
 import { signOutUser } from "@/lib/firebase/auth";
 import { maskEmail } from "@/lib/format";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -208,7 +207,7 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
         >
           <Search className="h-4 w-4" />
         </Button>
-        <ThemeToggle />
+        {/* Dark-mode toggle hidden 2026-10-13 — the CRM is light-only for now (lib/theme/crm-theme.ts). */}
 
         <DropdownMenu>
           <DropdownMenuTrigger

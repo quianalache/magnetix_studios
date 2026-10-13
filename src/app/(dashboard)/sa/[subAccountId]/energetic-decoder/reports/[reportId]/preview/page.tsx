@@ -100,7 +100,7 @@ export default function ReportDesignPreviewPage() {
   }, [subAccountId, params.reportId, searchParams]);
 
   return (
-    <div className="momentum-scope min-h-screen bg-muted/20 px-4 py-8 sm:px-6">
+    <div className="momentum-scope min-h-screen">
       <div className="mx-auto w-full max-w-2xl">
         <div className="mb-5 flex items-center justify-between gap-3">
           <button

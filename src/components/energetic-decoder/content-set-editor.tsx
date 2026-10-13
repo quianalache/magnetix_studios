@@ -184,7 +184,7 @@ export function ContentSetEditor({
 
   if (loadError) {
     return (
-      <div className={cn(CS_SCOPE, "space-y-3 rounded-2xl border bg-card p-6 text-sm text-[var(--cs-body)]")}>
+      <div className={cn(CS_SCOPE, "space-y-3 rounded-2xl border bg-card p-6 text-sm")}>
         <p>{loadError}</p>
         <Button variant="outline" className="rounded-xl" onClick={onBack}>
           <ArrowLeft className="mr-1.5 h-4 w-4" />

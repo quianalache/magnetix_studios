@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTheme } from "next-themes";
+import { useIsDarkTheme } from "@/lib/theme/crm-theme";
 import { Globe2, MapPin } from "lucide-react";
 import {
   Map as MapboxMap,
@@ -43,7 +43,7 @@ export function LeadsMap({
   deals: Deal[];
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  const { resolvedTheme } = useTheme();
+  const isDark = useIsDarkTheme();
   const { saPath } = useSubAccount();
   const router = useRouter();
   const mapRef = useRef<MapRef | null>(null);
@@ -206,7 +206,7 @@ export function LeadsMap({
   }
 
   const styleUrl =
-    resolvedTheme === "dark"
+    isDark
       ? "mapbox://styles/mapbox/dark-v11"
       : "mapbox://styles/mapbox/light-v11";
 
