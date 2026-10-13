@@ -962,8 +962,10 @@ Magnetix Studios has **ONE** Vercel application project: **`magnetix-studios`** 
 
 **How strays were created (don't repeat it):** `.vercel/` is gitignored, so every new worktree starts unlinked. Raw `vercel --prod --yes` / `npx vercel …` / `pnpm dlx vercel …` in an unlinked folder silently creates a NEW project named after the folder (`magnetix_studios-pipelines`, `magnetix-report-builder-parity`, …) and connects it to the repo.
 
+**NO NEW VERCEL PROJECT MAY BE CREATED FOR MAGNETIX STUDIOS WITHOUT EXPLICIT PRIOR OWNER APPROVAL.** This applies to worktrees, branches, CLI deployments, previews, feature/module work, testing environments, temporary QA environments and any other workflow. The canonical default is always `magnetix-studios`; a feature inside the CRM does NOT get its own Vercel project. If a worktree is not linked to the canonical project, deployment MUST FAIL CLOSED — it must never fall back to project creation. (The four strays created this way were deleted 2026-10-13.)
+
 Rules (Claude, Codex and humans):
-1. One canonical Vercel project. Creating another Magnetix Vercel project requires **owner approval**.
+1. One canonical Vercel project (`magnetix-studios`). Creating another Magnetix Vercel project requires **explicit prior owner approval** — see the rule above.
 2. A CRM module (Pipelines, Contacts, Community, Energetic Decoder, Billing, Forms, Content Studio, …) is part of the main app — it never gets its own Vercel project.
 3. A Git worktree is NOT a Vercel project. Many worktrees, one project. Never assume a worktree is linked.
 4. **Never run the raw Vercel CLI to deploy or link** (`vercel`, `vercel deploy`, `vercel --prod`, `vercel link`, especially with `--yes`). Read-only CLI use (`inspect`, `ls`, `logs`) is fine.
