@@ -262,7 +262,9 @@ export function ChartDesignLibrary({ legacyFallback }: { legacyFallback: ReactNo
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     ) : (
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
+                        {/* `relative` contains the sr-only label below: without a positioned ancestor its
+                            absolute box escapes <main>'s scroll area and stretches the whole document. */}
+                        <DropdownMenuTrigger className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground hover:bg-muted hover:text-foreground">
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">Actions for {set.name}</span>
                         </DropdownMenuTrigger>
