@@ -3,8 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
 import { useAgency } from "@/hooks/use-agency";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SettingsSection } from "@/components/system/settings-section";
+import { Tag } from "@/components/system/status-pill";
 
 /**
  * Agency Settings card: master switch for the Agency Assistant (the
@@ -85,88 +89,65 @@ export function AgencyAssistantSection() {
     }
   }
 
-  return (
-    <section className="space-y-4 rounded-2xl border bg-card p-5">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-          <Sparkles className="h-4 w-4" />
-        </span>
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            Agency Assistant
-            <span className="rounded-full bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400">
-              Beta
-            </span>
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Your owner-level AI: answers questions about running the agency
-            and performs a few confirm-first actions (create sub-accounts,
-            flip feature gates, act inside a client workspace).
-          </p>
-        </div>
-      </div>
+  const MODEL_ITEMS = { opus: "Opus — default (most reliable)", sonnet: "Sonnet — lower cost" };
 
-      <div className="flex items-start justify-between gap-3 rounded-xl border bg-background p-4">
-        <div>
-          <p className="text-xs font-medium">Enable the Agency Assistant</p>
-          <p className="text-[11px] text-muted-foreground">
+  return (
+    <SettingsSection
+      title={
+        <span className="flex items-center gap-2">
+          Agency Assistant <Tag color="pink">Beta</Tag>
+        </span>
+      }
+      description="Your owner-level AI: answers questions about running the agency and performs a few confirm-first actions (create sub-accounts, flip feature gates, act inside a client workspace)."
+    >
+      <div className="flex items-start justify-between gap-4 rounded-control border border-border p-4">
+        <div className="min-w-0">
+          <Label htmlFor="agency-assistant-enabled">Enable the Agency Assistant</Label>
+          <p className="mt-0.5 text-caption text-muted-foreground">
             Off by default. Every reply uses your OpenRouter credits
             (<code>OPENROUTER_API_KEY</code>). When off, the sidebar entry is
             hidden and the assistant refuses requests. Each client&apos;s{" "}
             <span className="font-medium">Workspace Assistant</span> is
             separate — enable it per sub-account under{" "}
-            <Link
-              href="/agency/sub-accounts"
-              className="underline underline-offset-2"
-            >
+            <Link href="/agency/sub-accounts" className="text-link underline-offset-2 hover:underline">
               Sub-accounts → Manage
             </Link>
             .
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
+        <Switch
+          id="agency-assistant-enabled"
+          checked={enabled}
+          onCheckedChange={(next) => handleToggle(next)}
           disabled={saving || agency.loading}
-          onClick={() => handleToggle(!enabled)}
-          className={
-            "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 " +
-            (enabled ? "bg-emerald-500" : "bg-muted-foreground/30")
-          }
-        >
-          <span
-            className={
-              "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform " +
-              (enabled ? "translate-x-4" : "translate-x-0.5")
-            }
-          />
-        </button>
+        />
       </div>
 
       {enabled && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background p-4">
-          <div>
-            <p className="text-xs font-medium">AI model</p>
-            <p className="text-[11px] text-muted-foreground">
+        <div className="flex flex-col gap-3 rounded-control border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p id="agency-assistant-model-label" className="text-body-sm font-medium text-foreground">AI model</p>
+            <p className="mt-0.5 text-caption text-muted-foreground">
               Opus is the most reliable at complex multi-step actions; Sonnet
               costs roughly half per reply but can be less sure-footed.
             </p>
           </div>
-          <select
+          <Select
             value={model}
-            onChange={(e) =>
-              handleModelChange(e.target.value as "opus" | "sonnet")
-            }
+            onValueChange={(v) => v && handleModelChange(v as "opus" | "sonnet")}
+            items={MODEL_ITEMS}
             disabled={saving || agency.loading}
-            className="h-8 shrink-0 rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50 [&_option]:bg-background [&_option]:text-foreground"
-            aria-label="Agency Assistant model"
           >
-            <option value="opus">Opus — default (most reliable)</option>
-            <option value="sonnet">Sonnet — lower cost</option>
-          </select>
+            <SelectTrigger aria-labelledby="agency-assistant-model-label" className="sm:w-64">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="opus">{MODEL_ITEMS.opus}</SelectItem>
+              <SelectItem value="sonnet">{MODEL_ITEMS.sonnet}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       )}
-    </section>
+    </SettingsSection>
   );
 }

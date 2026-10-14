@@ -3,20 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  GitBranch,
+  CalendarDays,
+  FolderKanban,
   Home,
   Menu,
   MessagesSquare,
-  Users,
 } from "lucide-react";
 import { useUnreadConversationsCount } from "@/hooks/use-unread-conversations";
 import { cn } from "@/lib/utils";
 
 /**
- * Phone-only bottom tab bar (native-feel v1.2). Thumb-reach navigation for
- * the core loop — Dashboard, Conversations (unread badge), Contacts,
- * Pipeline — plus "More", which opens the existing sidebar drawer for the
- * long tail. Renders only inside a sub-account (/sa/[id]/…): agency-level
+ * Phone-only bottom tab bar (native-feel v1.2; destinations per the approved
+ * Visual Direction 2 mobile nav, 2026-10-14). Thumb-reach navigation for the
+ * daily loop — Home, Inbox (unread badge), Calendar, Projects — plus "More",
+ * which opens the full sidebar menu (Contacts, Pipeline and everything else
+ * live there). Renders only inside a sub-account (/sa/[id]/…): agency-level
  * pages keep the drawer alone. Hidden at md+ where the sidebar is
  * permanent.
  *
@@ -27,8 +28,8 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { path: "/dashboard", label: "Home", icon: Home },
   { path: "/conversations", label: "Inbox", icon: MessagesSquare, badge: true },
-  { path: "/contacts", label: "Contacts", icon: Users },
-  { path: "/pipeline", label: "Pipeline", icon: GitBranch },
+  { path: "/calendar", label: "Calendar", icon: CalendarDays },
+  { path: "/projects", label: "Projects", icon: FolderKanban },
 ] as const;
 
 export function BottomTabBar({ onMore }: { onMore: () => void }) {
@@ -56,15 +57,21 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
             <Link
               key={tab.path}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors active:opacity-60",
-                active ? "text-primary" : "text-muted-foreground",
+                "relative flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-micro transition-colors active:opacity-60",
+                active ? "font-semibold text-primary" : "font-medium text-muted-foreground",
               )}
             >
-              <span className="relative">
-                <Icon className="h-5 w-5" />
+              <span
+                className={cn(
+                  "relative flex h-7 w-11 items-center justify-center rounded-full transition-colors",
+                  active && "bg-tag-violet-bg",
+                )}
+              >
+                <Icon className="size-5" aria-hidden="true" />
                 {"badge" in tab && tab.badge && unread > 0 && (
-                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold tabular-nums text-primary-foreground">
+                  <span className="absolute -top-1 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold tabular-nums text-primary-foreground">
                     {unread > 99 ? "99+" : unread}
                   </span>
                 )}
@@ -76,9 +83,12 @@ export function BottomTabBar({ onMore }: { onMore: () => void }) {
         <button
           type="button"
           onClick={onMore}
-          className="flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-[10px] font-medium text-muted-foreground transition-colors active:opacity-60"
+          aria-label="More — open the full menu"
+          className="flex min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 text-micro font-medium text-muted-foreground transition-colors active:opacity-60"
         >
-          <Menu className="h-5 w-5" />
+          <span className="flex h-7 w-11 items-center justify-center">
+            <Menu className="size-5" aria-hidden="true" />
+          </span>
           More
         </button>
       </div>

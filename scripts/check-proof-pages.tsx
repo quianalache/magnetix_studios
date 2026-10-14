@@ -1,0 +1,58 @@
+/**
+ * Proof-page contracts (design-system proof pages, 2026-10-14). Static render
+ * + source checks, no browser, no data.
+ * Run: pnpm exec tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-proof-pages.tsx
+ */
+import { readFileSync } from "node:fs";
+import { renderToStaticMarkup } from "react-dom/server";
+import { UserPlus } from "lucide-react";
+import { MetricCard } from "../src/components/system/metric-card";
+import { MomentHero } from "../src/components/system/moment-hero";
+import { LockedNotice } from "../src/components/system/locked-notice";
+import { PoweredByMagnetix, canHidePoweredBy } from "../src/components/brand/powered-by-magnetix";
+
+let pass = 0;
+let fail = 0;
+function check(label: string, ok: boolean) {
+  if (ok) pass++;
+  else fail++;
+  console.log(`  ${ok ? "PASS" : "FAIL"}  ${label}`);
+}
+const html = (el: React.ReactElement) => renderToStaticMarkup(el);
+const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+
+// Composites.
+const metric = html(<MetricCard icon={UserPlus} tone="aqua" label="New leads" value="3" hint="9 total" href="/x" />);
+check("MetricCard: link card, round chip, live value, no invented trend", metric.startsWith("<a") && metric.includes("rounded-full") && metric.includes(">3<") && !/↑|%/.test(metric));
+const hero = html(<MomentHero title="Hello" />);
+check("MomentHero: display serif h2 + one planet motif in a clipped frame", hero.includes("<h2") && hero.includes("font-display") && (hero.match(/data-motif=/g) ?? []).length === 1 && hero.includes('data-motif="planet"') && hero.includes("overflow-hidden"));
+check("LockedNotice: lock chip + default copy", html(<LockedNotice />).includes("Locked by your agency"));
+
+// Powered by — shown by default, no plan gate yet.
+check("PoweredByMagnetix renders by default", html(<PoweredByMagnetix />).includes("Powered by"));
+check("canHidePoweredBy() is false (no plan gate yet)", canHidePoweredBy({ subAccountId: "x" }) === false);
+
+// Navigation.
+const tabs = src("src/components/pwa/bottom-tab-bar.tsx");
+const paths = [...tabs.matchAll(/path: "(\/[a-z]+)"/g)].map((m) => m[1]);
+check("bottom tab bar: Home / Inbox / Calendar / Projects (+ More)", JSON.stringify(paths) === JSON.stringify(["/dashboard", "/conversations", "/calendar", "/projects"]) && tabs.includes("onMore"));
+check("bottom tab bar: Contacts and Pipeline removed", !tabs.includes('"/contacts"') && !tabs.includes('"/pipeline"'));
+const sidebar = src("src/components/dashboard/sidebar.tsx");
+check("sidebar: tablet band defaults to the icon rail, saved preference wins", sidebar.includes("(min-width: 768px) and (max-width: 1023.98px)") && /if \(stored === "1"\) return setCollapsed\(true\);\s*if \(stored === "0"\) return;/.test(sidebar));
+
+// Tenant boundary.
+const booking = src("src/components/booking/public-booking-view.tsx");
+check("booking: root is a tenant surface styled by tenantBrandStyle()", booking.includes('"tenant-surface tenant-wash') && booking.includes("tenantBrandStyle({"));
+check("booking: no hard-coded fallback green / white-on-accent", !booking.includes("#0F766E") && !booking.includes('"text-white shadow-sm"'));
+check("booking: Powered by Magnetix in the footer", booking.includes("<PoweredByMagnetix />"));
+const tenantCss = src("src/styles/magnetix/tenant.css");
+check("tenant.css: selected option uses the computed on-primary text", /aria-pressed="true"\][^}]*color: var\(--brand-on-primary\)/.test(tenantCss));
+check("tenant.css: no CRM tokens leak into tenant surfaces", !/--ds-|plum|violet/.test((tenantCss.split("Tenant-surface building blocks")[1] ?? "").replace(/^[\s\S]*?\*\//, "").replace(/\/\*[\s\S]*?\*\//g, "")));
+
+// Pages use the system shell.
+check("Dashboard: PageShell + moment PageHeader, no legacy scope", src("src/app/(dashboard)/sa/[subAccountId]/dashboard/page.tsx").includes('<PageHeader\n        variant="moment"') && !src("src/app/(dashboard)/sa/[subAccountId]/dashboard/page.tsx").includes("momentum-scope"));
+check("Settings pages: SettingsSection-based", src("src/components/settings/sub-account-sending-preferences-section.tsx").includes("<SettingsSection") && src("src/app/(dashboard)/agency/settings/page.tsx").includes("<SettingsSection"));
+check("Agency Assistant: shared Switch, no hand-rolled switch button", src("src/components/agency/agency-assistant-section.tsx").includes("<Switch") && !src("src/components/agency/agency-assistant-section.tsx").includes('role="switch"'));
+
+console.log(`\n${pass} passed, ${fail} failed.`);
+process.exit(fail ? 1 : 0);

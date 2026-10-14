@@ -216,10 +216,10 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
         <StatTile icon={FileText} tone="green" value={items ? counts.documents : "–"} label="Documents" active={kind === "document"} onClick={() => setKind(kind === "document" ? "all" : "document")} />
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <label className="relative block lg:w-72">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+        <label className="relative block sm:max-w-md xl:w-72">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input id="media-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search media by name, tags, or keyword…" className="bg-card h-10 pl-9" />
+          <Input id="media-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search media by name, tags, or keyword…" className="bg-background pl-9" />
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <FilterSelect id="media-kind" icon={FileText} label="File type" value={kind} onChange={setKind} options={[{ value: "all", label: "All File Types" }, { value: "image", label: "Images" }, { value: "video", label: "Videos" }, { value: "document", label: "Documents" }]} />
@@ -234,7 +234,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
               ["list", List],
             ] as const
           ).map(([v, Icon]) => (
-            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex w-11 items-center justify-center", view === v ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>
+            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex w-11 items-center justify-center", view === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted")}>
               <Icon className="h-4 w-4" />
             </button>
           ))}
@@ -254,7 +254,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">
+        <h2 className="text-title-md font-semibold tracking-tight">
           Media Library <span className="text-muted-foreground font-semibold">({filtered.length})</span>
         </h2>
         <FilterSelect id="media-sort" icon={ArrowUpDown} label="Sort" value={sort} onChange={setSort} options={[{ value: "recent", label: "Sort: Most recent" }, { value: "name", label: "Sort: Name" }, { value: "size", label: "Sort: Largest" }]} />
@@ -267,7 +267,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
           ) : !items ? (
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-4">
               {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="bg-muted/40 aspect-[4/3] animate-pulse rounded-2xl border" />
+                <div key={i} className="aspect-[4/3] animate-pulse rounded-card border border-border bg-muted/40" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
@@ -285,8 +285,8 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
                     onClick={() => setSelectedId(i.id === selectedId ? null : i.id)}
                     aria-pressed={i.id === selectedId}
                     className={cn(
-                      "bg-card w-full overflow-hidden rounded-2xl border text-left shadow-xs transition-colors",
-                      i.id === selectedId ? "border-primary ring-primary/30 ring-2" : "hover:border-primary/40"
+                      "bg-card w-full overflow-hidden rounded-card border border-border text-left shadow-card transition-colors",
+                      i.id === selectedId ? "border-violet-ds-300 ring-3 ring-ring/40" : "hover:border-border-strong"
                     )}
                   >
                     <Thumb i={i} className="aspect-[4/3] w-full" />
@@ -307,7 +307,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
               ))}
             </ul>
           ) : (
-            <ul className="bg-card divide-y rounded-2xl border">
+            <ul className="bg-card divide-y rounded-card border border-border shadow-card">
               {shown.map((i) => (
                 <li key={i.id}>
                   <button type="button" onClick={() => setSelectedId(i.id === selectedId ? null : i.id)} className={cn("flex w-full items-center gap-3 px-3 py-2.5 text-left", i.id === selectedId ? "bg-primary/5" : "hover:bg-muted/50")}>
@@ -329,7 +329,7 @@ export function MediaLibrary({ uploadRequest }: { uploadRequest: MediaUploadRequ
         </div>
 
         {selected && isXl && (
-          <aside className="bg-card sticky top-4 max-h-[calc(100dvh-6rem)] w-[380px] shrink-0 self-start overflow-y-auto rounded-2xl border p-4 shadow-xs" aria-label="File details">
+          <aside className="bg-card sticky top-4 max-h-[calc(100dvh-6rem)] w-[380px] shrink-0 self-start overflow-y-auto rounded-card border border-border p-4 shadow-card" aria-label="File details">
             <MediaDetail item={selected} onClose={() => setSelectedId(null)} onChanged={replaceItem} onDeleted={() => { setSelectedId(null); void load(); }} />
           </aside>
         )}

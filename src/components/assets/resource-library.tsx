@@ -245,7 +245,7 @@ export function ResourceLibrary({
   function ResourceIcon({ r }: { r: ResourceRow }) {
     const Icon = r.sourceKind === "internal" ? FileText : r.type === "Design Asset" ? ImageIcon : r.type === "Link" ? Link2 : FileText;
     return (
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-300">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
         <Icon className="h-5 w-5" />
       </span>
     );
@@ -253,10 +253,10 @@ export function ResourceLibrary({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <label className="relative block lg:w-80">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+        <label className="relative block sm:max-w-md xl:w-80">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input id="resources-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search resources by name, type, or keyword…" className="bg-card h-10 pl-9" />
+          <Input id="resources-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search resources by name, type, or keyword…" className="bg-background pl-9" />
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <FilterSelect id="resources-type" icon={FileText} label="Type" value={type} onChange={setType} options={[{ value: "all", label: "All Types" }, ...types.map((t) => ({ value: t, label: t }))]} />
@@ -271,21 +271,21 @@ export function ResourceLibrary({
               ["grid", LayoutGrid],
             ] as const
           ).map(([v, Icon]) => (
-            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex w-11 items-center justify-center", view === v ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>
+            <button key={v} type="button" aria-pressed={view === v} aria-label={`${v} view`} onClick={() => setView(v)} className={cn("flex w-11 items-center justify-center", view === v ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted")}>
               <Icon className="h-4 w-4" />
             </button>
           ))}
         </div>
       </div>
 
-      <h2 className="text-xl font-bold">
+      <h2 className="text-title-md font-semibold tracking-tight">
         Resources <span className="text-muted-foreground font-semibold">({filtered.length})</span>
       </h2>
 
       {error ? (
         <p className="text-destructive text-sm">Couldn&apos;t load resources: {error}</p>
       ) : !rows ? (
-        <div className="bg-muted/40 h-64 animate-pulse rounded-2xl border" aria-busy />
+        <div className="h-64 animate-pulse rounded-card border border-border bg-muted/40" aria-busy />
       ) : filtered.length === 0 ? (
         <EmptyPanel
           icon={FileText}
@@ -299,7 +299,7 @@ export function ResourceLibrary({
             const st = statusOf(r);
             const src = sourceLabel(r);
             return (
-              <li key={r.id} className="bg-card flex flex-col gap-3 rounded-2xl border p-4 shadow-xs">
+              <li key={r.id} className="bg-card flex flex-col gap-3 rounded-card border border-border shadow-card p-4 shadow-xs">
                 <div className="flex items-start gap-3">
                   <ResourceIcon r={r} />
                   <button type="button" onClick={() => void open(r)} className="min-w-0 flex-1 text-left">
@@ -328,7 +328,7 @@ export function ResourceLibrary({
             {shown.map((r) => {
               const st = statusOf(r);
               return (
-                <li key={r.id} className="bg-card flex items-start gap-3 rounded-2xl border p-4">
+                <li key={r.id} className="bg-card flex items-start gap-3 rounded-card border border-border shadow-card p-4">
                   <ResourceIcon r={r} />
                   <button type="button" onClick={() => void open(r)} className="min-w-0 flex-1 text-left">
                     <span className="block font-semibold">{r.name}</span>
@@ -343,10 +343,10 @@ export function ResourceLibrary({
               );
             })}
           </ul>
-          <div className="bg-card hidden overflow-x-auto rounded-2xl border md:block">
+          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs font-semibold tracking-wide uppercase">
+                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
                   <th className="px-4 py-3 font-semibold">Resource</th>
                   <th className="px-3 py-3 font-semibold">Type</th>
                   <th className="px-3 py-3 font-semibold">Access / Source</th>
@@ -362,7 +362,7 @@ export function ResourceLibrary({
                   const st = statusOf(r);
                   const src = sourceLabel(r);
                   return (
-                    <tr key={r.id} className="border-b last:border-0">
+                    <tr key={r.id} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
                       <td className="max-w-[320px] px-4 py-3">
                         <div className="flex items-center gap-3">
                           <ResourceIcon r={r} />
@@ -412,7 +412,7 @@ export function ResourceLibrary({
           <p className="text-muted-foreground text-sm">
             Kept from the old Assets tab for reference. Offers are now managed in Courses → Offers and listed under CRM Resources.
           </p>
-          <ul className="bg-card divide-y rounded-2xl border">
+          <ul className="bg-card divide-y rounded-card border border-border shadow-card">
             {bundles.map((b) => (
               <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
                 <span className="font-medium">{b.name}</span>

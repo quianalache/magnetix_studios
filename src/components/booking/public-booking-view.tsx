@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { BookingPage, IntakeField } from "@/types/booking";
 import { readAttributionFromBrowser } from "@/lib/attribution";
+import { tenantBrandStyle } from "@/lib/brand/tenant-brand";
+import { PoweredByMagnetix } from "@/components/brand/powered-by-magnetix";
 import { AttributionVisitLogger } from "@/components/attribution/visit-logger";
 
 /**
@@ -180,38 +182,49 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
     setSelectedSlot(null);
   }
 
-  // Accent style — applied to primary buttons + selected slot ring.
-  const accent = branding.accentColor;
-  const accentStyle: React.CSSProperties = accent
-    ? { backgroundColor: accent, borderColor: accent }
-    : {};
+  // Tenant brand (design-system tenant boundary, 2026-10-14): the booking
+  // page's accent becomes the surface's --brand-primary; tenantBrandStyle()
+  // computes readable on-primary text and a contrast-safe text variant, so a
+  // light accent can't produce unreadable buttons. No accent = neutral.
+  const brandStyle = tenantBrandStyle({
+    name: branding.name,
+    logoUrl: branding.logoUrl,
+    primary: branding.accentColor,
+  });
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-10 text-foreground sm:py-16">
+    <main
+      className="tenant-surface tenant-wash min-h-screen px-4 py-8 text-foreground sm:py-14"
+      style={brandStyle}
+    >
       <AttributionVisitLogger
         subAccountId={subAccountId}
         pageType="booking"
         pageId={page.slug}
       />
-      <article className="mx-auto max-w-3xl space-y-8 rounded-3xl border bg-card p-6 shadow-sm sm:p-10">
+      {/* ── Tenant brand lockup — the business leads the page ── */}
+      <div className="mx-auto mb-5 flex max-w-3xl items-center justify-center gap-2.5 sm:mb-6">
+        {branding.logoUrl ? (
+          // Decorative; alt is the business name.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={branding.logoUrl}
+            alt={branding.name}
+            className="h-10 w-auto max-w-[180px] rounded-md object-contain"
+          />
+        ) : (
+          <>
+            <span className="tenant-mark flex size-9 items-center justify-center rounded-full" aria-hidden="true">
+              <CalendarClock className="size-4.5" />
+            </span>
+            <span className="text-lg font-semibold tracking-tight text-foreground">{branding.name}</span>
+          </>
+        )}
+      </div>
+
+      <article className="tenant-card mx-auto max-w-3xl space-y-8 p-6 sm:p-10">
         {/* ── Hero ──────────────────────────────────────────── */}
         <header className="space-y-3 text-center">
-          {branding.logoUrl ? (
-            // Decorative; alt is the business name.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={branding.logoUrl}
-              alt={branding.name}
-              className="mx-auto h-12 w-auto rounded-md object-contain"
-            />
-          ) : (
-            <span
-              className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-white"
-              style={{ backgroundColor: accent ?? "#0F766E" }}
-            >
-              <CalendarClock className="h-6 w-6" />
-            </span>
-          )}
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             {page.name}
           </h1>
@@ -226,7 +239,7 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
             {page.payment && (
               <>
                 <span className="mx-1">·</span>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                <span className="tenant-soft rounded-full px-2 py-0.5 text-[11px] font-medium">
                   {page.payment.currency} {page.payment.amount} deposit
                 </span>
               </>
@@ -310,12 +323,10 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
                       key={s.startAt}
                       type="button"
                       onClick={() => setSelectedSlot(s)}
-                      className={`rounded-lg border px-2 py-2 text-sm font-medium transition ${
-                        isSelected
-                          ? "text-white shadow-sm"
-                          : "border-input bg-background hover:bg-muted hover:text-foreground"
+                      aria-pressed={isSelected}
+                      className={`tenant-choice min-h-11 rounded-lg px-2 py-2 text-sm font-medium tabular-nums transition ${
+                        isSelected ? "shadow-sm" : ""
                       }`}
-                      style={isSelected ? accentStyle : undefined}
                     >
                       {formatTimeInTz(s.startAt, viewerTz)}
                     </button>
@@ -334,9 +345,10 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
                       setActiveDay(d.dateKey);
                       setSelectedSlot(null);
                     }}
-                    className={`rounded-full border px-3 py-1 text-[11px] transition ${
+                    aria-pressed={d.dateKey === activeDay}
+                    className={`rounded-full border px-3 py-1 text-xs transition ${
                       d.dateKey === activeDay
-                        ? "border-foreground/40 bg-muted text-foreground"
+                        ? "tenant-soft border-transparent font-medium"
                         : "border-input bg-background text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -356,7 +368,6 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
             slot={selectedSlot}
             viewerTz={viewerTz}
             page={page}
-            accentStyle={accentStyle}
             onConfirmed={(c) => setConfirmation(c)}
           />
         )}
@@ -368,10 +379,11 @@ export function PublicBookingView({ subAccountId, page, branding }: Props) {
           />
         )}
 
-        <footer className="border-t pt-4 text-center text-[11px] text-muted-foreground">
-          Powered by {branding.name}
-        </footer>
       </article>
+
+      <footer className="mx-auto mt-6 flex max-w-3xl justify-center">
+        <PoweredByMagnetix />
+      </footer>
     </main>
   );
 }
@@ -382,7 +394,6 @@ function IntakeFormSection({
   slot,
   viewerTz,
   page,
-  accentStyle,
   onConfirmed,
 }: {
   subAccountId: string;
@@ -390,7 +401,6 @@ function IntakeFormSection({
   slot: SlotISO;
   viewerTz: string;
   page: Props["page"];
-  accentStyle: React.CSSProperties;
   onConfirmed: (next: {
     status: "scheduled" | "awaiting_payment";
     paymentUrl: string | null;
@@ -551,8 +561,7 @@ function IntakeFormSection({
       <button
         type="submit"
         disabled={submitting}
-        className="inline-flex h-10 w-full items-center justify-center rounded-lg border bg-foreground px-3 text-sm font-medium text-background transition disabled:opacity-60"
-        style={accentStyle.backgroundColor ? accentStyle : undefined}
+        className="tenant-button inline-flex h-11 w-full items-center justify-center border px-3 text-sm font-medium transition disabled:opacity-60"
       >
         {submitting ? (
           <>

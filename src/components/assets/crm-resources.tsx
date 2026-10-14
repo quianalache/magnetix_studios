@@ -135,8 +135,8 @@ export function CrmResources() {
   return (
     <div className="space-y-6">
       {!bannerHidden && (
-        <div className="flex items-start gap-4 rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4 sm:p-5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-300">
+        <div className="flex items-start gap-4 rounded-card border border-violet-ds-100 bg-tint-violet p-4 sm:p-5">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg">
             <RefreshCw className="h-6 w-6" />
           </span>
           <div className="min-w-0 flex-1">
@@ -178,10 +178,10 @@ export function CrmResources() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <label className="relative block lg:w-80">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+        <label className="relative block sm:max-w-md xl:w-80">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input id="crm-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search CRM resources by name, type, or keyword…" className="bg-card h-10 pl-9" />
+          <Input id="crm-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search CRM resources by name, type, or keyword…" className="bg-background pl-9" />
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <FilterSelect
@@ -200,12 +200,12 @@ export function CrmResources() {
         </div>
       </div>
 
-      <h2 className="text-xl font-bold">
+      <h2 className="text-title-md font-semibold tracking-tight">
         CRM Resources <span className="text-muted-foreground font-semibold">({filtered.length})</span>
       </h2>
 
       {data?.unavailable.length ? (
-        <p className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-sm text-amber-800 dark:text-amber-200">
+        <p className="rounded-control border border-status-warning-dot/30 bg-status-warning-bg px-4 py-2 text-body-sm text-status-warning-fg">
           Couldn&apos;t load: {data.unavailable.join(", ")}. The rest is shown below.
         </p>
       ) : null}
@@ -213,7 +213,7 @@ export function CrmResources() {
       {error ? (
         <p className="text-destructive text-sm">Couldn&apos;t load CRM resources: {error}</p>
       ) : !data ? (
-        <div className="bg-muted/40 h-64 animate-pulse rounded-2xl border" aria-busy />
+        <div className="h-64 animate-pulse rounded-card border border-border bg-muted/40" aria-busy />
       ) : filtered.length === 0 ? (
         <EmptyPanel icon={BookOpen} title={data.items.length ? "Nothing matches" : "Nothing to show yet"} body={data.items.length ? "Try another search or filter." : "Courses, offers, communities, forms and pages you create in Magnetix appear here automatically."} />
       ) : (
@@ -222,9 +222,9 @@ export function CrmResources() {
             {shown.map((i) => {
               const M = TYPE_META[i.type];
               return (
-                <li key={`${i.type}-${i.id}`} className="bg-card space-y-3 rounded-2xl border p-4">
+                <li key={`${i.type}-${i.id}`} className="bg-card space-y-3 rounded-card border border-border shadow-card p-4">
                   <div className="flex items-start gap-3">
-                    <span className="bg-primary/10 text-primary flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
                       <M.icon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -241,10 +241,10 @@ export function CrmResources() {
               );
             })}
           </ul>
-          <div className="bg-card hidden overflow-x-auto rounded-2xl border md:block">
+          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
             <table className="w-full min-w-[1000px] text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs font-semibold tracking-wide uppercase">
+                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
                   <th className="px-4 py-3 font-semibold">Resource</th>
                   <th className="px-3 py-3 font-semibold">Type</th>
                   <th className="px-3 py-3 font-semibold">Source Module</th>
@@ -259,10 +259,10 @@ export function CrmResources() {
                 {shown.map((i) => {
                   const M = TYPE_META[i.type];
                   return (
-                    <tr key={`${i.type}-${i.id}`} className="border-b last:border-0">
+                    <tr key={`${i.type}-${i.id}`} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
                       <td className="max-w-[320px] px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <span className="bg-primary/10 text-primary flex h-11 w-11 shrink-0 items-center justify-center rounded-xl">
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg">
                             <M.icon className="h-5 w-5" />
                           </span>
                           <div className="min-w-0">

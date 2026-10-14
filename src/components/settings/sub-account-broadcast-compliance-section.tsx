@@ -2,10 +2,14 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert } from "@/components/ui/alert";
+import { SettingsSection } from "@/components/system/settings-section";
+import { StatusPill, Tag } from "@/components/system/status-pill";
 
 /**
  * Business mailing address — CAN-SPAM requires a physical postal address in
@@ -27,6 +31,7 @@ export function SubAccountBroadcastComplianceSection() {
   const [postalCode, setPostalCode] = useState("");
   const [country, setCountry] = useState("");
   const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     const addr = subAccount?.mailingAddress ?? null;
@@ -45,6 +50,11 @@ export function SubAccountBroadcastComplianceSection() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
+    setSubmitted(true);
+    if (missing.length > 0) {
+      toast.error("Fill in the highlighted fields to save the address.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/agency/sub-accounts/${subAccountId}`, {
@@ -71,114 +81,74 @@ export function SubAccountBroadcastComplianceSection() {
     }
   }
 
-  return (
-    <section className="rounded-2xl border bg-card p-6">
-      <header className="mb-4 flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-          <ShieldCheck className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold">Broadcast compliance</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            CAN-SPAM requires a real postal address on every marketing email.
-            We add it (plus the unsubscribe link) to every broadcast&apos;s
-            footer automatically — you never have to remember it. Required
-            before you can send a broadcast.
+  const fields = { line1, city, region, postalCode, country };
+  const missing = (Object.keys(fields) as (keyof typeof fields)[]).filter((k) => !fields[k].trim());
+  const showErr = (k: keyof typeof fields) => submitted && missing.includes(k);
+
+  function field(
+    id: keyof typeof fields | "line2",
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    placeholder: string,
+    optional = false,
+  ) {
+    const err = id !== "line2" && showErr(id);
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`mailing-${id}`}>{label}</Label>
+        <Input
+          id={`mailing-${id}`}
+          value={value}
+          onChange={(e) => set(e.target.value)}
+          placeholder={placeholder}
+          disabled={saving}
+          required={!optional}
+          aria-invalid={err || undefined}
+          aria-describedby={err ? `mailing-${id}-err` : undefined}
+        />
+        {err ? (
+          <p id={`mailing-${id}-err`} className="text-caption text-destructive">
+            Required.
           </p>
-        </div>
-        {!hasAddress && (
-          <span className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
-            Required
-          </span>
-        )}
-      </header>
+        ) : null}
+      </div>
+    );
+  }
 
-      <form onSubmit={handleSave} className="space-y-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Street address
-          </label>
-          <Input
-            value={line1}
-            onChange={(e) => setLine1(e.target.value)}
-            placeholder="123 Main St"
-            disabled={saving}
-            required
-          />
+  return (
+    <form onSubmit={handleSave} noValidate>
+      <SettingsSection
+        title="Broadcast compliance"
+        description="CAN-SPAM requires a real postal address on every marketing email. We add it (plus the unsubscribe link) to every broadcast's footer automatically — you never have to remember it."
+        action={hasAddress ? <StatusPill tone="success">Saved</StatusPill> : <Tag color="gray">Required for broadcasts</Tag>}
+        footer={
+          <Button type="submit" disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                Saving…
+              </>
+            ) : (
+              "Save mailing address"
+            )}
+          </Button>
+        }
+      >
+        {!hasAddress ? (
+          <Alert tone="warning" title="Broadcasts are paused until this is saved">
+            Anti-spam law requires a physical address in every bulk email footer. It&apos;s added automatically.
+          </Alert>
+        ) : null}
+        {field("line1", "Street address", line1, setLine1, "123 Main St")}
+        {field("line2", "Suite / unit (optional)", line2, setLine2, "Suite 200", true)}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {field("city", "City", city, setCity, "Atlanta")}
+          {field("region", "State / region", region, setRegion, "GA")}
+          {field("postalCode", "Postal code", postalCode, setPostalCode, "30301")}
+          {field("country", "Country", country, setCountry, "United States")}
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Suite / unit (optional)
-          </label>
-          <Input
-            value={line2}
-            onChange={(e) => setLine2(e.target.value)}
-            placeholder="Suite 200"
-            disabled={saving}
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              City
-            </label>
-            <Input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Atlanta"
-              disabled={saving}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              State / region
-            </label>
-            <Input
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="GA"
-              disabled={saving}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Postal code
-            </label>
-            <Input
-              value={postalCode}
-              onChange={(e) => setPostalCode(e.target.value)}
-              placeholder="30301"
-              disabled={saving}
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Country
-            </label>
-            <Input
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              placeholder="United States"
-              disabled={saving}
-              required
-            />
-          </div>
-        </div>
-
-        <Button type="submit" size="sm" disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save mailing address"
-          )}
-        </Button>
-      </form>
-    </section>
+      </SettingsSection>
+    </form>
   );
 }

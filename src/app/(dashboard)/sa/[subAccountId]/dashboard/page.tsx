@@ -14,6 +14,10 @@ import {
   Upload,
   Download,
   Users,
+  Activity,
+  GitBranch,
+  LayoutDashboard,
+  type LucideIcon,
 } from "lucide-react";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
@@ -38,20 +42,49 @@ import type { Contact } from "@/types/contacts";
 import type { Quote } from "@/types/quotes";
 import type { BroadcastDoc } from "@/types/broadcasts";
 import { Button } from "@/components/ui/button";
-import { StatCard } from "@/components/ui/stat-card";
+import { Card } from "@/components/ui/card";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { MomentHero } from "@/components/system/moment-hero";
+import { MetricCard } from "@/components/system/metric-card";
+import { EmptyState } from "@/components/system/empty-state";
+import { cn } from "@/lib/utils";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { LeadsMap } from "@/components/dashboard/leads-map";
 
-const STAGE_BAR_COLORS: Record<string, string> = {
-  new: "bg-slate-400 dark:bg-slate-500",
-  contacted: "bg-blue-400 dark:bg-blue-500",
-  qualified: "bg-indigo-400 dark:bg-indigo-500",
-  proposal: "bg-amber-400 dark:bg-amber-500",
-  won: "bg-emerald-400 dark:bg-emerald-500",
-  lost: "bg-rose-400 dark:bg-rose-500",
+// Pipeline stages draw from the categorical chart palette; custom stages
+// rotate through it so every stage gets a distinct, on-system color.
+const STAGE_CHART_VAR: Record<string, number> = {
+  new: 8,
+  contacted: 4,
+  qualified: 1,
+  proposal: 5,
+  won: 6,
+  lost: 3,
+};
+function stageColor(stageId: string, index: number): string {
+  const n = STAGE_CHART_VAR[stageId] ?? (index % 8) + 1;
+  return `var(--ds-chart-${n})`;
+}
+
+type ChipTone = "violet" | "aqua" | "pink" | "blue" | "gold" | "green";
+const CHIP_TONE: Record<ChipTone, string> = {
+  violet: "bg-tag-violet-bg text-tag-violet-fg",
+  aqua: "bg-tag-aqua-bg text-tag-aqua-fg",
+  pink: "bg-tag-pink-bg text-tag-pink-fg",
+  blue: "bg-tag-blue-bg text-tag-blue-fg",
+  gold: "bg-tag-gold-bg text-tag-gold-fg",
+  green: "bg-tag-green-bg text-tag-green-fg",
 };
 
 type ActivityKind = "lead" | "won" | "sent" | "paid";
+
+const ACTIVITY_VISUAL: Record<ActivityKind, { Icon: LucideIcon; tone: ChipTone }> = {
+  lead: { Icon: UserPlus, tone: "aqua" },
+  won: { Icon: CheckCircle2, tone: "green" },
+  sent: { Icon: Send, tone: "violet" },
+  paid: { Icon: CheckCircle2, tone: "green" },
+};
 
 interface ActivityItem {
   id: string;
@@ -329,92 +362,84 @@ export default function DashboardPage() {
     return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}.`;
   }, [isEmpty, newLeadsToday, bookingsToday.length, saleToday]);
 
+  const firstWord = displayName ? displayName.split(/[\s._-]/)[0] : "";
+  const firstName = firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1) : "";
+
   return (
-    <div className="momentum-scope mx-auto w-full max-w-5xl space-y-6 rounded-2xl">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {today}
-          </p>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-balance sm:text-4xl">
-            {greeting}
-            {displayName ? `, ${displayName}` : ""}. Here&apos;s{" "}
-            <span className="mx-gradient-text text-primary">
-              what&apos;s moving
-            </span>{" "}
-            today.
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        </div>
-        {!isEmpty && (
-          <div className="flex items-center gap-2">
-            <NewDealDialog contacts={contacts} />
-          </div>
-        )}
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        variant="moment"
+        icon={LayoutDashboard}
+        title="Dashboard"
+        description="Your hub for leads, bookings and sales."
+        actions={!isEmpty ? <NewDealDialog contacts={contacts} /> : undefined}
+      />
+
+      <MomentHero
+        eyebrow={`${today}${firstName ? ` · Welcome back, ${firstName}` : ""}`}
+        title={
+          <>
+            {greeting}. Here&apos;s <em className="text-link">what&apos;s moving</em> today.
+          </>
+        }
+        description={subtitle}
+      />
 
       {!loading && unreadConversations > 0 && (
-        <Link
-          href={saPath("/conversations")}
-          className="mx-banner-gradient flex flex-col gap-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-violet-500 p-6 text-white shadow-sm transition-transform hover:-translate-y-px sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wider text-white/75">
-              Needs a reply
-            </p>
-            <h2 className="text-lg font-bold tracking-tight">
-              {unreadConversations} conversation
-              {unreadConversations === 1 ? "" : "s"} waiting for a reply
-            </h2>
-            <p className="text-sm text-white/85">
-              Catch up in your unified inbox.
-            </p>
+        <Card variant="tint" tint="violet" className="flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-tag-violet-bg text-tag-violet-fg">
+              <MessageCircle className="size-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-micro font-semibold uppercase tracking-[0.14em] text-link">Needs a reply</p>
+              <h2 className="text-section font-semibold text-foreground">
+                {unreadConversations} conversation{unreadConversations === 1 ? "" : "s"} waiting for a reply
+              </h2>
+              <p className="text-body-sm text-muted-foreground">Catch up in your unified inbox.</p>
+            </div>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-[11px] bg-white px-4 py-2.5 text-sm font-bold text-primary sm:self-auto">
-            Open inbox <ArrowRight className="h-3.5 w-3.5" />
-          </span>
-        </Link>
+          <Button render={<Link href={saPath("/conversations")} />} className="self-start sm:self-auto">
+            Open inbox <ArrowRight className="size-3.5" aria-hidden="true" />
+          </Button>
+        </Card>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 xl:grid-cols-4">
+        <MetricCard
           href={saPath("/contacts")}
-          icon={<UserPlus className="h-4 w-4" />}
+          icon={UserPlus}
+          tone="aqua"
           label="New leads today"
           value={String(newLeadsToday)}
           hint={`${contacts.length} total`}
-          tone="text-[#A8386B] dark:text-[#F3D9D7]"
-          iconBg="bg-[#F3D9D7]/50 dark:bg-[#F3D9D7]/15"
           loading={loading}
         />
-        <StatCard
+        <MetricCard
           href={saPath("/pipeline")}
-          icon={<TrendingUp className="h-4 w-4" />}
+          icon={TrendingUp}
+          tone="violet"
           label="Open pipeline value"
           value={<CurrencyTotalsText totals={pipelineValue} />}
           hint={`${openDeals.length} open deals`}
-          tone="text-[#5E2574] dark:text-[#C892DE]"
-          iconBg="bg-[#5E2574]/10 dark:bg-[#C892DE]/15"
           loading={loading}
         />
-        <StatCard
+        <MetricCard
           href={saPath("/conversations")}
-          icon={<MessageCircle className="h-4 w-4" />}
+          icon={MessageCircle}
+          tone="pink"
           label="Unread conversations"
           value={String(unreadConversations)}
           hint="Across your inbox"
-          tone="text-teal-700 dark:text-[#9EDBDD]"
-          iconBg="bg-[#9EDBDD]/25 dark:bg-[#9EDBDD]/15"
           loading={loading}
         />
-        <StatCard
+        <MetricCard
           href={saPath("/calendar")}
-          icon={<CalendarClock className="h-4 w-4" />}
+          icon={CalendarClock}
+          tone="blue"
           label="Bookings today"
           value={String(bookingsToday.length)}
           hint={bookingsToday.length ? "Scheduled" : "Nothing on the calendar"}
-          tone="text-[#6E1F49] dark:text-[#E8B7C8]"
-          iconBg="bg-[#E8B7C8]/50 dark:bg-[#E8B7C8]/20"
           loading={loading}
         />
       </div>
@@ -424,50 +449,33 @@ export default function DashboardPage() {
       {isEmpty ? (
         <GettingStarted />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-          <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-1 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold">Recent activity</h2>
-                <p className="text-xs text-muted-foreground">
-                  Across every channel, newest first.
-                </p>
-              </div>
-            </div>
+        <div className="grid gap-4 lg:grid-cols-12">
+          <DashboardCard
+            className="lg:col-span-7"
+            icon={Activity}
+            tone="gold"
+            title="Recent activity"
+            description="Across every channel, newest first."
+          >
             {activityItems.length === 0 ? (
-              <p className="py-8 text-center text-xs text-muted-foreground">
+              <p className="py-8 text-center text-body-sm text-muted-foreground">
                 Nothing has happened yet — once you get a lead, a won deal, or a
                 sale, it&apos;ll show up here.
               </p>
             ) : (
-              <ul className="mt-3 divide-y">
+              <ul className="divide-y divide-border-subtle">
                 {activityItems.map((item) => {
-                  const dotStyle =
-                    item.kind === "lead"
-                      ? "bg-[#F3D9D7] text-[#A8386B]"
-                      : item.kind === "sent"
-                        ? "bg-[#F3E4F0] text-[#5E2574] dark:bg-[#341E42] dark:text-[#C892DE]"
-                        : "bg-[#9EDBDD]/40 text-[#1D7A7C]";
-                  const Icon =
-                    item.kind === "lead"
-                      ? UserPlus
-                      : item.kind === "sent"
-                        ? Send
-                        : CheckCircle2;
+                  const { Icon, tone } = ACTIVITY_VISUAL[item.kind];
                   return (
                     <li key={item.id} className="flex items-start gap-3 py-2.5">
-                      <span
-                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${dotStyle}`}
-                      >
-                        <Icon className="h-3.5 w-3.5" />
+                      <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full", CHIP_TONE[tone])}>
+                        <Icon className="size-4" aria-hidden="true" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm">{item.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {item.meta}
-                        </p>
+                        <p className="truncate text-body-sm text-foreground">{item.title}</p>
+                        <p className="truncate text-caption text-muted-foreground">{item.meta}</p>
                       </div>
-                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-[11px] text-muted-foreground">
+                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-caption text-ink-tertiary">
                         {relativeTime(item.time)}
                       </span>
                     </li>
@@ -475,46 +483,40 @@ export default function DashboardPage() {
                 })}
               </ul>
             )}
-          </section>
+          </DashboardCard>
 
-          <div className="space-y-4">
-            <section className="rounded-2xl border bg-card p-5">
-              <h2 className="text-sm font-semibold">Today&apos;s bookings</h2>
-              <p className="mb-3 text-xs text-muted-foreground">
-                {bookingsToday.length > 0
+          <div className="flex flex-col gap-4 lg:col-span-5">
+            <DashboardCard
+              icon={CalendarClock}
+              tone="blue"
+              title="Today's bookings"
+              description={
+                bookingsToday.length > 0
                   ? `${bookingsToday.length} scheduled.`
-                  : "Nothing on the calendar today."}
-              </p>
+                  : "Nothing on the calendar today."
+              }
+            >
               {bookingsToday.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  No bookings today.
-                </p>
+                <p className="py-4 text-center text-body-sm text-muted-foreground">No bookings today.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="flex flex-col gap-2">
                   {bookingsToday.map((e) => {
                     const start = toDate(e.startAt);
-                    const contact = e.contactId
-                      ? contactById.get(e.contactId)
-                      : null;
+                    const contact = e.contactId ? contactById.get(e.contactId) : null;
                     return (
                       <li key={e.id}>
                         <Link
                           href={saPath("/calendar")}
-                          className="flex items-center gap-3 rounded-lg bg-muted/50 p-2.5 transition-colors hover:bg-muted"
+                          className="flex items-center gap-3 rounded-lg border border-border-subtle p-2.5 transition-colors hover:bg-muted"
                         >
-                          <span className="flex w-16 shrink-0 items-center justify-center rounded-lg bg-accent px-1 py-2 text-center text-[11px] font-bold tabular-nums text-accent-foreground">
+                          <span className="flex w-16 shrink-0 items-center justify-center rounded-md bg-tag-blue-bg px-1 py-2 text-center text-caption font-semibold tabular-nums text-tag-blue-fg">
                             {start
-                              ? start.toLocaleTimeString("en-US", {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                })
+                              ? start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
                               : "--"}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {e.title}
-                            </p>
-                            <p className="truncate text-xs text-muted-foreground">
+                            <p className="truncate text-body-sm font-medium text-foreground">{e.title}</p>
+                            <p className="truncate text-caption text-muted-foreground">
                               {contact?.name ? `with ${contact.name}` : "No contact linked"}
                             </p>
                           </div>
@@ -524,59 +526,52 @@ export default function DashboardPage() {
                   })}
                 </ul>
               )}
-            </section>
+            </DashboardCard>
 
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold">Pipeline</h2>
-                <Button
-                  render={<Link href={saPath("/pipeline")} />}
-                  size="sm"
-                  variant="ghost"
-                  className="gap-1"
-                >
-                  Open <ArrowRight className="h-3 w-3" />
+            <DashboardCard
+              icon={GitBranch}
+              tone="violet"
+              title="Pipeline"
+              action={
+                <Button render={<Link href={saPath("/pipeline")} />} size="sm" variant="ghost" className="gap-1 text-link">
+                  Open <ArrowRight className="size-3" aria-hidden="true" />
                 </Button>
-              </div>
+              }
+            >
               {onlyPipeline ? (
                 <>
-                  <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-muted">
-                    {stages.map((s) => {
+                  <div className="flex h-2 overflow-hidden rounded-full bg-muted">
+                    {stages.map((s, i) => {
                       const count = stageCounts.get(s.id) ?? 0;
                       if (!count || snapshotDeals.length === 0) return null;
                       return (
                         <span
                           key={s.id}
-                          className={`h-full ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
-                          style={{ width: `${(count / snapshotDeals.length) * 100}%` }}
+                          className="h-full"
+                          style={{ width: `${(count / snapshotDeals.length) * 100}%`, background: stageColor(s.id, i) }}
                         />
                       );
                     })}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
-                    {stages.map((s) => (
-                      <span
-                        key={s.id}
-                        className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                      >
-                        <span
-                          className={`h-2 w-2 rounded-sm ${STAGE_BAR_COLORS[s.id] ?? "bg-primary"}`}
-                        />
+                    {stages.map((s, i) => (
+                      <span key={s.id} className="inline-flex items-center gap-1.5 text-caption text-muted-foreground">
+                        <span className="size-2 rounded-sm" style={{ background: stageColor(s.id, i) }} />
                         {s.label} ({stageCounts.get(s.id) ?? 0})
                       </span>
                     ))}
                   </div>
                 </>
               ) : (
-                <ul className="mt-3 space-y-2">
+                <ul className="flex flex-col gap-1">
                   {perPipeline.map(({ pipeline, open, value }) => (
                     <li key={pipeline.id}>
                       <Link
                         href={saPath(`/pipeline/${pipeline.id}`)}
-                        className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50"
+                        className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-body-sm hover:bg-muted"
                       >
-                        <span className="min-w-0 truncate font-medium">{pipeline.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
+                        <span className="min-w-0 truncate font-medium text-foreground">{pipeline.name}</span>
+                        <span className="shrink-0 text-caption text-muted-foreground">
                           {open} open ·{" "}
                           <CurrencyTotalsText totals={value} className="font-medium text-foreground" />
                         </span>
@@ -585,11 +580,46 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               )}
-            </section>
+            </DashboardCard>
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
+  );
+}
+
+/** One self-contained dashboard widget: chip + title header, then content. */
+function DashboardCard({
+  icon: Icon,
+  tone,
+  title,
+  description,
+  action,
+  className,
+  children,
+}: {
+  icon: LucideIcon;
+  tone: ChipTone;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={cn("flex min-w-0 flex-col gap-3 rounded-card border border-border bg-card p-5 shadow-card", className)}>
+      <div className="flex items-start gap-3">
+        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", CHIP_TONE[tone])}>
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-section font-semibold text-foreground">{title}</h2>
+          {description ? <p className="text-caption text-muted-foreground">{description}</p> : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -609,46 +639,35 @@ function relativeTime(ms: number): string {
 function GettingStarted() {
   const { saPath } = useSubAccount();
   return (
-    <div className="mx-wash-gradient rounded-2xl border border-dashed bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-10 text-center">
-      <div className="mx-hero-gradient mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500 text-white">
-        <Sparkles className="h-6 w-6" />
-      </div>
-      <h2 className="text-xl font-semibold tracking-tight">
-        Let&apos;s get your first lead in
-      </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        Add a single contact, or migrate your whole list from another CRM by
-        uploading a CSV.
-      </p>
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-        <Button render={<Link href={saPath("/contacts")} />}>
-          <Users className="mr-1 h-4 w-4" />
-          Add your first contact
-        </Button>
-        <Button
-          variant="outline"
-          render={<Link href={`${saPath("/contacts")}?import=1`} />}
-        >
-          <Upload className="mr-1 h-4 w-4" />
-          Upload CSV
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          render={
-            <a
-              href="/contacts-template.csv"
-              download="leadstack-contacts-template.csv"
-            />
-          }
-        >
-          <Download className="mr-1 h-3.5 w-3.5" />
-          Download template
-        </Button>
-      </div>
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Template columns: <code>name, email, phone, company, source, tags</code>
-      </p>
-    </div>
+    <EmptyState
+      icon={Sparkles}
+      title="Let's get your first lead in"
+      description="Add a single contact, or migrate your whole list from another CRM by uploading a CSV."
+      action={
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button render={<Link href={saPath("/contacts")} />}>
+              <Users className="size-4" aria-hidden="true" />
+              Add your first contact
+            </Button>
+            <Button variant="outline" render={<Link href={`${saPath("/contacts")}?import=1`} />}>
+              <Upload className="size-4" aria-hidden="true" />
+              Upload CSV
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              render={<a href="/contacts-template.csv" download="leadstack-contacts-template.csv" />}
+            >
+              <Download className="size-3.5" aria-hidden="true" />
+              Download template
+            </Button>
+          </div>
+          <p className="text-caption text-muted-foreground">
+            Template columns: <code>name, email, phone, company, source, tags</code>
+          </p>
+        </div>
+      }
+    />
   );
 }

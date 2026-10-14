@@ -48,8 +48,8 @@ export function PageHeader(props: PageHeaderProps) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           {Icon ? (
-            <span className={cn("flex shrink-0 items-center justify-center rounded-chip bg-tint-violet text-link", moment ? "size-12" : "size-10")}>
-              <Icon className={moment ? "size-6" : "size-5"} aria-hidden="true" />
+            <span className={cn("flex shrink-0 items-center justify-center rounded-chip bg-tag-violet-bg text-tag-violet-fg", moment ? "size-10 sm:size-12" : "size-10")}>
+              <Icon className={moment ? "size-5 sm:size-6" : "size-5"} aria-hidden="true" />
             </span>
           ) : null}
           <div className="min-w-0">

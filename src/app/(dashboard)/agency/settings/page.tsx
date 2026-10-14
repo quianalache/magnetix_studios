@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SettingsSection } from "@/components/system/settings-section";
+import { EmptyState } from "@/components/system/empty-state";
 import { BrandingSection } from "@/components/agency/branding-section";
 import { SalesPageSection } from "@/components/agency/sales-page-section";
 import { AppIconSection } from "@/components/agency/app-icon-section";
@@ -20,49 +25,37 @@ export default function AgencySettingsPage() {
 
   if (!loading && agencyRole !== "owner") {
     return (
-      <div className="mx-auto w-full max-w-5xl rounded-2xl border bg-card p-8 text-center">
-        <p className="text-sm text-muted-foreground">
-          Only the agency owner can manage agency-level settings.
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href="/agency" />}
-          className="mt-4"
-        >
-          Back to agency
-        </Button>
-      </div>
+      <PageShell width="data">
+        <EmptyState
+          icon={Lock}
+          title="Owner only"
+          description="Only the agency owner can manage agency-level settings."
+          action={
+            <Button variant="outline" size="sm" render={<Link href="/agency" />}>
+              Back to agency
+            </Button>
+          }
+        />
+      </PageShell>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Agency-level configuration. These settings apply across every
-          sub-account and the public landing page.
-        </p>
-      </div>
+    <PageShell width="data">
+      <PageHeader
+        title="Settings"
+        description="Agency-level configuration. These settings apply across every sub-account and the public landing page."
+      />
 
-      <section className="flex items-center justify-between gap-4 rounded-2xl border bg-card p-5">
-        <div>
-          <h2 className="text-sm font-semibold">Guided setup</h2>
-          <p className="text-xs text-muted-foreground">
-            Optionally enter your remaining API keys in-app and have them written
-            to Vercel for you — an alternative to editing environment variables
-            by hand.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          render={<Link href="/agency/setup" />}
-        >
-          Open
-        </Button>
-      </section>
+      <SettingsSection
+        title="Guided setup"
+        description="Optionally enter your remaining API keys in-app and have them written to Vercel for you — an alternative to editing environment variables by hand."
+        action={
+          <Button variant="outline" size="sm" render={<Link href="/agency/setup" />}>
+            Open
+          </Button>
+        }
+      />
 
       {/* Deployment/integration health (Stripe, Resend, Twilio, Firebase…) —
           moved here from Agency Home's "Status" tab (2026-09-16 shell
@@ -111,6 +104,6 @@ export default function AgencySettingsPage() {
           Buyer clones (LANDING_VARIANT === "custom") don't see this, and
           the underlying API route 404s for them too. */}
       {LANDING_VARIANT === "leadstack" && <SeedDemoSection />}
-    </div>
+    </PageShell>
   );
 }

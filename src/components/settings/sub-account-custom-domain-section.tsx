@@ -6,11 +6,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   Copy,
-  Globe,
   Loader2,
-  Lock,
   Trash2,
 } from "lucide-react";
+import { SettingsSection } from "@/components/system/settings-section";
+import { LockedNotice } from "@/components/system/locked-notice";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -178,33 +178,23 @@ export function SubAccountCustomDomainSection() {
   }
 
   return (
-    <section className="rounded-2xl border bg-card p-6">
-      <header className="mb-4 flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-          <Globe className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold">Custom domain</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+    <SettingsSection
+      title="Custom domain"
+      description={
+        <>
             Put your booking page, Energetic Decoder tool, course/offer pages,
             and client portal on your own domain instead of the shared
             platform domain. URLs become human-readable — e.g.{" "}
             <code className="text-[11px]">yourdomain.com/booking/discovery-call</code>.
-          </p>
-        </div>
-      </header>
+        </>
+      }
+    >
 
       {!gateOpen ? (
-        <div className="flex items-start gap-3 rounded-lg border border-dashed bg-muted/30 p-4 text-sm">
-          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div className="text-muted-foreground">
-            <p className="font-medium text-foreground">Disabled by your agency</p>
-            <p className="mt-1">
-              Ask your agency owner to enable the custom domain feature for
-              this sub-account.
-            </p>
-          </div>
-        </div>
+        <LockedNotice title="Disabled by your agency">
+          Ask your agency owner to enable the custom domain feature for
+          this sub-account.
+        </LockedNotice>
       ) : !cfg ? (
         <form onSubmit={handleAdd} className="space-y-4">
           <div className="space-y-1.5">
@@ -345,6 +335,6 @@ export function SubAccountCustomDomainSection() {
           </form>
         </div>
       )}
-    </section>
+    </SettingsSection>
   );
 }

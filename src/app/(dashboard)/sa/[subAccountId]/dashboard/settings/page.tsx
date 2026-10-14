@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CreditCard, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getUserDoc } from "@/lib/firestore/users";
@@ -37,32 +37,20 @@ import { SubAccountWebhooksSection } from "@/components/settings/sub-account-web
 import { SubAccountBusinessBrainSection } from "@/components/settings/sub-account-business-brain-section";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageShell } from "@/components/system/page-shell";
+import { PageHeader } from "@/components/system/page-header";
+import { SettingsSection } from "@/components/system/settings-section";
+import { StatusPill, Tag, type StatusTone } from "@/components/system/status-pill";
 import type { UserDoc, SubscriptionStatus } from "@/types";
 import type { Contact } from "@/types/contacts";
 
-const PLAN_LABEL: Record<SubscriptionStatus, { label: string; tone: string }> =
-  {
-    active: {
-      label: "Pro · Active",
-      tone: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    },
-    trialing: {
-      label: "Pro · Trial",
-      tone: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
-    },
-    past_due: {
-      label: "Pro · Past due",
-      tone: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    },
-    canceled: {
-      label: "Canceled",
-      tone: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-    },
-    inactive: {
-      label: "Free plan",
-      tone: "bg-muted text-muted-foreground",
-    },
-  };
+const PLAN_LABEL: Record<SubscriptionStatus, { label: string; tone: StatusTone }> = {
+  active: { label: "Pro · Active", tone: "success" },
+  trialing: { label: "Pro · Trial", tone: "info" },
+  past_due: { label: "Pro · Past due", tone: "warning" },
+  canceled: { label: "Canceled", tone: "danger" },
+  inactive: { label: "Free plan", tone: "neutral" },
+};
 
 export default function SettingsPage() {
   const { user, role } = useAuth();
@@ -130,24 +118,24 @@ export default function SettingsPage() {
     : PLAN_LABEL.inactive;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          {workspaceName} · Settings
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Workspace-level configuration for{" "}
-          <strong className="text-foreground">{workspaceName}</strong>. For
-          your personal profile / password, open{" "}
-          <Link href="/me/settings" className="text-primary underline">
-            Your account
-          </Link>
-          .
-        </p>
-      </div>
+    <PageShell width="form">
+      <PageHeader
+        title={`${workspaceName} · Settings`}
+        description={
+          <>
+            Workspace-level configuration for{" "}
+            <strong className="font-medium text-foreground">{workspaceName}</strong>. For
+            your personal profile / password, open{" "}
+            <Link href="/me/settings" className="text-link underline-offset-2 hover:underline">
+              Your account
+            </Link>
+            .
+          </>
+        }
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList variant="underline" className="max-w-full overflow-x-auto [scrollbar-width:none]">
           <TabsTrigger value="admin">Admin</TabsTrigger>
           <TabsTrigger value="messaging">Messaging</TabsTrigger>
           <TabsTrigger value="api">API</TabsTrigger>
@@ -177,31 +165,13 @@ export default function SettingsPage() {
               payment off-system and provision sub-accounts by invite, so this
               panel is hidden there. */}
           {role === "admin" && LANDING_VARIANT === "leadstack" && (
-            <section className="rounded-2xl border bg-card p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <CreditCard className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-semibold">Subscription</h2>
-                  <p className="text-xs text-muted-foreground">
-                    This sub-account&apos;s plan with the agency. Defaults to
-                    free; upgrade unlocks higher limits + premium features.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${plan.tone}`}
-                  >
-                    {plan.label}
-                  </span>
-                  <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Roadmap
-                  </span>
-                </div>
+            <SettingsSection
+              title="Subscription"
+              description="This sub-account's plan with the agency. Defaults to free; upgrade unlocks higher limits + premium features."
+              action={<Tag color="gray">Roadmap</Tag>}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border p-4">
+                <StatusPill tone={plan.tone}>{plan.label}</StatusPill>
                 <span
                   title="Per-sub-account billing is on the roadmap. Coming with the Stripe Connect upgrade."
                   className="cursor-not-allowed"
@@ -211,13 +181,13 @@ export default function SettingsPage() {
                   </Button>
                 </span>
               </div>
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="text-caption text-muted-foreground">
                 Sub-account billing is on the roadmap — agencies will be able
                 to set tiered plans (free / pro / etc.) and clients can upgrade
                 from this card. Until then every sub-account is on the free
                 plan.
               </p>
-            </section>
+            </SettingsSection>
           )}
 
           {/* Members — admins (and the agency owner) invite, promote, remove. */}
@@ -250,23 +220,11 @@ export default function SettingsPage() {
           <SubAccountStripeSection />
 
           {/* Data export */}
-          <section className="rounded-2xl border bg-card p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                <Download className="h-4 w-4" />
-              </span>
+          <SettingsSection title="Data" description="Take your data with you, any time.">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border p-4">
               <div>
-                <h2 className="text-sm font-semibold">Data</h2>
-                <p className="text-xs text-muted-foreground">
-                  Take your data with you, any time.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
-              <div>
-                <p className="text-sm font-medium">Export contacts</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-body-sm font-medium text-foreground">Export contacts</p>
+                <p className="text-caption text-muted-foreground">
                   {contacts.length} contact{contacts.length === 1 ? "" : "s"} ·
                   CSV with tags, source, and timestamps
                 </p>
@@ -277,11 +235,11 @@ export default function SettingsPage() {
                 onClick={handleExportContacts}
                 disabled={contacts.length === 0}
               >
-                <Download className="mr-1 h-3.5 w-3.5" />
+                <Download className="size-3.5" aria-hidden="true" />
                 Download CSV
               </Button>
             </div>
-          </section>
+          </SettingsSection>
         </TabsContent>
 
         {/* ---------- Custom Fields: operator-defined fields on contacts + deals
@@ -348,6 +306,6 @@ export default function SettingsPage() {
           <SubAccountWebhooksSection />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

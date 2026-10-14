@@ -24,7 +24,7 @@
  * Usage:
  *   node scripts/qa/visual-pass.mjs run --base http://localhost:3000 \
  *     --routes scripts/qa/routes.example.json --vars sa=<subAccountId>,slug=<bookingSlug> \
- *     [--widths 390,820,1024,1280,1440] [--out /tmp/qa-run] [--token-file /tmp/qa-token.json] [--axe] [--only key1,key2]
+ *     [--widths 390,820,1024,1280,1440] [--out /tmp/qa-run] [--token-file /tmp/qa-token.json] [--axe] [--only key1,key2] [--scroll-shots N]
  *   node scripts/qa/visual-pass.mjs compare <beforeDir> <afterDir> [--threshold 0.5]
  *
  * --token-file holds {"idToken": "..."} from scripts/qa/mint-qa-session.ts (keep it OUTSIDE the repo; delete after).
@@ -226,6 +226,19 @@ async function run(args) {
       // The Next.js dev-mode indicator isn't part of the app — keep it out of diffs.
       await page.addStyleTag({ content: "nextjs-portal{display:none!important}" }).catch(() => {});
       await page.screenshot({ path: join(outDir, shot) });
+      // --scroll-shots N: also capture N further screens of the scrolling CRM
+      // <main> (the document itself never scrolls in the shell) as key@w~1.png…
+      for (let i = 1; i <= Number(args["scroll-shots"] ?? 0); i++) {
+        const moved = await page.evaluate((n) => {
+          const el = document.querySelector("main") ?? document.scrollingElement;
+          const before = el.scrollTop;
+          el.scrollTop = n * el.clientHeight * 0.85;
+          return el.scrollTop !== before;
+        }, i);
+        if (!moved) break;
+        await page.waitForTimeout(400);
+        await page.screenshot({ path: join(outDir, `${r.key}@${w}~${i}.png`) });
+      }
       page.off("console", onConsole);
       page.off("pageerror", onPageError);
       const failures = [];

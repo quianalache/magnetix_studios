@@ -35,3 +35,80 @@
   --secondary-foreground: var(--brand-on-secondary);
   /* --brand-radius is for tenant BUTTONS only (cards keep the system radius). */
 }
+
+/* ── Tenant-surface building blocks (proof pages, 2026-10-14) ──────────────
+ * Every color below derives from the tenant's --brand-* values, so a page
+ * with no brand set stays neutral (stock grey) and a branded page reads as
+ * the tenant's own — never the CRM's plum/violet, never a fixed green.
+ * Magnetix still owns the structure: radii, spacing, borders, shadows.
+ */
+
+/* Page background: a faint brand-tinted wash with two soft "cloud" blooms. */
+.tenant-surface.tenant-wash,
+.tenant-surface .tenant-wash {
+  background:
+    radial-gradient(55% 40% at 0% 0%, color-mix(in srgb, var(--brand-primary) 10%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 100% 100%, color-mix(in srgb, var(--brand-primary) 7%, transparent), transparent 70%),
+    color-mix(in srgb, var(--brand-primary) 3%, #f8f8f7);
+}
+
+/* The white content card. */
+.tenant-surface .tenant-card {
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 10%, #e7e7e4);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 2px 4px rgb(17 24 39 / 0.04),
+    0 18px 48px color-mix(in srgb, var(--brand-primary) 9%, transparent);
+}
+
+/* Brand monogram / icon tile (when the tenant has no logo). */
+.tenant-surface .tenant-mark {
+  background: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+/* Text that carries the brand (always contrast-checked against white). */
+.tenant-surface .tenant-text {
+  color: var(--brand-primary-text);
+}
+
+/* Selectable option (time slot): outline in a light brand tint; selected =
+   filled brand with the computed readable on-primary text. */
+.tenant-surface .tenant-choice {
+  background: #ffffff;
+  border: 1px solid color-mix(in srgb, var(--brand-primary-text) 30%, #ffffff);
+  color: var(--brand-primary-text);
+}
+.tenant-surface .tenant-choice:hover {
+  background: color-mix(in srgb, var(--brand-primary) 6%, #ffffff);
+}
+.tenant-surface .tenant-choice[aria-pressed="true"] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--brand-on-primary);
+}
+
+/* Soft brand chip (current day in the day strip, deposit badge). */
+.tenant-surface .tenant-soft {
+  background: color-mix(in srgb, var(--brand-primary) 10%, #ffffff);
+  color: var(--brand-primary-text);
+}
+
+/* Primary action. */
+.tenant-surface .tenant-button {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--brand-on-primary);
+  border-radius: var(--brand-radius);
+}
+.tenant-surface .tenant-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand-primary) 88%, #000000);
+}
+
+/* Focus ring follows the brand. */
+.tenant-surface .tenant-choice:focus-visible,
+.tenant-surface .tenant-button:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}

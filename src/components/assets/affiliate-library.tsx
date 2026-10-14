@@ -503,10 +503,10 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
         <StatTile icon={Repeat} tone="amber" value={rows ? stats.recurring : "–"} label="Recurring Programs" active={commission === "recurring"} onClick={() => setCommission(commission === "recurring" ? "all" : "recurring")} />
       </div>
 
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <label className="relative block lg:w-80">
+      <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+        <label className="relative block sm:max-w-md xl:w-80">
           <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input id="aff-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search affiliate programs by name, brand, or keyword…" className="bg-card h-10 pl-9" />
+          <Input id="aff-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search affiliate programs by name, brand, or keyword…" className="bg-background pl-9" />
         </label>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <FilterSelect id="aff-f-category" icon={LayoutGrid} label="Category" value={category} onChange={setCategory} options={[{ value: "all", label: "All Categories" }, ...categories.map((c) => ({ value: c, label: c }))]} />
@@ -516,14 +516,14 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
         </div>
       </div>
 
-      <h2 className="text-xl font-bold">
+      <h2 className="text-title-md font-semibold tracking-tight">
         Affiliate Programs <span className="text-muted-foreground font-semibold">({filtered.length})</span>
       </h2>
 
       {error ? (
         <p className="text-destructive text-sm">Couldn&apos;t load affiliate programs: {error}</p>
       ) : !rows ? (
-        <div className="bg-muted/40 h-64 animate-pulse rounded-2xl border" aria-busy />
+        <div className="h-64 animate-pulse rounded-card border border-border bg-muted/40" aria-busy />
       ) : filtered.length === 0 ? (
         <EmptyPanel
           icon={Link2}
@@ -535,7 +535,7 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
         <>
           <ul className="space-y-3 md:hidden">
             {shown.map((r) => (
-              <li key={r.id} className="bg-card flex items-start gap-3 rounded-2xl border p-4">
+              <li key={r.id} className="bg-card flex items-start gap-3 rounded-card border border-border shadow-card p-4">
                 <ProgramMark name={r.programName} />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{r.programName}</p>
@@ -554,10 +554,10 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
               </li>
             ))}
           </ul>
-          <div className="bg-card hidden overflow-x-auto rounded-2xl border md:block">
+          <div className="hidden overflow-x-auto rounded-card border border-border bg-card shadow-card md:block">
             <table className="w-full min-w-[960px] text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs font-semibold tracking-wide uppercase">
+                <tr className="border-b border-border bg-surface-sunken/60 text-left text-micro font-semibold tracking-[0.08em] text-ink-tertiary uppercase">
                   <th className="px-4 py-3 font-semibold">Program</th>
                   <th className="px-3 py-3 font-semibold">Category</th>
                   <th className="px-3 py-3 font-semibold">Status</th>
@@ -570,7 +570,7 @@ export function AffiliateLibrary({ createSignal }: { createSignal: number }) {
               </thead>
               <tbody>
                 {shown.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
+                  <tr key={r.id} className="border-b border-border-subtle transition-colors last:border-0 hover:bg-tint-violet">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <ProgramMark name={r.programName} />

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Globe, Loader2, Mail, Palette, Save, Trash2, Upload } from "lucide-react";
+import { Globe, Loader2, Mail, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useAgency } from "@/hooks/use-agency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogoMark } from "@/components/brand/logo-mark";
+import { SettingsSection } from "@/components/system/settings-section";
 import { renderLogo } from "@/lib/brand/render-logo-client";
 
 // Accepts a full https:// URL (manually pasted) OR our own served path from
@@ -26,6 +27,7 @@ export function BrandingSection() {
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadBusy, setUploadBusy] = useState<"upload" | "remove" | null>(null);
+  const [submitted, setSubmitted] = useState(false);
 
   // Hydrate the form once the agency doc resolves. We don't reset on every
   // change, so the operator's in-flight edits aren't blown away when the
@@ -48,8 +50,25 @@ export function BrandingSection() {
     hydrated,
   ]);
 
+  // Inline validation — same rules the save has always enforced, now shown
+  // beside the field (after the first save attempt) as well as in a toast.
+  const errors = {
+    name: !name.trim() ? "Agency name is required." : null,
+    logo: logoUrl.trim() && !URL_RE.test(logoUrl.trim()) ? "Logo URL must start with http:// or https://." : null,
+    email:
+      supportEmail.trim() && !EMAIL_RE.test(supportEmail.trim().toLowerCase())
+        ? "Support email must be a valid email address."
+        : null,
+    domain: (() => {
+      const d = primaryDomain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
+      return d && !DOMAIN_RE.test(d) ? "Primary domain must be a bare domain like example.com." : null;
+    })(),
+  };
+  const err = (k: keyof typeof errors) => (submitted ? errors[k] : null);
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
+    setSubmitted(true);
     const trimmedName = name.trim();
     const trimmedLogo = logoUrl.trim();
     const trimmedEmail = supportEmail.trim().toLowerCase();
@@ -141,21 +160,23 @@ export function BrandingSection() {
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-5 rounded-2xl border bg-card p-5">
-      <div className="flex items-center gap-2">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-          <Palette className="h-4 w-4" />
-        </span>
-        <div>
-          <h2 className="text-sm font-semibold">Branding</h2>
-          <p className="text-xs text-muted-foreground">
-            What clients see in the sidebar, browser tab, AND the public
-            landing page when LANDING_VARIANT is &ldquo;custom&rdquo;. Blank
-            fields fall back to the defaults in src/config/landing.ts.
-          </p>
-        </div>
-      </div>
-
+    <form onSubmit={handleSave} noValidate>
+    <SettingsSection
+      title="Branding"
+      description={
+        <>
+          What clients see in the sidebar, browser tab, AND the public landing
+          page when LANDING_VARIANT is &ldquo;custom&rdquo;. Blank fields fall
+          back to the defaults in src/config/landing.ts.
+        </>
+      }
+      footer={
+        <Button type="submit" disabled={saving || !hydrated}>
+          {saving ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Save className="size-3.5" aria-hidden="true" />}
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      }
+    >
       <div className="space-y-1.5">
         <Label htmlFor="agency-name">Agency name</Label>
         <Input
@@ -165,11 +186,13 @@ export function BrandingSection() {
           placeholder="Acme Marketing Co."
           maxLength={80}
           required
+          aria-invalid={!!err("name") || undefined}
+          aria-describedby="agency-name-help"
         />
-        <p className="text-[11px] text-muted-foreground">
+        <FieldHelp id="agency-name-help" error={err("name")}>
           Sidebar wordmark, browser tab title, and the brand name across the
           public landing page.
-        </p>
+        </FieldHelp>
       </div>
 
       <div className="space-y-1.5">
@@ -194,9 +217,9 @@ export function BrandingSection() {
             onClick={() => fileRef.current?.click()}
           >
             {uploadBusy === "upload" ? (
-              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
             ) : (
-              <Upload className="mr-1 h-3.5 w-3.5" />
+              <Upload className="size-3.5" aria-hidden="true" />
             )}
             {uploadBusy === "upload" ? "Uploading…" : "Upload logo"}
           </Button>
@@ -210,20 +233,20 @@ export function BrandingSection() {
               className="text-destructive hover:bg-destructive/5 hover:text-destructive"
             >
               {uploadBusy === "remove" ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
               ) : (
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
+                <Trash2 className="size-3.5" aria-hidden="true" />
               )}
               Remove
             </Button>
           )}
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <FieldHelp id="logo-help" error={err("logo")}>
           PNG, JPG, WebP, or SVG — transparent background works best.
           Renders in the sidebar at 24px tall. Leave empty to fall back to
           the default mark.
-        </p>
-        <details className="text-[11px] text-muted-foreground">
+        </FieldHelp>
+        <details className="text-caption text-muted-foreground" open={!!err("logo") || undefined}>
           <summary className="cursor-pointer select-none">
             Or paste a URL instead
           </summary>
@@ -234,6 +257,8 @@ export function BrandingSection() {
             onChange={(e) => setLogoUrl(e.target.value)}
             placeholder="https://yourcdn.com/agency-logo.svg"
             className="mt-2"
+            aria-invalid={!!err("logo") || undefined}
+            aria-describedby="logo-help"
           />
         </details>
       </div>
@@ -249,12 +274,14 @@ export function BrandingSection() {
             onChange={(e) => setSupportEmail(e.target.value)}
             placeholder="hello@yourbrand.com"
             className="pl-8"
+            aria-invalid={!!err("email") || undefined}
+            aria-describedby="support-email-help"
           />
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <FieldHelp id="support-email-help" error={err("email")}>
           Used for &ldquo;Talk to us&rdquo; CTAs, the FAQ contact line, and
           the footer on the public landing page.
-        </p>
+        </FieldHelp>
       </div>
 
       <div className="space-y-1.5">
@@ -267,18 +294,20 @@ export function BrandingSection() {
             onChange={(e) => setPrimaryDomain(e.target.value)}
             placeholder="yourbrand.com"
             className="pl-8"
+            aria-invalid={!!err("domain") || undefined}
+            aria-describedby="primary-domain-help"
           />
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <FieldHelp id="primary-domain-help" error={err("domain")}>
           Bare domain only — no https://, no trailing slash. Surfaced in the
           landing footer.
-        </p>
+        </FieldHelp>
       </div>
 
       {/* Live preview of the sidebar lockup. Mirrors what the dashboard
           chrome will render after save. */}
-      <div className="rounded-xl border bg-background p-4">
-        <p className="mb-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="rounded-control border border-border bg-surface-sunken/60 p-4">
+        <p className="mb-3 text-micro font-semibold uppercase tracking-[0.08em] text-ink-tertiary">
           Sidebar preview
         </p>
         <div className="flex items-center gap-2 text-xl font-bold">
@@ -296,12 +325,16 @@ export function BrandingSection() {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button type="submit" disabled={saving || !hydrated}>
-          <Save className="mr-1 h-3.5 w-3.5" />
-          {saving ? "Saving…" : "Save"}
-        </Button>
-      </div>
+    </SettingsSection>
     </form>
+  );
+}
+
+/** Helper line under a field — turns into the field's error message when invalid. */
+function FieldHelp({ id, error, children }: { id: string; error: string | null; children: React.ReactNode }) {
+  return (
+    <p id={id} className={error ? "text-caption text-destructive" : "text-caption text-muted-foreground"}>
+      {error ?? children}
+    </p>
   );
 }

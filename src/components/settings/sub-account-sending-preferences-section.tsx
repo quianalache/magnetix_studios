@@ -2,10 +2,22 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, MailQuestion, PauseCircle } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Alert } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { SettingsSection } from "@/components/system/settings-section";
+import { StatusPill } from "@/components/system/status-pill";
 
 /**
  * Sending preferences — the per-workspace outbound-email + workflow-engine
@@ -22,6 +34,10 @@ import { Input } from "@/components/ui/input";
  * All three PATCH the existing /api/agency/sub-accounts/[id] route
  * (sub-account-admin gated) — no new backend. Admin-only card, mirrors the
  * other settings sections.
+ *
+ * Design system (proof pages, 2026-10-14): SettingsSection cards, the shared
+ * Select + Switch, inline validation and a warning Alert while paused. Same
+ * fields, same PATCH bodies, same admin gate as before.
  */
 
 const HOURS = Array.from({ length: 25 }, (_, i) => i);
@@ -33,8 +49,13 @@ function hourLabel(h: number): string {
   return h < 12 ? `${h}:00 AM` : `${h - 12}:00 PM`;
 }
 
-const SELECT_CLASS =
-  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 [&_option]:bg-background [&_option]:text-foreground";
+const START_ITEMS = Object.fromEntries(
+  HOURS.filter((h) => h < 24).map((h) => [String(h), hourLabel(h)])
+);
+const END_ITEMS = Object.fromEntries(
+  HOURS.filter((h) => h > 0).map((h) => [String(h), hourLabel(h)])
+);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function SubAccountSendingPreferencesSection() {
   const { subAccountId, subAccount, isAdmin } = useSubAccount();
@@ -46,6 +67,7 @@ export function SubAccountSendingPreferencesSection() {
   const [timezone, setTimezone] = useState("");
   const [saving, setSaving] = useState(false);
   const [togglingPause, setTogglingPause] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   // Sync from the live doc (onSnapshot via the provider) whenever the
   // workspace changes — but not on every keystroke-triggered re-render.
@@ -56,12 +78,21 @@ export function SubAccountSendingPreferencesSection() {
     setStartHour(w?.startHour ?? 8);
     setEndHour(w?.endHour ?? 20);
     setTimezone(w?.timezone ?? subAccount?.timezone ?? "UTC");
+    setSubmitted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subAccountId, subAccount?.updatedAt]);
 
   if (!isAdmin) return null;
 
   const paused = subAccount?.automationsPaused === true;
+  const replyToError =
+    replyTo.trim() && !EMAIL_RE.test(replyTo.trim())
+      ? "Enter a full email address, like you@yourbusiness.com."
+      : null;
+  const windowError =
+    windowEnabled && startHour >= endHour
+      ? "The send window must start before it ends."
+      : null;
 
   async function patch(body: Record<string, unknown>): Promise<void> {
     const res = await fetch(`/api/agency/sub-accounts/${subAccountId}`, {
@@ -75,8 +106,9 @@ export function SubAccountSendingPreferencesSection() {
 
   async function handleSave(e: FormEvent) {
     e.preventDefault();
-    if (windowEnabled && startHour >= endHour) {
-      toast.error("The send window must start before it ends.");
+    setSubmitted(true);
+    if (windowError || replyToError) {
+      toast.error(windowError ?? replyToError);
       return;
     }
     setSaving(true);
@@ -102,7 +134,7 @@ export function SubAccountSendingPreferencesSection() {
       toast.success(
         paused
           ? "Workflows resumed — new triggers fire again."
-          : "All workflows paused — nothing will fire until you resume.",
+          : "All workflows paused — nothing will fire until you resume."
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update.");
@@ -111,161 +143,174 @@ export function SubAccountSendingPreferencesSection() {
     }
   }
 
+  const showReplyToError = !!replyToError && (submitted || replyTo.length > 3);
+
   return (
-    <section className="rounded-2xl border bg-card p-6">
-      <header className="mb-4 flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
-          <MailQuestion className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold">Sending preferences</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Where replies land, when automated messages may send, and the
-            master pause for workflows.
-          </p>
-        </div>
-      </header>
-
-      <form onSubmit={handleSave} className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Reply-To email
-          </label>
-          <Input
-            type="email"
-            value={replyTo}
-            onChange={(e) => setReplyTo(e.target.value)}
-            placeholder="you@yourbusiness.com"
-            disabled={saving}
-            className="max-w-md"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Replies to every automated and broadcast email come back to this
-            address — and, once a dedicated sending domain is verified
-            (Settings → Email), also to that domain&apos;s own inbox, which
-            shows up in Conversations. Required before sending from a
-            dedicated domain.
-          </p>
-        </div>
-
-        <div className="rounded-lg border p-3">
-          <label className="flex cursor-pointer items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={windowEnabled}
-              onChange={(e) => setWindowEnabled(e.target.checked)}
+    <div className="flex flex-col gap-6">
+      <form onSubmit={handleSave} noValidate>
+        <SettingsSection
+          title="Sending preferences"
+          description="Where replies land, when automated messages may send, and the master pause for workflows."
+          footer={
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2
+                    className="size-3.5 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Saving…
+                </>
+              ) : (
+                "Save sending preferences"
+              )}
+            </Button>
+          }
+        >
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="sp-reply-to">Reply-To email</Label>
+            <Input
+              id="sp-reply-to"
+              type="email"
+              value={replyTo}
+              onChange={(e) => setReplyTo(e.target.value)}
+              placeholder="you@yourbusiness.com"
               disabled={saving}
-              className="mt-0.5 h-4 w-4 cursor-pointer"
+              aria-invalid={showReplyToError || undefined}
+              aria-describedby="sp-reply-to-help"
+              className="sm:max-w-md"
             />
-            <span>
-              <span className="font-medium">Restrict sending hours</span>
-              <span className="block text-xs text-muted-foreground">
-                Workflow messages outside the window wait for the next window
-                start instead of sending at 3 AM.
-              </span>
-            </span>
-          </label>
-          {windowEnabled && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  From
-                </label>
-                <select
-                  value={startHour}
-                  onChange={(e) => setStartHour(Number(e.target.value))}
-                  disabled={saving}
-                  className={SELECT_CLASS}
-                >
-                  {HOURS.filter((h) => h < 24).map((h) => (
-                    <option key={h} value={h}>
-                      {hourLabel(h)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Until
-                </label>
-                <select
-                  value={endHour}
-                  onChange={(e) => setEndHour(Number(e.target.value))}
-                  disabled={saving}
-                  className={SELECT_CLASS}
-                >
-                  {HOURS.filter((h) => h > 0).map((h) => (
-                    <option key={h} value={h}>
-                      {hourLabel(h)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
-                  Timezone (IANA)
-                </label>
-                <Input
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  placeholder="Australia/Sydney"
-                  disabled={saving}
-                  className="h-9"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+            <p
+              id="sp-reply-to-help"
+              className={
+                showReplyToError
+                  ? "text-caption text-destructive"
+                  : "text-caption text-muted-foreground"
+              }
+            >
+              {showReplyToError
+                ? replyToError
+                : "Replies to every automated and broadcast email come back to this address — and, once a dedicated sending domain is verified (Settings → Email), also to that domain's own inbox, which shows up in Conversations. Required before sending from a dedicated domain."}
+            </p>
+          </div>
 
-        <Button type="submit" size="sm" disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save sending preferences"
-          )}
-        </Button>
+          <div className="border-border flex flex-col gap-4 border-t pt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="sp-window">Restrict sending hours</Label>
+                <p className="text-caption text-muted-foreground mt-0.5">
+                  Workflow messages outside the window wait for the next window
+                  start instead of sending at 3 AM.
+                </p>
+              </div>
+              <Switch
+                id="sp-window"
+                checked={windowEnabled}
+                onCheckedChange={setWindowEnabled}
+                disabled={saving}
+              />
+            </div>
+            {windowEnabled && (
+              <div className="flex flex-col gap-1.5">
+                <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr]">
+                  <div className="flex flex-col gap-1.5">
+                    <Label id="sp-start-label">From</Label>
+                    <Select
+                      value={String(startHour)}
+                      onValueChange={(v) => v && setStartHour(Number(v))}
+                      items={START_ITEMS}
+                      disabled={saving}
+                    >
+                      <SelectTrigger
+                        aria-labelledby="sp-start-label"
+                        aria-invalid={!!windowError || undefined}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(START_ITEMS).map(([v, l]) => (
+                          <SelectItem key={v} value={v}>
+                            {l}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label id="sp-end-label">Until</Label>
+                    <Select
+                      value={String(endHour)}
+                      onValueChange={(v) => v && setEndHour(Number(v))}
+                      items={END_ITEMS}
+                      disabled={saving}
+                    >
+                      <SelectTrigger
+                        aria-labelledby="sp-end-label"
+                        aria-invalid={!!windowError || undefined}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(END_ITEMS).map(([v, l]) => (
+                          <SelectItem key={v} value={v}>
+                            {l}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="sp-timezone">Timezone (IANA)</Label>
+                    <Input
+                      id="sp-timezone"
+                      value={timezone}
+                      onChange={(e) => setTimezone(e.target.value)}
+                      placeholder="Australia/Sydney"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+                {windowError ? (
+                  <p role="alert" className="text-caption text-destructive">
+                    {windowError}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+        </SettingsSection>
       </form>
 
-      <div
-        className={`mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 ${
-          paused ? "border-amber-500/40 bg-amber-500/5" : ""
-        }`}
+      <SettingsSection
+        title="Pause all workflows"
+        description="Emergency stop: prevents every workflow from firing or continuing."
+        action={
+          <div className="flex items-center gap-3">
+            <StatusPill tone={paused ? "warning" : "success"}>
+              {paused ? "Paused" : "Running"}
+            </StatusPill>
+            {togglingPause ? (
+              <Loader2
+                className="text-muted-foreground size-4 animate-spin"
+                aria-hidden="true"
+              />
+            ) : null}
+            <Switch
+              checked={paused}
+              onCheckedChange={() => handleTogglePause()}
+              disabled={togglingPause}
+              aria-label={paused ? "Resume workflows" : "Pause all workflows"}
+            />
+          </div>
+        }
       >
-        <div className="flex items-start gap-2 text-sm">
-          <PauseCircle
-            className={`mt-0.5 h-4 w-4 shrink-0 ${
-              paused
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-muted-foreground"
-            }`}
-          />
-          <span>
-            <span className="font-medium">
-              {paused ? "All workflows are paused" : "Pause all workflows"}
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              {paused
-                ? "No triggers fire and in-flight runs stop at their next step until you resume."
-                : "Emergency stop: prevents every workflow from firing or continuing."}
-            </span>
-          </span>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={paused ? "default" : "outline"}
-          onClick={handleTogglePause}
-          disabled={togglingPause}
-        >
-          {togglingPause ? (
-            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-          ) : null}
-          {paused ? "Resume workflows" : "Pause workflows"}
-        </Button>
-      </div>
-    </section>
+        {paused ? (
+          <Alert tone="warning" title="All workflows are paused">
+            No triggers fire and in-flight runs stop at their next step until
+            you resume.
+          </Alert>
+        ) : null}
+      </SettingsSection>
+    </div>
   );
 }

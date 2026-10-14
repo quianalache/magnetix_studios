@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PageShell } from "@/components/system/page-shell";
 import { AssetsHeader, AssetsTabs, type AssetsTab } from "@/components/assets/assets-ui";
 import { ResourceLibrary } from "@/components/assets/resource-library";
 import { CrmResources } from "@/components/assets/crm-resources";
@@ -71,17 +72,21 @@ function AssetsPageInner() {
         : null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
-      <AssetsHeader
+    <PageShell width="wide">
+      <AssetsHeader />
+      <AssetsTabs
+        tabs={TABS}
+        active={tab}
+        onChange={go}
         actions={primary ? (
           <div className="flex">
-            <Button className="h-11 rounded-r-none px-5" onClick={primary.run}>
-              <primary.icon className="mr-1.5 h-4 w-4" />
+            <Button className={tab === "media" ? "rounded-r-none" : undefined} onClick={primary.run}>
+              <primary.icon className="size-4" aria-hidden="true" />
               {primary.label}
             </Button>
             {tab === "media" && <DropdownMenu>
-              <DropdownMenuTrigger render={<Button className="h-11 rounded-l-none border-l border-white/20 px-3" aria-label="More create options" />}>
-                <ChevronDown className="h-4 w-4" />
+              <DropdownMenuTrigger render={<Button className="rounded-l-none border-l border-white/20 px-2.5" aria-label="More create options" />}>
+                <ChevronDown className="size-4" aria-hidden="true" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 {isAdmin && (
@@ -100,12 +105,11 @@ function AssetsPageInner() {
           </div>
         ) : null}
       />
-      <AssetsTabs tabs={TABS} active={tab} onChange={go} />
       {tab === "resources" && <ResourceLibrary createSignal={resourceSignal} />}
       {tab === "crm" && <CrmResources />}
       {tab === "media" && <MediaLibrary uploadRequest={uploadRequest} />}
       {tab === "affiliates" && <AffiliateLibrary createSignal={affiliateSignal} />}
-    </div>
+    </PageShell>
   );
 }
 

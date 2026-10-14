@@ -151,6 +151,10 @@
   --ds-tag-gray-bg: #f3f1f7;
   --ds-tag-gray-fg: var(--color-ink-2);
 
+  /* Switch track (approved toggle: soft grey-lilac off, violet on). */
+  --ds-switch-off: #dcd6e6;
+  --ds-switch-on: var(--color-violet-ds-600);
+
   /* Categorical chart palette (CRM analytics; chart RENDERERS for readings keep their own). */
   --ds-chart-1: #6d28d9;
   --ds-chart-2: #14a7b4;
@@ -227,6 +231,8 @@
   --color-bubble-out-foreground: var(--ds-bubble-out-fg);
   --color-bubble-in: var(--ds-bubble-in-bg);
   --color-note: var(--ds-note-bg);
+  --color-switch-off: var(--ds-switch-off);
+  --color-switch-on: var(--ds-switch-on);
 }
 
 /* ── The internal CRM system (Phase 1, 2026-10-13) ─────────────────────────
@@ -319,4 +325,15 @@
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
+}
+
+/* Moment-page hero wash (approved Dashboard hero, proof pages 2026-10-14):
+   lavender bloom top-right, blush bloom bottom-left, near-white base. Used only
+   by the <MomentHero> composite — one per page. */
+.mx-crm .mx-hero-wash {
+  background:
+    radial-gradient(120% 140% at 85% 30%, #ebddff 0%, rgb(235 221 255 / 0) 55%),
+    radial-gradient(80% 120% at 10% 100%, #fde3ef 0%, rgb(253 227 239 / 0) 60%),
+    linear-gradient(180deg, #fbf8ff, #f6f0ff);
+  border-color: #e9def9;
 }

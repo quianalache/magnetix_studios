@@ -324,6 +324,8 @@ const SUB_ACCOUNT_NAV_GROUPS: NavGroup[] = [
 ];
 
 const COLLAPSE_STORAGE_KEY = "ls_sidebar_collapsed";
+/** Tablet band (md → lg) where the sidebar defaults to the icon rail. */
+const TABLET_RAIL_QUERY = "(min-width: 768px) and (max-width: 1023.98px)";
 /** Which of the 8 category groups (CRM, Calendar, Content, Marketing, Sales,
  *  AI, Memberships, Insights) are collapsed — stored as a JSON array of group
  *  labels. The Dashboard/Sub-Account Settings entries and the Agency/
@@ -750,14 +752,16 @@ function SidebarContent({
         )}
       >
         <Link href="/" className="flex items-center gap-2 text-lg font-bold">
-          {agency.logoUrl && !collapsed ? (
+          {agency.logoUrl ? (
             // Custom agency logo. Constrained to 24px tall, auto width;
             // the agency hosts the asset so we render whatever they paste.
+            // In the collapsed icon rail (the tablet default) it's fitted
+            // into a 28px square so the agency's own mark still leads.
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={agency.logoUrl}
               alt={agency.name}
-              className="h-6 w-auto max-w-[120px] object-contain"
+              className={collapsed ? "size-7 object-contain" : "h-6 w-auto max-w-[120px] object-contain"}
             />
           ) : (
             <LogoMark size={20} idSuffix="-sidebar" />
@@ -967,15 +971,40 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
   // Hydrate the collapse preference from localStorage after mount (avoids
   // an SSR/client markup mismatch — the server always renders expanded).
+  // With no saved preference, tablets (md up to lg, e.g. 820px) default to
+  // the collapsed icon rail so content keeps its width (approved Visual
+  // Direction 2 tablet nav); desktop defaults to expanded. A saved choice
+  // from the collapse button always wins.
   useEffect(() => {
-    const stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
-    if (stored === "1") setCollapsed(true);
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    } catch {
+      // storage blocked — fall through to the width default
+    }
+    if (stored === "1") return setCollapsed(true);
+    if (stored === "0") return;
+    const tablet = window.matchMedia(TABLET_RAIL_QUERY);
+    setCollapsed(tablet.matches);
+    const onChange = (e: MediaQueryListEvent) => {
+      let saved: string | null = null;
+      try {
+        saved = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
+      } catch {}
+      if (saved === null) setCollapsed(e.matches);
+    };
+    tablet.addEventListener("change", onChange);
+    return () => tablet.removeEventListener("change", onChange);
   }, []);
 
   function toggleCollapsed() {
     setCollapsed((prev) => {
       const next = !prev;
-      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? "1" : "0");
+      try {
+        window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // storage blocked — the toggle still works for this session
+      }
       return next;
     });
   }
