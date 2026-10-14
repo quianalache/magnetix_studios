@@ -25,6 +25,14 @@ export async function registerNode() {
   // Production (VERCEL_ENV=production) and local runs are unaffected.
   if (process.env.VERCEL_ENV === "preview") return;
 
+  // Local visual QA (scripts/qa/serve-local-qa.mjs sets MAGNETIX_LOCAL_QA=1):
+  // a local `next start` loads the real .env.local credentials, so without
+  // this it would register PRODUCTION QStash schedules and write
+  // system/scheduleRegistration to production Firestore (happened once,
+  // 2026-10-13). QA renders pages; it must never mutate production on boot.
+  // Never set in any deployed environment.
+  if (process.env.MAGNETIX_LOCAL_QA === "1") return;
+
   // Auto-register the LeadStack daily/hourly cron schedules in QStash.
   // Lets buyers skip the "click into QStash dashboard, create schedules"
   // onboarding step — the schedules appear on the first production
