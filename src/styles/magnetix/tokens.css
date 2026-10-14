@@ -67,7 +67,7 @@
      decision 2026-08-08, reconfirmed 2026-10-13). Expressive display =
      DM Serif Display on approved moment pages only; the webfont is loaded
      when the first moment page adopts it (Phase 1/2). */
-  --font-display: var(--font-dm-serif-display, "DM Serif Display"), Georgia, "Times New Roman", serif;
+  /* --font-display lives in the @theme inline block below. */
 
   --text-display-xl: 3rem;
   --text-display-xl--line-height: 1.05;
@@ -102,6 +102,12 @@
   --container-page-form: 48rem; /* forms, settings, editors, chat — was max-w-3xl */
   --container-page-data: 64rem; /* tables, dashboards, reports — was max-w-5xl */
   --container-page-wide: 80rem; /* Contacts list/profile — was max-w-7xl */
+}
+
+/* `inline` so the utility reads next/font's variable where it is defined (on
+   <body>, src/app/layout.tsx) instead of resolving it once at :root. */
+@theme inline {
+  --font-display: var(--font-dm-serif-display), Georgia, "Times New Roman", serif;
 }
 
 /* Non-utility constants (consumed as var() by components). */

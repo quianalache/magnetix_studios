@@ -1,21 +1,15 @@
 /*
- * Magnetix design system — L2 SEMANTIC / COMPONENT TOKENS (Phase 0, 2026-10-13).
+ * Magnetix design system — L2 SEMANTIC / COMPONENT TOKENS (Phase 0 → live in Phase 1).
  *
- * Two parts:
- *
- * 1. The app-wide shadcn defaults (:root / .dark), MOVED here verbatim from
- *    globals.css so the legacy theme blocks in legacy.css still come after
- *    them in source order (a class on <html> and :root tie on specificity —
- *    the later block must be the theme; see the 2026-07-30 fix). Values are
- *    unchanged in Phase 0. Phase 1 points them at the Magnetix tokens and
- *    retires the theme-magnetix class. `.dark` is kept (dark mode is a future
- *    design task, not abandoned) but is never applied in the CRM today —
- *    next-themes forces light there (components/providers.tsx).
- *
- * 2. The NEW semantic tokens (`--ds-*`), defined from tokens.css and exposed
- *    as Tailwind utilities (`bg-status-success-bg`, `text-ink-secondary`, …).
- *    Unused in Phase 0, so nothing changes visually. New shared components
- *    (components/system/*) consume THESE, never raw hex.
+ * 1. :root / .dark — the neutral shadcn defaults that public/tenant pages
+ *    still use (they have no scope of their own yet). `.dark` is kept for a
+ *    future dark-mode design pass; the CRM is forced to light.
+ * 2. `--ds-*` semantic tokens (from tokens.css), exposed as Tailwind
+ *    utilities (`bg-status-success-bg`, `text-ink-secondary`, …). Shared
+ *    components consume THESE, never raw hex.
+ * 3. `.mx-crm` (end of file) — the live internal CRM system: shadcn
+ *    variables mapped to the semantic tokens. Applied by
+ *    components/theme/crm-scope.tsx.
  */
 
 :root {
@@ -233,4 +227,96 @@
   --color-bubble-out-foreground: var(--ds-bubble-out-fg);
   --color-bubble-in: var(--ds-bubble-in-bg);
   --color-note: var(--ds-note-bg);
+}
+
+/* ── The internal CRM system (Phase 1, 2026-10-13) ─────────────────────────
+ *
+ * `.mx-crm` is the ONE fixed Magnetix visual system for the internal CRM
+ * (sub-account AND agency pages). It is server-rendered on every CRM layout
+ * (components/theme/crm-scope.tsx — a `display: contents` wrapper, so it adds
+ * no box) and mirrored onto <html> so portalled dialogs, sheets, menus and
+ * toasts inherit it. It replaces the retired runtime app-theme classes.
+ *
+ * Why a scope and not :root: public and tenant pages (booking, hosted forms,
+ * Community, course pages, login…) share :root and have no scope of their own
+ * yet. Putting the CRM system on :root would recolor them; this keeps them on
+ * their current neutral defaults until they adopt `.tenant-surface`.
+ *
+ * Must stay AFTER the :root block above: on <html>, `.mx-crm` and `:root` tie
+ * on specificity, so source order decides.
+ */
+.mx-crm {
+  /* Brand constants kept for the existing sidebar indicator and dashboard
+     gradient helpers below (values unchanged from the retired theme). */
+  --mx-lavender-mist: #edd9ec;
+  --mx-rose-quartz: #e8b7c8;
+  --mx-blush-veil: #f3d9d7;
+  --mx-aqua-glow: #9edbdd;
+  --mx-purple: #5e2574;
+  --mx-purple-deep: var(--color-plum-900);
+  --mx-purple-deeper: var(--color-plum-950);
+  --mx-border-soft: var(--ds-border-subtle);
+  --mx-shadow-card: var(--shadow-card);
+  --mx-gradient-hero: linear-gradient(120deg, var(--mx-rose-quartz) 0%, var(--mx-purple) 100%);
+  --mx-gradient-banner: linear-gradient(115deg, var(--mx-rose-quartz) 0%, #c6699a 45%, var(--mx-purple) 100%);
+
+  /* shadcn variables → approved semantic tokens. */
+  --background: var(--ds-surface-canvas);
+  --foreground: var(--ds-text-primary);
+  --card: var(--ds-surface-raised);
+  --card-foreground: var(--ds-text-primary);
+  --popover: var(--ds-surface-raised);
+  --popover-foreground: var(--ds-text-primary);
+  --primary: var(--ds-action-primary);
+  --primary-foreground: var(--ds-action-on-primary);
+  --secondary: var(--ds-surface-sunken);
+  --secondary-foreground: var(--ds-text-primary);
+  --muted: var(--ds-surface-sunken);
+  --muted-foreground: var(--ds-text-secondary);
+  --accent: var(--ds-selected-bg);
+  --accent-foreground: var(--ds-selected-fg);
+  --destructive: var(--color-danger-700);
+  --border: var(--ds-border-default);
+  --input: var(--ds-border-strong);
+  --ring: var(--ds-focus-ring);
+  --chart-1: var(--ds-chart-1);
+  --chart-2: var(--ds-chart-2);
+  --chart-3: var(--ds-chart-3);
+  --chart-4: var(--ds-chart-4);
+  --chart-5: var(--ds-chart-5);
+
+  /* Deep plum sidebar (owner decision — unchanged). */
+  --sidebar: var(--ds-sidebar-from);
+  --sidebar-foreground: #ede0ef;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: var(--ds-sidebar-to);
+  --sidebar-accent: rgb(255 255 255 / 0.06);
+  --sidebar-accent-foreground: #ede0ef;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: var(--mx-aqua-glow);
+}
+
+/* Sidebar chrome gradient (a custom property can't drive background-image). */
+.mx-crm .app-sidebar {
+  background-image: linear-gradient(180deg, var(--ds-sidebar-from) 0%, var(--ds-sidebar-to) 100%);
+}
+
+/* Dashboard gradient helpers — compound selectors beat the plain Tailwind
+   fallback classes beside them (kept so the approved Dashboard hero renders
+   as-is). FROZEN: no new uses; moment pages use the shared PageHeader +
+   Motif instead. */
+.mx-crm .mx-hero-gradient {
+  background-image: var(--mx-gradient-hero);
+}
+.mx-crm .mx-wash-gradient {
+  background-image: linear-gradient(135deg, var(--mx-blush-veil) 0%, var(--mx-lavender-mist) 100%);
+}
+.mx-crm .mx-banner-gradient {
+  background-image: var(--mx-gradient-banner);
+}
+.mx-crm .mx-gradient-text {
+  background-image: var(--mx-gradient-hero);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }

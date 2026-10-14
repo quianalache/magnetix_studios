@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { AppAccent } from "@/components/theme/app-accent";
 import { AgencyImmersiveChrome } from "./_agency-immersive-chrome";
 
 /**
@@ -20,7 +19,6 @@ export default function AgencyCommunityImmersiveLayout({
   return (
     <AgencyImmersiveChrome>
       {children}
-      <AppAccent />
     </AgencyImmersiveChrome>
   );
 }

@@ -1,6 +1,6 @@
 {
   "_comment": "Representative design-system QA routes. {placeholders} are filled from --vars (keep tenant ids out of the repo). mode: shell = inside the CRM h-dvh shell (document must not scroll); public = tenant/public page (document may scroll); specialized = own chrome (overflow/console checks only). tabBar: the phone bottom tab bar must show < 768px.",
-  "expectHtmlClass": "theme-magnetix",
+  "expectHtmlClass": "mx-crm",
   "forbidThemeToggle": true,
   "settleMs": 4000,
   "allowPost": ["/api/sub-accounts/[^/]+/contacts/search$", "/api/broadcasts/audience-preview$"],
@@ -20,6 +20,8 @@
     { "key": "agency-settings", "path": "/agency/settings", "mode": "shell" },
     { "key": "agency-sub-accounts", "path": "/agency/sub-accounts", "mode": "shell" },
     { "key": "agency-billing", "path": "/agency/billing", "mode": "shell" },
+    { "key": "agency-courses", "path": "/agency/standalone-courses", "mode": "specialized" },
+    { "key": "design-system-docs", "path": "/docs/design-system", "mode": "public" },
     { "key": "report-builder", "path": "/sa/{sa}/energetic-decoder/reports/{reportId}", "mode": "specialized" },
     { "key": "pages-funnels-builder", "path": "/sa/{sa}/pages-funnels/{pageId}", "mode": "specialized" },
     { "key": "community-group", "path": "/sa/{sa}/community/{groupId}", "mode": "specialized" },

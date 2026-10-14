@@ -12,7 +12,7 @@ import { useTheme } from "next-themes";
  */
 export const CRM_FORCED_THEME = "light";
 
-const CRM_ROUTE = /^\/(sa|agency|me|calendar|contacts|conversations|dashboard|forms|pipeline|reports|tasks)(\/|$)/;
+const CRM_ROUTE = /^\/(sa|agency|me|calendar|contacts|conversations|dashboard|forms|pipeline|reports|tasks|docs\/design-system)(\/|$)/;
 
 export function isCrmRoute(pathname: string): boolean {
   return CRM_ROUTE.test(pathname);

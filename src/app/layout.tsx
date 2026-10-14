@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { DM_Serif_Display, Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { RefTracker } from "@/components/affiliate/ref-tracker";
 import { AnalyticsScripts } from "@/components/analytics-scripts";
@@ -23,6 +23,17 @@ const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
   weight: "400",
   style: ["normal", "italic"],
+});
+
+// Magnetix expressive display face — approved "moment" pages only (PageHeader
+// variant="moment"; CLAUDE.md → Magnetix design system). Not preloaded: the
+// webfont downloads only on a page that actually renders it.
+const dmSerifDisplay = DM_Serif_Display({
+  variable: "--font-dm-serif-display",
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  preload: false,
 });
 
 // Metadata follows the same variant the landing page renders. The custom
@@ -80,7 +91,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} ${dmSerifDisplay.variable} antialiased`}
       >
         {process.env.NEXT_PUBLIC_GTM_ID && (
           <noscript>

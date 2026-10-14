@@ -120,8 +120,8 @@ export default function NewBuilderShellQaPage() {
   // a real route — the real routes already get it correctly from
   // AppAccent; this effect exists only in this one QA-only file.
   useEffect(() => {
-    document.documentElement.classList.add("theme-magnetix");
-    return () => document.documentElement.classList.remove("theme-magnetix");
+    document.documentElement.classList.add("mx-crm");
+    return () => document.documentElement.classList.remove("mx-crm");
   }, []);
 
   return (

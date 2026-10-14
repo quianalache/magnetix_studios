@@ -188,7 +188,8 @@ async function run(args) {
             sidebarVisible: vis(sidebar),
             tabBarVisible: vis(tabBar),
             errorOverlay: !!document.querySelector("nextjs-portal") && /Unhandled Runtime Error|Application error/i.test(document.body.innerText),
-            appError: /Application error: a client-side exception|This page couldn.t load/i.test(document.body.innerText),
+            // Includes Chrome's own error page (a 5xx after a redirect shows "This page isn't working / HTTP ERROR 500").
+            appError: /Application error: a client-side exception|This page couldn.t load|This page isn.t working|HTTP ERROR \d{3}/i.test(document.body.innerText),
             themeToggleVisible: [...document.querySelectorAll("header button, [data-theme-toggle]")].some(
               (b) => vis(b) && /toggle theme|dark mode|light mode|appearance/i.test(`${b.getAttribute("aria-label") ?? ""} ${b.title ?? ""} ${b.textContent ?? ""} ${b.getAttribute("data-theme-toggle") ?? ""}`),
             ),

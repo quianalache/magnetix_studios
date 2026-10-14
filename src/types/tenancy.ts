@@ -4,9 +4,10 @@ export type SubAccountStatus = "active" | "archived";
 export type PaymentMode = "test" | "live";
 
 /**
- * Dashboard accent theme (Agency → Settings → App theme). Drives CSS
- * variables via a class on <html> (see globals.css +
- * components/theme/app-accent.tsx):
+ * RETIRED 2026-10-13 (design-system Phase 0/1): the App theme picker is gone
+ * and nothing reads this field — the internal CRM always uses the fixed
+ * Magnetix system (components/theme/crm-scope.tsx). Kept inert in stored docs
+ * for backward compatibility; former values:
  *   - "leadstack" — indigo/violet, the LeadStack design language
  *   - "green"     — the emerald "my CRM" palette from the custom landing
  *   - "neutral"   — stock zinc monochrome

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { SubAccountProvider } from "@/context/sub-account-context";
 import { BillingGuard } from "@/components/billing/billing-guard";
-import { AppAccent } from "@/components/theme/app-accent";
+import { CrmScope } from "@/components/theme/crm-scope";
 
 /**
  * Sibling of `(dashboard)/sa/[subAccountId]/layout.tsx` (and
@@ -16,14 +16,9 @@ import { AppAccent } from "@/components/theme/app-accent";
  * wrapping since route groups can't share a layout across trees — kept
  * deliberately thin so there's little to drift out of sync.
  *
- * `<AppAccent/>` is included for the exact reason `(builder)`'s copy of
- * this file already documents: it only toggles a class on `<html>` and
- * only needs `useAuth()` — no dependency on anything `(dashboard)`-
- * specific — so it's safe to mount here too. Without it, a *direct* load
- * of a route in this group (not arrived at via in-app navigation from
- * `(dashboard)`, e.g. a hard refresh or a typed/bookmarked URL) renders
- * with the wrong theme, since `<html>`'s class only persists across
- * CLIENT-SIDE navigations, not a fresh document load.
+ * `<CrmScope>` wraps the group in the fixed Magnetix CRM system (server-
+ * rendered, so a direct load or hard refresh renders the right system with
+ * no flash) — same as every other CRM layout.
  */
 export default async function ImmersiveSubAccountLayout({
   children,
@@ -36,8 +31,7 @@ export default async function ImmersiveSubAccountLayout({
   return (
     <SubAccountProvider subAccountId={subAccountId}>
       <BillingGuard>
-        {children}
-        <AppAccent />
+        <CrmScope>{children}</CrmScope>
       </BillingGuard>
     </SubAccountProvider>
   );

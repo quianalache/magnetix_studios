@@ -85,7 +85,7 @@ export function useAgency(): AgencySummary {
     }
     setSnapLoading(true);
     const ref = doc(getFirebaseDb(), `agencies/${agencyId}`);
-    // 2026-08-30: this listener is mounted via <AppAccent> in the shared
+    // 2026-08-30: this listener was mounted via <AppAccent> (retired 2026-10-13) in the shared
     // dashboard layout — runs on EVERY page, above every route's own
     // error.tsx. An uncaught synchronous throw here (the confirmed
     // firebase-js-sdk#9267 failure mode) previously crashed the WHOLE app

@@ -8,7 +8,7 @@ import { CommandPalette } from "@/components/search/command-palette";
 import { InstallBanner } from "@/components/pwa/install-banner";
 import { BottomTabBar } from "@/components/pwa/bottom-tab-bar";
 import { AppBadge } from "@/components/pwa/app-badge";
-import { AppAccent } from "@/components/theme/app-accent";
+import { CrmScope } from "@/components/theme/crm-scope";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
@@ -59,7 +59,8 @@ export default function DashboardLayout({
     // h-dvh (not h-screen): 100vh overshoots when mobile browser toolbars
     // or the on-screen keyboard are up, hiding bottom-anchored UI like the
     // conversations composer. Dynamic viewport units track the real height.
-    <div className="flex h-dvh">
+    <CrmScope>
+    <div className="flex h-dvh bg-background">
       <Sidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header
@@ -79,8 +80,8 @@ export default function DashboardLayout({
       </div>
       <BottomTabBar onMore={() => setSidebarOpen(true)} />
       <AppBadge />
-      <AppAccent />
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
+    </CrmScope>
   );
 }

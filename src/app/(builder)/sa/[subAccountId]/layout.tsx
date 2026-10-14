@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { SubAccountProvider } from "@/context/sub-account-context";
 import { BillingGuard } from "@/components/billing/billing-guard";
-import { AppAccent } from "@/components/theme/app-accent";
+import { CrmScope } from "@/components/theme/crm-scope";
 
 /**
  * Sibling of `(dashboard)/sa/[subAccountId]/layout.tsx` for full-screen
@@ -13,15 +13,9 @@ import { AppAccent } from "@/components/theme/app-accent";
  * wrapping since route groups can't share a layout across trees — kept
  * deliberately thin so there's little to drift out of sync.
  *
- * `<AppAccent/>` (found missing here during the Phase 2A Puck editor task,
- * fixed for every route in this group, not just the new one): it only
- * toggles a class on `<html>` and only needs `useAuth()` — no dependency on
- * anything `(dashboard)`-specific — so it's safe to mount here too. Without
- * it, a *direct* load of a builder route (not arrived at via in-app
- * navigation from `(dashboard)`, e.g. a hard refresh or a typed/bookmarked
- * URL) renders with the wrong theme, since `<html>`'s class only persists
- * across CLIENT-SIDE navigations, not a fresh document load. This applies
- * equally to the pre-existing V1 page editor and the new Puck editor below.
+ * `<CrmScope>` wraps the group in the fixed Magnetix CRM system (server-
+ * rendered, so a direct load or hard refresh renders the right system with
+ * no flash) — same as every other CRM layout.
  */
 export default async function BuilderSubAccountLayout({
   children,
@@ -34,8 +28,7 @@ export default async function BuilderSubAccountLayout({
   return (
     <SubAccountProvider subAccountId={subAccountId}>
       <BillingGuard>
-        {children}
-        <AppAccent />
+        <CrmScope>{children}</CrmScope>
       </BillingGuard>
     </SubAccountProvider>
   );

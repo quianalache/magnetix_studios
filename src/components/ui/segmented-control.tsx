@@ -8,7 +8,8 @@ export interface SegmentedControlOption<T extends string> {
 }
 
 /**
- * Compact pill-style filter control (Published/Draft/All, etc.) — built from
+ * Compact segmented filter control (Published/Draft/All, etc.) — Magnetix
+ * design-system styling (white container, violet-tint selection). Built from
  * plain buttons rather than a new dependency, matching the density of the
  * GHL reference this pass is piloting (see the course-offers plan).
  */
@@ -24,16 +25,17 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex items-center gap-1", className)}>
+    <div className={cn("inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-background p-1", className)}>
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-md px-2.5 py-1 text-[13px] font-medium transition-colors",
+            "h-(--ds-control-sm) shrink-0 rounded-lg px-3 text-[13px] font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
             value === opt.value
-              ? "bg-primary/10 text-primary"
+              ? "bg-accent font-semibold text-accent-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >

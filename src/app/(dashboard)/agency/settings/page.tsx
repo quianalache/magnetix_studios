@@ -83,7 +83,7 @@ export default function AgencySettingsPage() {
       <AppIconSection />
 
       {/* App theme picker retired 2026-10-13 — the internal CRM uses the one
-          fixed Magnetix visual system (see components/theme/app-accent.tsx). */}
+          fixed Magnetix visual system (see components/theme/crm-scope.tsx). */}
 
       {/* Read-only view of the shared (env-var) Twilio + Resend senders, so the
           owner can see exactly what "agency-level" SMS/email resolves to. */}
