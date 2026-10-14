@@ -227,11 +227,11 @@ export function SettingsWorkspace({
           <nav aria-label={`${title} sections`} className="mt-4 hidden lg:block">
             {groups.map((g, gi) => (
               <div key={g.label} role="group" aria-labelledby={`settings-group-${gi}`} className={gi === 0 ? "" : "mt-5"}>
-                {/* Approved Section 4.4 group label: 10px, regular weight,
-                    widely tracked, lighter than the links below it — the
-                    contrast in size/weight/colour is what makes it read as a
-                    heading and the links as its children. */}
-                <p id={`settings-group-${gi}`} className="px-2.5 pb-1.5 text-overline font-normal tracking-[0.16em] text-ink-tertiary uppercase">
+                {/* Group heading (owner direction 2026-10-14): compact 10px
+                    uppercase with the approved 0.16em tracking, but dark ink
+                    and semibold so it clearly stands apart from the softer
+                    ink-2 links beneath it. */}
+                <p id={`settings-group-${gi}`} className="px-2.5 pb-1.5 text-overline font-semibold tracking-[0.16em] text-foreground uppercase">
                   {g.label}
                 </p>
                 <ul className="flex flex-col gap-0.5">

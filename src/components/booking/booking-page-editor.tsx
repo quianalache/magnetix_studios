@@ -23,6 +23,8 @@ import { TerritorySelectField } from "@/components/settings/territory-select-fie
 import { WorkingHoursGrid } from "@/components/booking/working-hours-grid";
 import { IntakeFieldBuilder } from "@/components/booking/intake-field-builder";
 import { BookingAppearancePreview } from "@/components/booking/booking-appearance-preview";
+import { Switch } from "@/components/ui/switch";
+import { resolveBookingLogo, resolveWorkspaceLogo } from "@/lib/brand/workspace-logo";
 import {
   TENANT_ACCENT_PICKER_DEFAULT,
   TENANT_ACCENT_SWATCHES,
@@ -112,6 +114,7 @@ const DISPLAY_FONT_CHOICES: { key: TenantDisplayFont; label: string }[] = [
 export function BookingPageEditor({ mode, initial }: Props) {
   const router = useRouter();
   const { subAccountId, subAccount, saPath } = useSubAccount();
+  const workspaceLogo = resolveWorkspaceLogo(subAccount);
   const scopingOn = subAccount?.territoryScopingEnabled === true;
   const hasPaypal = !!subAccount?.paypalConfig;
 
@@ -132,6 +135,7 @@ export function BookingPageEditor({ mode, initial }: Props) {
         intakeFields: initial.intakeFields,
         hosts: initial.hosts ?? [],
         logoUrl: initial.logoUrl,
+        showLogo: initial.showLogo !== false,
         accentColor: initial.accentColor,
         brandName: initial.brandName ?? null,
         displayFont: initial.displayFont ?? null,
@@ -839,25 +843,56 @@ export function BookingPageEditor({ mode, initial }: Props) {
           structure, spacing, type scale and booking UX. */}
       <Section
         title="Appearance"
-        description="Brand this page as your own. Your logo, name, one accent colour and a display font — the soft background wash follows your accent."
+        description="Brand this page as your own. Your workspace logo, name, one accent colour and a display font — the soft background wash follows your accent."
       >
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           <div className="space-y-5">
-            <Field
-              label="Logo URL"
-              htmlFor="logoUrl"
-              hint={subAccount?.logoUrl ? "Leave blank to use your workspace logo." : "Public HTTPS URL. Leave blank to show your business name instead."}
-            >
-              <Input
-                id="logoUrl"
-                value={form.logoUrl ?? ""}
-                onChange={(e) =>
-                  set("logoUrl", e.target.value.length > 0 ? e.target.value : null)
-                }
-                placeholder="https://…"
-                type="url"
-              />
-            </Field>
+            {/* Logo — inherited from the workspace (Settings → Business
+                profile → Branding); booking only chooses whether to show it.
+                No second logo system here. */}
+            <div className="space-y-1.5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <Label htmlFor="showLogo">Show logo</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {workspaceLogo
+                      ? "Uses your workspace logo. Turn off to show just your business name."
+                      : "Your workspace has no logo yet, so the page shows your business name."}
+                  </p>
+                </div>
+                <Switch
+                  id="showLogo"
+                  checked={form.showLogo !== false}
+                  onCheckedChange={(on) => set("showLogo", on)}
+                />
+              </div>
+              <div className="flex items-center gap-3 rounded-control border border-dashed px-3 py-2">
+                {workspaceLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={workspaceLogo} alt="Workspace logo" className="h-7 w-auto max-w-[120px] rounded object-contain" />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No workspace logo</span>
+                )}
+                <a
+                  href={saPath("/dashboard/settings?section=business-profile")}
+                  className="ml-auto text-xs font-medium text-primary underline-offset-4 hover:underline"
+                >
+                  {workspaceLogo ? "Change in Branding" : "Add one in Branding"}
+                </a>
+              </div>
+              {form.logoUrl ? (
+                <p className="text-xs text-muted-foreground">
+                  This page still uses a logo set on the page itself.{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                    onClick={() => set("logoUrl", null)}
+                  >
+                    Use workspace logo instead
+                  </button>
+                </p>
+              ) : null}
+            </div>
 
             <Field
               label="Business name"
@@ -955,7 +990,7 @@ export function BookingPageEditor({ mode, initial }: Props) {
             <p className="text-xs font-medium text-muted-foreground">Live preview</p>
             <BookingAppearancePreview
               name={form.brandName || subAccount?.name || "Your business"}
-              logoUrl={form.logoUrl || subAccount?.logoUrl || null}
+              logoUrl={resolveBookingLogo(form, subAccount)}
               accentColor={/^#[0-9a-fA-F]{6}$/.test(form.accentColor ?? "") ? form.accentColor : null}
               displayFont={form.displayFont ?? null}
               pageTitle={form.name}

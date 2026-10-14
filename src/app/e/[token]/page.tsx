@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { resolveBookingLogo } from "@/lib/brand/workspace-logo";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   hashEventToken,
@@ -67,7 +68,7 @@ export default async function PublicEventPage({ params }: PageProps) {
 
   const branding = {
     name: page?.brandName || sub.name || "Booking",
-    logoUrl: page?.logoUrl ?? sub.logoUrl ?? null,
+    logoUrl: resolveBookingLogo(page ?? {}, sub),
     accentColor: page?.accentColor ?? null,
   };
 

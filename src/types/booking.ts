@@ -118,8 +118,14 @@ export interface BookingPage {
   hosts?: BookingHost[];
 
   // ── Visual overrides ──────────────────────────────────────────
-  /** Overrides `subAccount.logoUrl` on the public page. */
+  /**
+   * Legacy per-page logo override (pre-2026-10-14 raw URL field). No longer
+   * editable — pages inherit the workspace logo via resolveBookingLogo().
+   * Kept so existing pages render unchanged until switched back.
+   */
   logoUrl: string | null;
+  /** Show the workspace logo in the header lockup. Absent = true. */
+  showLogo?: boolean;
   /** Hex string. Overrides brand on the public page. */
   accentColor: string | null;
   /**
@@ -242,6 +248,7 @@ export type BookingPageFormData = Pick<
   | "intakeFields"
   | "hosts"
   | "logoUrl"
+  | "showLogo"
   | "accentColor"
   | "brandName"
   | "displayFont"

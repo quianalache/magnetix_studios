@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { PublicBookingView } from "@/components/booking/public-booking-view";
+import { resolveBookingLogo } from "@/lib/brand/workspace-logo";
 import type { BookingPage } from "@/types/booking";
 import type { SubAccountDoc } from "@/types";
 
@@ -45,7 +46,7 @@ export default async function PublicBookingPage({ params }: PageProps) {
   // boundary requires plain JSON.
   const branding = {
     name: page.brandName || sub.name || "Schedule a meeting",
-    logoUrl: page.logoUrl ?? sub.logoUrl ?? null,
+    logoUrl: resolveBookingLogo(page, sub),
     accentColor: page.accentColor ?? null,
     displayFont: page.displayFont ?? null,
   };

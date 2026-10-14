@@ -2,13 +2,16 @@
  * Booking appearance (approved Section 4.8 tenant controls, 2026-10-14):
  * validation, the curated font allowlist, and the tenant-brand boundary.
  * No browser, no data.
- * Run: NODE_OPTIONS="--require ./scripts/_server-only-shim.cjs" pnpm exec tsx scripts/check-booking-appearance.ts
+ * Run: NODE_OPTIONS="--require ./scripts/_server-only-shim.cjs" pnpm exec tsx --tsconfig scripts/tsconfig.jsx-test.json scripts/check-booking-appearance.tsx
  */
 import { readFileSync } from "node:fs";
 import { validateAccentColor, validateBrandName, validateDisplayFont, validateBookingPageFormData } from "../src/lib/booking/validation";
 import { defaultBookingPageFormData } from "../src/lib/booking/defaults";
 import { BOOKING_DISPLAY_FONTS } from "../src/types/booking";
 import { TENANT_DISPLAY_FONTS, tenantBrandStyle, contrastRatio } from "../src/lib/brand/tenant-brand";
+import { resolveBookingLogo, resolveWorkspaceLogo } from "../src/lib/brand/workspace-logo";
+import { renderToStaticMarkup } from "react-dom/server";
+import { BookingAppearancePreview } from "../src/components/booking/booking-appearance-preview";
 
 let pass = 0;
 let fail = 0;
@@ -56,6 +59,22 @@ const editor = src("src/components/booking/booking-page-editor.tsx");
 check("editor: Appearance section with live preview", editor.includes('title="Appearance"') && editor.includes("<BookingAppearancePreview"));
 check("editor: font control is a radio group of the curated fonts", editor.includes('role="radiogroup"') && editor.includes("DISPLAY_FONT_CHOICES"));
 check("preview: uses the same tenant classes as the public page", src("src/components/booking/booking-appearance-preview.tsx").includes("tenant-surface tenant-wash"));
+
+// Logo: inherited from the workspace, booking only shows/hides it.
+const WS = { logoUrl: "https://cdn.example/ws.png" };
+check("logo: default = inherited workspace logo", resolveBookingLogo({}, WS) === WS.logoUrl && resolveBookingLogo({ showLogo: true }, WS) === WS.logoUrl);
+check("logo: Show logo OFF = no logo", resolveBookingLogo({ showLogo: false }, WS) === null && resolveBookingLogo({ showLogo: false, logoUrl: "https://x/y.png" }, WS) === null);
+check("logo: no workspace logo = name lockup (null)", resolveBookingLogo({}, { logoUrl: "  " }) === null && resolveBookingLogo({}, null) === null);
+check("logo: legacy per-page logo keeps working until switched back", resolveBookingLogo({ logoUrl: "https://x/legacy.png" }, WS) === "https://x/legacy.png");
+check("logo: workspace resolver is the single source", resolveWorkspaceLogo(WS) === WS.logoUrl && resolveWorkspaceLogo({}) === null);
+check("form: showLogo defaults on, false round-trips", (() => { const a = validateBookingPageFormData({ ...base }); const b = validateBookingPageFormData({ ...base, showLogo: false }); return a.ok && a.value.showLogo === true && b.ok && b.value.showLogo === false; })());
+const withLogo = renderToStaticMarkup(BookingAppearancePreview({ name: "Juniper", logoUrl: WS.logoUrl, accentColor: "#2F5D50", displayFont: "serif", pageTitle: "Call", durationMinutes: 30 }));
+const noLogo = renderToStaticMarkup(BookingAppearancePreview({ name: "Juniper", logoUrl: null, accentColor: "#2F5D50", displayFont: "serif", pageTitle: "Call", durationMinutes: 30 }));
+check("preview: inherited logo renders as the lockup", withLogo.includes(WS.logoUrl) && !withLogo.includes(">Juniper</span>"));
+check("preview: no logo → name lockup", !noLogo.includes("<img") && noLogo.includes("Juniper"));
+const editor2 = src("src/components/booking/booking-page-editor.tsx");
+check("editor: raw Logo URL field removed; Show logo switch + Branding link instead", !editor2.includes('label="Logo URL"') && editor2.includes('id="showLogo"') && editor2.includes("section=business-profile"));
+check("public pages resolve the logo through the shared resolver", src("src/app/b/[subAccountId]/[slug]/page.tsx").includes("resolveBookingLogo(page, sub)") && src("src/app/e/[token]/page.tsx").includes("resolveBookingLogo("));
 
 console.log(`\n${pass} passed, ${fail} failed.`);
 process.exit(fail ? 1 : 0);

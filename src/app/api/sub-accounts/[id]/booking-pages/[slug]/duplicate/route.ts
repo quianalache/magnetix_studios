@@ -126,6 +126,7 @@ export async function POST(
     intakeFields: source.intakeFields ?? [],
     hosts: source.hosts ?? [],
     logoUrl: source.logoUrl ?? null,
+    showLogo: source.showLogo !== false,
     accentColor: source.accentColor ?? null,
     brandName: source.brandName ?? null,
     displayFont: source.displayFont ?? null,

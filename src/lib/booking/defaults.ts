@@ -45,6 +45,7 @@ export function defaultBookingPageFormData(
     maxPerDay: null,
     intakeFields: [],
     logoUrl: null,
+    showLogo: true,
     accentColor: null,
     brandName: null,
     displayFont: null,

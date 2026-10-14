@@ -503,6 +503,11 @@ export function validateDisplayFont(input: unknown): Validated<BookingDisplayFon
   return { ok: true, value: input as BookingDisplayFont };
 }
 
+/** Show logo toggle — absent/invalid = shown (the default). */
+export function validateShowLogo(input: unknown): boolean {
+  return input !== false;
+}
+
 export function validateLogoUrl(input: unknown): Validated<string | null> {
   if (input == null || input === "") return { ok: true, value: null };
   if (typeof input !== "string") {
@@ -661,6 +666,7 @@ export function validateBookingPageFormData(
 
   const logoUrl = validateLogoUrl(b.logoUrl);
   if (!logoUrl.ok) return logoUrl;
+  const showLogo = validateShowLogo(b.showLogo);
   const accentColor = validateAccentColor(b.accentColor);
   if (!accentColor.ok) return accentColor;
   const brandName = validateBrandName(b.brandName);
@@ -709,6 +715,7 @@ export function validateBookingPageFormData(
       intakeFields: intakeFields.value,
       hosts: hosts.value,
       logoUrl: logoUrl.value,
+      showLogo,
       accentColor: accentColor.value,
       brandName: brandName.value,
       displayFont: displayFont.value,

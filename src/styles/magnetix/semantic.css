@@ -151,10 +151,11 @@
   --ds-tag-gray-bg: #f3f1f7;
   --ds-tag-gray-fg: var(--color-ink-2);
 
-  /* Table header row — exact approved index table (Section 4.2): muted
-     violet-gray 10.5px labels on a faint lavender-white wash. */
-  --ds-table-head-bg: #fcfbfe;
-  --ds-table-head-fg: var(--color-ink-3);
+  /* Index table header band (Section 4.2, owner direction 2026-10-14): the
+     deep-plum band that tops the approved table card — plum ground,
+     lavender-white tracked labels — carried by the column-heading row. */
+  --ds-table-head-bg: var(--color-plum-900);
+  --ds-table-head-fg: #ede0ef;
 
   /* Switch track (approved toggle: soft grey-lilac off, violet on). */
   --ds-switch-off: #dcd6e6;
